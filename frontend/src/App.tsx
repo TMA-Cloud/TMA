@@ -50,8 +50,16 @@ const AppContent: React.FC = () => {
 };
 
 const AuthGate: React.FC = () => {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const [view, setView] = useState<"login" | "signup">("login");
+
+  if (loading) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+        Loading...
+      </div>
+    );
+  }
 
   if (!user) {
     return view === "login" ? (
