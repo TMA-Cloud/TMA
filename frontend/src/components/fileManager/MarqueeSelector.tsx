@@ -36,6 +36,14 @@ export const MarqueeSelector: React.FC<MarqueeSelectorProps> = ({
   const additiveRef = useRef(false);
   const mouseDownRef = useRef(false);
 
+  const cancelSelection = () => {
+    setIsSelecting(false);
+    isSelectingRef.current = false;
+    setSelectionRect(null);
+    mouseDownRef.current = false;
+    setTimeout(() => onSelectingChangeRef.current?.(false), 50);
+  };
+
   // rAF batching
   const rafRef = useRef<number | null>(null);
   const pendingRectRef = useRef<SelectionRect | null>(null);
@@ -154,19 +162,23 @@ export const MarqueeSelector: React.FC<MarqueeSelectorProps> = ({
         });
       onSelectionChangeRef.current(selectedIds, additiveRef.current);
 
-      setIsSelecting(false);
-      isSelectingRef.current = false;
-      setSelectionRect(null);
-      setTimeout(() => onSelectingChangeRef.current?.(false), 50);
+      cancelSelection();
+    };
+
+    const handleDragEnd = () => {
+      if (!mouseDownRef.current && !isSelectingRef.current) return;
+      cancelSelection();
     };
 
     container.addEventListener("mousedown", handleMouseDown);
     document.addEventListener("mousemove", handleMouseMove);
     document.addEventListener("mouseup", handleMouseUp);
+    document.addEventListener("dragend", handleDragEnd);
     return () => {
       container.removeEventListener("mousedown", handleMouseDown);
       document.removeEventListener("mousemove", handleMouseMove);
       document.removeEventListener("mouseup", handleMouseUp);
+      document.removeEventListener("dragend", handleDragEnd);
     };
   }, []);
 
