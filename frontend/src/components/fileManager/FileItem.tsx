@@ -10,6 +10,13 @@ interface FileItemProps {
   onClick: (e: React.MouseEvent) => void;
   onDoubleClick: () => void;
   onContextMenu: (e: React.MouseEvent) => void;
+  onDragStart?: (e: React.DragEvent) => void;
+  onDragEnd?: (e: React.DragEvent) => void;
+  onDragOver?: (e: React.DragEvent) => void;
+  onDragLeave?: (e: React.DragEvent) => void;
+  onDrop?: (e: React.DragEvent) => void;
+  isDragOver?: boolean;
+  dragDisabled?: boolean;
 }
 
 export const FileItemComponent: React.FC<FileItemProps> = ({
@@ -19,6 +26,13 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
   onClick,
   onDoubleClick,
   onContextMenu,
+  onDragStart,
+  onDragEnd,
+  onDragOver,
+  onDragLeave,
+  onDrop,
+  isDragOver,
+  dragDisabled,
 }) => {
   const Icon = getFileIcon(file);
 
@@ -27,17 +41,24 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
       <div
         data-file-id={file.id}
         className={`
-          group relative p-4 rounded-lg border-2 cursor-pointer transition-all duration-200
-          hover:shadow-md hover:scale-105
+          group relative p-4 rounded-lg border-2 cursor-pointer transition-transform duration-200 transform-gpu
+          hover:shadow-md hover:scale-105 will-change-transform
           ${
             isSelected
               ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
               : "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600"
           }
+          ${isDragOver ? "ring-2 ring-blue-400" : ""}
         `}
         onClick={onClick}
         onDoubleClick={onDoubleClick}
         onContextMenu={onContextMenu}
+        draggable={!dragDisabled}
+        onDragStart={onDragStart}
+        onDragEnd={onDragEnd}
+        onDragOver={onDragOver}
+        onDragLeave={onDragLeave}
+        onDrop={onDrop}
       >
         <div className="flex flex-col items-center text-center">
           <div className="relative mb-2">
@@ -74,16 +95,23 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
     <div
       data-file-id={file.id}
       className={`
-        group flex items-center space-x-3 p-3 rounded-lg cursor-pointer transition-colors duration-200
+        group flex items-center space-x-3 p-3 rounded-lg cursor-pointer transition-colors duration-200 transform-gpu
         ${
           isSelected
             ? "bg-blue-50 dark:bg-blue-900/20"
             : "hover:bg-gray-50 dark:hover:bg-gray-700"
         }
+        ${isDragOver ? "ring-2 ring-blue-400" : ""}
       `}
       onClick={onClick}
       onDoubleClick={onDoubleClick}
       onContextMenu={onContextMenu}
+      draggable={!dragDisabled}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
     >
       <div className="relative flex-shrink-0">
         <Icon

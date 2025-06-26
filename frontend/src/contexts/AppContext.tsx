@@ -34,6 +34,7 @@ interface AppContextType {
   refreshFiles: () => Promise<void>;
   createFolder: (name: string) => Promise<void>;
   uploadFile: (file: File) => Promise<void>;
+  moveFiles: (ids: string[], parentId: string | null) => Promise<void>;
   openFolder: (folder: FileItem) => void;
   navigateTo: (index: number) => void;
 }
@@ -108,6 +109,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
     await refreshFiles();
   };
 
+  const moveFiles = async (ids: string[], parentId: string | null) => {
+    await fetch(`${import.meta.env.VITE_API_URL}/api/files/move`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ ids, parentId }),
+    });
+    await refreshFiles();
+  };
+
   const addSelectedFile = (id: string) => {
     setSelectedFiles((prev) => [...prev, id]);
   };
@@ -163,6 +174,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         refreshFiles,
         createFolder,
         uploadFile,
+        moveFiles,
         openFolder,
         navigateTo,
       }}

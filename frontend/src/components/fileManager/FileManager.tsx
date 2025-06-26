@@ -18,14 +18,19 @@ export const FileManager: React.FC = () => {
     clearSelection,
     openFolder,
     setCreateFolderModalOpen,
+    moveFiles,
   } = useApp();
 
   const dragSelectingRef = useRef(false);
   const managerRef = useRef<HTMLDivElement>(null);
+  const [isSelecting, setIsSelecting] = useState(false);
+  const [draggingIds, setDraggingIds] = useState<string[]>([]);
+  const [dragOverFolder, setDragOverFolder] = useState<string | null>(null);
 
   // track marquee‐drag state in a ref only (we never read dragSelecting)
   const handleSelectingChange = useCallback((selecting: boolean) => {
     dragSelectingRef.current = selecting;
+    setIsSelecting(selecting);
   }, []);
 
   const [contextMenu, setContextMenu] = useState<{
@@ -116,6 +121,44 @@ export const FileManager: React.FC = () => {
     [selectedFiles, setSelectedFiles],
   );
 
+  const handleDragStart = (fileId: string) => (e: React.DragEvent) => {
+    if (dragSelectingRef.current) {
+      e.preventDefault();
+      return;
+    }
+    if (!selectedFiles.includes(fileId)) {
+      setSelectedFiles([fileId]);
+      setDraggingIds([fileId]);
+    } else {
+      setDraggingIds(selectedFiles);
+    }
+    e.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleDragEnd = () => {
+    setDraggingIds([]);
+    setDragOverFolder(null);
+  };
+
+  const handleFolderDragOver = (folderId: string) => (e: React.DragEvent) => {
+    if (dragSelectingRef.current || draggingIds.length === 0) return;
+    if (folderId && draggingIds.includes(folderId)) return;
+    e.preventDefault();
+    if (dragOverFolder !== folderId) setDragOverFolder(folderId);
+  };
+
+  const handleFolderDragLeave = (folderId: string) => () => {
+    if (dragOverFolder === folderId) setDragOverFolder(null);
+  };
+
+  const handleFolderDrop = (folderId: string) => async (e: React.DragEvent) => {
+    e.preventDefault();
+    if (dragSelectingRef.current || draggingIds.length === 0) return;
+    setDragOverFolder(null);
+    await moveFiles(draggingIds, folderId);
+    setDraggingIds([]);
+  };
+
   return (
     <div className="p-6 space-y-6" ref={managerRef}>
       {/* Header */}
@@ -195,6 +238,23 @@ export const FileManager: React.FC = () => {
               onClick={(e) => handleFileClick(file.id, e)}
               onDoubleClick={() => handleFileDoubleClick(file)}
               onContextMenu={(e) => handleContextMenu(e, file.id)}
+              onDragStart={handleDragStart(file.id)}
+              onDragEnd={handleDragEnd}
+              onDragOver={
+                file.type === "folder"
+                  ? handleFolderDragOver(file.id)
+                  : undefined
+              }
+              onDragLeave={
+                file.type === "folder"
+                  ? handleFolderDragLeave(file.id)
+                  : undefined
+              }
+              onDrop={
+                file.type === "folder" ? handleFolderDrop(file.id) : undefined
+              }
+              isDragOver={dragOverFolder === file.id}
+              dragDisabled={isSelecting}
             />
           ))}
         </div>

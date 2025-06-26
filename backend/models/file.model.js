@@ -30,4 +30,11 @@ async function createFile(name, size, mimeType, parentId = null, userId) {
   return result.rows[0];
 }
 
-module.exports = { getFiles, createFolder, createFile };
+async function moveFiles(ids, parentId = null, userId) {
+  await pool.query(
+    'UPDATE files SET parent_id = $1, modified = NOW() WHERE id = ANY($2::text[]) AND user_id = $3',
+    [parentId, ids, userId],
+  );
+}
+
+module.exports = { getFiles, createFolder, createFile, moveFiles };

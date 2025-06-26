@@ -1,6 +1,6 @@
 const path = require('path');
 const fs = require('fs');
-const { getFiles, createFolder, createFile } = require('../models/file.model');
+const { getFiles, createFolder, createFile, moveFiles } = require('../models/file.model');
 
 async function listFiles(req, res) {
   const parentId = req.query.parentId || null;
@@ -43,4 +43,18 @@ async function uploadFile(req, res) {
   }
 }
 
-module.exports = { listFiles, addFolder, uploadFile };
+async function moveFilesController(req, res) {
+  const { ids, parentId = null } = req.body;
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return res.status(400).json({ message: 'ids required' });
+  }
+  try {
+    await moveFiles(ids, parentId, req.userId);
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+}
+
+module.exports = { listFiles, addFolder, uploadFile, moveFiles: moveFilesController };
