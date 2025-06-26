@@ -1,0 +1,10 @@
+CREATE TABLE IF NOT EXISTS files (
+    id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL,
+    type TEXT NOT NULL,
+    size INTEGER,
+    modified TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    mime_type TEXT,
+    starred BOOLEAN DEFAULT FALSE,
+    shared BOOLEAN DEFAULT FALSE
+);
