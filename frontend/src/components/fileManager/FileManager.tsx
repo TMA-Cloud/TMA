@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useCallback, useRef, useEffect } from "react";
 import { Grid, List, SortAsc, FolderPlus } from "lucide-react";
 import { useApp } from "../../contexts/AppContext";
 import { Breadcrumbs } from "./Breadcrumbs";
@@ -20,13 +20,41 @@ export const FileManager: React.FC = () => {
     setCreateFolderModalOpen,
   } = useApp();
 
+  const dragSelectingRef = useRef(false);
+  const managerRef = useRef<HTMLDivElement>(null);
+
+  // track marquee‐drag state in a ref only (we never read dragSelecting)
+  const handleSelectingChange = useCallback((selecting: boolean) => {
+    dragSelectingRef.current = selecting;
+  }, []);
+
   const [contextMenu, setContextMenu] = useState<{
     isOpen: boolean;
     position: { x: number; y: number };
   }>({ isOpen: false, position: { x: 0, y: 0 } });
 
+  useEffect(() => {
+    const handleDocumentClick = (e: MouseEvent) => {
+      if (dragSelectingRef.current) return;
+
+      const manager = managerRef.current;
+      if (manager && !manager.contains(e.target as Node)) {
+        clearSelection();
+      }
+    };
+
+    document.addEventListener("click", handleDocumentClick);
+
+    return () => {
+      document.removeEventListener("click", handleDocumentClick);
+    };
+  }, [clearSelection]);
+
   const handleFileClick = (fileId: string, e: React.MouseEvent) => {
+    if (dragSelectingRef.current) return;
+
     e.preventDefault();
+    e.stopPropagation(); // ← prevent the container’s onClick from firing
 
     if (e.ctrlKey || e.metaKey) {
       // Multi-select with Ctrl/Cmd
@@ -75,16 +103,21 @@ export const FileManager: React.FC = () => {
     });
   };
 
-  const handleMarqueeSelection = (selectedIds: string[]) => {
-    setSelectedFiles(selectedIds);
-  };
-
-  const handleBackgroundClick = () => {
-    clearSelection();
-  };
+  const handleMarqueeSelection = useCallback(
+    (selectedIds: string[], additive: boolean) => {
+      if (additive) {
+        // merge current selection + new marquee hits
+        const merged = Array.from(new Set([...selectedFiles, ...selectedIds]));
+        setSelectedFiles(merged);
+      } else {
+        setSelectedFiles(selectedIds);
+      }
+    },
+    [selectedFiles, setSelectedFiles],
+  );
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6" ref={managerRef}>
       {/* Header */}
       <div className="flex items-center justify-between">
         <Breadcrumbs />
@@ -132,7 +165,10 @@ export const FileManager: React.FC = () => {
       </div>
 
       {/* File List */}
-      <MarqueeSelector onSelectionChange={handleMarqueeSelection}>
+      <MarqueeSelector
+        onSelectionChange={handleMarqueeSelection}
+        onSelectingChange={handleSelectingChange}
+      >
         <div
           className={`
             ${
@@ -140,8 +176,14 @@ export const FileManager: React.FC = () => {
                 ? "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4"
                 : "space-y-1"
             }
+            min-h-[50vh]
           `}
-          onClick={handleBackgroundClick}
+          onClick={(e) => {
+            // only clear if the click really hit the empty area
+            if (e.target === e.currentTarget && !dragSelectingRef.current) {
+              clearSelection();
+            }
+          }}
           onContextMenu={(e) => handleContextMenu(e)}
         >
           {files.map((file) => (

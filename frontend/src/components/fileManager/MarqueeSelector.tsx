@@ -1,7 +1,9 @@
+// MarqueeSelector.tsx
 import React, { useRef, useState, useEffect } from "react";
 
 interface MarqueeSelectorProps {
-  onSelectionChange: (selectedIds: string[]) => void;
+  onSelectionChange: (selectedIds: string[], additive: boolean) => void;
+  onSelectingChange?: (selecting: boolean) => void;
   children: React.ReactNode;
 }
 
@@ -14,121 +16,179 @@ interface SelectionRect {
 
 export const MarqueeSelector: React.FC<MarqueeSelectorProps> = ({
   onSelectionChange,
+  onSelectingChange,
   children,
 }) => {
+  // keep latest callbacks in refs
+  const onSelectionChangeRef = useRef(onSelectionChange);
+  const onSelectingChangeRef = useRef(onSelectingChange);
+  useEffect(() => {
+    onSelectionChangeRef.current = onSelectionChange;
+    onSelectingChangeRef.current = onSelectingChange;
+  }, [onSelectionChange, onSelectingChange]);
+
   const containerRef = useRef<HTMLDivElement>(null);
   const [isSelecting, setIsSelecting] = useState(false);
   const [selectionRect, setSelectionRect] = useState<SelectionRect | null>(
     null,
   );
+  const isSelectingRef = useRef(false);
+  const additiveRef = useRef(false);
+  const mouseDownRef = useRef(false);
+
+  // rAF batching
+  const rafRef = useRef<number | null>(null);
+  const pendingRectRef = useRef<SelectionRect | null>(null);
 
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
-    let startX = 0;
-    let startY = 0;
+    let startX = 0,
+      startY = 0;
 
     const handleMouseDown = (e: MouseEvent) => {
-      if (e.target !== container) return;
-
+      if (e.button !== 0) return;
       const rect = container.getBoundingClientRect();
-      startX = e.clientX - rect.left;
-      startY = e.clientY - rect.top;
-
-      setIsSelecting(true);
-      setSelectionRect({
-        startX,
-        startY,
-        endX: startX,
-        endY: startY,
-      });
+      startX = e.clientX - rect.left + container.scrollLeft;
+      startY = e.clientY - rect.top + container.scrollTop;
+      additiveRef.current = e.ctrlKey || e.metaKey;
+      mouseDownRef.current = true;
     };
 
     const handleMouseMove = (e: MouseEvent) => {
-      if (!isSelecting) return;
-
+      if (!mouseDownRef.current) return;
       const rect = container.getBoundingClientRect();
-      const endX = e.clientX - rect.left;
-      const endY = e.clientY - rect.top;
+      const curX = e.clientX - rect.left + container.scrollLeft;
+      const curY = e.clientY - rect.top + container.scrollTop;
 
-      setSelectionRect({
-        startX,
-        startY,
-        endX,
-        endY,
-      });
+      if (!isSelectingRef.current) {
+        const dx = Math.abs(curX - startX);
+        const dy = Math.abs(curY - startY);
+        if (dx < 5 && dy < 5) return;
+        e.preventDefault();
+        e.stopPropagation();
+        isSelectingRef.current = true;
+        setIsSelecting(true);
+        onSelectingChangeRef.current?.(true);
+      }
 
-      // Calculate selected items
-      const selectedIds: string[] = [];
-      const items = container.querySelectorAll("[data-file-id]");
+      e.preventDefault();
+      const newRect = { startX, startY, endX: curX, endY: curY };
+      pendingRectRef.current = newRect;
 
-      items.forEach((item) => {
-        const itemRect = item.getBoundingClientRect();
-        const containerRect = container.getBoundingClientRect();
+      if (rafRef.current === null) {
+        rafRef.current = requestAnimationFrame(() => {
+          const r = pendingRectRef.current!;
+          setSelectionRect(r);
 
-        const itemLeft = itemRect.left - containerRect.left;
-        const itemTop = itemRect.top - containerRect.top;
-        const itemRight = itemLeft + itemRect.width;
-        const itemBottom = itemTop + itemRect.height;
+          // intersection logic
+          const selL = Math.min(r.startX, r.endX);
+          const selT = Math.min(r.startY, r.endY);
+          const selR = Math.max(r.startX, r.endX);
+          const selB = Math.max(r.startY, r.endY);
 
-        const selectionLeft = Math.min(startX, endX);
-        const selectionTop = Math.min(startY, endY);
-        const selectionRight = Math.max(startX, endX);
-        const selectionBottom = Math.max(startY, endY);
+          const selectedIds: string[] = [];
+          container
+            .querySelectorAll<HTMLElement>("[data-file-id]")
+            .forEach((item) => {
+              const ir = item.getBoundingClientRect();
+              const left = ir.left - rect.left + container.scrollLeft;
+              const top = ir.top - rect.top + container.scrollTop;
+              const right = left + ir.width;
+              const bottom = top + ir.height;
 
-        // Check for intersection
-        if (
-          !(
-            itemRight < selectionLeft ||
-            itemLeft > selectionRight ||
-            itemBottom < selectionTop ||
-            itemTop > selectionBottom
-          )
-        ) {
-          const fileId = item.getAttribute("data-file-id");
-          if (fileId) selectedIds.push(fileId);
-        }
-      });
+              if (
+                !(right < selL || left > selR || bottom < selT || top > selB)
+              ) {
+                const id = item.getAttribute("data-file-id");
+                if (id) selectedIds.push(id);
+              }
+            });
 
-      onSelectionChange(selectedIds);
+          onSelectionChangeRef.current(selectedIds, additiveRef.current);
+          rafRef.current = null;
+        });
+      }
     };
 
-    const handleMouseUp = () => {
+    const handleMouseUp = (e: MouseEvent) => {
+      if (!mouseDownRef.current) return;
+      mouseDownRef.current = false;
+      if (!isSelectingRef.current) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      // ensure last frame runs
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+      // flush pendingRect once more
+      const rect = container.getBoundingClientRect();
+      const endX = e.clientX - rect.left + container.scrollLeft;
+      const endY = e.clientY - rect.top + container.scrollTop;
+      const finalRect = { startX, startY, endX, endY };
+      pendingRectRef.current = finalRect;
+
+      // run same logic synchronously
+      setSelectionRect(finalRect);
+      const selL = Math.min(startX, endX);
+      const selT = Math.min(startY, endY);
+      const selR = Math.max(startX, endX);
+      const selB = Math.max(startY, endY);
+      const selectedIds: string[] = [];
+      container
+        .querySelectorAll<HTMLElement>("[data-file-id]")
+        .forEach((item) => {
+          const ir = item.getBoundingClientRect();
+          const left = ir.left - rect.left + container.scrollLeft;
+          const top = ir.top - rect.top + container.scrollTop;
+          const right = left + ir.width;
+          const bottom = top + ir.height;
+          if (!(right < selL || left > selR || bottom < selT || top > selB)) {
+            const id = item.getAttribute("data-file-id");
+            if (id) selectedIds.push(id);
+          }
+        });
+      onSelectionChangeRef.current(selectedIds, additiveRef.current);
+
       setIsSelecting(false);
+      isSelectingRef.current = false;
       setSelectionRect(null);
+      setTimeout(() => onSelectingChangeRef.current?.(false), 50);
     };
 
     container.addEventListener("mousedown", handleMouseDown);
     document.addEventListener("mousemove", handleMouseMove);
     document.addEventListener("mouseup", handleMouseUp);
-
     return () => {
       container.removeEventListener("mousedown", handleMouseDown);
       document.removeEventListener("mousemove", handleMouseMove);
       document.removeEventListener("mouseup", handleMouseUp);
     };
-  }, [isSelecting, onSelectionChange]);
+  }, []);
 
   const getSelectionStyle = () => {
     if (!selectionRect) return {};
-
     const { startX, startY, endX, endY } = selectionRect;
-    const left = Math.min(startX, endX);
-    const top = Math.min(startY, endY);
+    const container = containerRef.current!;
+    const left = Math.min(startX, endX) - container.scrollLeft;
+    const top = Math.min(startY, endY) - container.scrollTop;
     const width = Math.abs(endX - startX);
     const height = Math.abs(endY - startY);
-
     return {
       left: `${left}px`,
       top: `${top}px`,
       width: `${width}px`,
       height: `${height}px`,
+      willChange: "left, top, width, height",
     };
   };
 
   return (
-    <div ref={containerRef} className="relative select-none">
+    <div ref={containerRef} className="relative select-none overflow-auto">
       {children}
       {isSelecting && selectionRect && (
         <div
