@@ -20,12 +20,14 @@ interface AppContextType {
   viewMode: "grid" | "list";
   sidebarOpen: boolean;
   uploadModalOpen: boolean;
+  createFolderModalOpen: boolean;
   setCurrentPath: (path: string[], ids?: (string | null)[]) => void;
   setFiles: (files: FileItem[]) => void;
   setSelectedFiles: (ids: string[]) => void;
   setViewMode: (mode: "grid" | "list") => void;
   setSidebarOpen: (open: boolean) => void;
   setUploadModalOpen: (open: boolean) => void;
+  setCreateFolderModalOpen: (open: boolean) => void;
   addSelectedFile: (id: string) => void;
   removeSelectedFile: (id: string) => void;
   clearSelection: () => void;
@@ -56,6 +58,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   const [viewMode, setViewMode] = useState<"grid" | "list">("list"); // Changed default to 'list'
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
+  const [createFolderModalOpen, setCreateFolderModalOpen] = useState(false);
 
   const refreshFiles = async () => {
     try {
@@ -146,12 +149,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         viewMode,
         sidebarOpen,
         uploadModalOpen,
+        createFolderModalOpen,
         setCurrentPath,
         setFiles,
         setSelectedFiles,
         setViewMode,
         setSidebarOpen,
         setUploadModalOpen,
+        setCreateFolderModalOpen,
         addSelectedFile,
         removeSelectedFile,
         clearSelection,

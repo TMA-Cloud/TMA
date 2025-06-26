@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Grid, List, SortAsc } from "lucide-react";
+import { Grid, List, SortAsc, FolderPlus } from "lucide-react";
 import { useApp } from "../../contexts/AppContext";
 import { Breadcrumbs } from "./Breadcrumbs";
 import { MarqueeSelector } from "./MarqueeSelector";
@@ -17,6 +17,7 @@ export const FileManager: React.FC = () => {
     removeSelectedFile,
     clearSelection,
     openFolder,
+    setCreateFolderModalOpen,
   } = useApp();
 
   const [contextMenu, setContextMenu] = useState<{
@@ -115,6 +116,13 @@ export const FileManager: React.FC = () => {
             `}
           >
             <List className="w-5 h-5" />
+          </button>
+
+          <button
+            className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-lg"
+            onClick={() => setCreateFolderModalOpen(true)}
+          >
+            <FolderPlus className="w-5 h-5" />
           </button>
 
           <button className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-lg">

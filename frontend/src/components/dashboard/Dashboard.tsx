@@ -5,7 +5,7 @@ import { useApp } from "../../contexts/AppContext";
 import { Upload, FolderPlus, Share2, Star } from "lucide-react";
 
 export const Dashboard: React.FC = () => {
-  const { files, setUploadModalOpen, createFolder } = useApp();
+  const { files, setUploadModalOpen, setCreateFolderModalOpen } = useApp();
 
   const quickActions = [
     {
@@ -18,10 +18,7 @@ export const Dashboard: React.FC = () => {
       title: "Create Folder",
       icon: FolderPlus,
       color: "bg-green-500 hover:bg-green-600",
-      onClick: () => {
-        const name = window.prompt("Folder name");
-        if (name) createFolder(name);
-      },
+      onClick: () => setCreateFolderModalOpen(true),
     },
     {
       title: "Share Files",
