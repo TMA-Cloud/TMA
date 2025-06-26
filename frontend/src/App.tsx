@@ -1,6 +1,7 @@
-import React from "react";
+import React, { useState } from "react";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { AppProvider, useApp } from "./contexts/AppContext";
+import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { ToastProvider } from "./hooks/useToast";
 import { Sidebar } from "./components/layout/Sidebar";
 import { Header } from "./components/layout/Header";
@@ -8,6 +9,8 @@ import { Dashboard } from "./components/dashboard/Dashboard";
 import { FileManager } from "./components/fileManager/FileManager";
 import { Settings } from "./components/settings/Settings";
 import { UploadModal } from "./components/upload/UploadModal";
+import { LoginForm } from "./components/auth/LoginForm";
+import { SignupForm } from "./components/auth/SignupForm";
 
 const AppContent: React.FC = () => {
   const { currentPath, sidebarOpen } = useApp();
@@ -46,13 +49,36 @@ const AppContent: React.FC = () => {
   );
 };
 
+const AuthGate: React.FC = () => {
+  const { user } = useAuth();
+  const [view, setView] = useState<"login" | "signup">("login");
+
+  if (!user) {
+    return view === "login" ? (
+      <div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+        <LoginForm onSwitch={() => setView("signup")} />
+      </div>
+    ) : (
+      <div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+        <SignupForm onSwitch={() => setView("login")} />
+      </div>
+    );
+  }
+
+  return (
+    <AppProvider>
+      <AppContent />
+    </AppProvider>
+  );
+};
+
 function App() {
   return (
     <ThemeProvider>
       <ToastProvider>
-        <AppProvider>
-          <AppContent />
-        </AppProvider>
+        <AuthProvider>
+          <AuthGate />
+        </AuthProvider>
       </ToastProvider>
     </ThemeProvider>
   );

@@ -1,17 +1,19 @@
 import React from "react";
 import { useTheme } from "../../contexts/ThemeContext";
+import { useAuth } from "../../contexts/AuthContext";
 import { User, Bell, Shield, HardDrive } from "lucide-react";
 
 export const Settings: React.FC = () => {
   const { theme, toggleTheme } = useTheme();
+  const { user } = useAuth();
 
   const settingsSections = [
     {
       title: "Profile",
       icon: User,
       items: [
-        { label: "Full Name", value: "John Doe" },
-        { label: "Email", value: "john@example.com" },
+        { label: "Full Name", value: user?.name || "" },
+        { label: "Email", value: user?.email || "" },
       ],
     },
     {

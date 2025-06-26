@@ -3,11 +3,17 @@ const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
 const pool = require('./config/db');
+const authRoutes = require('./routes/auth.routes');
 require('dotenv').config();
 
 const app = express();
-app.use(cors());
+const corsOptions = {
+  origin: process.env.CLIENT_URL || 'http://localhost:5173',
+  credentials: true,
+};
+app.use(cors(corsOptions));
 app.use(express.json());
+app.use('/api', authRoutes);
 
 async function runMigrations() {
   const client = await pool.connect();
