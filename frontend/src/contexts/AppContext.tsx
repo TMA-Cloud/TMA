@@ -14,12 +14,13 @@ export interface FileItem {
 
 interface AppContextType {
   currentPath: string[];
+  folderStack: (string | null)[];
   files: FileItem[];
   selectedFiles: string[];
   viewMode: "grid" | "list";
   sidebarOpen: boolean;
   uploadModalOpen: boolean;
-  setCurrentPath: (path: string[]) => void;
+  setCurrentPath: (path: string[], ids?: (string | null)[]) => void;
   setFiles: (files: FileItem[]) => void;
   setSelectedFiles: (ids: string[]) => void;
   setViewMode: (mode: "grid" | "list") => void;
@@ -28,6 +29,11 @@ interface AppContextType {
   addSelectedFile: (id: string) => void;
   removeSelectedFile: (id: string) => void;
   clearSelection: () => void;
+  refreshFiles: () => Promise<void>;
+  createFolder: (name: string) => Promise<void>;
+  uploadFile: (file: File) => Promise<void>;
+  openFolder: (folder: FileItem) => void;
+  navigateTo: (index: number) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -43,30 +49,61 @@ export const useApp = () => {
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
-  const [currentPath, setCurrentPath] = useState<string[]>(["My Files"]);
+  const [currentPath, setCurrentPathState] = useState<string[]>(["My Files"]);
+  const [folderStack, setFolderStack] = useState<(string | null)[]>([null]);
   const [files, setFiles] = useState<FileItem[]>([]);
   const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
   const [viewMode, setViewMode] = useState<"grid" | "list">("list"); // Changed default to 'list'
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
 
+  const refreshFiles = async () => {
+    try {
+      const parentId = folderStack[folderStack.length - 1];
+      const url = new URL(`${import.meta.env.VITE_API_URL}/api/files`);
+      if (parentId) url.searchParams.append("parentId", parentId);
+      const res = await fetch(url.toString(), { credentials: "include" });
+      const data = await res.json();
+      setFiles(
+        data.map((f: any) => ({
+          ...f,
+          modified: new Date(f.modified),
+        })),
+      );
+    } catch (e) {
+      console.error("Failed to load files", e);
+    }
+  };
+
   useEffect(() => {
-    const fetchFiles = async () => {
-      try {
-        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/files`);
-        const data = await res.json();
-        setFiles(
-          data.map((f: any) => ({
-            ...f,
-            modified: new Date(f.modified),
-          })),
-        );
-      } catch (e) {
-        console.error("Failed to load files", e);
-      }
-    };
-    fetchFiles();
-  }, []);
+    refreshFiles();
+  }, [folderStack]);
+
+  const createFolder = async (name: string) => {
+    await fetch(`${import.meta.env.VITE_API_URL}/api/files/folder`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        name,
+        parentId: folderStack[folderStack.length - 1],
+      }),
+    });
+    await refreshFiles();
+  };
+
+  const uploadFile = async (file: File) => {
+    const data = new FormData();
+    data.append("file", file);
+    const parentId = folderStack[folderStack.length - 1];
+    if (parentId) data.append("parentId", parentId);
+    await fetch(`${import.meta.env.VITE_API_URL}/api/files/upload`, {
+      method: "POST",
+      credentials: "include",
+      body: data,
+    });
+    await refreshFiles();
+  };
 
   const addSelectedFile = (id: string) => {
     setSelectedFiles((prev) => [...prev, id]);
@@ -80,10 +117,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
     setSelectedFiles([]);
   };
 
+  const setCurrentPath = (path: string[], ids?: (string | null)[]) => {
+    setCurrentPathState(path);
+    if (ids) {
+      setFolderStack(ids);
+    } else {
+      setFolderStack(Array(path.length).fill(null));
+    }
+  };
+
+  const openFolder = (folder: FileItem) => {
+    setCurrentPathState((p) => [...p, folder.name]);
+    setFolderStack((p) => [...p, folder.id]);
+  };
+
+  const navigateTo = (index: number) => {
+    setCurrentPathState((p) => p.slice(0, index + 1));
+    setFolderStack((p) => p.slice(0, index + 1));
+  };
+
   return (
     <AppContext.Provider
       value={{
         currentPath,
+        folderStack,
         files,
         selectedFiles,
         viewMode,
@@ -98,6 +155,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         addSelectedFile,
         removeSelectedFile,
         clearSelection,
+        refreshFiles,
+        createFolder,
+        uploadFile,
+        openFolder,
+        navigateTo,
       }}
     >
       {children}

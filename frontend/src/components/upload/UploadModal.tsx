@@ -11,7 +11,7 @@ interface UploadFile {
 }
 
 export const UploadModal: React.FC = () => {
-  const { uploadModalOpen, setUploadModalOpen } = useApp();
+  const { uploadModalOpen, setUploadModalOpen, uploadFile } = useApp();
   const [uploadFiles, setUploadFiles] = useState<UploadFile[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -28,43 +28,31 @@ export const UploadModal: React.FC = () => {
 
     setUploadFiles((prev) => [...prev, ...newUploadFiles]);
 
-    // Simulate upload progress
-    newUploadFiles.forEach((uploadFile) => {
-      simulateUpload(uploadFile.id);
-    });
-  };
-
-  const simulateUpload = (fileId: string) => {
-    setUploadFiles((prev) =>
-      prev.map((f) =>
-        f.id === fileId ? { ...f, status: "uploading" as const } : f,
-      ),
-    );
-
-    const interval = setInterval(() => {
-      setUploadFiles((prev) => {
-        const file = prev.find((f) => f.id === fileId);
-        if (!file || file.progress >= 100) {
-          clearInterval(interval);
-          if (file && file.progress >= 100) {
-            setTimeout(() => {
-              setUploadFiles((prev) =>
-                prev.map((f) =>
-                  f.id === fileId ? { ...f, status: "completed" as const } : f,
-                ),
-              );
-            }, 500);
-          }
-          return prev;
-        }
-
-        return prev.map((f) =>
-          f.id === fileId
-            ? { ...f, progress: Math.min(f.progress + Math.random() * 20, 100) }
+    newUploadFiles.forEach(async (uploadFileItem) => {
+      setUploadFiles((prev) =>
+        prev.map((f) =>
+          f.id === uploadFileItem.id
+            ? { ...f, status: "uploading" as const }
             : f,
+        ),
+      );
+      try {
+        await uploadFile(uploadFileItem.file);
+        setUploadFiles((prev) =>
+          prev.map((f) =>
+            f.id === uploadFileItem.id
+              ? { ...f, progress: 100, status: "completed" as const }
+              : f,
+          ),
         );
-      });
-    }, 200);
+      } catch {
+        setUploadFiles((prev) =>
+          prev.map((f) =>
+            f.id === uploadFileItem.id ? { ...f, status: "error" as const } : f,
+          ),
+        );
+      }
+    });
   };
 
   const handleDrop = (e: React.DragEvent) => {

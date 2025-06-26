@@ -16,6 +16,7 @@ export const FileManager: React.FC = () => {
     addSelectedFile,
     removeSelectedFile,
     clearSelection,
+    openFolder,
   } = useApp();
 
   const [contextMenu, setContextMenu] = useState<{
@@ -54,10 +55,8 @@ export const FileManager: React.FC = () => {
 
   const handleFileDoubleClick = (file: any) => {
     if (file.type === "folder") {
-      // Navigate into folder
-      console.log("Navigate to folder:", file.name);
+      openFolder(file);
     } else {
-      // Open file
       console.log("Open file:", file.name);
     }
   };

@@ -3,17 +3,16 @@ import { ChevronRight, Home } from "lucide-react";
 import { useApp } from "../../contexts/AppContext";
 
 export const Breadcrumbs: React.FC = () => {
-  const { currentPath, setCurrentPath } = useApp();
+  const { currentPath, navigateTo, setCurrentPath } = useApp();
 
   const handleNavigation = (index: number) => {
-    const newPath = currentPath.slice(0, index + 1);
-    setCurrentPath(newPath);
+    navigateTo(index);
   };
 
   return (
     <nav className="flex items-center space-x-1 text-sm">
       <button
-        onClick={() => setCurrentPath(["My Files"])}
+        onClick={() => setCurrentPath(["My Files"], [null])}
         className="flex items-center space-x-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
       >
         <Home className="w-4 h-4" />

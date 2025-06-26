@@ -1,0 +1,2 @@
+ALTER TABLE files ADD COLUMN IF NOT EXISTS user_id TEXT REFERENCES users(id) ON DELETE CASCADE;
+CREATE INDEX IF NOT EXISTS idx_files_user_id ON files(user_id);

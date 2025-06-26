@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const pool = require('./config/db');
 const authRoutes = require('./routes/auth.routes');
+const fileRoutes = require('./routes/file.routes');
 require('dotenv').config();
 
 const app = express();
@@ -14,6 +15,7 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json());
 app.use('/api', authRoutes);
+app.use('/api/files', fileRoutes);
 
 async function runMigrations() {
   const client = await pool.connect();
@@ -43,17 +45,6 @@ async function runMigrations() {
   }
 }
 
-app.get('/api/files', async (req, res) => {
-  try {
-    const result = await pool.query(
-      'SELECT id, name, type, size, modified, mime_type AS "mimeType", starred, shared FROM files'
-    );
-    res.json(result.rows);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Database error' });
-  }
-});
 
 runMigrations()
   .then(() => {
