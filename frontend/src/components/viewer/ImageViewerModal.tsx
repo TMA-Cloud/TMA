@@ -7,25 +7,23 @@ export const ImageViewerModal: React.FC = () => {
   const { imageViewerFile, setImageViewerFile } = useApp();
   const [zoom, setZoom] = useState(1);
   const [imageSrc, setImageSrc] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  // refs for DOM nodes
   const containerRef = useRef<HTMLDivElement | null>(null);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const imgRef = useRef<HTMLImageElement | null>(null);
 
-  // pan offset stored in ref
   const offset = useRef({ x: 0, y: 0 });
-  // dragging state
   const dragOrigin = useRef<{ x: number; y: number } | null>(null);
   const [dragging, setDragging] = useState(false);
   const lastMousePos = useRef({ x: 0, y: 0 });
 
-  // load image blob & reset state
   useEffect(() => {
     let revoke: (() => void) | undefined;
     if (imageViewerFile) {
       setZoom(1);
       offset.current = { x: 0, y: 0 };
+      setLoading(true);
       const load = async () => {
         try {
           const res = await fetch(
@@ -38,20 +36,19 @@ export const ImageViewerModal: React.FC = () => {
           revoke = () => URL.revokeObjectURL(url);
         } catch {
           setImageSrc(null);
+        } finally {
+          setLoading(false);
         }
       };
       load();
     } else {
       setImageSrc(null);
     }
-    return () => {
-      if (revoke) revoke();
-    };
+    return () => revoke?.();
   }, [imageViewerFile]);
 
   const handleClose = () => setImageViewerFile(null);
 
-  // clamp offset so the image never leaves the container entirely
   const clampOffset = (newZoom: number) => {
     const cont = containerRef.current;
     const img = imgRef.current;
@@ -62,7 +59,6 @@ export const ImageViewerModal: React.FC = () => {
     const iw = img.naturalWidth * newZoom;
     const ih = img.naturalHeight * newZoom;
 
-    // minimum allowed x/y so right/bottom edges don't go past
     const minX = Math.min(0, cw - iw);
     const minY = Math.min(0, ch - ih);
 
@@ -70,16 +66,13 @@ export const ImageViewerModal: React.FC = () => {
     offset.current.y = Math.max(minY, Math.min(0, offset.current.y));
   };
 
-  // apply the transform to the wrapper div
-  const applyTransform = (newZoom?: number) => {
-    const z = newZoom !== undefined ? newZoom : zoom;
-    clampOffset(z);
+  const applyTransform = (newZoom = zoom) => {
+    clampOffset(newZoom);
     if (wrapperRef.current) {
-      wrapperRef.current.style.transform = `translate(${offset.current.x}px, ${offset.current.y}px) scale(${z})`;
+      wrapperRef.current.style.transform = `translate(${offset.current.x}px, ${offset.current.y}px) scale(${newZoom})`;
     }
   };
 
-  // pointer down → start panning
   const handlePointerDown = (e: React.PointerEvent) => {
     e.preventDefault();
     setDragging(true);
@@ -88,7 +81,6 @@ export const ImageViewerModal: React.FC = () => {
     window.addEventListener("pointerup", handlePointerUp);
   };
 
-  // pointer move → update offset & transform
   const handlePointerMove = (e: PointerEvent) => {
     lastMousePos.current = { x: e.clientX, y: e.clientY };
     if (!dragOrigin.current) return;
@@ -100,7 +92,6 @@ export const ImageViewerModal: React.FC = () => {
     applyTransform();
   };
 
-  // pointer up → stop panning
   const handlePointerUp = () => {
     setDragging(false);
     dragOrigin.current = null;
@@ -108,12 +99,10 @@ export const ImageViewerModal: React.FC = () => {
     window.removeEventListener("pointerup", handlePointerUp);
   };
 
-  // wheel → zoom under cursor
   const handleWheel = (e: React.WheelEvent) => {
     e.preventDefault();
     const newZoom =
       e.deltaY < 0 ? Math.min(zoom + 0.25, 5) : Math.max(zoom - 0.25, 0.25);
-
     const wrap = wrapperRef.current;
     if (!wrap) {
       setZoom(newZoom);
@@ -121,11 +110,9 @@ export const ImageViewerModal: React.FC = () => {
     }
 
     const rect = wrap.getBoundingClientRect();
-    // image-space coords of cursor:
     const imgX = (e.clientX - rect.left - offset.current.x) / zoom;
     const imgY = (e.clientY - rect.top - offset.current.y) / zoom;
 
-    // recompute offset so that point stays under cursor
     offset.current = {
       x: e.clientX - rect.left - imgX * newZoom,
       y: e.clientY - rect.top - imgY * newZoom,
@@ -135,13 +122,10 @@ export const ImageViewerModal: React.FC = () => {
     applyTransform(newZoom);
   };
 
-  // buttons → zoom at lastMousePos
   const zoomAtCursor = (newZoom: number) => {
     const wrap = wrapperRef.current;
-    if (!wrap) {
-      setZoom(newZoom);
-      return;
-    }
+    if (!wrap) return setZoom(newZoom);
+
     const rect = wrap.getBoundingClientRect();
     const { x: cx, y: cy } = lastMousePos.current;
     const imgX = (cx - rect.left - offset.current.x) / zoom;
@@ -158,12 +142,17 @@ export const ImageViewerModal: React.FC = () => {
   const zoomInHandler = () => zoomAtCursor(Math.min(zoom + 0.25, 5));
   const zoomOutHandler = () => zoomAtCursor(Math.max(zoom - 0.25, 0.25));
 
+  const resetZoom = () => {
+    offset.current = { x: 0, y: 0 };
+    setZoom(1);
+    applyTransform(1);
+  };
+
   if (!imageViewerFile) return null;
 
   return (
     <Modal isOpen onClose={handleClose} title={imageViewerFile.name} size="xl">
-      <div className="relative flex justify-center items-center max-h-[70vh]">
-        {/* container captures drag & wheel */}
+      <div className="relative flex justify-center items-center h-[70vh] bg-gray-100 dark:bg-gray-900 rounded-md overflow-hidden">
         <div
           ref={containerRef}
           onPointerDown={handlePointerDown}
@@ -171,40 +160,55 @@ export const ImageViewerModal: React.FC = () => {
           onMouseMove={(e) =>
             (lastMousePos.current = { x: e.clientX, y: e.clientY })
           }
-          style={{ touchAction: "none" }}
-          className={`overflow-hidden max-h-[70vh] ${dragging ? "cursor-grabbing" : "cursor-grab"}`}
+          onDoubleClick={resetZoom}
+          className={`w-full h-full touch-none ${dragging ? "cursor-grabbing" : "cursor-grab"}`}
         >
-          {/* wrapper is translated & scaled */}
           <div
             ref={wrapperRef}
+            className="transition-transform will-change-transform"
             style={{
               transform: `translate(${offset.current.x}px, ${offset.current.y}px) scale(${zoom})`,
               transformOrigin: "0 0",
             }}
           >
-            {imageSrc && (
-              <img
-                ref={imgRef}
-                src={imageSrc}
-                alt={imageViewerFile.name}
-                draggable={false}
-                className="select-none pointer-events-none"
-              />
+            {loading ? (
+              <div className="flex justify-center items-center h-full">
+                <span className="text-sm text-gray-500 dark:text-gray-400">
+                  Loading image...
+                </span>
+              </div>
+            ) : (
+              imageSrc && (
+                <img
+                  ref={imgRef}
+                  src={imageSrc}
+                  alt={imageViewerFile.name}
+                  draggable={false}
+                  className="select-none pointer-events-none max-w-none"
+                />
+              )
             )}
           </div>
         </div>
 
-        {/* zoom buttons */}
-        <div className="absolute bottom-4 right-4 flex space-x-3 bg-white/70 dark:bg-gray-800/70 p-2 rounded-md">
+        {/* Zoom controls */}
+        <div className="absolute bottom-4 right-4 flex items-center space-x-2 bg-white/80 dark:bg-gray-800/80 px-3 py-2 rounded-md shadow-md">
           <button
             onClick={zoomOutHandler}
-            className="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700"
+            className="p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700"
+            disabled={zoom <= 0.25}
+            title="Zoom Out"
           >
             <ZoomOut className="w-5 h-5" />
           </button>
+          <span className="text-sm w-12 text-center">
+            {(zoom * 100).toFixed(0)}%
+          </span>
           <button
             onClick={zoomInHandler}
-            className="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700"
+            className="p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700"
+            disabled={zoom >= 5}
+            title="Zoom In"
           >
             <ZoomIn className="w-5 h-5" />
           </button>
