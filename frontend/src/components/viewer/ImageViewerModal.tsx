@@ -7,17 +7,25 @@ export const ImageViewerModal: React.FC = () => {
   const { imageViewerFile, setImageViewerFile } = useApp();
   const [zoom, setZoom] = useState(1);
   const [imageSrc, setImageSrc] = useState<string | null>(null);
-  const [offset, setOffset] = useState({ x: 0, y: 0 });
-  const [dragging, setDragging] = useState(false);
-  const lastPos = useRef<{ x: number; y: number } | null>(null);
-  const pointerId = useRef<number | null>(null);
-  const wheelContainerRef = useRef<HTMLDivElement | null>(null);
 
+  // refs for DOM nodes
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const imgRef = useRef<HTMLImageElement | null>(null);
+
+  // pan offset stored in ref
+  const offset = useRef({ x: 0, y: 0 });
+  // dragging state
+  const dragOrigin = useRef<{ x: number; y: number } | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const lastMousePos = useRef({ x: 0, y: 0 });
+
+  // load image blob & reset state
   useEffect(() => {
     let revoke: (() => void) | undefined;
     if (imageViewerFile) {
       setZoom(1);
-      setOffset({ x: 0, y: 0 });
+      offset.current = { x: 0, y: 0 };
       const load = async () => {
         try {
           const res = await fetch(
@@ -42,83 +50,151 @@ export const ImageViewerModal: React.FC = () => {
   }, [imageViewerFile]);
 
   const handleClose = () => setImageViewerFile(null);
-  const zoomInHandler = () => setZoom((z) => Math.min(z + 0.25, 5));
-  const zoomOutHandler = () => setZoom((z) => Math.max(z - 0.25, 0.25));
 
-  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    setDragging(true);
-    pointerId.current = e.pointerId;
-    lastPos.current = { x: e.clientX, y: e.clientY };
-    window.addEventListener("pointermove", onPointerMove);
-    window.addEventListener("pointerup", endDrag);
+  // clamp offset so the image never leaves the container entirely
+  const clampOffset = (newZoom: number) => {
+    const cont = containerRef.current;
+    const img = imgRef.current;
+    if (!cont || !img) return;
+
+    const cw = cont.clientWidth;
+    const ch = cont.clientHeight;
+    const iw = img.naturalWidth * newZoom;
+    const ih = img.naturalHeight * newZoom;
+
+    // minimum allowed x/y so right/bottom edges don't go past
+    const minX = Math.min(0, cw - iw);
+    const minY = Math.min(0, ch - ih);
+
+    offset.current.x = Math.max(minX, Math.min(0, offset.current.x));
+    offset.current.y = Math.max(minY, Math.min(0, offset.current.y));
   };
 
-  const onPointerMove = (e: PointerEvent) => {
-    if (!dragging || !lastPos.current) return;
-    const dx = e.clientX - lastPos.current.x;
-    const dy = e.clientY - lastPos.current.y;
-    lastPos.current = { x: e.clientX, y: e.clientY };
-    setOffset((o) => ({ x: o.x + dx, y: o.y + dy }));
-  };
-
-  const endDrag = () => {
-    setDragging(false);
-    lastPos.current = null;
-    if (pointerId.current !== null) {
-      window.removeEventListener("pointermove", onPointerMove);
-      window.removeEventListener("pointerup", endDrag);
-      pointerId.current = null;
+  // apply the transform to the wrapper div
+  const applyTransform = (newZoom?: number) => {
+    const z = newZoom !== undefined ? newZoom : zoom;
+    clampOffset(z);
+    if (wrapperRef.current) {
+      wrapperRef.current.style.transform = `translate(${offset.current.x}px, ${offset.current.y}px) scale(${z})`;
     }
   };
 
-  useEffect(() => {
-    const el = wheelContainerRef.current;
-    if (!el) return;
-    const handler = (e: WheelEvent) => {
-      e.preventDefault();
-      if (e.deltaY < 0) {
-        setZoom((z) => Math.min(z + 0.25, 5));
-      } else if (e.deltaY > 0) {
-        setZoom((z) => Math.max(z - 0.25, 0.25));
-      }
+  // pointer down → start panning
+  const handlePointerDown = (e: React.PointerEvent) => {
+    e.preventDefault();
+    setDragging(true);
+    dragOrigin.current = { x: e.clientX, y: e.clientY };
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+  };
+
+  // pointer move → update offset & transform
+  const handlePointerMove = (e: PointerEvent) => {
+    lastMousePos.current = { x: e.clientX, y: e.clientY };
+    if (!dragOrigin.current) return;
+    const dx = e.clientX - dragOrigin.current.x;
+    const dy = e.clientY - dragOrigin.current.y;
+    dragOrigin.current = { x: e.clientX, y: e.clientY };
+    offset.current.x += dx;
+    offset.current.y += dy;
+    applyTransform();
+  };
+
+  // pointer up → stop panning
+  const handlePointerUp = () => {
+    setDragging(false);
+    dragOrigin.current = null;
+    window.removeEventListener("pointermove", handlePointerMove);
+    window.removeEventListener("pointerup", handlePointerUp);
+  };
+
+  // wheel → zoom under cursor
+  const handleWheel = (e: React.WheelEvent) => {
+    e.preventDefault();
+    const newZoom =
+      e.deltaY < 0 ? Math.min(zoom + 0.25, 5) : Math.max(zoom - 0.25, 0.25);
+
+    const wrap = wrapperRef.current;
+    if (!wrap) {
+      setZoom(newZoom);
+      return;
+    }
+
+    const rect = wrap.getBoundingClientRect();
+    // image-space coords of cursor:
+    const imgX = (e.clientX - rect.left - offset.current.x) / zoom;
+    const imgY = (e.clientY - rect.top - offset.current.y) / zoom;
+
+    // recompute offset so that point stays under cursor
+    offset.current = {
+      x: e.clientX - rect.left - imgX * newZoom,
+      y: e.clientY - rect.top - imgY * newZoom,
     };
-    el.addEventListener("wheel", handler, { passive: false });
-    return () => {
-      el.removeEventListener("wheel", handler);
+
+    setZoom(newZoom);
+    applyTransform(newZoom);
+  };
+
+  // buttons → zoom at lastMousePos
+  const zoomAtCursor = (newZoom: number) => {
+    const wrap = wrapperRef.current;
+    if (!wrap) {
+      setZoom(newZoom);
+      return;
+    }
+    const rect = wrap.getBoundingClientRect();
+    const { x: cx, y: cy } = lastMousePos.current;
+    const imgX = (cx - rect.left - offset.current.x) / zoom;
+    const imgY = (cy - rect.top - offset.current.y) / zoom;
+
+    offset.current = {
+      x: cx - rect.left - imgX * newZoom,
+      y: cy - rect.top - imgY * newZoom,
     };
-  }, [imageViewerFile]);
+    setZoom(newZoom);
+    applyTransform(newZoom);
+  };
+
+  const zoomInHandler = () => zoomAtCursor(Math.min(zoom + 0.25, 5));
+  const zoomOutHandler = () => zoomAtCursor(Math.max(zoom - 0.25, 0.25));
 
   if (!imageViewerFile) return null;
 
   return (
-    <Modal
-      isOpen={!!imageViewerFile}
-      onClose={handleClose}
-      title={imageViewerFile.name}
-      size="xl"
-    >
-      <div className="relative flex justify-center items-center max-h-[70vh] overflow-hidden">
+    <Modal isOpen onClose={handleClose} title={imageViewerFile.name} size="xl">
+      <div className="relative flex justify-center items-center max-h-[70vh]">
+        {/* container captures drag & wheel */}
         <div
-          className={`w-full flex justify-center items-center ${
-            zoom > 1 ? (dragging ? "cursor-grabbing" : "cursor-grab") : ""
-          }`}
-          ref={wheelContainerRef}
+          ref={containerRef}
+          onPointerDown={handlePointerDown}
+          onWheel={handleWheel}
+          onMouseMove={(e) =>
+            (lastMousePos.current = { x: e.clientX, y: e.clientY })
+          }
           style={{ touchAction: "none" }}
-          onPointerDown={onPointerDown}
+          className={`overflow-hidden max-h-[70vh] ${dragging ? "cursor-grabbing" : "cursor-grab"}`}
         >
-          {imageSrc && (
-            <img
-              src={imageSrc}
-              alt={imageViewerFile.name}
-              style={{
-                transform: `translate(${offset.x}px, ${offset.y}px) scale(${zoom})`,
-              }}
-              className="transition-transform select-none pointer-events-none"
-              draggable={false}
-            />
-          )}
+          {/* wrapper is translated & scaled */}
+          <div
+            ref={wrapperRef}
+            style={{
+              transform: `translate(${offset.current.x}px, ${offset.current.y}px) scale(${zoom})`,
+              transformOrigin: "0 0",
+            }}
+          >
+            {imageSrc && (
+              <img
+                ref={imgRef}
+                src={imageSrc}
+                alt={imageViewerFile.name}
+                draggable={false}
+                className="select-none pointer-events-none"
+              />
+            )}
+          </div>
         </div>
+
+        {/* zoom buttons */}
         <div className="absolute bottom-4 right-4 flex space-x-3 bg-white/70 dark:bg-gray-800/70 p-2 rounded-md">
           <button
             onClick={zoomOutHandler}
