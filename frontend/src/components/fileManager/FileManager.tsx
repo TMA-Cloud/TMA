@@ -6,6 +6,159 @@ import { MarqueeSelector } from "./MarqueeSelector";
 import { ContextMenu } from "./ContextMenu";
 import { FileItemComponent } from "./FileItem";
 
+const transparentImage = new Image();
+transparentImage.src =
+  "data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=";
+
+// separate scaling factors so we can tweak width/height individually
+const PREVIEW_WIDTH_SCALE = 0.5;
+const PREVIEW_HEIGHT_SCALE = 1.2;
+
+const animateFlyToFolder = async (ids: string[], folderId: string) => {
+  if (ids.length === 0) return;
+  const target = document.querySelector<HTMLElement>(
+    `[data-file-id="${folderId}"]`,
+  );
+  const first = document.querySelector<HTMLElement>(
+    `[data-file-id="${ids[0]}"]`,
+  );
+  if (!target || !first) return;
+  const targetRect = target.getBoundingClientRect();
+  const startRect = first.getBoundingClientRect();
+
+  const wrapper = document.createElement("div");
+  wrapper.className = "drag-preview";
+  wrapper.style.position = "fixed";
+  wrapper.style.pointerEvents = "none";
+  wrapper.style.top = `${startRect.top}px`;
+  wrapper.style.left = `${startRect.left}px`;
+  wrapper.style.width = `${startRect.width + 4 * (Math.min(ids.length, 3) - 1)}px`;
+  wrapper.style.height = `${startRect.height + 4 * (Math.min(ids.length, 3) - 1)}px`;
+  wrapper.style.transform = `scale(${PREVIEW_WIDTH_SCALE}, ${PREVIEW_HEIGHT_SCALE})`;
+  wrapper.style.zIndex = "9999";
+  wrapper.style.setProperty("--preview-scale-x", String(PREVIEW_WIDTH_SCALE));
+  wrapper.style.setProperty("--preview-scale-y", String(PREVIEW_HEIGHT_SCALE));
+  wrapper.style.setProperty("--badge-scale-x", String(1 / PREVIEW_WIDTH_SCALE));
+  wrapper.style.setProperty(
+    "--badge-scale-y",
+    String(1 / PREVIEW_HEIGHT_SCALE),
+  );
+
+  const stack = document.createElement("div");
+  stack.className = "preview-stack";
+  wrapper.appendChild(stack);
+
+  ids.slice(0, 3).forEach((id, idx) => {
+    const el =
+      document.querySelector<HTMLElement>(`[data-file-id="${id}"]`) ?? first;
+    const rect = el.getBoundingClientRect();
+    const clone = el.cloneNode(true) as HTMLElement;
+    clone.classList.add("preview-item");
+    clone.style.width = `${rect.width}px`;
+    clone.style.height = `${rect.height}px`;
+    clone.style.transform = `translate(${idx * 4}px, ${idx * 4}px)`;
+    stack.appendChild(clone);
+  });
+
+  if (ids.length > 1) {
+    const badge = document.createElement("div");
+    badge.className = "preview-count";
+    badge.textContent = String(ids.length);
+    stack.appendChild(badge);
+  }
+
+  document.body.appendChild(wrapper);
+
+  const deltaX = targetRect.left - startRect.left;
+  const deltaY = targetRect.top - startRect.top;
+
+  await new Promise<void>((resolve) => {
+    requestAnimationFrame(() => {
+      wrapper.style.transition =
+        "transform 0.3s ease-in-out, opacity 0.3s ease-in-out";
+      wrapper.style.transform = `translate(${deltaX}px, ${deltaY}px) scale(${PREVIEW_WIDTH_SCALE * 0.5}, ${PREVIEW_HEIGHT_SCALE * 0.5})`;
+      wrapper.style.opacity = "0";
+      wrapper.addEventListener(
+        "transitionend",
+        () => {
+          wrapper.remove();
+          resolve();
+        },
+        { once: true },
+      );
+    });
+  });
+};
+
+let dragPreviewEl: HTMLDivElement | null = null;
+
+const createDragPreview = (ids: string[], x: number, y: number) => {
+  removeDragPreview();
+  if (ids.length === 0) return;
+  const first = document.querySelector<HTMLElement>(
+    `[data-file-id="${ids[0]}"]`,
+  );
+  if (!first) return;
+  const rect = first.getBoundingClientRect();
+
+  const wrapper = document.createElement("div");
+  wrapper.className = "drag-preview";
+  wrapper.style.position = "fixed";
+  wrapper.style.pointerEvents = "none";
+  wrapper.style.top = "0";
+  wrapper.style.left = "0";
+  wrapper.style.width = `${rect.width + 4 * (Math.min(ids.length, 3) - 1)}px`;
+  wrapper.style.height = `${rect.height + 4 * (Math.min(ids.length, 3) - 1)}px`;
+  wrapper.style.transform = `scale(${PREVIEW_WIDTH_SCALE}, ${PREVIEW_HEIGHT_SCALE})`;
+  wrapper.style.zIndex = "10000";
+  wrapper.style.setProperty("--preview-scale-x", String(PREVIEW_WIDTH_SCALE));
+  wrapper.style.setProperty("--preview-scale-y", String(PREVIEW_HEIGHT_SCALE));
+  wrapper.style.setProperty("--badge-scale-x", String(1 / PREVIEW_WIDTH_SCALE));
+  wrapper.style.setProperty(
+    "--badge-scale-y",
+    String(1 / PREVIEW_HEIGHT_SCALE),
+  );
+
+  const stack = document.createElement("div");
+  stack.className = "preview-stack";
+  wrapper.appendChild(stack);
+
+  ids.slice(0, 3).forEach((id, idx) => {
+    const el =
+      document.querySelector<HTMLElement>(`[data-file-id="${id}"]`) ?? first;
+    const clone = el.cloneNode(true) as HTMLElement;
+    clone.classList.add("preview-item");
+    clone.style.width = `${rect.width}px`;
+    clone.style.height = `${rect.height}px`;
+    clone.style.transform = `translate(${idx * 4}px, ${idx * 4}px)`;
+    stack.appendChild(clone);
+  });
+
+  if (ids.length > 1) {
+    const badge = document.createElement("div");
+    badge.className = "preview-count";
+    badge.textContent = String(ids.length);
+    stack.appendChild(badge);
+  }
+
+  document.body.appendChild(wrapper);
+  dragPreviewEl = wrapper;
+  moveDragPreview(x, y);
+};
+
+const moveDragPreview = (x: number, y: number) => {
+  if (dragPreviewEl) {
+    dragPreviewEl.style.transform = `translate(${x + 16}px, ${y + 16}px) scale(${PREVIEW_WIDTH_SCALE}, ${PREVIEW_HEIGHT_SCALE})`;
+  }
+};
+
+const removeDragPreview = () => {
+  if (dragPreviewEl) {
+    dragPreviewEl.remove();
+    dragPreviewEl = null;
+  }
+};
+
 export const FileManager: React.FC = () => {
   const {
     files,
@@ -50,8 +203,14 @@ export const FileManager: React.FC = () => {
 
     document.addEventListener("click", handleDocumentClick);
 
+    const handleDrag = (ev: DragEvent) => {
+      moveDragPreview(ev.clientX, ev.clientY);
+    };
+    document.addEventListener("dragover", handleDrag);
+
     return () => {
       document.removeEventListener("click", handleDocumentClick);
+      document.removeEventListener("dragover", handleDrag);
     };
   }, [clearSelection]);
 
@@ -133,11 +292,18 @@ export const FileManager: React.FC = () => {
       setDraggingIds(selectedFiles);
     }
     e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setDragImage(transparentImage, 0, 0);
+    createDragPreview(
+      selectedFiles.includes(fileId) ? selectedFiles : [fileId],
+      e.clientX,
+      e.clientY,
+    );
   };
 
   const handleDragEnd = () => {
     setDraggingIds([]);
     setDragOverFolder(null);
+    removeDragPreview();
   };
 
   const handleFolderDragOver = (folderId: string) => (e: React.DragEvent) => {
@@ -155,6 +321,8 @@ export const FileManager: React.FC = () => {
     e.preventDefault();
     if (dragSelectingRef.current || draggingIds.length === 0) return;
     setDragOverFolder(null);
+    removeDragPreview();
+    await animateFlyToFolder(draggingIds, folderId);
     await moveFiles(draggingIds, folderId);
     setDraggingIds([]);
   };
