@@ -1,6 +1,6 @@
 const path = require('path');
 const fs = require('fs');
-const { getFiles, createFolder, createFile, moveFiles } = require('../models/file.model');
+const { getFiles, createFolder, createFile, moveFiles, getFile } = require('../models/file.model');
 
 async function listFiles(req, res) {
   const parentId = req.query.parentId || null;
@@ -33,6 +33,7 @@ async function uploadFile(req, res) {
       req.file.originalname,
       req.file.size,
       req.file.mimetype,
+      req.file.path,
       parentId,
       req.userId
     );
@@ -57,4 +58,17 @@ async function moveFilesController(req, res) {
   }
 }
 
-module.exports = { listFiles, addFolder, uploadFile, moveFiles: moveFilesController };
+async function downloadFile(req, res) {
+  try {
+    const file = await getFile(req.params.id, req.userId);
+    if (!file) return res.status(404).json({ message: 'File not found' });
+    const filePath = path.join(__dirname, '..', 'uploads', file.path);
+    res.type(file.mimeType);
+    res.sendFile(filePath);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+}
+
+module.exports = { listFiles, addFolder, uploadFile, moveFiles: moveFilesController, downloadFile };

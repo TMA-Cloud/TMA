@@ -172,6 +172,7 @@ export const FileManager: React.FC = () => {
     openFolder,
     setCreateFolderModalOpen,
     moveFiles,
+    setImageViewerFile,
   } = useApp();
 
   const dragSelectingRef = useRef(false);
@@ -250,7 +251,11 @@ export const FileManager: React.FC = () => {
     if (file.type === "folder") {
       openFolder(file);
     } else {
-      console.log("Open file:", file.name);
+      if (file.mimeType && file.mimeType.startsWith("image/")) {
+        setImageViewerFile(file);
+      } else {
+        console.log("Open file:", file.name);
+      }
     }
   };
 

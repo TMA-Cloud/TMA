@@ -21,6 +21,8 @@ interface AppContextType {
   sidebarOpen: boolean;
   uploadModalOpen: boolean;
   createFolderModalOpen: boolean;
+  imageViewerFile: FileItem | null;
+  setImageViewerFile: (file: FileItem | null) => void;
   setCurrentPath: (path: string[], ids?: (string | null)[]) => void;
   setFiles: (files: FileItem[]) => void;
   setSelectedFiles: (ids: string[]) => void;
@@ -60,6 +62,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [createFolderModalOpen, setCreateFolderModalOpen] = useState(false);
+  const [imageViewerFile, setImageViewerFile] = useState<FileItem | null>(null);
 
   const refreshFiles = async () => {
     try {
@@ -161,6 +164,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         sidebarOpen,
         uploadModalOpen,
         createFolderModalOpen,
+        imageViewerFile,
+        setImageViewerFile,
         setCurrentPath,
         setFiles,
         setSelectedFiles,
