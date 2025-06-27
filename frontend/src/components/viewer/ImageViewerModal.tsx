@@ -11,6 +11,7 @@ export const ImageViewerModal: React.FC = () => {
   const [dragging, setDragging] = useState(false);
   const lastPos = useRef<{ x: number; y: number } | null>(null);
   const pointerId = useRef<number | null>(null);
+  const wheelContainerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     let revoke: (() => void) | undefined;
@@ -71,14 +72,22 @@ export const ImageViewerModal: React.FC = () => {
     }
   };
 
-  const onWheel = (e: React.WheelEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    if (e.deltaY < 0) {
-      setZoom((z) => Math.min(z + 0.25, 5));
-    } else if (e.deltaY > 0) {
-      setZoom((z) => Math.max(z - 0.25, 0.25));
-    }
-  };
+  useEffect(() => {
+    const el = wheelContainerRef.current;
+    if (!el) return;
+    const handler = (e: WheelEvent) => {
+      e.preventDefault();
+      if (e.deltaY < 0) {
+        setZoom((z) => Math.min(z + 0.25, 5));
+      } else if (e.deltaY > 0) {
+        setZoom((z) => Math.max(z - 0.25, 0.25));
+      }
+    };
+    el.addEventListener("wheel", handler, { passive: false });
+    return () => {
+      el.removeEventListener("wheel", handler);
+    };
+  }, [imageViewerFile]);
 
   if (!imageViewerFile) return null;
 
@@ -94,9 +103,9 @@ export const ImageViewerModal: React.FC = () => {
           className={`w-full flex justify-center items-center ${
             zoom > 1 ? (dragging ? "cursor-grabbing" : "cursor-grab") : ""
           }`}
+          ref={wheelContainerRef}
           style={{ touchAction: "none" }}
           onPointerDown={onPointerDown}
-          onWheel={onWheel}
         >
           {imageSrc && (
             <img
