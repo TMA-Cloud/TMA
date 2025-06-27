@@ -14,6 +14,7 @@ export const UploadModal: React.FC = () => {
   const { uploadModalOpen, setUploadModalOpen, uploadFile } = useApp();
   const [uploadFiles, setUploadFiles] = useState<UploadFile[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFiles = (files: FileList) => {
@@ -27,32 +28,6 @@ export const UploadModal: React.FC = () => {
     );
 
     setUploadFiles((prev) => [...prev, ...newUploadFiles]);
-
-    newUploadFiles.forEach(async (uploadFileItem) => {
-      setUploadFiles((prev) =>
-        prev.map((f) =>
-          f.id === uploadFileItem.id
-            ? { ...f, status: "uploading" as const }
-            : f,
-        ),
-      );
-      try {
-        await uploadFile(uploadFileItem.file);
-        setUploadFiles((prev) =>
-          prev.map((f) =>
-            f.id === uploadFileItem.id
-              ? { ...f, progress: 100, status: "completed" as const }
-              : f,
-          ),
-        );
-      } catch {
-        setUploadFiles((prev) =>
-          prev.map((f) =>
-            f.id === uploadFileItem.id ? { ...f, status: "error" as const } : f,
-          ),
-        );
-      }
-    });
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -96,6 +71,41 @@ export const UploadModal: React.FC = () => {
   const handleClose = () => {
     setUploadModalOpen(false);
     setTimeout(() => setUploadFiles([]), 300);
+  };
+
+  const startUpload = async () => {
+    setIsUploading(true);
+    for (const uploadFileItem of uploadFiles) {
+      if (
+        uploadFileItem.status !== "pending" &&
+        uploadFileItem.status !== "error"
+      )
+        continue;
+      setUploadFiles((prev) =>
+        prev.map((f) =>
+          f.id === uploadFileItem.id
+            ? { ...f, status: "uploading" as const }
+            : f,
+        ),
+      );
+      try {
+        await uploadFile(uploadFileItem.file);
+        setUploadFiles((prev) =>
+          prev.map((f) =>
+            f.id === uploadFileItem.id
+              ? { ...f, progress: 100, status: "completed" as const }
+              : f,
+          ),
+        );
+      } catch {
+        setUploadFiles((prev) =>
+          prev.map((f) =>
+            f.id === uploadFileItem.id ? { ...f, status: "error" as const } : f,
+          ),
+        );
+      }
+    }
+    setIsUploading(false);
   };
 
   return (
@@ -197,6 +207,18 @@ export const UploadModal: React.FC = () => {
 
         {/* Actions */}
         <div className="flex justify-end space-x-3">
+          <button
+            onClick={startUpload}
+            disabled={
+              isUploading ||
+              !uploadFiles.some(
+                (f) => f.status === "pending" || f.status === "error",
+              )
+            }
+            className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isUploading ? "Uploading..." : "Upload"}
+          </button>
           <button
             onClick={handleClose}
             className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors duration-200"
