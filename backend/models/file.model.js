@@ -103,6 +103,21 @@ async function renameFile(id, name, userId) {
   return result.rows[0];
 }
 
+async function setStarred(ids, starred, userId) {
+  await pool.query(
+    'UPDATE files SET starred = $1 WHERE id = ANY($2::text[]) AND user_id = $3',
+    [starred, ids, userId],
+  );
+}
+
+async function getStarredFiles(userId) {
+  const result = await pool.query(
+    'SELECT id, name, type, size, modified, mime_type AS "mimeType", starred, shared FROM files WHERE user_id = $1 AND starred = TRUE ORDER BY modified DESC',
+    [userId],
+  );
+  return result.rows;
+}
+
 module.exports = {
   getFiles,
   createFolder,
@@ -111,4 +126,6 @@ module.exports = {
   copyFiles,
   getFile,
   renameFile,
+  setStarred,
+  getStarredFiles,
 };

@@ -35,6 +35,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     folderStack,
     files,
     setRenameTarget,
+    starFiles,
   } = useApp();
 
   useEffect(() => {
@@ -63,10 +64,18 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
 
   if (!isOpen) return null;
 
+  const selectedItems = files.filter((f) => selectedFiles.includes(f.id));
+  const allStarred =
+    selectedItems.length > 0 && selectedItems.every((f) => f.starred);
+
   const menuItems = [
     { icon: Download, label: "Download", action: () => {} },
     { icon: Share2, label: "Share", action: () => {} },
-    { icon: Star, label: "Add to Starred", action: () => {} },
+    {
+      icon: Star,
+      label: allStarred ? "Remove from Starred" : "Add to Starred",
+      action: () => starFiles(selectedFiles, !allStarred),
+    },
     {
       icon: Copy,
       label: "Copy",

@@ -41,6 +41,7 @@ interface AppContextType {
   uploadFile: (file: File) => Promise<void>;
   moveFiles: (ids: string[], parentId: string | null) => Promise<void>;
   copyFiles: (ids: string[], parentId: string | null) => Promise<void>;
+  starFiles: (ids: string[], starred: boolean) => Promise<void>;
   clipboard: { ids: string[]; action: "copy" | "cut" } | null;
   setClipboard: (
     clip: { ids: string[]; action: "copy" | "cut" } | null,
@@ -84,8 +85,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   const refreshFiles = async () => {
     try {
       const parentId = folderStack[folderStack.length - 1];
-      const url = new URL(`${import.meta.env.VITE_API_URL}/api/files`);
-      if (parentId) url.searchParams.append("parentId", parentId);
+      let url: string | URL = `${import.meta.env.VITE_API_URL}/api/files`;
+      if (currentPath[0] === "Starred" && folderStack.length === 1) {
+        url = `${import.meta.env.VITE_API_URL}/api/files/starred`;
+      } else {
+        url = new URL(url);
+        if (parentId) url.searchParams.append("parentId", parentId);
+        url = url.toString();
+      }
       const res = await fetch(url.toString(), { credentials: "include" });
       const data = await res.json();
       setFiles(
@@ -155,6 +162,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
       headers: { "Content-Type": "application/json" },
       credentials: "include",
       body: JSON.stringify({ id, name }),
+    });
+    await refreshFiles();
+  };
+
+  const starFilesApi = async (ids: string[], starred: boolean) => {
+    await fetch(`${import.meta.env.VITE_API_URL}/api/files/star`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ ids, starred }),
     });
     await refreshFiles();
   };
@@ -241,6 +258,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         uploadFile,
         moveFiles,
         copyFiles: copyFilesApi,
+        starFiles: starFilesApi,
         clipboard,
         setClipboard,
         pasteClipboard,

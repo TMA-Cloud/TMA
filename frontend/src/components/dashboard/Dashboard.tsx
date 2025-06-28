@@ -5,7 +5,12 @@ import { useApp } from "../../contexts/AppContext";
 import { Upload, FolderPlus, Share2, Star } from "lucide-react";
 
 export const Dashboard: React.FC = () => {
-  const { files, setUploadModalOpen, setCreateFolderModalOpen } = useApp();
+  const {
+    files,
+    setUploadModalOpen,
+    setCreateFolderModalOpen,
+    setCurrentPath,
+  } = useApp();
 
   const quickActions = [
     {
@@ -30,7 +35,7 @@ export const Dashboard: React.FC = () => {
       title: "Starred Items",
       icon: Star,
       color: "bg-yellow-500 hover:bg-yellow-600",
-      onClick: () => {},
+      onClick: () => setCurrentPath(["Starred"]),
     },
   ];
 

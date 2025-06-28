@@ -8,6 +8,8 @@ const {
   copyFiles,
   getFile,
   renameFile,
+  setStarred,
+  getStarredFiles,
 } = require('../models/file.model');
 
 async function listFiles(req, res) {
@@ -106,6 +108,30 @@ async function renameFileController(req, res) {
   }
 }
 
+async function starFilesController(req, res) {
+  const { ids, starred } = req.body;
+  if (!Array.isArray(ids) || ids.length === 0 || typeof starred !== 'boolean') {
+    return res.status(400).json({ message: 'ids and starred required' });
+  }
+  try {
+    await setStarred(ids, starred, req.userId);
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+}
+
+async function listStarred(req, res) {
+  try {
+    const files = await getStarredFiles(req.userId);
+    res.json(files);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+}
+
 module.exports = {
   listFiles,
   addFolder,
@@ -114,4 +140,6 @@ module.exports = {
   copyFiles: copyFilesController,
   downloadFile,
   renameFile: renameFileController,
+  starFiles: starFilesController,
+  listStarred,
 };
