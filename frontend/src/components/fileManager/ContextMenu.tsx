@@ -39,7 +39,10 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     shareFiles,
     linkToParentShare,
     starFiles,
+    deleteFiles,
+    deleteForever,
     setShareLinkModalOpen,
+    currentPath,
   } = useApp();
 
   useEffect(() => {
@@ -141,7 +144,15 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
         if (file) setRenameTarget(file);
       },
     },
-    { icon: Trash2, label: "Delete", action: () => {}, danger: true },
+    {
+      icon: Trash2,
+      label: currentPath[0] === "Trash" ? "Delete Forever" : "Delete",
+      action: () =>
+        currentPath[0] === "Trash"
+          ? deleteForever(selectedFiles)
+          : deleteFiles(selectedFiles),
+      danger: true,
+    },
   ];
 
   return (

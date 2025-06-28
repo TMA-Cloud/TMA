@@ -7,7 +7,9 @@ async function getFiles(userId, parentId = null) {
   const result = await pool.query(
     `SELECT id, name, type, size, modified, mime_type AS "mimeType", starred, shared
      FROM files
-     WHERE user_id = $1 AND ${parentId ? 'parent_id = $2' : 'parent_id IS NULL'}
+     WHERE user_id = $1
+       AND deleted_at IS NULL
+       AND ${parentId ? 'parent_id = $2' : 'parent_id IS NULL'}
      ORDER BY modified DESC`,
     parentId ? [userId, parentId] : [userId]
   );
@@ -134,6 +136,56 @@ async function setShared(ids, shared, userId) {
   return res.rows.map(r => r.id);
 }
 
+async function deleteFiles(ids, userId) {
+  const allIds = await getRecursiveIds(ids, userId);
+  if (allIds.length === 0) return;
+  await pool.query(
+    'UPDATE files SET deleted_at = NOW() WHERE id = ANY($1::text[]) AND user_id = $2 AND deleted_at IS NULL',
+    [allIds, userId],
+  );
+}
+
+async function getTrashFiles(userId) {
+  const res = await pool.query(
+    'SELECT id, name, type, size, modified, mime_type AS "mimeType", starred, shared, deleted_at AS "deletedAt" FROM files WHERE user_id = $1 AND deleted_at IS NOT NULL ORDER BY deleted_at DESC',
+    [userId],
+  );
+  return res.rows;
+}
+
+async function permanentlyDeleteFiles(ids, userId) {
+  const allIds = await getRecursiveIds(ids, userId);
+  if (allIds.length === 0) return;
+  const files = await pool.query(
+    'SELECT id, path, type FROM files WHERE id = ANY($1::text[]) AND user_id = $2',
+    [allIds, userId],
+  );
+  for (const f of files.rows) {
+    if (f.type === 'file' && f.path) {
+      try {
+        await fs.promises.unlink(path.join(__dirname, '..', 'uploads', f.path));
+      } catch {}
+    }
+  }
+  await pool.query('DELETE FROM files WHERE id = ANY($1::text[]) AND user_id = $2', [allIds, userId]);
+}
+
+async function cleanupExpiredTrash() {
+  const expired = await pool.query(
+    "SELECT id, path, type FROM files WHERE deleted_at IS NOT NULL AND deleted_at < NOW() - INTERVAL '15 days'",
+  );
+  for (const f of expired.rows) {
+    if (f.type === 'file' && f.path) {
+      try {
+        await fs.promises.unlink(path.join(__dirname, '..', 'uploads', f.path));
+      } catch {}
+    }
+  }
+  await pool.query(
+    "DELETE FROM files WHERE deleted_at IS NOT NULL AND deleted_at < NOW() - INTERVAL '15 days'",
+  );
+}
+
 async function getStarredFiles(userId) {
   const result = await pool.query(
     'SELECT id, name, type, size, modified, mime_type AS "mimeType", starred, shared FROM files WHERE user_id = $1 AND starred = TRUE ORDER BY modified DESC',
@@ -163,4 +215,8 @@ module.exports = {
   setShared,
   getRecursiveIds,
   getSharedFiles,
+  deleteFiles,
+  getTrashFiles,
+  permanentlyDeleteFiles,
+  cleanupExpiredTrash,
 };

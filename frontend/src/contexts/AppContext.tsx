@@ -10,6 +10,7 @@ export interface FileItem {
   selected?: boolean;
   starred?: boolean;
   shared?: boolean;
+  deletedAt?: Date;
 }
 
 interface AppContextType {
@@ -51,6 +52,8 @@ interface AppContextType {
   ) => Promise<Record<string, string>>;
   linkToParentShare: (ids: string[]) => Promise<Record<string, string>>;
   starFiles: (ids: string[], starred: boolean) => Promise<void>;
+  deleteFiles: (ids: string[]) => Promise<void>;
+  deleteForever: (ids: string[]) => Promise<void>;
   clipboard: { ids: string[]; action: "copy" | "cut" } | null;
   setClipboard: (
     clip: { ids: string[]; action: "copy" | "cut" } | null,
@@ -107,6 +110,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         folderStack.length === 1
       ) {
         url = `${import.meta.env.VITE_API_URL}/api/files/shared`;
+      } else if (currentPath[0] === "Trash" && folderStack.length === 1) {
+        url = `${import.meta.env.VITE_API_URL}/api/files/trash`;
       } else {
         url = new URL(url);
         if (parentId) url.searchParams.append("parentId", parentId);
@@ -118,6 +123,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         data.map((f: any) => ({
           ...f,
           modified: new Date(f.modified),
+          deletedAt: f.deletedAt ? new Date(f.deletedAt) : undefined,
         })),
       );
     } catch (e) {
@@ -215,6 +221,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
       headers: { "Content-Type": "application/json" },
       credentials: "include",
       body: JSON.stringify({ ids, starred }),
+    });
+    await refreshFiles();
+  };
+
+  const deleteFilesApi = async (ids: string[]) => {
+    await fetch(`${import.meta.env.VITE_API_URL}/api/files/delete`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ ids }),
+    });
+    await refreshFiles();
+  };
+
+  const deleteForeverApi = async (ids: string[]) => {
+    await fetch(`${import.meta.env.VITE_API_URL}/api/files/trash/delete`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ ids }),
     });
     await refreshFiles();
   };
@@ -329,6 +355,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         shareFiles: shareFilesApi,
         linkToParentShare: linkToParentShareApi,
         starFiles: starFilesApi,
+        deleteFiles: deleteFilesApi,
+        deleteForever: deleteForeverApi,
         clipboard,
         setClipboard,
         pasteClipboard,

@@ -6,6 +6,7 @@ const pool = require('./config/db');
 const authRoutes = require('./routes/auth.routes');
 const fileRoutes = require('./routes/file.routes');
 const shareRoutes = require('./routes/share.routes');
+const { startTrashCleanup } = require('./services/trashCleanup');
 require('dotenv').config();
 
 const app = express();
@@ -52,6 +53,7 @@ runMigrations()
   .then(() => {
     const port = process.env.PORT || 3000;
     app.listen(port, () => console.log(`Server running on port ${port}`));
+    startTrashCleanup();
   })
   .catch((err) => {
     console.error('Failed to run migrations', err);

@@ -13,6 +13,9 @@ const {
   setShared,
   getSharedFiles,
   getRecursiveIds,
+  deleteFiles,
+  getTrashFiles,
+  permanentlyDeleteFiles,
 } = require('../models/file.model');
 const {
   createShareLink,
@@ -211,6 +214,44 @@ async function listShared(req, res) {
   }
 }
 
+async function deleteFilesController(req, res) {
+  const { ids } = req.body;
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return res.status(400).json({ message: 'ids required' });
+  }
+  try {
+    await deleteFiles(ids, req.userId);
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+}
+
+async function listTrash(req, res) {
+  try {
+    const files = await getTrashFiles(req.userId);
+    res.json(files);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+}
+
+async function deleteForeverController(req, res) {
+  const { ids } = req.body;
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return res.status(400).json({ message: 'ids required' });
+  }
+  try {
+    await permanentlyDeleteFiles(ids, req.userId);
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+}
+
 module.exports = {
   listFiles,
   addFolder,
@@ -224,4 +265,7 @@ module.exports = {
   shareFiles: shareFilesController,
   listShared,
   linkParentShare: linkParentShareController,
+  deleteFiles: deleteFilesController,
+  listTrash,
+  deleteForever: deleteForeverController,
 };

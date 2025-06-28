@@ -251,7 +251,7 @@ export const FileManager: React.FC = () => {
   };
 
   const handleFileDoubleClick = (file: any) => {
-    if (file.type === "folder") {
+    if (file.type === "folder" && currentPath[0] !== "Trash") {
       openFolder(file);
     } else {
       if (file.mimeType && file.mimeType.startsWith("image/")) {
