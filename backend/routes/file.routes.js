@@ -10,6 +10,8 @@ const {
   renameFile,
   starFiles,
   listStarred,
+  shareFiles,
+  listShared,
 } = require('../controllers/file.controller');
 const auth = require('../middleware/auth.middleware');
 const router = express.Router();
@@ -26,6 +28,8 @@ router.post('/copy', copyFiles);
 router.post('/rename', renameFile);
 router.post('/star', starFiles);
 router.get('/starred', listStarred);
+router.post('/share', shareFiles);
+router.get('/shared', listShared);
 router.get('/:id/download', downloadFile);
 
 module.exports = router;

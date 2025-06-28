@@ -5,6 +5,7 @@ const path = require('path');
 const pool = require('./config/db');
 const authRoutes = require('./routes/auth.routes');
 const fileRoutes = require('./routes/file.routes');
+const shareRoutes = require('./routes/share.routes');
 require('dotenv').config();
 
 const app = express();
@@ -16,6 +17,7 @@ app.use(cors(corsOptions));
 app.use(express.json());
 app.use('/api', authRoutes);
 app.use('/api/files', fileRoutes);
+app.use('/s', shareRoutes);
 
 async function runMigrations() {
   const client = await pool.connect();

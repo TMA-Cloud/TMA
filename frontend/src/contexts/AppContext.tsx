@@ -23,6 +23,9 @@ interface AppContextType {
   createFolderModalOpen: boolean;
   imageViewerFile: FileItem | null;
   setImageViewerFile: (file: FileItem | null) => void;
+  shareLinkModalOpen: boolean;
+  shareLinks: string[];
+  setShareLinkModalOpen: (open: boolean, links?: string[]) => void;
   renameTarget: FileItem | null;
   setRenameTarget: (file: FileItem | null) => void;
   renameFile: (id: string, name: string) => Promise<void>;
@@ -41,6 +44,10 @@ interface AppContextType {
   uploadFile: (file: File) => Promise<void>;
   moveFiles: (ids: string[], parentId: string | null) => Promise<void>;
   copyFiles: (ids: string[], parentId: string | null) => Promise<void>;
+  shareFiles: (
+    ids: string[],
+    shared: boolean,
+  ) => Promise<Record<string, string>>;
   starFiles: (ids: string[], starred: boolean) => Promise<void>;
   clipboard: { ids: string[]; action: "copy" | "cut" } | null;
   setClipboard: (
@@ -75,6 +82,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [createFolderModalOpen, setCreateFolderModalOpen] = useState(false);
   const [imageViewerFile, setImageViewerFile] = useState<FileItem | null>(null);
+  const [shareLinkModalOpen, setShareLinkModalOpenState] = useState(false);
+  const [shareLinks, setShareLinks] = useState<string[]>([]);
   const [renameTarget, setRenameTarget] = useState<FileItem | null>(null);
   const [clipboard, setClipboard] = useState<{
     ids: string[];
@@ -88,6 +97,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
       let url: string | URL = `${import.meta.env.VITE_API_URL}/api/files`;
       if (currentPath[0] === "Starred" && folderStack.length === 1) {
         url = `${import.meta.env.VITE_API_URL}/api/files/starred`;
+      } else if (
+        currentPath[0] === "Shared with Me" &&
+        folderStack.length === 1
+      ) {
+        url = `${import.meta.env.VITE_API_URL}/api/files/shared`;
       } else {
         url = new URL(url);
         if (parentId) url.searchParams.append("parentId", parentId);
@@ -166,6 +180,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
     await refreshFiles();
   };
 
+  const setShareLinkModalOpen = (open: boolean, links: string[] = []) => {
+    if (open) {
+      setShareLinks(links);
+    } else {
+      setShareLinks([]);
+    }
+    setShareLinkModalOpenState(open);
+  };
+
+  const shareFilesApi = async (
+    ids: string[],
+    shared: boolean,
+  ): Promise<Record<string, string>> => {
+    const res = await fetch(`${import.meta.env.VITE_API_URL}/api/files/share`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ ids, shared }),
+    });
+    const data = await res.json();
+    await refreshFiles();
+    return data.links || {};
+  };
+
   const starFilesApi = async (ids: string[], starred: boolean) => {
     await fetch(`${import.meta.env.VITE_API_URL}/api/files/star`, {
       method: "POST",
@@ -240,6 +278,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         createFolderModalOpen,
         imageViewerFile,
         setImageViewerFile,
+        shareLinkModalOpen,
+        shareLinks,
+        setShareLinkModalOpen,
         renameTarget,
         setRenameTarget,
         renameFile: renameFileApi,
@@ -258,6 +299,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         uploadFile,
         moveFiles,
         copyFiles: copyFilesApi,
+        shareFiles: shareFilesApi,
         starFiles: starFilesApi,
         clipboard,
         setClipboard,

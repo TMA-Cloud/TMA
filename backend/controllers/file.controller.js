@@ -10,7 +10,14 @@ const {
   renameFile,
   setStarred,
   getStarredFiles,
+  setShared,
+  getSharedFiles,
 } = require('../models/file.model');
+const {
+  createShareLink,
+  getShareLink,
+  deleteShareLink,
+} = require('../models/share.model');
 
 async function listFiles(req, res) {
   const parentId = req.query.parentId || null;
@@ -122,9 +129,45 @@ async function starFilesController(req, res) {
   }
 }
 
+async function shareFilesController(req, res) {
+  const { ids, shared } = req.body;
+  if (!Array.isArray(ids) || ids.length === 0 || typeof shared !== 'boolean') {
+    return res.status(400).json({ message: 'ids and shared required' });
+  }
+  try {
+    await setShared(ids, shared, req.userId);
+    const links = {};
+    if (shared) {
+      for (const id of ids) {
+        let token = await getShareLink(id, req.userId);
+        if (!token) token = await createShareLink(id, req.userId);
+        links[id] = token;
+      }
+    } else {
+      for (const id of ids) {
+        await deleteShareLink(id, req.userId);
+      }
+    }
+    res.json({ success: true, links });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+}
+
 async function listStarred(req, res) {
   try {
     const files = await getStarredFiles(req.userId);
+    res.json(files);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+}
+
+async function listShared(req, res) {
+  try {
+    const files = await getSharedFiles(req.userId);
     res.json(files);
   } catch (err) {
     console.error(err);
@@ -142,4 +185,6 @@ module.exports = {
   renameFile: renameFileController,
   starFiles: starFilesController,
   listStarred,
+  shareFiles: shareFilesController,
+  listShared,
 };

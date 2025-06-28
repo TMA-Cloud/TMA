@@ -12,6 +12,7 @@ import { UploadModal } from "./components/upload/UploadModal";
 import { CreateFolderModal } from "./components/folder/CreateFolderModal";
 import { ImageViewerModal } from "./components/viewer/ImageViewerModal";
 import { RenameModal } from "./components/fileManager/RenameModal";
+import { ShareLinkModal } from "./components/fileManager/ShareLinkModal";
 import { LoginForm } from "./components/auth/LoginForm";
 import { SignupForm } from "./components/auth/SignupForm";
 
@@ -51,6 +52,7 @@ const AppContent: React.FC = () => {
       <CreateFolderModal />
       <ImageViewerModal />
       <RenameModal />
+      <ShareLinkModal />
     </div>
   );
 };

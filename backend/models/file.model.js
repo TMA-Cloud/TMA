@@ -110,9 +110,24 @@ async function setStarred(ids, starred, userId) {
   );
 }
 
+async function setShared(ids, shared, userId) {
+  await pool.query(
+    'UPDATE files SET shared = $1 WHERE id = ANY($2::text[]) AND user_id = $3',
+    [shared, ids, userId],
+  );
+}
+
 async function getStarredFiles(userId) {
   const result = await pool.query(
     'SELECT id, name, type, size, modified, mime_type AS "mimeType", starred, shared FROM files WHERE user_id = $1 AND starred = TRUE ORDER BY modified DESC',
+    [userId],
+  );
+  return result.rows;
+}
+
+async function getSharedFiles(userId) {
+  const result = await pool.query(
+    'SELECT id, name, type, size, modified, mime_type AS "mimeType", starred, shared FROM files WHERE user_id = $1 AND shared = TRUE ORDER BY modified DESC',
     [userId],
   );
   return result.rows;
@@ -128,4 +143,6 @@ module.exports = {
   renameFile,
   setStarred,
   getStarredFiles,
+  setShared,
+  getSharedFiles,
 };

@@ -35,7 +35,9 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     folderStack,
     files,
     setRenameTarget,
+    shareFiles,
     starFiles,
+    setShareLinkModalOpen,
   } = useApp();
 
   useEffect(() => {
@@ -67,10 +69,24 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
   const selectedItems = files.filter((f) => selectedFiles.includes(f.id));
   const allStarred =
     selectedItems.length > 0 && selectedItems.every((f) => f.starred);
+  const allShared =
+    selectedItems.length > 0 && selectedItems.every((f) => f.shared);
 
   const menuItems = [
     { icon: Download, label: "Download", action: () => {} },
-    { icon: Share2, label: "Share", action: () => {} },
+    {
+      icon: Share2,
+      label: allShared ? "Remove from Shared" : "Add to Shared",
+      action: async () => {
+        const links = await shareFiles(selectedFiles, !allShared);
+        if (!allShared) {
+          let base = import.meta.env.VITE_API_URL;
+          if (base.endsWith("/api")) base = base.slice(0, -4);
+          const list = Object.values(links).map((t) => `${base}/s/${t}`);
+          setShareLinkModalOpen(true, list);
+        }
+      },
+    },
     {
       icon: Star,
       label: allStarred ? "Remove from Starred" : "Add to Starred",
