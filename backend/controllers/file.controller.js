@@ -21,6 +21,7 @@ const {
   addFilesToShare,
   removeFilesFromShares,
 } = require('../models/share.model');
+const pool = require('../config/db');
 
 async function listFiles(req, res) {
   const parentId = req.query.parentId || null;
@@ -162,6 +163,34 @@ async function shareFilesController(req, res) {
   }
 }
 
+async function linkParentShareController(req, res) {
+  const { ids } = req.body;
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return res.status(400).json({ message: 'ids required' });
+  }
+  try {
+    const links = {};
+    for (const id of ids) {
+      const parentRes = await pool.query(
+        'SELECT parent_id FROM files WHERE id = $1 AND user_id = $2',
+        [id, req.userId]
+      );
+      const parentId = parentRes.rows[0]?.parent_id;
+      if (!parentId) continue;
+      const shareId = await getShareLink(parentId, req.userId);
+      if (!shareId) continue;
+      const treeIds = await getRecursiveIds([id], req.userId);
+      await addFilesToShare(shareId, treeIds);
+      await setShared([id], true, req.userId);
+      links[id] = shareId;
+    }
+    res.json({ success: true, links });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+}
+
 async function listStarred(req, res) {
   try {
     const files = await getStarredFiles(req.userId);
@@ -194,4 +223,5 @@ module.exports = {
   listStarred,
   shareFiles: shareFilesController,
   listShared,
+  linkParentShare: linkParentShareController,
 };

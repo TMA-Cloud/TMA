@@ -15,6 +15,7 @@ export interface FileItem {
 interface AppContextType {
   currentPath: string[];
   folderStack: (string | null)[];
+  folderSharedStack: boolean[];
   files: FileItem[];
   selectedFiles: string[];
   viewMode: "grid" | "list";
@@ -48,6 +49,7 @@ interface AppContextType {
     ids: string[],
     shared: boolean,
   ) => Promise<Record<string, string>>;
+  linkToParentShare: (ids: string[]) => Promise<Record<string, string>>;
   starFiles: (ids: string[], starred: boolean) => Promise<void>;
   clipboard: { ids: string[]; action: "copy" | "cut" } | null;
   setClipboard: (
@@ -75,6 +77,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
 }) => {
   const [currentPath, setCurrentPathState] = useState<string[]>(["My Files"]);
   const [folderStack, setFolderStack] = useState<(string | null)[]>([null]);
+  const [folderSharedStack, setFolderSharedStack] = useState<boolean[]>([
+    false,
+  ]);
   const [files, setFiles] = useState<FileItem[]>([]);
   const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
   const [viewMode, setViewMode] = useState<"grid" | "list">("list"); // Changed default to 'list'
@@ -214,6 +219,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
     await refreshFiles();
   };
 
+  const linkToParentShareApi = async (
+    ids: string[],
+  ): Promise<Record<string, string>> => {
+    const res = await fetch(
+      `${import.meta.env.VITE_API_URL}/api/files/link-parent-share`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ ids }),
+      },
+    );
+    const data = await res.json();
+    await refreshFiles();
+    return data.links || {};
+  };
+
   const pasteClipboard = async (parentId: string | null) => {
     if (!clipboard) return;
     setPasteProgress(0);
@@ -250,19 +272,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
     setCurrentPathState(path);
     if (ids) {
       setFolderStack(ids);
+      setFolderSharedStack(Array(path.length).fill(false));
     } else {
       setFolderStack(Array(path.length).fill(null));
+      setFolderSharedStack(Array(path.length).fill(false));
     }
   };
 
   const openFolder = (folder: FileItem) => {
     setCurrentPathState((p) => [...p, folder.name]);
     setFolderStack((p) => [...p, folder.id]);
+    setFolderSharedStack((p) => [...p, !!folder.shared]);
   };
 
   const navigateTo = (index: number) => {
     setCurrentPathState((p) => p.slice(0, index + 1));
     setFolderStack((p) => p.slice(0, index + 1));
+    setFolderSharedStack((p) => p.slice(0, index + 1));
   };
 
   return (
@@ -270,6 +296,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
       value={{
         currentPath,
         folderStack,
+        folderSharedStack,
         files,
         selectedFiles,
         viewMode,
@@ -300,6 +327,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         moveFiles,
         copyFiles: copyFilesApi,
         shareFiles: shareFilesApi,
+        linkToParentShare: linkToParentShareApi,
         starFiles: starFilesApi,
         clipboard,
         setClipboard,

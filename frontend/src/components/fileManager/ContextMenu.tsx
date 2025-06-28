@@ -33,9 +33,11 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     clipboard,
     pasteClipboard,
     folderStack,
+    folderSharedStack,
     files,
     setRenameTarget,
     shareFiles,
+    linkToParentShare,
     starFiles,
     setShareLinkModalOpen,
   } = useApp();
@@ -71,9 +73,27 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     selectedItems.length > 0 && selectedItems.every((f) => f.starred);
   const allShared =
     selectedItems.length > 0 && selectedItems.every((f) => f.shared);
+  const parentShared = folderSharedStack[folderSharedStack.length - 1];
+  const allUnshared =
+    selectedItems.length > 0 && selectedItems.every((f) => !f.shared);
 
   const menuItems = [
     { icon: Download, label: "Download", action: () => {} },
+    ...(parentShared && allUnshared
+      ? [
+          {
+            icon: Share2,
+            label: "Link to Folder Share",
+            action: async () => {
+              const links = await linkToParentShare(selectedFiles);
+              let base = import.meta.env.VITE_API_URL;
+              if (base.endsWith("/api")) base = base.slice(0, -4);
+              const list = Object.values(links).map((t) => `${base}/s/${t}`);
+              if (list.length) setShareLinkModalOpen(true, list);
+            },
+          },
+        ]
+      : []),
     {
       icon: Share2,
       label: allShared ? "Remove from Shared" : "Add to Shared",

@@ -12,6 +12,7 @@ const {
   listStarred,
   shareFiles,
   listShared,
+  linkParentShare,
 } = require('../controllers/file.controller');
 const auth = require('../middleware/auth.middleware');
 const router = express.Router();
@@ -30,6 +31,7 @@ router.post('/star', starFiles);
 router.get('/starred', listStarred);
 router.post('/share', shareFiles);
 router.get('/shared', listShared);
+router.post('/link-parent-share', linkParentShare);
 router.get('/:id/download', downloadFile);
 
 module.exports = router;
