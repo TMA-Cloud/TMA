@@ -1,14 +1,22 @@
-import React from "react";
+import React, { useState } from "react";
 import { Modal } from "../ui/Modal";
 import { useApp } from "../../contexts/AppContext";
 import { Clipboard } from "lucide-react";
+import { useToast } from "../../hooks/useToast";
 
 export const ShareLinkModal: React.FC = () => {
   const { shareLinkModalOpen, shareLinks, setShareLinkModalOpen } = useApp();
+  const { showToast } = useToast();
+  const [copiedLink, setCopiedLink] = useState<string | null>(null);
 
   const handleClose = () => setShareLinkModalOpen(false);
 
-  const copy = (link: string) => navigator.clipboard.writeText(link);
+  const copy = (link: string) => {
+    navigator.clipboard.writeText(link);
+    setCopiedLink(link);
+    showToast("Link copied to clipboard", "success");
+    setTimeout(() => setCopiedLink(null), 2000);
+  };
 
   if (!shareLinkModalOpen) return null;
 
@@ -32,6 +40,11 @@ export const ShareLinkModal: React.FC = () => {
               >
                 <Clipboard className="w-4 h-4" />
               </button>
+              {copiedLink === link && (
+                <span className="text-xs text-gray-500 dark:text-gray-400">
+                  Copied!
+                </span>
+              )}
             </div>
           ))}
         </div>
