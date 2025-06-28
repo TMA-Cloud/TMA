@@ -12,11 +12,14 @@ const {
   getStarredFiles,
   setShared,
   getSharedFiles,
+  getRecursiveIds,
 } = require('../models/file.model');
 const {
   createShareLink,
   getShareLink,
   deleteShareLink,
+  addFilesToShare,
+  removeFilesFromShares,
 } = require('../models/share.model');
 
 async function listFiles(req, res) {
@@ -135,15 +138,19 @@ async function shareFilesController(req, res) {
     return res.status(400).json({ message: 'ids and shared required' });
   }
   try {
-    await setShared(ids, shared, req.userId);
+    const affected = await setShared(ids, shared, req.userId);
     const links = {};
     if (shared) {
       for (const id of ids) {
+        const treeIds = await getRecursiveIds([id], req.userId);
         let token = await getShareLink(id, req.userId);
-        if (!token) token = await createShareLink(id, req.userId);
+        if (!token) token = await createShareLink(id, req.userId, treeIds);
+        else await addFilesToShare(token, treeIds);
         links[id] = token;
       }
     } else {
+      const treeIds = await getRecursiveIds(ids, req.userId);
+      await removeFilesFromShares(treeIds, req.userId);
       for (const id of ids) {
         await deleteShareLink(id, req.userId);
       }

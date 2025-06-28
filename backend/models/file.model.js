@@ -110,11 +110,28 @@ async function setStarred(ids, starred, userId) {
   );
 }
 
-async function setShared(ids, shared, userId) {
-  await pool.query(
-    'UPDATE files SET shared = $1 WHERE id = ANY($2::text[]) AND user_id = $3',
-    [shared, ids, userId],
+async function getRecursiveIds(ids, userId) {
+  const res = await pool.query(
+    `WITH RECURSIVE sub AS (
+       SELECT id FROM files WHERE id = ANY($1::text[]) AND user_id = $2
+       UNION ALL
+       SELECT f.id FROM files f JOIN sub s ON f.parent_id = s.id
+       WHERE f.user_id = $2
+     )
+     SELECT id FROM sub`,
+    [ids, userId],
   );
+  return res.rows.map(r => r.id);
+}
+
+async function setShared(ids, shared, userId) {
+  const allIds = await getRecursiveIds(ids, userId);
+  if (allIds.length === 0) return [];
+  const res = await pool.query(
+    'UPDATE files SET shared = $1 WHERE id = ANY($2::text[]) AND user_id = $3 RETURNING id',
+    [shared, allIds, userId],
+  );
+  return res.rows.map(r => r.id);
 }
 
 async function getStarredFiles(userId) {
@@ -144,5 +161,6 @@ module.exports = {
   setStarred,
   getStarredFiles,
   setShared,
+  getRecursiveIds,
   getSharedFiles,
 };
