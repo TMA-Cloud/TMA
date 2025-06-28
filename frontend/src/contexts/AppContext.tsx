@@ -37,6 +37,14 @@ interface AppContextType {
   createFolder: (name: string) => Promise<void>;
   uploadFile: (file: File) => Promise<void>;
   moveFiles: (ids: string[], parentId: string | null) => Promise<void>;
+  copyFiles: (ids: string[], parentId: string | null) => Promise<void>;
+  clipboard: { ids: string[]; action: "copy" | "cut" } | null;
+  setClipboard: (
+    clip: { ids: string[]; action: "copy" | "cut" } | null,
+  ) => void;
+  pasteClipboard: (parentId: string | null) => Promise<void>;
+  pasteProgress: number | null;
+  setPasteProgress: (p: number | null) => void;
   openFolder: (folder: FileItem) => void;
   navigateTo: (index: number) => void;
 }
@@ -63,6 +71,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [createFolderModalOpen, setCreateFolderModalOpen] = useState(false);
   const [imageViewerFile, setImageViewerFile] = useState<FileItem | null>(null);
+  const [clipboard, setClipboard] = useState<{
+    ids: string[];
+    action: "copy" | "cut";
+  } | null>(null);
+  const [pasteProgress, setPasteProgress] = useState<number | null>(null);
 
   const refreshFiles = async () => {
     try {
@@ -120,6 +133,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
       body: JSON.stringify({ ids, parentId }),
     });
     await refreshFiles();
+  };
+
+  const copyFilesApi = async (ids: string[], parentId: string | null) => {
+    await fetch(`${import.meta.env.VITE_API_URL}/api/files/copy`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ ids, parentId }),
+    });
+    await refreshFiles();
+  };
+
+  const pasteClipboard = async (parentId: string | null) => {
+    if (!clipboard) return;
+    setPasteProgress(0);
+    const total = clipboard.ids.length;
+    for (let i = 0; i < total; i++) {
+      const id = clipboard.ids[i];
+      const endpoint = clipboard.action === "cut" ? "move" : "copy";
+      await fetch(`${import.meta.env.VITE_API_URL}/api/files/${endpoint}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ ids: [id], parentId }),
+      });
+      setPasteProgress(Math.round(((i + 1) / total) * 100));
+    }
+    await refreshFiles();
+    setClipboard(null);
+    setTimeout(() => setPasteProgress(null), 300);
   };
 
   const addSelectedFile = (id: string) => {
@@ -180,6 +223,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         createFolder,
         uploadFile,
         moveFiles,
+        copyFiles: copyFilesApi,
+        clipboard,
+        setClipboard,
+        pasteClipboard,
+        pasteProgress,
+        setPasteProgress,
         openFolder,
         navigateTo,
       }}

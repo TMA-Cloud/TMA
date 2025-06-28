@@ -7,13 +7,16 @@ import {
   Star,
   Copy,
   Scissors,
+  ClipboardPaste,
 } from "lucide-react";
+import { useApp } from "../../contexts/AppContext";
 
 interface ContextMenuProps {
   isOpen: boolean;
   position: { x: number; y: number };
   onClose: () => void;
   selectedCount: number;
+  targetId: string | null;
 }
 
 export const ContextMenu: React.FC<ContextMenuProps> = ({
@@ -21,8 +24,16 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
   position,
   onClose,
   selectedCount,
+  targetId,
 }) => {
   const menuRef = useRef<HTMLDivElement>(null);
+  const {
+    selectedFiles,
+    setClipboard,
+    clipboard,
+    pasteClipboard,
+    folderStack,
+  } = useApp();
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -54,8 +65,26 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     { icon: Download, label: "Download", action: () => {} },
     { icon: Share2, label: "Share", action: () => {} },
     { icon: Star, label: "Add to Starred", action: () => {} },
-    { icon: Copy, label: "Copy", action: () => {} },
-    { icon: Scissors, label: "Cut", action: () => {} },
+    {
+      icon: Copy,
+      label: "Copy",
+      action: () => setClipboard({ ids: selectedFiles, action: "copy" }),
+    },
+    {
+      icon: Scissors,
+      label: "Cut",
+      action: () => setClipboard({ ids: selectedFiles, action: "cut" }),
+    },
+    ...(clipboard
+      ? [
+          {
+            icon: ClipboardPaste,
+            label: "Paste",
+            action: () =>
+              pasteClipboard(targetId ?? folderStack[folderStack.length - 1]),
+          },
+        ]
+      : []),
     { icon: Edit3, label: "Rename", action: () => {} },
     { icon: Trash2, label: "Delete", action: () => {}, danger: true },
   ];

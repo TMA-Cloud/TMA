@@ -5,6 +5,7 @@ import { Breadcrumbs } from "./Breadcrumbs";
 import { MarqueeSelector } from "./MarqueeSelector";
 import { ContextMenu } from "./ContextMenu";
 import { FileItemComponent } from "./FileItem";
+import { PasteProgress } from "./PasteProgress";
 
 const transparentImage = new Image();
 transparentImage.src =
@@ -173,6 +174,7 @@ export const FileManager: React.FC = () => {
     setCreateFolderModalOpen,
     moveFiles,
     setImageViewerFile,
+    pasteProgress,
   } = useApp();
 
   const dragSelectingRef = useRef(false);
@@ -190,7 +192,8 @@ export const FileManager: React.FC = () => {
   const [contextMenu, setContextMenu] = useState<{
     isOpen: boolean;
     position: { x: number; y: number };
-  }>({ isOpen: false, position: { x: 0, y: 0 } });
+    targetId: string | null;
+  }>({ isOpen: false, position: { x: 0, y: 0 }, targetId: null });
 
   useEffect(() => {
     const handleDocumentClick = (e: MouseEvent) => {
@@ -261,6 +264,7 @@ export const FileManager: React.FC = () => {
 
   const handleContextMenu = (e: React.MouseEvent, fileId?: string) => {
     e.preventDefault();
+    e.stopPropagation();
 
     if (fileId && !selectedFiles.includes(fileId)) {
       setSelectedFiles([fileId]);
@@ -269,6 +273,7 @@ export const FileManager: React.FC = () => {
     setContextMenu({
       isOpen: true,
       position: { x: e.clientX, y: e.clientY },
+      targetId: fileId ?? null,
     });
   };
 
@@ -438,10 +443,17 @@ export const FileManager: React.FC = () => {
         isOpen={contextMenu.isOpen}
         position={contextMenu.position}
         onClose={() =>
-          setContextMenu({ isOpen: false, position: { x: 0, y: 0 } })
+          setContextMenu({
+            isOpen: false,
+            position: { x: 0, y: 0 },
+            targetId: null,
+          })
         }
+        targetId={contextMenu.targetId}
         selectedCount={selectedFiles.length}
       />
+
+      <PasteProgress progress={pasteProgress} />
     </div>
   );
 };
