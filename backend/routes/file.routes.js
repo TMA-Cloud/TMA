@@ -7,6 +7,7 @@ const {
   moveFiles,
   copyFiles,
   downloadFile,
+  renameFile,
 } = require('../controllers/file.controller');
 const auth = require('../middleware/auth.middleware');
 const router = express.Router();
@@ -20,6 +21,7 @@ router.post('/folder', addFolder);
 router.post('/upload', upload.single('file'), uploadFile);
 router.post('/move', moveFiles);
 router.post('/copy', copyFiles);
+router.post('/rename', renameFile);
 router.get('/:id/download', downloadFile);
 
 module.exports = router;

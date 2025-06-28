@@ -95,6 +95,14 @@ async function getFile(id, userId) {
   return result.rows[0];
 }
 
+async function renameFile(id, name, userId) {
+  const result = await pool.query(
+    'UPDATE files SET name = $1, modified = NOW() WHERE id = $2 AND user_id = $3 RETURNING id, name, type, size, modified, mime_type AS "mimeType", starred, shared',
+    [name, id, userId],
+  );
+  return result.rows[0];
+}
+
 module.exports = {
   getFiles,
   createFolder,
@@ -102,4 +110,5 @@ module.exports = {
   moveFiles,
   copyFiles,
   getFile,
+  renameFile,
 };

@@ -11,6 +11,7 @@ import { Settings } from "./components/settings/Settings";
 import { UploadModal } from "./components/upload/UploadModal";
 import { CreateFolderModal } from "./components/folder/CreateFolderModal";
 import { ImageViewerModal } from "./components/viewer/ImageViewerModal";
+import { RenameModal } from "./components/fileManager/RenameModal";
 import { LoginForm } from "./components/auth/LoginForm";
 import { SignupForm } from "./components/auth/SignupForm";
 
@@ -49,6 +50,7 @@ const AppContent: React.FC = () => {
       <UploadModal />
       <CreateFolderModal />
       <ImageViewerModal />
+      <RenameModal />
     </div>
   );
 };

@@ -7,6 +7,7 @@ const {
   moveFiles,
   copyFiles,
   getFile,
+  renameFile,
 } = require('../models/file.model');
 
 async function listFiles(req, res) {
@@ -92,6 +93,19 @@ async function downloadFile(req, res) {
   }
 }
 
+async function renameFileController(req, res) {
+  const { id, name } = req.body;
+  if (!id || !name) return res.status(400).json({ message: 'id and name required' });
+  try {
+    const file = await renameFile(id, name, req.userId);
+    if (!file) return res.status(404).json({ message: 'Not found' });
+    res.json(file);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+}
+
 module.exports = {
   listFiles,
   addFolder,
@@ -99,4 +113,5 @@ module.exports = {
   moveFiles: moveFilesController,
   copyFiles: copyFilesController,
   downloadFile,
+  renameFile: renameFileController,
 };

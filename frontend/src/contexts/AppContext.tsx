@@ -23,6 +23,9 @@ interface AppContextType {
   createFolderModalOpen: boolean;
   imageViewerFile: FileItem | null;
   setImageViewerFile: (file: FileItem | null) => void;
+  renameTarget: FileItem | null;
+  setRenameTarget: (file: FileItem | null) => void;
+  renameFile: (id: string, name: string) => Promise<void>;
   setCurrentPath: (path: string[], ids?: (string | null)[]) => void;
   setFiles: (files: FileItem[]) => void;
   setSelectedFiles: (ids: string[]) => void;
@@ -71,6 +74,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [createFolderModalOpen, setCreateFolderModalOpen] = useState(false);
   const [imageViewerFile, setImageViewerFile] = useState<FileItem | null>(null);
+  const [renameTarget, setRenameTarget] = useState<FileItem | null>(null);
   const [clipboard, setClipboard] = useState<{
     ids: string[];
     action: "copy" | "cut";
@@ -145,6 +149,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
     await refreshFiles();
   };
 
+  const renameFileApi = async (id: string, name: string) => {
+    await fetch(`${import.meta.env.VITE_API_URL}/api/files/rename`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ id, name }),
+    });
+    await refreshFiles();
+  };
+
   const pasteClipboard = async (parentId: string | null) => {
     if (!clipboard) return;
     setPasteProgress(0);
@@ -209,6 +223,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         createFolderModalOpen,
         imageViewerFile,
         setImageViewerFile,
+        renameTarget,
+        setRenameTarget,
+        renameFile: renameFileApi,
         setCurrentPath,
         setFiles,
         setSelectedFiles,

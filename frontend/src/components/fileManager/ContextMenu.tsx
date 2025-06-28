@@ -33,6 +33,8 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     clipboard,
     pasteClipboard,
     folderStack,
+    files,
+    setRenameTarget,
   } = useApp();
 
   useEffect(() => {
@@ -85,7 +87,15 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
           },
         ]
       : []),
-    { icon: Edit3, label: "Rename", action: () => {} },
+    {
+      icon: Edit3,
+      label: "Rename",
+      action: () => {
+        const id = targetId ?? selectedFiles[0];
+        const file = files.find((f) => f.id === id);
+        if (file) setRenameTarget(file);
+      },
+    },
     { icon: Trash2, label: "Delete", action: () => {}, danger: true },
   ];
 
