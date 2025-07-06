@@ -1,5 +1,6 @@
 const path = require('path');
 const fs = require('fs');
+const { UPLOAD_DIR } = require('../config/paths');
 const {
   getFiles,
   createFolder,
@@ -106,7 +107,7 @@ async function downloadFile(req, res) {
       return res.status(400).json({ message: 'Invalid file path' });
     }
     
-    const uploadsDir = path.join(__dirname, '..', 'uploads');
+    const uploadsDir = UPLOAD_DIR;
     const filePath = path.join(uploadsDir, file.path);
     
     // Ensure the resolved path is within uploads directory

@@ -2,6 +2,7 @@ const pool = require('../config/db');
 const { generateId } = require('../utils/id');
 const fs = require('fs');
 const path = require('path');
+const { UPLOAD_DIR } = require('../config/paths');
 
 async function getFiles(userId, parentId = null) {
   const result = await pool.query(
@@ -29,7 +30,7 @@ async function createFile(name, size, mimeType, tempPath, parentId = null, userI
   const id = generateId(16);
   const ext = path.extname(name);
   const storageName = id + ext;
-  const dest = path.join(__dirname, '..', 'uploads', storageName);
+  const dest = path.join(UPLOAD_DIR, storageName);
   await fs.promises.rename(tempPath, dest);
   const result = await pool.query(
     'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id, name, type, size, modified, mime_type AS "mimeType", starred, shared',
@@ -55,8 +56,8 @@ async function copyEntry(id, parentId, userId) {
     const ext = path.extname(file.name);
     storageName = newId + ext;
     await fs.promises.copyFile(
-      path.join(__dirname, '..', 'uploads', file.path),
-      path.join(__dirname, '..', 'uploads', storageName),
+      path.join(UPLOAD_DIR, file.path),
+      path.join(UPLOAD_DIR, storageName),
     );
   }
   await pool.query(
@@ -163,7 +164,7 @@ async function permanentlyDeleteFiles(ids, userId) {
   for (const f of files.rows) {
     if (f.type === 'file' && f.path) {
       try {
-        await fs.promises.unlink(path.join(__dirname, '..', 'uploads', f.path));
+        await fs.promises.unlink(path.join(UPLOAD_DIR, f.path));
       } catch {}
     }
   }
@@ -177,7 +178,7 @@ async function cleanupExpiredTrash() {
   for (const f of expired.rows) {
     if (f.type === 'file' && f.path) {
       try {
-        await fs.promises.unlink(path.join(__dirname, '..', 'uploads', f.path));
+        await fs.promises.unlink(path.join(UPLOAD_DIR, f.path));
       } catch {}
     }
   }
@@ -187,7 +188,7 @@ async function cleanupExpiredTrash() {
 }
 
 async function cleanupOrphanFiles() {
-  const uploadsDir = path.join(__dirname, '..', 'uploads');
+  const uploadsDir = UPLOAD_DIR;
   let diskFiles = [];
   try {
     diskFiles = await fs.promises.readdir(uploadsDir);

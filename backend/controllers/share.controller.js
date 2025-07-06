@@ -1,5 +1,6 @@
 const path = require('path');
 const archiver = require('archiver');
+const { UPLOAD_DIR } = require('../config/paths');
 const {
   getFileByToken,
   getFolderContentsByShare,
@@ -25,7 +26,7 @@ async function handleShared(req, res) {
       html += `</body></html>`;
       res.send(html);
     } else {
-      const filePath = path.join(__dirname, '..', 'uploads', file.path);
+      const filePath = path.join(UPLOAD_DIR, file.path);
       res.download(filePath, file.name, err => { if (err) console.error(err); });
     }
   } catch (err) {
@@ -50,7 +51,7 @@ async function downloadFolderZip(req, res) {
       for (const entry of entries.filter(e => e.parent_id === id)) {
         const relPath = base ? path.join(base, entry.name) : entry.name;
         if (entry.type === 'file') {
-          const p = path.join(__dirname, '..', 'uploads', entry.path);
+          const p = path.join(UPLOAD_DIR, entry.path);
           archive.file(p, { name: relPath });
         } else {
           addEntry(entry.id, relPath);
@@ -78,7 +79,7 @@ async function downloadSharedItem(req, res) {
     const file = res2.rows[0];
     if (!file) return res.status(404).send('Not found');
     if (file.type === 'file') {
-      const filePath = path.join(__dirname, '..', 'uploads', file.path);
+      const filePath = path.join(UPLOAD_DIR, file.path);
       return res.download(filePath, file.name, err => { if (err) console.error(err); });
     }
     // folder: create zip of shared contents under this folder
@@ -92,7 +93,7 @@ async function downloadSharedItem(req, res) {
       for (const entry of entries.filter(e => e.parent_id === id)) {
         const relPath = base ? path.join(base, entry.name) : entry.name;
         if (entry.type === 'file') {
-          const p = path.join(__dirname, '..', 'uploads', entry.path);
+          const p = path.join(UPLOAD_DIR, entry.path);
           archive.file(p, { name: relPath });
         } else {
           addEntry(entry.id, relPath);
