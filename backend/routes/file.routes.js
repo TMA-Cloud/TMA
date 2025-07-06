@@ -1,5 +1,4 @@
 const express = require('express');
-const multer = require('multer');
 const {
   listFiles,
   addFolder,
@@ -18,9 +17,8 @@ const {
   deleteForever,
 } = require('../controllers/file.controller');
 const auth = require('../middleware/auth.middleware');
+const upload = require('../utils/multer');
 const router = express.Router();
-
-const upload = multer({ dest: 'uploads/' });
 
 router.use(auth);
 

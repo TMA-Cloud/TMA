@@ -100,9 +100,28 @@ async function downloadFile(req, res) {
   try {
     const file = await getFile(req.params.id, req.userId);
     if (!file) return res.status(404).json({ message: 'File not found' });
-    const filePath = path.join(__dirname, '..', 'uploads', file.path);
+    
+    // Validate file path to prevent path traversal
+    if (!file.path || file.path.includes('..') || file.path.includes('/') || file.path.includes('\\')) {
+      return res.status(400).json({ message: 'Invalid file path' });
+    }
+    
+    const uploadsDir = path.join(__dirname, '..', 'uploads');
+    const filePath = path.join(uploadsDir, file.path);
+    
+    // Ensure the resolved path is within uploads directory
+    if (!filePath.startsWith(uploadsDir)) {
+      return res.status(400).json({ message: 'Invalid file path' });
+    }
+    
+    // Check if file exists
+    const fs = require('fs');
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ message: 'File not found on disk' });
+    }
+    
     res.type(file.mimeType);
-    res.sendFile(filePath);
+    res.sendFile(path.resolve(filePath));
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Server error' });
