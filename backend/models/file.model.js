@@ -186,6 +186,37 @@ async function cleanupExpiredTrash() {
   );
 }
 
+async function cleanupOrphanFiles() {
+  const uploadsDir = path.join(__dirname, '..', 'uploads');
+  let diskFiles = [];
+  try {
+    diskFiles = await fs.promises.readdir(uploadsDir);
+  } catch {
+    diskFiles = [];
+  }
+  const diskSet = new Set(diskFiles);
+
+  const dbRes = await pool.query(
+    "SELECT id, path FROM files WHERE type = 'file'"
+  );
+  const dbSet = new Set();
+  for (const row of dbRes.rows) {
+    if (!row.path) continue;
+    dbSet.add(row.path);
+    if (!diskSet.has(row.path)) {
+      await pool.query('DELETE FROM files WHERE id = $1', [row.id]);
+    }
+  }
+
+  for (const file of diskFiles) {
+    if (!dbSet.has(file)) {
+      try {
+        await fs.promises.unlink(path.join(uploadsDir, file));
+      } catch {}
+    }
+  }
+}
+
 async function getStarredFiles(userId) {
   const result = await pool.query(
     'SELECT id, name, type, size, modified, mime_type AS "mimeType", starred, shared FROM files WHERE user_id = $1 AND starred = TRUE ORDER BY modified DESC',
@@ -219,4 +250,5 @@ module.exports = {
   getTrashFiles,
   permanentlyDeleteFiles,
   cleanupExpiredTrash,
+  cleanupOrphanFiles,
 };

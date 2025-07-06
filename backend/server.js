@@ -7,6 +7,7 @@ const authRoutes = require('./routes/auth.routes');
 const fileRoutes = require('./routes/file.routes');
 const shareRoutes = require('./routes/share.routes');
 const { startTrashCleanup } = require('./services/trashCleanup');
+const { startOrphanFileCleanup } = require('./services/orphanCleanup');
 const errorHandler = require('./middleware/error.middleware');
 require('dotenv').config();
 
@@ -69,6 +70,7 @@ runMigrations()
     const port = process.env.PORT || 3000;
     app.listen(port, () => console.log(`Server running on port ${port}`));
     startTrashCleanup();
+    startOrphanFileCleanup();
   })
   .catch((err) => {
     console.error('Failed to run migrations', err);
