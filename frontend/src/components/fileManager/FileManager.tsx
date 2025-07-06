@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect } from "react";
 import { Grid, List, SortAsc, FolderPlus } from "lucide-react";
-import { useApp } from "../../contexts/AppContext";
+import { useApp, FileItem } from "../../contexts/AppContext";
 import { Breadcrumbs } from "./Breadcrumbs";
 import { MarqueeSelector } from "./MarqueeSelector";
 import { ContextMenu } from "./ContextMenu";
@@ -165,6 +165,7 @@ export const FileManager: React.FC = () => {
     files,
     selectedFiles,
     viewMode,
+    currentPath,
     setViewMode,
     setSelectedFiles,
     addSelectedFile,
@@ -250,7 +251,7 @@ export const FileManager: React.FC = () => {
     }
   };
 
-  const handleFileDoubleClick = (file: any) => {
+  const handleFileDoubleClick = (file: FileItem) => {
     if (file.type === "folder" && currentPath[0] !== "Trash") {
       openFolder(file);
     } else {
