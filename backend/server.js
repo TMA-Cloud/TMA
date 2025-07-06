@@ -7,18 +7,33 @@ const authRoutes = require('./routes/auth.routes');
 const fileRoutes = require('./routes/file.routes');
 const shareRoutes = require('./routes/share.routes');
 const { startTrashCleanup } = require('./services/trashCleanup');
+const errorHandler = require('./middleware/error.middleware');
 require('dotenv').config();
 
 const app = express();
+
+// Security headers
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), location=()');
+  next();
+});
+
 const corsOptions = {
   origin: process.env.CLIENT_URL || 'http://localhost:5173',
   credentials: true,
 };
 app.use(cors(corsOptions));
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 app.use('/api', authRoutes);
 app.use('/api/files', fileRoutes);
 app.use('/s', shareRoutes);
+
+// Error handling middleware (must be last)
+app.use(errorHandler);
 
 async function runMigrations() {
   const client = await pool.connect();
