@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
+import { usePromiseQueue, useDebouncedCallback } from "../utils/debounce";
 
 export interface FileItem {
   id: string;
@@ -99,6 +100,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   } | null>(null);
   const [pasteProgress, setPasteProgress] = useState<number | null>(null);
 
+  // Promise queue to prevent race conditions
+  const operationQueue = usePromiseQueue();
+
   const refreshFiles = async () => {
     try {
       const parentId = folderStack[folderStack.length - 1];
@@ -149,36 +153,47 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   const uploadFile = async (file: File) => {
-    const data = new FormData();
-    data.append("file", file);
-    const parentId = folderStack[folderStack.length - 1];
-    if (parentId) data.append("parentId", parentId);
-    await fetch(`${import.meta.env.VITE_API_URL}/api/files/upload`, {
-      method: "POST",
-      credentials: "include",
-      body: data,
+    return operationQueue.add(async () => {
+      try {
+        const data = new FormData();
+        data.append("file", file);
+        const parentId = folderStack[folderStack.length - 1];
+        if (parentId) data.append("parentId", parentId);
+        await fetch(`${import.meta.env.VITE_API_URL}/api/files/upload`, {
+          method: "POST",
+          credentials: "include",
+          body: data,
+        });
+        await refreshFiles();
+      } catch (error) {
+        console.error("Upload failed", error);
+        throw error;
+      }
     });
-    await refreshFiles();
   };
 
   const moveFiles = async (ids: string[], parentId: string | null) => {
-    await fetch(`${import.meta.env.VITE_API_URL}/api/files/move`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ ids, parentId }),
+    return operationQueue.add(async () => {
+      await fetch(`${import.meta.env.VITE_API_URL}/api/files/move`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ ids, parentId }),
+      });
+      await refreshFiles();
     });
-    await refreshFiles();
   };
 
   const copyFilesApi = async (ids: string[], parentId: string | null) => {
-    await fetch(`${import.meta.env.VITE_API_URL}/api/files/copy`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ ids, parentId }),
+    return operationQueue.add(async () => {
+      await fetch(`${import.meta.env.VITE_API_URL}/api/files/copy`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ ids, parentId }),
+      });
+      await refreshFiles();
     });
-    await refreshFiles();
   };
 
   const renameFileApi = async (id: string, name: string) => {
@@ -264,22 +279,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const pasteClipboard = async (parentId: string | null) => {
     if (!clipboard) return;
-    setPasteProgress(0);
-    const total = clipboard.ids.length;
-    for (let i = 0; i < total; i++) {
-      const id = clipboard.ids[i];
+
+    return operationQueue.add(async () => {
+      setPasteProgress(0);
       const endpoint = clipboard.action === "cut" ? "move" : "copy";
-      await fetch(`${import.meta.env.VITE_API_URL}/api/files/${endpoint}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ ids: [id], parentId }),
-      });
-      setPasteProgress(Math.round(((i + 1) / total) * 100));
-    }
-    await refreshFiles();
-    setClipboard(null);
-    setTimeout(() => setPasteProgress(null), 300);
+
+      try {
+        // Batch operation - send all files at once instead of individually
+        await fetch(`${import.meta.env.VITE_API_URL}/api/files/${endpoint}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ ids: clipboard.ids, parentId }),
+        });
+
+        setPasteProgress(100);
+        await refreshFiles();
+        setClipboard(null);
+        setTimeout(() => setPasteProgress(null), 300);
+      } catch (error) {
+        console.error("Paste operation failed", error);
+        setPasteProgress(null);
+        throw error;
+      }
+    });
   };
 
   const addSelectedFile = (id: string) => {
