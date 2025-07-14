@@ -26,6 +26,7 @@ const {
   removeFilesFromShares,
 } = require('../models/share.model');
 const pool = require('../config/db');
+const { userOperationLock, fileOperationLock } = require('../utils/mutex');
 
 async function listFiles(req, res) {
   const parentId = req.query.parentId || null;
@@ -54,14 +55,16 @@ async function uploadFile(req, res) {
   if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
   const parentId = req.body.parentId || null;
   try {
-    const file = await createFile(
-      req.file.originalname,
-      req.file.size,
-      req.file.mimetype,
-      req.file.path,
-      parentId,
-      req.userId
-    );
+    const file = await userOperationLock(req.userId, async () => {
+      return await createFile(
+        req.file.originalname,
+        req.file.size,
+        req.file.mimetype,
+        req.file.path,
+        parentId,
+        req.userId
+      );
+    });
     res.json(file);
   } catch (err) {
     console.error(err);
@@ -75,7 +78,9 @@ async function moveFilesController(req, res) {
     return res.status(400).json({ message: 'ids required' });
   }
   try {
-    await moveFiles(ids, parentId, req.userId);
+    await userOperationLock(req.userId, async () => {
+      await moveFiles(ids, parentId, req.userId);
+    });
     res.json({ success: true });
   } catch (err) {
     console.error(err);
@@ -89,7 +94,9 @@ async function copyFilesController(req, res) {
     return res.status(400).json({ message: 'ids required' });
   }
   try {
-    await copyFiles(ids, parentId, req.userId);
+    await userOperationLock(req.userId, async () => {
+      await copyFiles(ids, parentId, req.userId);
+    });
     res.json({ success: true });
   } catch (err) {
     console.error(err);
@@ -161,15 +168,23 @@ async function shareFilesController(req, res) {
   if (!Array.isArray(ids) || ids.length === 0 || typeof shared !== 'boolean') {
     return res.status(400).json({ message: 'ids and shared required' });
   }
+  
+  const client = await pool.connect();
   try {
+    await client.query('BEGIN');
+    
     const affected = await setShared(ids, shared, req.userId);
     const links = {};
+    
     if (shared) {
       for (const id of ids) {
         const treeIds = await getRecursiveIds([id], req.userId);
         let token = await getShareLink(id, req.userId);
-        if (!token) token = await createShareLink(id, req.userId, treeIds);
-        else await addFilesToShare(token, treeIds);
+        if (!token) {
+          token = await createShareLink(id, req.userId, treeIds);
+        } else {
+          await addFilesToShare(token, treeIds);
+        }
         links[id] = token;
       }
     } else {
@@ -179,10 +194,15 @@ async function shareFilesController(req, res) {
         await deleteShareLink(id, req.userId);
       }
     }
+    
+    await client.query('COMMIT');
     res.json({ success: true, links });
   } catch (err) {
+    await client.query('ROLLBACK');
     console.error(err);
     res.status(500).json({ message: 'Server error' });
+  } finally {
+    client.release();
   }
 }
 
