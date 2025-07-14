@@ -75,37 +75,49 @@ export const UploadModal: React.FC = () => {
 
   const startUpload = async () => {
     setIsUploading(true);
-    for (const uploadFileItem of uploadFiles) {
-      if (
-        uploadFileItem.status !== "pending" &&
-        uploadFileItem.status !== "error"
-      )
-        continue;
-      setUploadFiles((prev) =>
-        prev.map((f) =>
-          f.id === uploadFileItem.id
-            ? { ...f, status: "uploading" as const }
-            : f,
-        ),
-      );
-      try {
-        await uploadFile(uploadFileItem.file);
+    try {
+      for (const uploadFileItem of uploadFiles) {
+        if (
+          uploadFileItem.status !== "pending" &&
+          uploadFileItem.status !== "error"
+        )
+          continue;
+
         setUploadFiles((prev) =>
           prev.map((f) =>
             f.id === uploadFileItem.id
-              ? { ...f, progress: 100, status: "completed" as const }
+              ? { ...f, status: "uploading" as const }
               : f,
           ),
         );
-      } catch {
-        setUploadFiles((prev) =>
-          prev.map((f) =>
-            f.id === uploadFileItem.id ? { ...f, status: "error" as const } : f,
-          ),
-        );
+
+        try {
+          await uploadFile(uploadFileItem.file);
+          setUploadFiles((prev) =>
+            prev.map((f) =>
+              f.id === uploadFileItem.id
+                ? { ...f, progress: 100, status: "completed" as const }
+                : f,
+            ),
+          );
+        } catch (error) {
+          console.error(
+            "Upload failed for file:",
+            uploadFileItem.file.name,
+            error,
+          );
+          setUploadFiles((prev) =>
+            prev.map((f) =>
+              f.id === uploadFileItem.id
+                ? { ...f, status: "error" as const }
+                : f,
+            ),
+          );
+        }
       }
+    } finally {
+      setIsUploading(false);
     }
-    setIsUploading(false);
   };
 
   return (
