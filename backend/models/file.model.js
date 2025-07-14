@@ -46,8 +46,9 @@ async function moveFiles(ids, parentId = null, userId) {
   );
 }
 
-async function copyEntry(id, parentId, userId) {
-  const res = await pool.query('SELECT * FROM files WHERE id = $1 AND user_id = $2', [id, userId]);
+async function copyEntry(id, parentId, userId, client = null) {
+  const dbClient = client || pool;
+  const res = await dbClient.query('SELECT * FROM files WHERE id = $1 AND user_id = $2', [id, userId]);
   if (res.rows.length === 0) return null;
   const file = res.rows[0];
   const newId = generateId(16);
@@ -55,12 +56,18 @@ async function copyEntry(id, parentId, userId) {
   if (file.type === 'file') {
     const ext = path.extname(file.name);
     storageName = newId + ext;
-    await fs.promises.copyFile(
-      path.join(UPLOAD_DIR, file.path),
-      path.join(UPLOAD_DIR, storageName),
-    );
+    // Copy file first to ensure it exists before database entry
+    try {
+      await fs.promises.copyFile(
+        path.join(UPLOAD_DIR, file.path),
+        path.join(UPLOAD_DIR, storageName),
+      );
+    } catch (error) {
+      console.error('Failed to copy file:', error);
+      throw new Error('File copy operation failed');
+    }
   }
-  await pool.query(
+  await dbClient.query(
     'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id, starred, shared) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',
     [
       newId,
@@ -76,17 +83,27 @@ async function copyEntry(id, parentId, userId) {
     ],
   );
   if (file.type === 'folder') {
-    const children = await pool.query('SELECT id FROM files WHERE parent_id = $1 AND user_id = $2', [id, userId]);
+    const children = await dbClient.query('SELECT id FROM files WHERE parent_id = $1 AND user_id = $2', [id, userId]);
     for (const child of children.rows) {
-      await copyEntry(child.id, newId, userId);
+      await copyEntry(child.id, newId, userId, client);
     }
   }
   return newId;
 }
 
 async function copyFiles(ids, parentId = null, userId) {
-  for (const id of ids) {
-    await copyEntry(id, parentId, userId);
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    for (const id of ids) {
+      await copyEntry(id, parentId, userId, client);
+    }
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
   }
 }
 
