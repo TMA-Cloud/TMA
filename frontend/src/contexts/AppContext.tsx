@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
-import { usePromiseQueue, useDebouncedCallback } from "../utils/debounce";
+import { usePromiseQueue } from "../utils/debounce";
 
 export interface FileItem {
   id: string;
@@ -12,6 +12,18 @@ export interface FileItem {
   starred?: boolean;
   shared?: boolean;
   deletedAt?: Date;
+}
+
+interface FileItemResponse {
+  id: string;
+  name: string;
+  type: "file" | "folder";
+  size?: number;
+  modified: string;
+  mimeType?: string;
+  starred?: boolean;
+  shared?: boolean;
+  deletedAt?: string | null;
 }
 
 interface AppContextType {
@@ -122,9 +134,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         url = url.toString();
       }
       const res = await fetch(url.toString(), { credentials: "include" });
-      const data = await res.json();
+      const data: FileItemResponse[] = await res.json();
       setFiles(
-        data.map((f: any) => ({
+        data.map((f) => ({
           ...f,
           modified: new Date(f.modified),
           deletedAt: f.deletedAt ? new Date(f.deletedAt) : undefined,
@@ -137,7 +149,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
 
   useEffect(() => {
     refreshFiles();
-  }, [folderStack]);
+  }, [folderStack, refreshFiles]);
 
   const createFolder = async (name: string) => {
     await fetch(`${import.meta.env.VITE_API_URL}/api/files/folder`, {

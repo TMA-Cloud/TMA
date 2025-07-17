@@ -6,6 +6,7 @@ const pool = require('./config/db');
 const authRoutes = require('./routes/auth.routes');
 const fileRoutes = require('./routes/file.routes');
 const shareRoutes = require('./routes/share.routes');
+const userRoutes = require('./routes/user.routes');
 const { startTrashCleanup } = require('./services/trashCleanup');
 const { startOrphanFileCleanup } = require('./services/orphanCleanup');
 const errorHandler = require('./middleware/error.middleware');
@@ -31,6 +32,7 @@ app.use(cors(corsOptions));
 app.use(express.json({ limit: '10mb' }));
 app.use('/api', authRoutes);
 app.use('/api/files', fileRoutes);
+app.use('/api/user', userRoutes);
 app.use('/s', shareRoutes);
 
 // Error handling middleware (must be last)

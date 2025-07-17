@@ -1,11 +1,21 @@
 import React from "react";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useAuth } from "../../contexts/AuthContext";
+import { useStorageUsage } from "../../hooks/useStorageUsage";
 import { User, Bell, Shield, HardDrive } from "lucide-react";
 
 export const Settings: React.FC = () => {
   const { theme, toggleTheme } = useTheme();
   const { user } = useAuth();
+  const { usage, loading } = useStorageUsage();
+
+  const formatBytes = (bytes: number) => {
+    if (bytes === 0) return "0 Bytes";
+    const k = 1024;
+    const sizes = ["Bytes", "KB", "MB", "GB", "TB"];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+  };
 
   const settingsSections = [
     {
@@ -38,7 +48,17 @@ export const Settings: React.FC = () => {
       title: "Storage",
       icon: HardDrive,
       items: [
-        { label: "Used Space", value: "15 GB of 100 GB" },
+        {
+          label: "Used Space",
+          value:
+            loading || !usage
+              ? "Loading..."
+              : `${formatBytes(usage.used)} of ${formatBytes(usage.total)}`,
+        },
+        {
+          label: "Available Space",
+          value: loading || !usage ? "Loading..." : formatBytes(usage.free),
+        },
         { label: "Auto-Delete Trash", toggle: true, value: true },
         { label: "Sync Settings", action: "Configure" },
       ],

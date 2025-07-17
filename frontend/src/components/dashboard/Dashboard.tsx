@@ -3,6 +3,7 @@ import { StorageChart } from "./StorageChart";
 import { RecentFiles } from "./RecentFiles";
 import { useApp } from "../../contexts/AppContext";
 import { Upload, FolderPlus, Share2, Star } from "lucide-react";
+import { useStorageUsage } from "../../hooks/useStorageUsage";
 
 export const Dashboard: React.FC = () => {
   const {
@@ -11,6 +12,7 @@ export const Dashboard: React.FC = () => {
     setCreateFolderModalOpen,
     setCurrentPath,
   } = useApp();
+  const { usage, loading } = useStorageUsage();
 
   const quickActions = [
     {
@@ -110,8 +112,10 @@ export const Dashboard: React.FC = () => {
       <div className="grid lg:grid-cols-3 gap-6">
         <div className="lg:col-span-1">
           <StorageChart
-            used={15 * 1024 * 1024 * 1024}
-            total={100 * 1024 * 1024 * 1024}
+            used={usage?.used || 0}
+            total={usage?.total || 0}
+            free={usage?.free || 0}
+            loading={loading || !usage}
           />
         </div>
         <div className="lg:col-span-2">

@@ -3,11 +3,28 @@ import React from "react";
 interface StorageChartProps {
   used: number;
   total: number;
+  free: number;
+  loading?: boolean;
 }
 
-export const StorageChart: React.FC<StorageChartProps> = ({ used, total }) => {
+export const StorageChart: React.FC<StorageChartProps> = ({
+  used,
+  total,
+  free,
+  loading,
+}) => {
+  if (loading) {
+    return (
+      <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
+          Storage Usage
+        </h3>
+        <p className="text-gray-500 dark:text-gray-400">Loading...</p>
+      </div>
+    );
+  }
   const percentage = (used / total) * 100;
-  const remaining = total - used;
+  const remaining = free;
 
   const formatBytes = (bytes: number) => {
     if (bytes === 0) return "0 Bytes";

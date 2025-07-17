@@ -26,4 +26,12 @@ async function getUserById(id) {
   return result.rows[0];
 }
 
-module.exports = { createUser, getUserByEmail, getUserById };
+async function getUserStorageUsage(userId) {
+  const res = await pool.query(
+    "SELECT COALESCE(SUM(size), 0) AS used FROM files WHERE user_id = $1 AND type = 'file' AND deleted_at IS NULL",
+    [userId]
+  );
+  return Number(res.rows[0].used) || 0;
+}
+
+module.exports = { createUser, getUserByEmail, getUserById, getUserStorageUsage };

@@ -1,7 +1,7 @@
 import { useCallback, useRef } from "react";
 
 // Generic debounce function
-export function debounce<T extends (...args: any[]) => any>(
+export function debounce<T extends (...args: unknown[]) => unknown>(
   func: T,
   wait: number,
 ): (...args: Parameters<T>) => void {
@@ -19,7 +19,7 @@ export function debounce<T extends (...args: any[]) => any>(
 }
 
 // Hook for debounced callbacks
-export function useDebouncedCallback<T extends (...args: any[]) => any>(
+export function useDebouncedCallback<T extends (...args: unknown[]) => unknown>(
   callback: T,
   delay: number,
 ): (...args: Parameters<T>) => void {
@@ -36,7 +36,7 @@ export function useDebouncedCallback<T extends (...args: any[]) => any>(
 
 // Promise queue to handle sequential async operations
 export class PromiseQueue {
-  private queue: (() => Promise<any>)[] = [];
+  private queue: (() => Promise<unknown>)[] = [];
   private running = false;
 
   async add<T>(operation: () => Promise<T>): Promise<T> {
