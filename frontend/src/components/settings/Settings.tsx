@@ -2,7 +2,7 @@ import React from "react";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useAuth } from "../../contexts/AuthContext";
 import { useStorageUsage } from "../../hooks/useStorageUsage";
-import { User, Bell, Shield, HardDrive } from "lucide-react";
+import { User, HardDrive } from "lucide-react";
 
 export const Settings: React.FC = () => {
   const { theme, toggleTheme } = useTheme();
@@ -24,24 +24,6 @@ export const Settings: React.FC = () => {
       items: [
         { label: "Full Name", value: user?.name || "" },
         { label: "Email", value: user?.email || "" },
-      ],
-    },
-    {
-      title: "Notifications",
-      icon: Bell,
-      items: [
-        { label: "Email Notifications", toggle: true, value: true },
-        { label: "Desktop Notifications", toggle: true, value: false },
-        { label: "File Share Alerts", toggle: true, value: true },
-      ],
-    },
-    {
-      title: "Privacy & Security",
-      icon: Shield,
-      items: [
-        { label: "Two-Factor Authentication", toggle: true, value: true },
-        { label: "Login Alerts", toggle: true, value: true },
-        { label: "Data Export", action: "Export" },
       ],
     },
     {
