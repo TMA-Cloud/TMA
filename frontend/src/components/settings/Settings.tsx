@@ -41,8 +41,6 @@ export const Settings: React.FC = () => {
           label: "Available Space",
           value: loading || !usage ? "Loading..." : formatBytes(usage.free),
         },
-        { label: "Auto-Delete Trash", toggle: true, value: true },
-        { label: "Sync Settings", action: "Configure" },
       ],
     },
   ];
