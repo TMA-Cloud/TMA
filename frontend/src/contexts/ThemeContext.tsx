@@ -56,7 +56,6 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({
   const toggleTheme = () => {
     setTheme((prevTheme) => {
       const newTheme = prevTheme === "light" ? "dark" : "light";
-      console.log("Toggling theme from", prevTheme, "to", newTheme); // Debug log
       return newTheme;
     });
   };

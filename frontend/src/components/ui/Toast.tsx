@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { X, CheckCircle, AlertCircle, Info } from "lucide-react";
 
 interface ToastProps {
@@ -17,6 +17,9 @@ export const Toast: React.FC<ToastProps> = ({
   onClose,
 }) => {
   const [isVisible, setIsVisible] = useState(true);
+  const [touchStartX, setTouchStartX] = useState<number | null>(null);
+  const [touchDeltaX, setTouchDeltaX] = useState(0);
+  const toastRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -26,6 +29,24 @@ export const Toast: React.FC<ToastProps> = ({
 
     return () => clearTimeout(timer);
   }, [id, duration, onClose]);
+
+  // Swipe-to-dismiss handlers
+  const handleTouchStart = (e: React.TouchEvent) => {
+    setTouchStartX(e.touches[0].clientX);
+  };
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (touchStartX !== null) {
+      setTouchDeltaX(e.touches[0].clientX - touchStartX);
+    }
+  };
+  const handleTouchEnd = () => {
+    if (Math.abs(touchDeltaX) > 60) {
+      setIsVisible(false);
+      setTimeout(() => onClose(id), 300);
+    }
+    setTouchStartX(null);
+    setTouchDeltaX(0);
+  };
 
   const icons = {
     success: CheckCircle,
@@ -43,25 +64,41 @@ export const Toast: React.FC<ToastProps> = ({
 
   return (
     <div
+      ref={toastRef}
       className={`
         transform transition-all duration-300 ease-in-out
         ${isVisible ? "translate-x-0 opacity-100" : "translate-x-full opacity-0"}
-        bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700
-        p-4 flex items-center space-x-3 min-w-80
+        bg-white/80 dark:bg-gray-900/80 backdrop-blur-md rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700
+        p-4 flex items-center space-x-3 min-w-80 animate-toastIn mb-2
       `}
+      style={{
+        marginBottom: "0.5rem",
+        touchAction: "pan-y",
+        transform: `translateX(${touchDeltaX}px)`,
+      }}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      aria-live="polite"
+      role="status"
     >
-      <div className={`${colors[type]} rounded-full p-1`}>
-        <Icon className="w-4 h-4 text-white" />
+      <div
+        className={`${colors[type]} rounded-full p-2 shadow-md animate-bounceIn`}
+      >
+        <Icon className="w-5 h-5 text-white" />
       </div>
-      <p className="text-gray-900 dark:text-gray-100 flex-1">{message}</p>
+      <p className="text-gray-900 dark:text-gray-100 flex-1 font-medium text-base">
+        {message}
+      </p>
       <button
         onClick={() => {
           setIsVisible(false);
           setTimeout(() => onClose(id), 300);
         }}
-        className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+        className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors duration-200 rounded-lg p-1"
+        aria-label="Close notification"
       >
-        <X className="w-4 h-4" />
+        <X className="w-5 h-5" />
       </button>
     </div>
   );

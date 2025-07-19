@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Download,
   Edit3,
@@ -27,6 +27,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
   targetId,
 }) => {
   const menuRef = useRef<HTMLDivElement>(null);
+  const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
   const {
     selectedFiles,
     setClipboard,
@@ -44,32 +45,6 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     setShareLinkModalOpen,
     currentPath,
   } = useApp();
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        onClose();
-      }
-    };
-
-    const handleEscKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        onClose();
-      }
-    };
-
-    if (isOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
-      document.addEventListener("keydown", handleEscKey);
-    }
-
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-      document.removeEventListener("keydown", handleEscKey);
-    };
-  }, [isOpen, onClose]);
-
-  if (!isOpen) return null;
 
   const selectedItems = files.filter((f) => selectedFiles.includes(f.id));
   const allStarred =
@@ -155,14 +130,68 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     },
   ];
 
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        onClose();
+      }
+    };
+
+    const handleEscKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (!isOpen) return;
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        setFocusedIndex((prev) =>
+          prev === null ? 0 : Math.min(prev + 1, menuItems.length - 1),
+        );
+      } else if (event.key === "ArrowUp") {
+        event.preventDefault();
+        setFocusedIndex((prev) =>
+          prev === null ? menuItems.length - 1 : Math.max(prev - 1, 0),
+        );
+      } else if (event.key === "Enter" && focusedIndex !== null) {
+        event.preventDefault();
+        menuItems[focusedIndex].action();
+        onClose();
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+      document.addEventListener("keydown", handleEscKey);
+      document.addEventListener("keydown", handleKeyDown);
+    }
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleEscKey);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isOpen, onClose, menuItems, focusedIndex]);
+
+  useEffect(() => {
+    if (isOpen) setFocusedIndex(0);
+  }, [isOpen]);
+
+  if (!isOpen) return null;
+
   return (
     <div
       ref={menuRef}
-      className="fixed z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-2 min-w-48"
+      className="fixed z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-2xl py-2 min-w-48 transition-all duration-200 ease-out animate-menuIn focus:outline-none"
       style={{
         left: `${position.x}px`,
         top: `${position.y}px`,
       }}
+      tabIndex={-1}
+      role="menu"
+      aria-label="File actions menu"
     >
       <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-700">
         <p className="text-xs text-gray-500 dark:text-gray-400">
@@ -172,6 +201,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
 
       {menuItems.map((item, index) => {
         const Icon = item.icon;
+        const isFocused = focusedIndex === index;
         return (
           <button
             key={index}
@@ -180,13 +210,22 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
               onClose();
             }}
             className={`
-              w-full flex items-center space-x-3 px-3 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700
+              w-full flex items-center space-x-3 px-3 py-2 text-left
+              transition-all duration-150
+              rounded-md
+              focus:outline-none
               ${
-                item.danger
-                  ? "text-red-600 dark:text-red-400"
-                  : "text-gray-700 dark:text-gray-300"
+                isFocused
+                  ? "bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300"
+                  : item.danger
+                    ? "text-red-600 dark:text-red-400"
+                    : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
               }
             `}
+            tabIndex={0}
+            role="menuitem"
+            aria-selected={isFocused}
+            onMouseEnter={() => setFocusedIndex(index)}
           >
             <Icon className="w-4 h-4" />
             <span className="text-sm">{item.label}</span>

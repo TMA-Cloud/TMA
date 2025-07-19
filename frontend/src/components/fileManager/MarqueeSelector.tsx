@@ -200,7 +200,7 @@ export const MarqueeSelector: React.FC<MarqueeSelectorProps> = ({
   };
 
   return (
-    <div ref={containerRef} className="relative select-none overflow-auto">
+    <div ref={containerRef} className="relative select-none overflow-visible">
       {children}
       {isSelecting && selectionRect && (
         <div

@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import { X } from "lucide-react";
 
 interface ModalProps {
@@ -7,6 +7,11 @@ interface ModalProps {
   title: string;
   children: React.ReactNode;
   size?: "sm" | "md" | "lg" | "xl";
+  /**
+   * Optional ref of the element to focus when the modal opens.
+   * If not provided, the first focusable element will be focused.
+   */
+  initialFocusRef?: React.RefObject<HTMLElement>;
 }
 
 export const Modal: React.FC<ModalProps> = ({
@@ -15,18 +20,59 @@ export const Modal: React.FC<ModalProps> = ({
   title,
   children,
   size = "md",
+  initialFocusRef,
 }) => {
+  const modalRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = "hidden";
+      // Focus trap
+      const focusable = modalRef.current?.querySelectorAll<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+      );
+      const first = focusable?.[0];
+      const last = focusable?.[focusable.length - 1];
+      const handleTab = (e: KeyboardEvent) => {
+        if (!focusable || focusable.length === 0) return;
+        if (e.key === "Tab") {
+          if (e.shiftKey) {
+            if (document.activeElement === first) {
+              e.preventDefault();
+              last?.focus();
+            }
+          } else {
+            if (document.activeElement === last) {
+              e.preventDefault();
+              first?.focus();
+            }
+          }
+        }
+      };
+      const handleEsc = (e: KeyboardEvent) => {
+        if (e.key === "Escape") onClose();
+      };
+      document.addEventListener("keydown", handleTab);
+      document.addEventListener("keydown", handleEsc);
+      // Focus requested element or fallback to the first focusable node
+      setTimeout(() => {
+        if (initialFocusRef?.current) {
+          initialFocusRef.current.focus();
+        } else {
+          first?.focus();
+        }
+      }, 0);
+      return () => {
+        document.removeEventListener("keydown", handleTab);
+        document.removeEventListener("keydown", handleEsc);
+      };
     } else {
       document.body.style.overflow = "unset";
     }
-
     return () => {
       document.body.style.overflow = "unset";
     };
-  }, [isOpen]);
+  }, [isOpen, onClose, initialFocusRef]);
 
   if (!isOpen) return null;
 
@@ -38,15 +84,24 @@ export const Modal: React.FC<ModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto">
+    <div
+      className="fixed inset-0 z-50 overflow-y-auto"
+      aria-modal="true"
+      role="dialog"
+    >
       <div className="flex min-h-screen items-center justify-center p-4">
+        {/* Overlay with fade-in/out */}
         <div
-          className="fixed inset-0 bg-black bg-opacity-50 transition-opacity"
+          className="fixed inset-0 bg-white/30 dark:bg-white/10 backdrop-blur-lg transition-opacity duration-300 ease-in-out animate-fadeIn"
           onClick={onClose}
         />
+        {/* Modal content with debug styles */}
         <div
+          ref={modalRef}
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
           className={`
-          relative bg-white dark:bg-gray-800 rounded-lg shadow-xl 
+          relative z-10 bg-white dark:bg-gray-800 rounded-lg shadow-xl
           ${sizeClasses[size]} w-full max-h-[90vh] overflow-hidden
           transform transition-all duration-300 ease-out
         `}
@@ -58,6 +113,7 @@ export const Modal: React.FC<ModalProps> = ({
             <button
               onClick={onClose}
               className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              aria-label="Close modal"
             >
               <X className="w-5 h-5" />
             </button>

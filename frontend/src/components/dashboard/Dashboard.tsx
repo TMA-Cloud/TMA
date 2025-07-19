@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { StorageChart } from "./StorageChart";
 import { RecentFiles } from "./RecentFiles";
 import { useApp } from "../../contexts/AppContext";
@@ -54,8 +54,31 @@ export const Dashboard: React.FC = () => {
     { label: "Starred", value: files.filter((f) => f.starred).length },
   ];
 
+  const [animatedStats, setAnimatedStats] = useState([0, 0, 0, 0]);
+  useEffect(() => {
+    const durations = [600, 700, 800, 900];
+    stats.forEach((stat, i) => {
+      let start = 0;
+      const end = stat.value;
+      const duration = durations[i];
+      const step = Math.ceil(end / (duration / 16));
+      const animate = () => {
+        start += step;
+        if (start > end) start = end;
+        setAnimatedStats((prev) => {
+          const copy = [...prev];
+          copy[i] = start;
+          return copy;
+        });
+        if (start < end) setTimeout(animate, 16);
+      };
+      animate();
+    });
+    // eslint-disable-next-line
+  }, [files]);
+
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6 bg-[radial-gradient(ellipse_at_top_left,_var(--tw-gradient-stops))] from-blue-50/40 via-white/80 to-transparent dark:from-blue-900/20 dark:via-gray-900/80 dark:to-transparent min-h-screen">
       {/* Welcome section */}
       <div>
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">
@@ -71,10 +94,10 @@ export const Dashboard: React.FC = () => {
         {stats.map((stat, index) => (
           <div
             key={index}
-            className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700"
+            className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 shadow-md flex flex-col items-center animate-bounceIn"
           >
-            <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-              {stat.value}
+            <p className="text-2xl font-bold text-gray-900 dark:text-gray-100 transition-all duration-500">
+              {animatedStats[index]}
             </p>
             <p className="text-sm text-gray-600 dark:text-gray-400">
               {stat.label}
@@ -96,12 +119,14 @@ export const Dashboard: React.FC = () => {
                 key={index}
                 onClick={action.onClick}
                 className={`
-                  p-4 rounded-xl text-white transition-colors duration-200
-                  flex flex-col items-center space-y-2 ${action.color}
+                  p-4 rounded-xl text-white transition-all duration-200
+                  flex flex-col items-center space-y-2 ${action.color} shadow-md hover:scale-105 hover:shadow-xl
                 `}
               >
-                <Icon className="w-6 h-6" />
-                <span className="text-sm font-medium">{action.title}</span>
+                <Icon className="w-7 h-7 animate-bounceIn" />
+                <span className="text-base font-semibold tracking-tight">
+                  {action.title}
+                </span>
               </button>
             );
           })}

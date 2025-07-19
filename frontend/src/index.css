@@ -103,3 +103,45 @@
   border-radius: 50%;
   box-shadow: 0 0 0 2px rgba(15, 23, 42, 0.9);
 }
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1; /* slate-200 */
+  border-radius: 8px;
+  transition: background 0.2s;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #60a5fa; /* blue-400 */
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Dark mode scrollbar */
+html.dark ::-webkit-scrollbar-thumb {
+  background: #334155; /* slate-700 */
+}
+html.dark ::-webkit-scrollbar-thumb:hover {
+  background: #3b82f6; /* blue-500 */
+}
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+html.dark * {
+  scrollbar-color: #334155 transparent;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  min-height: 100%;
+  width: 100%;
+}

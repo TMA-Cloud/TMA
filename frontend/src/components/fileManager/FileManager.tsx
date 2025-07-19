@@ -6,6 +6,7 @@ import { MarqueeSelector } from "./MarqueeSelector";
 import { ContextMenu } from "./ContextMenu";
 import { FileItemComponent } from "./FileItem";
 import { PasteProgress } from "./PasteProgress";
+import { Tooltip } from "../ui/Tooltip";
 
 const transparentImage = new Image();
 transparentImage.src =
@@ -341,48 +342,62 @@ export const FileManager: React.FC = () => {
   return (
     <div className="p-6 space-y-6" ref={managerRef}>
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between rounded-2xl bg-white/80 dark:bg-gray-900/80 shadow-md px-6 py-4 mb-2 transition-all duration-300">
         <Breadcrumbs />
 
         <div className="flex items-center space-x-2">
-          <button
-            onClick={() => setViewMode("grid")}
-            className={`
-              p-2 rounded-lg transition-colors duration-200
-              ${
-                viewMode === "grid"
-                  ? "bg-blue-100 text-blue-600 dark:bg-blue-900/50 dark:text-blue-400"
-                  : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-              }
-            `}
-          >
-            <Grid className="w-5 h-5" />
-          </button>
+          <Tooltip text="Grid view">
+            <button
+              onClick={() => setViewMode("grid")}
+              className={`
+                p-2 rounded-xl transition-all duration-200 shadow-sm
+                ${
+                  viewMode === "grid"
+                    ? "bg-blue-100 text-blue-600 dark:bg-blue-900/60 dark:text-blue-400 shadow-md"
+                    : "text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400"
+                }
+              `}
+              aria-label="Grid view"
+            >
+              <Grid className="w-5 h-5" />
+            </button>
+          </Tooltip>
 
-          <button
-            onClick={() => setViewMode("list")}
-            className={`
-              p-2 rounded-lg transition-colors duration-200
-              ${
-                viewMode === "list"
-                  ? "bg-blue-100 text-blue-600 dark:bg-blue-900/50 dark:text-blue-400"
-                  : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-              }
-            `}
-          >
-            <List className="w-5 h-5" />
-          </button>
+          <Tooltip text="List view">
+            <button
+              onClick={() => setViewMode("list")}
+              className={`
+                p-2 rounded-xl transition-all duration-200 shadow-sm
+                ${
+                  viewMode === "list"
+                    ? "bg-blue-100 text-blue-600 dark:bg-blue-900/60 dark:text-blue-400 shadow-md"
+                    : "text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400"
+                }
+              `}
+              aria-label="List view"
+            >
+              <List className="w-5 h-5" />
+            </button>
+          </Tooltip>
 
-          <button
-            className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-lg"
-            onClick={() => setCreateFolderModalOpen(true)}
-          >
-            <FolderPlus className="w-5 h-5" />
-          </button>
+          <Tooltip text="Create folder">
+            <button
+              className="p-2 rounded-xl text-gray-500 hover:text-green-600 dark:text-gray-400 dark:hover:text-green-400 shadow-sm transition-all duration-200"
+              onClick={() => setCreateFolderModalOpen(true)}
+              aria-label="Create folder"
+            >
+              <FolderPlus className="w-5 h-5" />
+            </button>
+          </Tooltip>
 
-          <button className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-lg">
-            <SortAsc className="w-5 h-5" />
-          </button>
+          <Tooltip text="Sort">
+            <button
+              className="p-2 rounded-xl text-gray-500 hover:text-purple-600 dark:text-gray-400 dark:hover:text-purple-400 shadow-sm transition-all duration-200"
+              aria-label="Sort"
+            >
+              <SortAsc className="w-5 h-5" />
+            </button>
+          </Tooltip>
         </div>
       </div>
 
@@ -398,8 +413,10 @@ export const FileManager: React.FC = () => {
                 ? "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4"
                 : "space-y-1"
             }
-            min-h-[50vh]
+            min-h-[50vh] relative
+            ${files.length === 0 ? "flex flex-col items-center justify-center" : ""}
           `}
+          style={{ overflow: "unset", height: "auto" }}
           onClick={(e) => {
             // only clear if the click really hit the empty area
             if (e.target === e.currentTarget && !dragSelectingRef.current) {
@@ -408,34 +425,89 @@ export const FileManager: React.FC = () => {
           }}
           onContextMenu={(e) => handleContextMenu(e)}
         >
-          {files.map((file) => (
-            <FileItemComponent
-              key={file.id}
-              file={file}
-              isSelected={selectedFiles.includes(file.id)}
-              viewMode={viewMode}
-              onClick={(e) => handleFileClick(file.id, e)}
-              onDoubleClick={() => handleFileDoubleClick(file)}
-              onContextMenu={(e) => handleContextMenu(e, file.id)}
-              onDragStart={handleDragStart(file.id)}
-              onDragEnd={handleDragEnd}
-              onDragOver={
-                file.type === "folder"
-                  ? handleFolderDragOver(file.id)
-                  : undefined
-              }
-              onDragLeave={
-                file.type === "folder"
-                  ? handleFolderDragLeave(file.id)
-                  : undefined
-              }
-              onDrop={
-                file.type === "folder" ? handleFolderDrop(file.id) : undefined
-              }
-              isDragOver={dragOverFolder === file.id}
-              dragDisabled={isSelecting}
-            />
-          ))}
+          {files.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-64 text-center select-none">
+              <svg
+                width="80"
+                height="80"
+                fill="none"
+                viewBox="0 0 80 80"
+                className="mb-4"
+              >
+                <rect
+                  width="80"
+                  height="80"
+                  rx="20"
+                  fill="#e0e7ef"
+                  className="dark:fill-gray-800"
+                />
+                <path
+                  d="M24 56V32a4 4 0 014-4h24a4 4 0 014 4v24"
+                  stroke="#60a5fa"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="M32 40h16"
+                  stroke="#60a5fa"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                />
+                <path
+                  d="M32 48h16"
+                  stroke="#60a5fa"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                />
+              </svg>
+              <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                No files or folders
+              </h3>
+              <p className="text-gray-500 dark:text-gray-400 mb-4">
+                Upload or create a folder to get started.
+              </p>
+              <button
+                className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-xl shadow-md transition-all duration-200"
+                onClick={() => setCreateFolderModalOpen(true)}
+              >
+                Create Folder
+              </button>
+            </div>
+          ) : (
+            files.map((file) => (
+              <FileItemComponent
+                key={file.id}
+                file={file}
+                isSelected={selectedFiles.includes(file.id)}
+                viewMode={viewMode}
+                onClick={(e) => handleFileClick(file.id, e)}
+                onDoubleClick={() => handleFileDoubleClick(file)}
+                onContextMenu={(e) => handleContextMenu(e, file.id)}
+                onDragStart={handleDragStart(file.id)}
+                onDragEnd={handleDragEnd}
+                onDragOver={
+                  file.type === "folder"
+                    ? handleFolderDragOver(file.id)
+                    : undefined
+                }
+                onDragLeave={
+                  file.type === "folder"
+                    ? handleFolderDragLeave(file.id)
+                    : undefined
+                }
+                onDrop={
+                  file.type === "folder" ? handleFolderDrop(file.id) : undefined
+                }
+                isDragOver={dragOverFolder === file.id}
+                dragDisabled={isSelecting}
+              />
+            ))
+          )}
+          {/* Dropzone highlight for drag-and-drop */}
+          {dragOverFolder === null && draggingIds.length > 0 && (
+            <div className="absolute inset-0 rounded-2xl border-4 border-blue-400 border-dashed bg-blue-100/40 dark:bg-blue-900/20 pointer-events-none animate-fadeIn z-10" />
+          )}
         </div>
       </MarqueeSelector>
 
