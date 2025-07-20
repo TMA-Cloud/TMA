@@ -179,6 +179,8 @@ export const FileManager: React.FC = () => {
     pasteProgress,
   } = useApp();
 
+  const canCreateFolder = currentPath[0] === "My Files";
+
   const dragSelectingRef = useRef(false);
   const managerRef = useRef<HTMLDivElement>(null);
   const [isSelecting, setIsSelecting] = useState(false);
@@ -380,15 +382,17 @@ export const FileManager: React.FC = () => {
             </button>
           </Tooltip>
 
-          <Tooltip text="Create folder">
-            <button
-              className="p-2 rounded-xl text-gray-500 hover:text-green-600 dark:text-gray-400 dark:hover:text-green-400 shadow-sm transition-all duration-200"
-              onClick={() => setCreateFolderModalOpen(true)}
-              aria-label="Create folder"
-            >
-              <FolderPlus className="w-5 h-5" />
-            </button>
-          </Tooltip>
+          {canCreateFolder && (
+            <Tooltip text="Create folder">
+              <button
+                className="p-2 rounded-xl text-gray-500 hover:text-green-600 dark:text-gray-400 dark:hover:text-green-400 shadow-sm transition-all duration-200"
+                onClick={() => setCreateFolderModalOpen(true)}
+                aria-label="Create folder"
+              >
+                <FolderPlus className="w-5 h-5" />
+              </button>
+            </Tooltip>
+          )}
 
           <Tooltip text="Sort">
             <button
@@ -462,17 +466,31 @@ export const FileManager: React.FC = () => {
                 />
               </svg>
               <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                No files or folders
+                {currentPath[0] === "Starred"
+                  ? "No starred files"
+                  : currentPath[0] === "Shared with Me"
+                    ? "No shared files"
+                    : currentPath[0] === "Trash"
+                      ? "Trash is empty"
+                      : "No files or folders"}
               </h3>
               <p className="text-gray-500 dark:text-gray-400 mb-4">
-                Upload or create a folder to get started.
+                {currentPath[0] === "Starred"
+                  ? "Star files to easily find them later."
+                  : currentPath[0] === "Shared with Me"
+                    ? "Files others share with you will show up here."
+                    : currentPath[0] === "Trash"
+                      ? "Deleted files will appear here."
+                      : "Upload or create a folder to get started."}
               </p>
-              <button
-                className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-xl shadow-md transition-all duration-200"
-                onClick={() => setCreateFolderModalOpen(true)}
-              >
-                Create Folder
-              </button>
+              {canCreateFolder && (
+                <button
+                  className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-xl shadow-md transition-all duration-200"
+                  onClick={() => setCreateFolderModalOpen(true)}
+                >
+                  Create Folder
+                </button>
+              )}
             </div>
           ) : (
             files.map((file) => (
