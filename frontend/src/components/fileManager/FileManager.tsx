@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from "react";
-import { Grid, List, SortAsc, FolderPlus } from "lucide-react";
+import { Grid, List, SortAsc, FolderPlus, Check } from "lucide-react";
 import { useApp, FileItem } from "../../contexts/AppContext";
 import { Breadcrumbs } from "./Breadcrumbs";
 import { MarqueeSelector } from "./MarqueeSelector";
@@ -177,6 +177,10 @@ export const FileManager: React.FC = () => {
     moveFiles,
     setImageViewerFile,
     pasteProgress,
+    sortBy,
+    sortOrder,
+    setSortBy,
+    setSortOrder,
   } = useApp();
 
   const canCreateFolder = currentPath[0] === "My Files";
@@ -198,6 +202,23 @@ export const FileManager: React.FC = () => {
     position: { x: number; y: number };
     targetId: string | null;
   }>({ isOpen: false, position: { x: 0, y: 0 }, targetId: null });
+
+  const [showSortMenu, setShowSortMenu] = useState(false);
+  const sortMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showSortMenu) return;
+    const handler = (e: MouseEvent) => {
+      if (
+        sortMenuRef.current &&
+        !sortMenuRef.current.contains(e.target as Node)
+      ) {
+        setShowSortMenu(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showSortMenu]);
 
   useEffect(() => {
     const handleDocumentClick = (e: MouseEvent) => {
@@ -394,14 +415,54 @@ export const FileManager: React.FC = () => {
             </Tooltip>
           )}
 
-          <Tooltip text="Sort">
-            <button
-              className="p-2 rounded-xl text-gray-500 hover:text-purple-600 dark:text-gray-400 dark:hover:text-purple-400 shadow-sm transition-all duration-200"
-              aria-label="Sort"
-            >
-              <SortAsc className="w-5 h-5" />
-            </button>
-          </Tooltip>
+          <div className="relative">
+            <Tooltip text="Sort">
+              <button
+                className="p-2 rounded-xl text-gray-500 hover:text-purple-600 dark:text-gray-400 dark:hover:text-purple-400 shadow-sm transition-all duration-200"
+                aria-label="Sort"
+                onClick={() => setShowSortMenu((s) => !s)}
+              >
+                <SortAsc className="w-5 h-5" />
+              </button>
+            </Tooltip>
+            {showSortMenu && (
+              <div
+                ref={sortMenuRef}
+                className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl z-50"
+              >
+                {[
+                  { label: "Name (A-Z)", by: "name", order: "asc" },
+                  { label: "Name (Z-A)", by: "name", order: "desc" },
+                  { label: "Modified (newest)", by: "modified", order: "desc" },
+                  { label: "Modified (oldest)", by: "modified", order: "asc" },
+                  { label: "Size (largest)", by: "size", order: "desc" },
+                  { label: "Size (smallest)", by: "size", order: "asc" },
+                ].map((opt) => (
+                  <button
+                    key={opt.label}
+                    onClick={() => {
+                      setSortBy(opt.by as any);
+                      setSortOrder(opt.order as any);
+                      setShowSortMenu(false);
+                    }}
+                    className={`flex items-center w-full px-3 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 ${
+                      sortBy === opt.by && sortOrder === opt.order
+                        ? "bg-gray-100 dark:bg-gray-700"
+                        : ""
+                    }`}
+                  >
+                    {sortBy === opt.by && sortOrder === opt.order && (
+                      <Check className="w-4 h-4 mr-2" />
+                    )}
+                    {!(sortBy === opt.by && sortOrder === opt.order) && (
+                      <span className="w-4 h-4 mr-2" />
+                    )}
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

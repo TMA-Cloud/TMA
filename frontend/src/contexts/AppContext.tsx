@@ -76,6 +76,10 @@ interface AppContextType {
   setPasteProgress: (p: number | null) => void;
   openFolder: (folder: FileItem) => void;
   navigateTo: (index: number) => void;
+  sortBy: "name" | "size" | "modified" | "deletedAt";
+  sortOrder: "asc" | "desc";
+  setSortBy: (s: "name" | "size" | "modified" | "deletedAt") => void;
+  setSortOrder: (o: "asc" | "desc") => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -111,6 +115,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
     action: "copy" | "cut";
   } | null>(null);
   const [pasteProgress, setPasteProgress] = useState<number | null>(null);
+  const [sortBy, setSortBy] = useState<
+    "name" | "size" | "modified" | "deletedAt"
+  >("modified");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
 
   // Promise queue to prevent race conditions
   const operationQueue = usePromiseQueue();
@@ -128,11 +136,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         url = `${import.meta.env.VITE_API_URL}/api/files/shared`;
       } else if (currentPath[0] === "Trash" && folderStack.length === 1) {
         url = `${import.meta.env.VITE_API_URL}/api/files/trash`;
-      } else {
-        url = new URL(url);
-        if (parentId) url.searchParams.append("parentId", parentId);
-        url = url.toString();
       }
+
+      url = new URL(url as string);
+      if (parentId) url.searchParams.append("parentId", parentId);
+      url.searchParams.append("sortBy", sortBy);
+      url.searchParams.append("order", sortOrder);
+      url = url.toString();
       const res = await fetch(url.toString(), { credentials: "include" });
       const data: FileItemResponse[] = await res.json();
       setFiles(
@@ -149,7 +159,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
 
   useEffect(() => {
     refreshFiles();
-  }, [folderStack, refreshFiles]);
+  }, [folderStack, sortBy, sortOrder, refreshFiles]);
 
   const createFolder = async (name: string) => {
     await fetch(`${import.meta.env.VITE_API_URL}/api/files/folder`, {
@@ -399,6 +409,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         setPasteProgress,
         openFolder,
         navigateTo,
+        sortBy,
+        sortOrder,
+        setSortBy,
+        setSortOrder,
       }}
     >
       {children}

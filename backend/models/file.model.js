@@ -4,14 +4,28 @@ const fs = require('fs');
 const path = require('path');
 const { UPLOAD_DIR } = require('../config/paths');
 
-async function getFiles(userId, parentId = null) {
+const SORT_FIELDS = {
+  name: 'name',
+  size: 'size',
+  modified: 'modified',
+  deletedAt: 'deleted_at',
+};
+
+function buildOrderClause(sortBy = 'modified', order = 'DESC') {
+  const field = SORT_FIELDS[sortBy] || 'modified';
+  const dir = order && order.toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
+  return `ORDER BY ${field} ${dir}`;
+}
+
+async function getFiles(userId, parentId = null, sortBy = 'modified', order = 'DESC') {
+  const orderClause = buildOrderClause(sortBy, order);
   const result = await pool.query(
     `SELECT id, name, type, size, modified, mime_type AS "mimeType", starred, shared
      FROM files
      WHERE user_id = $1
        AND deleted_at IS NULL
        AND ${parentId ? 'parent_id = $2' : 'parent_id IS NULL'}
-     ORDER BY modified DESC`,
+     ${orderClause}`,
     parentId ? [userId, parentId] : [userId]
   );
   return result.rows;
@@ -163,9 +177,10 @@ async function deleteFiles(ids, userId) {
   );
 }
 
-async function getTrashFiles(userId) {
+async function getTrashFiles(userId, sortBy = 'deletedAt', order = 'DESC') {
+  const orderClause = buildOrderClause(sortBy, order);
   const res = await pool.query(
-    'SELECT id, name, type, size, modified, mime_type AS "mimeType", starred, shared, deleted_at AS "deletedAt" FROM files WHERE user_id = $1 AND deleted_at IS NOT NULL ORDER BY deleted_at DESC',
+    `SELECT id, name, type, size, modified, mime_type AS "mimeType", starred, shared, deleted_at AS "deletedAt" FROM files WHERE user_id = $1 AND deleted_at IS NOT NULL ${orderClause}`,
     [userId],
   );
   return res.rows;
@@ -235,17 +250,19 @@ async function cleanupOrphanFiles() {
   }
 }
 
-async function getStarredFiles(userId) {
+async function getStarredFiles(userId, sortBy = 'modified', order = 'DESC') {
+  const orderClause = buildOrderClause(sortBy, order);
   const result = await pool.query(
-    'SELECT id, name, type, size, modified, mime_type AS "mimeType", starred, shared FROM files WHERE user_id = $1 AND starred = TRUE ORDER BY modified DESC',
+    `SELECT id, name, type, size, modified, mime_type AS "mimeType", starred, shared FROM files WHERE user_id = $1 AND starred = TRUE ${orderClause}`,
     [userId],
   );
   return result.rows;
 }
 
-async function getSharedFiles(userId) {
+async function getSharedFiles(userId, sortBy = 'modified', order = 'DESC') {
+  const orderClause = buildOrderClause(sortBy, order);
   const result = await pool.query(
-    'SELECT id, name, type, size, modified, mime_type AS "mimeType", starred, shared FROM files WHERE user_id = $1 AND shared = TRUE ORDER BY modified DESC',
+    `SELECT id, name, type, size, modified, mime_type AS "mimeType", starred, shared FROM files WHERE user_id = $1 AND shared = TRUE ${orderClause}`,
     [userId],
   );
   return result.rows;

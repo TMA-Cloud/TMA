@@ -30,8 +30,10 @@ const { userOperationLock, fileOperationLock } = require('../utils/mutex');
 
 async function listFiles(req, res) {
   const parentId = req.query.parentId || null;
+  const sortBy = req.query.sortBy;
+  const order = req.query.order;
   try {
-    const files = await getFiles(req.userId, parentId);
+    const files = await getFiles(req.userId, parentId, sortBy, order);
     res.json(files);
   } catch (err) {
     console.error(err);
@@ -236,7 +238,9 @@ async function linkParentShareController(req, res) {
 
 async function listStarred(req, res) {
   try {
-    const files = await getStarredFiles(req.userId);
+    const sortBy = req.query.sortBy;
+    const order = req.query.order;
+    const files = await getStarredFiles(req.userId, sortBy, order);
     res.json(files);
   } catch (err) {
     console.error(err);
@@ -246,7 +250,9 @@ async function listStarred(req, res) {
 
 async function listShared(req, res) {
   try {
-    const files = await getSharedFiles(req.userId);
+    const sortBy = req.query.sortBy;
+    const order = req.query.order;
+    const files = await getSharedFiles(req.userId, sortBy, order);
     res.json(files);
   } catch (err) {
     console.error(err);
@@ -270,7 +276,9 @@ async function deleteFilesController(req, res) {
 
 async function listTrash(req, res) {
   try {
-    const files = await getTrashFiles(req.userId);
+    const sortBy = req.query.sortBy;
+    const order = req.query.order;
+    const files = await getTrashFiles(req.userId, sortBy, order);
     res.json(files);
   } catch (err) {
     console.error(err);
