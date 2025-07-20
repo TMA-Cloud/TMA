@@ -14,11 +14,40 @@ const SORT_FIELDS = {
 function buildOrderClause(sortBy = 'modified', order = 'DESC') {
   const field = SORT_FIELDS[sortBy] || 'modified';
   const dir = order && order.toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
-  return `ORDER BY ${field} ${dir}`;
+  // When sorting by size we will compute folder sizes dynamically. However,
+  // keep NULL values (shouldn't exist after computing) last just in case.
+  const nulls = field === 'size' ? ' NULLS LAST' : '';
+  return `ORDER BY ${field} ${dir}${nulls}`;
+}
+
+async function calculateFolderSize(id, userId) {
+  const res = await pool.query(
+    `WITH RECURSIVE sub AS (
+       SELECT id, size, type FROM files WHERE id = $1 AND user_id = $2
+       UNION ALL
+       SELECT f.id, f.size, f.type FROM files f
+       JOIN sub s ON f.parent_id = s.id
+       WHERE f.user_id = $2
+     )
+     SELECT COALESCE(SUM(size), 0) AS size FROM sub WHERE type = 'file'`,
+    [id, userId],
+  );
+  return parseInt(res.rows[0].size, 10) || 0;
+}
+
+async function fillFolderSizes(files, userId) {
+  await Promise.all(
+    files.map(async (f) => {
+      if (f.type === 'folder') {
+        f.size = await calculateFolderSize(f.id, userId);
+      }
+    }),
+  );
+  return files;
 }
 
 async function getFiles(userId, parentId = null, sortBy = 'modified', order = 'DESC') {
-  const orderClause = buildOrderClause(sortBy, order);
+  const orderClause = sortBy === 'size' ? '' : buildOrderClause(sortBy, order);
   const result = await pool.query(
     `SELECT id, name, type, size, modified, mime_type AS "mimeType", starred, shared
      FROM files
@@ -28,7 +57,15 @@ async function getFiles(userId, parentId = null, sortBy = 'modified', order = 'D
      ${orderClause}`,
     parentId ? [userId, parentId] : [userId]
   );
-  return result.rows;
+  const files = result.rows;
+  if (sortBy === 'size') {
+    await fillFolderSizes(files, userId);
+    files.sort((a, b) => {
+      const diff = (a.size || 0) - (b.size || 0);
+      return order && order.toUpperCase() === 'ASC' ? diff : -diff;
+    });
+  }
+  return files;
 }
 
 async function createFolder(name, parentId = null, userId) {
@@ -178,12 +215,20 @@ async function deleteFiles(ids, userId) {
 }
 
 async function getTrashFiles(userId, sortBy = 'deletedAt', order = 'DESC') {
-  const orderClause = buildOrderClause(sortBy, order);
+  const orderClause = sortBy === 'size' ? '' : buildOrderClause(sortBy, order);
   const res = await pool.query(
     `SELECT id, name, type, size, modified, mime_type AS "mimeType", starred, shared, deleted_at AS "deletedAt" FROM files WHERE user_id = $1 AND deleted_at IS NOT NULL ${orderClause}`,
     [userId],
   );
-  return res.rows;
+  const files = res.rows;
+  if (sortBy === 'size') {
+    await fillFolderSizes(files, userId);
+    files.sort((a, b) => {
+      const diff = (a.size || 0) - (b.size || 0);
+      return order && order.toUpperCase() === 'ASC' ? diff : -diff;
+    });
+  }
+  return files;
 }
 
 async function permanentlyDeleteFiles(ids, userId) {
@@ -251,21 +296,37 @@ async function cleanupOrphanFiles() {
 }
 
 async function getStarredFiles(userId, sortBy = 'modified', order = 'DESC') {
-  const orderClause = buildOrderClause(sortBy, order);
+  const orderClause = sortBy === 'size' ? '' : buildOrderClause(sortBy, order);
   const result = await pool.query(
     `SELECT id, name, type, size, modified, mime_type AS "mimeType", starred, shared FROM files WHERE user_id = $1 AND starred = TRUE ${orderClause}`,
     [userId],
   );
-  return result.rows;
+  const files = result.rows;
+  if (sortBy === 'size') {
+    await fillFolderSizes(files, userId);
+    files.sort((a, b) => {
+      const diff = (a.size || 0) - (b.size || 0);
+      return order && order.toUpperCase() === 'ASC' ? diff : -diff;
+    });
+  }
+  return files;
 }
 
 async function getSharedFiles(userId, sortBy = 'modified', order = 'DESC') {
-  const orderClause = buildOrderClause(sortBy, order);
+  const orderClause = sortBy === 'size' ? '' : buildOrderClause(sortBy, order);
   const result = await pool.query(
     `SELECT id, name, type, size, modified, mime_type AS "mimeType", starred, shared FROM files WHERE user_id = $1 AND shared = TRUE ${orderClause}`,
     [userId],
   );
-  return result.rows;
+  const files = result.rows;
+  if (sortBy === 'size') {
+    await fillFolderSizes(files, userId);
+    files.sort((a, b) => {
+      const diff = (a.size || 0) - (b.size || 0);
+      return order && order.toUpperCase() === 'ASC' ? diff : -diff;
+    });
+  }
+  return files;
 }
 
 module.exports = {
