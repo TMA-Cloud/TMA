@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { StorageChart } from "./StorageChart";
 import { RecentFiles } from "./RecentFiles";
 import { useApp } from "../../contexts/AppContext";
@@ -41,25 +41,37 @@ export const Dashboard: React.FC = () => {
     },
   ];
 
+  const fileCount = useMemo(
+    () => files.filter((f) => f.type === "file").length,
+    [files],
+  );
+  const folderCount = useMemo(
+    () => files.filter((f) => f.type === "folder").length,
+    [files],
+  );
+  const sharedCount = useMemo(
+    () => files.filter((f) => f.shared).length,
+    [files],
+  );
+  const starredCount = useMemo(
+    () => files.filter((f) => f.starred).length,
+    [files],
+  );
+
   const stats = [
-    {
-      label: "Total Files",
-      value: files.filter((f) => f.type === "file").length,
-    },
-    {
-      label: "Folders",
-      value: files.filter((f) => f.type === "folder").length,
-    },
-    { label: "Shared", value: files.filter((f) => f.shared).length },
-    { label: "Starred", value: files.filter((f) => f.starred).length },
+    { label: "Total Files", value: fileCount },
+    { label: "Folders", value: folderCount },
+    { label: "Shared", value: sharedCount },
+    { label: "Starred", value: starredCount },
   ];
 
   const [animatedStats, setAnimatedStats] = useState([0, 0, 0, 0]);
   useEffect(() => {
     const durations = [600, 700, 800, 900];
-    stats.forEach((stat, i) => {
+    const values = [fileCount, folderCount, sharedCount, starredCount];
+    values.forEach((val, i) => {
       let start = 0;
-      const end = stat.value;
+      const end = val;
       const duration = durations[i];
       const step = Math.ceil(end / (duration / 16));
       const animate = () => {
@@ -74,8 +86,7 @@ export const Dashboard: React.FC = () => {
       };
       animate();
     });
-    // eslint-disable-next-line
-  }, [files]);
+  }, [fileCount, folderCount, sharedCount, starredCount]);
 
   return (
     <div className="p-6 space-y-6 bg-[radial-gradient(ellipse_at_top_left,_var(--tw-gradient-stops))] from-blue-50/40 via-white/80 to-transparent dark:from-blue-900/20 dark:via-gray-900/80 dark:to-transparent min-h-screen">
