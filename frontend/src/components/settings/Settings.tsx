@@ -1,16 +1,12 @@
 import React from "react";
-import { useTheme } from "../../contexts/ThemeContext";
 import { useAuth } from "../../contexts/AuthContext";
 import { useStorageUsage } from "../../hooks/useStorageUsage";
 import { User, HardDrive } from "lucide-react";
-import { useState } from "react";
-import { ToastContainer, Toast } from "../ui/Toast";
+import { ToastContainer } from "../ui/Toast";
 
 export const Settings: React.FC = () => {
-  const { theme, toggleTheme } = useTheme();
   const { user } = useAuth();
   const { usage, loading } = useStorageUsage();
-  const [showThemeToast, setShowThemeToast] = useState(false);
 
   const formatBytes = (bytes: number) => {
     if (bytes === 0) return "0 Bytes";
@@ -18,12 +14,6 @@ export const Settings: React.FC = () => {
     const sizes = ["Bytes", "KB", "MB", "GB", "TB"];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
-  };
-
-  const handleThemeToggle = () => {
-    toggleTheme();
-    setShowThemeToast(true);
-    setTimeout(() => setShowThemeToast(false), 2000);
   };
 
   const settingsSections = [
@@ -64,48 +54,6 @@ export const Settings: React.FC = () => {
         <p className="text-gray-600 dark:text-gray-400">
           Manage your account preferences and application settings.
         </p>
-      </div>
-
-      {/* Theme Toggle */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700 mb-6">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
-          Appearance
-        </h3>
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="font-medium text-gray-900 dark:text-gray-100">
-              Dark Mode
-            </p>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              Toggle between light and dark themes
-            </p>
-          </div>
-          <button
-            onClick={handleThemeToggle}
-            className={`
-              relative inline-flex h-6 w-11 items-center rounded-full transition-colors
-              ${theme === "dark" ? "bg-blue-500" : "bg-gray-200"}
-            `}
-            aria-label="Toggle dark mode"
-          >
-            <span
-              className={`
-                inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-300
-                ${theme === "dark" ? "translate-x-6" : "translate-x-1"}
-              `}
-            />
-          </button>
-        </div>
-        {showThemeToast && (
-          <div className="mt-4">
-            <Toast
-              id="theme-toast"
-              message={`Switched to ${theme === "dark" ? "Dark" : "Light"} Mode`}
-              type="success"
-              onClose={() => setShowThemeToast(false)}
-            />
-          </div>
-        )}
       </div>
 
       {/* Settings Sections */}

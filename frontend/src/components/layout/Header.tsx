@@ -1,12 +1,10 @@
 import React, { useState, useEffect } from "react";
-import { Menu, Search, Upload, Sun, Moon, LogOut } from "lucide-react";
+import { Menu, Search, Upload, LogOut } from "lucide-react";
 import { useApp } from "../../contexts/AppContext";
-import { useTheme } from "../../contexts/ThemeContext";
 import { useAuth } from "../../contexts/AuthContext";
 
 export const Header: React.FC = () => {
   const { sidebarOpen, setSidebarOpen, setUploadModalOpen } = useApp();
-  const { theme, toggleTheme } = useTheme();
   const { logout, user } = useAuth();
   const [scrolled, setScrolled] = useState(false);
 
@@ -60,18 +58,6 @@ export const Header: React.FC = () => {
           >
             <Upload className="w-4 h-4 transition-transform duration-200 group-hover:scale-110" />
             <span className="hidden sm:inline">Upload</span>
-          </button>
-
-          <button
-            onClick={toggleTheme}
-            className="ripple p-2 text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-400"
-            aria-label="Toggle theme"
-          >
-            {theme === "light" ? (
-              <Moon className="w-5 h-5 transition-transform duration-200 group-hover:rotate-12" />
-            ) : (
-              <Sun className="w-5 h-5 transition-transform duration-200 group-hover:rotate-12" />
-            )}
           </button>
 
           <button

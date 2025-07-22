@@ -430,19 +430,29 @@ export const FileManager: React.FC = () => {
                 ref={sortMenuRef}
                 className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl z-50"
               >
-                {[
-                  { label: "Name (A-Z)", by: "name", order: "asc" },
-                  { label: "Name (Z-A)", by: "name", order: "desc" },
-                  { label: "Modified (newest)", by: "modified", order: "desc" },
-                  { label: "Modified (oldest)", by: "modified", order: "asc" },
-                  { label: "Size (largest)", by: "size", order: "desc" },
-                  { label: "Size (smallest)", by: "size", order: "asc" },
-                ].map((opt) => (
+                {(
+                  [
+                    { label: "Name (A-Z)", by: "name", order: "asc" },
+                    { label: "Name (Z-A)", by: "name", order: "desc" },
+                    {
+                      label: "Modified (newest)",
+                      by: "modified",
+                      order: "desc",
+                    },
+                    {
+                      label: "Modified (oldest)",
+                      by: "modified",
+                      order: "asc",
+                    },
+                    { label: "Size (largest)", by: "size", order: "desc" },
+                    { label: "Size (smallest)", by: "size", order: "asc" },
+                  ] as const
+                ).map((opt) => (
                   <button
                     key={opt.label}
                     onClick={() => {
-                      setSortBy(opt.by as any);
-                      setSortOrder(opt.order as any);
+                      setSortBy(opt.by);
+                      setSortOrder(opt.order);
                       setShowSortMenu(false);
                     }}
                     className={`flex items-center w-full px-3 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 ${
