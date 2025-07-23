@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useAuth } from "../../contexts/AuthContext";
-import { Eye, EyeOff, Github, Globe } from "lucide-react";
+import { Eye, EyeOff, Github } from "lucide-react";
 
 export const LoginForm: React.FC<{ onSwitch: () => void }> = ({ onSwitch }) => {
   const { login } = useAuth();
@@ -64,13 +64,15 @@ export const LoginForm: React.FC<{ onSwitch: () => void }> = ({ onSwitch }) => {
         >
           Login
         </button>
-        <div className="flex flex-col gap-2 mt-2">
+        <div className="flex flex-col gap-2 mt-2 items-center">
           <button
             type="button"
+            onClick={() => {
+              window.location.href = `${import.meta.env.VITE_API_URL}/api/google/login`;
+            }}
             className="flex items-center justify-center gap-2 w-full px-4 py-2 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-700 dark:text-gray-300 font-medium hover:bg-gray-200 dark:hover:bg-gray-700 transition-all duration-200"
-            disabled
           >
-            <Globe className="w-5 h-5" /> Continue with Google
+            Continue with Google
           </button>
           <button
             type="button"

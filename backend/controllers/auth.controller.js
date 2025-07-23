@@ -1,11 +1,36 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { createUser, getUserByEmail, getUserById } = require('../models/user.model');
+const { OAuth2Client } = require('google-auth-library');
+const {
+  createUser,
+  getUserByEmail,
+  getUserById,
+  getUserByGoogleId,
+  createUserWithGoogle,
+  updateGoogleId
+} = require('../models/user.model');
 
 const JWT_SECRET = process.env.JWT_SECRET;
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
+const GOOGLE_REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI;
+const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173';
+
+const googleClient = new OAuth2Client(
+  GOOGLE_CLIENT_ID,
+  GOOGLE_CLIENT_SECRET,
+  GOOGLE_REDIRECT_URI
+);
 
 if (!JWT_SECRET) {
   console.error('JWT_SECRET environment variable is required');
+  process.exit(1);
+}
+
+if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET || !GOOGLE_REDIRECT_URI) {
+  console.error(
+    'GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET and GOOGLE_REDIRECT_URI environment variables are required'
+  );
   process.exit(1);
 }
 
@@ -88,6 +113,55 @@ async function login(req, res) {
   }
 }
 
+function googleLogin(req, res) {
+  const url = googleClient.generateAuthUrl({
+    scope: ['profile', 'email'],
+    access_type: 'offline',
+    prompt: 'consent'
+  });
+  res.redirect(url);
+}
+
+async function googleCallback(req, res) {
+  try {
+    const { code } = req.query;
+    if (!code) return res.status(400).send('Missing code');
+
+    const { tokens } = await googleClient.getToken(code);
+    const ticket = await googleClient.verifyIdToken({
+      idToken: tokens.id_token,
+      audience: GOOGLE_CLIENT_ID
+    });
+    const payload = ticket.getPayload();
+    const googleId = payload.sub;
+    const email = payload.email;
+    const name = payload.name;
+
+    let user = await getUserByGoogleId(googleId);
+    if (!user) {
+      user = await getUserByEmail(email);
+      if (user) {
+        await updateGoogleId(user.id, googleId);
+      } else {
+        user = await createUserWithGoogle(googleId, email, name);
+      }
+    }
+
+    const token = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: '7d' });
+    const cookieOptions = {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000
+    };
+    res.cookie('token', token, cookieOptions);
+    res.redirect(CLIENT_URL);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Authentication failed');
+  }
+}
+
 function logout(req, res) {
   res.clearCookie('token');
   res.json({ message: 'Logged out' });
@@ -104,4 +178,4 @@ async function profile(req, res) {
   }
 }
 
-module.exports = { signup, login, logout, profile };
+module.exports = { signup, login, googleLogin, googleCallback, logout, profile };
