@@ -6,14 +6,20 @@ const {
   googleLogin,
   googleCallback,
   logout,
-  profile
+  profile,
+  googleAuthEnabled
 } = require('../controllers/auth.controller');
 const authMiddleware = require('../middleware/auth.middleware');
 
 router.post('/signup', signup);
 router.post('/login', login);
-router.get('/google/login', googleLogin);
-router.get('/google/callback', googleCallback);
+router.get('/google/enabled', (req, res) => {
+  res.json({ enabled: googleAuthEnabled });
+});
+if (googleAuthEnabled) {
+  router.get('/google/login', googleLogin);
+  router.get('/google/callback', googleCallback);
+}
 router.post('/logout', logout);
 router.get('/profile', authMiddleware, profile);
 

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useAuth } from "../../contexts/AuthContext";
 import { Eye, EyeOff, Github } from "lucide-react";
 
@@ -11,6 +11,14 @@ export const SignupForm: React.FC<{ onSwitch: () => void }> = ({
   const [name, setName] = useState("");
   const [error, setError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [googleEnabled, setGoogleEnabled] = useState(false);
+
+  useEffect(() => {
+    fetch(`${import.meta.env.VITE_API_URL}/api/google/enabled`)
+      .then((r) => r.json())
+      .then((d) => setGoogleEnabled(d.enabled))
+      .catch(() => setGoogleEnabled(false));
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -82,7 +90,8 @@ export const SignupForm: React.FC<{ onSwitch: () => void }> = ({
             onClick={() => {
               window.location.href = `${import.meta.env.VITE_API_URL}/api/google/login`;
             }}
-            className="flex items-center justify-center gap-2 w-full px-4 py-2 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-700 dark:text-gray-300 font-medium hover:bg-gray-200 dark:hover:bg-gray-700 transition-all duration-200"
+            disabled={!googleEnabled}
+            className="flex items-center justify-center gap-2 w-full px-4 py-2 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-700 dark:text-gray-300 font-medium hover:bg-gray-200 dark:hover:bg-gray-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Continue with Google
           </button>

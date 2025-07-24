@@ -16,22 +16,28 @@ const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 const GOOGLE_REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI;
 const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173';
 
-const googleClient = new OAuth2Client(
-  GOOGLE_CLIENT_ID,
-  GOOGLE_CLIENT_SECRET,
-  GOOGLE_REDIRECT_URI
-);
+const GOOGLE_AUTH_ENABLED =
+  GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET && GOOGLE_REDIRECT_URI;
+let googleClient;
+if (GOOGLE_AUTH_ENABLED) {
+  googleClient = new OAuth2Client(
+    GOOGLE_CLIENT_ID,
+    GOOGLE_CLIENT_SECRET,
+    GOOGLE_REDIRECT_URI
+  );
+} else {
+  console.log('Google OAuth disabled');
+}
 
 if (!JWT_SECRET) {
   console.error('JWT_SECRET environment variable is required');
   process.exit(1);
 }
 
-if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET || !GOOGLE_REDIRECT_URI) {
-  console.error(
-    'GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET and GOOGLE_REDIRECT_URI environment variables are required'
+if (!GOOGLE_AUTH_ENABLED) {
+  console.warn(
+    'Google OAuth credentials missing. Google login endpoints will be disabled.'
   );
-  process.exit(1);
 }
 
 async function signup(req, res) {
@@ -114,6 +120,9 @@ async function login(req, res) {
 }
 
 function googleLogin(req, res) {
+  if (!GOOGLE_AUTH_ENABLED) {
+    return res.status(503).send('Google OAuth disabled');
+  }
   const url = googleClient.generateAuthUrl({
     scope: ['profile', 'email'],
     access_type: 'offline',
@@ -124,6 +133,9 @@ function googleLogin(req, res) {
 
 async function googleCallback(req, res) {
   try {
+    if (!GOOGLE_AUTH_ENABLED) {
+      return res.status(503).send('Google OAuth disabled');
+    }
     const { code } = req.query;
     if (!code) return res.status(400).send('Missing code');
 
@@ -178,4 +190,12 @@ async function profile(req, res) {
   }
 }
 
-module.exports = { signup, login, googleLogin, googleCallback, logout, profile };
+module.exports = {
+  signup,
+  login,
+  googleLogin,
+  googleCallback,
+  logout,
+  profile,
+  googleAuthEnabled: !!GOOGLE_AUTH_ENABLED
+};
