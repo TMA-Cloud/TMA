@@ -85,8 +85,8 @@ export const LoginForm: React.FC<{ onSwitch: () => void }> = ({ onSwitch }) => {
           </button>
           <button
             type="button"
-            className="flex items-center justify-center gap-2 w-full px-4 py-2 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-700 dark:text-gray-300 font-medium hover:bg-gray-200 dark:hover:bg-gray-700 transition-all duration-200"
-            disabled
+            disabled={true} // GitHub login is not implemented yet
+            className="flex items-center justify-center gap-2 w-full px-4 py-2 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-700 dark:text-gray-300 font-medium hover:bg-gray-200 dark:hover:bg-gray-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Github className="w-5 h-5" /> Continue with GitHub
           </button>
