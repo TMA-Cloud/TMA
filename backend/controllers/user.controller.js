@@ -6,8 +6,10 @@ const STORAGE_LIMIT = Number(process.env.STORAGE_LIMIT || 100 * 1024 * 1024 * 10
 async function storageUsage(req, res) {
   try {
     const used = await getUserStorageUsage(req.userId);
-    const { size, free } = await checkDiskSpace(process.env.STORAGE_PATH || __dirname);
+    const { size, free: diskFree } = await checkDiskSpace(process.env.STORAGE_PATH || __dirname);
     const total = Math.min(size, STORAGE_LIMIT);
+    const remainingLimit = Math.max(total - used, 0);
+    const free = Math.min(diskFree, remainingLimit);
     res.json({ used, total, free });
   } catch (err) {
     console.error(err);
