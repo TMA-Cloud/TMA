@@ -105,12 +105,9 @@ export const Settings: React.FC = () => {
                         {item.action}
                       </button>
                     ) : (
-                      typeof item.value === "string" ||
-                      (typeof item.value === "number" && (
-                        <span className="text-gray-500 dark:text-gray-400">
-                          {item.value}
-                        </span>
-                      ))
+                      <span className="text-gray-500 dark:text-gray-400">
+                        {item.value}
+                      </span>
                     )}
                   </div>
                 ))}
