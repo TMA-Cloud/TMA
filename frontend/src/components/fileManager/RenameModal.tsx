@@ -1,26 +1,20 @@
-import React, { useState, useEffect } from "react";
+import React, { useRef } from "react";
 import { Modal } from "../ui/Modal";
 import { useApp } from "../../contexts/AppContext";
 
 export const RenameModal: React.FC = () => {
   const { renameTarget, setRenameTarget, renameFile } = useApp();
-  const [name, setName] = useState("");
-
-  useEffect(() => {
-    if (renameTarget) {
-      setName(renameTarget.name);
-    }
-  }, [renameTarget]);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const handleClose = () => {
     setRenameTarget(null);
-    setName("");
   };
 
   const handleRename = async () => {
     if (!renameTarget) return;
-    if (!name.trim()) return;
-    await renameFile(renameTarget.id, name.trim());
+    const value = inputRef.current?.value ?? "";
+    if (!value.trim()) return;
+    await renameFile(renameTarget.id, value.trim());
     handleClose();
   };
 
@@ -35,8 +29,9 @@ export const RenameModal: React.FC = () => {
           </label>
           <input
             type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
+            key={renameTarget?.id}
+            defaultValue={renameTarget?.name ?? ""}
+            ref={inputRef}
             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>

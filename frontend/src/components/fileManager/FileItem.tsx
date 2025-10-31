@@ -21,6 +21,14 @@ interface FileItemProps {
   dragDisabled?: boolean;
 }
 
+const FileIcon: React.FC<{ file: FileItemType; className?: string }> = ({
+  file,
+  className,
+}) => {
+  const IconComp = getFileIcon(file);
+  return React.createElement(IconComp as React.ElementType, { className });
+};
+
 export const FileItemComponent: React.FC<FileItemProps> = ({
   file,
   isSelected,
@@ -36,8 +44,6 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
   isDragOver,
   dragDisabled,
 }) => {
-  const Icon = getFileIcon(file);
-
   if (viewMode === "grid") {
     return (
       <div
@@ -64,7 +70,8 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
       >
         <div className="flex flex-col items-center text-center">
           <div className="relative mb-2">
-            <Icon
+            <FileIcon
+              file={file}
               className={`w-14 h-14 drop-shadow-md ${file.type === "folder" ? "text-blue-500" : "text-gray-600 dark:text-gray-400"}`}
             />
             {file.starred && (
@@ -79,7 +86,7 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
                 className="absolute -bottom-3 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-full p-1 shadow-md transition-all duration-200"
                 tabIndex={-1}
                 title="Quick preview"
-                onClick={(e) => {
+                onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
                   e.stopPropagation();
                   onDoubleClick();
                 }}
@@ -129,7 +136,8 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
       onDrop={onDrop}
     >
       <div className="relative flex-shrink-0">
-        <Icon
+        <FileIcon
+          file={file}
           className={`w-10 h-10 drop-shadow-md ${file.type === "folder" ? "text-blue-500" : "text-gray-600 dark:text-gray-400"}`}
         />
         {file.starred && (
@@ -144,7 +152,7 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
             className="absolute -bottom-3 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-full p-1 shadow-md transition-all duration-200"
             tabIndex={-1}
             title="Quick preview"
-            onClick={(e) => {
+            onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
               e.stopPropagation();
               onDoubleClick();
             }}

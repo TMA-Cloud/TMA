@@ -3,7 +3,11 @@
   "private": true,
   "version": "2.0.0",
   "description": "Frontend for Cloud Storage",
-  "keywords": ["cloud", "storage", "frontend"],
+  "keywords": [
+    "cloud",
+    "storage",
+    "frontend"
+  ],
   "author": "ZIDAN44",
   "license": "ISC",
   "type": "module",

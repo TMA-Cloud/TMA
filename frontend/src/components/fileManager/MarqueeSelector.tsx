@@ -12,6 +12,11 @@ interface SelectionRect {
   startY: number;
   endX: number;
   endY: number;
+  // precomputed CSS box values relative to container viewport
+  left: number;
+  top: number;
+  width: number;
+  height: number;
 }
 
 export const MarqueeSelector: React.FC<MarqueeSelectorProps> = ({
@@ -82,7 +87,16 @@ export const MarqueeSelector: React.FC<MarqueeSelectorProps> = ({
       }
 
       e.preventDefault();
-      const newRect = { startX, startY, endX: curX, endY: curY };
+      const newRect = {
+        startX,
+        startY,
+        endX: curX,
+        endY: curY,
+        left: Math.min(startX, curX) - container.scrollLeft,
+        top: Math.min(startY, curY) - container.scrollTop,
+        width: Math.abs(curX - startX),
+        height: Math.abs(curY - startY),
+      };
       pendingRectRef.current = newRect;
 
       if (rafRef.current === null) {
@@ -137,7 +151,16 @@ export const MarqueeSelector: React.FC<MarqueeSelectorProps> = ({
       const rect = container.getBoundingClientRect();
       const endX = e.clientX - rect.left + container.scrollLeft;
       const endY = e.clientY - rect.top + container.scrollTop;
-      const finalRect = { startX, startY, endX, endY };
+      const finalRect = {
+        startX,
+        startY,
+        endX,
+        endY,
+        left: Math.min(startX, endX) - container.scrollLeft,
+        top: Math.min(startY, endY) - container.scrollTop,
+        width: Math.abs(endX - startX),
+        height: Math.abs(endY - startY),
+      };
       pendingRectRef.current = finalRect;
 
       // run same logic synchronously
@@ -181,23 +204,7 @@ export const MarqueeSelector: React.FC<MarqueeSelectorProps> = ({
       document.removeEventListener("dragend", handleDragEnd);
     };
   }, []);
-
-  const getSelectionStyle = () => {
-    if (!selectionRect) return {};
-    const { startX, startY, endX, endY } = selectionRect;
-    const container = containerRef.current!;
-    const left = Math.min(startX, endX) - container.scrollLeft;
-    const top = Math.min(startY, endY) - container.scrollTop;
-    const width = Math.abs(endX - startX);
-    const height = Math.abs(endY - startY);
-    return {
-      left: `${left}px`,
-      top: `${top}px`,
-      width: `${width}px`,
-      height: `${height}px`,
-      willChange: "left, top, width, height",
-    };
-  };
+  // No setState in effects for style; style values are precomputed into selectionRect
 
   return (
     <div ref={containerRef} className="relative select-none overflow-visible">
@@ -205,7 +212,13 @@ export const MarqueeSelector: React.FC<MarqueeSelectorProps> = ({
       {isSelecting && selectionRect && (
         <div
           className="absolute border-2 border-blue-500 bg-blue-500 bg-opacity-20 pointer-events-none z-10"
-          style={getSelectionStyle()}
+          style={{
+            left: `${selectionRect.left}px`,
+            top: `${selectionRect.top}px`,
+            width: `${selectionRect.width}px`,
+            height: `${selectionRect.height}px`,
+            willChange: "left, top, width, height",
+          }}
         />
       )}
     </div>

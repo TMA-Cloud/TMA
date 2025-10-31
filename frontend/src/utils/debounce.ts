@@ -1,4 +1,4 @@
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 // Generic debounce function
 export function debounce<T extends (...args: unknown[]) => unknown>(
@@ -24,14 +24,21 @@ export function useDebouncedCallback<T extends (...args: unknown[]) => unknown>(
   delay: number,
 ): (...args: Parameters<T>) => void {
   const callbackRef = useRef(callback);
-  callbackRef.current = callback;
+  useEffect(() => {
+    callbackRef.current = callback;
+  }, [callback]);
 
-  return useCallback(
-    debounce((...args: Parameters<T>) => {
+  const debouncedRef = useRef<((...args: Parameters<T>) => void) | null>(null);
+
+  useEffect(() => {
+    debouncedRef.current = debounce((...args: Parameters<T>) => {
       callbackRef.current(...args);
-    }, delay),
-    [delay],
-  );
+    }, delay);
+  }, [delay]);
+
+  return useCallback((...args: Parameters<T>) => {
+    debouncedRef.current?.(...args);
+  }, []);
 }
 
 // Promise queue to handle sequential async operations
@@ -76,6 +83,6 @@ export class PromiseQueue {
 
 // Hook for promise queue
 export function usePromiseQueue() {
-  const queueRef = useRef(new PromiseQueue());
-  return queueRef.current;
+  const [queue] = useState(() => new PromiseQueue());
+  return queue;
 }

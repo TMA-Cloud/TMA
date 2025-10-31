@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Download,
   Edit3,
@@ -55,80 +55,103 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
   const allUnshared =
     selectedItems.length > 0 && selectedItems.every((f) => !f.shared);
 
-  const menuItems = [
-    { icon: Download, label: "Download", action: () => {} },
-    ...(parentShared && allUnshared
-      ? [
-          {
-            icon: Share2,
-            label: "Link to Folder Share",
-            action: async () => {
-              const links = await linkToParentShare(selectedFiles);
-              let base = import.meta.env.VITE_API_URL;
-              if (base.endsWith("/api")) base = base.slice(0, -4);
-              const list = Object.values(links).map((t) => `${base}/s/${t}`);
-              if (list.length) setShareLinkModalOpen(true, list);
+  const menuItems = useMemo(
+    () => [
+      { icon: Download, label: "Download", action: () => {} },
+      ...(parentShared && allUnshared
+        ? [
+            {
+              icon: Share2,
+              label: "Link to Folder Share",
+              action: async () => {
+                const links = await linkToParentShare(selectedFiles);
+                let base = import.meta.env.VITE_API_URL;
+                if (base.endsWith("/api")) base = base.slice(0, -4);
+                const list = Object.values(links).map((t) => `${base}/s/${t}`);
+                if (list.length) setShareLinkModalOpen(true, list);
+              },
             },
-          },
-        ]
-      : []),
-    {
-      icon: Share2,
-      label: allShared ? "Remove from Shared" : "Add to Shared",
-      action: async () => {
-        const links = await shareFiles(selectedFiles, !allShared);
-        if (!allShared) {
-          let base = import.meta.env.VITE_API_URL;
-          if (base.endsWith("/api")) base = base.slice(0, -4);
-          const list = Object.values(links).map((t) => `${base}/s/${t}`);
-          setShareLinkModalOpen(true, list);
-        }
+          ]
+        : []),
+      {
+        icon: Share2,
+        label: allShared ? "Remove from Shared" : "Add to Shared",
+        action: async () => {
+          const links = await shareFiles(selectedFiles, !allShared);
+          if (!allShared) {
+            let base = import.meta.env.VITE_API_URL;
+            if (base.endsWith("/api")) base = base.slice(0, -4);
+            const list = Object.values(links).map((t) => `${base}/s/${t}`);
+            setShareLinkModalOpen(true, list);
+          }
+        },
       },
-    },
-    {
-      icon: Star,
-      label: allStarred ? "Remove from Starred" : "Add to Starred",
-      action: () => starFiles(selectedFiles, !allStarred),
-    },
-    {
-      icon: Copy,
-      label: "Copy",
-      action: () => setClipboard({ ids: selectedFiles, action: "copy" }),
-    },
-    {
-      icon: Scissors,
-      label: "Cut",
-      action: () => setClipboard({ ids: selectedFiles, action: "cut" }),
-    },
-    ...(clipboard
-      ? [
-          {
-            icon: ClipboardPaste,
-            label: "Paste",
-            action: () =>
-              pasteClipboard(targetId ?? folderStack[folderStack.length - 1]),
-          },
-        ]
-      : []),
-    {
-      icon: Edit3,
-      label: "Rename",
-      action: () => {
-        const id = targetId ?? selectedFiles[0];
-        const file = files.find((f) => f.id === id);
-        if (file) setRenameTarget(file);
+      {
+        icon: Star,
+        label: allStarred ? "Remove from Starred" : "Add to Starred",
+        action: () => starFiles(selectedFiles, !allStarred),
       },
-    },
-    {
-      icon: Trash2,
-      label: currentPath[0] === "Trash" ? "Delete Forever" : "Delete",
-      action: () =>
-        currentPath[0] === "Trash"
-          ? deleteForever(selectedFiles)
-          : deleteFiles(selectedFiles),
-      danger: true,
-    },
-  ];
+      {
+        icon: Copy,
+        label: "Copy",
+        action: () => setClipboard({ ids: selectedFiles, action: "copy" }),
+      },
+      {
+        icon: Scissors,
+        label: "Cut",
+        action: () => setClipboard({ ids: selectedFiles, action: "cut" }),
+      },
+      ...(clipboard
+        ? [
+            {
+              icon: ClipboardPaste,
+              label: "Paste",
+              action: () =>
+                pasteClipboard(targetId ?? folderStack[folderStack.length - 1]),
+            },
+          ]
+        : []),
+      {
+        icon: Edit3,
+        label: "Rename",
+        action: () => {
+          const id = targetId ?? selectedFiles[0];
+          const file = files.find((f) => f.id === id);
+          if (file) setRenameTarget(file);
+        },
+      },
+      {
+        icon: Trash2,
+        label: currentPath[0] === "Trash" ? "Delete Forever" : "Delete",
+        action: () =>
+          currentPath[0] === "Trash"
+            ? deleteForever(selectedFiles)
+            : deleteFiles(selectedFiles),
+        danger: true,
+      },
+    ],
+    [
+      parentShared,
+      allUnshared,
+      linkToParentShare,
+      selectedFiles,
+      setShareLinkModalOpen,
+      shareFiles,
+      allShared,
+      starFiles,
+      allStarred,
+      setClipboard,
+      clipboard,
+      pasteClipboard,
+      targetId,
+      folderStack,
+      files,
+      setRenameTarget,
+      currentPath,
+      deleteForever,
+      deleteFiles,
+    ],
+  );
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -175,9 +198,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     };
   }, [isOpen, onClose, menuItems, focusedIndex]);
 
-  useEffect(() => {
-    if (isOpen) setFocusedIndex(0);
-  }, [isOpen]);
+  // Focus index will start at 0 on first mount; we avoid setting state in an effect
 
   if (!isOpen) return null;
 

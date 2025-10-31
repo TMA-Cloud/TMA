@@ -1,8 +1,10 @@
 import React, { useState } from "react";
-import { ThemeProvider } from "./contexts/ThemeContext";
-import { AppProvider, useApp } from "./contexts/AppContext";
-import { AuthProvider, useAuth } from "./contexts/AuthContext";
-import { ToastProvider } from "./hooks/useToast";
+import { ThemeProvider } from "./contexts/ThemeProvider";
+import { AppProvider } from "./contexts/AppProvider";
+import { useApp } from "./contexts/AppContext";
+import { AuthProvider } from "./contexts/AuthProvider";
+import { useAuth } from "./contexts/AuthContext";
+import { ToastProvider } from "./hooks/ToastProvider";
 import { Sidebar } from "./components/layout/Sidebar";
 import { Header } from "./components/layout/Header";
 import { Dashboard } from "./components/dashboard/Dashboard";
