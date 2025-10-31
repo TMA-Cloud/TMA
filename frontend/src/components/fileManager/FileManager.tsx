@@ -14,7 +14,7 @@ transparentImage.src =
 
 // separate scaling factors so we can tweak width/height individually
 const PREVIEW_WIDTH_SCALE = 0.5;
-const PREVIEW_HEIGHT_SCALE = 1.2;
+const PREVIEW_HEIGHT_SCALE = 0.75;
 
 const animateFlyToFolder = async (ids: string[], folderId: string) => {
   if (ids.length === 0) return;
@@ -101,7 +101,6 @@ const createDragPreview = (ids: string[], x: number, y: number) => {
     `[data-file-id="${ids[0]}"]`,
   );
   if (!first) return;
-  const rect = first.getBoundingClientRect();
 
   const wrapper = document.createElement("div");
   wrapper.className = "drag-preview";
@@ -109,42 +108,39 @@ const createDragPreview = (ids: string[], x: number, y: number) => {
   wrapper.style.pointerEvents = "none";
   wrapper.style.top = "0";
   wrapper.style.left = "0";
-  wrapper.style.width = `${rect.width + 4 * (Math.min(ids.length, 3) - 1)}px`;
-  wrapper.style.height = `${rect.height + 4 * (Math.min(ids.length, 3) - 1)}px`;
-  wrapper.style.transform = `scale(${PREVIEW_WIDTH_SCALE}, ${PREVIEW_HEIGHT_SCALE})`;
   wrapper.style.zIndex = "10000";
-  wrapper.style.setProperty("--preview-scale-x", String(PREVIEW_WIDTH_SCALE));
-  wrapper.style.setProperty("--preview-scale-y", String(PREVIEW_HEIGHT_SCALE));
-  wrapper.style.setProperty("--badge-scale-x", String(1 / PREVIEW_WIDTH_SCALE));
-  wrapper.style.setProperty(
-    "--badge-scale-y",
-    String(1 / PREVIEW_HEIGHT_SCALE),
-  );
 
-  const stack = document.createElement("div");
-  stack.className = "preview-stack";
-  wrapper.appendChild(stack);
+  // Compact chip
+  const chip = document.createElement("div");
+  chip.className = "drag-chip";
 
-  ids.slice(0, 3).forEach((id, idx) => {
-    const el =
-      document.querySelector<HTMLElement>(`[data-file-id="${id}"]`) ?? first;
-    const clone = el.cloneNode(true) as HTMLElement;
-    clone.classList.add("preview-item");
-    clone.style.width = `${rect.width}px`;
-    clone.style.height = `${rect.height}px`;
-    clone.style.transform = `translate(${idx * 4}px, ${idx * 4}px)`;
-    stack.appendChild(clone);
-  });
+  // icon clone (SVG) – copy from card if available
+  const iconSource = first.querySelector("svg");
+  if (iconSource) {
+    const icon = iconSource.cloneNode(true) as HTMLElement;
+    icon.classList.add("drag-chip-icon");
+    chip.appendChild(icon);
+  }
+
+  // name (single line)
+  const name = first.querySelector("p");
+  const nameText = name ? name.textContent || "" : "Selected";
+  const nameEl = document.createElement("span");
+  nameEl.className = "drag-chip-name";
+  nameEl.textContent = nameText;
+  chip.appendChild(nameEl);
+
+  wrapper.appendChild(chip);
 
   if (ids.length > 1) {
-    const badge = document.createElement("div");
-    badge.className = "preview-count";
-    badge.textContent = String(ids.length);
-    stack.appendChild(badge);
+    const count = document.createElement("div");
+    count.className = "drag-chip-count";
+    count.textContent = String(ids.length);
+    wrapper.appendChild(count);
   }
 
   document.body.appendChild(wrapper);
-  dragPreviewEl = wrapper;
+  dragPreviewEl = wrapper as HTMLDivElement;
   moveDragPreview(x, y);
 };
 
@@ -328,6 +324,8 @@ export const FileManager: React.FC = () => {
     }
     e.dataTransfer.effectAllowed = "move";
     e.dataTransfer.setDragImage(transparentImage, 0, 0);
+    // mark global dragging state (used to suppress tooltips)
+    document.body.classList.add("is-dragging");
     createDragPreview(
       selectedFiles.includes(fileId) ? selectedFiles : [fileId],
       e.clientX,
@@ -339,6 +337,7 @@ export const FileManager: React.FC = () => {
     setDraggingIds([]);
     setDragOverFolder(null);
     removeDragPreview();
+    document.body.classList.remove("is-dragging");
   };
 
   const handleFolderDragOver = (folderId: string) => (e: React.DragEvent) => {
@@ -360,6 +359,7 @@ export const FileManager: React.FC = () => {
     await animateFlyToFolder(draggingIds, folderId);
     await moveFiles(draggingIds, folderId);
     setDraggingIds([]);
+    document.body.classList.remove("is-dragging");
   };
 
   return (
@@ -565,32 +565,40 @@ export const FileManager: React.FC = () => {
             </div>
           ) : (
             files.map((file) => (
-              <FileItemComponent
-                key={file.id}
-                file={file}
-                isSelected={selectedFiles.includes(file.id)}
-                viewMode={viewMode}
-                onClick={(e) => handleFileClick(file.id, e)}
-                onDoubleClick={() => handleFileDoubleClick(file)}
-                onContextMenu={(e) => handleContextMenu(e, file.id)}
-                onDragStart={handleDragStart(file.id)}
-                onDragEnd={handleDragEnd}
-                onDragOver={
-                  file.type === "folder"
-                    ? handleFolderDragOver(file.id)
-                    : undefined
-                }
-                onDragLeave={
-                  file.type === "folder"
-                    ? handleFolderDragLeave(file.id)
-                    : undefined
-                }
-                onDrop={
-                  file.type === "folder" ? handleFolderDrop(file.id) : undefined
-                }
-                isDragOver={dragOverFolder === file.id}
-                dragDisabled={isSelecting}
-              />
+              <div key={file.id} className="relative">
+                <FileItemComponent
+                  file={file}
+                  isSelected={selectedFiles.includes(file.id)}
+                  viewMode={viewMode}
+                  onClick={(e) => handleFileClick(file.id, e)}
+                  onDoubleClick={() => handleFileDoubleClick(file)}
+                  onContextMenu={(e) => handleContextMenu(e, file.id)}
+                  onDragStart={handleDragStart(file.id)}
+                  onDragEnd={handleDragEnd}
+                  onDragOver={
+                    file.type === "folder"
+                      ? handleFolderDragOver(file.id)
+                      : undefined
+                  }
+                  onDragLeave={
+                    file.type === "folder"
+                      ? handleFolderDragLeave(file.id)
+                      : undefined
+                  }
+                  onDrop={
+                    file.type === "folder"
+                      ? handleFolderDrop(file.id)
+                      : undefined
+                  }
+                  isDragOver={dragOverFolder === file.id}
+                  dragDisabled={isSelecting}
+                />
+                {file.type === "folder" &&
+                  dragOverFolder === file.id &&
+                  draggingIds.length > 1 && (
+                    <div className="drop-count-badge">{draggingIds.length}</div>
+                  )}
+              </div>
             ))
           )}
           {/* Dropzone highlight for drag-and-drop */}

@@ -1,4 +1,4 @@
-import React, { ReactNode, useState } from "react";
+import React, { ReactNode, useEffect, useState } from "react";
 
 interface TooltipProps {
   text: string;
@@ -7,6 +7,21 @@ interface TooltipProps {
 
 export const Tooltip: React.FC<TooltipProps> = ({ text, children }) => {
   const [visible, setVisible] = useState(false);
+  const [dragging, setDragging] = useState(false);
+
+  useEffect(() => {
+    const onDragStart = () => {
+      setDragging(true);
+      setVisible(false);
+    };
+    const onDragEnd = () => setDragging(false);
+    window.addEventListener("dragstart", onDragStart);
+    window.addEventListener("dragend", onDragEnd);
+    return () => {
+      window.removeEventListener("dragstart", onDragStart);
+      window.removeEventListener("dragend", onDragEnd);
+    };
+  }, []);
 
   return (
     <span
@@ -24,9 +39,10 @@ export const Tooltip: React.FC<TooltipProps> = ({ text, children }) => {
           px-3 py-1 rounded-lg shadow-lg text-sm font-medium
           bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900
           transition-all duration-200 opacity-0 scale-95
-          ${visible ? "opacity-100 scale-100" : ""}
+          ${visible && !dragging ? "opacity-100 scale-100" : ""}
         `}
         role="tooltip"
+        aria-hidden={dragging || !visible}
       >
         {text}
       </span>
