@@ -17,6 +17,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [createFolderModalOpen, setCreateFolderModalOpen] = useState(false);
   const [imageViewerFile, setImageViewerFile] = useState<FileItem | null>(null);
+  const [documentViewerFile, setDocumentViewerFile] = useState<FileItem | null>(
+    null,
+  );
   const [shareLinkModalOpen, setShareLinkModalOpenState] = useState(false);
   const [shareLinks, setShareLinks] = useState<string[]>([]);
   const [renameTarget, setRenameTarget] = useState<FileItem | null>(null);
@@ -287,6 +290,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         createFolderModalOpen,
         imageViewerFile,
         setImageViewerFile,
+        documentViewerFile,
+        setDocumentViewerFile,
         shareLinkModalOpen,
         shareLinks,
         setShareLinkModalOpen,

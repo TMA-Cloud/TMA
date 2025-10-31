@@ -85,3 +85,40 @@ export const formatDate = (date: Date): string => {
     return date.toLocaleDateString();
   }
 };
+
+export const ONLYOFFICE_EXTS = new Set([
+  ".docx",
+  ".doc",
+  ".docm",
+  ".dotx",
+  ".dotm",
+  ".dot",
+  ".xlsx",
+  ".xls",
+  ".xlsm",
+  ".xlsb",
+  ".xltx",
+  ".xltm",
+  ".csv",
+  ".pptx",
+  ".ppt",
+  ".pptm",
+  ".ppsx",
+  ".ppsm",
+  ".pps",
+  ".potx",
+  ".potm",
+  ".odt",
+  ".ods",
+  ".odp",
+  ".pdf",
+]);
+
+function getExt(name?: string) {
+  if (!name) return "";
+  const idx = name.lastIndexOf(".");
+  return idx >= 0 ? name.slice(idx).toLowerCase() : "";
+}
+
+export const isOnlyOfficeSupported = (name?: string) =>
+  ONLYOFFICE_EXTS.has(getExt(name));

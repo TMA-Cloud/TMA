@@ -27,6 +27,8 @@ export interface AppContextType {
   createFolderModalOpen: boolean;
   imageViewerFile: FileItem | null;
   setImageViewerFile: (file: FileItem | null) => void;
+  documentViewerFile?: FileItem | null;
+  setDocumentViewerFile?: (file: FileItem | null) => void;
   shareLinkModalOpen: boolean;
   shareLinks: string[];
   setShareLinkModalOpen: (open: boolean, links?: string[]) => void;
