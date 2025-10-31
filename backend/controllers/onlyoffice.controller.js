@@ -1,5 +1,7 @@
 const path = require('path');
 const fs = require('fs');
+const http = require('http');
+const https = require('https');
 const jwt = require('jsonwebtoken');
 const { UPLOAD_DIR } = require('../config/paths');
 const { getFile } = require('../models/file.model');
@@ -336,6 +338,41 @@ async function getViewerPage(req, res) {
   }
 }
 
+/**
+ * Download file from URL
+ */
+function downloadFile(url) {
+  return new Promise((resolve, reject) => {
+    const protocol = url.startsWith('https') ? https : http;
+    
+    protocol.get(url, (response) => {
+      if (response.statusCode !== 200) {
+        reject(new Error(`Failed to download: ${response.statusCode}`));
+        return;
+      }
+      
+      const chunks = [];
+      response.on('data', (chunk) => chunks.push(chunk));
+      response.on('end', () => resolve(Buffer.concat(chunks)));
+      response.on('error', reject);
+    }).on('error', reject);
+  });
+}
+
+/**
+ * Extract file ID from OnlyOffice document key
+ * Key format: `${fileId}-${timestamp}`
+ * Since file IDs are 16 characters and don't contain hyphens, we take everything before the last hyphen
+ */
+function extractFileIdFromKey(key) {
+  if (!key) return null;
+  const parts = key.split('-');
+  if (parts.length < 2) return null;
+  // File ID is everything except the last part (which is the timestamp)
+  const fileIdPart = parts.slice(0, -1).join('-');
+  return fileIdPart || null;
+}
+
 async function callback(req, res) {
   // Add CORS headers for ONLYOFFICE server
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -347,11 +384,69 @@ async function callback(req, res) {
     return res.status(200).end();
   }
 
-  // Minimal handler to satisfy ONLYOFFICE callbacks
   try {
+    const body = req.body;
+
+    // OnlyOffice callback statuses:
+    // 0 = document is being edited
+    // 2 = document is ready for saving
+    // 3 = document saving error occurred
+    // 4 = document is closed with no changes
+    // 6 = document is being edited, but the current document state is saved
+    const status = body.status;
+    const shouldSave = status === 2 || status === 6;
+
+    if (shouldSave && body.url) {
+      const fileId = extractFileIdFromKey(body.key);
+      
+      if (!fileId) {
+        console.error('[ONLYOFFICE] Could not extract file ID from key:', body.key);
+        return res.status(200).json({ error: 0 }); // Still return success to OnlyOffice
+      }
+
+      // Get file info from database
+      const db = require('../config/db');
+      const fileResult = await db.query(
+        'SELECT id, name, path, user_id FROM files WHERE id = $1',
+        [fileId]
+      );
+
+      if (fileResult.rows.length === 0) {
+        console.error('[ONLYOFFICE] File not found in database:', fileId);
+        return res.status(200).json({ error: 0 });
+      }
+
+      const fileRow = fileResult.rows[0];
+      const filePath = path.join(UPLOAD_DIR, fileRow.path);
+
+      // Download the updated document from OnlyOffice
+      let fileBuffer;
+      try {
+        fileBuffer = await downloadFile(body.url);
+      } catch (error) {
+        console.error('[ONLYOFFICE] Failed to download document:', error);
+        return res.status(200).json({ error: 0 }); // Still return success
+      }
+
+      // Save the downloaded file, replacing the existing one
+      await fs.promises.writeFile(filePath, fileBuffer);
+
+      // Update file size and modified timestamp in database
+      const newSize = fileBuffer.length;
+      await db.query(
+        'UPDATE files SET size = $1, modified = NOW() WHERE id = $2',
+        [newSize, fileId]
+      );
+    } else if (status === 3) {
+      console.error('[ONLYOFFICE] Document saving error for:', body.key);
+    }
+
+    // Always return success to OnlyOffice
     res.status(200).json({ error: 0 });
   } catch (err) {
     console.error('[ONLYOFFICE] Callback error', err);
+    // Still return success to OnlyOffice even on error
+    // to prevent OnlyOffice from retrying
     res.status(200).json({ error: 0 });
   }
 }
