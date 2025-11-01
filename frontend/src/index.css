@@ -1,5 +1,72 @@
 @import "tailwindcss";
 
+@theme {
+  /* Custom Keyframes */
+  --animate-fadeIn: fadeIn 0.3s ease-in-out;
+  --animate-modalIn: modalIn 0.3s ease-out;
+  --animate-menuIn: menuIn 0.18s ease-out;
+  --animate-toastIn: toastIn 0.3s ease-out;
+  --animate-bounceIn: bounceIn 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+}
+
+/* Custom Keyframes Definitions */
+@keyframes fadeIn {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes modalIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes menuIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes toastIn {
+  0% {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes bounceIn {
+  0% {
+    transform: scale(0.7);
+    opacity: 0;
+  }
+  80% {
+    transform: scale(1.1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
 /* --- Drag Preview Wrapper --- */
 .drag-preview {
   pointer-events: none;
