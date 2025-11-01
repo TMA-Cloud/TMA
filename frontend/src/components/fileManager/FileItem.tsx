@@ -1,5 +1,5 @@
 import React from "react";
-import { FileItem as FileItemType } from "../../contexts/AppContext";
+import { type FileItem as FileItemType } from "../../contexts/AppContext";
 import { getFileIcon, formatFileSize, formatDate } from "../../utils/fileUtils";
 import { Star, Share2 } from "lucide-react";
 import { Tooltip } from "../ui/Tooltip";

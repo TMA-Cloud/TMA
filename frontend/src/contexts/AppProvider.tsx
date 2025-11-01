@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { AppContext, FileItem, FileItemResponse } from "./AppContext";
+import { AppContext, type FileItem, type FileItemResponse } from "./AppContext";
 import { usePromiseQueue } from "../utils/debounce";
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({

@@ -13,7 +13,18 @@ export interface FileItem {
   deletedAt?: Date;
 }
 
-// FileItemResponse moved to provider implementation
+export interface FileItemResponse {
+  id: string;
+  name: string;
+  type: "file" | "folder";
+  size?: number;
+  modified: string;
+  mimeType?: string;
+  selected?: boolean;
+  starred?: boolean;
+  shared?: boolean;
+  deletedAt?: string | null;
+}
 
 export interface AppContextType {
   currentPath: string[];

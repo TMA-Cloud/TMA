@@ -1,5 +1,5 @@
 import React from "react";
-import { FileItem } from "../../contexts/AppContext";
+import { type FileItem } from "../../contexts/AppContext";
 import { getFileIcon, formatFileSize } from "../../utils/fileUtils";
 import { Tooltip } from "../ui/Tooltip";
 

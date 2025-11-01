@@ -10,7 +10,7 @@ import {
   Presentation as FilePresentation,
   FileCode,
 } from "lucide-react";
-import { FileItem } from "../contexts/AppContext";
+import { type FileItem } from "../contexts/AppContext";
 
 export const getFileIcon = (file: FileItem) => {
   if (file.type === "folder") {

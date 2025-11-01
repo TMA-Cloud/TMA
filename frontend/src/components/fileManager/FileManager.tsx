@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect } from "react";
 import { Grid, List, SortAsc, FolderPlus, Check } from "lucide-react";
-import { useApp, FileItem } from "../../contexts/AppContext";
+import { useApp, type FileItem } from "../../contexts/AppContext";
 import { Breadcrumbs } from "./Breadcrumbs";
 import { MarqueeSelector } from "./MarqueeSelector";
 import { ContextMenu } from "./ContextMenu";
