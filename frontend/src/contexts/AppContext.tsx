@@ -82,6 +82,10 @@ export interface AppContextType {
   sortOrder: "asc" | "desc";
   setSortBy: (s: "name" | "size" | "modified" | "deletedAt") => void;
   setSortOrder: (o: "asc" | "desc") => void;
+  searchQuery: string;
+  setSearchQuery: (query: string) => void;
+  isSearching: boolean;
+  searchFiles: (query: string) => Promise<void>;
 }
 
 export const AppContext = createContext<AppContextType | undefined>(undefined);

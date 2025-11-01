@@ -17,6 +17,7 @@ const {
   deleteFiles,
   getTrashFiles,
   permanentlyDeleteFiles,
+  searchFiles,
 } = require('../models/file.model');
 const {
   createShareLink,
@@ -300,6 +301,23 @@ async function deleteForeverController(req, res) {
   }
 }
 
+async function searchFilesController(req, res) {
+  const query = req.query.q || req.query.query || '';
+  const limit = parseInt(req.query.limit, 10) || 100;
+
+  if (!query || query.trim().length === 0) {
+    return res.status(400).json({ message: 'Search query required' });
+  }
+
+  try {
+    const files = await searchFiles(req.userId, query, limit);
+    res.json(files);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+}
+
 module.exports = {
   listFiles,
   addFolder,
@@ -316,4 +334,5 @@ module.exports = {
   deleteFiles: deleteFilesController,
   listTrash,
   deleteForever: deleteForeverController,
+  searchFiles: searchFilesController,
 };

@@ -18,27 +18,44 @@ export function debounce<T extends (...args: unknown[]) => unknown>(
   };
 }
 
-// Hook for debounced callbacks
+// Hook for debounced callbacks with cancellation support
 export function useDebouncedCallback<T extends (...args: unknown[]) => unknown>(
   callback: T,
   delay: number,
-): (...args: Parameters<T>) => void {
+): [(...args: Parameters<T>) => void, () => void] {
   const callbackRef = useRef(callback);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   useEffect(() => {
     callbackRef.current = callback;
   }, [callback]);
 
-  const debouncedRef = useRef<((...args: Parameters<T>) => void) | null>(null);
-
-  useEffect(() => {
-    debouncedRef.current = debounce((...args: Parameters<T>) => {
-      callbackRef.current(...args);
-    }, delay);
-  }, [delay]);
-
-  return useCallback((...args: Parameters<T>) => {
-    debouncedRef.current?.(...args);
+  const cancel = useCallback(() => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
   }, []);
+
+  const debouncedCallback = useCallback(
+    (...args: Parameters<T>) => {
+      cancel(); // Cancel any pending calls
+      timeoutRef.current = setTimeout(() => {
+        callbackRef.current(...args);
+        timeoutRef.current = null;
+      }, delay);
+    },
+    [delay, cancel],
+  );
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      cancel();
+    };
+  }, [cancel]);
+
+  return [debouncedCallback, cancel];
 }
 
 // Promise queue to handle sequential async operations

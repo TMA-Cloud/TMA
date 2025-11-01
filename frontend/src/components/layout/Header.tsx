@@ -1,10 +1,17 @@
 import React, { useState, useEffect } from "react";
-import { Menu, Search, Upload, LogOut } from "lucide-react";
+import { Menu, Search, Upload, LogOut, X } from "lucide-react";
 import { useApp } from "../../contexts/AppContext";
 import { useAuth } from "../../contexts/AuthContext";
 
 export const Header: React.FC = () => {
-  const { sidebarOpen, setSidebarOpen, setUploadModalOpen } = useApp();
+  const {
+    sidebarOpen,
+    setSidebarOpen,
+    setUploadModalOpen,
+    searchQuery,
+    setSearchQuery,
+    isSearching,
+  } = useApp();
   const { logout, user } = useAuth();
   const [scrolled, setScrolled] = useState(false);
 
@@ -40,13 +47,29 @@ export const Header: React.FC = () => {
           </button>
 
           {/* Search */}
-          <div className="relative hidden md:block w-48 sm:w-80">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+          <div className="relative hidden md:block w-48 sm:w-80 lg:w-96">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 pointer-events-none" />
             <input
               type="text"
               placeholder="Search files and folders..."
-              className="w-full pl-10 pr-4 py-2 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-10 py-2 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200 text-gray-900 dark:text-gray-100 placeholder-gray-400"
             />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 p-1 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                aria-label="Clear search"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+            {isSearching && searchQuery && (
+              <div className="absolute right-10 top-1/2 transform -translate-y-1/2">
+                <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+              </div>
+            )}
           </div>
         </div>
 

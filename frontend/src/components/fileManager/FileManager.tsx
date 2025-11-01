@@ -185,6 +185,8 @@ export const FileManager: React.FC = () => {
     setSortBy,
     setSortOrder,
     setDocumentViewerFile,
+    searchQuery,
+    isSearching,
   } = useApp();
 
   const canCreateFolder = currentPath[0] === "My Files";
@@ -263,9 +265,9 @@ export const FileManager: React.FC = () => {
     } else if (e.shiftKey && selectedFiles.length > 0) {
       // Range select with Shift
       const fileIds = files.map((f) => f.id);
-      const lastSelectedIndex = fileIds.indexOf(
-        selectedFiles[selectedFiles.length - 1],
-      );
+      const lastSelectedId = selectedFiles[selectedFiles.length - 1];
+      if (!lastSelectedId) return; // Safety check
+      const lastSelectedIndex = fileIds.indexOf(lastSelectedId);
       const clickedIndex = fileIds.indexOf(fileId);
 
       const start = Math.min(lastSelectedIndex, clickedIndex);
@@ -547,24 +549,32 @@ export const FileManager: React.FC = () => {
                 />
               </svg>
               <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                {currentPath[0] === "Starred"
-                  ? "No starred files"
-                  : currentPath[0] === "Shared with Me"
-                    ? "No shared files"
-                    : currentPath[0] === "Trash"
-                      ? "Trash is empty"
-                      : "No files or folders"}
+                {searchQuery.trim().length > 0
+                  ? isSearching
+                    ? "Searching..."
+                    : "No results found"
+                  : currentPath[0] === "Starred"
+                    ? "No starred files"
+                    : currentPath[0] === "Shared with Me"
+                      ? "No shared files"
+                      : currentPath[0] === "Trash"
+                        ? "Trash is empty"
+                        : "No files or folders"}
               </h3>
               <p className="text-gray-500 dark:text-gray-400 mb-4">
-                {currentPath[0] === "Starred"
-                  ? "Star files to easily find them later."
-                  : currentPath[0] === "Shared with Me"
-                    ? "Files others share with you will show up here."
-                    : currentPath[0] === "Trash"
-                      ? "Deleted files will appear here."
-                      : "Upload or create a folder to get started."}
+                {searchQuery.trim().length > 0
+                  ? isSearching
+                    ? "Please wait while we search your files..."
+                    : `No files or folders match "${searchQuery}"`
+                  : currentPath[0] === "Starred"
+                    ? "Star files to easily find them later."
+                    : currentPath[0] === "Shared with Me"
+                      ? "Files others share with you will show up here."
+                      : currentPath[0] === "Trash"
+                        ? "Deleted files will appear here."
+                        : "Upload or create a folder to get started."}
               </p>
-              {canCreateFolder && (
+              {canCreateFolder && searchQuery.trim().length === 0 && (
                 <button
                   className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-xl shadow-md transition-all duration-200"
                   onClick={() => setCreateFolderModalOpen(true)}

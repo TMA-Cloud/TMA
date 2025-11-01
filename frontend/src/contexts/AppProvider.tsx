@@ -1,6 +1,6 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState, useRef } from "react";
 import { AppContext, type FileItem, type FileItemResponse } from "./AppContext";
-import { usePromiseQueue } from "../utils/debounce";
+import { usePromiseQueue, useDebouncedCallback } from "../utils/debounce";
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
@@ -32,49 +32,188 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
     "name" | "size" | "modified" | "deletedAt"
   >("modified");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [isSearching, setIsSearching] = useState<boolean>(false);
+  const searchQueryRef = useRef<string>(""); // Track current search query to ignore stale results
+  const abortControllerRef = useRef<AbortController | null>(null); // For cancelling fetch requests
 
   const operationQueue = usePromiseQueue();
 
-  const refreshFiles = useCallback(async () => {
-    try {
-      const parentId = folderStack[folderStack.length - 1];
-      let url: string | URL = `${import.meta.env.VITE_API_URL}/api/files`;
-      if (currentPath[0] === "Starred" && folderStack.length === 1) {
-        url = `${import.meta.env.VITE_API_URL}/api/files/starred`;
-      } else if (
-        currentPath[0] === "Shared with Me" &&
-        folderStack.length === 1
-      ) {
-        url = `${import.meta.env.VITE_API_URL}/api/files/shared`;
-      } else if (currentPath[0] === "Trash" && folderStack.length === 1) {
-        url = `${import.meta.env.VITE_API_URL}/api/files/trash`;
+  // Keep ref in sync with state
+  useEffect(() => {
+    searchQueryRef.current = searchQuery;
+  }, [searchQuery]);
+
+  const refreshFiles = useCallback(
+    async (skipSearchCheck = false) => {
+      try {
+        // If searching, don't refresh normally - search handles its own file updates
+        // skipSearchCheck is used when we explicitly want to refresh (e.g., when clearing search)
+        if (!skipSearchCheck && searchQuery.trim().length > 0) {
+          return;
+        }
+
+        const parentId = folderStack[folderStack.length - 1];
+        let url: string | URL = `${import.meta.env.VITE_API_URL}/api/files`;
+        if (currentPath[0] === "Starred" && folderStack.length === 1) {
+          url = `${import.meta.env.VITE_API_URL}/api/files/starred`;
+        } else if (
+          currentPath[0] === "Shared with Me" &&
+          folderStack.length === 1
+        ) {
+          url = `${import.meta.env.VITE_API_URL}/api/files/shared`;
+        } else if (currentPath[0] === "Trash" && folderStack.length === 1) {
+          url = `${import.meta.env.VITE_API_URL}/api/files/trash`;
+        }
+
+        url = new URL(url as string);
+        if (parentId) url.searchParams.append("parentId", parentId);
+        url.searchParams.append("sortBy", sortBy);
+        url.searchParams.append("order", sortOrder);
+        url = url.toString();
+        const res = await fetch(url.toString(), { credentials: "include" });
+        const data: FileItemResponse[] = await res.json();
+        setFiles(
+          data.map((f) => ({
+            ...f,
+            modified: new Date(f.modified),
+            deletedAt: f.deletedAt ? new Date(f.deletedAt) : undefined,
+          })),
+        );
+      } catch (e) {
+        console.error("Failed to load files", e);
+      }
+    },
+    [folderStack, currentPath, sortBy, sortOrder, searchQuery],
+  );
+
+  const searchFilesApi = useCallback(
+    async (query: string) => {
+      const trimmedQuery = query.trim();
+
+      // Check if this search result is still relevant (query hasn't changed)
+      if (searchQueryRef.current.trim() !== trimmedQuery) {
+        // Query has changed, ignore this result
+        return;
       }
 
-      url = new URL(url as string);
-      if (parentId) url.searchParams.append("parentId", parentId);
-      url.searchParams.append("sortBy", sortBy);
-      url.searchParams.append("order", sortOrder);
-      url = url.toString();
-      const res = await fetch(url.toString(), { credentials: "include" });
-      const data: FileItemResponse[] = await res.json();
-      setFiles(
-        data.map((f) => ({
-          ...f,
-          modified: new Date(f.modified),
-          deletedAt: f.deletedAt ? new Date(f.deletedAt) : undefined,
-        })),
-      );
-    } catch (e) {
-      console.error("Failed to load files", e);
-    }
-  }, [folderStack, currentPath, sortBy, sortOrder]);
+      if (!trimmedQuery || trimmedQuery.length === 0) {
+        // If search is cleared, refresh normal files
+        setIsSearching(false);
+        await refreshFiles(true); // Force refresh by skipping search check
+        return;
+      }
+
+      // Cancel any previous search request
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+
+      // Create new AbortController for this search
+      const abortController = new AbortController();
+      abortControllerRef.current = abortController;
+
+      setIsSearching(true);
+      try {
+        const url = new URL(`${import.meta.env.VITE_API_URL}/api/files/search`);
+        url.searchParams.append("q", trimmedQuery);
+        url.searchParams.append("limit", "100");
+
+        const res = await fetch(url.toString(), {
+          credentials: "include",
+          signal: abortController.signal, // Enable request cancellation
+        });
+
+        // Check if request was aborted
+        if (abortController.signal.aborted) {
+          return;
+        }
+
+        if (!res.ok) {
+          throw new Error("Search failed");
+        }
+
+        // Double-check query hasn't changed while fetching
+        if (searchQueryRef.current.trim() !== trimmedQuery) {
+          // Query changed during fetch, ignore this result
+          return;
+        }
+
+        const data: FileItemResponse[] = await res.json();
+
+        // Final check before updating state
+        if (searchQueryRef.current.trim() !== trimmedQuery) {
+          return;
+        }
+
+        setFiles(
+          data.map((f) => ({
+            ...f,
+            modified: new Date(f.modified),
+            deletedAt: f.deletedAt ? new Date(f.deletedAt) : undefined,
+          })),
+        );
+      } catch (e) {
+        // Ignore abort errors (expected when cancelling)
+        if (e instanceof Error && e.name === "AbortError") {
+          return;
+        }
+
+        // Only update state if query is still relevant and not aborted
+        if (
+          searchQueryRef.current.trim() === trimmedQuery &&
+          !abortController.signal.aborted
+        ) {
+          console.error("Failed to search files", e);
+          setFiles([]);
+        }
+      } finally {
+        // Only update searching state if query is still relevant and controller wasn't replaced
+        if (
+          searchQueryRef.current.trim() === trimmedQuery &&
+          abortControllerRef.current === abortController
+        ) {
+          setIsSearching(false);
+          abortControllerRef.current = null;
+        }
+      }
+    },
+    [refreshFiles],
+  );
+
+  // Debounced search function with cancellation support
+  const [debouncedSearch, cancelSearch] = useDebouncedCallback(
+    searchFilesApi,
+    300,
+  );
 
   useEffect(() => {
-    const id = setTimeout(() => {
-      void refreshFiles();
-    }, 0);
-    return () => clearTimeout(id);
-  }, [refreshFiles]);
+    if (searchQuery.trim().length > 0) {
+      // Trigger debounced search
+      debouncedSearch(searchQuery);
+    } else {
+      // Cancel any pending searches immediately
+      cancelSearch();
+
+      // Abort any in-flight fetch requests
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+
+      // Clear search and refresh normal files immediately
+      setIsSearching(false);
+      // Use skipSearchCheck to force refresh even if searchQuery is being cleared
+      void refreshFiles(true);
+    }
+  }, [searchQuery, debouncedSearch, cancelSearch, refreshFiles]);
+
+  useEffect(() => {
+    // Only refresh files when not searching and searchQuery is empty
+    if (searchQuery.trim().length === 0) {
+      void refreshFiles(true); // Force refresh when navigating/filtering
+    }
+  }, [folderStack, currentPath, sortBy, sortOrder, searchQuery, refreshFiles]);
 
   const createFolder = async (name: string) => {
     await fetch(`${import.meta.env.VITE_API_URL}/api/files/folder`, {
@@ -265,6 +404,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   const openFolder = (folder: FileItem) => {
+    // Clear search when navigating to a folder
+    if (searchQuery.trim().length > 0) {
+      setSearchQuery("");
+    }
     setCurrentPathState((p) => [...p, folder.name]);
     setFolderStack((p) => [...p, folder.id]);
     setFolderSharedStack((p) => [...p, !!folder.shared]);
@@ -329,6 +472,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         sortOrder,
         setSortBy,
         setSortOrder,
+        searchQuery,
+        setSearchQuery,
+        isSearching,
+        searchFiles: searchFilesApi,
       }}
     >
       {children}
