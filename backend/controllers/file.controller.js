@@ -1,6 +1,6 @@
 const path = require('path');
 const fs = require('fs');
-const { UPLOAD_DIR } = require('../config/paths');
+const { resolveFilePath, isValidPath } = require('../utils/filePath');
 const {
   getFiles,
   createFolder,
@@ -113,26 +113,25 @@ async function downloadFile(req, res) {
     if (!file) return res.status(404).json({ message: 'File not found' });
     
     // Validate file path to prevent path traversal
-    if (!file.path || file.path.includes('..') || file.path.includes('/') || file.path.includes('\\')) {
+    if (!isValidPath(file.path)) {
       return res.status(400).json({ message: 'Invalid file path' });
     }
     
-    const uploadsDir = UPLOAD_DIR;
-    const filePath = path.join(uploadsDir, file.path);
-    
-    // Ensure the resolved path is within uploads directory
-    if (!filePath.startsWith(uploadsDir)) {
-      return res.status(400).json({ message: 'Invalid file path' });
+    // Resolve file path (handles both relative and absolute paths)
+    let filePath;
+    try {
+      filePath = resolveFilePath(file.path);
+    } catch (err) {
+      return res.status(400).json({ message: err.message || 'Invalid file path' });
     }
     
     // Check if file exists
-    const fs = require('fs');
     if (!fs.existsSync(filePath)) {
       return res.status(404).json({ message: 'File not found on disk' });
     }
     
     res.type(file.mimeType);
-    res.sendFile(path.resolve(filePath));
+    res.sendFile(filePath);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Server error' });

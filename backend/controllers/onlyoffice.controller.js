@@ -3,7 +3,7 @@ const fs = require('fs');
 const http = require('http');
 const https = require('https');
 const jwt = require('jsonwebtoken');
-const { UPLOAD_DIR } = require('../config/paths');
+const { resolveFilePath, isValidPath } = require('../utils/filePath');
 const { getFile } = require('../models/file.model');
 const { getUserById } = require('../models/user.model');
 
@@ -118,7 +118,6 @@ async function serveFile(req, res) {
     }
 
     // Fetch file path directly from DB by id
-    const uploadsDir = UPLOAD_DIR;
     const db = require('../config/db');
     const result = await db.query(
       'SELECT name, mime_type AS "mimeType", path FROM files WHERE id = $1',
@@ -129,12 +128,20 @@ async function serveFile(req, res) {
       console.error('[ONLYOFFICE] File not found in DB', id);
       return res.status(404).json({ error: 'File not found' });
     }
-    if (!fileRow.path) {
-      console.error('[ONLYOFFICE] File missing path', id);
-      return res.status(404).json({ error: 'File missing path' });
+    if (!fileRow.path || !isValidPath(fileRow.path)) {
+      console.error('[ONLYOFFICE] File missing or invalid path', id);
+      return res.status(404).json({ error: 'File missing or invalid path' });
     }
     
-    const filePath = path.join(uploadsDir, fileRow.path);
+    // Resolve file path (handles both relative and absolute paths)
+    let filePath;
+    try {
+      filePath = resolveFilePath(fileRow.path);
+    } catch (err) {
+      console.error('[ONLYOFFICE] Error resolving file path:', err.message);
+      return res.status(404).json({ error: 'Invalid file path' });
+    }
+
     if (!fs.existsSync(filePath)) {
       console.error('[ONLYOFFICE] File not found on disk', filePath);
       return res.status(404).json({ error: 'File not found on disk' });
@@ -143,7 +150,7 @@ async function serveFile(req, res) {
     // Set appropriate headers
     res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(fileRow.name)}"`);
     res.type(fileRow.mimeType || 'application/octet-stream');
-    res.sendFile(path.resolve(filePath));
+    res.sendFile(filePath);
   } catch (err) {
     console.error('[ONLYOFFICE] Error serving file', err);
     res.status(500).json({ error: 'Server error' });
@@ -417,7 +424,15 @@ async function callback(req, res) {
       }
 
       const fileRow = fileResult.rows[0];
-      const filePath = path.join(UPLOAD_DIR, fileRow.path);
+      
+      // Only allow saving to files in UPLOAD_DIR (not custom drive files)
+      // Custom drive files are read-only
+      if (!fileRow.path || path.isAbsolute(fileRow.path)) {
+        console.error('[ONLYOFFICE] Cannot save to custom drive file:', fileId);
+        return res.status(200).json({ error: 0 }); // Still return success
+      }
+      
+      const filePath = resolveFilePath(fileRow.path);
 
       // Download the updated document from OnlyOffice
       let fileBuffer;

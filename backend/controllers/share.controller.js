@@ -1,6 +1,6 @@
 const path = require('path');
 const archiver = require('archiver');
-const { UPLOAD_DIR } = require('../config/paths');
+const { resolveFilePath, isValidPath } = require('../utils/filePath');
 const {
   getFileByToken,
   getFolderContentsByShare,
@@ -26,7 +26,15 @@ async function handleShared(req, res) {
       html += `</body></html>`;
       res.send(html);
     } else {
-      const filePath = path.join(UPLOAD_DIR, file.path);
+      if (!isValidPath(file.path)) {
+        return res.status(400).send('Invalid file path');
+      }
+      let filePath;
+      try {
+        filePath = resolveFilePath(file.path);
+      } catch (err) {
+        return res.status(400).send('Invalid file path');
+      }
       res.download(filePath, file.name, err => { if (err) console.error(err); });
     }
   } catch (err) {
@@ -50,10 +58,14 @@ async function downloadFolderZip(req, res) {
     const addEntry = (id, base) => {
       for (const entry of entries.filter(e => e.parent_id === id)) {
         const relPath = base ? path.join(base, entry.name) : entry.name;
-        if (entry.type === 'file') {
-          const p = path.join(UPLOAD_DIR, entry.path);
-          archive.file(p, { name: relPath });
-        } else {
+        if (entry.type === 'file' && isValidPath(entry.path)) {
+          try {
+            const p = resolveFilePath(entry.path);
+            archive.file(p, { name: relPath });
+          } catch (err) {
+            console.error(`[Share] Error adding file to archive: ${entry.name}`, err);
+          }
+        } else if (entry.type === 'folder') {
           addEntry(entry.id, relPath);
         }
       }
@@ -79,7 +91,15 @@ async function downloadSharedItem(req, res) {
     const file = res2.rows[0];
     if (!file) return res.status(404).send('Not found');
     if (file.type === 'file') {
-      const filePath = path.join(UPLOAD_DIR, file.path);
+      if (!isValidPath(file.path)) {
+        return res.status(400).send('Invalid file path');
+      }
+      let filePath;
+      try {
+        filePath = resolveFilePath(file.path);
+      } catch (err) {
+        return res.status(400).send('Invalid file path');
+      }
       return res.download(filePath, file.name, err => { if (err) console.error(err); });
     }
     // folder: create zip of shared contents under this folder
@@ -92,10 +112,14 @@ async function downloadSharedItem(req, res) {
     const addEntry = (id, base) => {
       for (const entry of entries.filter(e => e.parent_id === id)) {
         const relPath = base ? path.join(base, entry.name) : entry.name;
-        if (entry.type === 'file') {
-          const p = path.join(UPLOAD_DIR, entry.path);
-          archive.file(p, { name: relPath });
-        } else {
+        if (entry.type === 'file' && isValidPath(entry.path)) {
+          try {
+            const p = resolveFilePath(entry.path);
+            archive.file(p, { name: relPath });
+          } catch (err) {
+            console.error(`[Share] Error adding file to archive: ${entry.name}`, err);
+          }
+        } else if (entry.type === 'folder') {
           addEntry(entry.id, relPath);
         }
       }

@@ -10,6 +10,7 @@ const onlyofficeRoutes = require('./routes/onlyoffice.routes');
 const userRoutes = require('./routes/user.routes');
 const { startTrashCleanup } = require('./services/trashCleanup');
 const { startOrphanFileCleanup } = require('./services/orphanCleanup');
+const { startCustomDriveScanner } = require('./services/customDriveScanner');
 const errorHandler = require('./middleware/error.middleware');
 require('dotenv').config();
 
@@ -75,6 +76,7 @@ runMigrations()
     app.listen(port, () => console.log(`Server running on port ${port}`));
     startTrashCleanup();
     startOrphanFileCleanup();
+    startCustomDriveScanner();
   })
   .catch((err) => {
     console.error('Failed to run migrations', err);

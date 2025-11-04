@@ -2,7 +2,8 @@ const pool = require('../config/db');
 const { generateId } = require('../utils/id');
 const fs = require('fs');
 const path = require('path');
-const { UPLOAD_DIR } = require('../config/paths');
+const { UPLOAD_DIR, CUSTOM_DRIVE_ENABLED, CUSTOM_DRIVE_PATH } = require('../config/paths');
+const { resolveFilePath } = require('../utils/filePath');
 
 const SORT_FIELDS = {
   name: 'name',
@@ -70,6 +71,52 @@ async function getFiles(userId, parentId = null, sortBy = 'modified', order = 'D
 
 async function createFolder(name, parentId = null, userId) {
   const id = generateId(16);
+  
+  // If custom drive is enabled, create folder in custom drive
+  if (CUSTOM_DRIVE_ENABLED && CUSTOM_DRIVE_PATH) {
+    try {
+      // Get the parent folder path
+      const parentPath = await getFolderPath(parentId, userId);
+      
+      // Build the new folder path
+      const folderPath = parentPath
+        ? path.join(parentPath, name)
+        : path.join(CUSTOM_DRIVE_PATH, name);
+      
+      // Handle duplicate folder names
+      let finalPath = folderPath;
+      let counter = 1;
+      while (await fs.promises.access(finalPath).then(() => true).catch(() => false)) {
+        const newName = `${name} (${counter})`;
+        finalPath = parentPath
+          ? path.join(parentPath, newName)
+          : path.join(CUSTOM_DRIVE_PATH, newName);
+        counter++;
+        if (counter > 10000) {
+          throw new Error('Too many duplicate folders');
+        }
+      }
+      
+      // Create the folder on disk
+      await fs.promises.mkdir(finalPath, { recursive: true });
+      
+      // Get the actual folder name (in case it was changed due to duplicates)
+      const actualName = path.basename(finalPath);
+      
+      // Store absolute path in database
+      const absolutePath = path.resolve(finalPath);
+      const result = await pool.query(
+        'INSERT INTO files(id, name, type, parent_id, user_id, path) VALUES($1,$2,$3,$4,$5,$6) RETURNING id, name, type, size, modified, mime_type AS "mimeType", starred, shared',
+        [id, actualName, 'folder', parentId, userId, absolutePath]
+      );
+      return result.rows[0];
+    } catch (error) {
+      // If custom drive creation fails, fall back to regular folder (no path)
+      console.error('[File] Error creating folder in custom drive, creating regular folder:', error);
+    }
+  }
+  
+  // Regular folder creation (when custom drive is disabled or creation failed)
   const result = await pool.query(
     'INSERT INTO files(id, name, type, parent_id, user_id) VALUES($1,$2,$3,$4,$5) RETURNING id, name, type, size, modified, mime_type AS "mimeType", starred, shared',
     [id, name, 'folder', parentId, userId]
@@ -77,8 +124,155 @@ async function createFolder(name, parentId = null, userId) {
   return result.rows[0];
 }
 
+/**
+ * Gets the folder path for a parent folder ID
+ * Returns the absolute path if it's a custom drive folder, or null if regular folder
+ */
+async function getFolderPath(parentId, userId) {
+  if (!parentId) {
+    return CUSTOM_DRIVE_ENABLED && CUSTOM_DRIVE_PATH ? CUSTOM_DRIVE_PATH : null;
+  }
+
+  const result = await pool.query(
+    'SELECT path, type FROM files WHERE id = $1 AND user_id = $2',
+    [parentId, userId]
+  );
+
+  if (result.rows.length === 0) {
+    return CUSTOM_DRIVE_ENABLED && CUSTOM_DRIVE_PATH ? CUSTOM_DRIVE_PATH : null;
+  }
+
+  const folder = result.rows[0];
+  
+  // If it's a custom drive folder (has absolute path), use it
+  if (folder.path && path.isAbsolute(folder.path)) {
+    return folder.path;
+  }
+
+  // If custom drive is enabled but folder doesn't have path, use custom drive root
+  // For regular folders, we'll need to build the path by traversing up
+  if (CUSTOM_DRIVE_ENABLED && CUSTOM_DRIVE_PATH) {
+    // Try to build path by traversing parent chain
+    const folderPath = await buildFolderPath(parentId, userId);
+    return folderPath || CUSTOM_DRIVE_PATH;
+  }
+
+  return null;
+}
+
+/**
+ * Builds the folder path by traversing the parent chain
+ */
+async function buildFolderPath(folderId, userId) {
+  if (!CUSTOM_DRIVE_ENABLED || !CUSTOM_DRIVE_PATH) {
+    return null;
+  }
+
+  const pathParts = [];
+  let currentId = folderId;
+
+  // Traverse up the parent chain to build the path
+  while (currentId) {
+    const result = await pool.query(
+      'SELECT name, parent_id, path FROM files WHERE id = $1 AND user_id = $2',
+      [currentId, userId]
+    );
+
+    if (result.rows.length === 0) break;
+
+    const folder = result.rows[0];
+    
+    // If we hit a custom drive folder (has absolute path), use it as base
+    if (folder.path && path.isAbsolute(folder.path)) {
+      return folder.path;
+    }
+
+    pathParts.unshift(folder.name);
+    currentId = folder.parent_id;
+
+    // Safety check to avoid infinite loops
+    if (pathParts.length > 100) break;
+  }
+
+  // Build path from custom drive root
+  if (pathParts.length > 0) {
+    return path.join(CUSTOM_DRIVE_PATH, ...pathParts);
+  }
+
+  return CUSTOM_DRIVE_PATH;
+}
+
+/**
+ * Generates a unique filename if the file already exists
+ */
+async function getUniqueFilename(filePath, folderPath) {
+  const dir = path.dirname(filePath);
+  const ext = path.extname(filePath);
+  const baseName = path.basename(filePath, ext);
+  
+  let finalPath = filePath;
+  let counter = 1;
+
+  while (await fs.promises.access(finalPath).then(() => true).catch(() => false)) {
+    const newName = `${baseName} (${counter})${ext}`;
+    finalPath = path.join(dir, newName);
+    counter++;
+    
+    // Safety limit
+    if (counter > 10000) {
+      throw new Error('Too many duplicate files');
+    }
+  }
+
+  return finalPath;
+}
+
 async function createFile(name, size, mimeType, tempPath, parentId = null, userId) {
   const id = generateId(16);
+  
+  // If custom drive is enabled, save to custom drive with original name
+  if (CUSTOM_DRIVE_ENABLED && CUSTOM_DRIVE_PATH) {
+    try {
+      // Get the target folder path
+      const folderPath = await getFolderPath(parentId, userId);
+      
+      // Ensure the folder exists
+      try {
+        await fs.promises.access(folderPath || CUSTOM_DRIVE_PATH);
+      } catch {
+        // Folder doesn't exist, create it
+        await fs.promises.mkdir(folderPath || CUSTOM_DRIVE_PATH, { recursive: true });
+      }
+
+      // Build the destination path with original filename
+      const destPath = folderPath 
+        ? path.join(folderPath, name)
+        : path.join(CUSTOM_DRIVE_PATH, name);
+
+      // Handle duplicate filenames
+      const finalPath = await getUniqueFilename(destPath, folderPath || CUSTOM_DRIVE_PATH);
+      
+      // Move file to custom drive
+      await fs.promises.rename(tempPath, finalPath);
+      
+      // Get the actual filename (in case it was changed due to duplicates)
+      const actualName = path.basename(finalPath);
+      
+      // Store absolute path in database
+      const absolutePath = path.resolve(finalPath);
+      const result = await pool.query(
+        'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id, name, type, size, modified, mime_type AS "mimeType", starred, shared',
+        [id, actualName, 'file', size, mimeType, absolutePath, parentId, userId]
+      );
+      return result.rows[0];
+    } catch (error) {
+      // If custom drive save fails, fall back to regular upload
+      console.error('[File] Error saving to custom drive, falling back to UPLOAD_DIR:', error);
+      // Continue to regular upload logic below
+    }
+  }
+
+  // Regular upload behavior (when custom drive is disabled or save failed)
   const ext = path.extname(name);
   const storageName = id + ext;
   const dest = path.join(UPLOAD_DIR, storageName);
@@ -104,36 +298,193 @@ async function copyEntry(id, parentId, userId, client = null) {
   const file = res.rows[0];
   const newId = generateId(16);
   let storageName = null;
+  let newPath = null;
+  
   if (file.type === 'file') {
-    const ext = path.extname(file.name);
-    storageName = newId + ext;
-    // Copy file first to ensure it exists before database entry
-    try {
-      await fs.promises.copyFile(
-        path.join(UPLOAD_DIR, file.path),
-        path.join(UPLOAD_DIR, storageName),
+    // Get source file path (handles both relative and absolute)
+    const sourcePath = resolveFilePath(file.path);
+    
+    if (CUSTOM_DRIVE_ENABLED && CUSTOM_DRIVE_PATH) {
+      // If custom drive is enabled, copy to custom drive with original name
+      try {
+        const folderPath = await getFolderPath(parentId, userId);
+        const destDir = folderPath || CUSTOM_DRIVE_PATH;
+        
+        // Ensure destination directory exists
+        try {
+          await fs.promises.access(destDir);
+        } catch {
+          await fs.promises.mkdir(destDir, { recursive: true });
+        }
+        
+        // Handle duplicate filenames
+        let destPath = path.join(destDir, file.name);
+        let counter = 1;
+        while (await fs.promises.access(destPath).then(() => true).catch(() => false)) {
+          const ext = path.extname(file.name);
+          const baseName = path.basename(file.name, ext);
+          const newName = `${baseName} (${counter})${ext}`;
+          destPath = path.join(destDir, newName);
+          counter++;
+          if (counter > 10000) {
+            throw new Error('Too many duplicate files');
+          }
+        }
+        
+        await fs.promises.copyFile(sourcePath, destPath);
+        newPath = path.resolve(destPath);
+        
+        // Get the actual filename (in case it was changed due to duplicates)
+        const actualName = path.basename(destPath);
+        
+        await dbClient.query(
+          'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id, starred, shared) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',
+          [
+            newId,
+            actualName,
+            file.type,
+            file.size,
+            file.mime_type,
+            newPath,
+            parentId,
+            userId,
+            file.starred,
+            file.shared,
+          ],
+        );
+      } catch (error) {
+        // Fall back to regular copy if custom drive copy fails
+        console.error('[File] Error copying to custom drive, falling back to UPLOAD_DIR:', error);
+        const ext = path.extname(file.name);
+        storageName = newId + ext;
+        await fs.promises.copyFile(sourcePath, path.join(UPLOAD_DIR, storageName));
+        newPath = storageName;
+        
+        await dbClient.query(
+          'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id, starred, shared) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',
+          [
+            newId,
+            file.name,
+            file.type,
+            file.size,
+            file.mime_type,
+            newPath,
+            parentId,
+            userId,
+            file.starred,
+            file.shared,
+          ],
+        );
+      }
+    } else {
+      // Regular copy to UPLOAD_DIR
+      const ext = path.extname(file.name);
+      storageName = newId + ext;
+      try {
+        await fs.promises.copyFile(sourcePath, path.join(UPLOAD_DIR, storageName));
+      } catch (error) {
+        console.error('Failed to copy file:', error);
+        throw new Error('File copy operation failed');
+      }
+      newPath = storageName;
+      
+      await dbClient.query(
+        'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id, starred, shared) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',
+        [
+          newId,
+          file.name,
+          file.type,
+          file.size,
+          file.mime_type,
+          newPath,
+          parentId,
+          userId,
+          file.starred,
+          file.shared,
+        ],
       );
-    } catch (error) {
-      console.error('Failed to copy file:', error);
-      throw new Error('File copy operation failed');
     }
-  }
-  await dbClient.query(
-    'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id, starred, shared) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',
-    [
-      newId,
-      file.name,
-      file.type,
-      file.size,
-      file.mime_type,
-      storageName,
-      parentId,
-      userId,
-      file.starred,
-      file.shared,
-    ],
-  );
-  if (file.type === 'folder') {
+  } else if (file.type === 'folder') {
+    // For folders created in custom drive, we need to create them on disk
+    if (CUSTOM_DRIVE_ENABLED && CUSTOM_DRIVE_PATH) {
+      try {
+        const parentPath = await getFolderPath(parentId, userId);
+        const folderPath = parentPath
+          ? path.join(parentPath, file.name)
+          : path.join(CUSTOM_DRIVE_PATH, file.name);
+        
+        // Handle duplicate folder names
+        let finalPath = folderPath;
+        let counter = 1;
+        while (await fs.promises.access(finalPath).then(() => true).catch(() => false)) {
+          const newName = `${file.name} (${counter})`;
+          finalPath = parentPath
+            ? path.join(parentPath, newName)
+            : path.join(CUSTOM_DRIVE_PATH, newName);
+          counter++;
+          if (counter > 10000) {
+            throw new Error('Too many duplicate folders');
+          }
+        }
+        
+        await fs.promises.mkdir(finalPath, { recursive: true });
+        const actualName = path.basename(finalPath);
+        newPath = path.resolve(finalPath);
+        
+        await dbClient.query(
+          'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id, starred, shared) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',
+          [
+            newId,
+            actualName,
+            file.type,
+            file.size,
+            file.mime_type,
+            newPath,
+            parentId,
+            userId,
+            file.starred,
+            file.shared,
+          ],
+        );
+      } catch (error) {
+        // Fall back to regular folder (no path)
+        console.error('[File] Error creating folder in custom drive:', error);
+        await dbClient.query(
+          'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id, starred, shared) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',
+          [
+            newId,
+            file.name,
+            file.type,
+            file.size,
+            file.mime_type,
+            null,
+            parentId,
+            userId,
+            file.starred,
+            file.shared,
+          ],
+        );
+      }
+    } else {
+      // Regular folder (no path stored)
+      await dbClient.query(
+        'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id, starred, shared) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',
+        [
+          newId,
+          file.name,
+          file.type,
+          file.size,
+          file.mime_type,
+          null,
+          parentId,
+          userId,
+          file.starred,
+          file.shared,
+        ],
+      );
+    }
+    
+    // Recursively copy folder contents
     const children = await dbClient.query('SELECT id FROM files WHERE parent_id = $1 AND user_id = $2', [id, userId]);
     for (const child of children.rows) {
       await copyEntry(child.id, newId, userId, client);
@@ -238,13 +589,47 @@ async function permanentlyDeleteFiles(ids, userId) {
     'SELECT id, path, type FROM files WHERE id = ANY($1::text[]) AND user_id = $2',
     [allIds, userId],
   );
+  
+  // Delete files first, then folders
+  const foldersToDelete = [];
+  
   for (const f of files.rows) {
-    if (f.type === 'file' && f.path) {
-      try {
-        await fs.promises.unlink(path.join(UPLOAD_DIR, f.path));
-      } catch {}
+    if (!f.path) continue;
+    
+    try {
+      if (f.type === 'file') {
+        // Resolve file path (handles both relative and absolute paths)
+        const filePath = resolveFilePath(f.path);
+        await fs.promises.unlink(filePath);
+      } else if (f.type === 'folder') {
+        // For folders, we'll delete them after files are deleted
+        // Only delete custom drive folders (those with absolute paths)
+        if (path.isAbsolute(f.path)) {
+          foldersToDelete.push(f.path);
+        }
+      }
+    } catch (error) {
+      // Log error but continue with other deletions
+      console.error(`[File] Error deleting ${f.type} ${f.path}:`, error.message);
     }
   }
+  
+  // Delete folders (in reverse order to handle nested folders)
+  // Sort by path length descending so deeper folders are deleted first
+  foldersToDelete.sort((a, b) => b.length - a.length);
+  for (const folderPath of foldersToDelete) {
+    try {
+      // Check if folder is empty before deleting
+      const contents = await fs.promises.readdir(folderPath);
+      if (contents.length === 0) {
+        await fs.promises.rmdir(folderPath);
+      }
+    } catch (error) {
+      // Folder might not be empty or already deleted, skip
+      console.error(`[File] Error deleting folder ${folderPath}:`, error.message);
+    }
+  }
+  
   await pool.query('DELETE FROM files WHERE id = ANY($1::text[]) AND user_id = $2', [allIds, userId]);
 }
 
@@ -252,13 +637,42 @@ async function cleanupExpiredTrash() {
   const expired = await pool.query(
     "SELECT id, path, type FROM files WHERE deleted_at IS NOT NULL AND deleted_at < NOW() - INTERVAL '15 days'",
   );
+  
+  const foldersToDelete = [];
+  
   for (const f of expired.rows) {
-    if (f.type === 'file' && f.path) {
-      try {
-        await fs.promises.unlink(path.join(UPLOAD_DIR, f.path));
-      } catch {}
+    if (!f.path) continue;
+    
+    try {
+      if (f.type === 'file') {
+        // Resolve file path (handles both relative and absolute paths)
+        const filePath = resolveFilePath(f.path);
+        await fs.promises.unlink(filePath);
+      } else if (f.type === 'folder') {
+        // For folders, collect them for deletion after files
+        if (path.isAbsolute(f.path)) {
+          foldersToDelete.push(f.path);
+        }
+      }
+    } catch (error) {
+      // Log error but continue
+      console.error(`[Trash] Error cleaning up ${f.type} ${f.path}:`, error.message);
     }
   }
+  
+  // Delete folders (in reverse order)
+  foldersToDelete.sort((a, b) => b.length - a.length);
+  for (const folderPath of foldersToDelete) {
+    try {
+      const contents = await fs.promises.readdir(folderPath);
+      if (contents.length === 0) {
+        await fs.promises.rmdir(folderPath);
+      }
+    } catch (error) {
+      console.error(`[Trash] Error deleting folder ${folderPath}:`, error.message);
+    }
+  }
+  
   await pool.query(
     "DELETE FROM files WHERE deleted_at IS NOT NULL AND deleted_at < NOW() - INTERVAL '15 days'",
   );
