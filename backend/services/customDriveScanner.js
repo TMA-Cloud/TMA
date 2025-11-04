@@ -29,11 +29,14 @@ async function scanCustomDrive(customDrivePath) {
     const userIds = usersResult.rows.map(row => row.id);
 
     if (userIds.length === 0) {
+      console.log('[Custom Drive] No users found, skipping scan');
       return;
     }
 
+    console.log(`[Custom Drive] Starting scan for ${userIds.length} user(s)`);
     const folderMap = new Map();
     await scanDirectory(normalizedPath, null, userIds, folderMap);
+    console.log('[Custom Drive] Scan completed successfully');
   } catch (error) {
     console.error('[Custom Drive] Error during scan:', error);
     throw error;
@@ -59,13 +62,13 @@ async function scanDirectory(dirPath, parentFolderIds, userIds, folderMap) {
           // Batch create folders for all users
           const parentIdMap = parentFolderIds || {};
           const folderIdsMap = await batchCreateOrUpdateFolders(entry.name, parentIdMap, userIds, entryPath);
-          
+
           // Convert Map to object
           const folderIds = {};
           for (const userId of userIds) {
             folderIds[userId] = folderIdsMap.get(userId);
           }
-          
+
           // Store the folder mapping
           folderMap.set(entryPath, folderIds);
 
@@ -75,7 +78,7 @@ async function scanDirectory(dirPath, parentFolderIds, userIds, folderMap) {
           const stats = await fs.stat(entryPath);
           const mimeType = getMimeType(entry.name);
           const parentIdMap = parentFolderIds || {};
-          
+
           await batchCreateOrUpdateFiles(
             entry.name,
             stats.size,
@@ -86,10 +89,12 @@ async function scanDirectory(dirPath, parentFolderIds, userIds, folderMap) {
           );
         }
       } catch (error) {
+        console.error(`[Custom Drive] Error processing ${entryPath}:`, error.message);
         // Continue with other entries on error
       }
     }
   } catch (error) {
+    console.error(`[Custom Drive] Cannot read directory ${dirPath}:`, error.message);
     // Skip directories we can't read (permissions, etc.)
   }
 }
@@ -100,72 +105,54 @@ async function scanDirectory(dirPath, parentFolderIds, userIds, folderMap) {
  * @param {Object<string, string|null>} parentIds - Map of userId -> parentId
  * @param {string[]} userIds - Array of user IDs
  * @param {string} absolutePath - Absolute path of the folder
- * @returns {Promise<Object<string, string>>} Map of userId -> folderId
+ * @returns {Promise<Map<string, string>>} Map of userId -> folderId
  */
 async function batchCreateOrUpdateFolders(name, parentIds, userIds, absolutePath) {
-  // Batch check existing folders for all users
-  const existingResult = await pool.query(
-    'SELECT id, user_id FROM files WHERE path = $1 AND user_id = ANY($2::text[]) AND type = $3',
-    [absolutePath, userIds, 'folder']
-  );
-  
-  const existingMap = new Map();
-  const updateIds = [];
-  
-  existingResult.rows.forEach((row) => {
-    existingMap.set(row.user_id, row.id);
-    updateIds.push(row.id);
-  });
-  
-  if (updateIds.length > 0) {
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-      for (let i = 0; i < updateIds.length; i++) {
-        const userId = existingResult.rows.find(r => r.id === updateIds[i])?.user_id;
-        if (userId) {
-          await client.query(
-            'UPDATE files SET name = $1, parent_id = $2 WHERE id = $3',
-            [name, parentIds[userId] || null, updateIds[i]]
-          );
-        }
-      }
-      await client.query('COMMIT');
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
-    }
-  }
-  
-  const userIdsToInsert = userIds.filter(userId => !existingMap.has(userId));
-  if (userIdsToInsert.length > 0) {
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-      const folderIdsMap = new Map(existingMap);
-      
-      for (const userId of userIdsToInsert) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const folderIdsMap = new Map();
+
+    for (const userId of userIds) {
+      const parentId = parentIds[userId] || null;
+
+      // Normalize path to ensure consistency (lowercase for Windows case-insensitivity)
+      const normalizedPath = path.resolve(absolutePath).toLowerCase();
+
+      // Check if folder already exists for this user and path (case-insensitive)
+      const existing = await client.query(
+        'SELECT id, path FROM files WHERE LOWER(path) = $1 AND user_id = $2 AND type = $3 AND deleted_at IS NULL',
+        [normalizedPath, userId, 'folder']
+      );
+
+      if (existing.rows.length > 0) {
+        // Update existing folder (keep same ID)
+        await client.query(
+          'UPDATE files SET name = $1, parent_id = $2, modified = NOW() WHERE id = $3',
+          [name, parentId, existing.rows[0].id]
+        );
+        folderIdsMap.set(userId, existing.rows[0].id);
+      } else {
+        // Insert new folder (store original case path)
         const id = generateId(16);
+        const originalCasePath = path.resolve(absolutePath);
         await client.query(
           'INSERT INTO files(id, name, type, parent_id, user_id, path) VALUES($1, $2, $3, $4, $5, $6)',
-          [id, name, 'folder', parentIds[userId] || null, userId, absolutePath]
+          [id, name, 'folder', parentId, userId, originalCasePath]
         );
         folderIdsMap.set(userId, id);
       }
-      
-      await client.query('COMMIT');
-      return folderIdsMap;
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
     }
+
+    await client.query('COMMIT');
+    return folderIdsMap;
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('[Custom Drive] Error in batchCreateOrUpdateFolders:', error);
+    throw error;
+  } finally {
+    client.release();
   }
-  
-  return existingMap;
 }
 
 /**
@@ -184,108 +171,54 @@ async function createFolderEntry(name, parentId, userId, absolutePath) {
  * @param {string} absolutePath - Absolute path of the file
  * @param {Object<string, string|null>} parentIds - Map of userId -> parentId
  * @param {string[]} userIds - Array of user IDs
- * @returns {Promise<Object<string, string>>} Map of userId -> fileId
+ * @returns {Promise<Map<string, Object>>} Map of userId -> {id}
  */
 async function batchCreateOrUpdateFiles(name, size, mimeType, absolutePath, parentIds, userIds) {
-  // Batch check existing files for all users
-  const existingResult = await pool.query(
-    'SELECT id, user_id, size, modified FROM files WHERE path = $1 AND user_id = ANY($2::text[]) AND type = $3',
-    [absolutePath, userIds, 'file']
-  );
-  
-  const existingMap = new Map();
-  const updateIds = [];
-  const updateData = [];
-  
-  existingResult.rows.forEach((row) => {
-    existingMap.set(row.user_id, {
-      id: row.id,
-      size: parseInt(row.size),
-      modified: row.modified
-    });
-    updateIds.push(row.id);
-    updateData.push({
-      id: row.id,
-      size: row.size,
-      needsUpdate: parseInt(row.size) !== size
-    });
-  });
-  
-  if (updateIds.length > 0) {
-    const needsUpdateIds = updateData.filter(d => d.needsUpdate).map(d => d.id);
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-      
-      if (needsUpdateIds.length > 0) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const fileIdsMap = new Map();
+
+    for (const userId of userIds) {
+      const parentId = parentIds[userId] || null;
+
+      // Normalize path to ensure consistency (lowercase for Windows case-insensitivity)
+      const normalizedPath = path.resolve(absolutePath).toLowerCase();
+
+      // Check if file already exists for this user and path (case-insensitive)
+      const existing = await client.query(
+        'SELECT id, path FROM files WHERE LOWER(path) = $1 AND user_id = $2 AND type = $3 AND deleted_at IS NULL',
+        [normalizedPath, userId, 'file']
+      );
+
+      if (existing.rows.length > 0) {
+        // Update existing file (keep same ID)
         await client.query(
-          'UPDATE files SET size = $1, modified = NOW(), mime_type = $2, name = $3 WHERE id = ANY($4::text[])',
-          [size, mimeType, name, needsUpdateIds]
+          'UPDATE files SET name = $1, size = $2, mime_type = $3, parent_id = $4, modified = NOW() WHERE id = $5',
+          [name, size, mimeType, parentId, existing.rows[0].id]
         );
-        
-        for (const row of existingResult.rows) {
-          if (needsUpdateIds.includes(row.id)) {
-            await client.query(
-              'UPDATE files SET parent_id = $1 WHERE id = $2',
-              [parentIds[row.user_id] || null, row.id]
-            );
-          }
-        }
-      }
-      
-      const noSizeUpdateIds = updateIds.filter(id => !needsUpdateIds.includes(id));
-      if (noSizeUpdateIds.length > 0) {
-        await client.query(
-          'UPDATE files SET name = $1 WHERE id = ANY($2::text[])',
-          [name, noSizeUpdateIds]
-        );
-        
-        for (const row of existingResult.rows) {
-          if (noSizeUpdateIds.includes(row.id)) {
-            await client.query(
-              'UPDATE files SET parent_id = $1 WHERE id = $2',
-              [parentIds[row.user_id] || null, row.id]
-            );
-          }
-        }
-      }
-      
-      await client.query('COMMIT');
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
-    }
-  }
-  
-  const userIdsToInsert = userIds.filter(userId => !existingMap.has(userId));
-  if (userIdsToInsert.length > 0) {
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-      const fileIdsMap = new Map(existingMap);
-      
-      for (const userId of userIdsToInsert) {
+        fileIdsMap.set(userId, { id: existing.rows[0].id });
+      } else {
+        // Insert new file (store original case path)
         const id = generateId(16);
+        const originalCasePath = path.resolve(absolutePath);
         await client.query(
           'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id) VALUES($1, $2, $3, $4, $5, $6, $7, $8)',
-          [id, name, 'file', size, mimeType, absolutePath, parentIds[userId] || null, userId]
+          [id, name, 'file', size, mimeType, originalCasePath, parentId, userId]
         );
         fileIdsMap.set(userId, { id });
       }
-      
-      await client.query('COMMIT');
-      return fileIdsMap;
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
     }
+
+    await client.query('COMMIT');
+    return fileIdsMap;
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('[Custom Drive] Error in batchCreateOrUpdateFiles:', error);
+    throw error;
+  } finally {
+    client.release();
   }
-  
-  return existingMap;
 }
 
 /**
@@ -357,14 +290,16 @@ async function syncCustomDrive(customDrivePath) {
     }
 
     const dbEntries = new Map();
+    const normalizedPathLower = normalizedPath.toLowerCase();
     const dbResult = await pool.query(
-      "SELECT id, name, type, size, modified, path FROM files WHERE path IS NOT NULL AND path LIKE $1 || '%'",
-      [normalizedPath]
+      "SELECT id, name, type, size, modified, path FROM files WHERE path IS NOT NULL AND LOWER(path) LIKE $1 || '%' ESCAPE ''",
+      [normalizedPathLower]
     );
-    
+
     for (const row of dbResult.rows) {
       if (row.path && path.isAbsolute(row.path)) {
-        dbEntries.set(row.path, row);
+        // Store with lowercase key for case-insensitive lookup
+        dbEntries.set(row.path.toLowerCase(), row);
       }
     }
 
@@ -483,10 +418,12 @@ async function handleFileChange(filePath, userIds) {
     
     const parentDir = path.dirname(filePath);
     const fileName = path.basename(filePath);
-    
+
+    // Use case-insensitive path comparison
+    const normalizedParentDir = path.resolve(parentDir).toLowerCase();
     const parentResult = await pool.query(
-      'SELECT id, user_id FROM files WHERE path = $1 AND user_id = ANY($2::text[]) AND type = $3',
-      [parentDir, userIds, 'folder']
+      'SELECT id, user_id FROM files WHERE LOWER(path) = $1 AND user_id = ANY($2::text[]) AND type = $3',
+      [normalizedParentDir, userIds, 'folder']
     );
     
     const parentFolderIds = {};
@@ -512,19 +449,29 @@ async function handleFileChange(filePath, userIds) {
 async function handleDeletion(filePath, userIds) {
   try {
     const pathSeparator = path.sep === '\\' ? '\\\\' : path.sep;
-    
-    await pool.query(
-      'UPDATE files SET deleted_at = NOW() WHERE path = $1 AND user_id = ANY($2::text[]) AND deleted_at IS NULL',
-      [filePath, userIds]
+    const normalizedPath = path.resolve(filePath).toLowerCase();
+
+    console.log(`[Custom Drive] File deleted from disk: ${filePath}`);
+
+    // Hard delete from database (remove entries completely)
+    const result1 = await pool.query(
+      'DELETE FROM files WHERE LOWER(path) = $1 AND user_id = ANY($2::text[])',
+      [normalizedPath, userIds]
     );
-    
-    await pool.query(
-      `UPDATE files SET deleted_at = NOW() 
-       WHERE path LIKE $1 || $2 || '%' AND user_id = ANY($3::text[]) AND deleted_at IS NULL`,
-      [filePath, pathSeparator, userIds]
+
+    // Delete children (case-insensitive, ESCAPE '' to handle backslashes)
+    const result2 = await pool.query(
+      `DELETE FROM files
+       WHERE LOWER(path) LIKE $1 || $2 || '%' ESCAPE '' AND user_id = ANY($3::text[])`,
+      [normalizedPath, pathSeparator, userIds]
     );
+
+    const totalDeleted = result1.rowCount + result2.rowCount;
+    if (totalDeleted > 0) {
+      console.log(`[Custom Drive] Removed ${totalDeleted} entries from database`);
+    }
   } catch (error) {
-    // Continue on error
+    console.error(`[Custom Drive] Error deleting file from database:`, error.message);
   }
 }
 
@@ -544,10 +491,36 @@ async function startCustomDriveScanner() {
 
   try {
     await fs.stat(normalizedPath);
-    await scanCustomDrive(customDrivePath);
-    
+
+    // Check if this is the first scan by looking for any existing custom drive files (case-insensitive)
+    // Use ESCAPE '' to disable backslash escaping in LIKE pattern (Windows paths have backslashes)
+    const normalizedPathLower = normalizedPath.toLowerCase();
+    const existingFiles = await pool.query(
+      "SELECT COUNT(*) as count FROM files WHERE path IS NOT NULL AND LOWER(path) LIKE $1 || '%' ESCAPE ''",
+      [normalizedPathLower]
+    );
+
+    const isFirstScan = parseInt(existingFiles.rows[0].count) === 0;
+
+    console.log(`[Custom Drive] Found ${existingFiles.rows[0].count} existing files`);
+
+    if (isFirstScan) {
+      console.log('[Custom Drive] First scan detected, performing full scan...');
+      await scanCustomDrive(customDrivePath);
+      console.log('[Custom Drive] Initial scan complete');
+    } else {
+      console.log('[Custom Drive] Existing data found, using full scan to ensure consistency...');
+      await scanCustomDrive(customDrivePath);
+      console.log('[Custom Drive] Full scan complete');
+    }
+
+    // Start file watcher for real-time updates
     watcher = chokidar.watch(normalizedPath, {
-      ignored: /(^|[\/\\])\../, // ignore dotfiles
+      ignored: [
+        /(^|[\/\\])\../, // ignore dotfiles
+        /node_modules/, // ignore node_modules
+        /\.git/, // ignore .git
+      ],
       persistent: true,
       ignoreInitial: true, // Don't trigger events for existing files
       awaitWriteFinish: {
@@ -556,23 +529,62 @@ async function startCustomDriveScanner() {
       },
       depth: 99, // Watch all subdirectories
       usePolling: false, // Use native events (faster, but set to true for network drives)
+      ignorePermissionErrors: true, // Ignore permission errors
+      atomic: true, // Handle atomic writes better
     });
-    
-    watcher.on('add', processChange);
-    watcher.on('change', processChange);
-    watcher.on('addDir', processChange);
-    watcher.on('unlink', processChange);
-    watcher.on('unlinkDir', processChange);
-    
-    // Handle errors
+
+    watcher.on('add', (filePath) => {
+      processChange(filePath).catch(err => {
+        console.error(`[Custom Drive] Error processing add event for ${filePath}:`, err.message);
+      });
+    });
+
+    watcher.on('change', (filePath) => {
+      processChange(filePath).catch(err => {
+        console.error(`[Custom Drive] Error processing change event for ${filePath}:`, err.message);
+      });
+    });
+
+    watcher.on('addDir', (filePath) => {
+      processChange(filePath).catch(err => {
+        console.error(`[Custom Drive] Error processing addDir event for ${filePath}:`, err.message);
+      });
+    });
+
+    watcher.on('unlink', (filePath) => {
+      processChange(filePath).catch(err => {
+        console.error(`[Custom Drive] Error processing unlink event for ${filePath}:`, err.message);
+      });
+    });
+
+    watcher.on('unlinkDir', (filePath) => {
+      processChange(filePath).catch(err => {
+        console.error(`[Custom Drive] Error processing unlinkDir event for ${filePath}:`, err.message);
+      });
+    });
+
+    // Handle errors gracefully
     watcher.on('error', (error) => {
-      console.error('[Custom Drive] Watcher error:', error);
+      // Ignore EPERM errors (permission issues) - these are common on Windows
+      if (error.code === 'EPERM') {
+        console.log('[Custom Drive] Skipping file due to permission restriction');
+        return;
+      }
+
+      // Ignore ENOENT errors (file not found) - these happen during rapid deletions
+      if (error.code === 'ENOENT') {
+        console.log('[Custom Drive] File no longer exists, ignoring');
+        return;
+      }
+
+      // Log other errors
+      console.error('[Custom Drive] Watcher error:', error.code || error.message);
     });
-    
+
     watcher.on('ready', () => {
       console.log('[Custom Drive] File system watcher ready');
     });
-    
+
   } catch (error) {
     if (error.code === 'ENOENT') {
       console.error(`[Custom Drive] Path does not exist: ${normalizedPath}`);

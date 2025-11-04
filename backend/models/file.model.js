@@ -688,18 +688,27 @@ async function cleanupOrphanFiles() {
   }
   const diskSet = new Set(diskFiles);
 
+  // Only check files in UPLOAD_DIR, not custom drive files (which have absolute paths)
   const dbRes = await pool.query(
-    "SELECT id, path FROM files WHERE type = 'file'"
+    "SELECT id, path FROM files WHERE type = 'file' AND path IS NOT NULL"
   );
   const dbSet = new Set();
   for (const row of dbRes.rows) {
     if (!row.path) continue;
+
+    // Skip custom drive files (they have absolute paths, not relative to UPLOAD_DIR)
+    if (path.isAbsolute(row.path)) {
+      continue;
+    }
+
     dbSet.add(row.path);
+    // Only delete if it's a regular upload file (relative path) that doesn't exist on disk
     if (!diskSet.has(row.path)) {
       await pool.query('DELETE FROM files WHERE id = $1', [row.id]);
     }
   }
 
+  // Clean up files on disk that aren't in database
   for (const file of diskFiles) {
     if (!dbSet.has(file)) {
       try {
