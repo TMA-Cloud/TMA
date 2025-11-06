@@ -1,17 +1,63 @@
 const { getUserStorageUsage } = require('../models/user.model');
 const checkDiskSpace = require('check-disk-space').default;
 const { sendError, sendSuccess } = require('../utils/response');
+const { CUSTOM_DRIVE_ENABLED, CUSTOM_DRIVE_PATH } = require('../config/paths');
+const pool = require('../config/db');
+const path = require('path');
 
 const STORAGE_LIMIT = Number(process.env.STORAGE_LIMIT || 100 * 1024 * 1024 * 1024);
 
+/**
+ * Calculate storage usage from custom drive path
+ * Returns used space from files in the custom drive directory
+ */
+async function getCustomDriveStorageUsage(userId) {
+  if (!CUSTOM_DRIVE_ENABLED || !CUSTOM_DRIVE_PATH) {
+    return null;
+  }
+
+  const normalizedPath = path.resolve(CUSTOM_DRIVE_PATH).toLowerCase();
+  
+  // Calculate used space from files in the custom drive path
+  const res = await pool.query(
+    `SELECT COALESCE(SUM(size), 0) AS used 
+     FROM files 
+     WHERE user_id = $1 
+       AND type = 'file' 
+       AND deleted_at IS NULL 
+       AND path IS NOT NULL 
+       AND LOWER(path) LIKE $2 || '%' ESCAPE ''`,
+    [userId, normalizedPath]
+  );
+  
+  return Number(res.rows[0].used) || 0;
+}
+
 async function storageUsage(req, res) {
   try {
-    const used = await getUserStorageUsage(req.userId);
-    const { size, free: diskFree } = await checkDiskSpace(process.env.STORAGE_PATH || __dirname);
-    const total = Math.min(size, STORAGE_LIMIT);
-    const remainingLimit = Math.max(total - used, 0);
-    const free = Math.min(diskFree, remainingLimit);
-    sendSuccess(res, { used, total, free });
+    // If custom drive is enabled, use custom drive storage calculation
+    if (CUSTOM_DRIVE_ENABLED && CUSTOM_DRIVE_PATH) {
+      const used = await getCustomDriveStorageUsage(req.userId);
+      
+      // Get disk space information for the custom drive path
+      const { size, free: diskFree } = await checkDiskSpace(CUSTOM_DRIVE_PATH);
+      
+      // Total is the actual disk size available on the custom drive path
+      const total = size;
+      
+      // Free space is the actual free space on the disk
+      const free = diskFree;
+      
+      sendSuccess(res, { used, total, free });
+    } else {
+      // Original logic for regular uploads
+      const used = await getUserStorageUsage(req.userId);
+      const { size, free: diskFree } = await checkDiskSpace(process.env.STORAGE_PATH || __dirname);
+      const total = Math.min(size, STORAGE_LIMIT);
+      const remainingLimit = Math.max(total - used, 0);
+      const free = Math.min(diskFree, remainingLimit);
+      sendSuccess(res, { used, total, free });
+    }
   } catch (err) {
     sendError(res, 500, 'Server error', err);
   }
