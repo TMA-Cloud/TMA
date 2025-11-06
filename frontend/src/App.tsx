@@ -27,20 +27,32 @@ const AppContent: React.FC = () => {
 
     switch (currentPage) {
       case "Dashboard":
-        return <Dashboard />;
+        return (
+          <div className="animate-fadeIn">
+            <Dashboard />
+          </div>
+        );
       case "Settings":
-        return <Settings />;
+        return (
+          <div className="animate-fadeIn">
+            <Settings />
+          </div>
+        );
       case "My Files":
       case "Shared with Me":
       case "Starred":
       case "Trash":
       default:
-        return <FileManager />;
+        return (
+          <div className="animate-fadeIn">
+            <FileManager />
+          </div>
+        );
     }
   };
 
   return (
-    <div className="h-screen bg-gray-50 dark:bg-gray-900 flex overflow-hidden">
+    <div className="h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-950 flex overflow-hidden">
       <Sidebar />
 
       <div
@@ -67,8 +79,13 @@ const AuthGate: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-        Loading...
+      <div className="h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-950">
+        <div className="text-center animate-fadeIn">
+          <div className="w-16 h-16 mx-auto mb-4 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-lg font-semibold text-gray-700 dark:text-gray-300 animate-pulse">
+            Loading...
+          </p>
+        </div>
       </div>
     );
   }

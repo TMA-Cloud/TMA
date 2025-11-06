@@ -49,14 +49,16 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
       <div
         data-file-id={file.id}
         className={`
-          group relative p-4 rounded-2xl border-2 cursor-pointer transition-all duration-200 transform-gpu
-          hover:shadow-xl hover:scale-105 will-change-transform backdrop-blur-md hover:z-20
+          stagger-item group relative p-4 rounded-2xl border-2 cursor-pointer
+          transition-all duration-300 ease-out transform-gpu
+          hover:shadow-2xl hover:scale-[1.03] will-change-transform backdrop-blur-md hover:z-20
+          active:scale-[0.98]
           ${
             isSelected
-              ? "border-blue-500 bg-gradient-to-br from-blue-100/80 to-blue-200/60 dark:from-blue-900/40 dark:to-blue-800/30"
+              ? "border-blue-500 bg-gradient-to-br from-blue-100/80 to-blue-200/60 dark:from-blue-900/40 dark:to-blue-800/30 shadow-lg"
               : "border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-800/80 hover:border-blue-300 dark:hover:border-blue-600 hover:bg-gradient-to-br hover:from-blue-50/60 hover:to-blue-100/40 dark:hover:from-blue-900/20 dark:hover:to-blue-800/10"
           }
-          ${isDragOver ? "ring-2 ring-blue-400" : ""}
+          ${isDragOver ? "ring-4 ring-blue-400 ring-offset-2 scale-105" : ""}
         `}
         onClick={onClick}
         onDoubleClick={onDoubleClick}
@@ -69,21 +71,21 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
         onDrop={onDrop}
       >
         <div className="flex flex-col items-center text-center">
-          <div className="relative mb-2">
+          <div className="relative mb-2 transition-transform duration-300 group-hover:scale-110">
             <FileIcon
               file={file}
-              className={`w-14 h-14 drop-shadow-md ${file.type === "folder" ? "text-blue-500" : "text-gray-600 dark:text-gray-400"}`}
+              className={`w-14 h-14 drop-shadow-md transition-all duration-300 ${file.type === "folder" ? "text-blue-500 group-hover:text-blue-600" : "text-gray-600 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-300"}`}
             />
             {file.starred && (
-              <Star className="absolute -top-2 -right-2 w-5 h-5 text-yellow-400 drop-shadow" />
+              <Star className="absolute -top-2 -right-2 w-5 h-5 text-yellow-400 drop-shadow animate-bounceIn fill-yellow-400" />
             )}
             {file.shared && (
-              <Share2 className="absolute -top-2 -left-2 w-5 h-5 text-green-400 drop-shadow" />
+              <Share2 className="absolute -top-2 -left-2 w-5 h-5 text-green-400 drop-shadow animate-bounceIn" />
             )}
             {/* Quick preview icon on hover for files */}
             {file.type === "file" && (
               <button
-                className="absolute -bottom-3 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-full p-1 shadow-md transition-all duration-200"
+                className="absolute -bottom-3 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 scale-75 group-hover:scale-100 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-full p-1.5 shadow-lg hover:shadow-xl hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:border-blue-400 transition-all duration-300 hover:scale-110"
                 tabIndex={-1}
                 title="Quick preview"
                 onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
@@ -91,7 +93,7 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
                   onDoubleClick();
                 }}
               >
-                <Eye className="w-4 h-4 text-blue-500" />
+                <Eye className="w-4 h-4 text-blue-500 transition-colors duration-200" />
               </button>
             )}
           </div>
@@ -117,13 +119,15 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
     <div
       data-file-id={file.id}
       className={`
-        group flex items-center space-x-3 p-3 rounded-xl cursor-pointer transition-all duration-200 transform-gpu
+        stagger-item group flex items-center space-x-3 p-3 rounded-xl cursor-pointer
+        transition-all duration-300 ease-out transform-gpu
+        hover:shadow-lg hover:scale-[1.01] active:scale-[0.99]
         ${
           isSelected
-            ? "bg-blue-50 dark:bg-blue-900/20 shadow-md"
+            ? "bg-blue-50 dark:bg-blue-900/20 shadow-md border-l-4 border-blue-500"
             : "hover:bg-blue-50/60 dark:hover:bg-blue-900/30 hover:bg-gradient-to-r hover:from-blue-50/60 hover:to-blue-100/40 dark:hover:from-blue-900/20 dark:hover:to-blue-800/10"
         }
-        ${isDragOver ? "ring-2 ring-blue-400" : ""}
+        ${isDragOver ? "ring-4 ring-blue-400 ring-offset-2 scale-[1.02]" : ""}
       `}
       onClick={onClick}
       onDoubleClick={onDoubleClick}
@@ -135,21 +139,21 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
       onDragLeave={onDragLeave}
       onDrop={onDrop}
     >
-      <div className="relative flex-shrink-0">
+      <div className="relative flex-shrink-0 transition-transform duration-300 group-hover:scale-110">
         <FileIcon
           file={file}
-          className={`w-10 h-10 drop-shadow-md ${file.type === "folder" ? "text-blue-500" : "text-gray-600 dark:text-gray-400"}`}
+          className={`w-10 h-10 drop-shadow-md transition-all duration-300 ${file.type === "folder" ? "text-blue-500 group-hover:text-blue-600" : "text-gray-600 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-300"}`}
         />
         {file.starred && (
-          <Star className="absolute -top-2 -right-2 w-4 h-4 text-yellow-400 drop-shadow" />
+          <Star className="absolute -top-2 -right-2 w-4 h-4 text-yellow-400 drop-shadow animate-bounceIn fill-yellow-400" />
         )}
         {file.shared && (
-          <Share2 className="absolute -top-2 -left-2 w-4 h-4 text-green-400 drop-shadow" />
+          <Share2 className="absolute -top-2 -left-2 w-4 h-4 text-green-400 drop-shadow animate-bounceIn" />
         )}
         {/* Quick preview icon on hover for files */}
         {file.type === "file" && (
           <button
-            className="absolute -bottom-3 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-full p-1 shadow-md transition-all duration-200"
+            className="absolute -bottom-3 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 scale-75 group-hover:scale-100 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-full p-1 shadow-lg hover:shadow-xl hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:border-blue-400 transition-all duration-300"
             tabIndex={-1}
             title="Quick preview"
             onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
@@ -157,18 +161,18 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
               onDoubleClick();
             }}
           >
-            <Eye className="w-4 h-4 text-blue-500" />
+            <Eye className="w-4 h-4 text-blue-500 transition-colors duration-200" />
           </button>
         )}
       </div>
 
-      <div className="flex-1 min-w-0">
+      <div className="flex-1 min-w-0 transition-transform duration-200 group-hover:translate-x-1">
         <Tooltip text={file.name}>
-          <p className="text-base font-semibold text-gray-900 dark:text-gray-100 break-words">
+          <p className="text-base font-semibold text-gray-900 dark:text-gray-100 break-words transition-colors duration-200">
             {file.name}
           </p>
         </Tooltip>
-        <p className="text-xs text-gray-500 dark:text-gray-400">
+        <p className="text-xs text-gray-500 dark:text-gray-400 transition-colors duration-200">
           {file.type === "file" &&
             file.size &&
             `${formatFileSize(file.size)} • `}

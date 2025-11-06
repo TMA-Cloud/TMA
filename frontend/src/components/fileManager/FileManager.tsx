@@ -6,6 +6,7 @@ import { MarqueeSelector } from "./MarqueeSelector";
 import { ContextMenu } from "./ContextMenu";
 import { FileItemComponent } from "./FileItem";
 import { PasteProgress } from "./PasteProgress";
+import { FileSkeleton } from "./FileSkeleton";
 import { Tooltip } from "../ui/Tooltip";
 import { ONLYOFFICE_EXTS, getExt } from "../../utils/fileUtils";
 
@@ -369,7 +370,7 @@ export const FileManager: React.FC = () => {
   return (
     <div className="p-6 space-y-6" ref={managerRef}>
       {/* Header */}
-      <div className="flex items-center justify-between rounded-2xl bg-white/80 dark:bg-gray-900/80 shadow-md px-6 py-4 mb-2 transition-all duration-300">
+      <div className="flex items-center justify-between rounded-2xl bg-white/80 dark:bg-gray-900/80 shadow-md px-6 py-4 mb-2 transition-all duration-300 backdrop-blur-lg border border-gray-200/50 dark:border-gray-700/50 animate-slideDown">
         <Breadcrumbs />
 
         <div className="flex items-center space-x-2">
@@ -377,16 +378,17 @@ export const FileManager: React.FC = () => {
             <button
               onClick={() => setViewMode("grid")}
               className={`
-                p-2 rounded-xl transition-all duration-200 shadow-sm
+                p-2 rounded-xl transition-all duration-300 ease-out shadow-sm
+                hover:scale-110 active:scale-95
                 ${
                   viewMode === "grid"
-                    ? "bg-blue-100 text-blue-600 dark:bg-blue-900/60 dark:text-blue-400 shadow-md"
-                    : "text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400"
+                    ? "bg-blue-100 text-blue-600 dark:bg-blue-900/60 dark:text-blue-400 shadow-lg scale-105"
+                    : "text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20"
                 }
               `}
               aria-label="Grid view"
             >
-              <Grid className="w-5 h-5" />
+              <Grid className="w-5 h-5 transition-transform duration-300" />
             </button>
           </Tooltip>
 
@@ -394,27 +396,28 @@ export const FileManager: React.FC = () => {
             <button
               onClick={() => setViewMode("list")}
               className={`
-                p-2 rounded-xl transition-all duration-200 shadow-sm
+                p-2 rounded-xl transition-all duration-300 ease-out shadow-sm
+                hover:scale-110 active:scale-95
                 ${
                   viewMode === "list"
-                    ? "bg-blue-100 text-blue-600 dark:bg-blue-900/60 dark:text-blue-400 shadow-md"
-                    : "text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400"
+                    ? "bg-blue-100 text-blue-600 dark:bg-blue-900/60 dark:text-blue-400 shadow-lg scale-105"
+                    : "text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20"
                 }
               `}
               aria-label="List view"
             >
-              <List className="w-5 h-5" />
+              <List className="w-5 h-5 transition-transform duration-300" />
             </button>
           </Tooltip>
 
           {canCreateFolder && (
             <Tooltip text="Create folder">
               <button
-                className="p-2 rounded-xl text-gray-500 hover:text-green-600 dark:text-gray-400 dark:hover:text-green-400 shadow-sm transition-all duration-200"
+                className="p-2 rounded-xl text-gray-500 hover:text-green-600 dark:text-gray-400 dark:hover:text-green-400 shadow-sm transition-all duration-300 hover:scale-110 active:scale-95 hover:bg-green-50 dark:hover:bg-green-900/20 hover:shadow-md"
                 onClick={() => setCreateFolderModalOpen(true)}
                 aria-label="Create folder"
               >
-                <FolderPlus className="w-5 h-5" />
+                <FolderPlus className="w-5 h-5 transition-transform duration-300" />
               </button>
             </Tooltip>
           )}
@@ -422,17 +425,17 @@ export const FileManager: React.FC = () => {
           <div className="relative">
             <Tooltip text="Sort">
               <button
-                className="p-2 rounded-xl text-gray-500 hover:text-purple-600 dark:text-gray-400 dark:hover:text-purple-400 shadow-sm transition-all duration-200"
+                className="p-2 rounded-xl text-gray-500 hover:text-purple-600 dark:text-gray-400 dark:hover:text-purple-400 shadow-sm transition-all duration-300 hover:scale-110 active:scale-95 hover:bg-purple-50 dark:hover:bg-purple-900/20 hover:shadow-md"
                 aria-label="Sort"
                 onClick={() => setShowSortMenu((s) => !s)}
               >
-                <SortAsc className="w-5 h-5" />
+                <SortAsc className="w-5 h-5 transition-transform duration-300" />
               </button>
             </Tooltip>
             {showSortMenu && (
               <div
                 ref={sortMenuRef}
-                className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl z-50"
+                className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl z-50 animate-menuIn backdrop-blur-lg"
               >
                 {(
                   [
@@ -459,9 +462,9 @@ export const FileManager: React.FC = () => {
                       setSortOrder(opt.order);
                       setShowSortMenu(false);
                     }}
-                    className={`flex items-center w-full px-3 py-2 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-700 ${
+                    className={`flex items-center w-full px-3 py-2 text-sm text-left transition-all duration-200 hover:bg-gray-100 dark:hover:bg-gray-700 hover:pl-4 ${
                       sortBy === opt.by && sortOrder === opt.order
-                        ? "bg-gray-100 dark:bg-gray-700"
+                        ? "bg-gray-100 dark:bg-gray-700 font-semibold"
                         : ""
                     }`}
                   >
@@ -505,13 +508,13 @@ export const FileManager: React.FC = () => {
           onContextMenu={(e) => handleContextMenu(e)}
         >
           {files.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-64 text-center select-none">
+            <div className="flex flex-col items-center justify-center h-64 text-center select-none animate-fadeIn">
               <svg
                 width="80"
                 height="80"
                 fill="none"
                 viewBox="0 0 80 80"
-                className="mb-4"
+                className="mb-4 animate-bounceIn"
               >
                 <rect
                   width="80"
@@ -568,13 +571,18 @@ export const FileManager: React.FC = () => {
               </p>
               {canCreateFolder && searchQuery.trim().length === 0 && (
                 <button
-                  className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-xl shadow-md transition-all duration-200"
+                  className="px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 font-semibold hover:scale-105 active:scale-95 transform animate-bounceIn"
                   onClick={() => setCreateFolderModalOpen(true)}
                 >
                   Create Folder
                 </button>
               )}
             </div>
+          ) : isSearching ? (
+            <FileSkeleton
+              viewMode={viewMode}
+              count={viewMode === "grid" ? 12 : 8}
+            />
           ) : (
             files.map((file) => (
               <div key={file.id} className="relative">

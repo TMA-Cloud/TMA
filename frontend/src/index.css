@@ -1,12 +1,16 @@
 @import "tailwindcss";
 
 @theme {
-  /* Custom Keyframes */
+  /* Custom Keyframes - Standardized timings for smoother UX */
   --animate-fadeIn: fadeIn 0.3s ease-in-out;
-  --animate-modalIn: modalIn 0.3s ease-out;
-  --animate-menuIn: menuIn 0.18s ease-out;
-  --animate-toastIn: toastIn 0.3s ease-out;
+  --animate-modalIn: modalIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-menuIn: menuIn 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-toastIn: toastIn 0.35s cubic-bezier(0.16, 1, 0.3, 1);
   --animate-bounceIn: bounceIn 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+  --animate-slideUp: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-slideDown: slideDown 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-scaleIn: scaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-shimmer: shimmer 1.5s ease-in-out infinite;
 }
 
 /* Custom Keyframes Definitions */
@@ -65,6 +69,106 @@
     transform: scale(1);
     opacity: 1;
   }
+}
+
+@keyframes slideUp {
+  0% {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideDown {
+  0% {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes scaleIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -1000px 0;
+  }
+  100% {
+    background-position: 1000px 0;
+  }
+}
+
+/* Stagger animation utilities for lists */
+.stagger-item {
+  animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+}
+
+.stagger-item:nth-child(1) {
+  animation-delay: 0.02s;
+}
+.stagger-item:nth-child(2) {
+  animation-delay: 0.04s;
+}
+.stagger-item:nth-child(3) {
+  animation-delay: 0.06s;
+}
+.stagger-item:nth-child(4) {
+  animation-delay: 0.08s;
+}
+.stagger-item:nth-child(5) {
+  animation-delay: 0.1s;
+}
+.stagger-item:nth-child(6) {
+  animation-delay: 0.12s;
+}
+.stagger-item:nth-child(7) {
+  animation-delay: 0.14s;
+}
+.stagger-item:nth-child(8) {
+  animation-delay: 0.16s;
+}
+.stagger-item:nth-child(9) {
+  animation-delay: 0.18s;
+}
+.stagger-item:nth-child(10) {
+  animation-delay: 0.2s;
+}
+.stagger-item:nth-child(11) {
+  animation-delay: 0.22s;
+}
+.stagger-item:nth-child(12) {
+  animation-delay: 0.24s;
+}
+.stagger-item:nth-child(n + 13) {
+  animation-delay: 0.26s;
+}
+
+/* Skeleton loader animation */
+.skeleton {
+  background: linear-gradient(90deg, #e0e7ef 0%, #f3f4f6 50%, #e0e7ef 100%);
+  background-size: 1000px 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+  border-radius: 0.5rem;
+}
+
+html.dark .skeleton {
+  background: linear-gradient(90deg, #1f2937 0%, #374151 50%, #1f2937 100%);
+  background-size: 1000px 100%;
 }
 
 /* --- Drag Preview Wrapper --- */
@@ -285,10 +389,32 @@ html.dark * {
   scrollbar-color: #334155 transparent;
 }
 
+html {
+  scroll-behavior: smooth;
+}
+
 html,
 body,
 #root {
   height: 100%;
   min-height: 100%;
   width: 100%;
+}
+
+/* Improve text rendering */
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Reduce motion for users who prefer it */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

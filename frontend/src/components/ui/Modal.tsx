@@ -95,24 +95,25 @@ export const Modal: React.FC<ModalProps> = ({
           className="fixed inset-0 bg-white/30 dark:bg-white/10 backdrop-blur-lg transition-opacity duration-300 ease-in-out animate-fadeIn"
           onClick={onClose}
         />
-        {/* Modal content with debug styles */}
+        {/* Modal content with enhanced animations */}
         <div
           ref={modalRef}
           onMouseDown={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
           className={`
-          relative z-10 bg-white dark:bg-gray-800 rounded-lg shadow-xl
+          relative z-10 bg-white dark:bg-gray-800 rounded-2xl shadow-2xl
           ${sizeClasses[size]} w-full max-h-[90vh] overflow-hidden
           transform transition-all duration-300 ease-out
+          animate-modalIn border border-gray-200/50 dark:border-gray-700/50
         `}
         >
-          <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+          <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-gray-50 to-white dark:from-gray-800 dark:to-gray-900">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 animate-slideDown">
               {title}
             </h3>
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-all duration-300 hover:scale-110 hover:rotate-90 active:scale-95 rounded-lg p-1 hover:bg-gray-200 dark:hover:bg-gray-700"
               aria-label="Close modal"
             >
               <X className="w-5 h-5" />
