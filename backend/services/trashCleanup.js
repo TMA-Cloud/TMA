@@ -1,28 +1,14 @@
 const { cleanupExpiredTrash } = require('../models/file.model');
+const { createPeriodicCleanup } = require('../utils/cleanupScheduler');
 
-let isTrashCleanupRunning = false;
-
-async function runTrashCleanup() {
-  if (isTrashCleanupRunning) {
-    console.log('Trash cleanup already running, skipping...');
-    return;
-  }
-  
-  isTrashCleanupRunning = true;
-  try {
-    await cleanupExpiredTrash();
-  } catch (error) {
-    console.error('Trash cleanup failed:', error);
-  } finally {
-    isTrashCleanupRunning = false;
-  }
-}
+const trashCleanupTask = createPeriodicCleanup(
+  cleanupExpiredTrash,
+  'Trash cleanup',
+  24
+);
 
 function startTrashCleanup() {
-  runTrashCleanup();
-  setInterval(() => {
-    runTrashCleanup();
-  }, 24 * 60 * 60 * 1000);
+  trashCleanupTask.start();
 }
 
 module.exports = { startTrashCleanup };

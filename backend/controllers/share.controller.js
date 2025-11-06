@@ -1,6 +1,6 @@
-const path = require('path');
-const archiver = require('archiver');
-const { resolveFilePath, isValidPath } = require('../utils/filePath');
+const { validateAndResolveFile } = require('../utils/fileDownload');
+const { sendError } = require('../utils/response');
+const { createZipArchive } = require('../utils/zipArchive');
 const {
   getFileByToken,
   getFolderContentsByShare,
@@ -26,20 +26,14 @@ async function handleShared(req, res) {
       html += `</body></html>`;
       res.send(html);
     } else {
-      if (!isValidPath(file.path)) {
-        return res.status(400).send('Invalid file path');
-      }
-      let filePath;
-      try {
-        filePath = resolveFilePath(file.path);
-      } catch (err) {
-        return res.status(400).send('Invalid file path');
+      const { success, filePath, error } = validateAndResolveFile(file);
+      if (!success) {
+        return res.status(400).send(error || 'Invalid file path');
       }
       res.download(filePath, file.name, err => { if (err) console.error(err); });
     }
   } catch (err) {
-    console.error(err);
-    res.status(500).send('Server error');
+    sendError(res, 500, 'Server error', err);
   }
 }
 
@@ -48,33 +42,9 @@ async function downloadFolderZip(req, res) {
     const file = await getFileByToken(req.params.token);
     if (!file || file.type !== 'folder') return res.status(404).send('Not found');
     const entries = await getSharedTree(req.params.token, file.id);
-
-    res.setHeader('Content-Type', 'application/zip');
-    res.setHeader('Content-Disposition', `attachment; filename="${file.name}.zip"`);
-    const archive = archiver('zip');
-    archive.on('error', err => { throw err; });
-    archive.pipe(res);
-
-    const addEntry = (id, base) => {
-      for (const entry of entries.filter(e => e.parent_id === id)) {
-        const relPath = base ? path.join(base, entry.name) : entry.name;
-        if (entry.type === 'file' && isValidPath(entry.path)) {
-          try {
-            const p = resolveFilePath(entry.path);
-            archive.file(p, { name: relPath });
-          } catch (err) {
-            console.error(`[Share] Error adding file to archive: ${entry.name}`, err);
-          }
-        } else if (entry.type === 'folder') {
-          addEntry(entry.id, relPath);
-        }
-      }
-    };
-    addEntry(file.id, file.name);
-    archive.finalize();
+    createZipArchive(res, file.name, entries, file.id, file.name);
   } catch (err) {
-    console.error(err);
-    res.status(500).send('Server error');
+    sendError(res, 500, 'Server error', err);
   }
 }
 
@@ -91,44 +61,17 @@ async function downloadSharedItem(req, res) {
     const file = res2.rows[0];
     if (!file) return res.status(404).send('Not found');
     if (file.type === 'file') {
-      if (!isValidPath(file.path)) {
-        return res.status(400).send('Invalid file path');
-      }
-      let filePath;
-      try {
-        filePath = resolveFilePath(file.path);
-      } catch (err) {
-        return res.status(400).send('Invalid file path');
+      const { success, filePath, error } = validateAndResolveFile(file);
+      if (!success) {
+        return res.status(400).send(error || 'Invalid file path');
       }
       return res.download(filePath, file.name, err => { if (err) console.error(err); });
     }
     // folder: create zip of shared contents under this folder
     const entries = await getSharedTree(token, file.id);
-    res.setHeader('Content-Type', 'application/zip');
-    res.setHeader('Content-Disposition', `attachment; filename="${file.name}.zip"`);
-    const archive = archiver('zip');
-    archive.on('error', err => { throw err; });
-    archive.pipe(res);
-    const addEntry = (id, base) => {
-      for (const entry of entries.filter(e => e.parent_id === id)) {
-        const relPath = base ? path.join(base, entry.name) : entry.name;
-        if (entry.type === 'file' && isValidPath(entry.path)) {
-          try {
-            const p = resolveFilePath(entry.path);
-            archive.file(p, { name: relPath });
-          } catch (err) {
-            console.error(`[Share] Error adding file to archive: ${entry.name}`, err);
-          }
-        } else if (entry.type === 'folder') {
-          addEntry(entry.id, relPath);
-        }
-      }
-    };
-    addEntry(file.id, file.name);
-    archive.finalize();
+    createZipArchive(res, file.name, entries, file.id, file.name);
   } catch (err) {
-    console.error(err);
-    res.status(500).send('Server error');
+    sendError(res, 500, 'Server error', err);
   }
 }
 

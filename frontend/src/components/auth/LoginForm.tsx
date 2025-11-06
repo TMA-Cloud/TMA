@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "../../contexts/AuthContext";
-import { Eye, EyeOff, Github } from "lucide-react";
+import { PasswordInput } from "./PasswordInput";
+import { SocialAuthButtons } from "./SocialAuthButtons";
+import { checkGoogleAuthEnabled } from "../../utils/api";
 
 export const LoginForm: React.FC<{ onSwitch: () => void }> = ({ onSwitch }) => {
   const { login } = useAuth();
@@ -11,10 +13,7 @@ export const LoginForm: React.FC<{ onSwitch: () => void }> = ({ onSwitch }) => {
   const [googleEnabled, setGoogleEnabled] = useState(false);
 
   useEffect(() => {
-    fetch(`${import.meta.env.VITE_API_URL}/api/google/enabled`)
-      .then((r) => r.json())
-      .then((d) => setGoogleEnabled(d.enabled))
-      .catch(() => setGoogleEnabled(false));
+    checkGoogleAuthEnabled().then(setGoogleEnabled);
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -35,29 +34,12 @@ export const LoginForm: React.FC<{ onSwitch: () => void }> = ({ onSwitch }) => {
             autoComplete="email"
           />
         </div>
-        <div className="relative">
-          <input
-            className="border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-3 w-full bg-gray-50/80 dark:bg-gray-800/80 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm transition-all duration-200 text-base pr-12"
-            type={showPassword ? "text" : "password"}
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            autoComplete="current-password"
-          />
-          <button
-            type="button"
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-blue-500 focus:outline-none"
-            tabIndex={-1}
-            onClick={() => setShowPassword((v) => !v)}
-            aria-label={showPassword ? "Hide password" : "Show password"}
-          >
-            {showPassword ? (
-              <EyeOff className="w-5 h-5" />
-            ) : (
-              <Eye className="w-5 h-5" />
-            )}
-          </button>
-        </div>
+        <PasswordInput
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          showPassword={showPassword}
+          onTogglePassword={() => setShowPassword((v) => !v)}
+        />
         {error && (
           <p
             className="text-red-500 text-sm font-medium animate-bounceIn"
@@ -72,25 +54,7 @@ export const LoginForm: React.FC<{ onSwitch: () => void }> = ({ onSwitch }) => {
         >
           Login
         </button>
-        <div className="flex flex-col gap-2 mt-2 items-center">
-          <button
-            type="button"
-            onClick={() => {
-              window.location.href = `${import.meta.env.VITE_API_URL}/api/google/login`;
-            }}
-            disabled={!googleEnabled}
-            className="flex items-center justify-center gap-2 w-full px-4 py-2 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-700 dark:text-gray-300 font-medium hover:bg-gray-200 dark:hover:bg-gray-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Continue with Google
-          </button>
-          <button
-            type="button"
-            disabled={true} // GitHub login is not implemented yet
-            className="flex items-center justify-center gap-2 w-full px-4 py-2 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-700 dark:text-gray-300 font-medium hover:bg-gray-200 dark:hover:bg-gray-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Github className="w-5 h-5" /> Continue with GitHub
-          </button>
-        </div>
+        <SocialAuthButtons googleEnabled={googleEnabled} />
         <p className="text-sm text-center text-gray-500 dark:text-gray-400">
           No account?{" "}
           <button

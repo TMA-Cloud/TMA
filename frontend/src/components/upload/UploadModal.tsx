@@ -2,6 +2,7 @@ import React, { useState, useRef } from "react";
 import { Upload, X, File, CheckCircle } from "lucide-react";
 import { Modal } from "../ui/Modal";
 import { useApp } from "../../contexts/AppContext";
+import { formatFileSize } from "../../utils/fileUtils";
 
 interface UploadFile {
   id: string;
@@ -59,13 +60,6 @@ export const UploadModal: React.FC = () => {
 
   const removeFile = (fileId: string) => {
     setUploadFiles((prev) => prev.filter((f) => f.id !== fileId));
-  };
-
-  const formatFileSize = (bytes: number) => {
-    const k = 1024;
-    const sizes = ["B", "KB", "MB", "GB"];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
   };
 
   const handleClose = () => {

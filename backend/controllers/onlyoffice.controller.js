@@ -4,6 +4,7 @@ const http = require('http');
 const https = require('https');
 const jwt = require('jsonwebtoken');
 const { resolveFilePath, isValidPath } = require('../utils/filePath');
+const { validateAndResolveFile } = require('../utils/fileDownload');
 const { getFile } = require('../models/file.model');
 const { getUserById } = require('../models/user.model');
 
@@ -128,23 +129,10 @@ async function serveFile(req, res) {
       console.error('[ONLYOFFICE] File not found in DB', id);
       return res.status(404).json({ error: 'File not found' });
     }
-    if (!fileRow.path || !isValidPath(fileRow.path)) {
-      console.error('[ONLYOFFICE] File missing or invalid path', id);
-      return res.status(404).json({ error: 'File missing or invalid path' });
-    }
-    
-    // Resolve file path (handles both relative and absolute paths)
-    let filePath;
-    try {
-      filePath = resolveFilePath(fileRow.path);
-    } catch (err) {
-      console.error('[ONLYOFFICE] Error resolving file path:', err.message);
-      return res.status(404).json({ error: 'Invalid file path' });
-    }
-
-    if (!fs.existsSync(filePath)) {
-      console.error('[ONLYOFFICE] File not found on disk', filePath);
-      return res.status(404).json({ error: 'File not found on disk' });
+    const { success, filePath, error } = validateAndResolveFile(fileRow);
+    if (!success) {
+      console.error('[ONLYOFFICE] File validation failed', id, error);
+      return res.status(404).json({ error: error || 'File not found' });
     }
 
     // Set appropriate headers

@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Download,
   Edit3,
   Trash2,
   Share2,
@@ -57,7 +56,6 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
 
   const menuItems = useMemo(
     () => [
-      { icon: Download, label: "Download", action: () => {} },
       ...(parentShared && allUnshared
         ? [
             {

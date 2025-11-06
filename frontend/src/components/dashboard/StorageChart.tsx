@@ -1,4 +1,5 @@
 import React from "react";
+import { formatFileSize } from "../../utils/fileUtils";
 
 interface StorageChartProps {
   used: number;
@@ -25,14 +26,6 @@ export const StorageChart: React.FC<StorageChartProps> = ({
   }
   const percentage = (used / total) * 100;
   const remaining = free;
-
-  const formatBytes = (bytes: number) => {
-    if (bytes === 0) return "0 Bytes";
-    const k = 1024;
-    const sizes = ["Bytes", "KB", "MB", "GB", "TB"];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
-  };
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
@@ -74,19 +67,19 @@ export const StorageChart: React.FC<StorageChartProps> = ({
         <div className="flex justify-between">
           <span className="text-gray-600 dark:text-gray-400">Used:</span>
           <span className="font-medium text-gray-900 dark:text-gray-100">
-            {formatBytes(used)}
+            {formatFileSize(used)}
           </span>
         </div>
         <div className="flex justify-between">
           <span className="text-gray-600 dark:text-gray-400">Available:</span>
           <span className="font-medium text-gray-900 dark:text-gray-100">
-            {formatBytes(remaining)}
+            {formatFileSize(remaining)}
           </span>
         </div>
         <div className="flex justify-between border-t border-gray-200 dark:border-gray-700 pt-2">
           <span className="text-gray-600 dark:text-gray-400">Total:</span>
           <span className="font-medium text-gray-900 dark:text-gray-100">
-            {formatBytes(total)}
+            {formatFileSize(total)}
           </span>
         </div>
       </div>

@@ -9,6 +9,8 @@ const {
   createUserWithGoogle,
   updateGoogleId
 } = require('../models/user.model');
+const { getCookieOptions, isValidEmail, isValidPassword, generateAuthToken } = require('../utils/auth');
+const { sendError, sendSuccess } = require('../utils/response');
 
 const JWT_SECRET = process.env.JWT_SECRET;
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
@@ -46,42 +48,34 @@ async function signup(req, res) {
     
     // Input validation
     if (!email || !password) {
-      return res.status(400).json({ message: 'Email and password required' });
+      return sendError(res, 400, 'Email and password required');
     }
     
-    // Email validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      return res.status(400).json({ message: 'Invalid email format' });
+    if (!isValidEmail(email)) {
+      return sendError(res, 400, 'Invalid email format');
     }
     
-    // Password validation
-    if (password.length < 6) {
-      return res.status(400).json({ message: 'Password must be at least 6 characters' });
+    if (!isValidPassword(password)) {
+      return sendError(res, 400, 'Password must be at least 6 characters');
     }
     
     // Name validation (if provided)
     if (name && (typeof name !== 'string' || name.trim().length === 0)) {
-      return res.status(400).json({ message: 'Invalid name' });
+      return sendError(res, 400, 'Invalid name');
     }
+    
     const existing = await getUserByEmail(email);
     if (existing) {
-      return res.status(409).json({ message: 'Email already in use' });
+      return sendError(res, 409, 'Email already in use');
     }
+    
     const hashed = await bcrypt.hash(password, 10);
     const user = await createUser(email, hashed, name);
-    const token = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: '7d' });
-    const cookieOptions = {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
-    };
-    res.cookie('token', token, cookieOptions);
-    res.json({ user });
+    const token = generateAuthToken(user.id, JWT_SECRET);
+    res.cookie('token', token, getCookieOptions());
+    sendSuccess(res, { user });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Server error' });
+    sendError(res, 500, 'Server error', err);
   }
 }
 
@@ -89,33 +83,29 @@ async function login(req, res) {
   try {
     const { email, password } = req.body;
     
-    // Input validation
     if (!email || !password) {
-      return res.status(400).json({ message: 'Email and password required' });
+      return sendError(res, 400, 'Email and password required');
     }
     
-    // Email validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      return res.status(400).json({ message: 'Invalid email format' });
+    if (!isValidEmail(email)) {
+      return sendError(res, 400, 'Invalid email format');
     }
     
     const user = await getUserByEmail(email);
-    if (!user) return res.status(401).json({ message: 'Invalid credentials' });
+    if (!user) {
+      return sendError(res, 401, 'Invalid credentials');
+    }
+    
     const valid = await bcrypt.compare(password, user.password);
-    if (!valid) return res.status(401).json({ message: 'Invalid credentials' });
-    const token = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: '7d' });
-    const cookieOptions = {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
-    };
-    res.cookie('token', token, cookieOptions);
-    res.json({ user: { id: user.id, email: user.email, name: user.name } });
+    if (!valid) {
+      return sendError(res, 401, 'Invalid credentials');
+    }
+
+    const token = generateAuthToken(user.id, JWT_SECRET);
+    res.cookie('token', token, getCookieOptions());
+    sendSuccess(res, { user: { id: user.id, email: user.email, name: user.name } });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Server error' });
+    sendError(res, 500, 'Server error', err);
   }
 }
 
@@ -159,14 +149,8 @@ async function googleCallback(req, res) {
       }
     }
 
-    const token = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: '7d' });
-    const cookieOptions = {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000
-    };
-    res.cookie('token', token, cookieOptions);
+    const token = generateAuthToken(user.id, JWT_SECRET);
+    res.cookie('token', token, getCookieOptions());
     res.redirect(CLIENT_URL);
   } catch (err) {
     console.error(err);
@@ -182,11 +166,12 @@ function logout(req, res) {
 async function profile(req, res) {
   try {
     const user = await getUserById(req.userId);
-    if (!user) return res.status(404).json({ message: 'Not found' });
-    res.json(user);
+    if (!user) {
+      return sendError(res, 404, 'Not found');
+    }
+    sendSuccess(res, user);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Server error' });
+    sendError(res, 500, 'Server error', err);
   }
 }
 

@@ -1,6 +1,5 @@
-const path = require('path');
-const fs = require('fs');
-const { resolveFilePath, isValidPath } = require('../utils/filePath');
+const { validateAndResolveFile } = require('../utils/fileDownload');
+const { sendError, sendSuccess } = require('../utils/response');
 const {
   getFiles,
   createFolder,
@@ -30,34 +29,36 @@ const pool = require('../config/db');
 const { userOperationLock, fileOperationLock } = require('../utils/mutex');
 
 async function listFiles(req, res) {
-  const parentId = req.query.parentId || null;
-  const sortBy = req.query.sortBy;
-  const order = req.query.order;
   try {
+    const parentId = req.query.parentId || null;
+    const sortBy = req.query.sortBy;
+    const order = req.query.order;
     const files = await getFiles(req.userId, parentId, sortBy, order);
-    res.json(files);
+    sendSuccess(res, files);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Server error' });
+    sendError(res, 500, 'Server error', err);
   }
 }
 
 async function addFolder(req, res) {
-  const { name, parentId = null } = req.body;
-  if (!name) return res.status(400).json({ message: 'Name required' });
   try {
+    const { name, parentId = null } = req.body;
+    if (!name) {
+      return sendError(res, 400, 'Name required');
+    }
     const folder = await createFolder(name, parentId, req.userId);
-    res.json(folder);
+    sendSuccess(res, folder);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Server error' });
+    sendError(res, 500, 'Server error', err);
   }
 }
 
 async function uploadFile(req, res) {
-  if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
-  const parentId = req.body.parentId || null;
   try {
+    if (!req.file) {
+      return sendError(res, 400, 'No file uploaded');
+    }
+    const parentId = req.body.parentId || null;
     const file = await userOperationLock(req.userId, async () => {
       return await createFile(
         req.file.originalname,
@@ -68,114 +69,100 @@ async function uploadFile(req, res) {
         req.userId
       );
     });
-    res.json(file);
+    sendSuccess(res, file);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Server error' });
+    sendError(res, 500, 'Server error', err);
   }
 }
 
 async function moveFilesController(req, res) {
-  const { ids, parentId = null } = req.body;
-  if (!Array.isArray(ids) || ids.length === 0) {
-    return res.status(400).json({ message: 'ids required' });
-  }
   try {
+    const { ids, parentId = null } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return sendError(res, 400, 'ids required');
+    }
     await userOperationLock(req.userId, async () => {
       await moveFiles(ids, parentId, req.userId);
     });
-    res.json({ success: true });
+    sendSuccess(res, { success: true });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Server error' });
+    sendError(res, 500, 'Server error', err);
   }
 }
 
 async function copyFilesController(req, res) {
-  const { ids, parentId = null } = req.body;
-  if (!Array.isArray(ids) || ids.length === 0) {
-    return res.status(400).json({ message: 'ids required' });
-  }
   try {
+    const { ids, parentId = null } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return sendError(res, 400, 'ids required');
+    }
     await userOperationLock(req.userId, async () => {
       await copyFiles(ids, parentId, req.userId);
     });
-    res.json({ success: true });
+    sendSuccess(res, { success: true });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Server error' });
+    sendError(res, 500, 'Server error', err);
   }
 }
 
 async function downloadFile(req, res) {
   try {
     const file = await getFile(req.params.id, req.userId);
-    if (!file) return res.status(404).json({ message: 'File not found' });
-    
-    // Validate file path to prevent path traversal
-    if (!isValidPath(file.path)) {
-      return res.status(400).json({ message: 'Invalid file path' });
+    if (!file) {
+      return sendError(res, 404, 'File not found');
     }
     
-    // Resolve file path (handles both relative and absolute paths)
-    let filePath;
-    try {
-      filePath = resolveFilePath(file.path);
-    } catch (err) {
-      return res.status(400).json({ message: err.message || 'Invalid file path' });
-    }
-    
-    // Check if file exists
-    if (!fs.existsSync(filePath)) {
-      return res.status(404).json({ message: 'File not found on disk' });
+    const { success, filePath, error } = validateAndResolveFile(file);
+    if (!success) {
+      return sendError(res, filePath ? 400 : 404, error);
     }
     
     res.type(file.mimeType);
     res.sendFile(filePath);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Server error' });
+    sendError(res, 500, 'Server error', err);
   }
 }
 
 async function renameFileController(req, res) {
-  const { id, name } = req.body;
-  if (!id || !name) return res.status(400).json({ message: 'id and name required' });
   try {
+    const { id, name } = req.body;
+    if (!id || !name) {
+      return sendError(res, 400, 'id and name required');
+    }
     const file = await renameFile(id, name, req.userId);
-    if (!file) return res.status(404).json({ message: 'Not found' });
-    res.json(file);
+    if (!file) {
+      return sendError(res, 404, 'Not found');
+    }
+    sendSuccess(res, file);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Server error' });
+    sendError(res, 500, 'Server error', err);
   }
 }
 
 async function starFilesController(req, res) {
-  const { ids, starred } = req.body;
-  if (!Array.isArray(ids) || ids.length === 0 || typeof starred !== 'boolean') {
-    return res.status(400).json({ message: 'ids and starred required' });
-  }
   try {
+    const { ids, starred } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0 || typeof starred !== 'boolean') {
+      return sendError(res, 400, 'ids and starred required');
+    }
     await setStarred(ids, starred, req.userId);
-    res.json({ success: true });
+    sendSuccess(res, { success: true });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Server error' });
+    sendError(res, 500, 'Server error', err);
   }
 }
 
 async function shareFilesController(req, res) {
   const { ids, shared } = req.body;
   if (!Array.isArray(ids) || ids.length === 0 || typeof shared !== 'boolean') {
-    return res.status(400).json({ message: 'ids and shared required' });
+    return sendError(res, 400, 'ids and shared required');
   }
   
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     
-    const affected = await setShared(ids, shared, req.userId);
     const links = {};
     
     if (shared) {
@@ -198,22 +185,21 @@ async function shareFilesController(req, res) {
     }
     
     await client.query('COMMIT');
-    res.json({ success: true, links });
+    sendSuccess(res, { success: true, links });
   } catch (err) {
     await client.query('ROLLBACK');
-    console.error(err);
-    res.status(500).json({ message: 'Server error' });
+    sendError(res, 500, 'Server error', err);
   } finally {
     client.release();
   }
 }
 
 async function linkParentShareController(req, res) {
-  const { ids } = req.body;
-  if (!Array.isArray(ids) || ids.length === 0) {
-    return res.status(400).json({ message: 'ids required' });
-  }
   try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return sendError(res, 400, 'ids required');
+    }
     const links = {};
     for (const id of ids) {
       const parentRes = await pool.query(
@@ -229,10 +215,9 @@ async function linkParentShareController(req, res) {
       await setShared([id], true, req.userId);
       links[id] = shareId;
     }
-    res.json({ success: true, links });
+    sendSuccess(res, { success: true, links });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Server error' });
+    sendError(res, 500, 'Server error', err);
   }
 }
 
@@ -241,10 +226,9 @@ async function listStarred(req, res) {
     const sortBy = req.query.sortBy;
     const order = req.query.order;
     const files = await getStarredFiles(req.userId, sortBy, order);
-    res.json(files);
+    sendSuccess(res, files);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Server error' });
+    sendError(res, 500, 'Server error', err);
   }
 }
 
@@ -253,24 +237,22 @@ async function listShared(req, res) {
     const sortBy = req.query.sortBy;
     const order = req.query.order;
     const files = await getSharedFiles(req.userId, sortBy, order);
-    res.json(files);
+    sendSuccess(res, files);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Server error' });
+    sendError(res, 500, 'Server error', err);
   }
 }
 
 async function deleteFilesController(req, res) {
-  const { ids } = req.body;
-  if (!Array.isArray(ids) || ids.length === 0) {
-    return res.status(400).json({ message: 'ids required' });
-  }
   try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return sendError(res, 400, 'ids required');
+    }
     await deleteFiles(ids, req.userId);
-    res.json({ success: true });
+    sendSuccess(res, { success: true });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Server error' });
+    sendError(res, 500, 'Server error', err);
   }
 }
 
@@ -279,41 +261,38 @@ async function listTrash(req, res) {
     const sortBy = req.query.sortBy;
     const order = req.query.order;
     const files = await getTrashFiles(req.userId, sortBy, order);
-    res.json(files);
+    sendSuccess(res, files);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Server error' });
+    sendError(res, 500, 'Server error', err);
   }
 }
 
 async function deleteForeverController(req, res) {
-  const { ids } = req.body;
-  if (!Array.isArray(ids) || ids.length === 0) {
-    return res.status(400).json({ message: 'ids required' });
-  }
   try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return sendError(res, 400, 'ids required');
+    }
     await permanentlyDeleteFiles(ids, req.userId);
-    res.json({ success: true });
+    sendSuccess(res, { success: true });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Server error' });
+    sendError(res, 500, 'Server error', err);
   }
 }
 
 async function searchFilesController(req, res) {
-  const query = req.query.q || req.query.query || '';
-  const limit = parseInt(req.query.limit, 10) || 100;
-
-  if (!query || query.trim().length === 0) {
-    return res.status(400).json({ message: 'Search query required' });
-  }
-
   try {
+    const query = req.query.q || req.query.query || '';
+    const limit = parseInt(req.query.limit, 10) || 100;
+
+    if (!query || query.trim().length === 0) {
+      return sendError(res, 400, 'Search query required');
+    }
+
     const files = await searchFiles(req.userId, query, limit);
-    res.json(files);
+    sendSuccess(res, files);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Server error' });
+    sendError(res, 500, 'Server error', err);
   }
 }
 

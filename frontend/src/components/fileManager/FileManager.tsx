@@ -7,13 +7,7 @@ import { ContextMenu } from "./ContextMenu";
 import { FileItemComponent } from "./FileItem";
 import { PasteProgress } from "./PasteProgress";
 import { Tooltip } from "../ui/Tooltip";
-import { ONLYOFFICE_EXTS } from "../../utils/fileUtils";
-
-function getExt(name?: string) {
-  if (!name) return "";
-  const idx = name.lastIndexOf(".");
-  return idx >= 0 ? name.slice(idx).toLowerCase() : "";
-}
+import { ONLYOFFICE_EXTS, getExt } from "../../utils/fileUtils";
 
 const transparentImage = new Image();
 transparentImage.src =
@@ -289,8 +283,6 @@ export const FileManager: React.FC = () => {
         setImageViewerFile(file);
       } else if (ONLYOFFICE_EXTS.has(getExt(file.name))) {
         setDocumentViewerFile?.(file);
-      } else {
-        console.log("Open file:", file.name);
       }
     }
   };

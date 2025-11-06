@@ -114,7 +114,7 @@ export const ONLYOFFICE_EXTS = new Set([
   ".pdf",
 ]);
 
-function getExt(name?: string) {
+export function getExt(name?: string) {
   if (!name) return "";
   const idx = name.lastIndexOf(".");
   return idx >= 0 ? name.slice(idx).toLowerCase() : "";

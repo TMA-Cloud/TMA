@@ -1,13 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { ExternalLink } from "lucide-react";
 import { useApp } from "../../contexts/AppContext";
-import { ONLYOFFICE_EXTS } from "../../utils/fileUtils";
-
-function getExt(name?: string) {
-  if (!name) return "";
-  const idx = name.lastIndexOf(".");
-  return idx >= 0 ? name.slice(idx).toLowerCase() : "";
-}
+import { ONLYOFFICE_EXTS, getExt } from "../../utils/fileUtils";
 
 interface DocsAPIEditor {
   destroyEditor?: () => void;
