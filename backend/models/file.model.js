@@ -849,6 +849,32 @@ async function searchFiles(userId, query, limit = 100) {
   return files;
 }
 
+/**
+ * Get file statistics for a user
+ * Returns total counts of files, folders, shared items, and starred items
+ * @param {string} userId - User ID to get stats for
+ * @returns {Promise<Object>} Object with totalFiles, totalFolders, sharedCount, starredCount
+ */
+async function getFileStats(userId) {
+  const result = await pool.query(
+    `SELECT 
+      COUNT(*) FILTER (WHERE type = 'file' AND deleted_at IS NULL) AS "totalFiles",
+      COUNT(*) FILTER (WHERE type = 'folder' AND deleted_at IS NULL) AS "totalFolders",
+      COUNT(*) FILTER (WHERE shared = TRUE AND deleted_at IS NULL) AS "sharedCount",
+      COUNT(*) FILTER (WHERE starred = TRUE AND deleted_at IS NULL) AS "starredCount"
+     FROM files
+     WHERE user_id = $1`,
+    [userId]
+  );
+  
+  return {
+    totalFiles: parseInt(result.rows[0].totalFiles, 10) || 0,
+    totalFolders: parseInt(result.rows[0].totalFolders, 10) || 0,
+    sharedCount: parseInt(result.rows[0].sharedCount, 10) || 0,
+    starredCount: parseInt(result.rows[0].starredCount, 10) || 0,
+  };
+}
+
 module.exports = {
   getFiles,
   createFolder,
@@ -868,4 +894,5 @@ module.exports = {
   cleanupExpiredTrash,
   cleanupOrphanFiles,
   searchFiles,
+  getFileStats,
 };

@@ -1,9 +1,17 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState } from "react";
 import { StorageChart } from "./StorageChart";
 import { RecentFiles } from "./RecentFiles";
 import { useApp } from "../../contexts/AppContext";
 import { Upload, FolderPlus, Share2, Star } from "lucide-react";
 import { useStorageUsage } from "../../hooks/useStorageUsage";
+import { apiGet } from "../../utils/api";
+
+interface FileStats {
+  totalFiles: number;
+  totalFolders: number;
+  sharedCount: number;
+  starredCount: number;
+}
 
 export const Dashboard: React.FC = () => {
   const {
@@ -13,6 +21,28 @@ export const Dashboard: React.FC = () => {
     setCurrentPath,
   } = useApp();
   const { usage, loading } = useStorageUsage();
+  const [stats, setStats] = useState<FileStats>({
+    totalFiles: 0,
+    totalFolders: 0,
+    sharedCount: 0,
+    starredCount: 0,
+  });
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const data = await apiGet<FileStats>("/api/files/stats");
+        setStats(data);
+      } catch (error) {
+        console.error("Failed to fetch file stats", error);
+      }
+    };
+
+    fetchStats();
+    // Refresh stats periodically to keep counts up to date
+    const interval = setInterval(fetchStats, 30000); // Refresh every 30 seconds
+    return () => clearInterval(interval);
+  }, []);
 
   const quickActions = [
     {
@@ -41,24 +71,12 @@ export const Dashboard: React.FC = () => {
     },
   ];
 
-  const fileCount = useMemo(
-    () => files.filter((f) => f.type === "file").length,
-    [files],
-  );
-  const folderCount = useMemo(
-    () => files.filter((f) => f.type === "folder").length,
-    [files],
-  );
-  const sharedCount = useMemo(
-    () => files.filter((f) => f.shared).length,
-    [files],
-  );
-  const starredCount = useMemo(
-    () => files.filter((f) => f.starred).length,
-    [files],
-  );
+  const fileCount = stats.totalFiles;
+  const folderCount = stats.totalFolders;
+  const sharedCount = stats.sharedCount;
+  const starredCount = stats.starredCount;
 
-  const stats = [
+  const statsData = [
     { label: "Total Files", value: fileCount },
     { label: "Folders", value: folderCount },
     { label: "Shared", value: sharedCount },
@@ -102,7 +120,7 @@ export const Dashboard: React.FC = () => {
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {stats.map((stat, index) => (
+        {statsData.map((stat, index) => (
           <div
             key={index}
             className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 shadow-md flex flex-col items-center animate-bounceIn"

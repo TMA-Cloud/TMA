@@ -16,6 +16,7 @@ const {
   listTrash,
   deleteForever,
   searchFiles,
+  getFileStats,
 } = require('../controllers/file.controller');
 const auth = require('../middleware/auth.middleware');
 const upload = require('../utils/multer');
@@ -24,6 +25,7 @@ const router = express.Router();
 router.use(auth);
 
 router.get('/', listFiles);
+router.get('/stats', getFileStats);
 router.get('/search', searchFiles);
 router.post('/folder', addFolder);
 router.post('/upload', upload.single('file'), uploadFile);

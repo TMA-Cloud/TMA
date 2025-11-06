@@ -17,6 +17,7 @@ const {
   getTrashFiles,
   permanentlyDeleteFiles,
   searchFiles,
+  getFileStats,
 } = require('../models/file.model');
 const {
   createShareLink,
@@ -296,6 +297,15 @@ async function searchFilesController(req, res) {
   }
 }
 
+async function getFileStatsController(req, res) {
+  try {
+    const stats = await getFileStats(req.userId);
+    sendSuccess(res, stats);
+  } catch (err) {
+    sendError(res, 500, 'Server error', err);
+  }
+}
+
 module.exports = {
   listFiles,
   addFolder,
@@ -313,4 +323,5 @@ module.exports = {
   listTrash,
   deleteForever: deleteForeverController,
   searchFiles: searchFilesController,
+  getFileStats: getFileStatsController,
 };
