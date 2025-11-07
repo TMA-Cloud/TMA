@@ -1,0 +1,67 @@
+# TMA Cloud
+
+A self-hosted cloud storage platform providing robust file storage and management capabilities.
+
+## Features
+
+- 🔐 **Authentication**: JWT-based auth with optional Google OAuth
+- 📁 **File Management**: Upload, download, organize, and manage files and folders
+- 🔗 **Sharing**: Create shareable links for files and folders
+- 📝 **Document Editing**: OnlyOffice integration for online document editing
+- 🎨 **Modern UI**: React + TypeScript frontend with Tailwind CSS
+- 🗄️ **PostgreSQL**: Robust database with automatic migrations
+- 🧹 **Background Services**: Automatic cleanup of trash and orphaned files
+
+## Quick Start
+
+### Prerequisites
+
+- Node.js (v25+)
+- PostgreSQL (v17+)
+- npm or yarn
+
+### Installation
+
+```bash
+git clone https://github.com/TMA-Cloud/TMA.git
+cd TMA
+```
+
+```bash
+cd backend
+npm install
+cp .env.example .env
+# Edit .env with your configuration
+npm start
+```
+
+```bash
+cd ../frontend
+npm install
+cp .env.example .env
+# Edit .env with your configuration
+npm run dev
+```
+
+For detailed setup instructions, see [docs/setup.md](docs/setup.md).
+
+## Documentation
+
+- [Features](docs/features.md)
+- [Database Schema](docs/database.md)
+- [API Documentation](docs/api.md)
+- [Setup & Installation](docs/setup.md)
+- [Architecture Overview](docs/architecture.md)
+- [Environment Variables](docs/environment.md)
+
+## Contributing
+
+Pull requests are welcome! Feel free to open issues for any bugs or feature requests.
+
+## License
+
+This project is released under the [MIT License](LICENSE).
+
+## Credits
+
+- [**Zinadin Zidan**](https://github.com/ZIDAN44) - Developer and creator.
