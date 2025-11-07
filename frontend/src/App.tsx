@@ -39,7 +39,7 @@ const AppContent: React.FC = () => {
           </div>
         );
       case "My Files":
-      case "Shared with Me":
+      case "Shared":
       case "Starred":
       case "Trash":
       default:

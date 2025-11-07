@@ -16,9 +16,9 @@ const navigationItems = [
   { id: "files", label: "My Files", icon: FolderOpen, path: ["My Files"] },
   {
     id: "shared",
-    label: "Shared with Me",
+    label: "Shared",
     icon: Share2,
-    path: ["Shared with Me"],
+    path: ["Shared"],
   },
   { id: "starred", label: "Starred", icon: Star, path: ["Starred"] },
   { id: "trash", label: "Trash", icon: Trash2, path: ["Trash"] },

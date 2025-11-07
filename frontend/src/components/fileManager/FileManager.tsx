@@ -550,7 +550,7 @@ export const FileManager: React.FC = () => {
                     : "No results found"
                   : currentPath[0] === "Starred"
                     ? "No starred files"
-                    : currentPath[0] === "Shared with Me"
+                    : currentPath[0] === "Shared"
                       ? "No shared files"
                       : currentPath[0] === "Trash"
                         ? "Trash is empty"
@@ -563,7 +563,7 @@ export const FileManager: React.FC = () => {
                     : `No files or folders match "${searchQuery}"`
                   : currentPath[0] === "Starred"
                     ? "Star files to easily find them later."
-                    : currentPath[0] === "Shared with Me"
+                    : currentPath[0] === "Shared"
                       ? "Files others share with you will show up here."
                       : currentPath[0] === "Trash"
                         ? "Deleted files will appear here."

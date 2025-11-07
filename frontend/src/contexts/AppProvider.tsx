@@ -57,10 +57,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         let url: string | URL = `${import.meta.env.VITE_API_URL}/api/files`;
         if (currentPath[0] === "Starred" && folderStack.length === 1) {
           url = `${import.meta.env.VITE_API_URL}/api/files/starred`;
-        } else if (
-          currentPath[0] === "Shared with Me" &&
-          folderStack.length === 1
-        ) {
+        } else if (currentPath[0] === "Shared" && folderStack.length === 1) {
           url = `${import.meta.env.VITE_API_URL}/api/files/shared`;
         } else if (currentPath[0] === "Trash" && folderStack.length === 1) {
           url = `${import.meta.env.VITE_API_URL}/api/files/trash`;

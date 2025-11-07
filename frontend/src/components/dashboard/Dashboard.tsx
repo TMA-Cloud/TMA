@@ -61,7 +61,7 @@ export const Dashboard: React.FC = () => {
       title: "Share Files",
       icon: Share2,
       color: "bg-purple-500 hover:bg-purple-600",
-      onClick: () => setCurrentPath(["Shared with Me"]),
+      onClick: () => setCurrentPath(["Shared"]),
     },
     {
       title: "Starred Items",

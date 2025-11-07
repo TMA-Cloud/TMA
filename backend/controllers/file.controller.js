@@ -248,12 +248,14 @@ async function shareFilesController(req, res) {
           }
           links[id] = token;
         }
+        await setShared(validatedIds, true, req.userId);
       } else {
         const treeIds = await getRecursiveIds(validatedIds, req.userId);
         await removeFilesFromShares(treeIds, req.userId);
         for (const id of validatedIds) {
           await deleteShareLink(id, req.userId);
         }
+        await setShared(validatedIds, false, req.userId);
       }
       
       await client.query('COMMIT');
