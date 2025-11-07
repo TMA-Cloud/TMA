@@ -82,3 +82,30 @@ export async function checkGoogleAuthEnabled(): Promise<boolean> {
     return false;
   }
 }
+
+/**
+ * Get signup status and whether current user can toggle it
+ */
+export async function getSignupStatus(): Promise<{
+  signupEnabled: boolean;
+  canToggle: boolean;
+}> {
+  try {
+    return await apiGet<{ signupEnabled: boolean; canToggle: boolean }>(
+      "/api/user/signup-status",
+    );
+  } catch {
+    return { signupEnabled: true, canToggle: false };
+  }
+}
+
+/**
+ * Toggle signup enabled/disabled (only for first user)
+ */
+export async function toggleSignup(
+  enabled: boolean,
+): Promise<{ signupEnabled: boolean }> {
+  return await apiPost<{ signupEnabled: boolean }>("/api/user/signup-toggle", {
+    enabled,
+  });
+}

@@ -104,6 +104,32 @@ Junction table linking share links to files.
 - `share_link_id` → `share_links.id` (ON DELETE CASCADE)
 - `file_id` → `files.id` (ON DELETE CASCADE)
 
+### `app_settings`
+
+Stores application-wide settings.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | TEXT | PRIMARY KEY | Settings identifier (always 'app_settings') |
+| `signup_enabled` | BOOLEAN | DEFAULT true | Whether new user registration is enabled |
+| `first_user_id` | TEXT | UNIQUE, FK → users.id | Immutable ID of the first user (set once) |
+| `updated_at` | TIMESTAMPTZ | DEFAULT now() | Last update timestamp |
+
+**Indexes:**
+
+- Primary key on `id`
+- Unique index on `first_user_id`
+
+**Foreign Keys:**
+
+- `first_user_id` → `users.id` (ON DELETE RESTRICT) - Prevents deletion of first user
+
+**Notes:**
+
+- Only one row exists in this table (id = 'app_settings')
+- `first_user_id` is set when the first user signs up and cannot be changed afterward
+- The foreign key constraint with `ON DELETE RESTRICT` prevents deletion of the first user
+
 ### `migrations`
 
 Tracks applied database migrations.
@@ -194,9 +220,10 @@ Tracks applied database migrations.
 
 ### Foreign Key Constraints
 
-- All foreign keys use `ON DELETE CASCADE` to maintain referential integrity
+- Most foreign keys use `ON DELETE CASCADE` to maintain referential integrity
 - Deleting a user deletes all their files and share links
 - Deleting a folder deletes all child files/folders
+- **Exception**: `app_settings.first_user_id` uses `ON DELETE RESTRICT` to prevent deletion of the first user
 
 ## Migrations
 
@@ -215,6 +242,7 @@ Migrations are stored in `backend/migrations/` and applied automatically on serv
 9. `009_add_deleted_at.sql` - Soft delete support
 10. `010_add_google_auth.sql` - Google OAuth support
 11. `011_add_search_index.sql` - Full-text search index
+12. `012_add_signup_setting.sql` - Signup control settings table
 
 ## Query Patterns
 

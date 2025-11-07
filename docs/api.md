@@ -22,6 +22,8 @@ Cookie: token=<jwt_token>
 
 Create a new user account.
 
+**Note:** This endpoint respects the signup enabled/disabled setting. If signup is disabled, returns 403 Forbidden.
+
 **Request Body:**
 
 ```json
@@ -32,7 +34,7 @@ Create a new user account.
 }
 ```
 
-**Response:**
+**Response (Success):**
 
 ```json
 {
@@ -45,6 +47,22 @@ Create a new user account.
   }
 }
 ```
+
+**Response (Signup Disabled):**
+
+```json
+{
+  "message": "Signup is currently disabled"
+}
+```
+
+**Status Codes:**
+
+- `200` - User created successfully
+- `400` - Invalid input (email/password validation)
+- `403` - Signup is currently disabled
+- `409` - Email already in use
+- `500` - Server error
 
 #### POST `/api/login`
 
@@ -125,6 +143,8 @@ Initiate Google OAuth login (redirects to Google).
 #### GET `/api/google/callback`
 
 Google OAuth callback endpoint.
+
+**Note:** If signup is disabled and the user doesn't exist, redirects to frontend with `?error=signup_disabled`.
 
 ---
 
@@ -517,6 +537,64 @@ Get storage usage information.
 
 - If custom drive is enabled, returns actual disk space from the custom drive path
 - Otherwise, returns user storage usage with storage limit
+
+#### GET `/api/user/signup-status`
+
+Get current signup status and whether the current user can toggle it.
+
+**Headers:** Requires authentication
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "signupEnabled": false,
+  "canToggle": true
+}
+```
+
+**Response Fields:**
+
+- `signupEnabled` (boolean): Whether new user registration is currently enabled
+- `canToggle` (boolean): Whether the current user has permission to toggle signup (only true for first user)
+
+#### POST `/api/user/signup-toggle`
+
+Enable or disable user signup. Only the first user can perform this action.
+
+**Headers:** Requires authentication
+
+**Request Body:**
+
+```json
+{
+  "enabled": true
+}
+```
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "signupEnabled": true
+}
+```
+
+**Status Codes:**
+
+- `200` - Signup status updated successfully
+- `400` - Invalid request (enabled must be boolean)
+- `403` - Only the first user can toggle signup
+- `500` - Server error
+
+**Security Notes:**
+
+- Only the first user (oldest account by creation date) can toggle signup
+- The first user ID is immutable once set
+- All operations use database transactions for atomicity
+- Unauthorized attempts are logged
 
 ---
 

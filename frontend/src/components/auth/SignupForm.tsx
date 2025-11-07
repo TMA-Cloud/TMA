@@ -21,8 +21,12 @@ export const SignupForm: React.FC<{ onSwitch: () => void }> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const ok = await signup(email, password, name);
-    if (!ok) setError("Failed to sign up");
+    setError("");
+    try {
+      await signup(email, password, name);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to sign up");
+    }
   };
 
   return (

@@ -1,12 +1,56 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { useAuth } from "../../contexts/AuthContext";
 import { useStorageUsage } from "../../hooks/useStorageUsage";
-import { User, HardDrive } from "lucide-react";
+import { User, HardDrive, Settings as SettingsIcon } from "lucide-react";
 import { formatFileSize } from "../../utils/fileUtils";
+import { getSignupStatus, toggleSignup } from "../../utils/api";
+import { useToast } from "../../hooks/useToast";
 
 export const Settings: React.FC = () => {
   const { user } = useAuth();
   const { usage, loading } = useStorageUsage();
+  const { showToast } = useToast();
+  const [signupEnabled, setSignupEnabled] = useState(false);
+  const [canToggleSignup, setCanToggleSignup] = useState(false);
+  const [loadingSignupStatus, setLoadingSignupStatus] = useState(true);
+  const [togglingSignup, setTogglingSignup] = useState(false);
+
+  useEffect(() => {
+    loadSignupStatus();
+  }, []);
+
+  const loadSignupStatus = async () => {
+    try {
+      setLoadingSignupStatus(true);
+      const status = await getSignupStatus();
+      setSignupEnabled(status.signupEnabled);
+      setCanToggleSignup(status.canToggle);
+    } catch (error) {
+      console.error("Failed to load signup status:", error);
+    } finally {
+      setLoadingSignupStatus(false);
+    }
+  };
+
+  const handleToggleSignup = async () => {
+    if (!canToggleSignup || togglingSignup) return;
+
+    try {
+      setTogglingSignup(true);
+      const newStatus = !signupEnabled;
+      await toggleSignup(newStatus);
+      setSignupEnabled(newStatus);
+      showToast(
+        newStatus ? "Signup enabled" : "Signup disabled",
+        newStatus ? "success" : "info",
+      );
+    } catch (error) {
+      console.error("Failed to toggle signup:", error);
+      showToast("Failed to update signup setting", "error");
+    } finally {
+      setTogglingSignup(false);
+    }
+  };
 
   const settingsSections = [
     {
@@ -34,6 +78,22 @@ export const Settings: React.FC = () => {
         },
       ],
     },
+    ...(canToggleSignup
+      ? [
+          {
+            title: "Administration",
+            icon: SettingsIcon,
+            items: [
+              {
+                label: "Allow User Signup",
+                value: signupEnabled,
+                toggle: true,
+                description: "Enable or disable new user registration",
+              },
+            ],
+          },
+        ]
+      : []),
   ];
 
   return (
@@ -78,20 +138,30 @@ export const Settings: React.FC = () => {
                     </div>
 
                     {"toggle" in item && item.toggle !== undefined ? (
-                      <button
-                        className={`
-                          relative inline-flex h-6 w-11 items-center rounded-full transition-colors
-                          ${item.value ? "bg-blue-500" : "bg-gray-200 dark:bg-gray-600"}
-                        `}
-                        aria-label={item.label}
-                      >
-                        <span
+                      <div className="flex flex-col items-end">
+                        <button
+                          onClick={handleToggleSignup}
+                          disabled={togglingSignup || loadingSignupStatus}
                           className={`
-                            inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-300
-                            ${item.value ? "translate-x-6" : "translate-x-1"}
+                            relative inline-flex h-6 w-11 items-center rounded-full transition-colors
+                            ${item.value ? "bg-blue-500" : "bg-gray-200 dark:bg-gray-600"}
+                            ${togglingSignup || loadingSignupStatus ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}
                           `}
-                        />
-                      </button>
+                          aria-label={item.label}
+                        >
+                          <span
+                            className={`
+                              inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-300
+                              ${item.value ? "translate-x-6" : "translate-x-1"}
+                            `}
+                          />
+                        </button>
+                        {"description" in item && item.description && (
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 max-w-[200px] text-right">
+                            {item.description}
+                          </p>
+                        )}
+                      </div>
                     ) : "action" in item && item.action !== undefined ? (
                       <button className="px-3 py-1 text-sm bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors duration-200">
                         {item.action}

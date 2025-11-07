@@ -44,20 +44,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   const signup = async (email: string, password: string, name?: string) => {
-    try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/signup`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ email, password, name }),
-      });
-      if (!res.ok) return false;
-      const data = await res.json();
-      setUser(data.user);
-      return true;
-    } catch {
-      return false;
+    const res = await fetch(`${import.meta.env.VITE_API_URL}/api/signup`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ email, password, name }),
+    });
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.message || "Failed to sign up");
     }
+    const data = await res.json();
+    setUser(data.user);
+    return true;
   };
 
   const logout = async () => {

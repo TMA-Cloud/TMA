@@ -1,4 +1,4 @@
-const { getUserStorageUsage } = require('../models/user.model');
+const { getUserStorageUsage, isFirstUser, getSignupEnabled, setSignupEnabled } = require('../models/user.model');
 const checkDiskSpace = require('check-disk-space').default;
 const { sendError, sendSuccess } = require('../utils/response');
 const { CUSTOM_DRIVE_ENABLED, CUSTOM_DRIVE_PATH } = require('../config/paths');
@@ -63,4 +63,41 @@ async function storageUsage(req, res) {
   }
 }
 
-module.exports = { storageUsage };
+async function getSignupStatus(req, res) {
+  try {
+    const signupEnabled = await getSignupEnabled();
+    const userIsFirst = await isFirstUser(req.userId);
+    sendSuccess(res, { signupEnabled, canToggle: userIsFirst });
+  } catch (err) {
+    sendError(res, 500, 'Server error', err);
+  }
+}
+
+async function toggleSignup(req, res) {
+  try {
+    // Verify user is first user before proceeding
+    const userIsFirst = await isFirstUser(req.userId);
+    if (!userIsFirst) {
+      console.warn(`[SECURITY] Unauthorized signup toggle attempt by user ${req.userId}`);
+      return sendError(res, 403, 'Only the first user can toggle signup');
+    }
+    
+    const { enabled } = req.body;
+    if (typeof enabled !== 'boolean') {
+      return sendError(res, 400, 'enabled must be a boolean');
+    }
+    
+    // setSignupEnabled will do additional security checks internally
+    await setSignupEnabled(enabled, req.userId);
+    sendSuccess(res, { signupEnabled: enabled });
+  } catch (err) {
+    if (err.message === 'Only the first user can toggle signup') {
+      console.warn(`[SECURITY] Unauthorized signup toggle attempt by user ${req.userId}`);
+      return sendError(res, 403, err.message);
+    }
+    console.error('[ERROR] Failed to toggle signup:', err);
+    sendError(res, 500, 'Server error', err);
+  }
+}
+
+module.exports = { storageUsage, getSignupStatus, toggleSignup };

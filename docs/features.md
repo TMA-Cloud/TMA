@@ -28,6 +28,34 @@ Optional Google OAuth integration:
 2. Configure `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`
 3. Enable in application
 
+### Signup Control (Self-Hosted)
+
+For self-hosted deployments, signup can be controlled to prevent unauthorized account creation:
+
+- **Automatic Disable**: After the first user signs up, signup is automatically disabled
+- **First User Control**: Only the first user (oldest account by creation date) can enable/disable signup
+- **Settings Toggle**: First user can manage signup status from Settings page
+- **Security Hardened**: Multiple layers of protection prevent unauthorized manipulation
+  - Immutable first user ID stored in database
+  - Foreign key constraint prevents first user deletion
+  - Transaction-based operations prevent race conditions
+  - Double verification at controller and model levels
+
+**How It Works:**
+
+1. Initially, signup is enabled (allows first user to register)
+2. When the first user signs up, signup is automatically disabled
+3. The first user's ID is permanently stored and cannot be changed
+4. Only the first user can see and toggle the signup setting in Settings
+5. All signup attempts (email/password and Google OAuth) respect the signup status
+
+**Security Features:**
+
+- First user ID is immutable once set
+- Database foreign key prevents first user deletion
+- All toggle operations use database transactions
+- Unauthorized attempts are logged for security monitoring
+
 ## File Management
 
 ### File Operations

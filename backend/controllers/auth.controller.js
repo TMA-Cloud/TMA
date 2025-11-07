@@ -7,8 +7,11 @@ const {
   getUserById,
   getUserByGoogleId,
   createUserWithGoogle,
-  updateGoogleId
+  updateGoogleId,
+  getSignupEnabled,
+  setSignupEnabled
 } = require('../models/user.model');
+const pool = require('../config/db');
 const { getCookieOptions, isValidEmail, isValidPassword, generateAuthToken } = require('../utils/auth');
 const { sendError, sendSuccess } = require('../utils/response');
 
@@ -44,6 +47,12 @@ if (!GOOGLE_AUTH_ENABLED) {
 
 async function signup(req, res) {
   try {
+    // Check if signup is enabled
+    const signupEnabled = await getSignupEnabled();
+    if (!signupEnabled) {
+      return sendError(res, 403, 'Signup is currently disabled');
+    }
+    
     const { email, password, name } = req.body;
     
     // Input validation
@@ -71,6 +80,33 @@ async function signup(req, res) {
     
     const hashed = await bcrypt.hash(password, 10);
     const user = await createUser(email, hashed, name);
+    
+    // After first user signs up, disable signup by default and lock first_user_id
+    const userCountResult = await pool.query('SELECT COUNT(*) as count FROM users');
+    const userCount = parseInt(userCountResult.rows[0].count, 10);
+    if (userCount === 1) {
+      // This is the first user, set first_user_id and disable signup atomically
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        
+        // Set first_user_id (immutable after this)
+        await client.query(
+          'UPDATE app_settings SET first_user_id = $1, signup_enabled = false, updated_at = NOW() WHERE id = $2 AND first_user_id IS NULL',
+          [user.id, 'app_settings']
+        );
+        
+        await client.query('COMMIT');
+        console.log(`[SECURITY] First user created (ID: ${user.id}), signup disabled by default`);
+      } catch (err) {
+        await client.query('ROLLBACK');
+        // If first_user_id already set, just disable signup
+        await setSignupEnabled(false, user.id);
+      } finally {
+        client.release();
+      }
+    }
+    
     const token = generateAuthToken(user.id, JWT_SECRET);
     res.cookie('token', token, getCookieOptions());
     sendSuccess(res, { user });
@@ -145,7 +181,38 @@ async function googleCallback(req, res) {
       if (user) {
         await updateGoogleId(user.id, googleId);
       } else {
+        // Check if signup is enabled before creating new user
+        const signupEnabled = await getSignupEnabled();
+        if (!signupEnabled) {
+          return res.redirect(`${CLIENT_URL}?error=signup_disabled`);
+        }
         user = await createUserWithGoogle(googleId, email, name);
+        
+        // After first user signs up, disable signup by default and lock first_user_id
+        const userCountResult = await pool.query('SELECT COUNT(*) as count FROM users');
+        const userCount = parseInt(userCountResult.rows[0].count, 10);
+        if (userCount === 1) {
+          // This is the first user, set first_user_id and disable signup atomically
+          const client = await pool.connect();
+          try {
+            await client.query('BEGIN');
+            
+            // Set first_user_id (immutable after this)
+            await client.query(
+              'UPDATE app_settings SET first_user_id = $1, signup_enabled = false, updated_at = NOW() WHERE id = $2 AND first_user_id IS NULL',
+              [user.id, 'app_settings']
+            );
+            
+            await client.query('COMMIT');
+            console.log(`[SECURITY] First user created via Google (ID: ${user.id}), signup disabled by default`);
+          } catch (err) {
+            await client.query('ROLLBACK');
+            // If first_user_id already set, just disable signup
+            await setSignupEnabled(false, user.id);
+          } finally {
+            client.release();
+          }
+        }
       }
     }
 

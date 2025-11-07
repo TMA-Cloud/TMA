@@ -5,6 +5,7 @@ A self-hosted cloud storage platform providing robust file storage and managemen
 ## Features
 
 - 🔐 **Authentication**: JWT-based auth with optional Google OAuth
+- 🔒 **Signup Control**: Self-hosted deployments can control user registration
 - 📁 **File Management**: Upload, download, organize, and manage files and folders
 - 🔗 **Sharing**: Create shareable links for files and folders
 - 📝 **Document Editing**: OnlyOffice integration for online document editing

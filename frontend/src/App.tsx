@@ -76,6 +76,19 @@ const AppContent: React.FC = () => {
 const AuthGate: React.FC = () => {
   const { user, loading } = useAuth();
   const [view, setView] = useState<"login" | "signup">("login");
+  const [error, setError] = useState<string | null>(null);
+
+  // Check for error in URL (e.g., from Google OAuth callback)
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const errorParam = params.get("error");
+    if (errorParam === "signup_disabled") {
+      setError("Signup is currently disabled");
+      setView("login");
+      // Clean up URL
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, []);
 
   if (loading) {
     return (
@@ -91,13 +104,28 @@ const AuthGate: React.FC = () => {
   }
 
   if (!user) {
-    return view === "login" ? (
+    return (
       <div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-        <LoginForm onSwitch={() => setView("signup")} />
-      </div>
-    ) : (
-      <div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-        <SignupForm onSwitch={() => setView("login")} />
+        {error && (
+          <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-red-500 text-white px-4 py-2 rounded-lg shadow-lg z-50">
+            {error}
+          </div>
+        )}
+        {view === "login" ? (
+          <LoginForm
+            onSwitch={() => {
+              setView("signup");
+              setError(null);
+            }}
+          />
+        ) : (
+          <SignupForm
+            onSwitch={() => {
+              setView("login");
+              setError(null);
+            }}
+          />
+        )}
       </div>
     );
   }
