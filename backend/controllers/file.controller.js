@@ -28,12 +28,26 @@ const {
 } = require('../models/share.model');
 const pool = require('../config/db');
 const { userOperationLock, fileOperationLock } = require('../utils/mutex');
+const {
+  validateId,
+  validateIdArray,
+  validateFileName,
+  validateSortBy,
+  validateSortOrder,
+  validateSearchQuery,
+  validateLimit,
+  validateBoolean,
+  validateFileUpload,
+} = require('../utils/validation');
 
 async function listFiles(req, res) {
   try {
-    const parentId = req.query.parentId || null;
-    const sortBy = req.query.sortBy;
-    const order = req.query.order;
+    const parentId = req.query.parentId ? validateId(req.query.parentId) : null;
+    if (req.query.parentId && !parentId) {
+      return sendError(res, 400, 'Invalid parent ID');
+    }
+    const sortBy = validateSortBy(req.query.sortBy) || 'modified';
+    const order = validateSortOrder(req.query.order) || 'DESC';
     const files = await getFiles(req.userId, parentId, sortBy, order);
     sendSuccess(res, files);
   } catch (err) {
@@ -44,10 +58,14 @@ async function listFiles(req, res) {
 async function addFolder(req, res) {
   try {
     const { name, parentId = null } = req.body;
-    if (!name) {
-      return sendError(res, 400, 'Name required');
+    if (!name || !validateFileName(name)) {
+      return sendError(res, 400, 'Invalid folder name');
     }
-    const folder = await createFolder(name, parentId, req.userId);
+    const validatedParentId = parentId ? validateId(parentId) : null;
+    if (parentId && !validatedParentId) {
+      return sendError(res, 400, 'Invalid parent ID');
+    }
+    const folder = await createFolder(name, validatedParentId, req.userId);
     sendSuccess(res, folder);
   } catch (err) {
     sendError(res, 500, 'Server error', err);
@@ -59,7 +77,21 @@ async function uploadFile(req, res) {
     if (!req.file) {
       return sendError(res, 400, 'No file uploaded');
     }
-    const parentId = req.body.parentId || null;
+
+    // Validate filename
+    if (!validateFileName(req.file.originalname)) {
+      return sendError(res, 400, 'Invalid file name');
+    }
+
+    // Validate for security concerns (MIME spoofing detection, etc.)
+    // This logs warnings but doesn't block uploads - cloud storage accepts all file types
+    validateFileUpload(req.file.mimetype, req.file.originalname);
+
+    const parentId = req.body.parentId ? validateId(req.body.parentId) : null;
+    if (req.body.parentId && !parentId) {
+      return sendError(res, 400, 'Invalid parent ID');
+    }
+
     const file = await userOperationLock(req.userId, async () => {
       return await createFile(
         req.file.originalname,
@@ -79,11 +111,16 @@ async function uploadFile(req, res) {
 async function moveFilesController(req, res) {
   try {
     const { ids, parentId = null } = req.body;
-    if (!Array.isArray(ids) || ids.length === 0) {
-      return sendError(res, 400, 'ids required');
+    const validatedIds = validateIdArray(ids);
+    if (!validatedIds) {
+      return sendError(res, 400, 'Invalid ids array');
+    }
+    const validatedParentId = parentId ? validateId(parentId) : null;
+    if (parentId && !validatedParentId) {
+      return sendError(res, 400, 'Invalid parent ID');
     }
     await userOperationLock(req.userId, async () => {
-      await moveFiles(ids, parentId, req.userId);
+      await moveFiles(validatedIds, validatedParentId, req.userId);
     });
     sendSuccess(res, { success: true });
   } catch (err) {
@@ -94,11 +131,16 @@ async function moveFilesController(req, res) {
 async function copyFilesController(req, res) {
   try {
     const { ids, parentId = null } = req.body;
-    if (!Array.isArray(ids) || ids.length === 0) {
-      return sendError(res, 400, 'ids required');
+    const validatedIds = validateIdArray(ids);
+    if (!validatedIds) {
+      return sendError(res, 400, 'Invalid ids array');
+    }
+    const validatedParentId = parentId ? validateId(parentId) : null;
+    if (parentId && !validatedParentId) {
+      return sendError(res, 400, 'Invalid parent ID');
     }
     await userOperationLock(req.userId, async () => {
-      await copyFiles(ids, parentId, req.userId);
+      await copyFiles(validatedIds, validatedParentId, req.userId);
     });
     sendSuccess(res, { success: true });
   } catch (err) {
@@ -108,17 +150,31 @@ async function copyFilesController(req, res) {
 
 async function downloadFile(req, res) {
   try {
-    const file = await getFile(req.params.id, req.userId);
+    const fileId = validateId(req.params.id);
+    if (!fileId) {
+      return sendError(res, 400, 'Invalid file ID');
+    }
+    const file = await getFile(fileId, req.userId);
     if (!file) {
       return sendError(res, 404, 'File not found');
     }
-    
+
     const { success, filePath, error } = validateAndResolveFile(file);
     if (!success) {
       return sendError(res, filePath ? 400 : 404, error);
     }
-    
+
+    // Check if file should be forced to download (executable files)
+    const { requiresDownload } = validateFileUpload(file.mimeType, file.name);
+
     res.type(file.mimeType);
+
+    // Force download for potentially executable files to prevent execution in browser
+    if (requiresDownload) {
+      res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(file.name)}"`);
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+    }
+
     res.sendFile(filePath);
   } catch (err) {
     sendError(res, 500, 'Server error', err);
@@ -128,10 +184,14 @@ async function downloadFile(req, res) {
 async function renameFileController(req, res) {
   try {
     const { id, name } = req.body;
-    if (!id || !name) {
-      return sendError(res, 400, 'id and name required');
+    const validatedId = validateId(id);
+    if (!validatedId) {
+      return sendError(res, 400, 'Invalid file ID');
     }
-    const file = await renameFile(id, name, req.userId);
+    if (!name || !validateFileName(name)) {
+      return sendError(res, 400, 'Invalid file name');
+    }
+    const file = await renameFile(validatedId, name, req.userId);
     if (!file) {
       return sendError(res, 404, 'Not found');
     }
@@ -144,10 +204,15 @@ async function renameFileController(req, res) {
 async function starFilesController(req, res) {
   try {
     const { ids, starred } = req.body;
-    if (!Array.isArray(ids) || ids.length === 0 || typeof starred !== 'boolean') {
-      return sendError(res, 400, 'ids and starred required');
+    const validatedIds = validateIdArray(ids);
+    if (!validatedIds) {
+      return sendError(res, 400, 'Invalid ids array');
     }
-    await setStarred(ids, starred, req.userId);
+    const validatedStarred = validateBoolean(starred);
+    if (validatedStarred === null) {
+      return sendError(res, 400, 'starred must be a boolean');
+    }
+    await setStarred(validatedIds, validatedStarred, req.userId);
     sendSuccess(res, { success: true });
   } catch (err) {
     sendError(res, 500, 'Server error', err);
@@ -155,54 +220,64 @@ async function starFilesController(req, res) {
 }
 
 async function shareFilesController(req, res) {
-  const { ids, shared } = req.body;
-  if (!Array.isArray(ids) || ids.length === 0 || typeof shared !== 'boolean') {
-    return sendError(res, 400, 'ids and shared required');
-  }
-  
-  const client = await pool.connect();
   try {
-    await client.query('BEGIN');
-    
-    const links = {};
-    
-    if (shared) {
-      for (const id of ids) {
-        const treeIds = await getRecursiveIds([id], req.userId);
-        let token = await getShareLink(id, req.userId);
-        if (!token) {
-          token = await createShareLink(id, req.userId, treeIds);
-        } else {
-          await addFilesToShare(token, treeIds);
-        }
-        links[id] = token;
-      }
-    } else {
-      const treeIds = await getRecursiveIds(ids, req.userId);
-      await removeFilesFromShares(treeIds, req.userId);
-      for (const id of ids) {
-        await deleteShareLink(id, req.userId);
-      }
+    const { ids, shared } = req.body;
+    const validatedIds = validateIdArray(ids);
+    if (!validatedIds) {
+      return sendError(res, 400, 'Invalid ids array');
+    }
+    const validatedShared = validateBoolean(shared);
+    if (validatedShared === null) {
+      return sendError(res, 400, 'shared must be a boolean');
     }
     
-    await client.query('COMMIT');
-    sendSuccess(res, { success: true, links });
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      
+      const links = {};
+      
+      if (validatedShared) {
+        for (const id of validatedIds) {
+          const treeIds = await getRecursiveIds([id], req.userId);
+          let token = await getShareLink(id, req.userId);
+          if (!token) {
+            token = await createShareLink(id, req.userId, treeIds);
+          } else {
+            await addFilesToShare(token, treeIds);
+          }
+          links[id] = token;
+        }
+      } else {
+        const treeIds = await getRecursiveIds(validatedIds, req.userId);
+        await removeFilesFromShares(treeIds, req.userId);
+        for (const id of validatedIds) {
+          await deleteShareLink(id, req.userId);
+        }
+      }
+      
+      await client.query('COMMIT');
+      sendSuccess(res, { success: true, links });
+    } catch (err) {
+      await client.query('ROLLBACK');
+      sendError(res, 500, 'Server error', err);
+    } finally {
+      client.release();
+    }
   } catch (err) {
-    await client.query('ROLLBACK');
     sendError(res, 500, 'Server error', err);
-  } finally {
-    client.release();
   }
 }
 
 async function linkParentShareController(req, res) {
   try {
     const { ids } = req.body;
-    if (!Array.isArray(ids) || ids.length === 0) {
-      return sendError(res, 400, 'ids required');
+    const validatedIds = validateIdArray(ids);
+    if (!validatedIds) {
+      return sendError(res, 400, 'Invalid ids array');
     }
     const links = {};
-    for (const id of ids) {
+    for (const id of validatedIds) {
       const parentRes = await pool.query(
         'SELECT parent_id FROM files WHERE id = $1 AND user_id = $2',
         [id, req.userId]
@@ -224,8 +299,8 @@ async function linkParentShareController(req, res) {
 
 async function listStarred(req, res) {
   try {
-    const sortBy = req.query.sortBy;
-    const order = req.query.order;
+    const sortBy = validateSortBy(req.query.sortBy) || 'modified';
+    const order = validateSortOrder(req.query.order) || 'DESC';
     const files = await getStarredFiles(req.userId, sortBy, order);
     sendSuccess(res, files);
   } catch (err) {
@@ -235,8 +310,8 @@ async function listStarred(req, res) {
 
 async function listShared(req, res) {
   try {
-    const sortBy = req.query.sortBy;
-    const order = req.query.order;
+    const sortBy = validateSortBy(req.query.sortBy) || 'modified';
+    const order = validateSortOrder(req.query.order) || 'DESC';
     const files = await getSharedFiles(req.userId, sortBy, order);
     sendSuccess(res, files);
   } catch (err) {
@@ -247,10 +322,11 @@ async function listShared(req, res) {
 async function deleteFilesController(req, res) {
   try {
     const { ids } = req.body;
-    if (!Array.isArray(ids) || ids.length === 0) {
-      return sendError(res, 400, 'ids required');
+    const validatedIds = validateIdArray(ids);
+    if (!validatedIds) {
+      return sendError(res, 400, 'Invalid ids array');
     }
-    await deleteFiles(ids, req.userId);
+    await deleteFiles(validatedIds, req.userId);
     sendSuccess(res, { success: true });
   } catch (err) {
     sendError(res, 500, 'Server error', err);
@@ -259,8 +335,8 @@ async function deleteFilesController(req, res) {
 
 async function listTrash(req, res) {
   try {
-    const sortBy = req.query.sortBy;
-    const order = req.query.order;
+    const sortBy = validateSortBy(req.query.sortBy) || 'deletedAt';
+    const order = validateSortOrder(req.query.order) || 'DESC';
     const files = await getTrashFiles(req.userId, sortBy, order);
     sendSuccess(res, files);
   } catch (err) {
@@ -271,10 +347,11 @@ async function listTrash(req, res) {
 async function deleteForeverController(req, res) {
   try {
     const { ids } = req.body;
-    if (!Array.isArray(ids) || ids.length === 0) {
-      return sendError(res, 400, 'ids required');
+    const validatedIds = validateIdArray(ids);
+    if (!validatedIds) {
+      return sendError(res, 400, 'Invalid ids array');
     }
-    await permanentlyDeleteFiles(ids, req.userId);
+    await permanentlyDeleteFiles(validatedIds, req.userId);
     sendSuccess(res, { success: true });
   } catch (err) {
     sendError(res, 500, 'Server error', err);
@@ -284,13 +361,13 @@ async function deleteForeverController(req, res) {
 async function searchFilesController(req, res) {
   try {
     const query = req.query.q || req.query.query || '';
-    const limit = parseInt(req.query.limit, 10) || 100;
-
-    if (!query || query.trim().length === 0) {
-      return sendError(res, 400, 'Search query required');
+    const validatedQuery = validateSearchQuery(query);
+    if (!validatedQuery) {
+      return sendError(res, 400, 'Invalid search query');
     }
+    const limit = validateLimit(req.query.limit, 100) || 100;
 
-    const files = await searchFiles(req.userId, query, limit);
+    const files = await searchFiles(req.userId, validatedQuery, limit);
     sendSuccess(res, files);
   } catch (err) {
     sendError(res, 500, 'Server error', err);

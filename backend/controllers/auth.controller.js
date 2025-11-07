@@ -14,6 +14,7 @@ const {
 const pool = require('../config/db');
 const { getCookieOptions, isValidEmail, isValidPassword, generateAuthToken } = require('../utils/auth');
 const { sendError, sendSuccess } = require('../utils/response');
+const { validateString, validateEmail: validateEmailUtil } = require('../utils/validation');
 
 const JWT_SECRET = process.env.JWT_SECRET;
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
@@ -60,16 +61,19 @@ async function signup(req, res) {
       return sendError(res, 400, 'Email and password required');
     }
     
-    if (!isValidEmail(email)) {
+    // Validate and sanitize email
+    if (!validateEmailUtil(email) || !isValidEmail(email)) {
       return sendError(res, 400, 'Invalid email format');
     }
     
+    // Validate password
     if (!isValidPassword(password)) {
       return sendError(res, 400, 'Password must be at least 6 characters');
     }
     
-    // Name validation (if provided)
-    if (name && (typeof name !== 'string' || name.trim().length === 0)) {
+    // Name validation (if provided) - sanitize and limit length
+    const validatedName = name ? validateString(name, 255) : null;
+    if (name && !validatedName) {
       return sendError(res, 400, 'Invalid name');
     }
     
@@ -79,7 +83,7 @@ async function signup(req, res) {
     }
     
     const hashed = await bcrypt.hash(password, 10);
-    const user = await createUser(email, hashed, name);
+    const user = await createUser(email, hashed, validatedName);
     
     // After first user signs up, disable signup by default and lock first_user_id
     const userCountResult = await pool.query('SELECT COUNT(*) as count FROM users');
@@ -123,7 +127,8 @@ async function login(req, res) {
       return sendError(res, 400, 'Email and password required');
     }
     
-    if (!isValidEmail(email)) {
+    // Validate and sanitize email
+    if (!validateEmailUtil(email) || !isValidEmail(email)) {
       return sendError(res, 400, 'Invalid email format');
     }
     

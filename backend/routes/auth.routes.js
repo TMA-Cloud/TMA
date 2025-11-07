@@ -10,9 +10,10 @@ const {
   googleAuthEnabled
 } = require('../controllers/auth.controller');
 const authMiddleware = require('../middleware/auth.middleware');
+const { authRateLimiter } = require('../middleware/rateLimit.middleware');
 
-router.post('/signup', signup);
-router.post('/login', login);
+router.post('/signup', authRateLimiter, signup);
+router.post('/login', authRateLimiter, login);
 router.get('/google/enabled', (req, res) => {
   res.json({ enabled: googleAuthEnabled });
 });

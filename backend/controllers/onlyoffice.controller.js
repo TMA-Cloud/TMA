@@ -7,6 +7,7 @@ const { resolveFilePath, isValidPath } = require('../utils/filePath');
 const { validateAndResolveFile } = require('../utils/fileDownload');
 const { getFile } = require('../models/file.model');
 const { getUserById } = require('../models/user.model');
+const { validateId } = require('../utils/validation');
 
 const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173';
 const ONLYOFFICE_JWT_SECRET = process.env.ONLYOFFICE_JWT_SECRET;
@@ -34,7 +35,10 @@ function buildSignedFileToken(fileId) {
 
 async function getConfig(req, res) {
   try {
-    const fileId = req.params.id;
+    const fileId = validateId(req.params.id);
+    if (!fileId) {
+      return res.status(400).json({ message: 'Invalid file ID' });
+    }
     const userId = req.userId;
     
     // Fetch user info to get the name for ONLYOFFICE
@@ -90,7 +94,10 @@ async function getConfig(req, res) {
 
 async function serveFile(req, res) {
   try {
-    const { id } = req.params;
+    const id = validateId(req.params.id);
+    if (!id) {
+      return res.status(400).json({ error: 'Invalid file ID' });
+    }
     const token = req.query.t;
 
     // Add CORS headers for ONLYOFFICE server
@@ -147,7 +154,10 @@ async function serveFile(req, res) {
 
 async function getViewerPage(req, res) {
   try {
-    const fileId = req.params.id;
+    const fileId = validateId(req.params.id);
+    if (!fileId) {
+      return res.status(400).send('Invalid file ID');
+    }
     const userId = req.userId;
     
     // Verify file access
@@ -399,11 +409,80 @@ async function callback(req, res) {
         return res.status(200).json({ error: 0 }); // Still return success to OnlyOffice
       }
 
+      // Validate file ID format
+      const validatedFileId = validateId(fileId);
+      if (!validatedFileId) {
+        console.error('[ONLYOFFICE] Invalid file ID format:', fileId);
+        return res.status(200).json({ error: 0 });
+      }
+
+      // Validate URL to prevent SSRF - only allow http/https and check for localhost/internal IPs
+      if (typeof body.url !== 'string' || (!body.url.startsWith('http://') && !body.url.startsWith('https://'))) {
+        console.error('[ONLYOFFICE] Invalid URL format:', body.url);
+        return res.status(200).json({ error: 0 });
+      }
+      
+      // Additional SSRF protection: block localhost and private IP ranges
+      try {
+        const urlObj = new URL(body.url);
+        const hostname = urlObj.hostname.toLowerCase();
+
+        // Block localhost variations (IPv4, IPv6, domain)
+        const localhostPatterns = [
+          'localhost', '127.0.0.1', '0.0.0.0', '::1', '::',
+          '[::1]', '[::ffff:127.0.0.1]'
+        ];
+
+        // Block private IPv4 ranges
+        const privateIPv4Patterns = [
+          /^10\./,                    // 10.0.0.0/8
+          /^192\.168\./,              // 192.168.0.0/16
+          /^172\.(1[6-9]|2[0-9]|3[0-1])\./, // 172.16.0.0/12
+          /^169\.254\./,              // 169.254.0.0/16 (link-local)
+        ];
+
+        // Block private IPv6 ranges
+        const privateIPv6Patterns = [
+          /^fe80:/i,                  // fe80::/10 (link-local)
+          /^fc00:/i,                  // fc00::/7 (unique local)
+          /^fd00:/i,                  // fd00::/8 (unique local)
+          /^::ffff:127\./i,           // IPv4-mapped localhost
+          /^::ffff:10\./i,            // IPv4-mapped 10.0.0.0/8
+          /^::ffff:192\.168\./i,      // IPv4-mapped 192.168.0.0/16
+          /^::ffff:169\.254\./i,      // IPv4-mapped link-local
+        ];
+
+        // Check localhost patterns
+        if (localhostPatterns.includes(hostname)) {
+          console.error('[ONLYOFFICE] Blocked SSRF attempt to localhost:', hostname);
+          return res.status(200).json({ error: 0 });
+        }
+
+        // Check private IPv4 ranges
+        for (const pattern of privateIPv4Patterns) {
+          if (pattern.test(hostname)) {
+            console.error('[ONLYOFFICE] Blocked SSRF attempt to private IP:', hostname);
+            return res.status(200).json({ error: 0 });
+          }
+        }
+
+        // Check private IPv6 ranges
+        for (const pattern of privateIPv6Patterns) {
+          if (pattern.test(hostname)) {
+            console.error('[ONLYOFFICE] Blocked SSRF attempt to private IPv6:', hostname);
+            return res.status(200).json({ error: 0 });
+          }
+        }
+      } catch (urlError) {
+        console.error('[ONLYOFFICE] Invalid URL:', urlError);
+        return res.status(200).json({ error: 0 });
+      }
+
       // Get file info from database
       const db = require('../config/db');
       const fileResult = await db.query(
         'SELECT id, name, path, user_id FROM files WHERE id = $1',
-        [fileId]
+        [validatedFileId]
       );
 
       if (fileResult.rows.length === 0) {
@@ -438,7 +517,7 @@ async function callback(req, res) {
       const newSize = fileBuffer.length;
       await db.query(
         'UPDATE files SET size = $1, modified = NOW() WHERE id = $2',
-        [newSize, fileId]
+        [newSize, validatedFileId]
       );
     } else if (status === 3) {
       console.error('[ONLYOFFICE] Document saving error for:', body.key);

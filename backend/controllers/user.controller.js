@@ -17,19 +17,22 @@ async function getCustomDriveStorageUsage(userId) {
   }
 
   const normalizedPath = path.resolve(CUSTOM_DRIVE_PATH).toLowerCase();
-  
+
+  // Escape LIKE wildcards (%, _) in the path to prevent unintended matches
+  const escapedPath = normalizedPath.replace(/[%_]/g, '\\$&');
+
   // Calculate used space from files in the custom drive path
   const res = await pool.query(
-    `SELECT COALESCE(SUM(size), 0) AS used 
-     FROM files 
-     WHERE user_id = $1 
-       AND type = 'file' 
-       AND deleted_at IS NULL 
-       AND path IS NOT NULL 
-       AND LOWER(path) LIKE $2 || '%' ESCAPE ''`,
-    [userId, normalizedPath]
+    `SELECT COALESCE(SUM(size), 0) AS used
+     FROM files
+     WHERE user_id = $1
+       AND type = 'file'
+       AND deleted_at IS NULL
+       AND path IS NOT NULL
+       AND LOWER(path) LIKE $2 || '%' ESCAPE '\\'`,
+    [userId, escapedPath]
   );
-  
+
   return Number(res.rows[0].used) || 0;
 }
 

@@ -12,11 +12,23 @@ All API endpoints are prefixed with `/api` unless otherwise specified.
 
 Most endpoints require authentication via JWT token. The token is sent as an httpOnly cookie automatically by the browser.
 
+**Rate Limiting:** Authentication endpoints (`/api/signup`, `/api/login`) are rate-limited to 5 attempts per 15 minutes per IP address and email combination.
+
 ### Headers
 
 ```bash
 Cookie: token=<jwt_token>
 ```
+
+### Security
+
+All API endpoints implement comprehensive security measures:
+
+- **Input Validation**: All inputs are validated and sanitized
+- **Rate Limiting**: Endpoints are rate-limited to prevent abuse
+- **SQL Injection Protection**: All queries use parameterized statements
+- **XSS Protection**: User-generated content is properly escaped
+- **Path Traversal Protection**: File paths are validated to prevent directory traversal
 
 #### POST `/api/signup`
 

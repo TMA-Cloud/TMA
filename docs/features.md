@@ -278,22 +278,76 @@ Optional external drive integration:
 
 - JWT token expiration
 - HttpOnly cookies
-- Secure password hashing
+- Secure password hashing (bcrypt with salt rounds)
 - CSRF protection
+- Rate limiting on authentication endpoints (5 attempts per 15 minutes)
+- Input validation and sanitization for all user inputs
+- Email format validation
+- Password strength requirements
 
 ### File Security
 
 - User-based access control
-- Share link token security
-- File path validation
-- Storage isolation
+- Share link token security (validated format)
+- File path validation (prevents directory traversal attacks)
+- Storage isolation per user
+- File name validation (prevents path traversal, null bytes, reserved characters)
+- Executable file handling (forced download, not inline execution)
+- MIME type spoofing detection
 
 ### API Security
 
 - CORS configuration
-- Security headers
-- Input validation
-- Error message sanitization
+- Security headers (X-Content-Type-Options, X-Frame-Options, X-XSS-Protection, etc.)
+- Comprehensive input validation on all endpoints
+- Error message sanitization (no sensitive information exposure)
+- Rate limiting:
+  - Authentication endpoints: 5 requests per 15 minutes
+  - General API endpoints: 100 requests per 15 minutes
+  - File upload endpoints: 50 uploads per hour
+- SQL injection prevention (all queries use parameterized statements)
+- XSS prevention (HTML escaping for user-generated content)
+
+### Input Validation
+
+All user inputs are validated and sanitized:
+
+- **IDs**: Validated against expected format (8-16 character alphanumeric)
+- **File/Folder Names**: Validated to prevent path traversal, null bytes, and reserved characters
+- **Search Queries**: Sanitized and length-limited
+- **Email Addresses**: Format validation and length limits
+- **Sort Parameters**: Whitelist-based validation
+- **Share Tokens**: Format validation (8 character alphanumeric)
+- **File Uploads**: Filename validation, MIME type checking
+
+### SQL Injection Protection
+
+- All database queries use parameterized statements
+- No string concatenation in SQL queries
+- Sort fields validated against whitelist
+- Search queries properly parameterized
+
+### XSS (Cross-Site Scripting) Protection
+
+- HTML escaping for all user-generated content in shared file listings
+- Content-Type headers with nosniff for executable files
+- Proper Content-Disposition headers for downloads
+
+### SSRF (Server-Side Request Forgery) Protection
+
+- URL validation in OnlyOffice callbacks
+- Blocking of localhost and private IP ranges (IPv4 and IPv6)
+- Protocol validation (only HTTP/HTTPS allowed)
+
+### Rate Limiting
+
+Rate limiting is implemented to prevent brute force attacks and abuse:
+
+- **Authentication Endpoints** (`/api/signup`, `/api/login`): 5 attempts per 15 minutes per IP/email
+- **General API Endpoints**: 100 requests per 15 minutes per IP
+- **File Upload Endpoints**: 50 uploads per hour per user/IP
+
+Rate limit violations return HTTP 429 (Too Many Requests).
 
 ## Performance
 
