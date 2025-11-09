@@ -1,6 +1,6 @@
 {
   "name": "cloud_backend",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Backend for Cloud Storage",
   "main": "server.js",
   "scripts": {
@@ -17,7 +17,7 @@
   "type": "commonjs",
   "dependencies": {
     "archiver": "^7.0.1",
-    "bcryptjs": "^3.0.2",
+    "bcryptjs": "^3.0.3",
     "check-disk-space": "^3.4.0",
     "chokidar": "^4.0.3",
     "cors": "^2.8.5",
