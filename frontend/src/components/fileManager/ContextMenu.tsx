@@ -7,6 +7,7 @@ import {
   Copy,
   Scissors,
   ClipboardPaste,
+  Download,
 } from "lucide-react";
 import { useApp } from "../../contexts/AppContext";
 
@@ -43,6 +44,8 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     deleteForever,
     setShareLinkModalOpen,
     currentPath,
+    downloadFiles,
+    isDownloading,
   } = useApp();
 
   const selectedItems = files.filter((f) => selectedFiles.includes(f.id));
@@ -83,6 +86,12 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
             setShareLinkModalOpen(true, list);
           }
         },
+      },
+      {
+        icon: Download,
+        label: "Download",
+        action: () => downloadFiles(selectedFiles),
+        disabled: isDownloading || selectedFiles.length === 0,
       },
       {
         icon: Star,
@@ -148,6 +157,8 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
       currentPath,
       deleteForever,
       deleteFiles,
+      downloadFiles,
+      isDownloading,
     ],
   );
 
@@ -178,8 +189,11 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
         );
       } else if (event.key === "Enter" && focusedIndex !== null) {
         event.preventDefault();
-        menuItems[focusedIndex].action();
-        onClose();
+        const item = menuItems[focusedIndex];
+        if (!item.disabled) {
+          item.action();
+          onClose();
+        }
       }
     };
 
@@ -225,8 +239,10 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
           <button
             key={index}
             onClick={() => {
-              item.action();
-              onClose();
+              if (!item.disabled) {
+                item.action();
+                onClose();
+              }
             }}
             className={`
               w-full flex items-center space-x-3 px-3 py-2 text-left
@@ -234,13 +250,16 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
               rounded-md
               focus:outline-none
               ${
-                isFocused
-                  ? "bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300"
-                  : item.danger
-                    ? "text-red-600 dark:text-red-400"
-                    : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                item.disabled
+                  ? "opacity-50 cursor-not-allowed text-gray-400 dark:text-gray-500"
+                  : isFocused
+                    ? "bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300"
+                    : item.danger
+                      ? "text-red-600 dark:text-red-400"
+                      : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
               }
             `}
+            disabled={item.disabled}
             tabIndex={0}
             role="menuitem"
             aria-selected={isFocused}

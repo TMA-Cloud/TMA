@@ -86,6 +86,8 @@ export interface AppContextType {
   setSearchQuery: (query: string) => void;
   isSearching: boolean;
   searchFiles: (query: string) => Promise<void>;
+  isDownloading: boolean;
+  downloadFiles: (ids: string[]) => Promise<void>;
 }
 
 export const AppContext = createContext<AppContextType | undefined>(undefined);

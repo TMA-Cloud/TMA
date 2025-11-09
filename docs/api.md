@@ -522,9 +522,47 @@ Permanently delete files from trash.
 
 #### GET `/api/files/:id/download`
 
-Download a file.
+Download a file or folder.
 
-**Response:** File stream with appropriate Content-Type header.
+**Parameters:**
+
+- `id` (path): File or folder ID
+
+**Response:**
+
+- For files: File stream with appropriate Content-Type and Content-Disposition headers
+- For folders: ZIP archive stream with `application/zip` Content-Type
+
+**Headers:**
+
+- `Content-Type`: MIME type of the file (for files) or `application/zip` (for folders)
+- `Content-Disposition`: `attachment; filename="filename.ext"; filename*=UTF-8''encoded_filename`
+  - Uses RFC 5987 encoding for filenames with special characters
+  - For folders, the filename will be `foldername.zip`
+
+**Behavior:**
+
+- **Files**: Downloads directly with original filename and extension preserved
+- **Folders**: Automatically zipped before download with `.zip` extension added
+- Concurrent download requests for the same user are prevented using mutex locks
+- Deleted files/folders cannot be downloaded (returns 404)
+
+**Status Codes:**
+
+- `200` - Download successful
+- `400` - Invalid file ID
+- `404` - File/folder not found or deleted
+- `500` - Server error
+
+**Example:**
+
+```bash
+# Download a file
+GET /api/files/abc123def/download
+
+# Download a folder (returns ZIP)
+GET /api/files/xyz789ghi/download
+```
 
 ---
 

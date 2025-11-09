@@ -109,3 +109,83 @@ export async function toggleSignup(
     enabled,
   });
 }
+
+/**
+ * Download a file or folder
+ * For files: triggers direct download
+ * For folders: fetches zip and triggers download
+ * @param id - File or folder ID
+ * @param fallbackFilename - Fallback filename to use if Content-Disposition header is missing or invalid
+ */
+export async function downloadFile(
+  id: string,
+  fallbackFilename?: string,
+): Promise<void> {
+  const url = `${API_URL}/api/files/${id}/download`;
+  const response = await fetch(url, {
+    method: "GET",
+    credentials: "include",
+  });
+
+  if (!response.ok) {
+    throw new Error(`Download failed: ${response.statusText}`);
+  }
+
+  // Get the filename from Content-Disposition header or use fallback
+  const contentDisposition = response.headers.get("Content-Disposition");
+  let filename: string | null = null;
+
+  if (contentDisposition) {
+    // Try to extract filename from Content-Disposition header
+    // Handle both quoted and unquoted filenames, and RFC 5987 encoded filenames (filename*=UTF-8''...)
+
+    // First try RFC 5987 encoding (filename*=UTF-8''...)
+    const rfc5987Match = contentDisposition.match(
+      /filename\*=UTF-8''([^;,\s]+)/i,
+    );
+    if (rfc5987Match && rfc5987Match[1]) {
+      try {
+        filename = decodeURIComponent(rfc5987Match[1]);
+      } catch {
+        filename = rfc5987Match[1];
+      }
+    } else {
+      // Fallback to standard filename parameter
+      // Try quoted filename first: filename="name.ext"
+      const quotedMatch = contentDisposition.match(/filename="([^"]+)"/);
+      if (quotedMatch && quotedMatch[1]) {
+        filename = quotedMatch[1];
+      } else {
+        // Try unquoted filename: filename=name.ext
+        const unquotedMatch = contentDisposition.match(/filename=([^;,\s]+)/);
+        if (unquotedMatch && unquotedMatch[1]) {
+          filename = unquotedMatch[1].trim();
+          // Decode URI component if needed
+          try {
+            filename = decodeURIComponent(filename);
+          } catch {
+            // If decoding fails, use as is
+          }
+        }
+      }
+    }
+  }
+
+  // Use extracted filename if available, otherwise use fallback
+  if (!filename || filename.trim() === "") {
+    filename = fallbackFilename || "download";
+  }
+
+  // Get the blob
+  const blob = await response.blob();
+
+  // Create a download link and trigger download
+  const downloadUrl = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = downloadUrl;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(downloadUrl);
+}

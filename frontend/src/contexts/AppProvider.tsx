@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState, useRef } from "react";
 import { AppContext, type FileItem, type FileItemResponse } from "./AppContext";
 import { usePromiseQueue, useDebouncedCallback } from "../utils/debounce";
+import { downloadFile as downloadFileApi } from "../utils/api";
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
@@ -34,6 +35,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [isSearching, setIsSearching] = useState<boolean>(false);
+  const [isDownloading, setIsDownloading] = useState<boolean>(false);
   const searchQueryRef = useRef<string>(""); // Track current search query to ignore stale results
   const abortControllerRef = useRef<AbortController | null>(null); // For cancelling fetch requests
 
@@ -416,6 +418,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
     setFolderSharedStack((p) => p.slice(0, index + 1));
   };
 
+  const downloadFiles = async (ids: string[]) => {
+    if (isDownloading || ids.length === 0) return;
+
+    setIsDownloading(true);
+    try {
+      // Download files sequentially to avoid overwhelming the server
+      for (const id of ids) {
+        const file = files.find((f) => f.id === id);
+        if (file) {
+          // For folders, the backend will add .zip extension
+          // For files, use the actual filename with extension
+          const filename =
+            file.type === "folder" ? `${file.name}.zip` : file.name;
+          await downloadFileApi(id, filename);
+        }
+      }
+    } catch (error) {
+      console.error("Download failed", error);
+      // Error is already logged, user will see download failure in browser
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -473,6 +499,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         setSearchQuery,
         isSearching,
         searchFiles: searchFilesApi,
+        isDownloading,
+        downloadFiles,
       }}
     >
       {children}

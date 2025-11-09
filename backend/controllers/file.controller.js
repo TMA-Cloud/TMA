@@ -1,5 +1,6 @@
 const { validateAndResolveFile } = require('../utils/fileDownload');
 const { sendError, sendSuccess } = require('../utils/response');
+const { createZipArchive } = require('../utils/zipArchive');
 const {
   getFiles,
   createFolder,
@@ -13,6 +14,7 @@ const {
   setShared,
   getSharedFiles,
   getRecursiveIds,
+  getFolderTree,
   deleteFiles,
   getTrashFiles,
   permanentlyDeleteFiles,
@@ -159,6 +161,15 @@ async function downloadFile(req, res) {
       return sendError(res, 404, 'File not found');
     }
 
+    // If it's a folder, zip it first
+    if (file.type === 'folder') {
+      return await userOperationLock(req.userId, async () => {
+        const entries = await getFolderTree(fileId, req.userId);
+        createZipArchive(res, file.name, entries, fileId, file.name);
+      });
+    }
+
+    // For files, download directly
     const { success, filePath, error } = validateAndResolveFile(file);
     if (!success) {
       return sendError(res, filePath ? 400 : 404, error);
@@ -169,9 +180,13 @@ async function downloadFile(req, res) {
 
     res.type(file.mimeType);
 
+    // Always set Content-Disposition to ensure correct filename with extension
+    // Use RFC 5987 encoding for filenames with special characters
+    const encodedFilename = encodeURIComponent(file.name);
+    res.setHeader('Content-Disposition', `attachment; filename="${file.name}"; filename*=UTF-8''${encodedFilename}`);
+    
     // Force download for potentially executable files to prevent execution in browser
     if (requiresDownload) {
-      res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(file.name)}"`);
       res.setHeader('X-Content-Type-Options', 'nosniff');
     }
 

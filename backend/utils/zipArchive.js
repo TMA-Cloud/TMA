@@ -12,7 +12,10 @@ const { resolveFilePath, isValidPath } = require('./filePath');
  */
 function createZipArchive(res, archiveName, entries, rootId, baseName) {
   res.setHeader('Content-Type', 'application/zip');
-  res.setHeader('Content-Disposition', `attachment; filename="${archiveName}.zip"`);
+  // Use RFC 5987 encoding for filenames with special characters
+  const zipFilename = `${archiveName}.zip`;
+  const encodedFilename = encodeURIComponent(zipFilename);
+  res.setHeader('Content-Disposition', `attachment; filename="${zipFilename}"; filename*=UTF-8''${encodedFilename}`);
 
   const archive = archiver('zip');
   archive.on('error', err => { throw err; });

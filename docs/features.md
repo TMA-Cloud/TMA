@@ -70,9 +70,16 @@ For self-hosted deployments, signup can be controlled to prevent unauthorized ac
 
 #### Download
 
-- Direct file download
-- Folder download as ZIP archive
-- Share link downloads
+- **File Downloads**: Direct download with original filename and extension preserved
+- **Folder Downloads**: Automatic ZIP compression before download
+  - Folders are zipped on-the-fly when requested
+  - Original folder structure is preserved in the ZIP
+  - ZIP filename uses folder name with `.zip` extension
+- **Multiple Downloads**: Support for downloading multiple files/folders sequentially
+- **Progress Indication**: Visual progress indicator during download/zipping
+- **Concurrent Request Prevention**: Mutex locks prevent multiple simultaneous zip operations per user
+- **Share Link Downloads**: Download files and folders from share links
+- **Filename Preservation**: Original filenames with extensions are maintained using RFC 5987 encoding for special characters
 
 #### Organization
 

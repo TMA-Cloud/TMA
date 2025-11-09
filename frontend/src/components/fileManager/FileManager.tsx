@@ -6,6 +6,7 @@ import { MarqueeSelector } from "./MarqueeSelector";
 import { ContextMenu } from "./ContextMenu";
 import { FileItemComponent } from "./FileItem";
 import { PasteProgress } from "./PasteProgress";
+import { DownloadProgress } from "./DownloadProgress";
 import { FileSkeleton } from "./FileSkeleton";
 import { Tooltip } from "../ui/Tooltip";
 import { ONLYOFFICE_EXTS, getExt } from "../../utils/fileUtils";
@@ -182,6 +183,7 @@ export const FileManager: React.FC = () => {
     setDocumentViewerFile,
     searchQuery,
     isSearching,
+    isDownloading,
   } = useApp();
 
   const canCreateFolder = currentPath[0] === "My Files";
@@ -644,6 +646,12 @@ export const FileManager: React.FC = () => {
       />
 
       <PasteProgress progress={pasteProgress} />
+      <DownloadProgress
+        isDownloading={isDownloading}
+        hasFolders={selectedFiles.some(
+          (id) => files.find((f) => f.id === id)?.type === "folder",
+        )}
+      />
     </div>
   );
 };
