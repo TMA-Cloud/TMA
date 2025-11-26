@@ -138,6 +138,8 @@ export const DocumentViewerModal: React.FC = () => {
               onClick={() => {
                 const url = `${import.meta.env.VITE_API_URL}/api/onlyoffice/viewer/${documentViewerFile.id}`;
                 window.open(url, "_blank", "noopener,noreferrer");
+                // Close the document in the main tab to avoid confusion when editing in the new tab
+                setDocumentViewerFile?.(null);
               }}
               title="Open in new tab"
             >
