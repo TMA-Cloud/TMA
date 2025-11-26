@@ -66,8 +66,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
               label: "Link to Folder Share",
               action: async () => {
                 const links = await linkToParentShare(selectedFiles);
-                let base = import.meta.env.VITE_API_URL;
-                if (base.endsWith("/api")) base = base.slice(0, -4);
+                const base = window.location.origin;
                 const list = Object.values(links).map((t) => `${base}/s/${t}`);
                 if (list.length) setShareLinkModalOpen(true, list);
               },
@@ -80,8 +79,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
         action: async () => {
           const links = await shareFiles(selectedFiles, !allShared);
           if (!allShared) {
-            let base = import.meta.env.VITE_API_URL;
-            if (base.endsWith("/api")) base = base.slice(0, -4);
+            const base = window.location.origin;
             const list = Object.values(links).map((t) => `${base}/s/${t}`);
             setShareLinkModalOpen(true, list);
           }

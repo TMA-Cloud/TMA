@@ -8,4 +8,20 @@ export default defineConfig({
   optimizeDeps: {
     exclude: ["lucide-react"],
   },
+  server: {
+    proxy: {
+      // Proxy API requests to the backend
+      "/api": {
+        target: "http://localhost:3000",
+        changeOrigin: true,
+        secure: false,
+      },
+      // Proxy Share routes (from your git diff: app.use('/s', shareRoutes))
+      "/s": {
+        target: "http://localhost:3000",
+        changeOrigin: true,
+        secure: false,
+      },
+    },
+  },
 });

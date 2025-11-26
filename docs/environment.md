@@ -124,18 +124,7 @@ Create a `.env` file in the `backend/` directory with the following variables.
 
 **Note:** If all three Google OAuth variables are provided, Google authentication will be enabled. If any are missing, Google authentication will be disabled.
 
----
-
-### Client Application
-
-#### `CLIENT_URL`
-
-- **Type:** String (URL)
-- **Required:** No
-- **Default:** `http://localhost:5173`
-- **Description:** URL of the frontend client application (for CORS)
-- **Example:** `CLIENT_URL=http://localhost:5173`
-- **Production Example:** `CLIENT_URL=https://app.example.com`
+**Important:** The `GOOGLE_REDIRECT_URI` must match your backend domain and should be in the format: `http://YOUR_DOMAIN:PORT/api/google/callback`
 
 ---
 
@@ -220,27 +209,27 @@ Create a `.env` file in the `backend/` directory with the following variables.
 
 ## Frontend Environment Variables
 
-Create a `.env` file in the `frontend/` directory with the following variables.
+**No frontend environment variables are required!**
 
-### API Configuration
+TMA Cloud uses a **Single-Origin Architecture** where the backend serves both the frontend and the API from the same domain. This means:
 
-#### `VITE_API_URL`
+- ✅ No `VITE_API_URL` needed - frontend uses relative URLs
+- ✅ No `ONLYOFFICE_JS_URL` needed - fetched dynamically from backend
+- ✅ No CORS configuration needed
+- ✅ Simplified deployment
 
-- **Type:** String (URL)
-- **Required:** Yes
-- **Description:** Backend API base URL
-- **Example:** `VITE_API_URL=http://localhost:3000/api`
-- **Production Example:** `VITE_API_URL=https://api.example.com/api`
-- **Note:** Must include `/api` suffix
+### How It Works
 
-### Frontend OnlyOffice Integration (Optional)
+**Production:**
 
-#### `ONLYOFFICE_JS_URL`
+- Backend serves built frontend from `frontend/dist/` at `/`
+- API endpoints available at `/api/*` and `/s/*`
+- All requests are same-origin
 
-- **Type:** String (URL)
-- **Required:** No (required if using OnlyOffice)
-- **Description:** OnlyOffice Document Server JavaScript URL
-- **Example:** `ONLYOFFICE_JS_URL=https://documentserver.example.com/web-apps/apps/api/documents/api.js`
-- **Note:** Must point to the OnlyOffice Document Server API.js file
+**Development:**
+
+- Vite dev server runs on `http://localhost:5173`
+- Vite proxy forwards `/api/*` and `/s/*` to backend on `http://localhost:3000`
+- No environment variables needed
 
 ---

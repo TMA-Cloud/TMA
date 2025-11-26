@@ -69,15 +69,20 @@ export const DocumentViewerModal: React.FC = () => {
       setLoading(true);
       setError(null);
       try {
+        // Fetch config first to get ONLYOFFICE JS URL
+        const res = await fetch(
+          `/api/onlyoffice/config/${documentViewerFile.id}`,
+          {
+            credentials: "include",
+          },
+        );
+        if (!res.ok) throw new Error("Failed to fetch ONLYOFFICE config");
+        const { config, token, onlyofficeJsUrl } = await res.json();
+
         // Load ONLYOFFICE JS if needed
         if (!window.DocsAPI) {
           const script = document.createElement("script");
-          const onlyOfficeJsUrl = import.meta.env.VITE_ONLYOFFICE_JS_URL as
-            | string
-            | undefined;
-          script.src =
-            onlyOfficeJsUrl ||
-            "http://localhost:2202/web-apps/apps/api/documents/api.js";
+          script.src = onlyofficeJsUrl;
           script.async = true;
           await new Promise<void>((resolve, reject) => {
             script.onload = () => resolve();
@@ -86,15 +91,6 @@ export const DocumentViewerModal: React.FC = () => {
             document.body.appendChild(script);
           });
         }
-
-        const res = await fetch(
-          `${import.meta.env.VITE_API_URL}/api/onlyoffice/config/${documentViewerFile.id}`,
-          {
-            credentials: "include",
-          },
-        );
-        if (!res.ok) throw new Error("Failed to fetch ONLYOFFICE config");
-        const { config, token } = await res.json();
 
         if (token) config.token = token;
 
@@ -136,7 +132,7 @@ export const DocumentViewerModal: React.FC = () => {
             <button
               className="px-3 py-2 rounded-md bg-blue-600 dark:bg-blue-500 text-white text-sm hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors flex items-center gap-2 flex-shrink-0"
               onClick={() => {
-                const url = `${import.meta.env.VITE_API_URL}/api/onlyoffice/viewer/${documentViewerFile.id}`;
+                const url = `/api/onlyoffice/viewer/${documentViewerFile.id}`;
                 window.open(url, "_blank", "noopener,noreferrer");
                 // Close the document in the main tab to avoid confusion when editing in the new tab
                 setDocumentViewerFile?.(null);

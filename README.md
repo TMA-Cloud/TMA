@@ -28,20 +28,24 @@ git clone https://github.com/TMA-Cloud/TMA.git
 cd TMA
 ```
 
+#### Frontend Setup & Build
+
+```bash
+cd ../frontend
+npm install
+npm run build
+# Frontend will be built to dist/ dir
+```
+
+#### Backend Setup
+
 ```bash
 cd backend
 npm install
 cp .env.example .env
 # Edit .env with your configuration
 npm start
-```
-
-```bash
-cd ../frontend
-npm install
-cp .env.example .env
-# Edit .env with your configuration
-npm run dev
+# Access the application at http://localhost:3000
 ```
 
 For detailed setup instructions, see [docs/setup.md](docs/setup.md).

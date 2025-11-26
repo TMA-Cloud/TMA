@@ -2,16 +2,15 @@
  * API utility functions
  */
 
-const API_URL = import.meta.env.VITE_API_URL;
-
 /**
  * Make a fetch request with default options
+ * Using relative URLs since frontend and backend are served from the same origin
  */
 async function apiRequest(
   endpoint: string,
   options: RequestInit = {},
 ): Promise<Response> {
-  const url = endpoint.startsWith("http") ? endpoint : `${API_URL}${endpoint}`;
+  const url = endpoint.startsWith("http") ? endpoint : endpoint;
 
   const defaultOptions: RequestInit = {
     credentials: "include",
@@ -121,7 +120,7 @@ export async function downloadFile(
   id: string,
   fallbackFilename?: string,
 ): Promise<void> {
-  const url = `${API_URL}/api/files/${id}/download`;
+  const url = `/api/files/${id}/download`;
   const response = await fetch(url, {
     method: "GET",
     credentials: "include",

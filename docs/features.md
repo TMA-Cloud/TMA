@@ -304,16 +304,17 @@ Optional external drive integration:
 
 ### API Security
 
-- CORS configuration
-- Security headers (X-Content-Type-Options, X-Frame-Options, X-XSS-Protection, etc.)
-- Comprehensive input validation on all endpoints
-- Error message sanitization (no sensitive information exposure)
-- Rate limiting:
+- **Single-Origin Architecture**: Frontend and backend on same domain (no CORS needed)
+- **Security Headers**: X-Content-Type-Options, X-Frame-Options, X-XSS-Protection, CSP, Referrer-Policy
+- **Comprehensive Input Validation**: All endpoints validate and sanitize user input
+- **Error Message Sanitization**: Generic error messages prevent information leakage
+- **Rate Limiting** (when enabled):
   - Authentication endpoints: 5 requests per 15 minutes
   - General API endpoints: 100 requests per 15 minutes
   - File upload endpoints: 50 uploads per hour
-- SQL injection prevention (all queries use parameterized statements)
-- XSS prevention (HTML escaping for user-generated content)
+- **SQL Injection Prevention**: All queries use parameterized statements
+- **XSS Prevention**: HTML escaping for user-generated content
+- **CSRF Protection**: SameSite cookie attributes and origin validation
 
 ### Input Validation
 

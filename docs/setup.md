@@ -10,16 +10,25 @@ Before you begin, ensure you have the following installed:
 - **PostgreSQL** (v17 or higher)
 - **npm** or **yarn** package manager
 
-## Backend Setup
+## Installation Steps
 
-### 1. Install Backend Dependencies
+### 1. Clone the Repository
+
+```bash
+git clone https://github.com/TMA-Cloud/TMA.git
+cd TMA
+```
+
+### 2. Backend Setup
+
+#### Install Backend Dependencies
 
 ```bash
 cd backend
 npm install
 ```
 
-### 2. Configure Backend Environment Variables
+#### Configure Backend Environment Variables
 
 Copy the example environment file:
 
@@ -33,15 +42,17 @@ Edit `.env` with your configuration. See [Environment Variables](environment.md)
 
 - `JWT_SECRET` - Secret key for JWT tokens
 - `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` - Database connection details
-- `CLIENT_URL` - Frontend URL (e.g., `http://localhost:5173`)
+- `BPORT` - Backend server port (default: 3000)
+- `UPLOAD_DIR` - Directory to store uploaded files
 
 **Optional variables:**
 
 - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` - For Google OAuth
-- `ONLYOFFICE_JWT_SECRET`, `BACKEND_URL` - For OnlyOffice integration
+- `ONLYOFFICE_JWT_SECRET`, `ONLYOFFICE_URL`, `BACKEND_URL` - For OnlyOffice integration
 - `CUSTOM_DRIVE`, `CUSTOM_DRIVE_PATH` - For custom drive scanning
+- `STORAGE_LIMIT` - Per-user storage limit in bytes
 
-### 3. Create Database
+#### Create Database
 
 Create a PostgreSQL database:
 
@@ -51,69 +62,85 @@ CREATE DATABASE cloud_storage;
 
 The application will automatically run migrations on startup to create the necessary tables.
 
-### 4. Start the Server
+### 3. Frontend Setup
 
-**Development mode:**
-
-```bash
-npm run dev
-```
-
-**Production mode:**
+#### Install Frontend Dependencies
 
 ```bash
-npm start
-```
-
-The server will start on the port specified in `BPORT` (default: 3000).
-
-## Frontend Setup
-
-### 1. Install Frontend Dependencies
-
-```bash
-cd frontend
+cd ../frontend
 npm install
 ```
 
-### 2. Configure Frontend Environment Variables
-
-Copy the example environment file:
-
-```bash
-cp .env.example .env
-```
-
-Edit `.env` with your configuration:
-
-- `VITE_API_URL` - Backend API URL (e.g., `http://localhost:3000`)
-- `ONLYOFFICE_JS_URL` - OnlyOffice Document Server JS URL (optional)
-
-### 3. Start Development Server
-
-```bash
-npm run dev
-```
-
-The frontend will start on `http://localhost:5173` (or the next available port).
-
-### 4. Build for Production
+#### Build for Production
 
 ```bash
 npm run build
 ```
 
-The built files will be in the `dist` directory.
+The built files will be in the `dist` directory and will be served by the backend.
+
+**Note:** No frontend environment variables are needed! The frontend uses relative URLs and is served from the same origin as the backend (Single-Origin Architecture).
+
+### 4. Start the Application
+
+#### Production Mode (Recommended)
+
+```bash
+cd ../backend
+npm start
+```
+
+Access the application at `http://localhost:3000` (or your configured BPORT).
+
+The backend serves both:
+
+- Frontend static files at `/`
+- API endpoints at `/api/*` and `/s/*`
+
+#### Development Mode (with Hot Reload)
+
+For active development with frontend hot module replacement:
+
+**Terminal 1 - Backend:**
+
+```bash
+cd backend
+npm run dev
+```
+
+**Terminal 2 - Frontend Dev Server:**
+
+```bash
+cd frontend
+npm run dev
+```
+
+Access at `http://localhost:5173`
+
+The Vite dev server automatically proxies API requests to `http://localhost:3000`.
 
 ## Verification
 
-1. **Backend**: Check that the server is running and database is connected
-   - Look for "Server running on port 3000" and "Database connected successfully" messages
+### 1. Backend Health Check
 
-2. **Frontend**: Open `http://localhost:5173` in your browser
-   - You should see the login/signup page
+When you start the backend, you should see:
 
-3. **Create an account**: Sign up with a new account to test the system
+- ✅ "Database connected successfully"
+- ✅ "Database query test successful"
+- ✅ "Server running on port 3000"
+
+### 2. Frontend Access
+
+Open your browser and navigate to:
+
+- **Production**: `http://localhost:3000`
+- **Development**: `http://localhost:5173`
+
+You should see the login/signup page.
+
+### 3. Create First Account
+
+Sign up with a new account to test the system. The first user automatically becomes the admin and can control signup settings.
 
 ## Troubleshooting
 
@@ -122,25 +149,44 @@ The built files will be in the `dist` directory.
 - Verify PostgreSQL is running: `pg_isready`
 - Check database credentials in `.env`
 - Ensure the database exists: `psql -l`
+- Verify the database user has CREATE TABLE permissions
 
 ### Port Already in Use
 
-- Change `BPORT` in backend `.env` for a different backend port
-- Change the frontend port by editing `vite.config.ts` or using `npm run dev -- --port 5174`
+- Change `BPORT` in backend `.env` to use a different port
+- In development, Vite will automatically use the next available port after 5173
 
 ### Migration Errors
 
 - Ensure the database user has CREATE TABLE permissions
 - Check that the `migrations` table was created successfully
 - Review migration files in `backend/migrations/` for SQL errors
+- Check backend console for specific error messages
 
-### CORS Issues
+### Frontend Build Errors
 
-- Verify `CLIENT_URL` in backend `.env` matches your frontend URL
-- Check that CORS is properly configured in `backend/server.js`
+- Ensure all dependencies are installed: `npm install`
+- Clear the build cache: `rm -rf dist node_modules/.vite`
+- Reinstall dependencies: `npm install`
+- Try building again: `npm run build`
+
+### Google OAuth Issues
+
+- Verify `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are correct
+- Ensure `GOOGLE_REDIRECT_URI` is set to `http://YOUR_DOMAIN/api/google/callback`
+- Check that the redirect URI matches exactly in Google Cloud Console
+- Ensure your domain is authorized in Google Cloud Console
+
+### OnlyOffice Integration Issues
+
+- Verify `ONLYOFFICE_URL` points to your Document Server
+- Ensure `ONLYOFFICE_JWT_SECRET` matches your Document Server configuration
+- Check that the Document Server can reach your backend via `BACKEND_URL`
+- Verify firewall rules allow communication between servers
 
 ## Next Steps
 
 - Read the [Architecture Overview](architecture.md) to understand the system design
 - Check [API Documentation](api.md) for available endpoints
 - Review [Features](features.md) to learn about available functionality
+- Configure [Environment Variables](environment.md) for your deployment

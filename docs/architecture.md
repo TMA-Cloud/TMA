@@ -4,20 +4,62 @@ This document provides an overview of the TMA Cloud architecture, including syst
 
 ## System Architecture
 
-TMA Cloud follows a traditional client-server architecture with a React frontend and Express.js backend.
+TMA Cloud uses a **Single-Origin Architecture** where the backend serves both the API and the frontend from the same origin, eliminating CORS issues.
+
+### Production Architecture
 
 ```bash
-┌─────────────┐         ┌─────────────┐         ┌─────────────┐
-│   Browser   │◄──────►│   Frontend  │◄──────►│   Backend   │
-│  (React)    │         │  (Vite)     │         │  (Express)  │
-└─────────────┘         └─────────────┘         └─────────────┘
-                                                       │
-                                                       ▼
-                                                ┌─────────────┐
-                                                │ PostgreSQL  │
-                                                │  Database   │
-                                                └─────────────┘
+┌─────────────────────────────────────────────┐
+│              Browser (Client)               │
+└──────────────────┬──────────────────────────┘
+                   │ http://localhost:3000
+                   │ (Single Origin)
+                   ▼
+┌─────────────────────────────────────────────┐
+│         Express Backend Server              │
+│  ┌──────────────────┐  ┌─────────────────┐ │
+│  │  Static Files    │  │   API Routes    │ │
+│  │  (Frontend UI)   │  │   /api/*        │ │
+│  │  Served at /     │  │   /s/*          │ │
+│  └──────────────────┘  └─────────────────┘ │
+└──────────────────┬──────────────────────────┘
+                   │
+                   ▼
+            ┌─────────────┐
+            │ PostgreSQL  │
+            │  Database   │
+            └─────────────┘
 ```
+
+### Development Architecture
+
+```bash
+┌──────────────┐                 ┌─────────────┐
+│   Browser    │                 │   Backend   │
+└──────┬───────┘                 │  (Express)  │
+       │                         │   :3000     │
+       │ http://localhost:5173   │             │
+       ▼                         └──────┬──────┘
+┌─────────────────────────┐            │
+│  Vite Dev Server        │            │
+│  ┌──────────────────┐   │            │
+│  │  Frontend (HMR)  │   │            ▼
+│  └──────────────────┘   │     ┌─────────────┐
+│  ┌──────────────────┐   │     │ PostgreSQL  │
+│  │  Proxy to :3000  │───┼────►└─────────────┘
+│  │  /api/* → :3000  │   │
+│  │  /s/* → :3000    │   │
+│  └──────────────────┘   │
+└─────────────────────────┘
+```
+
+### Key Benefits
+
+- ✅ **No CORS issues**: Same origin for frontend and backend
+- ✅ **Simplified deployment**: Single server, single port
+- ✅ **Better security**: No cross-origin requests in production
+- ✅ **Cleaner config**: No frontend environment variables needed
+- ✅ **Cookie-based auth**: Works seamlessly across the application
 
 ## Backend Architecture
 
@@ -192,10 +234,11 @@ Key tables:
 
 ### API Security
 
-- CORS configured for specific origins
-- Security headers (XSS protection, frame options)
-- Input validation and sanitization
-- Error messages don't expose sensitive information
+- **Single-Origin Architecture**: No CORS needed, frontend and backend on same domain
+- **Security Headers**: XSS protection, CSP, frame options, referrer policy
+- **Input Validation**: All user input validated and sanitized
+- **Error Handling**: Generic error messages prevent information leakage
+- **ONLYOFFICE Integration**: CSP allows configured document server origin
 
 ## Background Services
 

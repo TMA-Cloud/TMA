@@ -20,7 +20,6 @@ const JWT_SECRET = process.env.JWT_SECRET;
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 const GOOGLE_REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI;
-const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173';
 
 const GOOGLE_AUTH_ENABLED =
   GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET && GOOGLE_REDIRECT_URI;
@@ -189,7 +188,7 @@ async function googleCallback(req, res) {
         // Check if signup is enabled before creating new user
         const signupEnabled = await getSignupEnabled();
         if (!signupEnabled) {
-          return res.redirect(`${CLIENT_URL}?error=signup_disabled`);
+          return res.redirect('/?error=signup_disabled');
         }
         user = await createUserWithGoogle(googleId, email, name);
         
@@ -223,7 +222,7 @@ async function googleCallback(req, res) {
 
     const token = generateAuthToken(user.id, JWT_SECRET);
     res.cookie('token', token, getCookieOptions());
-    res.redirect(CLIENT_URL);
+    res.redirect('/');
   } catch (err) {
     console.error(err);
     res.status(500).send('Authentication failed');

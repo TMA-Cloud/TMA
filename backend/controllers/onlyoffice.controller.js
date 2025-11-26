@@ -9,8 +9,9 @@ const { getFile } = require('../models/file.model');
 const { getUserById } = require('../models/user.model');
 const { validateId } = require('../utils/validation');
 
-const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173';
 const ONLYOFFICE_JWT_SECRET = process.env.ONLYOFFICE_JWT_SECRET;
+// ONLYOFFICE server URL
+const ONLYOFFICE_URL = process.env.ONLYOFFICE_URL;
 // Backend URL that ONLYOFFICE Document Server can access to download files
 // Only needed if ONLYOFFICE is in Docker/remote - if not set, will derive from request
 const BACKEND_URL = process.env.BACKEND_URL;
@@ -85,7 +86,12 @@ async function getConfig(req, res) {
       tokenForConfig = jwt.sign(config, ONLYOFFICE_JWT_SECRET);
     }
 
-    res.json({ config, token: tokenForConfig });
+    // Include ONLYOFFICE JS URL for frontend to load the API
+    const onlyofficeJsUrl = ONLYOFFICE_URL
+      ? `${ONLYOFFICE_URL}/web-apps/apps/api/documents/api.js`
+      : 'http://localhost/web-apps/apps/api/documents/api.js';
+
+    res.json({ config, token: tokenForConfig, onlyofficeJsUrl });
   } catch (err) {
     console.error('[ONLYOFFICE] Config error:', err);
     res.status(500).json({ message: 'Server error' });
@@ -174,8 +180,8 @@ async function getViewerPage(req, res) {
     const backendBaseUrl = BACKEND_URL || `${req.protocol}://${req.get('host')}`;
     const downloadUrl = `${backendBaseUrl}/api/onlyoffice/file/${file.id}${token ? `?t=${encodeURIComponent(token)}` : ''}`;
     const callbackUrl = `${backendBaseUrl}/api/onlyoffice/callback`;
-    const onlyofficeJsUrl = process.env.ONLYOFFICE_URL 
-      ? `${process.env.ONLYOFFICE_URL}/web-apps/apps/api/documents/api.js`
+    const onlyofficeJsUrl = ONLYOFFICE_URL
+      ? `${ONLYOFFICE_URL}/web-apps/apps/api/documents/api.js`
       : 'http://localhost/web-apps/apps/api/documents/api.js';
 
     const config = {
@@ -430,9 +436,9 @@ async function callback(req, res) {
 
         // If this callback comes from our configured ONLYOFFICE server, allow it
         let isTrustedOnlyofficeHost = false;
-        if (process.env.ONLYOFFICE_URL) {
+        if (ONLYOFFICE_URL) {
           try {
-            const allowedOnlyofficeHost = new URL(process.env.ONLYOFFICE_URL).hostname.toLowerCase();
+            const allowedOnlyofficeHost = new URL(ONLYOFFICE_URL).hostname.toLowerCase();
             if (hostname === allowedOnlyofficeHost) {
               isTrustedOnlyofficeHost = true;
             }

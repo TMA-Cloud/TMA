@@ -26,10 +26,9 @@ export const ImageViewerModal: React.FC = () => {
       setLoading(true);
       const load = async () => {
         try {
-          const res = await fetch(
-            `${import.meta.env.VITE_API_URL}/api/files/${imageViewerFile.id}/download`,
-            { credentials: "include" },
-          );
+          const res = await fetch(`/api/files/${imageViewerFile.id}/download`, {
+            credentials: "include",
+          });
           const blob = await res.blob();
           const url = URL.createObjectURL(blob);
           setImageSrc(url);

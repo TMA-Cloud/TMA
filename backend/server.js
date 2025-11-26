@@ -1,5 +1,4 @@
 const express = require('express');
-const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
 const pool = require('./config/db');
@@ -22,7 +21,7 @@ app.use((req, res, next) => {
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('X-XSS-Protection', '1; mode=block');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), location=()');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
 
   // Allow ONLYOFFICE Document Server for scripts / connections / iframes, if configured
   let scriptSrc = "script-src 'self' 'unsafe-inline' 'unsafe-eval'";
@@ -58,17 +57,32 @@ app.use((req, res, next) => {
   next();
 });
 
-const corsOptions = {
-  origin: process.env.CLIENT_URL || 'http://localhost:5173',
-  credentials: true,
-};
-app.use(cors(corsOptions));
 app.use(express.json({ limit: '10mb' }));
+
+// API routes
 app.use('/api', authRoutes);
 app.use('/api/files', fileRoutes);
 app.use('/api/user', userRoutes);
 app.use('/api/onlyoffice', onlyofficeRoutes);
 app.use('/s', shareRoutes);
+
+// Serve static frontend files
+const frontendPath = path.join(__dirname, '..', 'frontend', 'dist');
+app.use(express.static(frontendPath));
+
+// SPA fallback - serve index.html for all non-API routes
+app.use((req, res, next) => {
+  // Skip API routes and static files
+  if (req.path.startsWith('/api') || req.path.startsWith('/s')) {
+    return next();
+  }
+  // For all other routes, serve index.html (SPA routing)
+  res.sendFile(path.join(frontendPath, 'index.html'), (err) => {
+    if (err) {
+      next(err);
+    }
+  });
+});
 
 // Error handling middleware (must be last)
 app.use(errorHandler);

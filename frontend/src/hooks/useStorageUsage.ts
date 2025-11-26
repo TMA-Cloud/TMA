@@ -13,12 +13,9 @@ export function useStorageUsage() {
   const loadUsage = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(
-        `${import.meta.env.VITE_API_URL}/api/user/storage`,
-        {
-          credentials: "include",
-        },
-      );
+      const res = await fetch(`/api/user/storage`, {
+        credentials: "include",
+      });
       if (res.ok) {
         const data = await res.json();
         setUsage({ used: data.used, total: data.total, free: data.free });

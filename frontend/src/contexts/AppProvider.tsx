@@ -56,20 +56,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         }
 
         const parentId = folderStack[folderStack.length - 1];
-        let url: string | URL = `${import.meta.env.VITE_API_URL}/api/files`;
+        let urlPath = `/api/files`;
         if (currentPath[0] === "Starred" && folderStack.length === 1) {
-          url = `${import.meta.env.VITE_API_URL}/api/files/starred`;
+          urlPath = `/api/files/starred`;
         } else if (currentPath[0] === "Shared" && folderStack.length === 1) {
-          url = `${import.meta.env.VITE_API_URL}/api/files/shared`;
+          urlPath = `/api/files/shared`;
         } else if (currentPath[0] === "Trash" && folderStack.length === 1) {
-          url = `${import.meta.env.VITE_API_URL}/api/files/trash`;
+          urlPath = `/api/files/trash`;
         }
 
-        url = new URL(url as string);
+        const url = new URL(urlPath, window.location.origin);
         if (parentId) url.searchParams.append("parentId", parentId);
         url.searchParams.append("sortBy", sortBy);
         url.searchParams.append("order", sortOrder);
-        url = url.toString();
         const res = await fetch(url.toString(), { credentials: "include" });
         const data: FileItemResponse[] = await res.json();
         setFiles(
@@ -114,7 +113,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
 
       setIsSearching(true);
       try {
-        const url = new URL(`${import.meta.env.VITE_API_URL}/api/files/search`);
+        const url = new URL(`/api/files/search`, window.location.origin);
         url.searchParams.append("q", trimmedQuery);
         url.searchParams.append("limit", "100");
 
@@ -215,7 +214,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   }, [folderStack, currentPath, sortBy, sortOrder, searchQuery, refreshFiles]);
 
   const createFolder = async (name: string) => {
-    await fetch(`${import.meta.env.VITE_API_URL}/api/files/folder`, {
+    await fetch(`/api/files/folder`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
@@ -234,7 +233,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         data.append("file", file);
         const parentId = folderStack[folderStack.length - 1];
         if (parentId) data.append("parentId", parentId);
-        await fetch(`${import.meta.env.VITE_API_URL}/api/files/upload`, {
+        await fetch(`/api/files/upload`, {
           method: "POST",
           credentials: "include",
           body: data,
@@ -249,7 +248,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const moveFiles = async (ids: string[], parentId: string | null) => {
     return operationQueue.add(async () => {
-      await fetch(`${import.meta.env.VITE_API_URL}/api/files/move`, {
+      await fetch(`/api/files/move`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -261,7 +260,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const copyFilesApi = async (ids: string[], parentId: string | null) => {
     return operationQueue.add(async () => {
-      await fetch(`${import.meta.env.VITE_API_URL}/api/files/copy`, {
+      await fetch(`/api/files/copy`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -272,7 +271,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   const renameFileApi = async (id: string, name: string) => {
-    await fetch(`${import.meta.env.VITE_API_URL}/api/files/rename`, {
+    await fetch(`/api/files/rename`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
@@ -294,7 +293,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
     ids: string[],
     shared: boolean,
   ): Promise<Record<string, string>> => {
-    const res = await fetch(`${import.meta.env.VITE_API_URL}/api/files/share`, {
+    const res = await fetch(`/api/files/share`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
@@ -306,7 +305,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   const starFilesApi = async (ids: string[], starred: boolean) => {
-    await fetch(`${import.meta.env.VITE_API_URL}/api/files/star`, {
+    await fetch(`/api/files/star`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
@@ -316,7 +315,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   const deleteFilesApi = async (ids: string[]) => {
-    await fetch(`${import.meta.env.VITE_API_URL}/api/files/delete`, {
+    await fetch(`/api/files/delete`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
@@ -326,7 +325,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   const deleteForeverApi = async (ids: string[]) => {
-    await fetch(`${import.meta.env.VITE_API_URL}/api/files/trash/delete`, {
+    await fetch(`/api/files/trash/delete`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
@@ -338,15 +337,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   const linkToParentShareApi = async (
     ids: string[],
   ): Promise<Record<string, string>> => {
-    const res = await fetch(
-      `${import.meta.env.VITE_API_URL}/api/files/link-parent-share`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ ids }),
-      },
-    );
+    const res = await fetch(`/api/files/link-parent-share`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ ids }),
+    });
     const data = await res.json();
     await refreshFiles();
     return data.links || {};
@@ -360,7 +356,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
       const endpoint = clipboard.action === "cut" ? "move" : "copy";
 
       try {
-        await fetch(`${import.meta.env.VITE_API_URL}/api/files/${endpoint}`, {
+        await fetch(`/api/files/${endpoint}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
