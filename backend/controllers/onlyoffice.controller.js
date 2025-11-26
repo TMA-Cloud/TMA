@@ -34,6 +34,71 @@ function buildSignedFileToken(fileId) {
   );
 }
 
+/**
+ * Get ONLYOFFICE JavaScript API URL
+ */
+function getOnlyofficeJsUrl() {
+  return ONLYOFFICE_URL
+    ? `${ONLYOFFICE_URL}/web-apps/apps/api/documents/api.js`
+    : 'http://localhost/web-apps/apps/api/documents/api.js';
+}
+
+/**
+ * Get user name for ONLYOFFICE
+ */
+async function getUserName(userId) {
+  const user = await getUserById(userId);
+  return user?.name || user?.email || 'User';
+}
+
+/**
+ * Build backend base URL, download URL, and callback URL
+ */
+function buildOnlyofficeUrls(req, fileId, token) {
+  const backendBaseUrl = BACKEND_URL || `${req.protocol}://${req.get('host')}`;
+  const downloadUrl = `${backendBaseUrl}/api/onlyoffice/file/${fileId}${token ? `?t=${encodeURIComponent(token)}` : ''}`;
+  const callbackUrl = `${backendBaseUrl}/api/onlyoffice/callback`;
+  return { backendBaseUrl, downloadUrl, callbackUrl };
+}
+
+/**
+ * Build ONLYOFFICE editor configuration
+ */
+function buildOnlyofficeConfig(file, userId, userName, downloadUrl, callbackUrl) {
+  const fileType = getFileTypeFromName(file.name);
+  const viewOnly = fileType === 'pdf';
+  
+  return {
+    document: {
+      fileType,
+      key: `${file.id}-${Date.now()}`,
+      title: file.name,
+      url: downloadUrl,
+    },
+    editorConfig: {
+      callbackUrl: callbackUrl,
+      mode: viewOnly ? 'view' : 'edit',
+      lang: 'en',
+      customization: {
+        autosave: !viewOnly,
+      },
+      user: {
+        id: String(userId),
+        name: userName,
+      },
+    },
+    type: 'desktop',
+  };
+}
+
+/**
+ * Sign ONLYOFFICE config with JWT token
+ */
+function signConfigToken(config) {
+  if (!ONLYOFFICE_JWT_SECRET) return null;
+  return jwt.sign(config, ONLYOFFICE_JWT_SECRET);
+}
+
 async function getConfig(req, res) {
   try {
     const fileId = validateId(req.params.id);
@@ -42,54 +107,15 @@ async function getConfig(req, res) {
     }
     const userId = req.userId;
     
-    // Fetch user info to get the name for ONLYOFFICE
-    const user = await getUserById(userId);
-    const userName = user?.name || user?.email || 'User';
-    
     const file = await getFile(fileId, userId);
     if (!file) return res.status(404).json({ message: 'File not found' });
 
-    const fileType = getFileTypeFromName(file.name);
-    const viewOnly = fileType === 'pdf';
-
+    const userName = await getUserName(userId);
     const token = buildSignedFileToken(file.id);
-    // Use BACKEND_URL if set (for Docker/remote ONLYOFFICE), otherwise derive from request
-    // ONLYOFFICE Document Server needs this URL to download files
-    const backendBaseUrl = BACKEND_URL || `${req.protocol}://${req.get('host')}`;
-    const downloadUrl = `${backendBaseUrl}/api/onlyoffice/file/${file.id}${token ? `?t=${encodeURIComponent(token)}` : ''}`;
-    const callbackUrl = `${backendBaseUrl}/api/onlyoffice/callback`;
-
-    const config = {
-      document: {
-        fileType,
-        key: `${file.id}-${Date.now()}`,
-        title: file.name,
-        url: downloadUrl,
-      },
-      editorConfig: {
-        callbackUrl: callbackUrl,
-        mode: viewOnly ? 'view' : 'edit',
-        lang: 'en',
-        customization: {
-          autosave: !viewOnly,
-        },
-        user: {
-          id: String(userId),
-          name: userName,
-        },
-      },
-      type: 'desktop',
-    };
-
-    let tokenForConfig = null;
-    if (ONLYOFFICE_JWT_SECRET) {
-      tokenForConfig = jwt.sign(config, ONLYOFFICE_JWT_SECRET);
-    }
-
-    // Include ONLYOFFICE JS URL for frontend to load the API
-    const onlyofficeJsUrl = ONLYOFFICE_URL
-      ? `${ONLYOFFICE_URL}/web-apps/apps/api/documents/api.js`
-      : 'http://localhost/web-apps/apps/api/documents/api.js';
+    const { downloadUrl, callbackUrl } = buildOnlyofficeUrls(req, file.id, token);
+    const config = buildOnlyofficeConfig(file, userId, userName, downloadUrl, callbackUrl);
+    const tokenForConfig = signConfigToken(config);
+    const onlyofficeJsUrl = getOnlyofficeJsUrl();
 
     res.json({ config, token: tokenForConfig, onlyofficeJsUrl });
   } catch (err) {
@@ -166,50 +192,19 @@ async function getViewerPage(req, res) {
     }
     const userId = req.userId;
     
-    // Verify file access
     const file = await getFile(fileId, userId);
     if (!file) return res.status(404).send('File not found');
 
-    // Get user name
-    const user = await getUserById(userId);
-    const userName = user?.name || user?.email || 'User';
-
-    const fileType = getFileTypeFromName(file.name);
-    const viewOnly = fileType === 'pdf';
+    const userName = await getUserName(userId);
     const token = buildSignedFileToken(file.id);
-    const backendBaseUrl = BACKEND_URL || `${req.protocol}://${req.get('host')}`;
-    const downloadUrl = `${backendBaseUrl}/api/onlyoffice/file/${file.id}${token ? `?t=${encodeURIComponent(token)}` : ''}`;
-    const callbackUrl = `${backendBaseUrl}/api/onlyoffice/callback`;
-    const onlyofficeJsUrl = ONLYOFFICE_URL
-      ? `${ONLYOFFICE_URL}/web-apps/apps/api/documents/api.js`
-      : 'http://localhost/web-apps/apps/api/documents/api.js';
-
-    const config = {
-      document: {
-        fileType,
-        key: `${file.id}-${Date.now()}`,
-        title: file.name,
-        url: downloadUrl,
-      },
-      editorConfig: {
-        callbackUrl: callbackUrl,
-        mode: viewOnly ? 'view' : 'edit',
-        lang: 'en',
-        customization: {
-          autosave: !viewOnly,
-        },
-        user: {
-          id: String(userId),
-          name: userName,
-        },
-      },
-      type: 'desktop',
-    };
-
-    let configToken = null;
-    if (ONLYOFFICE_JWT_SECRET) {
-      configToken = jwt.sign(config, ONLYOFFICE_JWT_SECRET);
-      if (configToken) config.token = configToken;
+    const { downloadUrl, callbackUrl } = buildOnlyofficeUrls(req, file.id, token);
+    const config = buildOnlyofficeConfig(file, userId, userName, downloadUrl, callbackUrl);
+    const configToken = signConfigToken(config);
+    const onlyofficeJsUrl = getOnlyofficeJsUrl();
+    
+    // Add token to config if JWT is enabled (for viewer page)
+    if (configToken) {
+      config.token = configToken;
     }
 
     // Generate HTML page
