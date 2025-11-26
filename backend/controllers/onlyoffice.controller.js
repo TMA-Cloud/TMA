@@ -176,7 +176,7 @@ async function getViewerPage(req, res) {
     const callbackUrl = `${backendBaseUrl}/api/onlyoffice/callback`;
     const onlyofficeJsUrl = process.env.ONLYOFFICE_URL 
       ? `${process.env.ONLYOFFICE_URL}/web-apps/apps/api/documents/api.js`
-      : 'http://localhost:2202/web-apps/apps/api/documents/api.js';
+      : 'http://localhost/web-apps/apps/api/documents/api.js';
 
     const config = {
       document: {
@@ -422,10 +422,24 @@ async function callback(req, res) {
         return res.status(200).json({ error: 0 });
       }
       
-      // Additional SSRF protection: block localhost and private IP ranges
+      // Additional SSRF protection: block localhost and private IP ranges,
+      // but allow the configured ONLYOFFICE server host/IP.
       try {
         const urlObj = new URL(body.url);
         const hostname = urlObj.hostname.toLowerCase();
+
+        // If this callback comes from our configured ONLYOFFICE server, allow it
+        let isTrustedOnlyofficeHost = false;
+        if (process.env.ONLYOFFICE_URL) {
+          try {
+            const allowedOnlyofficeHost = new URL(process.env.ONLYOFFICE_URL).hostname.toLowerCase();
+            if (hostname === allowedOnlyofficeHost) {
+              isTrustedOnlyofficeHost = true;
+            }
+          } catch {
+            // If ONLYOFFICE_URL is misconfigured, fall through to normal checks
+          }
+        }
 
         // Block localhost variations (IPv4, IPv6, domain)
         const localhostPatterns = [
@@ -452,25 +466,28 @@ async function callback(req, res) {
           /^::ffff:169\.254\./i,      // IPv4-mapped link-local
         ];
 
-        // Check localhost patterns
-        if (localhostPatterns.includes(hostname)) {
-          console.error('[ONLYOFFICE] Blocked SSRF attempt to localhost:', hostname);
-          return res.status(200).json({ error: 0 });
-        }
-
-        // Check private IPv4 ranges
-        for (const pattern of privateIPv4Patterns) {
-          if (pattern.test(hostname)) {
-            console.error('[ONLYOFFICE] Blocked SSRF attempt to private IP:', hostname);
+        // Skip local/private checks for trusted ONLYOFFICE host
+        if (!isTrustedOnlyofficeHost) {
+          // Check localhost patterns
+          if (localhostPatterns.includes(hostname)) {
+            console.error('[ONLYOFFICE] Blocked SSRF attempt to localhost:', hostname);
             return res.status(200).json({ error: 0 });
           }
-        }
 
-        // Check private IPv6 ranges
-        for (const pattern of privateIPv6Patterns) {
-          if (pattern.test(hostname)) {
-            console.error('[ONLYOFFICE] Blocked SSRF attempt to private IPv6:', hostname);
-            return res.status(200).json({ error: 0 });
+          // Check private IPv4 ranges
+          for (const pattern of privateIPv4Patterns) {
+            if (pattern.test(hostname)) {
+              console.error('[ONLYOFFICE] Blocked SSRF attempt to private IP:', hostname);
+              return res.status(200).json({ error: 0 });
+            }
+          }
+
+          // Check private IPv6 ranges
+          for (const pattern of privateIPv6Patterns) {
+            if (pattern.test(hostname)) {
+              console.error('[ONLYOFFICE] Blocked SSRF attempt to private IPv6:', hostname);
+              return res.status(200).json({ error: 0 });
+            }
           }
         }
       } catch (urlError) {

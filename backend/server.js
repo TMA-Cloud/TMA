@@ -24,14 +24,31 @@ app.use((req, res, next) => {
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), location=()');
 
+  // Allow ONLYOFFICE Document Server for scripts / connections / iframes, if configured
+  let scriptSrc = "script-src 'self' 'unsafe-inline' 'unsafe-eval'";
+  let connectSrc = "connect-src 'self'";
+  let frameSrc = "frame-src 'self'";
+  const onlyofficeBase = process.env.ONLYOFFICE_URL;
+  if (onlyofficeBase) {
+    try {
+      const onlyofficeOrigin = new URL(onlyofficeBase).origin;
+      scriptSrc += ` ${onlyofficeOrigin}`;
+      connectSrc += ` ${onlyofficeOrigin}`;
+      frameSrc += ` ${onlyofficeOrigin}`;
+    } catch {
+      // ignore invalid URL, fall back to strict defaults
+    }
+  }
+
   // Content Security Policy - allow only necessary sources
   const csp = [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval'", // unsafe-inline/eval needed for some frameworks
+    scriptSrc, // unsafe-inline/eval needed for some frameworks
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
     "font-src 'self' data:",
-    "connect-src 'self'",
+    connectSrc,
+    frameSrc,
     "frame-ancestors 'none'",
     "base-uri 'self'",
     "form-action 'self'"
