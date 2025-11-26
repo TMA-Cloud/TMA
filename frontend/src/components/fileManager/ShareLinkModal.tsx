@@ -11,11 +11,34 @@ export const ShareLinkModal: React.FC = () => {
 
   const handleClose = () => setShareLinkModalOpen(false);
 
-  const copy = (link: string) => {
-    navigator.clipboard.writeText(link);
-    setCopiedLink(link);
-    showToast("Link copied to clipboard", "success");
-    setTimeout(() => setCopiedLink(null), 2000);
+  const copy = async (link: string) => {
+    try {
+      // Try modern clipboard API first
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(link);
+      } else {
+        // Fallback for older browsers
+        const textArea = document.createElement("textarea");
+        textArea.value = link;
+        textArea.style.position = "fixed";
+        textArea.style.left = "-999999px";
+        textArea.style.top = "-999999px";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        const successful = document.execCommand("copy");
+        document.body.removeChild(textArea);
+        if (!successful) {
+          throw new Error("Copy command failed");
+        }
+      }
+      setCopiedLink(link);
+      showToast("Link copied to clipboard", "success");
+      setTimeout(() => setCopiedLink(null), 2000);
+    } catch (error) {
+      console.error("Failed to copy link:", error);
+      showToast("Failed to copy link", "error");
+    }
   };
 
   if (!shareLinkModalOpen) return null;
@@ -35,8 +58,14 @@ export const ShareLinkModal: React.FC = () => {
                 className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-200"
               />
               <button
-                onClick={() => copy(link)}
-                className="p-2 rounded-lg bg-blue-500 hover:bg-blue-600 text-white"
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  copy(link);
+                }}
+                className="p-2 rounded-lg bg-blue-500 hover:bg-blue-600 text-white transition-colors"
+                aria-label="Copy link to clipboard"
               >
                 <Clipboard className="w-4 h-4" />
               </button>
