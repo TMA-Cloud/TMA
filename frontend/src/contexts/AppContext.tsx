@@ -65,6 +65,7 @@ export interface AppContextType {
     ids: string[],
     shared: boolean,
   ) => Promise<Record<string, string>>;
+  getShareLinks: (ids: string[]) => Promise<Record<string, string>>;
   linkToParentShare: (ids: string[]) => Promise<Record<string, string>>;
   starFiles: (ids: string[], starred: boolean) => Promise<void>;
   deleteFiles: (ids: string[]) => Promise<void>;

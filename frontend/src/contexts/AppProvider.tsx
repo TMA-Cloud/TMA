@@ -304,6 +304,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
     return data.links || {};
   };
 
+  const getShareLinks = async (
+    ids: string[],
+  ): Promise<Record<string, string>> => {
+    const res = await fetch(`/api/files/share/links`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ ids }),
+    });
+    const data = await res.json();
+    return data.links || {};
+  };
+
   const starFilesApi = async (ids: string[], starred: boolean) => {
     await fetch(`/api/files/star`, {
       method: "POST",
@@ -476,6 +489,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         moveFiles,
         copyFiles: copyFilesApi,
         shareFiles: shareFilesApi,
+        getShareLinks,
         linkToParentShare: linkToParentShareApi,
         starFiles: starFilesApi,
         deleteFiles: deleteFilesApi,

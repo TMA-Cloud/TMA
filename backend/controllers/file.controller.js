@@ -391,6 +391,28 @@ async function searchFilesController(req, res) {
   }
 }
 
+async function getShareLinksController(req, res) {
+  try {
+    const { ids } = req.body;
+    const validatedIds = validateIdArray(ids);
+    if (!validatedIds) {
+      return sendError(res, 400, 'Invalid ids array');
+    }
+
+    const links = {};
+    for (const id of validatedIds) {
+      const token = await getShareLink(id, req.userId);
+      if (token) {
+        links[id] = token;
+      }
+    }
+
+    sendSuccess(res, { success: true, links });
+  } catch (err) {
+    sendError(res, 500, 'Server error', err);
+  }
+}
+
 async function getFileStatsController(req, res) {
   try {
     const stats = await getFileStats(req.userId);
@@ -411,6 +433,7 @@ module.exports = {
   starFiles: starFilesController,
   listStarred,
   shareFiles: shareFilesController,
+  getShareLinks: getShareLinksController,
   listShared,
   linkParentShare: linkParentShareController,
   deleteFiles: deleteFilesController,

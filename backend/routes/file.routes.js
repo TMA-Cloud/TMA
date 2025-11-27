@@ -10,6 +10,7 @@ const {
   starFiles,
   listStarred,
   shareFiles,
+  getShareLinks,
   listShared,
   linkParentShare,
   deleteFiles,
@@ -37,6 +38,7 @@ router.post('/rename', renameFile);
 router.post('/star', starFiles);
 router.get('/starred', listStarred);
 router.post('/share', shareFiles);
+router.post('/share/links', getShareLinks);
 router.get('/shared', listShared);
 router.post('/link-parent-share', linkParentShare);
 router.post('/delete', deleteFiles);

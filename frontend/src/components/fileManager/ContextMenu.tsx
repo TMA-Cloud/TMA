@@ -8,8 +8,10 @@ import {
   Scissors,
   ClipboardPaste,
   Download,
+  Link2,
 } from "lucide-react";
 import { useApp } from "../../contexts/AppContext";
+import { useToast } from "../../hooks/useToast";
 
 interface ContextMenuProps {
   isOpen: boolean;
@@ -38,6 +40,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     files,
     setRenameTarget,
     shareFiles,
+    getShareLinks,
     linkToParentShare,
     starFiles,
     deleteFiles,
@@ -47,12 +50,15 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     downloadFiles,
     isDownloading,
   } = useApp();
+  const { showToast } = useToast();
 
   const selectedItems = files.filter((f) => selectedFiles.includes(f.id));
   const allStarred =
     selectedItems.length > 0 && selectedItems.every((f) => f.starred);
   const allShared =
     selectedItems.length > 0 && selectedItems.every((f) => f.shared);
+  const anyShared =
+    selectedItems.length > 0 && selectedItems.some((f) => f.shared);
   const parentShared = folderSharedStack[folderSharedStack.length - 1];
   const allUnshared =
     selectedItems.length > 0 && selectedItems.every((f) => !f.shared);
@@ -85,6 +91,49 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
           }
         },
       },
+      ...(anyShared
+        ? [
+            {
+              icon: Link2,
+              label: "Copy Link",
+              action: async () => {
+                const sharedIds = selectedItems
+                  .filter((file) => file.shared)
+                  .map((file) => file.id);
+                if (sharedIds.length === 0) return;
+                const links = await getShareLinks(sharedIds);
+                const base = window.location.origin;
+                const list = Object.values(links).map(
+                  (token) => `${base}/s/${token}`,
+                );
+                if (!list.length) return;
+
+                const text = list.join("\n");
+                try {
+                  if (navigator.clipboard?.writeText) {
+                    await navigator.clipboard.writeText(text);
+                  } else {
+                    const textArea = document.createElement("textarea");
+                    textArea.value = text;
+                    textArea.style.position = "fixed";
+                    textArea.style.left = "-999999px";
+                    textArea.style.top = "-999999px";
+                    document.body.appendChild(textArea);
+                    textArea.focus();
+                    textArea.select();
+                    const successful = document.execCommand("copy");
+                    document.body.removeChild(textArea);
+                    if (!successful) throw new Error("Copy command failed");
+                  }
+                  showToast("Link copied to clipboard", "success");
+                } catch (error) {
+                  console.error("Failed to copy link:", error);
+                  showToast("Failed to copy link", "error");
+                }
+              },
+            },
+          ]
+        : []),
       {
         icon: Download,
         label: "Download",
@@ -140,9 +189,12 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
       allUnshared,
       linkToParentShare,
       selectedFiles,
+      selectedItems,
       setShareLinkModalOpen,
       shareFiles,
+      getShareLinks,
       allShared,
+      anyShared,
       starFiles,
       allStarred,
       setClipboard,
@@ -157,6 +209,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
       deleteFiles,
       downloadFiles,
       isDownloading,
+      showToast,
     ],
   );
 
