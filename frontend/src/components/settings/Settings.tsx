@@ -1,7 +1,13 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "../../contexts/AuthContext";
 import { useStorageUsage } from "../../hooks/useStorageUsage";
-import { User, HardDrive, Settings as SettingsIcon } from "lucide-react";
+import {
+  User,
+  HardDrive,
+  Settings as SettingsIcon,
+  ChevronRight,
+  Loader2,
+} from "lucide-react";
 import { formatFileSize } from "../../utils/fileUtils";
 import { getSignupStatus, toggleSignup, fetchAllUsers } from "../../utils/api";
 import type { UserSummary } from "../../utils/api";
@@ -22,6 +28,10 @@ export const Settings: React.FC = () => {
   const [usersList, setUsersList] = useState<UserSummary[]>([]);
   const [loadingUsersList, setLoadingUsersList] = useState(false);
   const [usersListError, setUsersListError] = useState<string | null>(null);
+  const storageUsagePercent =
+    usage && usage.total > 0
+      ? Math.min(100, Math.round((usage.used / usage.total) * 100))
+      : null;
 
   useEffect(() => {
     loadSignupStatus();
@@ -106,6 +116,7 @@ export const Settings: React.FC = () => {
     {
       title: "Profile",
       icon: User,
+      description: "Personal information that appears on shared items.",
       items: [
         { label: "Full Name", value: user?.name || "" },
         { label: "Email", value: user?.email || "" },
@@ -114,6 +125,7 @@ export const Settings: React.FC = () => {
     {
       title: "Storage",
       icon: HardDrive,
+      description: "Track how your allocated drive space is being used.",
       items: [
         {
           label: "Used Space",
@@ -133,6 +145,7 @@ export const Settings: React.FC = () => {
           {
             title: "Administration",
             icon: SettingsIcon,
+            description: "Manage workspace access, visibility, and onboarding.",
             items: [
               {
                 label: "Other Registered Users",
@@ -175,15 +188,61 @@ export const Settings: React.FC = () => {
   ];
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">
-          Settings
-        </h1>
-        <p className="text-gray-600 dark:text-gray-400">
-          Manage your account preferences and application settings.
-        </p>
+    <div className="p-6 md:p-8 space-y-8 bg-gradient-to-b from-gray-50/60 to-white dark:from-gray-900/40 dark:to-gray-950/60 rounded-3xl">
+      {/* Hero / Header */}
+      <div
+        className="relative overflow-hidden border border-gray-200/70 dark:border-gray-800/70 rounded-2xl bg-white/80 dark:bg-gray-900/70 shadow-sm"
+        style={{ animation: "fadeIn 0.45s ease both" }}
+      >
+        <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 via-transparent to-purple-500/10" />
+        <div className="absolute -top-10 -right-10 w-40 h-40 bg-blue-500/20 blur-3xl pointer-events-none" />
+        <div className="relative flex flex-col gap-6 p-6 md:flex-row md:items-center md:justify-between">
+          <div className="space-y-2">
+            <p className="uppercase tracking-[0.35em] text-xs font-semibold text-blue-500">
+              Control Center
+            </p>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
+              Settings
+            </h1>
+            <p className="text-gray-600 dark:text-gray-400 max-w-2xl">
+              Manage your account preferences and smoothly adjust application
+              controls without leaving this page.
+            </p>
+            {user?.name && (
+              <div className="inline-flex items-center gap-2 mt-3 px-3 py-1.5 rounded-full bg-blue-500/10 text-sm text-blue-700 dark:text-blue-200 border border-blue-500/20">
+                <User className="w-4 h-4" />
+                <span>Signed in as {user.name}</span>
+              </div>
+            )}
+          </div>
+
+          <div className="w-full md:w-1/2 space-y-3">
+            <div className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400">
+              <span>Storage usage</span>
+              <span>
+                {storageUsagePercent !== null
+                  ? `${storageUsagePercent}%`
+                  : "Loading..."}
+              </span>
+            </div>
+            <div className="h-2 w-full rounded-full bg-gray-200/70 dark:bg-gray-800/60 overflow-hidden">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 transition-[width] duration-500"
+                style={{
+                  width:
+                    storageUsagePercent !== null
+                      ? `${storageUsagePercent}%`
+                      : "0%",
+                }}
+              />
+            </div>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              {loading || !usage
+                ? "Calculating storage details..."
+                : `${formatFileSize(usage.used)} used · ${formatFileSize(usage.free)} free of ${formatFileSize(usage.total)}`}
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* Settings Sections */}
@@ -194,25 +253,45 @@ export const Settings: React.FC = () => {
           return (
             <div
               key={index}
-              className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700"
+              className="relative overflow-hidden bg-white/90 dark:bg-gray-900/70 rounded-2xl p-6 border border-gray-200/70 dark:border-gray-800/70 shadow-sm hover:shadow-lg transition-shadow duration-300"
+              style={{
+                animation: "slideUp 0.45s cubic-bezier(0.16, 1, 0.3, 1) both",
+                animationDelay: `${index * 80}ms`,
+              }}
             >
-              <div className="flex items-center space-x-2 mb-4">
-                <Icon className="w-5 h-5 text-blue-500" />
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                  {section.title}
-                </h3>
+              <div className="absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-blue-500/40 to-transparent" />
+
+              <div className="flex flex-wrap items-center gap-3 mb-6">
+                <div className="p-3 rounded-2xl bg-blue-500/10 text-blue-600 dark:text-blue-300">
+                  <Icon className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                    {section.title}
+                  </h3>
+                  {"description" in section && section.description && (
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      {section.description}
+                    </p>
+                  )}
+                </div>
               </div>
 
               <div className="space-y-4">
                 {section.items.map((item, itemIndex) => (
                   <div
                     key={itemIndex}
-                    className="flex items-center justify-between border-b border-dashed border-gray-200 dark:border-gray-700 pb-2 mb-2 last:border-b-0 last:pb-0 last:mb-0"
+                    className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-2xl bg-gray-50/70 dark:bg-gray-900/60 px-4 py-3 border border-transparent hover:border-blue-500/40 transition-all duration-200"
                   >
                     <div>
                       <p className="font-medium text-gray-900 dark:text-gray-100">
                         {item.label}
                       </p>
+                      {"description" in item && item.description && (
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                          {item.description}
+                        </p>
+                      )}
                     </div>
 
                     {"toggle" in item && item.toggle !== undefined ? (
@@ -221,24 +300,19 @@ export const Settings: React.FC = () => {
                           onClick={handleToggleSignup}
                           disabled={togglingSignup || loadingSignupStatus}
                           className={`
-                            relative inline-flex h-6 w-11 items-center rounded-full transition-colors
-                            ${item.value ? "bg-blue-500" : "bg-gray-200 dark:bg-gray-600"}
+                            relative inline-flex h-6 w-12 items-center rounded-full transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500
+                            ${item.value ? "bg-gradient-to-r from-blue-500 to-indigo-500" : "bg-gray-200 dark:bg-gray-700"}
                             ${togglingSignup || loadingSignupStatus ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}
                           `}
                           aria-label={item.label}
                         >
                           <span
                             className={`
-                              inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-300
-                              ${item.value ? "translate-x-6" : "translate-x-1"}
+                              inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-300
+                              ${item.value ? "translate-x-7" : "translate-x-1"}
                             `}
                           />
                         </button>
-                        {"description" in item && item.description && (
-                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 max-w-[200px] text-right">
-                            {item.description}
-                          </p>
-                        )}
                       </div>
                     ) : "action" in item && item.action !== undefined ? (
                       <div className="flex flex-col items-end">
@@ -258,7 +332,7 @@ export const Settings: React.FC = () => {
                             )
                           }
                           className={`
-                            px-3 py-1 text-sm rounded-lg transition-colors duration-200
+                            inline-flex items-center gap-2 px-4 py-2 text-sm rounded-2xl transition-all duration-200 border
                             ${
                               ("actionDisabled" in item &&
                                 item.actionDisabled === true) ||
@@ -266,21 +340,22 @@ export const Settings: React.FC = () => {
                                 "onAction" in item &&
                                 typeof item.onAction === "function"
                               )
-                                ? "bg-gray-300 dark:bg-gray-600 cursor-not-allowed opacity-70"
-                                : "bg-blue-500 hover:bg-blue-600 text-white"
+                                ? "bg-gray-200 dark:bg-gray-700 cursor-not-allowed opacity-70 border-transparent"
+                                : "border-blue-500/40 text-blue-600 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/30"
                             }
                           `}
                         >
-                          {item.action}
+                          {item.label === "Registered Users" &&
+                          loadingUsersList ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <ChevronRight className="w-4 h-4" />
+                          )}
+                          <span>{item.action}</span>
                         </button>
-                        {"description" in item && item.description && (
-                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 max-w-[200px] text-right">
-                            {item.description}
-                          </p>
-                        )}
                       </div>
                     ) : (
-                      <span className="text-gray-500 dark:text-gray-400">
+                      <span className="text-base font-semibold text-gray-700 dark:text-gray-200 text-right">
                         {item.value}
                       </span>
                     )}
@@ -328,7 +403,8 @@ export const Settings: React.FC = () => {
           )}
 
           {loadingUsersList ? (
-            <p className="text-center text-gray-600 dark:text-gray-300">
+            <p className="text-center text-gray-600 dark:text-gray-300 flex items-center justify-center gap-2">
+              <Loader2 className="w-4 h-4 animate-spin" />
               Loading users...
             </p>
           ) : usersList.length === 0 ? (
@@ -349,7 +425,7 @@ export const Settings: React.FC = () => {
                   {usersList.map((listedUser) => (
                     <tr
                       key={listedUser.id}
-                      className="border-b border-gray-100 dark:border-gray-800 last:border-b-0"
+                      className="border-b border-gray-100 dark:border-gray-800 last:border-b-0 hover:bg-gray-50/60 dark:hover:bg-gray-900/40 transition-colors"
                     >
                       <td className="py-2 pr-4 text-gray-900 dark:text-gray-100">
                         {listedUser.name || "Unnamed"}
