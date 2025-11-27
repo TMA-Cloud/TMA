@@ -88,11 +88,16 @@ export async function checkGoogleAuthEnabled(): Promise<boolean> {
 export async function getSignupStatus(): Promise<{
   signupEnabled: boolean;
   canToggle: boolean;
+  totalUsers?: number;
+  additionalUsers?: number;
 }> {
   try {
-    return await apiGet<{ signupEnabled: boolean; canToggle: boolean }>(
-      "/api/user/signup-status",
-    );
+    return await apiGet<{
+      signupEnabled: boolean;
+      canToggle: boolean;
+      totalUsers?: number;
+      additionalUsers?: number;
+    }>("/api/user/signup-status");
   } catch {
     return { signupEnabled: true, canToggle: false };
   }
@@ -107,6 +112,19 @@ export async function toggleSignup(
   return await apiPost<{ signupEnabled: boolean }>("/api/user/signup-toggle", {
     enabled,
   });
+}
+
+export interface UserSummary {
+  id: string;
+  name: string;
+  email: string;
+  createdAt: string;
+}
+
+export async function fetchAllUsers(): Promise<{
+  users: UserSummary[];
+}> {
+  return await apiGet<{ users: UserSummary[] }>("/api/user/all");
 }
 
 /**

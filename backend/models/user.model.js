@@ -107,6 +107,18 @@ async function getSignupEnabled() {
   return result.rows[0].signup_enabled;
 }
 
+async function getTotalUserCount() {
+  const result = await pool.query('SELECT COUNT(*) AS count FROM users');
+  return Number(result.rows[0]?.count || 0);
+}
+
+async function getAllUsersBasic() {
+  const result = await pool.query(
+    'SELECT id, email, name, created_at FROM users ORDER BY created_at ASC'
+  );
+  return result.rows;
+}
+
 async function setSignupEnabled(enabled, userId) {
   // Use transaction to ensure atomicity and verify user is first user
   const client = await pool.connect();
@@ -185,5 +197,7 @@ module.exports = {
   updateGoogleId,
   isFirstUser,
   getSignupEnabled,
-  setSignupEnabled
+  setSignupEnabled,
+  getTotalUserCount,
+  getAllUsersBasic
 };

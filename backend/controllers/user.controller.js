@@ -1,4 +1,11 @@
-const { getUserStorageUsage, isFirstUser, getSignupEnabled, setSignupEnabled } = require('../models/user.model');
+const {
+  getUserStorageUsage,
+  isFirstUser,
+  getSignupEnabled,
+  setSignupEnabled,
+  getTotalUserCount,
+  getAllUsersBasic
+} = require('../models/user.model');
 const checkDiskSpace = require('check-disk-space').default;
 const { sendError, sendSuccess } = require('../utils/response');
 const { CUSTOM_DRIVE_ENABLED, CUSTOM_DRIVE_PATH } = require('../config/paths');
@@ -70,7 +77,18 @@ async function getSignupStatus(req, res) {
   try {
     const signupEnabled = await getSignupEnabled();
     const userIsFirst = await isFirstUser(req.userId);
-    sendSuccess(res, { signupEnabled, canToggle: userIsFirst });
+    let totalUsers;
+
+    if (userIsFirst) {
+      totalUsers = await getTotalUserCount();
+    }
+
+    sendSuccess(res, {
+      signupEnabled,
+      canToggle: userIsFirst,
+      totalUsers,
+      additionalUsers: typeof totalUsers === 'number' ? Math.max(totalUsers - 1, 0) : undefined
+    });
   } catch (err) {
     sendError(res, 500, 'Server error', err);
   }
@@ -103,4 +121,25 @@ async function toggleSignup(req, res) {
   }
 }
 
-module.exports = { storageUsage, getSignupStatus, toggleSignup };
+async function listUsers(req, res) {
+  try {
+    const userIsFirst = await isFirstUser(req.userId);
+    if (!userIsFirst) {
+      console.warn(`[SECURITY] Unauthorized user list attempt by user ${req.userId}`);
+      return sendError(res, 403, 'Only the first user can view all users');
+    }
+
+    const users = (await getAllUsersBasic()).map((user) => ({
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      createdAt: user.created_at
+    }));
+    sendSuccess(res, { users });
+  } catch (err) {
+    console.error('[ERROR] Failed to fetch users list:', err);
+    sendError(res, 500, 'Server error', err);
+  }
+}
+
+module.exports = { storageUsage, getSignupStatus, toggleSignup, listUsers };
