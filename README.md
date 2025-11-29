@@ -4,15 +4,15 @@ A self-hosted cloud storage platform providing robust file storage and managemen
 
 ## Features
 
-- 🔐 **Authentication**: JWT-based auth with optional Google OAuth
-- 🔒 **Signup Control**: Self-hosted deployments can control user registration
-- 📁 **File Management**: Upload, download, organize, and manage files and folders
-- 🔗 **Sharing**: Create shareable links for files and folders
-- 📝 **Document Editing**: OnlyOffice integration for online document editing
-- 🎨 **Modern UI**: React + TypeScript frontend with Tailwind CSS
-- 🗄️ **PostgreSQL**: Robust database with automatic migrations
-- 🧹 **Background Services**: Automatic cleanup of trash and orphaned files
-- 📊 **Audit Logging**: Comprehensive audit trail with queue-based event tracking
+- 🔐 **Authentication** --- JWT-based auth with optional Google OAuth
+- 🔒 **Signup Control** --- Self-hosted deployments can control user registration
+- 📁 **File Management** --- Upload, download, organize, and manage files and folders
+- 🔗 **Sharing** --- Create shareable links for files and folders
+- 📝 **Document Editing** --- OnlyOffice integration for online document editing
+- 🎨 **Modern UI** --- React + TypeScript frontend with Tailwind CSS
+- 🗄️ **PostgreSQL** --- Robust database with automatic migrations
+- 🧹 **Background Services** --- Automatic cleanup of trash and orphaned files
+- 📊 **Audit Logging** --- Comprehensive audit trail with queue-based event tracking
 
 ## Quick Start
 
@@ -49,7 +49,7 @@ npm start
 # Access the application at http://localhost:3000
 ```
 
-For detailed setup instructions, see [docs/setup.md](docs/setup.md).
+For detailed setup instructions, see [docs/setup.md](docs/setup.md)
 
 ## Documentation
 
@@ -64,7 +64,8 @@ For detailed setup instructions, see [docs/setup.md](docs/setup.md).
 
 ## Contributing
 
-Pull requests are welcome! Feel free to open issues for any bugs or feature requests.
+Contributions, issues, and feature requests are welcome!\
+Feel free to open a pull request or create an issue.
 
 ## License
 
@@ -72,4 +73,4 @@ This project is released under the [MIT License](LICENSE).
 
 ## Credits
 
-- [**Zinadin Zidan**](https://github.com/ZIDAN44) - Developer and creator.
+- **[Zinadin Zidan](https://github.com/ZIDAN44)** --- Developer & creator

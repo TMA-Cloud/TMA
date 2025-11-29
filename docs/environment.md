@@ -239,7 +239,7 @@ Create a `.env` file in the `backend/` directory with the following variables.
 - **Required:** No
 - **Default:** `127.0.0.1,::1`
 - **Description:** IP addresses allowed to access metrics endpoint
-- **Example:** `METRICS_ALLOWED_IPS=127.0.0.1,::1,10.0.0.5`
+- **Example:** `METRICS_ALLOWED_IPS=127.0.0.1,::1`
 - **Note:** Restricts access to `/metrics` endpoint for security
 
 ### Audit Logging Configuration

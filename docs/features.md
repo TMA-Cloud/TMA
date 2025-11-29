@@ -24,9 +24,14 @@ Optional Google OAuth integration:
 
 **Setup:**
 
-1. Create Google OAuth credentials
-2. Configure `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`
-3. Enable in application
+1. Create Google OAuth credentials in [Google Cloud Console](https://console.cloud.google.com/)
+2. Configure environment variables (see [Environment Variables](environment.md#google-oauth-20-optional))
+   - `GOOGLE_CLIENT_ID` - OAuth client ID
+   - `GOOGLE_CLIENT_SECRET` - OAuth client secret
+   - `GOOGLE_REDIRECT_URI` - Must match backend domain: `http://YOUR_DOMAIN:PORT/api/google/callback`
+3. Enable in application (automatically enabled when all three variables are set)
+
+See [Setup Guide](setup.md#google-oauth-issues) for troubleshooting.
 
 ### Signup Control (Self-Hosted)
 
@@ -159,9 +164,13 @@ Online document editing with OnlyOffice:
 ### Setup
 
 1. Install OnlyOffice Document Server
-2. Configure `ONLYOFFICE_JWT_SECRET` and `BACKEND_URL`
-3. Set `ONLYOFFICE_JS_URL` in frontend
-4. Enable integration
+2. Configure environment variables (see [Environment Variables](environment.md#backend-onlyoffice-integration-optional))
+   - `ONLYOFFICE_JWT_SECRET` - JWT secret for document server communication
+   - `ONLYOFFICE_URL` - Document server URL
+   - `BACKEND_URL` - Public backend URL accessible by document server
+3. No frontend configuration needed - OnlyOffice integration is handled automatically
+
+See [Setup Guide](setup.md#onlyoffice-integration-issues) for troubleshooting.
 
 ## Storage Management
 
@@ -251,17 +260,21 @@ Optional external drive integration:
 
 **Setup:**
 
-1. Set `CUSTOM_DRIVE=yes`
-2. Configure `CUSTOM_DRIVE_PATH` to external directory
+1. Set `CUSTOM_DRIVE=yes` in environment variables
+2. Configure `CUSTOM_DRIVE_PATH` to absolute path of external directory
 3. Service automatically syncs files
+
+See [Environment Variables](environment.md#custom-drive-integration-optional) for configuration details.
 
 ### Audit Worker
 
-Queue-based audit event processing:
+Queue-based audit event processing system that writes audit events to the database asynchronously. The worker processes events from a PostgreSQL-based queue (pg-boss) and writes them to the `audit_logs` table.
 
-- Processes audit events asynchronously
+**Key Features:**
+
+- Processes audit events asynchronously (non-blocking)
 - Writes to `audit_logs` database table
-- Configurable concurrency
+- Configurable concurrency (`AUDIT_WORKER_CONCURRENCY`)
 - Automatic retry on failure
 - Runs as separate process
 
@@ -271,79 +284,29 @@ Queue-based audit event processing:
 npm run worker
 ```
 
+**Important:** The audit worker must be running in production. Without it, audit events are queued but not written to the database.
+
+See [Audit Documentation](audit.md) for complete setup, configuration, and monitoring details.
+
 ## Logging and Monitoring
 
 ### Structured Logging
 
-TMA Cloud uses **Pino** for high-performance structured logging:
+TMA Cloud uses **Pino** for high-performance structured logging with automatic secret masking, structured JSON logs, and request/response logging. All sensitive data (JWTs, passwords, cookies) is automatically redacted in logs.
 
-**Features:**
+**Key Features:**
 
-- **JSON Logs**: Structured logs for easy parsing and analysis
-- **Pretty Printing**: Human-readable logs for development
-- **Multiple Log Levels**: fatal, error, warn, info, debug, trace
-- **Request Logging**: Automatic HTTP request/response logging
-- **Context Propagation**: Request ID and user ID tracked across logs
+- Structured JSON logs for easy parsing
+- Automatic secret masking (passwords, tokens, cookies)
+- Request/response logging with context propagation
+- Multiple log levels (fatal, error, warn, info, debug, trace)
+- Pretty-print format for development
 
-**Configuration:**
-
-```bash
-# Log level (debug recommended for development)
-LOG_LEVEL=debug
-
-# Log format (pretty for development, json for production)
-LOG_FORMAT=pretty
-```
-
-**Example Log Output:**
-
-```json
-{
-  "level": 30,
-  "time": 1679251200000,
-  "requestId": "abc123",
-  "userId": "user_001",
-  "msg": "File uploaded successfully",
-  "fileName": "document.pdf",
-  "fileSize": 1024000
-}
-```
-
-See [Logging Documentation](logging.md) for details.
-
-### Secret Masking
-
-Automatic redaction of sensitive data in logs:
-
-**Masked Data:**
-
-- JWT tokens (partial masking: `eyJh...***...mVw`)
-- Passwords (fully redacted: `[REDACTED]`)
-- Cookies (values masked, options preserved)
-- Authorization headers (Bearer tokens masked)
-- API keys and secrets (partial masking)
-- OAuth tokens and secrets
-
-**Why It Matters:**
-
-- Prevents credential leakage in logs
-- Safe to use debug logging in production
-- Compliance with security best practices
-- Protects user privacy
-
-**Example:**
-
-```javascript
-// Request with Authorization header
-Authorization: Bearer eyJhbGci...long_token...XVCmVw
-
-// Logged as:
-Authorization: Bearer eyJhbGci...***...mVw
-```
+See [Logging Documentation](logging.md) for complete details, configuration, and examples.
 
 ### Audit Trail
 
-Comprehensive audit logging system tracks all critical actions:
+Comprehensive audit logging system tracks all critical user actions and system events. The system uses a queue-based architecture to ensure reliable event capture without impacting performance.
 
 **Tracked Events:**
 
@@ -354,86 +317,21 @@ Comprehensive audit logging system tracks all critical actions:
 - **Document Operations**: Open, save (OnlyOffice)
 - **Settings**: Configuration changes
 
-**Audit Log Contents:**
+**Key Features:**
 
-- Event type and timestamp
-- User who performed action
-- IP address and user agent
-- Resource type and ID (file, folder, share)
-- Status (success/failure)
-- Rich metadata (file names, sizes, types, destinations)
+- Complete user activity tracking with IP addresses
+- Rich metadata for each event (file names, sizes, types, destinations)
+- PostgreSQL storage with queryable JSONB metadata
+- Asynchronous processing via audit worker
+- Success and failure status tracking
 
-**Example Audit Entry:**
-
-```json
-{
-  "id": 1234,
-  "event_type": "file.upload",
-  "user_id": "user_abc123",
-  "status": "success",
-  "resource_type": "file",
-  "resource_id": "file_xyz789",
-  "ip_address": "192.168.1.100",
-  "metadata": {
-    "fileName": "report.pdf",
-    "fileSize": 2048000,
-    "mimeType": "application/pdf"
-  },
-  "created_at": "2025-01-15T14:30:00Z"
-}
-```
-
-**Query Audit Logs:**
-
-```sql
--- View user activity
-SELECT * FROM audit_logs
-WHERE user_id = 'user_123'
-ORDER BY created_at DESC;
-
--- View failed operations
-SELECT * FROM audit_logs
-WHERE status = 'failure'
-ORDER BY created_at DESC;
-
--- View file operations
-SELECT * FROM audit_logs
-WHERE event_type LIKE 'file.%'
-ORDER BY created_at DESC;
-```
-
-**Benefits:**
-
-- Complete user activity tracking
-- Security incident investigation
-- Compliance (GDPR, HIPAA, SOC 2)
-- User behavior analysis
-- Debugging and troubleshooting
-
-See [Audit Documentation](audit.md) for details.
+See [Audit Documentation](audit.md) for complete details, event types, query examples, and worker setup.
 
 ### Application Metrics
 
-Monitor application health via metrics endpoint:
+Monitor application health and performance via the `/metrics` endpoint. Access is restricted by IP address for security.
 
-**Endpoint:** `GET /metrics`
-
-**Access Control:** Restricted by IP address (see `METRICS_ALLOWED_IPS`)
-
-**Available Metrics:**
-
-- Application uptime
-- Memory usage
-- CPU usage
-- Request statistics
-- Error rates
-
-**Configuration:**
-
-```bash
-# Allow specific IPs to access metrics
-METRICS_ALLOWED_IPS=127.0.0.1,::1,10.0.0.5
-```
+See [API Documentation - Metrics](api.md#monitoring) for endpoint details, available metrics, and configuration.
 
 ## User Interface
 

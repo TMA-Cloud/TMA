@@ -85,10 +85,21 @@ The built files will be in the `dist` directory and will be served by the backen
 
 #### Production Mode (Recommended)
 
+**Terminal 1 - Backend Server:**
+
 ```bash
 cd ../backend
 npm start
 ```
+
+**Terminal 2 - Audit Worker (Required for Production):**
+
+```bash
+cd backend
+npm run worker
+```
+
+**Important:** The audit worker must be running in production to process audit events. Without it, audit events will be queued but not written to the database.
 
 Access the application at `http://localhost:3000` (or your configured BPORT).
 
@@ -142,6 +153,14 @@ You should see the login/signup page.
 
 Sign up with a new account to test the system. The first user automatically becomes the admin and can control signup settings.
 
+### 4. Verify Audit Worker (Production)
+
+If running in production mode, verify the audit worker is processing events:
+
+- Check worker logs for "Audit worker started" message
+- Perform an action (e.g., upload a file) and verify audit events are logged
+- See [Audit Documentation](audit.md) for monitoring and troubleshooting
+
 ## Troubleshooting
 
 ### Database Connection Issues
@@ -184,9 +203,19 @@ Sign up with a new account to test the system. The first user automatically beco
 - Check that the Document Server can reach your backend via `BACKEND_URL`
 - Verify firewall rules allow communication between servers
 
+### Audit Worker Issues
+
+- Ensure the audit worker is running: `npm run worker`
+- Check that `AUDIT_WORKER_CONCURRENCY` is set appropriately (default: 5)
+- Verify database connection in worker logs
+- Check pg-boss queue status (see [Audit Documentation](audit.md) for query examples)
+- Ensure PostgreSQL has sufficient connections for both backend and worker
+
 ## Next Steps
 
 - Read the [Architecture Overview](architecture.md) to understand the system design
 - Check [API Documentation](api.md) for available endpoints
 - Review [Features](features.md) to learn about available functionality
 - Configure [Environment Variables](environment.md) for your deployment
+- **Important:** Ensure the [Audit Worker](audit.md#starting-the-audit-worker) is running in production
+- Review [Logging System](logging.md) for monitoring and debugging

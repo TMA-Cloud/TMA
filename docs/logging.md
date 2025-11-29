@@ -257,33 +257,7 @@ npm start > logs/app.log 2>&1
 
 ## Metrics Endpoint
 
-### Access Metrics
-
-View application metrics:
-
-```bash
-GET http://localhost:3000/metrics
-```
-
-**Requires:**
-
-- Request from allowed IP (see `METRICS_ALLOWED_IPS`)
-
-**Returns:**
-
-- Application uptime
-- Memory usage
-- CPU usage
-- Request statistics
-- Error rates
-
-### Security
-
-Only IPs listed in `METRICS_ALLOWED_IPS` can access metrics:
-
-```bash
-METRICS_ALLOWED_IPS=127.0.0.1,::1,10.0.0.5
-```
+Application metrics are available via the `/metrics` endpoint. For complete documentation including access control, available metrics, and configuration, see [API Documentation - Monitoring](api.md#monitoring).
 
 ## Related Documentation
 
