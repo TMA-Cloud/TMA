@@ -29,7 +29,7 @@ function createZipArchive(res, archiveName, entries, rootId, baseName) {
           const p = resolveFilePath(entry.path);
           archive.file(p, { name: relPath });
         } catch (err) {
-          console.error(`[ZIP] Error adding file to archive: ${entry.name}`, err);
+          logger.error(`[ZIP] Error adding file to archive: ${entry.name}`, err);
         }
       } else if (entry.type === 'folder') {
         addEntry(entry.id, relPath);

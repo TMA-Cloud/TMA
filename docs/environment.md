@@ -207,6 +207,54 @@ Create a `.env` file in the `backend/` directory with the following variables.
 
 ---
 
+### Logging Configuration
+
+#### `LOG_LEVEL`
+
+- **Type:** String
+- **Required:** No
+- **Default:** `info` (production), `debug` (development)
+- **Values:** `fatal`, `error`, `warn`, `info`, `debug`, `trace`
+- **Description:** Sets the minimum log level for the application
+- **Example:** `LOG_LEVEL=debug`
+- **Note:**
+  - `debug` and `trace` levels automatically mask secrets (JWTs, passwords, cookies, tokens)
+  - Recommended: `info` for production, `debug` for development
+
+#### `LOG_FORMAT`
+
+- **Type:** String
+- **Required:** No
+- **Default:** `json` (production), `pretty` (development)
+- **Values:** `json` or `pretty`
+- **Description:** Log output format
+- **Example:** `LOG_FORMAT=pretty`
+- **Format Details:**
+  - `json`: Structured JSON logs (best for log aggregation and production)
+  - `pretty`: Human-readable colored logs (best for development)
+
+#### `METRICS_ALLOWED_IPS`
+
+- **Type:** String (Comma-separated)
+- **Required:** No
+- **Default:** `127.0.0.1,::1`
+- **Description:** IP addresses allowed to access metrics endpoint
+- **Example:** `METRICS_ALLOWED_IPS=127.0.0.1,::1,10.0.0.5`
+- **Note:** Restricts access to `/metrics` endpoint for security
+
+### Audit Logging Configuration
+
+#### `AUDIT_WORKER_CONCURRENCY`
+
+- **Type:** Number
+- **Required:** No
+- **Default:** `5`
+- **Description:** Number of concurrent audit events the worker can process
+- **Example:** `AUDIT_WORKER_CONCURRENCY=10`
+- **Note:** Higher values process audit logs faster but use more database connections
+
+---
+
 ## Frontend Environment Variables
 
 **No frontend environment variables are required!**

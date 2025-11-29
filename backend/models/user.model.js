@@ -82,7 +82,7 @@ async function isFirstUser(userId) {
         );
       } catch (err) {
         // Ignore if another request already set it (race condition handled)
-        console.warn('Could not set first_user_id (may already be set):', err.message);
+        logger.warn('Could not set first_user_id (may already be set):', err.message);
       }
     }
     return isFirst;
@@ -178,7 +178,7 @@ async function setSignupEnabled(enabled, userId) {
     await client.query('COMMIT');
     
     // Log security event
-    console.log(`[SECURITY] Signup ${enabled ? 'enabled' : 'disabled'} by first user (ID: ${userId})`);
+    logger.info(`[SECURITY] Signup ${enabled ? 'enabled' : 'disabled'} by first user (ID: ${userId})`);
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;

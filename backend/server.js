@@ -10,10 +10,27 @@ const userRoutes = require('./routes/user.routes');
 const { startTrashCleanup } = require('./services/trashCleanup');
 const { startOrphanFileCleanup } = require('./services/orphanCleanup');
 const { startCustomDriveScanner } = require('./services/customDriveScanner');
+const { startAuditCleanup } = require('./services/auditCleanup');
 const errorHandler = require('./middleware/error.middleware');
+// Logging and audit system
+const { requestIdMiddleware } = require('./middleware/requestId.middleware');
+const { logger, httpLogger } = require('./config/logger');
+const { initializeAuditQueue, shutdownAuditQueue } = require('./services/auditLogger');
+const { initializeMetrics, metricsEndpoint, startQueueMetricsUpdater } = require('./services/metrics');
 require('dotenv').config();
 
 const app = express();
+
+// Metrics endpoint IP whitelist
+const METRICS_ALLOWED_IPS = (process.env.METRICS_ALLOWED_IPS || '127.0.0.1')
+  .split(',')
+  .map(ip => ip.trim());
+
+// FIRST: Request ID middleware (must be first for proper context propagation)
+app.use(requestIdMiddleware);
+
+// SECOND: HTTP request logging (after requestId so it can use it)
+app.use(httpLogger);
 
 // Security headers
 app.use((req, res, next) => {
@@ -58,6 +75,24 @@ app.use((req, res, next) => {
 });
 
 app.use(express.json({ limit: '10mb' }));
+
+// Health check endpoint (before auth, for monitoring)
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+  });
+});
+
+// Metrics endpoint (protected by IP whitelist in production)
+app.get('/metrics', (req, res, next) => {
+  if (process.env.NODE_ENV === 'production' && !METRICS_ALLOWED_IPS.includes(req.ip)) {
+    logger.warn({ ip: req.ip }, 'Unauthorized metrics access attempt');
+    return res.status(403).send('Forbidden');
+  }
+  next();
+}, metricsEndpoint);
 
 // API routes
 app.use('/api', authRoutes);
@@ -105,7 +140,7 @@ async function runMigrations() {
       const version = file.replace('.sql', '');
       if (!applied.includes(version)) {
         const sql = fs.readFileSync(path.join(migrationsDir, file), 'utf8');
-        console.log(`Applying migration ${version}`);
+        logger.info({ version }, 'Applying migration');
         await client.query(sql);
         await client.query('INSERT INTO migrations(version) VALUES($1)', [version]);
       }
@@ -115,16 +150,73 @@ async function runMigrations() {
   }
 }
 
+// Graceful shutdown handler
+async function gracefulShutdown(signal) {
+  logger.info({ signal }, 'Received shutdown signal, starting graceful shutdown...');
+
+  try {
+    // Stop accepting new connections
+    if (server) {
+      server.close(() => {
+        logger.info('HTTP server closed');
+      });
+    }
+
+    // Shutdown audit queue
+    await shutdownAuditQueue();
+
+    // Close database pool
+    await pool.end();
+    logger.info('Database pool closed');
+
+    logger.info('Graceful shutdown completed');
+    process.exit(0);
+  } catch (error) {
+    logger.error({ err: error }, 'Error during graceful shutdown');
+    process.exit(1);
+  }
+}
+
+// Store server instance for graceful shutdown
+let server = null;
+
 
 runMigrations()
-  .then(() => {
+  .then(async () => {
     const port = process.env.BPORT || 3000;
-    app.listen(port, () => console.log(`Server running on port ${port}`));
+
+    // Initialize audit system
+    try {
+      await initializeAuditQueue();
+      logger.info('Audit queue initialized');
+
+      initializeMetrics();
+      logger.info('Metrics initialized');
+
+      // Start queue metrics updater (every 30 seconds)
+      startQueueMetricsUpdater(30);
+      logger.info('Queue metrics updater started');
+    } catch (error) {
+      logger.error({ err: error }, 'Failed to initialize audit system');
+      // Continue anyway - audit system is non-critical for application operation
+    }
+
+    // Start HTTP server
+    server = app.listen(port, () => {
+      logger.info({ port, environment: process.env.NODE_ENV || 'development' }, 'Server started successfully');
+    });
+
+    // Start background services
     startTrashCleanup();
     startOrphanFileCleanup();
     startCustomDriveScanner();
+    startAuditCleanup();
+
+    // Register shutdown handlers
+    process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+    process.on('SIGINT', () => gracefulShutdown('SIGINT'));
   })
   .catch((err) => {
-    console.error('Failed to run migrations', err);
+    logger.error({ err }, 'Failed to start server');
     process.exit(1);
   });

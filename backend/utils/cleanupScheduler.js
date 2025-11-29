@@ -7,7 +7,7 @@ function createPeriodicCleanup(cleanupFn, name, intervalHours = 24) {
 
   async function runCleanup() {
     if (isRunning) {
-      console.log(`${name} already running, skipping...`);
+      logger.info(`${name} already running, skipping...`);
       return;
     }
 
@@ -15,7 +15,7 @@ function createPeriodicCleanup(cleanupFn, name, intervalHours = 24) {
     try {
       await cleanupFn();
     } catch (error) {
-      console.error(`${name} failed:`, error);
+      logger.error(`${name} failed:`, error);
     } finally {
       isRunning = false;
     }

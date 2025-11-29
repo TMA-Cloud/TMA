@@ -1,5 +1,7 @@
+const { logger } = require('../config/logger');
+
 const errorHandler = (err, req, res, next) => {
-  console.error('Error:', err.stack);
+  logger.error({ err }, 'Unhandled error');
 
   // Multer errors
   if (err.code === 'LIMIT_FILE_SIZE') {

@@ -8,6 +8,8 @@ const { validateAndResolveFile } = require('../utils/fileDownload');
 const { getFile } = require('../models/file.model');
 const { getUserById } = require('../models/user.model');
 const { validateId } = require('../utils/validation');
+const { logger } = require('../config/logger');
+const { logAuditEvent } = require('../services/auditLogger');
 
 const ONLYOFFICE_JWT_SECRET = process.env.ONLYOFFICE_JWT_SECRET;
 // ONLYOFFICE server URL
@@ -17,7 +19,7 @@ const ONLYOFFICE_URL = process.env.ONLYOFFICE_URL;
 const BACKEND_URL = process.env.BACKEND_URL;
 
 if (!ONLYOFFICE_JWT_SECRET) {
-  console.warn('ONLYOFFICE_JWT_SECRET not set; ONLYOFFICE integration will run without JWT.');
+  logger.warn('ONLYOFFICE_JWT_SECRET not set; ONLYOFFICE integration will run without JWT.');
 }
 
 function getFileTypeFromName(name) {
@@ -119,7 +121,7 @@ async function getConfig(req, res) {
 
     res.json({ config, token: tokenForConfig, onlyofficeJsUrl });
   } catch (err) {
-    console.error('[ONLYOFFICE] Config error:', err);
+    logger.error({ err }, '[ONLYOFFICE] Config error');
     res.status(500).json({ message: 'Server error' });
   }
 }
@@ -140,7 +142,7 @@ async function serveFile(req, res) {
     // Validate token if JWT secret is configured
     if (ONLYOFFICE_JWT_SECRET) {
       if (!token) {
-        console.error('[ONLYOFFICE] Missing token for file', id);
+        logger.error('[ONLYOFFICE] Missing token for file', id);
         return res.status(401).json({ error: 'Missing token' });
       }
       try {
@@ -148,11 +150,11 @@ async function serveFile(req, res) {
         const decodedToken = decodeURIComponent(String(token));
         const payload = jwt.verify(decodedToken, ONLYOFFICE_JWT_SECRET);
         if (payload.fileId !== id) {
-          console.error('[ONLYOFFICE] Token fileId mismatch', { tokenFileId: payload.fileId, requestedId: id });
+          logger.error('[ONLYOFFICE] Token fileId mismatch', { tokenFileId: payload.fileId, requestedId: id });
           return res.status(401).json({ error: 'Invalid token' });
         }
       } catch (e) {
-        console.error('[ONLYOFFICE] Token verification failed', e.message);
+        logger.error('[ONLYOFFICE] Token verification failed', e.message);
         return res.status(401).json({ error: 'Invalid token' });
       }
     }
@@ -165,12 +167,12 @@ async function serveFile(req, res) {
     );
     const fileRow = result.rows[0];
     if (!fileRow) {
-      console.error('[ONLYOFFICE] File not found in DB', id);
+      logger.error('[ONLYOFFICE] File not found in DB', id);
       return res.status(404).json({ error: 'File not found' });
     }
     const { success, filePath, error } = validateAndResolveFile(fileRow);
     if (!success) {
-      console.error('[ONLYOFFICE] File validation failed', id, error);
+      logger.error('[ONLYOFFICE] File validation failed', id, error);
       return res.status(404).json({ error: error || 'File not found' });
     }
 
@@ -179,7 +181,7 @@ async function serveFile(req, res) {
     res.type(fileRow.mimeType || 'application/octet-stream');
     res.sendFile(filePath);
   } catch (err) {
-    console.error('[ONLYOFFICE] Error serving file', err);
+    logger.error({ err }, '[ONLYOFFICE] Error serving file');
     res.status(500).json({ error: 'Server error' });
   }
 }
@@ -206,6 +208,20 @@ async function getViewerPage(req, res) {
     if (configToken) {
       config.token = configToken;
     }
+
+    // Log audit event for document opening
+    await logAuditEvent('document.open', {
+      status: 'success',
+      resourceType: 'file',
+      resourceId: file.id,
+      metadata: {
+        fileName: file.name,
+        fileType: config.document.fileType,
+        mode: config.editorConfig.mode,
+      },
+    }, req);
+
+    logger.info({ fileId: file.id, fileName: file.name, mode: config.editorConfig.mode }, 'Document opened in ONLYOFFICE');
 
     // Generate HTML page
     const html = `<!DOCTYPE html>
@@ -339,7 +355,7 @@ async function getViewerPage(req, res) {
     res.setHeader('Content-Type', 'text/html');
     res.send(html);
   } catch (err) {
-    console.error('[ONLYOFFICE] Viewer page error:', err);
+    logger.error({ err }, '[ONLYOFFICE] Viewer page error');
     res.status(500).send('Error loading viewer');
   }
 }
@@ -406,20 +422,20 @@ async function callback(req, res) {
       const fileId = extractFileIdFromKey(body.key);
       
       if (!fileId) {
-        console.error('[ONLYOFFICE] Could not extract file ID from key:', body.key);
+        logger.error('[ONLYOFFICE] Could not extract file ID from key:', body.key);
         return res.status(200).json({ error: 0 }); // Still return success to OnlyOffice
       }
 
       // Validate file ID format
       const validatedFileId = validateId(fileId);
       if (!validatedFileId) {
-        console.error('[ONLYOFFICE] Invalid file ID format:', fileId);
+        logger.error('[ONLYOFFICE] Invalid file ID format:', fileId);
         return res.status(200).json({ error: 0 });
       }
 
       // Validate URL to prevent SSRF - only allow http/https and check for localhost/internal IPs
       if (typeof body.url !== 'string' || (!body.url.startsWith('http://') && !body.url.startsWith('https://'))) {
-        console.error('[ONLYOFFICE] Invalid URL format:', body.url);
+        logger.error('[ONLYOFFICE] Invalid URL format:', body.url);
         return res.status(200).json({ error: 0 });
       }
       
@@ -471,14 +487,14 @@ async function callback(req, res) {
         if (!isTrustedOnlyofficeHost) {
           // Check localhost patterns
           if (localhostPatterns.includes(hostname)) {
-            console.error('[ONLYOFFICE] Blocked SSRF attempt to localhost:', hostname);
+            logger.error('[ONLYOFFICE] Blocked SSRF attempt to localhost:', hostname);
             return res.status(200).json({ error: 0 });
           }
 
           // Check private IPv4 ranges
           for (const pattern of privateIPv4Patterns) {
             if (pattern.test(hostname)) {
-              console.error('[ONLYOFFICE] Blocked SSRF attempt to private IP:', hostname);
+              logger.error('[ONLYOFFICE] Blocked SSRF attempt to private IP:', hostname);
               return res.status(200).json({ error: 0 });
             }
           }
@@ -486,13 +502,13 @@ async function callback(req, res) {
           // Check private IPv6 ranges
           for (const pattern of privateIPv6Patterns) {
             if (pattern.test(hostname)) {
-              console.error('[ONLYOFFICE] Blocked SSRF attempt to private IPv6:', hostname);
+              logger.error('[ONLYOFFICE] Blocked SSRF attempt to private IPv6:', hostname);
               return res.status(200).json({ error: 0 });
             }
           }
         }
       } catch (urlError) {
-        console.error('[ONLYOFFICE] Invalid URL:', urlError);
+        logger.error('[ONLYOFFICE] Invalid URL:', urlError);
         return res.status(200).json({ error: 0 });
       }
 
@@ -504,7 +520,7 @@ async function callback(req, res) {
       );
 
       if (fileResult.rows.length === 0) {
-        console.error('[ONLYOFFICE] File not found in database:', fileId);
+        logger.error('[ONLYOFFICE] File not found in database:', fileId);
         return res.status(200).json({ error: 0 });
       }
 
@@ -513,7 +529,7 @@ async function callback(req, res) {
       // Only allow saving to files in UPLOAD_DIR (not custom drive files)
       // Custom drive files are read-only
       if (!fileRow.path || path.isAbsolute(fileRow.path)) {
-        console.error('[ONLYOFFICE] Cannot save to custom drive file:', fileId);
+        logger.error('[ONLYOFFICE] Cannot save to custom drive file:', fileId);
         return res.status(200).json({ error: 0 }); // Still return success
       }
       
@@ -524,7 +540,7 @@ async function callback(req, res) {
       try {
         fileBuffer = await downloadFile(body.url);
       } catch (error) {
-        console.error('[ONLYOFFICE] Failed to download document:', error);
+        logger.error('[ONLYOFFICE] Failed to download document:', error);
         return res.status(200).json({ error: 0 }); // Still return success
       }
 
@@ -537,14 +553,29 @@ async function callback(req, res) {
         'UPDATE files SET size = $1, modified = NOW() WHERE id = $2',
         [newSize, validatedFileId]
       );
+
+      // Log audit event for document save
+      await logAuditEvent('document.save', {
+        status: 'success',
+        resourceType: 'file',
+        resourceId: validatedFileId,
+        metadata: {
+          fileName: fileRow.name,
+          fileSize: newSize,
+          oldSize: fileRow.size || 0,
+          savedVia: 'onlyoffice',
+        },
+      }, req);
+
+      logger.info({ fileId: validatedFileId, fileName: fileRow.name, newSize, oldSize: fileRow.size }, 'Document saved via ONLYOFFICE');
     } else if (status === 3) {
-      console.error('[ONLYOFFICE] Document saving error for:', body.key);
+      logger.error('[ONLYOFFICE] Document saving error for:', body.key);
     }
 
     // Always return success to OnlyOffice
     res.status(200).json({ error: 0 });
   } catch (err) {
-    console.error('[ONLYOFFICE] Callback error', err);
+    logger.error({ err }, '[ONLYOFFICE] Callback error');
     // Still return success to OnlyOffice even on error
     // to prevent OnlyOffice from retrying
     res.status(200).json({ error: 0 });

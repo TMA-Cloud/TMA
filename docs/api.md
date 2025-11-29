@@ -29,12 +29,16 @@ All API endpoints implement comprehensive security measures:
 - **SQL Injection Protection**: All queries use parameterized statements
 - **XSS Protection**: User-generated content is properly escaped
 - **Path Traversal Protection**: File paths are validated to prevent directory traversal
+- **Audit Logging**: All critical operations automatically logged to audit trail
+- **Structured Logging**: All requests logged with automatic secret masking (JWTs, passwords, cookies)
 
 #### POST `/api/signup`
 
 Create a new user account.
 
 **Note:** This endpoint respects the signup enabled/disabled setting. If signup is disabled, returns 403 Forbidden.
+
+**Audit Logging:** Creates `user.signup` audit event (success or failure).
 
 **Request Body:**
 
@@ -80,6 +84,8 @@ Create a new user account.
 
 Authenticate user and receive JWT token.
 
+**Audit Logging:** Creates `user.login` audit event (success) or `user.login.failed` audit event (failure).
+
 **Request Body:**
 
 ```json
@@ -106,6 +112,8 @@ Authenticate user and receive JWT token.
 #### POST `/api/logout`
 
 Log out current user (clears token cookie).
+
+**Audit Logging:** Creates `user.logout` audit event.
 
 **Response:**
 
@@ -615,6 +623,8 @@ Enable or disable user signup. Only the first user can perform this action.
 
 **Headers:** Requires authentication
 
+**Audit Logging:** Creates `settings.signup.toggle` audit event with new status.
+
 **Request Body:**
 
 ```json
@@ -698,6 +708,8 @@ OnlyOffice callback endpoint (called by OnlyOffice server).
 
 These endpoints don't require authentication.
 
+**Audit Logging:** All share link access is logged with `share.access` audit events including IP address, file accessed, and share token.
+
 #### GET `/s/:token`
 
 View shared files/folders.
@@ -715,6 +727,100 @@ Download a file from a share link.
 Download a folder as ZIP from a share link.
 
 **Response:** ZIP file stream
+
+---
+
+### Monitoring
+
+#### GET `/metrics`
+
+Get application health and performance metrics.
+
+**Access Control:** Restricted to IP addresses listed in `METRICS_ALLOWED_IPS` environment variable.
+
+**Response:**
+
+```json
+{
+  "uptime": 3600,
+  "memory": {
+    "rss": 123456789,
+    "heapTotal": 98765432,
+    "heapUsed": 87654321,
+    "external": 1234567
+  },
+  "cpu": {
+    "user": 1234567,
+    "system": 234567
+  }
+}
+```
+
+**Response Fields:**
+
+- `uptime` (number): Application uptime in seconds
+- `memory` (object): Memory usage statistics in bytes
+  - `rss`: Resident Set Size (total memory allocated)
+  - `heapTotal`: Total heap size
+  - `heapUsed`: Heap memory used
+  - `external`: Memory used by C++ objects
+- `cpu` (object): CPU usage in microseconds
+  - `user`: User CPU time
+  - `system`: System CPU time
+
+**Status Codes:**
+
+- `200` - Success
+- `403` - Forbidden (IP not allowed)
+
+**Security Notes:**
+
+- Only accessible from IPs listed in `METRICS_ALLOWED_IPS` environment variable
+- Default allowed IPs: `127.0.0.1` (localhost IPv4) and `::1` (localhost IPv6)
+- Configure allowed IPs via environment: `METRICS_ALLOWED_IPS=127.0.0.1,::1`
+
+**Example:**
+
+```bash
+# Only works from allowed IP
+curl http://localhost:3000/metrics
+```
+
+---
+
+## Audit Logging
+
+**Note:** All API endpoints automatically log audit events for critical operations. Audit logging happens asynchronously in the background and does not affect API response times.
+
+**Logged Events:**
+
+- **Authentication**: signup, login, logout, failed login attempts
+- **File Operations**: upload, download, delete, move, copy, rename, star/unstar
+- **Folder Operations**: create
+- **Share Operations**: create, delete, access via share links
+- **Document Operations**: open, save (OnlyOffice)
+- **Settings**: signup toggle
+
+**Audit Log Data:**
+
+Each audit event includes:
+
+- Event type and timestamp
+- User ID (if authenticated)
+- IP address and user agent
+- Resource type and ID (file, folder, share, etc.)
+- Status (success/failure)
+- Detailed metadata (file names, sizes, types, destinations, etc.)
+
+**Accessing Audit Logs:**
+
+Audit logs are stored in the `audit_logs` PostgreSQL table. Access requires direct database queries. See [Audit Documentation](audit.md) for query examples.
+
+**Privacy:**
+
+- Sensitive data (passwords, tokens) is never logged
+- IP addresses are logged for security auditing
+- User agents are logged for troubleshooting
 
 ---
 

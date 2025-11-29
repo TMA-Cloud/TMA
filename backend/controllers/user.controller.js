@@ -11,6 +11,8 @@ const { sendError, sendSuccess } = require('../utils/response');
 const { CUSTOM_DRIVE_ENABLED, CUSTOM_DRIVE_PATH } = require('../config/paths');
 const pool = require('../config/db');
 const path = require('path');
+const { logger } = require('../config/logger');
+const { logAuditEvent } = require('../services/auditLogger');
 
 const STORAGE_LIMIT = Number(process.env.STORAGE_LIMIT || 100 * 1024 * 1024 * 1024);
 
@@ -99,24 +101,44 @@ async function toggleSignup(req, res) {
     // Verify user is first user before proceeding
     const userIsFirst = await isFirstUser(req.userId);
     if (!userIsFirst) {
-      console.warn(`[SECURITY] Unauthorized signup toggle attempt by user ${req.userId}`);
+      await logAuditEvent('admin.settings.update', {
+        status: 'failure',
+        resourceType: 'settings',
+        metadata: { action: 'toggle_signup', reason: 'unauthorized' }
+      }, req);
+      logger.warn({ userId: req.userId }, 'Unauthorized signup toggle attempt');
       return sendError(res, 403, 'Only the first user can toggle signup');
     }
-    
+
     const { enabled } = req.body;
     if (typeof enabled !== 'boolean') {
       return sendError(res, 400, 'enabled must be a boolean');
     }
-    
+
     // setSignupEnabled will do additional security checks internally
     await setSignupEnabled(enabled, req.userId);
+
+    // Log admin action
+    await logAuditEvent('admin.settings.update', {
+      status: 'success',
+      resourceType: 'settings',
+      metadata: { setting: 'signup_enabled', newValue: enabled }
+    }, req);
+    logger.info({ userId: req.userId, signupEnabled: enabled }, 'Signup setting toggled');
+
     sendSuccess(res, { signupEnabled: enabled });
   } catch (err) {
     if (err.message === 'Only the first user can toggle signup') {
-      console.warn(`[SECURITY] Unauthorized signup toggle attempt by user ${req.userId}`);
+      await logAuditEvent('admin.settings.update', {
+        status: 'failure',
+        resourceType: 'settings',
+        errorMessage: err.message,
+        metadata: { action: 'toggle_signup' }
+      }, req);
+      logger.warn({ userId: req.userId }, 'Unauthorized signup toggle attempt');
       return sendError(res, 403, err.message);
     }
-    console.error('[ERROR] Failed to toggle signup:', err);
+    logger.error({ err }, 'Failed to toggle signup');
     sendError(res, 500, 'Server error', err);
   }
 }
@@ -125,7 +147,12 @@ async function listUsers(req, res) {
   try {
     const userIsFirst = await isFirstUser(req.userId);
     if (!userIsFirst) {
-      console.warn(`[SECURITY] Unauthorized user list attempt by user ${req.userId}`);
+      await logAuditEvent('admin.user.list', {
+        status: 'failure',
+        resourceType: 'user',
+        metadata: { reason: 'unauthorized' }
+      }, req);
+      logger.warn({ userId: req.userId }, 'Unauthorized user list attempt');
       return sendError(res, 403, 'Only the first user can view all users');
     }
 
@@ -135,9 +162,18 @@ async function listUsers(req, res) {
       name: user.name,
       createdAt: user.created_at
     }));
+
+    // Log admin action
+    await logAuditEvent('admin.user.list', {
+      status: 'success',
+      resourceType: 'user',
+      metadata: { userCount: users.length }
+    }, req);
+    logger.info({ userId: req.userId, userCount: users.length }, 'Users list viewed');
+
     sendSuccess(res, { users });
   } catch (err) {
-    console.error('[ERROR] Failed to fetch users list:', err);
+    logger.error({ err }, 'Failed to fetch users list');
     sendError(res, 500, 'Server error', err);
   }
 }

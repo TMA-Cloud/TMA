@@ -112,7 +112,7 @@ async function createFolder(name, parentId = null, userId) {
       return result.rows[0];
     } catch (error) {
       // If custom drive creation fails, fall back to regular folder (no path)
-      console.error('[File] Error creating folder in custom drive, creating regular folder:', error);
+      logger.error('[File] Error creating folder in custom drive, creating regular folder:', error);
     }
   }
   
@@ -267,7 +267,7 @@ async function createFile(name, size, mimeType, tempPath, parentId = null, userI
       return result.rows[0];
     } catch (error) {
       // If custom drive save fails, fall back to regular upload
-      console.error('[File] Error saving to custom drive, falling back to UPLOAD_DIR:', error);
+      logger.error('[File] Error saving to custom drive, falling back to UPLOAD_DIR:', error);
       // Continue to regular upload logic below
     }
   }
@@ -354,7 +354,7 @@ async function copyEntry(id, parentId, userId, client = null) {
         );
       } catch (error) {
         // Fall back to regular copy if custom drive copy fails
-        console.error('[File] Error copying to custom drive, falling back to UPLOAD_DIR:', error);
+        logger.error('[File] Error copying to custom drive, falling back to UPLOAD_DIR:', error);
         const ext = path.extname(file.name);
         storageName = newId + ext;
         await fs.promises.copyFile(sourcePath, path.join(UPLOAD_DIR, storageName));
@@ -383,7 +383,7 @@ async function copyEntry(id, parentId, userId, client = null) {
       try {
         await fs.promises.copyFile(sourcePath, path.join(UPLOAD_DIR, storageName));
       } catch (error) {
-        console.error('Failed to copy file:', error);
+        logger.error('Failed to copy file:', error);
         throw new Error('File copy operation failed');
       }
       newPath = storageName;
@@ -448,7 +448,7 @@ async function copyEntry(id, parentId, userId, client = null) {
         );
       } catch (error) {
         // Fall back to regular folder (no path)
-        console.error('[File] Error creating folder in custom drive:', error);
+        logger.error('[File] Error creating folder in custom drive:', error);
         await dbClient.query(
           'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id, starred, shared) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',
           [
@@ -625,7 +625,7 @@ async function permanentlyDeleteFiles(ids, userId) {
       }
     } catch (error) {
       // Log error but continue with other deletions
-      console.error(`[File] Error deleting ${f.type} ${f.path}:`, error.message);
+      logger.error(`[File] Error deleting ${f.type} ${f.path}:`, error.message);
     }
   }
   
@@ -641,7 +641,7 @@ async function permanentlyDeleteFiles(ids, userId) {
       }
     } catch (error) {
       // Folder might not be empty or already deleted, skip
-      console.error(`[File] Error deleting folder ${folderPath}:`, error.message);
+      logger.error(`[File] Error deleting folder ${folderPath}:`, error.message);
     }
   }
   
@@ -671,7 +671,7 @@ async function cleanupExpiredTrash() {
       }
     } catch (error) {
       // Log error but continue
-      console.error(`[Trash] Error cleaning up ${f.type} ${f.path}:`, error.message);
+      logger.error(`[Trash] Error cleaning up ${f.type} ${f.path}:`, error.message);
     }
   }
   
@@ -684,7 +684,7 @@ async function cleanupExpiredTrash() {
         await fs.promises.rmdir(folderPath);
       }
     } catch (error) {
-      console.error(`[Trash] Error deleting folder ${folderPath}:`, error.message);
+      logger.error(`[Trash] Error deleting folder ${folderPath}:`, error.message);
     }
   }
   

@@ -12,6 +12,7 @@ A self-hosted cloud storage platform providing robust file storage and managemen
 - 🎨 **Modern UI**: React + TypeScript frontend with Tailwind CSS
 - 🗄️ **PostgreSQL**: Robust database with automatic migrations
 - 🧹 **Background Services**: Automatic cleanup of trash and orphaned files
+- 📊 **Audit Logging**: Comprehensive audit trail with queue-based event tracking
 
 ## Quick Start
 
@@ -53,6 +54,8 @@ For detailed setup instructions, see [docs/setup.md](docs/setup.md).
 ## Documentation
 
 - [Features](docs/features.md)
+- [Audit Trail](docs/audit.md)
+- [Logging System](docs/logging.md)
 - [Database Schema](docs/database.md)
 - [API Documentation](docs/api.md)
 - [Setup & Installation](docs/setup.md)

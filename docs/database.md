@@ -130,6 +130,60 @@ Stores application-wide settings.
 - `first_user_id` is set when the first user signs up and cannot be changed afterward
 - The foreign key constraint with `ON DELETE RESTRICT` prevents deletion of the first user
 
+### `audit_logs`
+
+Stores comprehensive audit trail of all user actions and system events.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | SERIAL | PRIMARY KEY | Auto-incrementing audit log ID |
+| `event_type` | VARCHAR(100) | NOT NULL | Event type (e.g., 'user.login', 'file.upload') |
+| `user_id` | VARCHAR(16) | FK → users.id | User who performed the action (null for anonymous) |
+| `status` | VARCHAR(20) | NOT NULL | Event status ('success', 'failure') |
+| `resource_type` | VARCHAR(50) | | Type of resource affected (e.g., 'file', 'folder', 'share') |
+| `resource_id` | VARCHAR(255) | | ID of affected resource |
+| `ip_address` | INET | | IP address of client |
+| `user_agent` | TEXT | | Browser/client user agent |
+| `metadata` | JSONB | | Additional event-specific data (searchable) |
+| `created_at` | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | When event occurred |
+
+**Indexes:**
+
+- Primary key on `id`
+- Index on `user_id` (for user activity queries)
+- Index on `event_type` (for filtering by event type)
+- Index on `created_at` (for time-based queries)
+- Composite index on (`resource_type`, `resource_id`) (for resource tracking)
+
+**Foreign Keys:**
+
+- `user_id` → `users.id` (ON DELETE SET NULL) - Preserves audit logs even if user deleted
+
+**Notes:**
+
+- JSONB `metadata` column allows flexible storage of event-specific data
+- Use JSONB operators for querying metadata: `metadata @> '{"fileName": "doc.pdf"}'::jsonb`
+- Events are queued via pg-boss and processed asynchronously by audit worker
+
+### `pgboss.*` Tables
+
+pg-boss creates several tables for job queue management (prefixed with `pgboss.`):
+
+**Key Tables:**
+
+- `pgboss.job` - Job queue entries
+- `pgboss.schedule` - Scheduled jobs
+- `pgboss.subscription` - Job subscriptions
+- `pgboss.archive` - Completed/failed jobs archive
+- `pgboss.version` - pg-boss schema version
+
+**Notes:**
+
+- These tables are managed automatically by pg-boss
+- Used for asynchronous audit event processing
+- Jobs in queue until processed by audit worker
+- See [pg-boss documentation](https://github.com/timgit/pg-boss) for details
+
 ### `migrations`
 
 Tracks applied database migrations.
@@ -171,6 +225,13 @@ Tracks applied database migrations.
 - A file can be in many share links
 - Junction table: `share_link_files`
 
+### User → Audit Logs
+
+- One-to-many relationship
+- A user can have many audit log entries
+- Audit logs are preserved when user is deleted (SET NULL)
+- Allows historical tracking even after user deletion
+
 ## Data Types
 
 ### Identifiers
@@ -209,6 +270,12 @@ Tracks applied database migrations.
    - `share_links.token` - Fast lookup by share token
    - `share_link_files.share_link_id` - Fast file lookup for shares
 
+5. **Audit Logs:**
+   - `audit_logs.user_id` - Fast lookup of user activity
+   - `audit_logs.event_type` - Filter by event type
+   - `audit_logs.created_at` - Time-based queries and sorting
+   - Composite (`resource_type`, `resource_id`) - Track operations on specific resources
+
 ## Constraints
 
 ### Unique Constraints
@@ -243,6 +310,8 @@ Migrations are stored in `backend/migrations/` and applied automatically on serv
 10. `010_add_google_auth.sql` - Google OAuth support
 11. `011_add_search_index.sql` - Full-text search index
 12. `012_add_signup_setting.sql` - Signup control settings table
+13. `013_create_audit_log.sql` - Audit logs table with indexes
+14. `014_audit_retention.sql` - Audit log retention policy and cleanup
 
 ## Query Patterns
 
@@ -275,6 +344,64 @@ WHERE slf.share_link_id = $1
   AND f.deleted_at IS NULL;
 ```
 
+### Query Audit Logs
+
+**Get user activity:**
+
+```sql
+SELECT event_type, status, resource_type, metadata, created_at
+FROM audit_logs
+WHERE user_id = $1
+ORDER BY created_at DESC
+LIMIT 100;
+```
+
+**Get failed operations:**
+
+```sql
+SELECT event_type, user_id, resource_type, metadata, ip_address, created_at
+FROM audit_logs
+WHERE status = 'failure'
+ORDER BY created_at DESC;
+```
+
+**Get file operations:**
+
+```sql
+SELECT event_type, user_id, metadata->>'fileName' as file_name, created_at
+FROM audit_logs
+WHERE resource_type = 'file'
+  AND event_type LIKE 'file.%'
+ORDER BY created_at DESC;
+```
+
+**Search metadata (JSONB):**
+
+```sql
+-- Find operations on specific file
+SELECT * FROM audit_logs
+WHERE metadata @> '{"fileId": "file_123"}'::jsonb
+ORDER BY created_at DESC;
+
+-- Find large file uploads
+SELECT user_id, metadata->>'fileName' as file_name,
+       (metadata->>'fileSize')::bigint as size, created_at
+FROM audit_logs
+WHERE event_type = 'file.upload'
+  AND (metadata->>'fileSize')::bigint > 10485760
+ORDER BY created_at DESC;
+```
+
+**Activity summary by date:**
+
+```sql
+SELECT event_type, COUNT(*) as count
+FROM audit_logs
+WHERE created_at BETWEEN $1 AND $2
+GROUP BY event_type
+ORDER BY count DESC;
+```
+
 ## Backup and Maintenance
 
 ### Recommended Practices
@@ -286,24 +413,109 @@ WHERE slf.share_link_id = $1
 2. **Index Maintenance:**
    - Periodic `VACUUM ANALYZE` for statistics
    - Reindex if needed
+   - Monitor JSONB index performance on `audit_logs.metadata`
 
 3. **Storage Monitoring:**
-   - Monitor table sizes
+   - Monitor table sizes (especially `audit_logs` growth)
    - Archive old deleted files
    - Clean up expired share links
+   - Implement audit log retention policy
+
+4. **Audit Log Management:**
+   - Monitor `audit_logs` table size
+   - Set up retention policy (e.g., 1 year)
+   - Archive old audit logs before deletion
+   - Clean up pg-boss archive periodically
+   - Monitor audit worker health
 
 ### Cleanup Queries
 
 **Delete expired share links:**
 
 ```sql
-DELETE FROM share_links 
+DELETE FROM share_links
 WHERE expires_at < NOW();
 ```
 
 **Permanently delete old trash:**
 
 ```sql
-DELETE FROM files 
+DELETE FROM files
 WHERE deleted_at < NOW() - INTERVAL '30 days';
+```
+
+**Archive old audit logs:**
+
+```sql
+-- Delete audit logs older than 1 year (adjust retention as needed)
+DELETE FROM audit_logs
+WHERE created_at < NOW() - INTERVAL '1 year';
+
+-- Or archive to separate table before deletion
+INSERT INTO audit_logs_archive
+SELECT * FROM audit_logs
+WHERE created_at < NOW() - INTERVAL '1 year';
+
+DELETE FROM audit_logs
+WHERE created_at < NOW() - INTERVAL '1 year';
+```
+
+**Clean up old pg-boss jobs:**
+
+```sql
+-- pg-boss automatically archives completed jobs
+-- Check archive table size
+SELECT COUNT(*) FROM pgboss.archive;
+
+-- Clean up old archived jobs (optional)
+DELETE FROM pgboss.archive
+WHERE completedon < NOW() - INTERVAL '90 days';
+```
+
+### Monitoring Queries
+
+**Check table sizes:**
+
+```sql
+SELECT
+  schemaname,
+  tablename,
+  pg_size_pretty(pg_total_relation_size(schemaname||'.'||tablename)) AS size
+FROM pg_tables
+WHERE schemaname = 'public'
+ORDER BY pg_total_relation_size(schemaname||'.'||tablename) DESC;
+```
+
+**Monitor audit log growth:**
+
+```sql
+-- Count audit logs by day
+SELECT DATE(created_at) as date, COUNT(*) as count
+FROM audit_logs
+WHERE created_at > NOW() - INTERVAL '30 days'
+GROUP BY DATE(created_at)
+ORDER BY date DESC;
+
+-- Count by event type
+SELECT event_type, COUNT(*) as count
+FROM audit_logs
+WHERE created_at > NOW() - INTERVAL '7 days'
+GROUP BY event_type
+ORDER BY count DESC;
+```
+
+**Check pg-boss queue status:**
+
+```sql
+-- Check pending jobs
+SELECT state, COUNT(*) as count
+FROM pgboss.job
+WHERE name = 'audit-log'
+GROUP BY state;
+
+-- Check for stuck jobs
+SELECT * FROM pgboss.job
+WHERE name = 'audit-log'
+  AND state = 'active'
+  AND startedon < NOW() - INTERVAL '1 hour';
 ```

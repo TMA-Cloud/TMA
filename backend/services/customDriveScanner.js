@@ -16,11 +16,11 @@ async function scanCustomDrive(customDrivePath) {
   try {
     const stat = await fs.stat(normalizedPath);
     if (!stat.isDirectory()) {
-      console.error(`[Custom Drive] Path is not a directory: ${normalizedPath}`);
+      logger.error(`[Custom Drive] Path is not a directory: ${normalizedPath}`);
       return;
     }
   } catch (error) {
-    console.error(`[Custom Drive] Cannot access directory: ${normalizedPath}`, error.message);
+    logger.error(`[Custom Drive] Cannot access directory: ${normalizedPath}`, error.message);
     return;
   }
 
@@ -29,16 +29,16 @@ async function scanCustomDrive(customDrivePath) {
     const userIds = usersResult.rows.map(row => row.id);
 
     if (userIds.length === 0) {
-      console.log('[Custom Drive] No users found, skipping scan');
+      logger.info('[Custom Drive] No users found, skipping scan');
       return;
     }
 
-    console.log(`[Custom Drive] Starting scan for ${userIds.length} user(s)`);
+    logger.info(`[Custom Drive] Starting scan for ${userIds.length} user(s)`);
     const folderMap = new Map();
     await scanDirectory(normalizedPath, null, userIds, folderMap);
-    console.log('[Custom Drive] Scan completed successfully');
+    logger.info('[Custom Drive] Scan completed successfully');
   } catch (error) {
-    console.error('[Custom Drive] Error during scan:', error);
+    logger.error('[Custom Drive] Error during scan:', error);
     throw error;
   }
 }
@@ -89,12 +89,12 @@ async function scanDirectory(dirPath, parentFolderIds, userIds, folderMap) {
           );
         }
       } catch (error) {
-        console.error(`[Custom Drive] Error processing ${entryPath}:`, error.message);
+        logger.error(`[Custom Drive] Error processing ${entryPath}:`, error.message);
         // Continue with other entries on error
       }
     }
   } catch (error) {
-    console.error(`[Custom Drive] Cannot read directory ${dirPath}:`, error.message);
+    logger.error(`[Custom Drive] Cannot read directory ${dirPath}:`, error.message);
     // Skip directories we can't read (permissions, etc.)
   }
 }
@@ -148,7 +148,7 @@ async function batchCreateOrUpdateFolders(name, parentIds, userIds, absolutePath
     return folderIdsMap;
   } catch (error) {
     await client.query('ROLLBACK');
-    console.error('[Custom Drive] Error in batchCreateOrUpdateFolders:', error);
+    logger.error('[Custom Drive] Error in batchCreateOrUpdateFolders:', error);
     throw error;
   } finally {
     client.release();
@@ -214,7 +214,7 @@ async function batchCreateOrUpdateFiles(name, size, mimeType, absolutePath, pare
     return fileIdsMap;
   } catch (error) {
     await client.query('ROLLBACK');
-    console.error('[Custom Drive] Error in batchCreateOrUpdateFiles:', error);
+    logger.error('[Custom Drive] Error in batchCreateOrUpdateFiles:', error);
     throw error;
   } finally {
     client.release();
@@ -272,11 +272,11 @@ async function syncCustomDrive(customDrivePath) {
   try {
     const stat = await fs.stat(normalizedPath);
     if (!stat.isDirectory()) {
-      console.error(`[Custom Drive] Path is not a directory: ${normalizedPath}`);
+      logger.error(`[Custom Drive] Path is not a directory: ${normalizedPath}`);
       return;
     }
   } catch (error) {
-    console.error(`[Custom Drive] Cannot access directory: ${normalizedPath}`, error.message);
+    logger.error(`[Custom Drive] Cannot access directory: ${normalizedPath}`, error.message);
     return;
   }
 
@@ -307,7 +307,7 @@ async function syncCustomDrive(customDrivePath) {
     await syncDirectory(normalizedPath, null, userIds, dbEntries);
 
   } catch (error) {
-    console.error('[Custom Drive] Error during sync:', error);
+    logger.error('[Custom Drive] Error during sync:', error);
     throw error;
   }
 }
@@ -399,7 +399,7 @@ async function processChange(filePath) {
         }
       }
     } catch (error) {
-      console.error('[Custom Drive] Error processing changes:', error);
+      logger.error('[Custom Drive] Error processing changes:', error);
     }
   }, 500);
 }
@@ -451,7 +451,7 @@ async function handleDeletion(filePath, userIds) {
     const pathSeparator = path.sep === '\\' ? '\\\\' : path.sep;
     const normalizedPath = path.resolve(filePath).toLowerCase();
 
-    console.log(`[Custom Drive] File deleted from disk: ${filePath}`);
+    logger.info(`[Custom Drive] File deleted from disk: ${filePath}`);
 
     // Hard delete from database (remove entries completely)
     const result1 = await pool.query(
@@ -468,10 +468,10 @@ async function handleDeletion(filePath, userIds) {
 
     const totalDeleted = result1.rowCount + result2.rowCount;
     if (totalDeleted > 0) {
-      console.log(`[Custom Drive] Removed ${totalDeleted} entries from database`);
+      logger.info(`[Custom Drive] Removed ${totalDeleted} entries from database`);
     }
   } catch (error) {
-    console.error(`[Custom Drive] Error deleting file from database:`, error.message);
+    logger.error(`[Custom Drive] Error deleting file from database:`, error.message);
   }
 }
 
@@ -502,16 +502,16 @@ async function startCustomDriveScanner() {
 
     const isFirstScan = parseInt(existingFiles.rows[0].count) === 0;
 
-    console.log(`[Custom Drive] Found ${existingFiles.rows[0].count} existing files`);
+    logger.info(`[Custom Drive] Found ${existingFiles.rows[0].count} existing files`);
 
     if (isFirstScan) {
-      console.log('[Custom Drive] First scan detected, performing full scan...');
+      logger.info('[Custom Drive] First scan detected, performing full scan...');
       await scanCustomDrive(customDrivePath);
-      console.log('[Custom Drive] Initial scan complete');
+      logger.info('[Custom Drive] Initial scan complete');
     } else {
-      console.log('[Custom Drive] Existing data found, using full scan to ensure consistency...');
+      logger.info('[Custom Drive] Existing data found, using full scan to ensure consistency...');
       await scanCustomDrive(customDrivePath);
-      console.log('[Custom Drive] Full scan complete');
+      logger.info('[Custom Drive] Full scan complete');
     }
 
     // Start file watcher for real-time updates
@@ -535,31 +535,31 @@ async function startCustomDriveScanner() {
 
     watcher.on('add', (filePath) => {
       processChange(filePath).catch(err => {
-        console.error(`[Custom Drive] Error processing add event for ${filePath}:`, err.message);
+        logger.error(`[Custom Drive] Error processing add event for ${filePath}:`, err.message);
       });
     });
 
     watcher.on('change', (filePath) => {
       processChange(filePath).catch(err => {
-        console.error(`[Custom Drive] Error processing change event for ${filePath}:`, err.message);
+        logger.error(`[Custom Drive] Error processing change event for ${filePath}:`, err.message);
       });
     });
 
     watcher.on('addDir', (filePath) => {
       processChange(filePath).catch(err => {
-        console.error(`[Custom Drive] Error processing addDir event for ${filePath}:`, err.message);
+        logger.error(`[Custom Drive] Error processing addDir event for ${filePath}:`, err.message);
       });
     });
 
     watcher.on('unlink', (filePath) => {
       processChange(filePath).catch(err => {
-        console.error(`[Custom Drive] Error processing unlink event for ${filePath}:`, err.message);
+        logger.error(`[Custom Drive] Error processing unlink event for ${filePath}:`, err.message);
       });
     });
 
     watcher.on('unlinkDir', (filePath) => {
       processChange(filePath).catch(err => {
-        console.error(`[Custom Drive] Error processing unlinkDir event for ${filePath}:`, err.message);
+        logger.error(`[Custom Drive] Error processing unlinkDir event for ${filePath}:`, err.message);
       });
     });
 
@@ -567,29 +567,29 @@ async function startCustomDriveScanner() {
     watcher.on('error', (error) => {
       // Ignore EPERM errors (permission issues) - these are common on Windows
       if (error.code === 'EPERM') {
-        console.log('[Custom Drive] Skipping file due to permission restriction');
+        logger.info('[Custom Drive] Skipping file due to permission restriction');
         return;
       }
 
       // Ignore ENOENT errors (file not found) - these happen during rapid deletions
       if (error.code === 'ENOENT') {
-        console.log('[Custom Drive] File no longer exists, ignoring');
+        logger.info('[Custom Drive] File no longer exists, ignoring');
         return;
       }
 
       // Log other errors
-      console.error('[Custom Drive] Watcher error:', error.code || error.message);
+      logger.error('[Custom Drive] Watcher error:', error.code || error.message);
     });
 
     watcher.on('ready', () => {
-      console.log('[Custom Drive] File system watcher ready');
+      logger.info('[Custom Drive] File system watcher ready');
     });
 
   } catch (error) {
     if (error.code === 'ENOENT') {
-      console.error(`[Custom Drive] Path does not exist: ${normalizedPath}`);
+      logger.error(`[Custom Drive] Path does not exist: ${normalizedPath}`);
     } else {
-      console.error('[Custom Drive] Failed to start watcher:', error);
+      logger.error('[Custom Drive] Failed to start watcher:', error);
     }
   }
 }

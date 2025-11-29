@@ -1,6 +1,7 @@
 require('dotenv').config();
 
 const { Pool } = require('pg');
+const { logger } = require('./logger');
 
 const pool = new Pool({
   host: process.env.DB_HOST || 'localhost',
@@ -13,23 +14,23 @@ const pool = new Pool({
 
 // Error handling
 pool.on('error', (err, client) => {
-  console.error('Unexpected error on idle client', err);
+  logger.error({ err }, 'Unexpected error on idle database client');
 });
 
 // Connection test
 pool.connect((err, client, release) => {
   if (err) {
-    console.error('Error acquiring client', err.stack);
+    logger.error({ err }, 'Failed to acquire database client');
     return;
   }
-  console.log('Database connected successfully');
+  logger.info('Database connected successfully');
   client.query('SELECT NOW()', (err, result) => {
     release();
     if (err) {
-      console.error('Error executing query', err.stack);
+      logger.error({ err }, 'Database query test failed');
       return;
     }
-    console.log('Database query test successful');
+    logger.debug('Database query test successful');
   });
 });
 

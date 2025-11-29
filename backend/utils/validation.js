@@ -200,7 +200,7 @@ function validateFileUpload(mimeType, filename) {
   if (mimeType && mimeExtensionMap[mimeType.toLowerCase()]) {
     const expectedExtensions = mimeExtensionMap[mimeType.toLowerCase()];
     if (fileExtension && !expectedExtensions.includes(fileExtension)) {
-      console.warn(`[SECURITY] Potential MIME spoofing: ${mimeType} with extension ${fileExtension}`);
+      logger.warn(`[SECURITY] Potential MIME spoofing: ${mimeType} with extension ${fileExtension}`);
     }
   }
 

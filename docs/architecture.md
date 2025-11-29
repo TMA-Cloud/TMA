@@ -110,6 +110,7 @@ Background processes:
 - `trashCleanup.js` - Automatic trash deletion
 - `orphanCleanup.js` - Cleanup of orphaned files
 - `customDriveScanner.js` - Custom drive synchronization
+- `auditLogger.js` - Audit event logging service
 
 #### 5. **Routes**
 
@@ -120,6 +121,13 @@ API endpoint definitions:
 - `/api/user` - User endpoints
 - `/api/onlyoffice` - OnlyOffice endpoints
 - `/s` - Public share endpoints
+- `/metrics` - Application metrics (restricted by IP)
+
+#### 6. **Workers**
+
+Standalone worker processes:
+
+- `audit-worker.js` - Processes audit events from queue and writes to database
 
 ## Frontend Architecture
 
@@ -216,6 +224,8 @@ Key tables:
 - `files` - Files and folders
 - `share_links` - Share link metadata
 - `share_link_files` - Files included in share links
+- `audit_logs` - Audit trail events
+- `pgboss.*` - pg-boss job queue tables
 - `migrations` - Migration tracking
 
 ## Security
@@ -240,6 +250,126 @@ Key tables:
 - **Error Handling**: Generic error messages prevent information leakage
 - **ONLYOFFICE Integration**: CSP allows configured document server origin
 
+## Logging Architecture
+
+### Logging System
+
+TMA Cloud uses **Pino** for high-performance structured logging:
+
+```bash
+┌─────────────────┐
+│  Application    │
+│  (Controllers,  │
+│   Middleware)   │
+└────────┬────────┘
+         │ logger.info()
+         │ logger.error()
+         ▼
+┌─────────────────┐
+│  Pino Logger    │
+│  - Masking      │
+│  - Formatting   │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│  stdout/stderr  │
+│  (JSON/Pretty)  │
+└─────────────────┘
+```
+
+**Features:**
+
+- **Structured Logging**: JSON-formatted logs for easy parsing
+- **Secret Masking**: Automatic redaction of JWTs, passwords, cookies, tokens
+- **Multiple Formats**: JSON (production) or Pretty (development)
+- **Request Logging**: HTTP middleware logs all requests with context
+- **Context Propagation**: Request ID and user ID tracked across logs
+
+**Configuration:**
+
+- `LOG_LEVEL`: Sets minimum log level (debug, info, warn, error)
+- `LOG_FORMAT`: Output format (json, pretty)
+
+See [Logging Documentation](logging.md) for detailed information.
+
+## Audit System Architecture
+
+### Audit Logging Flow
+
+```bash
+┌──────────────────┐
+│   Controller     │
+│   (User Action)  │
+└────────┬─────────┘
+         │ logAuditEvent()
+         │ (non-blocking)
+         ▼
+┌──────────────────┐
+│    pg-boss       │
+│  Message Queue   │
+│   (PostgreSQL)   │
+└────────┬─────────┘
+         │ job: audit-log
+         │
+         ▼
+┌──────────────────┐
+│  Audit Worker    │
+│ (audit-worker.js)│
+│  - Concurrency   │
+│  - Retry Logic   │
+└────────┬─────────┘
+         │ INSERT
+         ▼
+┌──────────────────┐
+│  audit_logs      │
+│     Table        │
+│  - event_type    │
+│  - user_id       │
+│  - metadata      │
+│  - timestamp     │
+└──────────────────┘
+```
+
+### Key Components
+
+#### 1. **Audit Logger Service** (`services/auditLogger.js`)
+
+- Provides `logAuditEvent()` function
+- Queues events to pg-boss
+- Fire-and-forget pattern (non-blocking)
+- Includes user context, IP, user agent
+
+#### 2. **Audit Worker** (`audit-worker.js`)
+
+- Standalone Node.js process
+- Listens to pg-boss queue
+- Processes events asynchronously
+- Configurable concurrency
+- Automatic retry on failure
+
+#### 3. **Audit Database** (`audit_logs` table)
+
+- Stores all audit events
+- JSONB metadata for flexible querying
+- Indexed for performance
+- Foreign key to users table
+
+### Audit Event Types
+
+- **Authentication**: login, logout, signup, failures
+- **Files**: upload, download, delete, move, copy, rename, star
+- **Folders**: create, delete, move, copy
+- **Shares**: create, delete, access
+- **Documents**: open, save (OnlyOffice)
+- **Settings**: signup toggle
+
+**Configuration:**
+
+- `AUDIT_WORKER_CONCURRENCY`: Number of concurrent audit processing jobs
+
+See [Audit Documentation](audit.md) for detailed information.
+
 ## Background Services
 
 ### Trash Cleanup
@@ -256,6 +386,12 @@ Key tables:
 
 - Optional service to sync external directory
 - Watches for file changes and syncs to database
+
+### Audit Worker
+
+- Processes audit events from queue
+- Writes events to audit_logs table
+- Runs as separate process (`npm run worker`)
 
 ## Scalability Considerations
 
@@ -281,6 +417,8 @@ Key tables:
 - **PostgreSQL**: Reliable relational database
 - **JWT**: Stateless authentication
 - **Multer**: File upload handling
+- **Pino**: High-performance structured logging
+- **pg-boss**: PostgreSQL-based job queue for audit events
 
 ### Frontend
 
@@ -293,3 +431,10 @@ Key tables:
 
 - **OnlyOffice**: Document editing capabilities
 - **Google OAuth**: Social authentication option
+
+### Monitoring & Logging
+
+- **Pino**: Fast structured JSON logging
+- **pino-http**: HTTP request logging middleware
+- **pino-pretty**: Development-friendly log formatting
+- **pg-boss**: Reliable queue-based audit logging

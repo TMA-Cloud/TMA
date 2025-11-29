@@ -1,6 +1,7 @@
 /**
  * Response utility functions for consistent error handling
  */
+const { logger } = require('../config/logger');
 
 /**
  * Send error response with consistent format
@@ -11,7 +12,7 @@
  */
 function sendError(res, status, message, err = null) {
   if (err) {
-    console.error(err);
+    logger.error({ err }, 'Error in request handler');
   }
   res.status(status).json({ message });
 }
