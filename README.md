@@ -51,6 +51,17 @@ npm start
 
 For detailed setup instructions, see [docs/setup.md](docs/setup.md)
 
+## UI Preview
+
+A quick preview of the TMA Cloud interface.  
+Full gallery: [View All Screenshots](docs/screenshots.md)
+
+### Dashboard & File Manager
+
+| Dashboard | File Manager |
+|-----------|--------------|
+| ![Dashboard](docs/images/dashboard.png) | ![File Manager](docs/images/file-manager.png) |
+
 ## Documentation
 
 - [Features](docs/features.md)
