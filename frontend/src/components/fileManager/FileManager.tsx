@@ -518,6 +518,7 @@ export const FileManager: React.FC = () => {
       <MarqueeSelector
         onSelectionChange={handleMarqueeSelection}
         onSelectingChange={handleSelectingChange}
+        selectedFiles={selectedFiles}
       >
         <div
           className={`
@@ -526,7 +527,7 @@ export const FileManager: React.FC = () => {
                 ? "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4"
                 : "space-y-1"
             }
-            min-h-[50vh] relative
+            min-h-[50vh] relative pb-32
             ${files.length === 0 ? "flex flex-col items-center justify-center" : ""}
           `}
           style={{ overflow: "unset", height: "auto" }}
