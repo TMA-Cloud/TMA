@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { Grid, List, SortAsc, FolderPlus, Check } from "lucide-react";
 import { useApp, type FileItem } from "../../contexts/AppContext";
 import { Breadcrumbs } from "./Breadcrumbs";
@@ -208,6 +209,8 @@ export const FileManager: React.FC = () => {
 
   const [showSortMenu, setShowSortMenu] = useState(false);
   const sortMenuRef = useRef<HTMLDivElement>(null);
+  const sortButtonRef = useRef<HTMLButtonElement>(null);
+  const [sortMenuPos, setSortMenuPos] = useState({ top: 0, right: 0 });
 
   useEffect(() => {
     if (!showSortMenu) return;
@@ -427,60 +430,86 @@ export const FileManager: React.FC = () => {
           <div className="relative">
             <Tooltip text="Sort">
               <button
+                ref={sortButtonRef}
                 className="p-2 rounded-xl text-gray-500 hover:text-purple-600 dark:text-gray-400 dark:hover:text-purple-400 shadow-sm transition-all duration-300 hover:scale-110 active:scale-95 hover:bg-purple-50 dark:hover:bg-purple-900/20 hover:shadow-md"
                 aria-label="Sort"
-                onClick={() => setShowSortMenu((s) => !s)}
+                onClick={() => {
+                  if (!showSortMenu && sortButtonRef.current) {
+                    const rect = sortButtonRef.current.getBoundingClientRect();
+                    setSortMenuPos({
+                      top: rect.bottom + 8,
+                      right: window.innerWidth - rect.right,
+                    });
+                  }
+                  setShowSortMenu((s) => !s);
+                }}
               >
                 <SortAsc className="w-5 h-5 transition-transform duration-300" />
               </button>
             </Tooltip>
-            {showSortMenu && (
-              <div
-                ref={sortMenuRef}
-                className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl z-50 animate-menuIn backdrop-blur-lg"
-              >
-                {(
-                  [
-                    { label: "Name (A-Z)", by: "name", order: "asc" },
-                    { label: "Name (Z-A)", by: "name", order: "desc" },
-                    {
-                      label: "Modified (newest)",
-                      by: "modified",
-                      order: "desc",
-                    },
-                    {
-                      label: "Modified (oldest)",
-                      by: "modified",
-                      order: "asc",
-                    },
-                    { label: "Size (largest)", by: "size", order: "desc" },
-                    { label: "Size (smallest)", by: "size", order: "asc" },
-                  ] as const
-                ).map((opt) => (
-                  <button
-                    key={opt.label}
-                    onClick={() => {
-                      setSortBy(opt.by);
-                      setSortOrder(opt.order);
-                      setShowSortMenu(false);
+            {showSortMenu &&
+              createPortal(
+                <>
+                  {/* Overlay */}
+                  <div
+                    className="fixed inset-0 bg-white/30 dark:bg-white/10 transition-opacity duration-300 ease-in-out animate-fadeIn z-[9998]"
+                    onClick={() => setShowSortMenu(false)}
+                  />
+                  {/* Sort menu */}
+                  <div
+                    ref={sortMenuRef}
+                    className="fixed w-48 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl z-[9999] animate-menuIn"
+                    style={{
+                      top: `${sortMenuPos.top}px`,
+                      right: `${sortMenuPos.right}px`,
                     }}
-                    className={`flex items-center w-full px-3 py-2 text-sm text-left transition-all duration-200 hover:bg-gray-100 dark:hover:bg-gray-700 hover:pl-4 ${
-                      sortBy === opt.by && sortOrder === opt.order
-                        ? "bg-gray-100 dark:bg-gray-700 font-semibold"
-                        : ""
-                    }`}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={(e) => e.stopPropagation()}
                   >
-                    {sortBy === opt.by && sortOrder === opt.order && (
-                      <Check className="w-4 h-4 mr-2" />
-                    )}
-                    {!(sortBy === opt.by && sortOrder === opt.order) && (
-                      <span className="w-4 h-4 mr-2" />
-                    )}
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            )}
+                    {(
+                      [
+                        { label: "Name (A-Z)", by: "name", order: "asc" },
+                        { label: "Name (Z-A)", by: "name", order: "desc" },
+                        {
+                          label: "Modified (newest)",
+                          by: "modified",
+                          order: "desc",
+                        },
+                        {
+                          label: "Modified (oldest)",
+                          by: "modified",
+                          order: "asc",
+                        },
+                        { label: "Size (largest)", by: "size", order: "desc" },
+                        { label: "Size (smallest)", by: "size", order: "asc" },
+                      ] as const
+                    ).map((opt) => (
+                      <button
+                        key={opt.label}
+                        onClick={() => {
+                          setSortBy(opt.by);
+                          setSortOrder(opt.order);
+                          setShowSortMenu(false);
+                        }}
+                        className={`flex items-center w-full px-3 py-2 text-sm text-left transition-all duration-200 hover:bg-gray-100 dark:hover:bg-gray-700 hover:pl-4 ${
+                          sortBy === opt.by && sortOrder === opt.order
+                            ? "bg-gray-100 dark:bg-gray-700 font-semibold"
+                            : ""
+                        }`}
+                      >
+                        {sortBy === opt.by && sortOrder === opt.order && (
+                          <Check className="w-4 h-4 mr-2" />
+                        )}
+                        {!(sortBy === opt.by && sortOrder === opt.order) && (
+                          <span className="w-4 h-4 mr-2" />
+                        )}
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </>,
+                document.body,
+              )}
           </div>
         </div>
       </div>
