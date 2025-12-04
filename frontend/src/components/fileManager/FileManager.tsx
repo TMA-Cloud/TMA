@@ -9,6 +9,10 @@ import {
   CheckSquare,
   X,
   Trash2,
+  Share2,
+  Star,
+  Download,
+  Edit3,
 } from "lucide-react";
 import { useApp, type FileItem } from "../../contexts/AppContext";
 import { Breadcrumbs } from "./Breadcrumbs";
@@ -201,10 +205,18 @@ export const FileManager: React.FC = () => {
     isSearching,
     isDownloading,
     emptyTrash,
+    shareFiles,
+    starFiles,
+    downloadFiles,
+    setRenameTarget,
+    deleteFiles,
+    setShareLinkModalOpen,
   } = useApp();
 
   const canCreateFolder = currentPath[0] === "My Files";
   const isTrashView = currentPath[0] === "Trash";
+  const isSharedView = currentPath[0] === "Shared";
+  const isStarredView = currentPath[0] === "Starred";
   const hasTrashFiles = isTrashView && files.length > 0;
 
   const handleEmptyTrash = async () => {
@@ -481,8 +493,98 @@ export const FileManager: React.FC = () => {
         </div>
 
         <div
-          className={`flex items-center ${isMobile ? "justify-end w-full" : "space-x-2"}`}
+          className={`flex items-center ${isMobile ? "justify-end w-full flex-wrap gap-2" : "space-x-2"}`}
         >
+          {/* Action buttons - only show when files are selected, but not on Trash page */}
+          {selectedFiles.length > 0 && !isTrashView && (
+            <>
+              {/* Hide "Add to Share" on Shared page */}
+              {!isSharedView && (
+                <Tooltip text="Add to Share">
+                  <button
+                    className="p-2 rounded-xl text-gray-500 hover:text-green-600 dark:text-gray-400 dark:hover:text-green-400 shadow-sm transition-all duration-300 hover:scale-110 active:scale-95 hover:bg-green-50 dark:hover:bg-green-900/20 hover:shadow-md"
+                    onClick={async () => {
+                      const selectedItems = files.filter((f) =>
+                        selectedFiles.includes(f.id),
+                      );
+                      const allShared =
+                        selectedItems.length > 0 &&
+                        selectedItems.every((f) => f.shared);
+                      const links = await shareFiles(selectedFiles, !allShared);
+                      if (!allShared) {
+                        const base = window.location.origin;
+                        const list = Object.values(links).map(
+                          (t) => `${base}/s/${t}`,
+                        );
+                        setShareLinkModalOpen(true, list);
+                      }
+                    }}
+                    aria-label="Add to Share"
+                  >
+                    <Share2 className="w-5 h-5 transition-transform duration-300" />
+                  </button>
+                </Tooltip>
+              )}
+
+              {/* Hide "Add to Starred" on Starred page */}
+              {!isStarredView && (
+                <Tooltip text="Add to Starred">
+                  <button
+                    className="p-2 rounded-xl text-gray-500 hover:text-yellow-600 dark:text-gray-400 dark:hover:text-yellow-400 shadow-sm transition-all duration-300 hover:scale-110 active:scale-95 hover:bg-yellow-50 dark:hover:bg-yellow-900/20 hover:shadow-md"
+                    onClick={() => {
+                      const selectedItems = files.filter((f) =>
+                        selectedFiles.includes(f.id),
+                      );
+                      const allStarred =
+                        selectedItems.length > 0 &&
+                        selectedItems.every((f) => f.starred);
+                      starFiles(selectedFiles, !allStarred);
+                    }}
+                    aria-label="Add to Starred"
+                  >
+                    <Star className="w-5 h-5 transition-transform duration-300" />
+                  </button>
+                </Tooltip>
+              )}
+
+              <Tooltip text="Download">
+                <button
+                  className="p-2 rounded-xl text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 shadow-sm transition-all duration-300 hover:scale-110 active:scale-95 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={() => downloadFiles(selectedFiles)}
+                  disabled={isDownloading || selectedFiles.length === 0}
+                  aria-label="Download"
+                >
+                  <Download className="w-5 h-5 transition-transform duration-300" />
+                </button>
+              </Tooltip>
+
+              <Tooltip text="Rename">
+                <button
+                  className="p-2 rounded-xl text-gray-500 hover:text-purple-600 dark:text-gray-400 dark:hover:text-purple-400 shadow-sm transition-all duration-300 hover:scale-110 active:scale-95 hover:bg-purple-50 dark:hover:bg-purple-900/20 hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={() => {
+                    if (selectedFiles.length === 1) {
+                      const file = files.find((f) => f.id === selectedFiles[0]);
+                      if (file) setRenameTarget(file);
+                    }
+                  }}
+                  disabled={selectedFiles.length !== 1}
+                  aria-label="Rename"
+                >
+                  <Edit3 className="w-5 h-5 transition-transform duration-300" />
+                </button>
+              </Tooltip>
+
+              <Tooltip text="Delete">
+                <button
+                  className="p-2 rounded-xl text-gray-500 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400 shadow-sm transition-all duration-300 hover:scale-110 active:scale-95 hover:bg-red-50 dark:hover:bg-red-900/20 hover:shadow-md"
+                  onClick={() => deleteFiles(selectedFiles)}
+                  aria-label="Delete"
+                >
+                  <Trash2 className="w-5 h-5 transition-transform duration-300" />
+                </button>
+              </Tooltip>
+            </>
+          )}
           {isTrashView ? (
             // Trash page: only show Empty Trash button
             hasTrashFiles && (
