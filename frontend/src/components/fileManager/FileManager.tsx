@@ -8,6 +8,7 @@ import {
   Check,
   CheckSquare,
   X,
+  Trash2,
 } from "lucide-react";
 import { useApp, type FileItem } from "../../contexts/AppContext";
 import { Breadcrumbs } from "./Breadcrumbs";
@@ -199,9 +200,28 @@ export const FileManager: React.FC = () => {
     searchQuery,
     isSearching,
     isDownloading,
+    emptyTrash,
   } = useApp();
 
   const canCreateFolder = currentPath[0] === "My Files";
+  const isTrashView = currentPath[0] === "Trash";
+  const hasTrashFiles = isTrashView && files.length > 0;
+
+  const handleEmptyTrash = async () => {
+    if (
+      !window.confirm(
+        `Are you sure you want to permanently delete all ${files.length} item(s) from trash? This action cannot be undone.`,
+      )
+    ) {
+      return;
+    }
+
+    try {
+      await emptyTrash();
+    } catch (error) {
+      console.error("Failed to empty trash:", error);
+    }
+  };
 
   const dragSelectingRef = useRef(false);
   const managerRef = useRef<HTMLDivElement>(null);
@@ -458,138 +478,165 @@ export const FileManager: React.FC = () => {
         <div
           className={`flex items-center ${isMobile ? "justify-end w-full" : "space-x-2"}`}
         >
-          <Tooltip text="Grid view">
-            <button
-              onClick={() => setViewMode("grid")}
-              className={`
-                p-2 rounded-xl transition-all duration-300 ease-out shadow-sm
-                hover:scale-110 active:scale-95
-                ${
-                  viewMode === "grid"
-                    ? "bg-blue-100 text-blue-600 dark:bg-blue-900/60 dark:text-blue-400 shadow-lg scale-105"
-                    : "text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20"
-                }
-              `}
-              aria-label="Grid view"
-            >
-              <Grid className="w-5 h-5 transition-transform duration-300" />
-            </button>
-          </Tooltip>
+          {isTrashView ? (
+            // Trash page: only show Empty Trash button
+            hasTrashFiles && (
+              <Tooltip text="Empty Trash">
+                <button
+                  className="p-2 rounded-xl text-gray-500 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400 shadow-sm transition-all duration-300 hover:scale-110 active:scale-95 hover:bg-red-50 dark:hover:bg-red-900/20 hover:shadow-md"
+                  onClick={handleEmptyTrash}
+                  aria-label="Empty Trash"
+                >
+                  <Trash2 className="w-5 h-5 transition-transform duration-300" />
+                </button>
+              </Tooltip>
+            )
+          ) : (
+            // Other pages: show all buttons
+            <>
+              <Tooltip text="Grid view">
+                <button
+                  onClick={() => setViewMode("grid")}
+                  className={`
+                    p-2 rounded-xl transition-all duration-300 ease-out shadow-sm
+                    hover:scale-110 active:scale-95
+                    ${
+                      viewMode === "grid"
+                        ? "bg-blue-100 text-blue-600 dark:bg-blue-900/60 dark:text-blue-400 shadow-lg scale-105"
+                        : "text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                    }
+                  `}
+                  aria-label="Grid view"
+                >
+                  <Grid className="w-5 h-5 transition-transform duration-300" />
+                </button>
+              </Tooltip>
 
-          <Tooltip text="List view">
-            <button
-              onClick={() => setViewMode("list")}
-              className={`
-                p-2 rounded-xl transition-all duration-300 ease-out shadow-sm
-                hover:scale-110 active:scale-95
-                ${
-                  viewMode === "list"
-                    ? "bg-blue-100 text-blue-600 dark:bg-blue-900/60 dark:text-blue-400 shadow-lg scale-105"
-                    : "text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20"
-                }
-              `}
-              aria-label="List view"
-            >
-              <List className="w-5 h-5 transition-transform duration-300" />
-            </button>
-          </Tooltip>
+              <Tooltip text="List view">
+                <button
+                  onClick={() => setViewMode("list")}
+                  className={`
+                    p-2 rounded-xl transition-all duration-300 ease-out shadow-sm
+                    hover:scale-110 active:scale-95
+                    ${
+                      viewMode === "list"
+                        ? "bg-blue-100 text-blue-600 dark:bg-blue-900/60 dark:text-blue-400 shadow-lg scale-105"
+                        : "text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                    }
+                  `}
+                  aria-label="List view"
+                >
+                  <List className="w-5 h-5 transition-transform duration-300" />
+                </button>
+              </Tooltip>
 
-          {canCreateFolder && (
-            <Tooltip text="Create folder">
-              <button
-                className="p-2 rounded-xl text-gray-500 hover:text-green-600 dark:text-gray-400 dark:hover:text-green-400 shadow-sm transition-all duration-300 hover:scale-110 active:scale-95 hover:bg-green-50 dark:hover:bg-green-900/20 hover:shadow-md"
-                onClick={() => setCreateFolderModalOpen(true)}
-                aria-label="Create folder"
-              >
-                <FolderPlus className="w-5 h-5 transition-transform duration-300" />
-              </button>
-            </Tooltip>
-          )}
-
-          <div className="relative">
-            <Tooltip text="Sort">
-              <button
-                ref={sortButtonRef}
-                className="p-2 rounded-xl text-gray-500 hover:text-purple-600 dark:text-gray-400 dark:hover:text-purple-400 shadow-sm transition-all duration-300 hover:scale-110 active:scale-95 hover:bg-purple-50 dark:hover:bg-purple-900/20 hover:shadow-md"
-                aria-label="Sort"
-                onClick={() => {
-                  if (!showSortMenu && sortButtonRef.current) {
-                    const rect = sortButtonRef.current.getBoundingClientRect();
-                    setSortMenuPos({
-                      top: rect.bottom + 8,
-                      right: window.innerWidth - rect.right,
-                    });
-                  }
-                  setShowSortMenu((s) => !s);
-                }}
-              >
-                <SortAsc className="w-5 h-5 transition-transform duration-300" />
-              </button>
-            </Tooltip>
-            {showSortMenu &&
-              createPortal(
-                <>
-                  {/* Overlay */}
-                  <div
-                    className="fixed inset-0 bg-white/30 dark:bg-white/10 transition-opacity duration-300 ease-in-out animate-fadeIn z-[9998]"
-                    onClick={() => setShowSortMenu(false)}
-                  />
-                  {/* Sort menu */}
-                  <div
-                    ref={sortMenuRef}
-                    className="fixed w-48 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl z-[9999] animate-menuIn"
-                    style={{
-                      top: `${sortMenuPos.top}px`,
-                      right: `${sortMenuPos.right}px`,
-                    }}
-                    onMouseDown={(e) => e.stopPropagation()}
-                    onClick={(e) => e.stopPropagation()}
+              {canCreateFolder && (
+                <Tooltip text="Create folder">
+                  <button
+                    className="p-2 rounded-xl text-gray-500 hover:text-green-600 dark:text-gray-400 dark:hover:text-green-400 shadow-sm transition-all duration-300 hover:scale-110 active:scale-95 hover:bg-green-50 dark:hover:bg-green-900/20 hover:shadow-md"
+                    onClick={() => setCreateFolderModalOpen(true)}
+                    aria-label="Create folder"
                   >
-                    {(
-                      [
-                        { label: "Name (A-Z)", by: "name", order: "asc" },
-                        { label: "Name (Z-A)", by: "name", order: "desc" },
-                        {
-                          label: "Modified (newest)",
-                          by: "modified",
-                          order: "desc",
-                        },
-                        {
-                          label: "Modified (oldest)",
-                          by: "modified",
-                          order: "asc",
-                        },
-                        { label: "Size (largest)", by: "size", order: "desc" },
-                        { label: "Size (smallest)", by: "size", order: "asc" },
-                      ] as const
-                    ).map((opt) => (
-                      <button
-                        key={opt.label}
-                        onClick={() => {
-                          setSortBy(opt.by);
-                          setSortOrder(opt.order);
-                          setShowSortMenu(false);
-                        }}
-                        className={`flex items-center w-full px-3 py-2 text-sm text-left transition-all duration-200 hover:bg-gray-100 dark:hover:bg-gray-700 hover:pl-4 ${
-                          sortBy === opt.by && sortOrder === opt.order
-                            ? "bg-gray-100 dark:bg-gray-700 font-semibold"
-                            : ""
-                        }`}
-                      >
-                        {sortBy === opt.by && sortOrder === opt.order && (
-                          <Check className="w-4 h-4 mr-2" />
-                        )}
-                        {!(sortBy === opt.by && sortOrder === opt.order) && (
-                          <span className="w-4 h-4 mr-2" />
-                        )}
-                        {opt.label}
-                      </button>
-                    ))}
-                  </div>
-                </>,
-                document.body,
+                    <FolderPlus className="w-5 h-5 transition-transform duration-300" />
+                  </button>
+                </Tooltip>
               )}
-          </div>
+
+              <div className="relative">
+                <Tooltip text="Sort">
+                  <button
+                    ref={sortButtonRef}
+                    className="p-2 rounded-xl text-gray-500 hover:text-purple-600 dark:text-gray-400 dark:hover:text-purple-400 shadow-sm transition-all duration-300 hover:scale-110 active:scale-95 hover:bg-purple-50 dark:hover:bg-purple-900/20 hover:shadow-md"
+                    aria-label="Sort"
+                    onClick={() => {
+                      if (!showSortMenu && sortButtonRef.current) {
+                        const rect =
+                          sortButtonRef.current.getBoundingClientRect();
+                        setSortMenuPos({
+                          top: rect.bottom + 8,
+                          right: window.innerWidth - rect.right,
+                        });
+                      }
+                      setShowSortMenu((s) => !s);
+                    }}
+                  >
+                    <SortAsc className="w-5 h-5 transition-transform duration-300" />
+                  </button>
+                </Tooltip>
+                {showSortMenu &&
+                  createPortal(
+                    <>
+                      {/* Overlay */}
+                      <div
+                        className="fixed inset-0 bg-white/30 dark:bg-white/10 transition-opacity duration-300 ease-in-out animate-fadeIn z-[9998]"
+                        onClick={() => setShowSortMenu(false)}
+                      />
+                      {/* Sort menu */}
+                      <div
+                        ref={sortMenuRef}
+                        className="fixed w-48 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl z-[9999] animate-menuIn"
+                        style={{
+                          top: `${sortMenuPos.top}px`,
+                          right: `${sortMenuPos.right}px`,
+                        }}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {(
+                          [
+                            { label: "Name (A-Z)", by: "name", order: "asc" },
+                            { label: "Name (Z-A)", by: "name", order: "desc" },
+                            {
+                              label: "Modified (newest)",
+                              by: "modified",
+                              order: "desc",
+                            },
+                            {
+                              label: "Modified (oldest)",
+                              by: "modified",
+                              order: "asc",
+                            },
+                            {
+                              label: "Size (largest)",
+                              by: "size",
+                              order: "desc",
+                            },
+                            {
+                              label: "Size (smallest)",
+                              by: "size",
+                              order: "asc",
+                            },
+                          ] as const
+                        ).map((opt) => (
+                          <button
+                            key={opt.label}
+                            onClick={() => {
+                              setSortBy(opt.by);
+                              setSortOrder(opt.order);
+                              setShowSortMenu(false);
+                            }}
+                            className={`flex items-center w-full px-3 py-2 text-sm text-left transition-all duration-200 hover:bg-gray-100 dark:hover:bg-gray-700 hover:pl-4 ${
+                              sortBy === opt.by && sortOrder === opt.order
+                                ? "bg-gray-100 dark:bg-gray-700 font-semibold"
+                                : ""
+                            }`}
+                          >
+                            {sortBy === opt.by && sortOrder === opt.order && (
+                              <Check className="w-4 h-4 mr-2" />
+                            )}
+                            {!(
+                              sortBy === opt.by && sortOrder === opt.order
+                            ) && <span className="w-4 h-4 mr-2" />}
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
+                    </>,
+                    document.body,
+                  )}
+              </div>
+            </>
+          )}
         </div>
       </div>
 

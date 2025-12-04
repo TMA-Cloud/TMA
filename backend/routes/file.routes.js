@@ -16,6 +16,7 @@ const {
   deleteFiles,
   listTrash,
   deleteForever,
+  emptyTrash,
   searchFiles,
   getFileStats,
 } = require('../controllers/file.controller');
@@ -44,6 +45,7 @@ router.post('/link-parent-share', linkParentShare);
 router.post('/delete', deleteFiles);
 router.get('/trash', listTrash);
 router.post('/trash/delete', deleteForever);
+router.post('/trash/empty', emptyTrash);
 router.get('/:id/download', downloadFile);
 
 module.exports = router;

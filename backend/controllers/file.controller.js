@@ -600,6 +600,43 @@ async function deleteForeverController(req, res) {
   }
 }
 
+async function emptyTrashController(req, res) {
+  try {
+    // Get all trash files for the user
+    const trashFiles = await getTrashFiles(req.userId);
+    
+    if (trashFiles.length === 0) {
+      return sendSuccess(res, { success: true, message: 'Trash is already empty' });
+    }
+
+    const allIds = trashFiles.map(f => f.id);
+    const fileNames = trashFiles.map(f => f.name);
+    const fileTypes = trashFiles.map(f => f.type);
+
+    await permanentlyDeleteFiles(allIds, req.userId);
+
+    // Log empty trash action with details
+    await logAuditEvent('file.delete.permanent', {
+      status: 'success',
+      resourceType: 'file',
+      resourceId: allIds[0] || null,
+      metadata: {
+        fileCount: allIds.length,
+        fileIds: allIds,
+        fileNames: fileNames,
+        fileTypes: fileTypes,
+        permanent: true,
+        action: 'empty_trash',
+      }
+    }, req);
+    logger.info({ fileCount: allIds.length, fileNames }, 'Trash emptied');
+
+    sendSuccess(res, { success: true, message: `Deleted ${allIds.length} file(s) from trash` });
+  } catch (err) {
+    sendError(res, 500, 'Server error', err);
+  }
+}
+
 async function searchFilesController(req, res) {
   try {
     const query = req.query.q || req.query.query || '';
@@ -664,6 +701,7 @@ module.exports = {
   deleteFiles: deleteFilesController,
   listTrash,
   deleteForever: deleteForeverController,
+  emptyTrash: emptyTrashController,
   searchFiles: searchFilesController,
   getFileStats: getFileStatsController,
 };

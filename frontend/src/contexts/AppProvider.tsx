@@ -347,6 +347,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
     await refreshFiles();
   };
 
+  const emptyTrashApi = async () => {
+    await fetch(`/api/files/trash/empty`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+    });
+    await refreshFiles();
+  };
+
   const linkToParentShareApi = async (
     ids: string[],
   ): Promise<Record<string, string>> => {
@@ -494,6 +503,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         starFiles: starFilesApi,
         deleteFiles: deleteFilesApi,
         deleteForever: deleteForeverApi,
+        emptyTrash: emptyTrashApi,
         clipboard,
         setClipboard,
         pasteClipboard,
