@@ -54,6 +54,15 @@ async function getUserName(userId) {
 }
 
 /**
+ * Detect if request is from a mobile device
+ */
+function isMobileDevice(req) {
+  const userAgent = req?.headers?.['user-agent'] || '';
+  const mobilePattern = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i;
+  return mobilePattern.test(userAgent);
+}
+
+/**
  * Build backend base URL, download URL, and callback URL
  */
 function buildOnlyofficeUrls(req, fileId, token) {
@@ -66,7 +75,7 @@ function buildOnlyofficeUrls(req, fileId, token) {
 /**
  * Build ONLYOFFICE editor configuration
  */
-function buildOnlyofficeConfig(file, userId, userName, downloadUrl, callbackUrl) {
+function buildOnlyofficeConfig(file, userId, userName, downloadUrl, callbackUrl, isMobile = false) {
   const fileType = getFileTypeFromName(file.name);
   const viewOnly = fileType === 'pdf';
   
@@ -89,7 +98,7 @@ function buildOnlyofficeConfig(file, userId, userName, downloadUrl, callbackUrl)
         name: userName,
       },
     },
-    type: 'desktop',
+    type: isMobile ? 'mobile' : 'desktop',
   };
 }
 
@@ -115,7 +124,8 @@ async function getConfig(req, res) {
     const userName = await getUserName(userId);
     const token = buildSignedFileToken(file.id);
     const { downloadUrl, callbackUrl } = buildOnlyofficeUrls(req, file.id, token);
-    const config = buildOnlyofficeConfig(file, userId, userName, downloadUrl, callbackUrl);
+    const isMobile = isMobileDevice(req);
+    const config = buildOnlyofficeConfig(file, userId, userName, downloadUrl, callbackUrl, isMobile);
     const tokenForConfig = signConfigToken(config);
     const onlyofficeJsUrl = getOnlyofficeJsUrl();
 
@@ -200,7 +210,8 @@ async function getViewerPage(req, res) {
     const userName = await getUserName(userId);
     const token = buildSignedFileToken(file.id);
     const { downloadUrl, callbackUrl } = buildOnlyofficeUrls(req, file.id, token);
-    const config = buildOnlyofficeConfig(file, userId, userName, downloadUrl, callbackUrl);
+    const isMobile = isMobileDevice(req);
+    const config = buildOnlyofficeConfig(file, userId, userName, downloadUrl, callbackUrl, isMobile);
     const configToken = signConfigToken(config);
     const onlyofficeJsUrl = getOnlyofficeJsUrl();
     
