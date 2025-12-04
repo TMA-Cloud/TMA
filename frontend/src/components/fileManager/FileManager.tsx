@@ -1,6 +1,14 @@
 import React, { useState, useCallback, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { Grid, List, SortAsc, FolderPlus, Check } from "lucide-react";
+import {
+  Grid,
+  List,
+  SortAsc,
+  FolderPlus,
+  Check,
+  CheckSquare,
+  X,
+} from "lucide-react";
 import { useApp, type FileItem } from "../../contexts/AppContext";
 import { Breadcrumbs } from "./Breadcrumbs";
 import { MarqueeSelector } from "./MarqueeSelector";
@@ -11,6 +19,7 @@ import { DownloadProgress } from "./DownloadProgress";
 import { FileSkeleton } from "./FileSkeleton";
 import { Tooltip } from "../ui/Tooltip";
 import { ONLYOFFICE_EXTS, getExt } from "../../utils/fileUtils";
+import { useIsMobile } from "../../hooks/useIsMobile";
 
 const transparentImage = new Image();
 transparentImage.src =
@@ -98,9 +107,14 @@ const animateFlyToFolder = async (ids: string[], folderId: string) => {
 
 let dragPreviewEl: HTMLDivElement | null = null;
 
-const createDragPreview = (ids: string[], x: number, y: number) => {
+const createDragPreview = (
+  ids: string[],
+  x: number,
+  y: number,
+  isMobile: boolean,
+) => {
   removeDragPreview();
-  if (ids.length === 0) return;
+  if (ids.length === 0 || isMobile) return; // Disable drag preview on mobile
   const first = document.querySelector<HTMLElement>(
     `[data-file-id="${ids[0]}"]`,
   );
@@ -194,6 +208,7 @@ export const FileManager: React.FC = () => {
   const [isSelecting, setIsSelecting] = useState(false);
   const [draggingIds, setDraggingIds] = useState<string[]>([]);
   const [dragOverFolder, setDragOverFolder] = useState<string | null>(null);
+  const [multiSelectMode, setMultiSelectMode] = useState(false);
 
   // track marquee‐drag state in a ref only (we never read dragSelecting)
   const handleSelectingChange = useCallback((selecting: boolean) => {
@@ -212,6 +227,8 @@ export const FileManager: React.FC = () => {
   const sortButtonRef = useRef<HTMLButtonElement>(null);
   const [sortMenuPos, setSortMenuPos] = useState({ top: 0, right: 0 });
 
+  const isMobile = useIsMobile();
+
   useEffect(() => {
     if (!showSortMenu) return;
     const handler = (e: MouseEvent) => {
@@ -226,20 +243,42 @@ export const FileManager: React.FC = () => {
     return () => document.removeEventListener("mousedown", handler);
   }, [showSortMenu]);
 
+  // Wrapper for clearSelection that also exits multi-select mode on mobile
+  const handleClearSelection = useCallback(() => {
+    clearSelection();
+    if (isMobile && multiSelectMode) {
+      setMultiSelectMode(false);
+    }
+  }, [clearSelection, isMobile, multiSelectMode]);
+
+  // Wrapper for removeSelectedFile that exits multi-select mode when last file is deselected
+  const handleRemoveSelectedFile = useCallback(
+    (fileId: string) => {
+      removeSelectedFile(fileId);
+      if (isMobile && multiSelectMode && selectedFiles.length === 1) {
+        // If this was the last selected file, exit multi-select mode
+        setMultiSelectMode(false);
+      }
+    },
+    [removeSelectedFile, isMobile, multiSelectMode, selectedFiles.length],
+  );
+
   useEffect(() => {
     const handleDocumentClick = (e: MouseEvent) => {
       if (dragSelectingRef.current) return;
 
       const manager = managerRef.current;
       if (manager && !manager.contains(e.target as Node)) {
-        clearSelection();
+        handleClearSelection();
       }
     };
 
     document.addEventListener("click", handleDocumentClick);
 
     const handleDrag = (ev: DragEvent) => {
-      moveDragPreview(ev.clientX, ev.clientY);
+      if (!isMobile) {
+        moveDragPreview(ev.clientX, ev.clientY);
+      }
     };
     document.addEventListener("dragover", handleDrag);
 
@@ -247,18 +286,28 @@ export const FileManager: React.FC = () => {
       document.removeEventListener("click", handleDocumentClick);
       document.removeEventListener("dragover", handleDrag);
     };
-  }, [clearSelection]);
+  }, [handleClearSelection, isMobile]);
 
   const handleFileClick = (fileId: string, e: React.MouseEvent) => {
     if (dragSelectingRef.current) return;
 
     e.preventDefault();
-    e.stopPropagation(); // ← prevent the container’s onClick from firing
+    e.stopPropagation(); // ← prevent the container's onClick from firing
+
+    // Mobile multi-select mode
+    if (isMobile && multiSelectMode) {
+      if (selectedFiles.includes(fileId)) {
+        handleRemoveSelectedFile(fileId);
+      } else {
+        addSelectedFile(fileId);
+      }
+      return;
+    }
 
     if (e.ctrlKey || e.metaKey) {
       // Multi-select with Ctrl/Cmd
       if (selectedFiles.includes(fileId)) {
-        removeSelectedFile(fileId);
+        handleRemoveSelectedFile(fileId);
       } else {
         addSelectedFile(fileId);
       }
@@ -322,7 +371,7 @@ export const FileManager: React.FC = () => {
   );
 
   const handleDragStart = (fileId: string) => (e: React.DragEvent) => {
-    if (dragSelectingRef.current) {
+    if (dragSelectingRef.current || isMobile) {
       e.preventDefault();
       return;
     }
@@ -340,6 +389,7 @@ export const FileManager: React.FC = () => {
       selectedFiles.includes(fileId) ? selectedFiles : [fileId],
       e.clientX,
       e.clientY,
+      isMobile,
     );
   };
 
@@ -373,12 +423,41 @@ export const FileManager: React.FC = () => {
   };
 
   return (
-    <div className="p-6 space-y-6" ref={managerRef}>
-      {/* Header */}
-      <div className="flex items-center justify-between rounded-2xl bg-white/80 dark:bg-gray-900/80 shadow-md px-6 py-4 mb-2 transition-all duration-300 backdrop-blur-lg border border-gray-200/50 dark:border-gray-700/50 animate-slideDown">
-        <Breadcrumbs />
+    <div className={`${isMobile ? "p-3" : "p-6"} space-y-6`} ref={managerRef}>
+      {/* Multi-Select Mode Indicator (Mobile Only) */}
+      {isMobile && multiSelectMode && (
+        <div className="bg-blue-500 text-white px-4 py-2 rounded-xl flex items-center justify-between mb-2 animate-slideDown">
+          <div className="flex items-center space-x-2">
+            <CheckSquare className="w-5 h-5" />
+            <span className="text-sm font-medium">Multi-Select Mode</span>
+            <span className="text-xs opacity-90">
+              ({selectedFiles.length} selected)
+            </span>
+          </div>
+          <button
+            onClick={() => {
+              setMultiSelectMode(false);
+              handleClearSelection();
+            }}
+            className="text-white hover:text-blue-100 active:scale-95 transition"
+            aria-label="Exit multi-select mode"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+      )}
 
-        <div className="flex items-center space-x-2">
+      {/* Header */}
+      <div
+        className={`${isMobile ? "flex-col space-y-3 px-3 py-3" : "flex items-center justify-between px-6 py-4"} rounded-2xl bg-white/80 dark:bg-gray-900/80 shadow-md mb-2 transition-all duration-300 backdrop-blur-lg border border-gray-200/50 dark:border-gray-700/50 animate-slideDown`}
+      >
+        <div className={`${isMobile ? "w-full" : "flex-1 min-w-0"}`}>
+          <Breadcrumbs />
+        </div>
+
+        <div
+          className={`flex items-center ${isMobile ? "justify-end w-full" : "space-x-2"}`}
+        >
           <Tooltip text="Grid view">
             <button
               onClick={() => setViewMode("grid")}
@@ -515,16 +594,12 @@ export const FileManager: React.FC = () => {
       </div>
 
       {/* File List */}
-      <MarqueeSelector
-        onSelectionChange={handleMarqueeSelection}
-        onSelectingChange={handleSelectingChange}
-        selectedFiles={selectedFiles}
-      >
+      {isMobile ? (
         <div
           className={`
             ${
               viewMode === "grid"
-                ? "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4"
+                ? `grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 ${isMobile ? "gap-2" : "gap-4"}`
                 : "space-y-1"
             }
             min-h-[50vh] relative pb-32
@@ -534,7 +609,7 @@ export const FileManager: React.FC = () => {
           onClick={(e) => {
             // only clear if the click really hit the empty area
             if (e.target === e.currentTarget && !dragSelectingRef.current) {
-              clearSelection();
+              handleClearSelection();
             }
           }}
           onContextMenu={(e) => handleContextMenu(e)}
@@ -653,12 +728,159 @@ export const FileManager: React.FC = () => {
               </div>
             ))
           )}
-          {/* Dropzone highlight for drag-and-drop */}
-          {dragOverFolder === null && draggingIds.length > 0 && (
+          {/* Dropzone highlight for drag-and-drop - disabled on mobile */}
+          {dragOverFolder === null && draggingIds.length > 0 && !isMobile && (
             <div className="absolute inset-0 rounded-2xl border-4 border-blue-400 border-dashed bg-blue-100/40 dark:bg-blue-900/20 pointer-events-none animate-fadeIn z-10" />
           )}
         </div>
-      </MarqueeSelector>
+      ) : (
+        <MarqueeSelector
+          onSelectionChange={handleMarqueeSelection}
+          onSelectingChange={handleSelectingChange}
+          selectedFiles={selectedFiles}
+        >
+          <div
+            className={`
+            ${
+              viewMode === "grid"
+                ? `grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4`
+                : "space-y-1"
+            }
+            min-h-[50vh] relative pb-32
+            ${files.length === 0 ? "flex flex-col items-center justify-center" : ""}
+          `}
+            style={{ overflow: "unset", height: "auto" }}
+            onClick={(e) => {
+              // only clear if the click really hit the empty area
+              if (e.target === e.currentTarget && !dragSelectingRef.current) {
+                handleClearSelection();
+              }
+            }}
+            onContextMenu={(e) => handleContextMenu(e)}
+          >
+            {files.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-64 text-center select-none animate-fadeIn">
+                <svg
+                  width="80"
+                  height="80"
+                  fill="none"
+                  viewBox="0 0 80 80"
+                  className="mb-4 animate-bounceIn"
+                >
+                  <rect
+                    width="80"
+                    height="80"
+                    rx="20"
+                    fill="#e0e7ef"
+                    className="dark:fill-gray-800"
+                  />
+                  <path
+                    d="M24 56V32a4 4 0 014-4h24a4 4 0 014 4v24"
+                    stroke="#60a5fa"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  <path
+                    d="M32 40h16"
+                    stroke="#60a5fa"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                  />
+                  <path
+                    d="M32 48h16"
+                    stroke="#60a5fa"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                  />
+                </svg>
+                <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                  {searchQuery.trim().length > 0
+                    ? isSearching
+                      ? "Searching..."
+                      : "No results found"
+                    : currentPath[0] === "Starred"
+                      ? "No starred files"
+                      : currentPath[0] === "Shared"
+                        ? "No shared files"
+                        : currentPath[0] === "Trash"
+                          ? "Trash is empty"
+                          : "No files or folders"}
+                </h3>
+                <p className="text-gray-500 dark:text-gray-400 mb-4">
+                  {searchQuery.trim().length > 0
+                    ? isSearching
+                      ? "Please wait while we search your files..."
+                      : `No files or folders match "${searchQuery}"`
+                    : currentPath[0] === "Starred"
+                      ? "Star files to easily find them later."
+                      : currentPath[0] === "Shared"
+                        ? "Files others share with you will show up here."
+                        : currentPath[0] === "Trash"
+                          ? "Deleted files will appear here."
+                          : "Upload or create a folder to get started."}
+                </p>
+                {canCreateFolder && searchQuery.trim().length === 0 && (
+                  <button
+                    className="px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 font-semibold hover:scale-105 active:scale-95 transform animate-bounceIn"
+                    onClick={() => setCreateFolderModalOpen(true)}
+                  >
+                    Create Folder
+                  </button>
+                )}
+              </div>
+            ) : isSearching ? (
+              <FileSkeleton
+                viewMode={viewMode}
+                count={viewMode === "grid" ? 12 : 8}
+              />
+            ) : (
+              files.map((file) => (
+                <div key={file.id} className="relative">
+                  <FileItemComponent
+                    file={file}
+                    isSelected={selectedFiles.includes(file.id)}
+                    viewMode={viewMode}
+                    onClick={(e) => handleFileClick(file.id, e)}
+                    onDoubleClick={() => handleFileDoubleClick(file)}
+                    onContextMenu={(e) => handleContextMenu(e, file.id)}
+                    onDragStart={handleDragStart(file.id)}
+                    onDragEnd={handleDragEnd}
+                    onDragOver={
+                      file.type === "folder"
+                        ? handleFolderDragOver(file.id)
+                        : undefined
+                    }
+                    onDragLeave={
+                      file.type === "folder"
+                        ? handleFolderDragLeave(file.id)
+                        : undefined
+                    }
+                    onDrop={
+                      file.type === "folder"
+                        ? handleFolderDrop(file.id)
+                        : undefined
+                    }
+                    isDragOver={dragOverFolder === file.id}
+                    dragDisabled={isSelecting}
+                  />
+                  {file.type === "folder" &&
+                    dragOverFolder === file.id &&
+                    draggingIds.length > 1 && (
+                      <div className="drop-count-badge">
+                        {draggingIds.length}
+                      </div>
+                    )}
+                </div>
+              ))
+            )}
+            {/* Dropzone highlight for drag-and-drop */}
+            {dragOverFolder === null && draggingIds.length > 0 && (
+              <div className="absolute inset-0 rounded-2xl border-4 border-blue-400 border-dashed bg-blue-100/40 dark:bg-blue-900/20 pointer-events-none animate-fadeIn z-10" />
+            )}
+          </div>
+        </MarqueeSelector>
+      )}
 
       {/* Context Menu */}
       <ContextMenu
@@ -673,6 +895,8 @@ export const FileManager: React.FC = () => {
         }
         targetId={contextMenu.targetId}
         selectedCount={selectedFiles.length}
+        multiSelectMode={multiSelectMode}
+        setMultiSelectMode={setMultiSelectMode}
       />
 
       <PasteProgress progress={pasteProgress} />

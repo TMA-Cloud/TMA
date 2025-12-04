@@ -5,6 +5,7 @@ import { useApp } from "./contexts/AppContext";
 import { AuthProvider } from "./contexts/AuthProvider";
 import { useAuth } from "./contexts/AuthContext";
 import { ToastProvider } from "./hooks/ToastProvider";
+import { useIsMobile } from "./hooks/useIsMobile";
 import { Sidebar } from "./components/layout/Sidebar";
 import { Header } from "./components/layout/Header";
 import { Dashboard } from "./components/dashboard/Dashboard";
@@ -18,9 +19,11 @@ import { RenameModal } from "./components/fileManager/RenameModal";
 import { ShareLinkModal } from "./components/fileManager/ShareLinkModal";
 import { LoginForm } from "./components/auth/LoginForm";
 import { SignupForm } from "./components/auth/SignupForm";
+import { MobileAppContent } from "./components/mobile/MobileAppContent";
 
 const AppContent: React.FC = () => {
   const { currentPath, sidebarOpen } = useApp();
+  const isMobile = useIsMobile();
 
   const renderContent = () => {
     const currentPage = currentPath[0];
@@ -50,6 +53,11 @@ const AppContent: React.FC = () => {
         );
     }
   };
+
+  if (isMobile) {
+    // Dedicated mobile layout / UX
+    return <MobileAppContent />;
+  }
 
   return (
     <div className="h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-950 flex overflow-hidden">

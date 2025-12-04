@@ -141,7 +141,8 @@ frontend/
 │   │   ├── dashboard/# Dashboard components
 │   │   ├── fileManager/ # File management UI
 │   │   ├── folder/   # Folder creation
-│   │   ├── layout/   # Layout components
+│   │   ├── layout/   # Layout components (desktop)
+│   │   ├── mobile/   # Mobile-specific components
 │   │   ├── settings/ # Settings page
 │   │   ├── upload/   # Upload functionality
 │   │   ├── viewer/   # File viewers
@@ -161,14 +162,54 @@ Global state management:
 - `AppContext` - Application state (current path, sidebar, etc.)
 - `ThemeContext` - Dark/light theme
 
-#### 2. **Components**
+#### 2. **Layout Components**
 
-- **Layout**: `Header`, `Sidebar` - Main layout structure
-- **File Manager**: `FileManager`, `FileItem`, `Breadcrumbs` - File browsing
-- **Modals**: `UploadModal`, `RenameModal`, `ShareLinkModal` - User interactions
-- **Viewers**: `ImageViewerModal`, `DocumentViewerModal` - File preview
+**Desktop Layout** (> 1024px):
 
-#### 3. **Utils**
+- `Header` - Top navigation bar with search and user profile
+- `Sidebar` - Left sidebar navigation menu
+- `AppContent` - Main desktop layout wrapper
+
+**Mobile Layout** (≤ 1024px):
+
+- `MobileAppContent` - Dedicated mobile layout with bottom navigation
+- Compact header with app logo and essential controls
+- Bottom navigation bar for easy thumb access
+
+#### 3. **File Management Components**
+
+- **Desktop**: `FileManager`, `FileItem`, `Breadcrumbs` - Traditional file browsing
+- **Mobile**: Same components with mobile-optimized styling and interactions
+- **Context Menu**:
+  - Desktop: Right-click floating menu
+  - Mobile: Bottom sheet with press-and-hold activation
+
+#### 4. **Viewer Components**
+
+**Image Viewers**:
+
+- `ImageViewerModal` - Router component that detects viewport and routes to appropriate viewer
+- `DesktopImageViewer` - Modal-based viewer for desktop with fit-to-screen default
+- `MobileImageViewer` - Full-screen Google Drive-like viewer with pinch-zoom and swipe navigation
+
+**Document Viewer**:
+
+- `DocumentViewerModal` - OnlyOffice document viewer
+
+#### 5. **Modals**
+
+- `UploadModal` - File upload interface
+- `RenameModal` - File/folder renaming
+- `ShareLinkModal` - Share link management
+- `CreateFolderModal` - Folder creation
+
+#### 6. **Hooks**
+
+- `useIsMobile` - Viewport detection hook (detects ≤ 1024px as mobile)
+- `useToast` - Toast notification system
+- `useStorageUsage` - Storage quota tracking
+
+#### 7. **Utils**
 
 - `api.ts` - API client functions
 - `fileUtils.ts` - File-related utilities
@@ -426,6 +467,8 @@ See [Audit Documentation](audit.md) for detailed information.
 - **TypeScript**: Type safety
 - **Vite**: Fast build tool
 - **Tailwind CSS**: Utility-first styling
+- **Responsive Design**: Dedicated mobile and desktop UI implementations
+- **Viewport Detection**: Automatic mobile/desktop UI switching based on viewport size
 
 ### Integration
 

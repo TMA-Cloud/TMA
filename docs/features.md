@@ -94,6 +94,22 @@ For self-hosted deployments, signup can be controlled to prevent unauthorized ac
 - Rename items
 - Delete to trash
 
+#### Context Menu
+
+**Desktop**:
+
+- Right-click context menu with all file actions
+- Keyboard navigation support (Arrow keys, Enter)
+- Floating menu positioned at cursor
+
+**Mobile**:
+
+- Press-and-hold (500ms) to open context menu
+- Bottom sheet action menu (Google Drive-like)
+- Large, thumb-friendly action buttons
+- Swipe down or tap outside to dismiss
+- All file actions available: Share, Download, Star, Copy, Cut, Paste, Rename, Delete
+
 ### File Browser
 
 - Grid and list view modes
@@ -345,10 +361,53 @@ See [API Documentation - Metrics](api.md#monitoring) for endpoint details, avail
 
 ### Responsive Design
 
-- Mobile-friendly layouts
-- Tablet optimization
-- Desktop experience
-- Adaptive components
+TMA Cloud features **dedicated mobile and desktop UI/UX** that are completely separate, ensuring optimal experience on all devices.
+
+#### Mobile/Responsive UI (≤ 1024px)
+
+- **Dedicated Mobile Layout**: Completely separate UI optimized for mobile and tablet devices
+- **Bottom Navigation Bar**: Easy thumb-reach navigation with Home, Files, Shared, Starred, Trash, and Settings
+- **Compact Header**: Streamlined top bar with app logo, current section, upload button, and user profile
+- **Mobile-Optimized File Manager**:
+  - Truncated breadcrumbs with ellipsis for deep folder navigation
+  - Text wrapping in grid view to prevent overflow
+  - Compact spacing and touch-friendly controls
+  - Action buttons always visible and accessible
+- **Mobile Context Menu**:
+  - Bottom sheet action menu (Google Drive-like)
+  - Press-and-hold (500ms) to open context menu
+  - Large, thumb-friendly action buttons
+  - Swipe down to dismiss
+- **Mobile Image Viewer**:
+  - Full-screen immersive experience
+  - Pinch-to-zoom (0.5x - 5x)
+  - Swipe left/right to navigate between images
+  - Swipe down to dismiss
+  - Tap to toggle controls visibility
+  - Auto-hide controls after 3 seconds
+  - Double-tap to zoom in/out
+  - Image counter for multiple images
+  - Smooth animations and transitions
+
+#### Desktop UI (> 1024px)
+
+- **Traditional Desktop Layout**: Sidebar navigation with header bar
+- **Desktop Image Viewer**:
+  - Modal-based viewer
+  - Fit-to-screen by default (images automatically fit viewport)
+  - Mouse wheel zoom
+  - Click and drag to pan
+  - Double-click to reset zoom
+  - Zoom controls in bottom-right corner
+- **Desktop Context Menu**: Right-click context menu with all file actions
+- **Full Feature Access**: All features optimized for mouse and keyboard interaction
+
+#### Viewport Detection
+
+- Automatic detection of viewport size
+- Seamless switching between mobile and desktop UI
+- No conflicts between mobile and desktop implementations
+- Each UI is completely isolated and optimized for its platform
 
 ### Accessibility
 
@@ -492,6 +551,31 @@ Rate limit violations return HTTP 429 (Too Many Requests).
 - Info messages
 - Auto-dismiss
 
+## Image Viewing
+
+### Desktop Image Viewer
+
+- **Modal-based viewer** with clean interface
+- **Fit-to-screen by default**: Images automatically scale to fit viewport on open
+- **Mouse wheel zoom**: Scroll to zoom in/out (0.25x - 5x)
+- **Click and drag**: Pan around zoomed images
+- **Double-click**: Reset zoom to fit-to-screen
+- **Zoom controls**: Bottom-right corner with zoom percentage display
+- **Smooth interactions**: Optimized for mouse and keyboard
+
+### Mobile Image Viewer
+
+- **Full-screen immersive experience**: Google Drive-like interface
+- **Pinch-to-zoom**: Two-finger pinch gesture (0.5x - 5x)
+- **Swipe navigation**: Swipe left/right to navigate between images in folder
+- **Swipe down to dismiss**: Natural gesture to close viewer
+- **Tap to toggle controls**: Tap anywhere to show/hide UI controls
+- **Auto-hide controls**: Controls automatically hide after 3 seconds when zoomed out
+- **Double-tap zoom**: Double-tap to zoom to 2x, double-tap again to reset
+- **Image counter**: Shows current image position (e.g., "2 / 5")
+- **Navigation arrows**: Previous/next buttons when multiple images available
+- **Smooth animations**: Polished transitions and interactions
+
 ## File Types
 
 ### Supported Types
@@ -527,4 +611,4 @@ Rate limit violations return HTTP 429 (Too Many Requests).
 - Real-time collaboration
 - File comments
 - Advanced permissions
-- Mobile apps
+- Native mobile apps (iOS/Android)

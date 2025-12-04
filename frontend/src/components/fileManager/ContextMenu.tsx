@@ -9,9 +9,12 @@ import {
   ClipboardPaste,
   Download,
   Link2,
+  CheckSquare,
+  Square,
 } from "lucide-react";
 import { useApp } from "../../contexts/AppContext";
 import { useToast } from "../../hooks/useToast";
+import { useIsMobile } from "../../hooks/useIsMobile";
 
 interface ContextMenuProps {
   isOpen: boolean;
@@ -19,6 +22,8 @@ interface ContextMenuProps {
   onClose: () => void;
   selectedCount: number;
   targetId: string | null;
+  multiSelectMode?: boolean;
+  setMultiSelectMode?: (enabled: boolean) => void;
 }
 
 export const ContextMenu: React.FC<ContextMenuProps> = ({
@@ -27,9 +32,13 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
   onClose,
   selectedCount,
   targetId,
+  multiSelectMode = false,
+  setMultiSelectMode,
 }) => {
   const menuRef = useRef<HTMLDivElement>(null);
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
+  const isMobile = useIsMobile();
+
   const {
     selectedFiles,
     setClipboard,
@@ -65,6 +74,25 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
 
   const menuItems = useMemo(
     () => [
+      // Mobile-only: Select Multiple option
+      ...(isMobile && setMultiSelectMode
+        ? [
+            {
+              icon: multiSelectMode ? CheckSquare : Square,
+              label: multiSelectMode ? "Exit Multi-Select" : "Select Multiple",
+              action: () => {
+                if (setMultiSelectMode) {
+                  setMultiSelectMode(!multiSelectMode);
+                  if (multiSelectMode) {
+                    // Clear selection when exiting multi-select mode
+                    // This will be handled by FileManager if needed
+                  }
+                }
+                onClose();
+              },
+            },
+          ]
+        : []),
       ...(parentShared && allUnshared
         ? [
             {
@@ -210,10 +238,16 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
       downloadFiles,
       isDownloading,
       showToast,
+      isMobile,
+      multiSelectMode,
+      setMultiSelectMode,
+      onClose,
     ],
   );
 
   useEffect(() => {
+    if (!isOpen || isMobile) return;
+
     const handleClickOutside = (event: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
         onClose();
@@ -248,23 +282,80 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
       }
     };
 
-    if (isOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
-      document.addEventListener("keydown", handleEscKey);
-      document.addEventListener("keydown", handleKeyDown);
-    }
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleEscKey);
+    document.addEventListener("keydown", handleKeyDown);
 
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
       document.removeEventListener("keydown", handleEscKey);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [isOpen, onClose, menuItems, focusedIndex]);
-
-  // Focus index will start at 0 on first mount; we avoid setting state in an effect
+  }, [isOpen, onClose, menuItems, focusedIndex, isMobile]);
 
   if (!isOpen) return null;
 
+  // Mobile: bottom sheet with overlay
+  if (isMobile) {
+    return (
+      <div
+        className="fixed inset-0 z-50 flex flex-col justify-end bg-black/40 backdrop-blur-sm"
+        role="dialog"
+        aria-modal="true"
+        onClick={onClose}
+      >
+        <div
+          ref={menuRef}
+          className="bg-white dark:bg-gray-900 rounded-t-2xl shadow-2xl pt-3 pb-4 px-4 max-h-[70vh] overflow-y-auto animate-slideUp"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center justify-center mb-3">
+            <div className="h-1 w-10 rounded-full bg-gray-300 dark:bg-gray-700" />
+          </div>
+          <div className="mb-2 text-center">
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              {selectedCount} item{selectedCount !== 1 ? "s" : ""} selected
+            </p>
+          </div>
+          <div className="space-y-1">
+            {menuItems.map((item, index) => {
+              const Icon = item.icon;
+              return (
+                <button
+                  key={index}
+                  onClick={() => {
+                    if (!item.disabled) {
+                      item.action();
+                      onClose();
+                    }
+                  }}
+                  className={`
+                    w-full flex items-center justify-between px-3 py-3 rounded-xl
+                    text-sm
+                    ${
+                      item.disabled
+                        ? "opacity-50 cursor-not-allowed text-gray-400 dark:text-gray-500"
+                        : item.danger
+                          ? "text-red-600 dark:text-red-400 bg-red-50/70 dark:bg-red-900/20"
+                          : "text-gray-800 dark:text-gray-100 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700"
+                    }
+                  `}
+                  disabled={item.disabled}
+                >
+                  <div className="flex items-center space-x-3">
+                    <Icon className="w-5 h-5" />
+                    <span>{item.label}</span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Desktop: floating menu near cursor
   return (
     <div
       ref={menuRef}
