@@ -736,7 +736,7 @@ async function cleanupOrphanFiles() {
 async function getStarredFiles(userId, sortBy = 'modified', order = 'DESC') {
   const orderClause = sortBy === 'size' ? '' : buildOrderClause(sortBy, order);
   const result = await pool.query(
-    `SELECT id, name, type, size, modified, mime_type AS "mimeType", starred, shared FROM files WHERE user_id = $1 AND starred = TRUE ${orderClause}`,
+    `SELECT id, name, type, size, modified, mime_type AS "mimeType", starred, shared FROM files WHERE user_id = $1 AND starred = TRUE AND deleted_at IS NULL ${orderClause}`,
     [userId],
   );
   const files = result.rows;
@@ -753,7 +753,7 @@ async function getStarredFiles(userId, sortBy = 'modified', order = 'DESC') {
 async function getSharedFiles(userId, sortBy = 'modified', order = 'DESC') {
   const orderClause = sortBy === 'size' ? '' : buildOrderClause(sortBy, order);
   const result = await pool.query(
-    `SELECT id, name, type, size, modified, mime_type AS "mimeType", starred, shared FROM files WHERE user_id = $1 AND shared = TRUE ${orderClause}`,
+    `SELECT id, name, type, size, modified, mime_type AS "mimeType", starred, shared FROM files WHERE user_id = $1 AND shared = TRUE AND deleted_at IS NULL ${orderClause}`,
     [userId],
   );
   const files = result.rows;
