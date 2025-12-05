@@ -15,6 +15,7 @@ import {
 import { useApp } from "../../contexts/AppContext";
 import { useToast } from "../../hooks/useToast";
 import { useIsMobile } from "../../hooks/useIsMobile";
+import { Modal } from "../ui/Modal";
 
 interface ContextMenuProps {
   isOpen: boolean;
@@ -37,6 +38,11 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
 }) => {
   const menuRef = useRef<HTMLDivElement>(null);
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
+  const [confirmModalOpen, setConfirmModalOpen] = useState(false);
+  const [pendingAction, setPendingAction] = useState<{
+    type: "delete" | "deleteForever";
+    files: string[];
+  } | null>(null);
   const isMobile = useIsMobile();
 
   const {
@@ -72,8 +78,86 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
   const allUnshared =
     selectedItems.length > 0 && selectedItems.every((f) => !f.shared);
 
-  const menuItems = useMemo(
-    () => [
+  const isTrashView = currentPath[0] === "Trash";
+
+  const handleConfirmDelete = async () => {
+    if (!pendingAction) return;
+
+    setConfirmModalOpen(false);
+    const { type, files } = pendingAction;
+    const count = files.length;
+
+    try {
+      if (type === "deleteForever") {
+        await deleteForever(files);
+        showToast(
+          `Permanently deleted ${count} item${count !== 1 ? "s" : ""}`,
+          "success",
+        );
+      } else {
+        await deleteFiles(files);
+        showToast(
+          `Moved ${count} item${count !== 1 ? "s" : ""} to trash`,
+          "success",
+        );
+      }
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
+      console.error(
+        `Failed to ${type === "deleteForever" ? "delete forever" : "delete"}:`,
+        error,
+      );
+      showToast(
+        errorMessage ||
+          `Failed to ${type === "deleteForever" ? "permanently delete" : "delete"}. Please try again.`,
+        "error",
+      );
+    } finally {
+      setPendingAction(null);
+    }
+  };
+
+  const menuItems = useMemo(() => {
+    // On trash page, only show "Delete Forever" option
+    if (isTrashView) {
+      return [
+        // Mobile-only: Select Multiple option
+        ...(isMobile && setMultiSelectMode
+          ? [
+              {
+                icon: multiSelectMode ? CheckSquare : Square,
+                label: multiSelectMode
+                  ? "Exit Multi-Select"
+                  : "Select Multiple",
+                action: () => {
+                  if (setMultiSelectMode) {
+                    setMultiSelectMode(!multiSelectMode);
+                    if (multiSelectMode) {
+                      // Clear selection when exiting multi-select mode
+                      // This will be handled by FileManager if needed
+                    }
+                  }
+                  onClose();
+                },
+              },
+            ]
+          : []),
+        {
+          icon: Trash2,
+          label: "Delete Forever",
+          action: () => {
+            setPendingAction({ type: "deleteForever", files: selectedFiles });
+            setConfirmModalOpen(true);
+            onClose();
+          },
+          danger: true,
+        },
+      ];
+    }
+
+    // Regular menu items for other pages
+    return [
       // Mobile-only: Select Multiple option
       ...(isMobile && setMultiSelectMode
         ? [
@@ -204,46 +288,44 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
       },
       {
         icon: Trash2,
-        label: currentPath[0] === "Trash" ? "Delete Forever" : "Delete",
-        action: () =>
-          currentPath[0] === "Trash"
-            ? deleteForever(selectedFiles)
-            : deleteFiles(selectedFiles),
+        label: "Delete",
+        action: () => {
+          setPendingAction({ type: "delete", files: selectedFiles });
+          setConfirmModalOpen(true);
+          onClose();
+        },
         danger: true,
       },
-    ],
-    [
-      parentShared,
-      allUnshared,
-      linkToParentShare,
-      selectedFiles,
-      selectedItems,
-      setShareLinkModalOpen,
-      shareFiles,
-      getShareLinks,
-      allShared,
-      anyShared,
-      starFiles,
-      allStarred,
-      setClipboard,
-      clipboard,
-      pasteClipboard,
-      targetId,
-      folderStack,
-      files,
-      setRenameTarget,
-      currentPath,
-      deleteForever,
-      deleteFiles,
-      downloadFiles,
-      isDownloading,
-      showToast,
-      isMobile,
-      multiSelectMode,
-      setMultiSelectMode,
-      onClose,
-    ],
-  );
+    ];
+  }, [
+    isTrashView,
+    parentShared,
+    allUnshared,
+    linkToParentShare,
+    selectedFiles,
+    selectedItems,
+    setShareLinkModalOpen,
+    shareFiles,
+    getShareLinks,
+    allShared,
+    anyShared,
+    starFiles,
+    allStarred,
+    setClipboard,
+    clipboard,
+    pasteClipboard,
+    targetId,
+    folderStack,
+    files,
+    setRenameTarget,
+    downloadFiles,
+    isDownloading,
+    showToast,
+    isMobile,
+    multiSelectMode,
+    setMultiSelectMode,
+    onClose,
+  ]);
 
   useEffect(() => {
     if (!isOpen || isMobile) return;
@@ -293,125 +375,179 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     };
   }, [isOpen, onClose, menuItems, focusedIndex, isMobile]);
 
-  if (!isOpen) return null;
+  const confirmationTitle =
+    pendingAction?.type === "deleteForever" ? "Delete Forever" : "Delete";
+  const confirmationMessage =
+    pendingAction?.type === "deleteForever"
+      ? `Are you sure you want to permanently delete ${pendingAction.files.length} item${pendingAction.files.length !== 1 ? "s" : ""}? This action cannot be undone.`
+      : `Are you sure you want to move ${pendingAction?.files.length || 0} item${(pendingAction?.files.length || 0) !== 1 ? "s" : ""} to trash?`;
+
+  // Render modal outside of isOpen check so it persists when context menu closes
+  const modalElement = (
+    <Modal
+      isOpen={confirmModalOpen}
+      onClose={() => {
+        setConfirmModalOpen(false);
+        setPendingAction(null);
+      }}
+      title={confirmationTitle}
+      size="sm"
+    >
+      <div className="space-y-4">
+        <p className="text-gray-700 dark:text-gray-300">
+          {confirmationMessage}
+        </p>
+        <div className="flex justify-end space-x-3 pt-4">
+          <button
+            onClick={() => {
+              setConfirmModalOpen(false);
+              setPendingAction(null);
+            }}
+            className="px-4 py-2 rounded-lg text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors duration-200"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleConfirmDelete}
+            className="px-4 py-2 rounded-lg text-white bg-red-600 hover:bg-red-700 dark:bg-red-500 dark:hover:bg-red-600 transition-colors duration-200"
+          >
+            {pendingAction?.type === "deleteForever"
+              ? "Delete Forever"
+              : "Delete"}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+
+  if (!isOpen) {
+    // Still render modal even when context menu is closed
+    return modalElement;
+  }
 
   // Mobile: bottom sheet with overlay
   if (isMobile) {
     return (
-      <div
-        className="fixed inset-0 z-50 flex flex-col justify-end bg-black/40 backdrop-blur-sm"
-        role="dialog"
-        aria-modal="true"
-        onClick={onClose}
-      >
+      <>
         <div
-          ref={menuRef}
-          className="bg-white dark:bg-gray-900 rounded-t-2xl shadow-2xl pt-3 pb-4 px-4 max-h-[70vh] overflow-y-auto animate-slideUp"
-          onClick={(e) => e.stopPropagation()}
+          className="fixed inset-0 z-50 flex flex-col justify-end bg-black/40 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          onClick={onClose}
         >
-          <div className="flex items-center justify-center mb-3">
-            <div className="h-1 w-10 rounded-full bg-gray-300 dark:bg-gray-700" />
-          </div>
-          <div className="mb-2 text-center">
-            <p className="text-xs text-gray-500 dark:text-gray-400">
-              {selectedCount} item{selectedCount !== 1 ? "s" : ""} selected
-            </p>
-          </div>
-          <div className="space-y-1">
-            {menuItems.map((item, index) => {
-              const Icon = item.icon;
-              return (
-                <button
-                  key={index}
-                  onClick={() => {
-                    if (!item.disabled) {
-                      item.action();
-                      onClose();
-                    }
-                  }}
-                  className={`
-                    w-full flex items-center justify-between px-3 py-3 rounded-xl
-                    text-sm
-                    ${
-                      item.disabled
-                        ? "opacity-50 cursor-not-allowed text-gray-400 dark:text-gray-500"
-                        : item.danger
-                          ? "text-red-600 dark:text-red-400 bg-red-50/70 dark:bg-red-900/20"
-                          : "text-gray-800 dark:text-gray-100 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700"
-                    }
-                  `}
-                  disabled={item.disabled}
-                >
-                  <div className="flex items-center space-x-3">
-                    <Icon className="w-5 h-5" />
-                    <span>{item.label}</span>
-                  </div>
-                </button>
-              );
-            })}
+          <div
+            ref={menuRef}
+            className="bg-white dark:bg-gray-900 rounded-t-2xl shadow-2xl pt-3 pb-4 px-4 max-h-[70vh] overflow-y-auto animate-slideUp"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-center mb-3">
+              <div className="h-1 w-10 rounded-full bg-gray-300 dark:bg-gray-700" />
+            </div>
+            <div className="mb-2 text-center">
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                {selectedCount} item{selectedCount !== 1 ? "s" : ""} selected
+              </p>
+            </div>
+            <div className="space-y-1">
+              {menuItems.map((item, index) => {
+                const Icon = item.icon;
+                return (
+                  <button
+                    key={index}
+                    onClick={() => {
+                      if (!item.disabled) {
+                        item.action();
+                        onClose();
+                      }
+                    }}
+                    className={`
+                      w-full flex items-center justify-between px-3 py-3 rounded-xl
+                      text-sm
+                      ${
+                        item.disabled
+                          ? "opacity-50 cursor-not-allowed text-gray-400 dark:text-gray-500"
+                          : item.danger
+                            ? "text-red-600 dark:text-red-400 bg-red-50/70 dark:bg-red-900/20"
+                            : "text-gray-800 dark:text-gray-100 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700"
+                      }
+                    `}
+                    disabled={item.disabled}
+                  >
+                    <div className="flex items-center space-x-3">
+                      <Icon className="w-5 h-5" />
+                      <span>{item.label}</span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
-      </div>
+        {modalElement}
+      </>
     );
   }
 
   // Desktop: floating menu near cursor
   return (
-    <div
-      ref={menuRef}
-      className="fixed z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-2xl py-2 min-w-48 transition-all duration-200 ease-out animate-menuIn focus:outline-none"
-      style={{
-        left: `${position.x}px`,
-        top: `${position.y}px`,
-      }}
-      tabIndex={-1}
-      role="menu"
-      aria-label="File actions menu"
-    >
-      <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-700">
-        <p className="text-xs text-gray-500 dark:text-gray-400">
-          {selectedCount} item{selectedCount !== 1 ? "s" : ""} selected
-        </p>
-      </div>
+    <>
+      <div
+        ref={menuRef}
+        className="fixed z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-2xl py-2 min-w-48 transition-all duration-200 ease-out animate-menuIn focus:outline-none"
+        style={{
+          left: `${position.x}px`,
+          top: `${position.y}px`,
+        }}
+        tabIndex={-1}
+        role="menu"
+        aria-label="File actions menu"
+      >
+        <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-700">
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            {selectedCount} item{selectedCount !== 1 ? "s" : ""} selected
+          </p>
+        </div>
 
-      {menuItems.map((item, index) => {
-        const Icon = item.icon;
-        const isFocused = focusedIndex === index;
-        return (
-          <button
-            key={index}
-            onClick={() => {
-              if (!item.disabled) {
-                item.action();
-                onClose();
-              }
-            }}
-            className={`
-              w-full flex items-center space-x-3 px-3 py-2 text-left
-              transition-all duration-150
-              rounded-md
-              focus:outline-none
-              ${
-                item.disabled
-                  ? "opacity-50 cursor-not-allowed text-gray-400 dark:text-gray-500"
-                  : isFocused
-                    ? "bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300"
-                    : item.danger
-                      ? "text-red-600 dark:text-red-400"
-                      : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-              }
-            `}
-            disabled={item.disabled}
-            tabIndex={0}
-            role="menuitem"
-            aria-selected={isFocused}
-            onMouseEnter={() => setFocusedIndex(index)}
-          >
-            <Icon className="w-4 h-4" />
-            <span className="text-sm">{item.label}</span>
-          </button>
-        );
-      })}
-    </div>
+        {menuItems.map((item, index) => {
+          const Icon = item.icon;
+          const isFocused = focusedIndex === index;
+          return (
+            <button
+              key={index}
+              onClick={() => {
+                if (!item.disabled) {
+                  item.action();
+                  onClose();
+                }
+              }}
+              className={`
+                w-full flex items-center space-x-3 px-3 py-2 text-left
+                transition-all duration-150
+                rounded-md
+                focus:outline-none
+                ${
+                  item.disabled
+                    ? "opacity-50 cursor-not-allowed text-gray-400 dark:text-gray-500"
+                    : isFocused
+                      ? "bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300"
+                      : item.danger
+                        ? "text-red-600 dark:text-red-400"
+                        : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                }
+              `}
+              disabled={item.disabled}
+              tabIndex={0}
+              role="menuitem"
+              aria-selected={isFocused}
+              onMouseEnter={() => setFocusedIndex(index)}
+            >
+              <Icon className="w-4 h-4" />
+              <span className="text-sm">{item.label}</span>
+            </button>
+          );
+        })}
+      </div>
+      {modalElement}
+    </>
   );
 };

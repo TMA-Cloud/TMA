@@ -70,7 +70,7 @@ export interface AppContextType {
   starFiles: (ids: string[], starred: boolean) => Promise<void>;
   deleteFiles: (ids: string[]) => Promise<void>;
   deleteForever: (ids: string[]) => Promise<void>;
-  emptyTrash: () => Promise<void>;
+  emptyTrash: () => Promise<{ success: boolean; message?: string }>;
   clipboard: { ids: string[]; action: "copy" | "cut" } | null;
   setClipboard: (
     clip: { ids: string[]; action: "copy" | "cut" } | null,

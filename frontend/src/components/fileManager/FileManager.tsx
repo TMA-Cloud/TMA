@@ -23,8 +23,10 @@ import { PasteProgress } from "./PasteProgress";
 import { DownloadProgress } from "./DownloadProgress";
 import { FileSkeleton } from "./FileSkeleton";
 import { Tooltip } from "../ui/Tooltip";
+import { Modal } from "../ui/Modal";
 import { ONLYOFFICE_EXTS, getExt } from "../../utils/fileUtils";
 import { useIsMobile } from "../../hooks/useIsMobile";
+import { useToast } from "../../hooks/useToast";
 
 const transparentImage = new Image();
 transparentImage.src =
@@ -210,8 +212,14 @@ export const FileManager: React.FC = () => {
     downloadFiles,
     setRenameTarget,
     deleteFiles,
+    deleteForever,
     setShareLinkModalOpen,
   } = useApp();
+
+  const { showToast } = useToast();
+  const [emptyTrashModalOpen, setEmptyTrashModalOpen] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [deleteForeverModalOpen, setDeleteForeverModalOpen] = useState(false);
 
   const canCreateFolder = currentPath[0] === "My Files";
   const isTrashView = currentPath[0] === "Trash";
@@ -220,18 +228,59 @@ export const FileManager: React.FC = () => {
   const hasTrashFiles = isTrashView && files.length > 0;
 
   const handleEmptyTrash = async () => {
-    if (
-      !window.confirm(
-        `Are you sure you want to permanently delete all ${files.length} item(s) from trash? This action cannot be undone.`,
-      )
-    ) {
-      return;
-    }
-
+    setEmptyTrashModalOpen(false);
     try {
-      await emptyTrash();
-    } catch (error) {
+      const result = await emptyTrash();
+      showToast(
+        result?.message ||
+          `Successfully deleted ${files.length} item(s) from trash`,
+        "success",
+      );
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
       console.error("Failed to empty trash:", error);
+      showToast(
+        errorMessage || "Failed to empty trash. Please try again.",
+        "error",
+      );
+    }
+  };
+
+  const handleDelete = async () => {
+    setDeleteModalOpen(false);
+    try {
+      await deleteFiles(selectedFiles);
+      const count = selectedFiles.length;
+      showToast(
+        `Moved ${count} item${count !== 1 ? "s" : ""} to trash`,
+        "success",
+      );
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
+      console.error("Failed to delete:", error);
+      showToast(errorMessage || "Failed to delete. Please try again.", "error");
+    }
+  };
+
+  const handleDeleteForever = async () => {
+    setDeleteForeverModalOpen(false);
+    try {
+      await deleteForever(selectedFiles);
+      const count = selectedFiles.length;
+      showToast(
+        `Permanently deleted ${count} item${count !== 1 ? "s" : ""}`,
+        "success",
+      );
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
+      console.error("Failed to delete forever:", error);
+      showToast(
+        errorMessage || "Failed to permanently delete. Please try again.",
+        "error",
+      );
     }
   };
 
@@ -577,7 +626,7 @@ export const FileManager: React.FC = () => {
               <Tooltip text="Delete">
                 <button
                   className="p-2 rounded-xl text-gray-500 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400 shadow-sm transition-all duration-300 hover:scale-110 active:scale-95 hover:bg-red-50 dark:hover:bg-red-900/20 hover:shadow-md"
-                  onClick={() => deleteFiles(selectedFiles)}
+                  onClick={() => setDeleteModalOpen(true)}
                   aria-label="Delete"
                 >
                   <Trash2 className="w-5 h-5 transition-transform duration-300" />
@@ -586,18 +635,31 @@ export const FileManager: React.FC = () => {
             </>
           )}
           {isTrashView ? (
-            // Trash page: only show Empty Trash button
-            hasTrashFiles && (
-              <Tooltip text="Empty Trash">
-                <button
-                  className="p-2 rounded-xl text-gray-500 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400 shadow-sm transition-all duration-300 hover:scale-110 active:scale-95 hover:bg-red-50 dark:hover:bg-red-900/20 hover:shadow-md"
-                  onClick={handleEmptyTrash}
-                  aria-label="Empty Trash"
-                >
-                  <Trash2 className="w-5 h-5 transition-transform duration-300" />
-                </button>
-              </Tooltip>
-            )
+            // Trash page: show Delete Forever button when files are selected, Empty Trash when no files selected
+            <>
+              {selectedFiles.length > 0 && (
+                <Tooltip text="Delete Forever">
+                  <button
+                    className="p-2 rounded-xl text-gray-500 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400 shadow-sm transition-all duration-300 hover:scale-110 active:scale-95 hover:bg-red-50 dark:hover:bg-red-900/20 hover:shadow-md"
+                    onClick={() => setDeleteForeverModalOpen(true)}
+                    aria-label="Delete Forever"
+                  >
+                    <Trash2 className="w-5 h-5 transition-transform duration-300" />
+                  </button>
+                </Tooltip>
+              )}
+              {hasTrashFiles && selectedFiles.length === 0 && (
+                <Tooltip text="Empty Trash">
+                  <button
+                    className="p-2 rounded-xl text-gray-500 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400 shadow-sm transition-all duration-300 hover:scale-110 active:scale-95 hover:bg-red-50 dark:hover:bg-red-900/20 hover:shadow-md"
+                    onClick={() => setEmptyTrashModalOpen(true)}
+                    aria-label="Empty Trash"
+                  >
+                    <Trash2 className="w-5 h-5 transition-transform duration-300" />
+                  </button>
+                </Tooltip>
+              )}
+            </>
           ) : (
             // Other pages: show all buttons
             <>
@@ -1060,6 +1122,91 @@ export const FileManager: React.FC = () => {
           (id) => files.find((f) => f.id === id)?.type === "folder",
         )}
       />
+
+      <Modal
+        isOpen={emptyTrashModalOpen}
+        onClose={() => setEmptyTrashModalOpen(false)}
+        title="Empty Trash"
+        size="sm"
+      >
+        <div className="space-y-4">
+          <p className="text-gray-700 dark:text-gray-300">
+            Are you sure you want to permanently delete all {files.length}{" "}
+            item(s) from trash? This action cannot be undone.
+          </p>
+          <div className="flex justify-end space-x-3 pt-4">
+            <button
+              onClick={() => setEmptyTrashModalOpen(false)}
+              className="px-4 py-2 rounded-lg text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors duration-200"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleEmptyTrash}
+              className="px-4 py-2 rounded-lg text-white bg-red-600 hover:bg-red-700 dark:bg-red-500 dark:hover:bg-red-600 transition-colors duration-200"
+            >
+              Empty Trash
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={deleteModalOpen}
+        onClose={() => setDeleteModalOpen(false)}
+        title="Delete"
+        size="sm"
+      >
+        <div className="space-y-4">
+          <p className="text-gray-700 dark:text-gray-300">
+            Are you sure you want to move {selectedFiles.length} item
+            {selectedFiles.length !== 1 ? "s" : ""} to trash?
+          </p>
+          <div className="flex justify-end space-x-3 pt-4">
+            <button
+              onClick={() => setDeleteModalOpen(false)}
+              className="px-4 py-2 rounded-lg text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors duration-200"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleDelete}
+              className="px-4 py-2 rounded-lg text-white bg-red-600 hover:bg-red-700 dark:bg-red-500 dark:hover:bg-red-600 transition-colors duration-200"
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={deleteForeverModalOpen}
+        onClose={() => setDeleteForeverModalOpen(false)}
+        title="Delete Forever"
+        size="sm"
+      >
+        <div className="space-y-4">
+          <p className="text-gray-700 dark:text-gray-300">
+            Are you sure you want to permanently delete {selectedFiles.length}{" "}
+            item{selectedFiles.length !== 1 ? "s" : ""}? This action cannot be
+            undone.
+          </p>
+          <div className="flex justify-end space-x-3 pt-4">
+            <button
+              onClick={() => setDeleteForeverModalOpen(false)}
+              className="px-4 py-2 rounded-lg text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors duration-200"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleDeleteForever}
+              className="px-4 py-2 rounded-lg text-white bg-red-600 hover:bg-red-700 dark:bg-red-500 dark:hover:bg-red-600 transition-colors duration-200"
+            >
+              Delete Forever
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };

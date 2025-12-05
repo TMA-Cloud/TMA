@@ -348,12 +348,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   const emptyTrashApi = async () => {
-    await fetch(`/api/files/trash/empty`, {
+    const res = await fetch(`/api/files/trash/empty`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
     });
+    const data = await res.json();
     await refreshFiles();
+    if (!res.ok) {
+      throw new Error(data.message || "Failed to empty trash");
+    }
+    return data;
   };
 
   const linkToParentShareApi = async (
