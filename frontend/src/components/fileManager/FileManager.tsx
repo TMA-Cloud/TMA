@@ -508,6 +508,13 @@ export const FileManager: React.FC = () => {
     document.body.classList.remove("is-dragging");
   };
 
+  // Calculate shared/starred status for selected files
+  const selectedItems = files.filter((f) => selectedFiles.includes(f.id));
+  const allShared =
+    selectedItems.length > 0 && selectedItems.every((f) => f.shared);
+  const allStarred =
+    selectedItems.length > 0 && selectedItems.every((f) => f.starred);
+
   return (
     <div className={`${isMobile ? "p-3" : "p-6"} space-y-6`} ref={managerRef}>
       {/* Multi-Select Mode Indicator (Mobile Only) */}
@@ -549,16 +556,16 @@ export const FileManager: React.FC = () => {
             <>
               {/* Hide "Add to Share" on Shared page */}
               {!isSharedView && (
-                <Tooltip text="Add to Share">
+                <Tooltip
+                  text={allShared ? "Remove from Shared" : "Add to Share"}
+                >
                   <button
-                    className="p-2 rounded-xl text-gray-500 hover:text-green-600 dark:text-gray-400 dark:hover:text-green-400 shadow-sm transition-all duration-300 hover:scale-110 active:scale-95 hover:bg-green-50 dark:hover:bg-green-900/20 hover:shadow-md"
+                    className={`p-2 rounded-xl shadow-sm transition-all duration-300 hover:scale-110 active:scale-95 hover:shadow-md ${
+                      allShared
+                        ? "text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20"
+                        : "text-gray-500 hover:text-green-600 dark:text-gray-400 dark:hover:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20"
+                    }`}
                     onClick={async () => {
-                      const selectedItems = files.filter((f) =>
-                        selectedFiles.includes(f.id),
-                      );
-                      const allShared =
-                        selectedItems.length > 0 &&
-                        selectedItems.every((f) => f.shared);
                       const links = await shareFiles(selectedFiles, !allShared);
                       if (!allShared) {
                         const base = window.location.origin;
@@ -568,30 +575,42 @@ export const FileManager: React.FC = () => {
                         setShareLinkModalOpen(true, list);
                       }
                     }}
-                    aria-label="Add to Share"
+                    aria-label={
+                      allShared ? "Remove from Shared" : "Add to Share"
+                    }
                   >
-                    <Share2 className="w-5 h-5 transition-transform duration-300" />
+                    <Share2
+                      className={`w-5 h-5 transition-transform duration-300 ${
+                        allShared ? "fill-green-600 dark:fill-green-400" : ""
+                      }`}
+                    />
                   </button>
                 </Tooltip>
               )}
 
               {/* Hide "Add to Starred" on Starred page */}
               {!isStarredView && (
-                <Tooltip text="Add to Starred">
+                <Tooltip
+                  text={allStarred ? "Remove from Starred" : "Add to Starred"}
+                >
                   <button
-                    className="p-2 rounded-xl text-gray-500 hover:text-yellow-600 dark:text-gray-400 dark:hover:text-yellow-400 shadow-sm transition-all duration-300 hover:scale-110 active:scale-95 hover:bg-yellow-50 dark:hover:bg-yellow-900/20 hover:shadow-md"
+                    className={`p-2 rounded-xl shadow-sm transition-all duration-300 hover:scale-110 active:scale-95 hover:shadow-md ${
+                      allStarred
+                        ? "text-yellow-600 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-900/20"
+                        : "text-gray-500 hover:text-yellow-600 dark:text-gray-400 dark:hover:text-yellow-400 hover:bg-yellow-50 dark:hover:bg-yellow-900/20"
+                    }`}
                     onClick={() => {
-                      const selectedItems = files.filter((f) =>
-                        selectedFiles.includes(f.id),
-                      );
-                      const allStarred =
-                        selectedItems.length > 0 &&
-                        selectedItems.every((f) => f.starred);
                       starFiles(selectedFiles, !allStarred);
                     }}
-                    aria-label="Add to Starred"
+                    aria-label={
+                      allStarred ? "Remove from Starred" : "Add to Starred"
+                    }
                   >
-                    <Star className="w-5 h-5 transition-transform duration-300" />
+                    <Star
+                      className={`w-5 h-5 transition-transform duration-300 ${
+                        allStarred ? "fill-yellow-600 dark:fill-yellow-400" : ""
+                      }`}
+                    />
                   </button>
                 </Tooltip>
               )}
