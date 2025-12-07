@@ -11,6 +11,7 @@
   --animate-slideDown: slideDown 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   --animate-scaleIn: scaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   --animate-shimmer: shimmer 1.5s ease-in-out infinite;
+  --animate-actionGlow: actionGlow 2s ease-in-out infinite;
 }
 
 /* Custom Keyframes Definitions */
@@ -110,6 +111,104 @@
   }
   100% {
     background-position: 1000px 0;
+  }
+}
+
+@keyframes actionGlow {
+  0%,
+  100% {
+    box-shadow:
+      0 0 8px currentColor,
+      0 0 16px currentColor,
+      0 4px 6px rgba(0, 0, 0, 0.1);
+    filter: drop-shadow(0 0 4px currentColor);
+  }
+  50% {
+    box-shadow:
+      0 0 12px currentColor,
+      0 0 24px currentColor,
+      0 4px 6px rgba(0, 0, 0, 0.1);
+    filter: drop-shadow(0 0 6px currentColor);
+  }
+}
+
+@keyframes actionGlowGreen {
+  0%,
+  100% {
+    box-shadow:
+      0 0 8px rgba(34, 197, 94, 0.4),
+      0 0 16px rgba(34, 197, 94, 0.2),
+      0 4px 6px rgba(0, 0, 0, 0.1);
+  }
+  50% {
+    box-shadow:
+      0 0 12px rgba(34, 197, 94, 0.6),
+      0 0 24px rgba(34, 197, 94, 0.3),
+      0 4px 6px rgba(0, 0, 0, 0.1);
+  }
+}
+
+@keyframes actionGlowYellow {
+  0%,
+  100% {
+    box-shadow:
+      0 0 8px rgba(234, 179, 8, 0.4),
+      0 0 16px rgba(234, 179, 8, 0.2),
+      0 4px 6px rgba(0, 0, 0, 0.1);
+  }
+  50% {
+    box-shadow:
+      0 0 12px rgba(234, 179, 8, 0.6),
+      0 0 24px rgba(234, 179, 8, 0.3),
+      0 4px 6px rgba(0, 0, 0, 0.1);
+  }
+}
+
+@keyframes actionGlowBlue {
+  0%,
+  100% {
+    box-shadow:
+      0 0 8px rgba(59, 130, 246, 0.4),
+      0 0 16px rgba(59, 130, 246, 0.2),
+      0 4px 6px rgba(0, 0, 0, 0.1);
+  }
+  50% {
+    box-shadow:
+      0 0 12px rgba(59, 130, 246, 0.6),
+      0 0 24px rgba(59, 130, 246, 0.3),
+      0 4px 6px rgba(0, 0, 0, 0.1);
+  }
+}
+
+@keyframes actionGlowPurple {
+  0%,
+  100% {
+    box-shadow:
+      0 0 8px rgba(168, 85, 247, 0.4),
+      0 0 16px rgba(168, 85, 247, 0.2),
+      0 4px 6px rgba(0, 0, 0, 0.1);
+  }
+  50% {
+    box-shadow:
+      0 0 12px rgba(168, 85, 247, 0.6),
+      0 0 24px rgba(168, 85, 247, 0.3),
+      0 4px 6px rgba(0, 0, 0, 0.1);
+  }
+}
+
+@keyframes actionGlowRed {
+  0%,
+  100% {
+    box-shadow:
+      0 0 8px rgba(239, 68, 68, 0.4),
+      0 0 16px rgba(239, 68, 68, 0.2),
+      0 4px 6px rgba(0, 0, 0, 0.1);
+  }
+  50% {
+    box-shadow:
+      0 0 12px rgba(239, 68, 68, 0.6),
+      0 0 24px rgba(239, 68, 68, 0.3),
+      0 4px 6px rgba(0, 0, 0, 0.1);
   }
 }
 

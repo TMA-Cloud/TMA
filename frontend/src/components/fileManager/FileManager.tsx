@@ -560,11 +560,14 @@ export const FileManager: React.FC = () => {
                   text={allShared ? "Remove from Shared" : "Add to Share"}
                 >
                   <button
-                    className={`p-2 rounded-xl shadow-sm transition-all duration-300 hover:scale-110 active:scale-95 hover:shadow-md ${
+                    className={`p-2 rounded-xl shadow-lg transition-all duration-300 hover:scale-110 active:scale-95 hover:shadow-xl ring-2 ring-green-400/50 dark:ring-green-500/50 ${
                       allShared
-                        ? "text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20"
-                        : "text-gray-500 hover:text-green-600 dark:text-gray-400 dark:hover:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20"
+                        ? "text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 shadow-green-500/30 dark:shadow-green-400/20"
+                        : "text-gray-500 hover:text-green-600 dark:text-gray-400 dark:hover:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 shadow-green-500/20 dark:shadow-green-400/10"
                     }`}
+                    style={{
+                      animation: "actionGlowGreen 2s ease-in-out infinite",
+                    }}
                     onClick={async () => {
                       const links = await shareFiles(selectedFiles, !allShared);
                       if (!allShared) {
@@ -594,11 +597,14 @@ export const FileManager: React.FC = () => {
                   text={allStarred ? "Remove from Starred" : "Add to Starred"}
                 >
                   <button
-                    className={`p-2 rounded-xl shadow-sm transition-all duration-300 hover:scale-110 active:scale-95 hover:shadow-md ${
+                    className={`p-2 rounded-xl shadow-lg transition-all duration-300 hover:scale-110 active:scale-95 hover:shadow-xl ring-2 ring-yellow-400/50 dark:ring-yellow-500/50 ${
                       allStarred
-                        ? "text-yellow-600 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-900/20"
-                        : "text-gray-500 hover:text-yellow-600 dark:text-gray-400 dark:hover:text-yellow-400 hover:bg-yellow-50 dark:hover:bg-yellow-900/20"
+                        ? "text-yellow-600 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-900/20 shadow-yellow-500/30 dark:shadow-yellow-400/20"
+                        : "text-gray-500 hover:text-yellow-600 dark:text-gray-400 dark:hover:text-yellow-400 hover:bg-yellow-50 dark:hover:bg-yellow-900/20 shadow-yellow-500/20 dark:shadow-yellow-400/10"
                     }`}
+                    style={{
+                      animation: "actionGlowYellow 2s ease-in-out infinite",
+                    }}
                     onClick={() => {
                       starFiles(selectedFiles, !allStarred);
                     }}
@@ -617,7 +623,10 @@ export const FileManager: React.FC = () => {
 
               <Tooltip text="Download">
                 <button
-                  className="p-2 rounded-xl text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 shadow-sm transition-all duration-300 hover:scale-110 active:scale-95 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="p-2 rounded-xl text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 shadow-lg transition-all duration-300 hover:scale-110 active:scale-95 hover:shadow-xl ring-2 ring-blue-400/50 dark:ring-blue-500/50 hover:bg-blue-50 dark:hover:bg-blue-900/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                  style={{
+                    animation: "actionGlowBlue 2s ease-in-out infinite",
+                  }}
                   onClick={() => downloadFiles(selectedFiles)}
                   disabled={isDownloading || selectedFiles.length === 0}
                   aria-label="Download"
@@ -628,7 +637,10 @@ export const FileManager: React.FC = () => {
 
               <Tooltip text="Rename">
                 <button
-                  className="p-2 rounded-xl text-gray-500 hover:text-purple-600 dark:text-gray-400 dark:hover:text-purple-400 shadow-sm transition-all duration-300 hover:scale-110 active:scale-95 hover:bg-purple-50 dark:hover:bg-purple-900/20 hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="p-2 rounded-xl text-gray-500 hover:text-purple-600 dark:text-gray-400 dark:hover:text-purple-400 shadow-lg transition-all duration-300 hover:scale-110 active:scale-95 hover:shadow-xl ring-2 ring-purple-400/50 dark:ring-purple-500/50 hover:bg-purple-50 dark:hover:bg-purple-900/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                  style={{
+                    animation: "actionGlowPurple 2s ease-in-out infinite",
+                  }}
                   onClick={() => {
                     if (selectedFiles.length === 1) {
                       const file = files.find((f) => f.id === selectedFiles[0]);
@@ -644,7 +656,10 @@ export const FileManager: React.FC = () => {
 
               <Tooltip text="Delete">
                 <button
-                  className="p-2 rounded-xl text-gray-500 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400 shadow-sm transition-all duration-300 hover:scale-110 active:scale-95 hover:bg-red-50 dark:hover:bg-red-900/20 hover:shadow-md"
+                  className="p-2 rounded-xl text-gray-500 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400 shadow-lg transition-all duration-300 hover:scale-110 active:scale-95 hover:shadow-xl ring-2 ring-red-400/50 dark:ring-red-500/50 hover:bg-red-50 dark:hover:bg-red-900/20"
+                  style={{
+                    animation: "actionGlowRed 2s ease-in-out infinite",
+                  }}
                   onClick={() => setDeleteModalOpen(true)}
                   aria-label="Delete"
                 >
@@ -659,7 +674,10 @@ export const FileManager: React.FC = () => {
               {selectedFiles.length > 0 && (
                 <Tooltip text="Delete Forever">
                   <button
-                    className="p-2 rounded-xl text-gray-500 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400 shadow-sm transition-all duration-300 hover:scale-110 active:scale-95 hover:bg-red-50 dark:hover:bg-red-900/20 hover:shadow-md"
+                    className="p-2 rounded-xl text-gray-500 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400 shadow-lg transition-all duration-300 hover:scale-110 active:scale-95 hover:shadow-xl ring-2 ring-red-400/50 dark:ring-red-500/50 hover:bg-red-50 dark:hover:bg-red-900/20"
+                    style={{
+                      animation: "actionGlowRed 2s ease-in-out infinite",
+                    }}
                     onClick={() => setDeleteForeverModalOpen(true)}
                     aria-label="Delete Forever"
                   >
