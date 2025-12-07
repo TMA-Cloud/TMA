@@ -32,6 +32,7 @@ interface ContextMenuProps {
   targetId: string | null;
   multiSelectMode?: boolean;
   setMultiSelectMode?: (enabled: boolean) => void;
+  onActionComplete?: () => void;
 }
 
 export const ContextMenu: React.FC<ContextMenuProps> = ({
@@ -42,6 +43,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
   targetId,
   multiSelectMode = false,
   setMultiSelectMode,
+  onActionComplete,
 }) => {
   const menuRef = useRef<HTMLDivElement>(null);
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
@@ -98,6 +100,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
         `Restored ${count} item${count !== 1 ? "s" : ""} from trash`,
         "success",
       );
+      onActionComplete?.();
     } catch (error: unknown) {
       const errorMessage =
         error instanceof Error ? error.message : "Unknown error";
@@ -107,7 +110,13 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
         "error",
       );
     }
-  }, [restoreFiles, selectedFiles, clearSelection, showToast]);
+  }, [
+    restoreFiles,
+    selectedFiles,
+    clearSelection,
+    showToast,
+    onActionComplete,
+  ]);
 
   const handleConfirmDelete = async () => {
     if (!pendingAction) return;
@@ -132,6 +141,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
           "success",
         );
       }
+      onActionComplete?.();
     } catch (error: unknown) {
       const errorMessage =
         error instanceof Error ? error.message : "Unknown error";
@@ -226,6 +236,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                 const base = window.location.origin;
                 const list = Object.values(links).map((t) => `${base}/s/${t}`);
                 if (list.length) setShareLinkModalOpen(true, list);
+                onActionComplete?.();
               },
             },
           ]
@@ -240,6 +251,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
             const list = Object.values(links).map((t) => `${base}/s/${t}`);
             setShareLinkModalOpen(true, list);
           }
+          onActionComplete?.();
         },
       },
       ...(anyShared
@@ -277,6 +289,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                     if (!successful) throw new Error("Copy command failed");
                   }
                   showToast("Link copied to clipboard", "success");
+                  onActionComplete?.();
                 } catch (error) {
                   console.error("Failed to copy link:", error);
                   showToast("Failed to copy link", "error");
@@ -288,31 +301,47 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
       {
         icon: Download,
         label: "Download",
-        action: () => downloadFiles(selectedFiles),
+        action: async () => {
+          await downloadFiles(selectedFiles);
+          onActionComplete?.();
+        },
         disabled: isDownloading || selectedFiles.length === 0,
       },
       {
         icon: Star,
         label: allStarred ? "Remove from Starred" : "Add to Starred",
-        action: () => starFiles(selectedFiles, !allStarred),
+        action: async () => {
+          await starFiles(selectedFiles, !allStarred);
+          onActionComplete?.();
+        },
       },
       {
         icon: Copy,
         label: "Copy",
-        action: () => setClipboard({ ids: selectedFiles, action: "copy" }),
+        action: () => {
+          setClipboard({ ids: selectedFiles, action: "copy" });
+          onActionComplete?.();
+        },
       },
       {
         icon: Scissors,
         label: "Cut",
-        action: () => setClipboard({ ids: selectedFiles, action: "cut" }),
+        action: () => {
+          setClipboard({ ids: selectedFiles, action: "cut" });
+          onActionComplete?.();
+        },
       },
       ...(clipboard
         ? [
             {
               icon: ClipboardPaste,
               label: "Paste",
-              action: () =>
-                pasteClipboard(targetId ?? folderStack[folderStack.length - 1]),
+              action: async () => {
+                await pasteClipboard(
+                  targetId ?? folderStack[folderStack.length - 1],
+                );
+                onActionComplete?.();
+              },
             },
           ]
         : []),
@@ -323,6 +352,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
           const id = targetId ?? selectedFiles[0];
           const file = files.find((f) => f.id === id);
           if (file) setRenameTarget(file);
+          onActionComplete?.();
         },
       },
       {
@@ -365,6 +395,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     setMultiSelectMode,
     onClose,
     handleRestore,
+    onActionComplete,
   ]);
 
   useEffect(() => {

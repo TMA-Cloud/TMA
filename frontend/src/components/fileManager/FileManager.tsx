@@ -73,7 +73,7 @@ export const FileManager: React.FC = () => {
     setEmptyTrashModalOpen(false);
     try {
       const result = await emptyTrash();
-      clearSelection(); // Clear selection after successful deletion
+      handleClearSelection(); // Clear selection after successful deletion
       showToast(
         result?.message ||
           `Successfully deleted ${files.length} item(s) from trash`,
@@ -95,7 +95,7 @@ export const FileManager: React.FC = () => {
     try {
       await deleteFiles(selectedFiles);
       const count = selectedFiles.length;
-      clearSelection(); // Clear selection after successful deletion
+      handleClearSelection(); // Clear selection after successful deletion
       showToast(
         `Moved ${count} item${count !== 1 ? "s" : ""} to trash`,
         "success",
@@ -113,7 +113,7 @@ export const FileManager: React.FC = () => {
     try {
       await deleteForever(selectedFiles);
       const count = selectedFiles.length;
-      clearSelection(); // Clear selection after successful deletion
+      handleClearSelection(); // Clear selection after successful deletion
       showToast(
         `Permanently deleted ${count} item${count !== 1 ? "s" : ""}`,
         "success",
@@ -133,7 +133,7 @@ export const FileManager: React.FC = () => {
     try {
       const result = await restoreFiles(selectedFiles);
       const count = selectedFiles.length;
-      clearSelection(); // Clear selection after successful restore
+      handleClearSelection(); // Clear selection after successful restore
       showToast(
         result?.message ||
           `Restored ${count} item${count !== 1 ? "s" : ""} from trash`,
@@ -156,6 +156,12 @@ export const FileManager: React.FC = () => {
   const [draggingIds, setDraggingIds] = useState<string[]>([]);
   const [dragOverFolder, setDragOverFolder] = useState<string | null>(null);
   const [multiSelectMode, setMultiSelectMode] = useState(false);
+  const multiSelectModeRef = useRef(multiSelectMode);
+
+  // Keep ref in sync with state
+  useEffect(() => {
+    multiSelectModeRef.current = multiSelectMode;
+  }, [multiSelectMode]);
 
   // track marquee‐drag state in a ref only (we never read dragSelecting)
   const handleSelectingChange = useCallback((selecting: boolean) => {
@@ -171,13 +177,18 @@ export const FileManager: React.FC = () => {
 
   const isMobile = useIsMobile();
 
+  // Helper to close multi-select mode on mobile
+  const closeMultiSelectIfMobile = useCallback(() => {
+    if (isMobile && multiSelectModeRef.current) {
+      setMultiSelectMode(false);
+    }
+  }, [isMobile, setMultiSelectMode]);
+
   // Wrapper for clearSelection that also exits multi-select mode on mobile
   const handleClearSelection = useCallback(() => {
     clearSelection();
-    if (isMobile && multiSelectMode) {
-      setMultiSelectMode(false);
-    }
-  }, [clearSelection, isMobile, multiSelectMode]);
+    closeMultiSelectIfMobile();
+  }, [clearSelection, closeMultiSelectIfMobile]);
 
   // Wrapper for removeSelectedFile that exits multi-select mode when last file is deselected
   const handleRemoveSelectedFile = useCallback(
@@ -188,7 +199,13 @@ export const FileManager: React.FC = () => {
         setMultiSelectMode(false);
       }
     },
-    [removeSelectedFile, isMobile, multiSelectMode, selectedFiles.length],
+    [
+      removeSelectedFile,
+      isMobile,
+      multiSelectMode,
+      selectedFiles.length,
+      setMultiSelectMode,
+    ],
   );
 
   // Filter out deleted files from selection
@@ -283,6 +300,7 @@ export const FileManager: React.FC = () => {
         setDocumentViewerFile?.(file);
       }
     }
+    closeMultiSelectIfMobile();
   };
 
   const handleContextMenu = (e: React.MouseEvent, fileId?: string) => {
@@ -363,6 +381,7 @@ export const FileManager: React.FC = () => {
     await moveFiles(draggingIds, folderId);
     setDraggingIds([]);
     document.body.classList.remove("is-dragging");
+    closeMultiSelectIfMobile();
   };
 
   // Calculate shared/starred status for selected files
@@ -379,16 +398,19 @@ export const FileManager: React.FC = () => {
       const list = Object.values(links).map((t) => `${base}/s/${t}`);
       setShareLinkModalOpen(true, list);
     }
+    closeMultiSelectIfMobile();
   };
 
   const handleStar = () => {
     starFiles(selectedFiles, !allStarred);
+    closeMultiSelectIfMobile();
   };
 
   const handleRename = () => {
     if (selectedFiles.length === 1) {
       const file = files.find((f) => f.id === selectedFiles[0]);
       if (file) setRenameTarget(file);
+      closeMultiSelectIfMobile();
     }
   };
 
@@ -435,7 +457,10 @@ export const FileManager: React.FC = () => {
           onCreateFolder={() => setCreateFolderModalOpen(true)}
           onShare={handleShare}
           onStar={handleStar}
-          onDownload={() => downloadFiles(selectedFiles)}
+          onDownload={async () => {
+            await downloadFiles(selectedFiles);
+            closeMultiSelectIfMobile();
+          }}
           onRename={handleRename}
           onDelete={() => setDeleteModalOpen(true)}
           onRestore={handleRestore}
@@ -487,6 +512,7 @@ export const FileManager: React.FC = () => {
         selectedCount={selectedFiles.length}
         multiSelectMode={multiSelectMode}
         setMultiSelectMode={setMultiSelectMode}
+        onActionComplete={closeMultiSelectIfMobile}
       />
 
       <PasteProgress progress={pasteProgress} />
