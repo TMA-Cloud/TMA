@@ -6,6 +6,7 @@ This page contains the complete gallery of all available UI screenshots.
 
 - [Authentication](#authentication)
 - [Dashboard & File Manager](#dashboard--file-manager)
+- [Dashboard & File Manager Mobile View](#dashboard--file-manager-mobile-view)
 - [Uploading & Sharing](#uploading--sharing)
 - [Image Viewer](#image-viewer)
 - [Document Viewer](#document-viewer)
@@ -27,6 +28,14 @@ This page contains the complete gallery of all available UI screenshots.
 
 ![Dashboard](images/dashboard.png)
 ![File Manager](images/file-manager.png)
+
+---
+
+## Dashboard & File Manager Mobile View
+
+| Dashboard                                         | File Manager                                            |
+|---------------------------------------------------|---------------------------------------------------------|
+| ![Dashboard](images/dashboard(mobile).png) | ![File Manager](images/file-manager(mobile).png) |
 
 ---
 
