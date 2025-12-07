@@ -64,6 +64,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     currentPath,
     downloadFiles,
     isDownloading,
+    clearSelection,
   } = useApp();
   const { showToast } = useToast();
 
@@ -90,12 +91,14 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     try {
       if (type === "deleteForever") {
         await deleteForever(files);
+        clearSelection(); // Clear selection after successful deletion
         showToast(
           `Permanently deleted ${count} item${count !== 1 ? "s" : ""}`,
           "success",
         );
       } else {
         await deleteFiles(files);
+        clearSelection(); // Clear selection after successful deletion
         showToast(
           `Moved ${count} item${count !== 1 ? "s" : ""} to trash`,
           "success",

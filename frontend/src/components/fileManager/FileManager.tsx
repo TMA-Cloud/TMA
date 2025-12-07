@@ -231,6 +231,7 @@ export const FileManager: React.FC = () => {
     setEmptyTrashModalOpen(false);
     try {
       const result = await emptyTrash();
+      clearSelection(); // Clear selection after successful deletion
       showToast(
         result?.message ||
           `Successfully deleted ${files.length} item(s) from trash`,
@@ -252,6 +253,7 @@ export const FileManager: React.FC = () => {
     try {
       await deleteFiles(selectedFiles);
       const count = selectedFiles.length;
+      clearSelection(); // Clear selection after successful deletion
       showToast(
         `Moved ${count} item${count !== 1 ? "s" : ""} to trash`,
         "success",
@@ -269,6 +271,7 @@ export const FileManager: React.FC = () => {
     try {
       await deleteForever(selectedFiles);
       const count = selectedFiles.length;
+      clearSelection(); // Clear selection after successful deletion
       showToast(
         `Permanently deleted ${count} item${count !== 1 ? "s" : ""}`,
         "success",
@@ -343,6 +346,16 @@ export const FileManager: React.FC = () => {
     },
     [removeSelectedFile, isMobile, multiSelectMode, selectedFiles.length],
   );
+
+  // Filter out deleted files from selection
+  useEffect(() => {
+    const validSelectedFiles = selectedFiles.filter((id) =>
+      files.some((f) => f.id === id),
+    );
+    if (validSelectedFiles.length !== selectedFiles.length) {
+      setSelectedFiles(validSelectedFiles);
+    }
+  }, [files, selectedFiles, setSelectedFiles]);
 
   useEffect(() => {
     const handleDocumentClick = (e: MouseEvent) => {
