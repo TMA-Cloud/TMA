@@ -40,6 +40,7 @@ export const Tooltip: React.FC<TooltipProps> = ({ text, children }) => {
           bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900
           transition-all duration-200 opacity-0 scale-95
           ${visible && !dragging ? "opacity-100 scale-100" : ""}
+          max-w-xs truncate
         `}
         role="tooltip"
         aria-hidden={dragging || !visible}

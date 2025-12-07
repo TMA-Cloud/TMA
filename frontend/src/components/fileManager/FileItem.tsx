@@ -1,6 +1,11 @@
 import React, { useRef } from "react";
 import { type FileItem as FileItemType } from "../../contexts/AppContext";
-import { getFileIcon, formatFileSize, formatDate } from "../../utils/fileUtils";
+import {
+  getFileIcon,
+  formatFileSize,
+  formatDate,
+  formatFileNameForTooltip,
+} from "../../utils/fileUtils";
 import { Star, Share2 } from "lucide-react";
 import { Tooltip } from "../ui/Tooltip";
 import { Eye } from "lucide-react";
@@ -120,7 +125,7 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
           transition-all duration-300 ease-out transform-gpu
           hover:shadow-2xl hover:scale-[1.03] will-change-transform backdrop-blur-md hover:z-20
           active:scale-[0.98]
-          ${isMobile ? "min-w-0 w-full p-2 select-none" : "p-4"}
+          ${isMobile ? "min-w-0 w-full p-2 select-none" : "p-4 min-w-0"}
           overflow-hidden
           ${
             isSelected
@@ -129,6 +134,7 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
           }
           ${isDragOver ? "ring-4 ring-blue-400 ring-offset-2 scale-105" : ""}
         `}
+        style={{ maxWidth: "100%" }}
         onClick={handleClickWrapped}
         onDoubleClick={onDoubleClick}
         onContextMenu={handleContextMenuWrapped}
@@ -179,13 +185,30 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
           </div>
 
           <div className="w-full min-w-0 px-1">
-            <Tooltip text={file.name}>
-              <p
-                className={`${isMobile ? "text-xs" : "text-base"} font-semibold text-gray-900 dark:text-gray-100 w-full break-words line-clamp-2`}
+            <div className="w-full min-w-0">
+              <Tooltip
+                text={formatFileNameForTooltip(file.name, isMobile ? 20 : 35)}
               >
-                {file.name}
-              </p>
-            </Tooltip>
+                <p
+                  className={`${isMobile ? "text-xs" : "text-base"} font-semibold text-gray-900 dark:text-gray-100 w-full break-words`}
+                  style={{
+                    display: "-webkit-box",
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: "vertical",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    wordBreak: "break-word",
+                    overflowWrap: "break-word",
+                    hyphens: "auto",
+                    width: "100%",
+                    maxWidth: "100%",
+                    lineHeight: "1.3",
+                  }}
+                >
+                  {file.name}
+                </p>
+              </Tooltip>
+            </div>
           </div>
 
           <div
@@ -257,11 +280,23 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
       </div>
 
       <div className="flex-1 min-w-0 transition-transform duration-200 group-hover:translate-x-1">
-        <Tooltip text={file.name}>
-          <p className="text-base font-semibold text-gray-900 dark:text-gray-100 break-words transition-colors duration-200">
-            {file.name}
-          </p>
-        </Tooltip>
+        <div className={isMobile ? "w-full min-w-0" : "w-full min-w-0"}>
+          <Tooltip
+            text={formatFileNameForTooltip(file.name, isMobile ? 25 : 40)}
+          >
+            <p
+              className="text-base font-semibold text-gray-900 dark:text-gray-100 transition-colors duration-200 break-words"
+              style={{
+                wordBreak: "break-word",
+                overflowWrap: "break-word",
+                hyphens: "auto",
+                lineHeight: "1.4",
+              }}
+            >
+              {file.name}
+            </p>
+          </Tooltip>
+        </div>
         <p className="text-xs text-gray-500 dark:text-gray-400 transition-colors duration-200">
           {file.type === "file" &&
             file.size &&

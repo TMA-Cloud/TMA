@@ -122,3 +122,43 @@ export function getExt(name?: string) {
 
 export const isOnlyOfficeSupported = (name?: string) =>
   ONLYOFFICE_EXTS.has(getExt(name));
+
+/**
+ * Formats a filename for tooltip display in the format: "filename...extension"
+ * @param filename The full filename
+ * @param maxLength Maximum length before truncation (default: 30)
+ * @returns Formatted string like "filenam...ext" or full name if short enough
+ */
+export const formatFileNameForTooltip = (
+  filename: string,
+  maxLength: number = 30,
+): string => {
+  if (!filename) return "";
+
+  // If filename is short enough, return as is
+  if (filename.length <= maxLength) {
+    return filename;
+  }
+
+  const extension = getExt(filename);
+  const nameWithoutExt = extension
+    ? filename.slice(0, -extension.length)
+    : filename;
+
+  // If no extension, just truncate with ellipsis
+  if (!extension) {
+    return filename.slice(0, maxLength - 3) + "...";
+  }
+
+  // Calculate available space for name part (reserve space for "..." + extension)
+  const reservedSpace = 3 + extension.length; // "..." + extension
+  const nameMaxLength = Math.max(5, maxLength - reservedSpace); // At least 5 chars for name
+
+  if (nameWithoutExt.length <= nameMaxLength) {
+    return filename; // Fits within maxLength
+  }
+
+  // Format as "name...ext"
+  const truncatedName = nameWithoutExt.slice(0, nameMaxLength);
+  return `${truncatedName}...${extension}`;
+};
