@@ -284,7 +284,7 @@ export const Settings: React.FC = () => {
                     className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-2xl bg-gray-50/70 dark:bg-gray-900/60 px-4 py-3 border border-transparent hover:border-blue-500/40 transition-all duration-200"
                   >
                     <div>
-                      <p className="font-medium text-gray-900 dark:text-gray-100">
+                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
                         {item.label}
                       </p>
                       {"description" in item && item.description && (
@@ -355,7 +355,7 @@ export const Settings: React.FC = () => {
                         </button>
                       </div>
                     ) : (
-                      <span className="text-base font-semibold text-gray-700 dark:text-gray-200 text-right">
+                      <span className="text-base font-semibold text-gray-700 dark:text-gray-200 text-left sm:text-right break-words">
                         {item.value}
                       </span>
                     )}
