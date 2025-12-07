@@ -120,7 +120,7 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
           transition-all duration-300 ease-out transform-gpu
           hover:shadow-2xl hover:scale-[1.03] will-change-transform backdrop-blur-md hover:z-20
           active:scale-[0.98]
-          ${isMobile ? "min-w-0 w-full p-2" : "p-4"}
+          ${isMobile ? "min-w-0 w-full p-2 select-none" : "p-4"}
           overflow-hidden
           ${
             isSelected
@@ -208,6 +208,7 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
         stagger-item group flex items-center space-x-3 p-3 rounded-xl cursor-pointer
         transition-all duration-300 ease-out transform-gpu
         hover:shadow-lg hover:scale-[1.01] active:scale-[0.99]
+        ${isMobile ? "select-none" : ""}
         ${
           isSelected
             ? "bg-blue-50 dark:bg-blue-900/20 shadow-md border-l-4 border-blue-500"
