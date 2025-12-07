@@ -337,6 +337,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
     await refreshFiles();
   };
 
+  const restoreFilesApi = async (ids: string[]) => {
+    const res = await fetch(`/api/files/trash/restore`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ ids }),
+    });
+    const data = await res.json();
+    await refreshFiles();
+    if (!res.ok) {
+      throw new Error(data.message || "Failed to restore files");
+    }
+    return data;
+  };
+
   const deleteForeverApi = async (ids: string[]) => {
     await fetch(`/api/files/trash/delete`, {
       method: "POST",
@@ -507,6 +522,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         linkToParentShare: linkToParentShareApi,
         starFiles: starFilesApi,
         deleteFiles: deleteFilesApi,
+        restoreFiles: restoreFilesApi,
         deleteForever: deleteForeverApi,
         emptyTrash: emptyTrashApi,
         clipboard,

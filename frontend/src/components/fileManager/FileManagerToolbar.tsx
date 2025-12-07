@@ -8,6 +8,7 @@ import {
   Star,
   Download,
   Edit3,
+  RotateCcw,
 } from "lucide-react";
 import { Tooltip } from "../ui/Tooltip";
 import { SortMenu } from "./SortMenu";
@@ -34,6 +35,7 @@ interface FileManagerToolbarProps {
   onDownload: () => void;
   onRename: () => void;
   onDelete: () => void;
+  onRestore: () => void;
   onDeleteForever: () => void;
   onEmptyTrash: () => void;
 }
@@ -60,6 +62,7 @@ export const FileManagerToolbar: React.FC<FileManagerToolbarProps> = ({
   onDownload,
   onRename,
   onDelete,
+  onRestore,
   onDeleteForever,
   onEmptyTrash,
 }) => {
@@ -165,21 +168,35 @@ export const FileManagerToolbar: React.FC<FileManagerToolbarProps> = ({
         </>
       )}
       {isTrashView ? (
-        // Trash page: show Delete Forever button when files are selected, Empty Trash when no files selected
+        // Trash page: show Restore and Delete Forever buttons when files are selected, Empty Trash when no files selected
         <>
           {selectedFiles.length > 0 && (
-            <Tooltip text="Delete Forever">
-              <button
-                className="p-2 rounded-xl text-gray-500 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400 shadow-lg transition-all duration-300 hover:scale-110 active:scale-95 hover:shadow-xl ring-2 ring-red-400/50 dark:ring-red-500/50 hover:bg-red-50 dark:hover:bg-red-900/20"
-                style={{
-                  animation: "actionGlowRed 2s ease-in-out infinite",
-                }}
-                onClick={onDeleteForever}
-                aria-label="Delete Forever"
-              >
-                <Trash2 className="w-5 h-5 transition-transform duration-300" />
-              </button>
-            </Tooltip>
+            <>
+              <Tooltip text="Restore">
+                <button
+                  className="p-2 rounded-xl text-gray-500 hover:text-green-600 dark:text-gray-400 dark:hover:text-green-400 shadow-lg transition-all duration-300 hover:scale-110 active:scale-95 hover:shadow-xl ring-2 ring-green-400/50 dark:ring-green-500/50 hover:bg-green-50 dark:hover:bg-green-900/20"
+                  style={{
+                    animation: "actionGlowGreen 2s ease-in-out infinite",
+                  }}
+                  onClick={onRestore}
+                  aria-label="Restore"
+                >
+                  <RotateCcw className="w-5 h-5 transition-transform duration-300" />
+                </button>
+              </Tooltip>
+              <Tooltip text="Delete Forever">
+                <button
+                  className="p-2 rounded-xl text-gray-500 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400 shadow-lg transition-all duration-300 hover:scale-110 active:scale-95 hover:shadow-xl ring-2 ring-red-400/50 dark:ring-red-500/50 hover:bg-red-50 dark:hover:bg-red-900/20"
+                  style={{
+                    animation: "actionGlowRed 2s ease-in-out infinite",
+                  }}
+                  onClick={onDeleteForever}
+                  aria-label="Delete Forever"
+                >
+                  <Trash2 className="w-5 h-5 transition-transform duration-300" />
+                </button>
+              </Tooltip>
+            </>
           )}
           {hasTrashFiles && selectedFiles.length === 0 && (
             <Tooltip text="Empty Trash">

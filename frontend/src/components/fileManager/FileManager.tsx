@@ -53,6 +53,7 @@ export const FileManager: React.FC = () => {
     downloadFiles,
     setRenameTarget,
     deleteFiles,
+    restoreFiles,
     deleteForever,
     setShareLinkModalOpen,
   } = useApp();
@@ -123,6 +124,27 @@ export const FileManager: React.FC = () => {
       console.error("Failed to delete forever:", error);
       showToast(
         errorMessage || "Failed to permanently delete. Please try again.",
+        "error",
+      );
+    }
+  };
+
+  const handleRestore = async () => {
+    try {
+      const result = await restoreFiles(selectedFiles);
+      const count = selectedFiles.length;
+      clearSelection(); // Clear selection after successful restore
+      showToast(
+        result?.message ||
+          `Restored ${count} item${count !== 1 ? "s" : ""} from trash`,
+        "success",
+      );
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
+      console.error("Failed to restore:", error);
+      showToast(
+        errorMessage || "Failed to restore files. Please try again.",
         "error",
       );
     }
@@ -416,6 +438,7 @@ export const FileManager: React.FC = () => {
           onDownload={() => downloadFiles(selectedFiles)}
           onRename={handleRename}
           onDelete={() => setDeleteModalOpen(true)}
+          onRestore={handleRestore}
           onDeleteForever={() => setDeleteForeverModalOpen(true)}
           onEmptyTrash={() => setEmptyTrashModalOpen(true)}
         />

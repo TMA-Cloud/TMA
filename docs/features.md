@@ -227,8 +227,14 @@ See [Setup Guide](setup.md#onlyoffice-integration-issues) for troubleshooting.
 
 - Soft delete to trash
 - Restore from trash
+  - Restore files/folders to original location
+  - Automatic fallback to root if parent folder was deleted
+  - Smart name conflict resolution (auto-renaming)
+  - Recursive restore for entire folder trees
+  - Transaction-safe operations
 - Permanent deletion
-- Automatic cleanup after 30 days
+- Empty trash functionality
+- Automatic cleanup after 15 days
 
 ## Search
 
@@ -252,7 +258,7 @@ See [Setup Guide](setup.md#onlyoffice-integration-issues) for troubleshooting.
 Automatic cleanup service:
 
 - Runs periodically
-- Deletes files from trash after 30 days
+- Deletes files from trash after 15 days
 - Prevents storage bloat
 - Configurable retention period
 

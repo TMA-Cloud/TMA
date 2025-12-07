@@ -69,6 +69,7 @@ export interface AppContextType {
   linkToParentShare: (ids: string[]) => Promise<Record<string, string>>;
   starFiles: (ids: string[], starred: boolean) => Promise<void>;
   deleteFiles: (ids: string[]) => Promise<void>;
+  restoreFiles: (ids: string[]) => Promise<void>;
   deleteForever: (ids: string[]) => Promise<void>;
   emptyTrash: () => Promise<{ success: boolean; message?: string }>;
   clipboard: { ids: string[]; action: "copy" | "cut" } | null;

@@ -19,6 +19,7 @@ const {
   getFolderTree,
   deleteFiles,
   getTrashFiles,
+  restoreFiles,
   permanentlyDeleteFiles,
   searchFiles,
   getFileStats,
@@ -600,6 +601,49 @@ async function deleteForeverController(req, res) {
   }
 }
 
+async function restoreFilesController(req, res) {
+  try {
+    const { ids } = req.body;
+    const validatedIds = validateIdArray(ids);
+    if (!validatedIds) {
+      return sendError(res, 400, 'Invalid ids array');
+    }
+
+    // Get file names for audit logging (from trash)
+    const fileInfoResult = await pool.query(
+      'SELECT id, name, type FROM files WHERE id = ANY($1) AND user_id = $2 AND deleted_at IS NOT NULL',
+      [validatedIds, req.userId]
+    );
+    const fileInfo = fileInfoResult.rows.map(f => ({ id: f.id, name: f.name, type: f.type }));
+    const fileNames = fileInfo.map(f => f.name);
+    const fileTypes = fileInfo.map(f => f.type);
+
+    if (fileInfo.length === 0) {
+      return sendError(res, 404, 'No files found in trash to restore');
+    }
+
+    await restoreFiles(validatedIds, req.userId);
+
+    // Log file restore with details
+    await logAuditEvent('file.restore', {
+      status: 'success',
+      resourceType: fileTypes[0] || 'file', // Use actual type (file/folder)
+      resourceId: validatedIds[0],
+      metadata: {
+        fileCount: validatedIds.length,
+        fileIds: validatedIds,
+        fileNames: fileNames,
+        fileTypes: fileTypes,
+      }
+    }, req);
+    logger.info({ fileIds: validatedIds, fileNames }, 'Files restored from trash');
+
+    sendSuccess(res, { success: true, message: `Restored ${fileInfo.length} file(s) from trash` });
+  } catch (err) {
+    sendError(res, 500, 'Server error', err);
+  }
+}
+
 async function emptyTrashController(req, res) {
   try {
     // Get all trash files for the user
@@ -700,6 +744,7 @@ module.exports = {
   linkParentShare: linkParentShareController,
   deleteFiles: deleteFilesController,
   listTrash,
+  restoreFiles: restoreFilesController,
   deleteForever: deleteForeverController,
   emptyTrash: emptyTrashController,
   searchFiles: searchFilesController,

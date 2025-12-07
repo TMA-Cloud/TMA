@@ -507,6 +507,42 @@ List files in trash.
 }
 ```
 
+#### POST `/api/files/trash/restore`
+
+Restore files from trash to their original location.
+
+**Request Body:**
+
+```json
+{
+  "ids": ["id1", "id2"]
+}
+```
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "message": "Restored 2 file(s) from trash"
+}
+```
+
+**Behavior:**
+
+- Restores files to their original parent folder if it still exists
+- If the original parent folder was deleted, files are restored to the root directory
+- Automatically handles name conflicts by renaming restored files (e.g., "file (1).txt")
+- Recursively restores all children of selected folders
+- All operations are performed in a transaction (all-or-nothing)
+
+**Status Codes:**
+
+- `200` - Files restored successfully
+- `400` - Invalid ids array
+- `404` - No files found in trash to restore
+- `500` - Server error
+
 #### POST `/api/files/trash/delete`
 
 Permanently delete files from trash.

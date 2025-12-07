@@ -413,9 +413,15 @@ See [Audit Documentation](audit.md) for detailed information.
 
 ## Background Services
 
-### Trash Cleanup
+### Trash Management
 
-- Automatically deletes files from trash after 30 days
+- Soft delete: Files are marked as deleted with `deleted_at` timestamp
+- Restore functionality: Files can be restored to their original location
+  - Validates parent folder existence
+  - Handles name conflicts automatically
+  - Transaction-safe restore operations
+- Trash Cleanup: Automatically deletes files from trash after 15 days
+- Runs periodically via scheduler
 - Runs periodically via scheduler
 
 ### Orphan Cleanup

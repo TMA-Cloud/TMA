@@ -15,6 +15,7 @@ const {
   linkParentShare,
   deleteFiles,
   listTrash,
+  restoreFiles,
   deleteForever,
   emptyTrash,
   searchFiles,
@@ -44,6 +45,7 @@ router.get('/shared', listShared);
 router.post('/link-parent-share', linkParentShare);
 router.post('/delete', deleteFiles);
 router.get('/trash', listTrash);
+router.post('/trash/restore', restoreFiles);
 router.post('/trash/delete', deleteForever);
 router.post('/trash/empty', emptyTrash);
 router.get('/:id/download', downloadFile);

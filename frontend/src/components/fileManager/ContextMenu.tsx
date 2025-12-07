@@ -1,4 +1,10 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   Edit3,
   Trash2,
@@ -11,6 +17,7 @@ import {
   Link2,
   CheckSquare,
   Square,
+  RotateCcw,
 } from "lucide-react";
 import { useApp } from "../../contexts/AppContext";
 import { useToast } from "../../hooks/useToast";
@@ -59,6 +66,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     linkToParentShare,
     starFiles,
     deleteFiles,
+    restoreFiles,
     deleteForever,
     setShareLinkModalOpen,
     currentPath,
@@ -80,6 +88,26 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     selectedItems.length > 0 && selectedItems.every((f) => !f.shared);
 
   const isTrashView = currentPath[0] === "Trash";
+
+  const handleRestore = useCallback(async () => {
+    try {
+      await restoreFiles(selectedFiles);
+      const count = selectedFiles.length;
+      clearSelection(); // Clear selection after successful restore
+      showToast(
+        `Restored ${count} item${count !== 1 ? "s" : ""} from trash`,
+        "success",
+      );
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
+      console.error("Failed to restore:", error);
+      showToast(
+        errorMessage || "Failed to restore files. Please try again.",
+        "error",
+      );
+    }
+  }, [restoreFiles, selectedFiles, clearSelection, showToast]);
 
   const handleConfirmDelete = async () => {
     if (!pendingAction) return;
@@ -122,7 +150,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
   };
 
   const menuItems = useMemo(() => {
-    // On trash page, only show "Delete Forever" option
+    // On trash page, show "Restore" and "Delete Forever" options
     if (isTrashView) {
       return [
         // Mobile-only: Select Multiple option
@@ -146,6 +174,14 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
               },
             ]
           : []),
+        {
+          icon: RotateCcw,
+          label: "Restore",
+          action: () => {
+            handleRestore();
+            onClose();
+          },
+        },
         {
           icon: Trash2,
           label: "Delete Forever",
@@ -328,6 +364,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     multiSelectMode,
     setMultiSelectMode,
     onClose,
+    handleRestore,
   ]);
 
   useEffect(() => {
