@@ -253,6 +253,15 @@ Create a `.env` file in the `backend/` directory with the following variables.
 - **Example:** `AUDIT_WORKER_CONCURRENCY=10`
 - **Note:** Higher values process audit logs faster but use more database connections
 
+#### `AUDIT_JOB_TTL_SECONDS`
+
+- **Type:** Number (seconds)
+- **Required:** No
+- **Default:** `82800` (23 hours)
+- **Description:** Time-to-live for queued audit jobs. Must be **less than 24 hours** due to pg-boss policy.
+- **Example:** `AUDIT_JOB_TTL_SECONDS=7200` (2 hours)
+- **Note:** If you set this, keep it under `86400` seconds; recommended to stay slightly below 24h (e.g., 23h).
+
 ---
 
 ## Frontend Environment Variables

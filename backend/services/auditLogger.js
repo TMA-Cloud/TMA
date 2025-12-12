@@ -9,6 +9,12 @@ let boss = null;
 let isInitialized = false;
 
 const AUDIT_QUEUE = 'audit-events';
+// pg-boss enforces expiration strictly < 24h; clamp to a safe default.
+const MAX_JOB_TTL_SECONDS = (60 * 60 * 24) - 60; // 23h 59m to stay under limit
+const AUDIT_JOB_TTL_SECONDS = Math.min(
+  parseInt(process.env.AUDIT_JOB_TTL_SECONDS || '82800', 10), // default 23h
+  MAX_JOB_TTL_SECONDS
+);
 
 /**
  * Initialize pg-boss connection for audit event queueing
@@ -223,7 +229,7 @@ async function logAuditEvent(action, options = {}, req = null) {
         retryLimit: 3, // Retry up to 3 times
         retryDelay: 60, // Wait 60 seconds before first retry
         retryBackoff: true, // Exponential backoff (60s, 120s, 240s)
-        expireInSeconds: 60 * 60 * 24, // Expire job after 24 hours
+        expireInSeconds: AUDIT_JOB_TTL_SECONDS, // Must be < 24h per pg-boss policy
       }
     );
 

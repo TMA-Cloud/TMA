@@ -23,6 +23,9 @@ TMA Cloud includes a robust audit logging system that tracks all critical user a
 ```bash
 # Worker concurrency (default: 5)
 AUDIT_WORKER_CONCURRENCY=5
+
+# Audit job TTL (must be < 24h; default 23h = 82800 seconds)
+AUDIT_JOB_TTL_SECONDS=82800
 ```
 
 ### Starting the Audit Worker
