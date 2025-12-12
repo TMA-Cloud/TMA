@@ -127,6 +127,38 @@ export async function fetchAllUsers(): Promise<{
   return await apiGet<{ users: UserSummary[] }>("/api/user/all");
 }
 
+export interface VersionInfo {
+  frontend: string;
+  backend: string;
+}
+
+/**
+ * Get currently deployed versions for frontend and backend
+ * Backend version comes from server, frontend version is embedded at build time
+ */
+export async function getCurrentVersions(): Promise<VersionInfo> {
+  const backendVersions = await apiGet<{ backend: string }>("/api/version");
+
+  // Frontend version is embedded at build time, so use it directly
+  const frontendVersion =
+    typeof __FRONTEND_VERSION__ !== "undefined"
+      ? __FRONTEND_VERSION__
+      : "unknown";
+
+  return {
+    backend: backendVersions.backend,
+    frontend: frontendVersion,
+  };
+}
+
+/**
+ * Fetch the latest published versions from the update feed
+ * Uses backend proxy to avoid CORS issues
+ */
+export async function fetchLatestVersions(): Promise<VersionInfo> {
+  return apiGet<VersionInfo>("/api/version/latest");
+}
+
 /**
  * Download a file or folder
  * For files: triggers direct download

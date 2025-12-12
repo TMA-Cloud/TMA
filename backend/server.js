@@ -7,6 +7,7 @@ const fileRoutes = require('./routes/file.routes');
 const shareRoutes = require('./routes/share.routes');
 const onlyofficeRoutes = require('./routes/onlyoffice.routes');
 const userRoutes = require('./routes/user.routes');
+const versionRoutes = require('./routes/version.routes');
 const { startTrashCleanup } = require('./services/trashCleanup');
 const { startOrphanFileCleanup } = require('./services/orphanCleanup');
 const { startCustomDriveScanner } = require('./services/customDriveScanner');
@@ -99,6 +100,7 @@ app.use('/api', authRoutes);
 app.use('/api/files', fileRoutes);
 app.use('/api/user', userRoutes);
 app.use('/api/onlyoffice', onlyofficeRoutes);
+app.use('/api/version', versionRoutes);
 app.use('/s', shareRoutes);
 
 // Serve static frontend files

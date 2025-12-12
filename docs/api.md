@@ -766,6 +766,69 @@ Download a folder as ZIP from a share link.
 
 ---
 
+### Version
+
+#### GET `/api/version`
+
+Get currently deployed backend version.
+
+**Headers:** Requires authentication
+
+**Response:**
+
+```json
+{
+  "backend": "X.X.X"
+}
+```
+
+**Response Fields:**
+
+- `backend` (string): Currently deployed backend version
+
+**Status Codes:**
+
+- `200` - Success
+
+**Note:** The frontend version is embedded during the build process and is not returned by this endpoint.
+
+#### GET `/api/version/latest`
+
+Fetch the latest versions from the update feed.
+
+**Headers:** Requires authentication
+
+**Response:**
+
+```json
+{
+  "frontend": "X.X.X",
+  "backend": "X.X.X"
+}
+```
+
+**Response Fields:**
+
+- `frontend` (string): Latest available frontend version
+- `backend` (string): Latest available backend version
+
+**Status Codes:**
+
+- `200` - Success
+- `500` - Failed to fetch latest versions
+- `502` - GitHub returned non-200 status or connection error
+- `504` - Request timeout (10 seconds)
+
+**Error Response:**
+
+```json
+{
+  "error": "Failed to fetch latest versions"
+}
+```
+
+---
+
 ### Monitoring
 
 #### GET `/metrics`

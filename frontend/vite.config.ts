@@ -1,10 +1,21 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import { readFileSync } from "fs";
+import { join } from "path";
+
+// Read package.json to get version
+const packageJson = JSON.parse(
+  readFileSync(join(__dirname, "package.json"), "utf-8"),
+);
+const frontendVersion = packageJson.version || "unknown";
 
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  define: {
+    __FRONTEND_VERSION__: JSON.stringify(frontendVersion),
+  },
   optimizeDeps: {
     exclude: ["lucide-react"],
   },

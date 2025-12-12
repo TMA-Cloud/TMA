@@ -188,6 +188,16 @@ Online document editing with OnlyOffice:
 
 See [Setup Guide](setup.md#onlyoffice-integration-issues) for troubleshooting.
 
+## Version Management
+
+### Version Checking
+
+Functionality to check latest available version tags:
+
+- Current Version Display
+- Update Feed Integration
+- Status Indicators
+
 ## Storage Management
 
 ### Storage Quotas

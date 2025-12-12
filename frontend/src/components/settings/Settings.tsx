@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useAuth } from "../../contexts/AuthContext";
 import { useStorageUsage } from "../../hooks/useStorageUsage";
 import {
@@ -7,10 +7,17 @@ import {
   Settings as SettingsIcon,
   ChevronRight,
   Loader2,
+  RefreshCw,
 } from "lucide-react";
 import { formatFileSize } from "../../utils/fileUtils";
-import { getSignupStatus, toggleSignup, fetchAllUsers } from "../../utils/api";
-import type { UserSummary } from "../../utils/api";
+import {
+  getSignupStatus,
+  toggleSignup,
+  fetchAllUsers,
+  getCurrentVersions,
+  fetchLatestVersions,
+} from "../../utils/api";
+import type { UserSummary, VersionInfo } from "../../utils/api";
 import { useToast } from "../../hooks/useToast";
 import { Modal } from "../ui/Modal";
 
@@ -28,6 +35,15 @@ export const Settings: React.FC = () => {
   const [usersList, setUsersList] = useState<UserSummary[]>([]);
   const [loadingUsersList, setLoadingUsersList] = useState(false);
   const [usersListError, setUsersListError] = useState<string | null>(null);
+  const [currentVersions, setCurrentVersions] = useState<VersionInfo | null>(
+    null,
+  );
+  const [latestVersions, setLatestVersions] = useState<VersionInfo | null>(
+    null,
+  );
+  const [checkingVersions, setCheckingVersions] = useState(false);
+  const [versionChecked, setVersionChecked] = useState(false);
+  const [versionError, setVersionError] = useState<string | null>(null);
   const storageUsagePercent =
     usage && usage.total > 0
       ? Math.min(100, Math.round((usage.used / usage.total) * 100))
@@ -35,6 +51,7 @@ export const Settings: React.FC = () => {
 
   useEffect(() => {
     loadSignupStatus();
+    loadCurrentVersions();
   }, []);
 
   const loadSignupStatus = async () => {
@@ -100,6 +117,50 @@ export const Settings: React.FC = () => {
     loadUsersList();
   };
 
+  const loadCurrentVersions = async () => {
+    try {
+      const versions = await getCurrentVersions();
+      setCurrentVersions(versions);
+    } catch (error) {
+      console.error("Failed to load current versions:", error);
+      setVersionError("Unable to load current version information");
+    }
+  };
+
+  const handleCheckVersions = useCallback(async () => {
+    if (checkingVersions) return;
+
+    try {
+      setCheckingVersions(true);
+      setVersionError(null);
+
+      // Always fetch fresh current versions to detect backend redeployments
+      const [current, latest] = await Promise.all([
+        getCurrentVersions(),
+        fetchLatestVersions(),
+      ]);
+
+      setCurrentVersions(current);
+      setLatestVersions(latest);
+      setVersionChecked(true);
+
+      const allUpToDate =
+        current.frontend === latest.frontend &&
+        current.backend === latest.backend;
+
+      showToast(
+        allUpToDate ? "All components are up to date" : "Updates are available",
+        allUpToDate ? "success" : "info",
+      );
+    } catch (error) {
+      console.error("Failed to check versions:", error);
+      setVersionError("Unable to check for updates right now");
+      showToast("Failed to check for updates", "error");
+    } finally {
+      setCheckingVersions(false);
+    }
+  }, [checkingVersions, showToast]);
+
   const handleCloseUsersModal = () => {
     setUsersModalOpen(false);
   };
@@ -110,6 +171,36 @@ export const Settings: React.FC = () => {
       return "Unknown";
     }
     return date.toLocaleString();
+  };
+
+  const versionStatusText = (key: keyof VersionInfo) => {
+    const current = currentVersions?.[key];
+    if (!current) {
+      return "Loading current version...";
+    }
+
+    if (!versionChecked || !latestVersions) {
+      return `Current v${current}`;
+    }
+
+    const latest = latestVersions[key];
+    if (!latest) {
+      return `Current v${current}`;
+    }
+
+    if (current === latest) {
+      return `☑️ Up to date (v${current})`;
+    }
+
+    return `⚠️ Outdated (current v${current}, latest v${latest})`;
+  };
+
+  const versionDescription = (key: keyof VersionInfo) => {
+    if (versionError) return versionError;
+    if (checkingVersions && !versionChecked) return "Checking update feed...";
+    if (latestVersions?.[key])
+      return `Latest available: v${latestVersions[key]}`;
+    return "Version reported by this installation.";
   };
 
   const settingsSections = [
@@ -185,6 +276,33 @@ export const Settings: React.FC = () => {
           },
         ]
       : []),
+    {
+      title: "Updates",
+      icon: RefreshCw,
+      description: "Check whether this deployment is up to date.",
+      items: [
+        {
+          label: "Frontend",
+          value: versionStatusText("frontend"),
+          description: versionDescription("frontend"),
+        },
+        {
+          label: "Backend",
+          value: versionStatusText("backend"),
+          description: versionDescription("backend"),
+        },
+        {
+          label: "Check for Updates",
+          value: "",
+          action: checkingVersions ? "Checking..." : "Check now",
+          onAction: handleCheckVersions,
+          actionDisabled: checkingVersions,
+          description:
+            versionError ??
+            "Fetches latest version tags from tma-cloud.github.io",
+        },
+      ],
+    },
   ];
 
   return (
