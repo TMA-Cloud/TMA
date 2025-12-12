@@ -1,6 +1,7 @@
 const promClient = require('prom-client');
 const { logger } = require('../config/logger');
 const { getBoss } = require('./auditLogger');
+const pool = require('../config/db');
 
 // Create a registry for metrics
 const register = new promClient.Registry();
@@ -145,18 +146,32 @@ function recordProcessingDuration(durationSeconds) {
  */
 async function updateQueueMetrics() {
   try {
-    const boss = getBoss();
-    if (!boss) {
-      return;
-    }
+    // pg-boss v10+ removed getQueueSize; query job table directly
+    const schema = process.env.PGBOSS_SCHEMA || 'pgboss';
+    const queueName = 'audit-events';
 
-    // Get queue statistics from pg-boss
-    const queueSize = await boss.getQueueSize('audit-events');
+    const pendingQuery = `
+      SELECT COUNT(*)::int AS count
+      FROM "${schema}".job
+      WHERE name = $1
+        AND state IN ('created', 'retry')
+    `;
+    const failedQuery = `
+      SELECT COUNT(*)::int AS count
+      FROM "${schema}".job
+      WHERE name = $1
+        AND state = 'failed'
+    `;
+
+    const [pendingResult, failedResult] = await Promise.all([
+      pool.query(pendingQuery, [queueName]),
+      pool.query(failedQuery, [queueName]),
+    ]);
+
+    const queueSize = pendingResult.rows[0]?.count || 0;
+    const failedCount = failedResult.rows[0]?.count || 0;
 
     auditQueueDepth.set(queueSize);
-
-    // Get failed job count
-    const failedCount = await boss.getQueueSize('audit-events', { state: 'failed' });
     auditQueueFailedDepth.set(failedCount);
 
     logger.debug({ queueSize, failedCount }, 'Updated queue metrics');

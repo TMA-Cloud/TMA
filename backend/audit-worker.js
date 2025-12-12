@@ -20,7 +20,9 @@
  */
 
 require('dotenv').config();
-const PgBoss = require('pg-boss');
+// pg-boss v12 is ESM; normalize constructor for CommonJS
+const PgBossModule = require('pg-boss');
+const PgBoss = PgBossModule?.default || PgBossModule?.PgBoss || PgBossModule;
 const { Pool } = require('pg');
 const pino = require('pino');
 const {
@@ -228,6 +230,18 @@ async function initializeWorker() {
   try {
     logger.info('Starting audit worker...');
 
+    // Ensure schema exists before pg-boss migrations run
+    const schema = process.env.PGBOSS_SCHEMA || 'pgboss';
+    const pool = new Pool({
+      host: process.env.DB_HOST || 'localhost',
+      port: parseInt(process.env.DB_PORT || '5432'),
+      database: process.env.DB_NAME || 'cloud_store',
+      user: process.env.DB_USER || 'postgres',
+      password: process.env.DB_PASSWORD || 'postgres',
+    });
+    await pool.query(`CREATE SCHEMA IF NOT EXISTS "${schema}"`);
+    await pool.end();
+
     // Initialize pg-boss
     boss = new PgBoss({
       host: process.env.DB_HOST || 'localhost',
@@ -235,8 +249,9 @@ async function initializeWorker() {
       database: process.env.DB_NAME || 'cloud_store',
       user: process.env.DB_USER || 'postgres',
       password: process.env.DB_PASSWORD || 'postgres',
-      schema: 'pgboss',
+      schema,
       max: 10,
+      migrate: true,
     });
 
     boss.on('error', (error) => {
@@ -244,13 +259,25 @@ async function initializeWorker() {
     });
 
     await boss.start();
+    // Queues must be created before sending/working in pg-boss v10+
+    await boss.createQueue(AUDIT_QUEUE, {
+      retryLimit: 3,
+      retryDelay: 60,
+      retryBackoff: true,
+      retentionDays: 30,
+    });
     logger.info('pg-boss started successfully');
 
     // Subscribe to audit events queue
     await boss.work(
       AUDIT_QUEUE,
-      { teamSize: CONCURRENCY, teamConcurrency: CONCURRENCY },
-      processAuditEvent
+      { batchSize: CONCURRENCY },
+      async (jobs) => {
+        // Handler now receives an array in pg-boss v10+
+        for (const job of jobs) {
+          await processAuditEvent(job);
+        }
+      }
     );
 
     logger.info(

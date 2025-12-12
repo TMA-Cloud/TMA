@@ -1,4 +1,7 @@
-const PgBoss = require('pg-boss');
+// pg-boss v12 is ESM; normalize constructor for CommonJS
+const PgBossModule = require('pg-boss');
+const PgBoss = PgBossModule?.default || PgBossModule?.PgBoss || PgBossModule;
+const { Pool } = require('pg');
 const { logger } = require('../config/logger');
 const { getRequestId, getUserId } = require('../middleware/requestId.middleware');
 
@@ -21,15 +24,28 @@ async function initializeAuditQueue() {
   }
 
   try {
+    // Ensure schema exists before pg-boss migrations run
+    const schema = process.env.PGBOSS_SCHEMA || 'pgboss';
+    const pool = new Pool({
+      host: process.env.DB_HOST || 'localhost',
+      port: parseInt(process.env.DB_PORT || '5432'),
+      database: process.env.DB_NAME || 'cloud_store',
+      user: process.env.DB_USER || 'postgres',
+      password: process.env.DB_PASSWORD || 'postgres',
+    });
+    await pool.query(`CREATE SCHEMA IF NOT EXISTS "${schema}"`);
+    await pool.end();
+
     boss = new PgBoss({
       host: process.env.DB_HOST || 'localhost',
       port: parseInt(process.env.DB_PORT || '5432'),
       database: process.env.DB_NAME || 'cloud_store',
       user: process.env.DB_USER || 'postgres',
       password: process.env.DB_PASSWORD || 'postgres',
-      schema: 'pgboss',
+      schema,
       // Connection pool settings
       max: 10,
+      migrate: true, // ensure schema/tables are built
       // Archiving settings
       archiveCompletedAfterSeconds: 60 * 60 * 24, // Archive after 24 hours
       deleteArchivedJobsAfterDays: 30, // Delete archives after 30 days
@@ -42,6 +58,13 @@ async function initializeAuditQueue() {
     });
 
     await boss.start();
+    // Queues must be created explicitly in pg-boss v10+
+    await boss.createQueue(AUDIT_QUEUE, {
+      retryLimit: 3,
+      retryDelay: 60,
+      retryBackoff: true,
+      retentionDays: 30,
+    });
     isInitialized = true;
     logger.info('Audit queue initialized successfully');
 
