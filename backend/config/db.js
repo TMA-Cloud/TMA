@@ -8,7 +8,7 @@ const pool = new Pool({
   port: Number(process.env.DB_PORT) || 5432,
   user: process.env.DB_USER || 'postgres',
   password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME || 'cloud_storage',
+  database: process.env.DB_NAME || 'cloud_store',
   ssl: process.env.DB_SSLMODE === 'require' ? { rejectUnauthorized: false } : false
 });
 
