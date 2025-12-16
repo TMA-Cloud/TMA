@@ -354,7 +354,9 @@ export const Settings: React.FC = () => {
             <p className="text-xs text-gray-500/80 dark:text-gray-400/80">
               {loading || !usage
                 ? "Calculating storage details..."
-                : `${formatFileSize(usage.used)} used · ${formatFileSize(usage.free)} free of ${formatFileSize(usage.total)}`}
+                : usage.used > 0
+                  ? `${formatFileSize(usage.used)} used · ${formatFileSize(usage.free)} free of ${formatFileSize(usage.total)}`
+                  : `${formatFileSize(usage.free)} free of ${formatFileSize(usage.total)}`}
             </p>
           </div>
         </div>
