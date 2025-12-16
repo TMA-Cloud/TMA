@@ -13,6 +13,7 @@ This page contains the complete gallery of all available UI screenshots.
 - [Shared & Starred Files](#shared--starred-files)
 - [Settings](#settings)
 - [Registered Users](#registered-users)
+- [Admin & Check Updates Section](#admin--check-updates)
 
 ---
 
@@ -75,3 +76,11 @@ This page contains the complete gallery of all available UI screenshots.
 ## Registered Users
 
 ![Registered Users](images/all-users.png)
+
+---
+
+## Admin & Check Updates
+
+| Admin                              | Check Updates                              |
+|------------------------------------|--------------------------------------------|
+| ![Admin](images/admin-section.png) | ![File Manager](images/update-section.png) |
