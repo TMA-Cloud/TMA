@@ -55,6 +55,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
           return;
         }
 
+        // Only fetch files if we're on a file manager page
+        const currentPage = currentPath[0];
+        const isFileManagerPage =
+          currentPage === "My Files" ||
+          currentPage === "Shared" ||
+          currentPage === "Starred" ||
+          currentPage === "Trash";
+
+        if (!isFileManagerPage) {
+          return;
+        }
+
         const parentId = folderStack[folderStack.length - 1];
         let urlPath = `/api/files`;
         if (currentPath[0] === "Starred" && folderStack.length === 1) {
@@ -68,7 +80,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         const url = new URL(urlPath, window.location.origin);
         if (parentId) url.searchParams.append("parentId", parentId);
         url.searchParams.append("sortBy", sortBy);
-        url.searchParams.append("order", sortOrder);
+        // Only append order if it has a valid value, and convert to uppercase for backend
+        if (sortOrder && sortOrder.trim()) {
+          url.searchParams.append("order", sortOrder.toUpperCase());
+        }
         const res = await fetch(url.toString(), { credentials: "include" });
         const data: FileItemResponse[] = await res.json();
         setFiles(
@@ -208,7 +223,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
 
   useEffect(() => {
     // Only refresh files when not searching and searchQuery is empty
-    if (searchQuery.trim().length === 0) {
+    // Also check if we're on a file manager page to avoid unnecessary calls
+    const currentPage = currentPath[0];
+    const isFileManagerPage =
+      currentPage === "My Files" ||
+      currentPage === "Shared" ||
+      currentPage === "Starred" ||
+      currentPage === "Trash";
+
+    if (searchQuery.trim().length === 0 && isFileManagerPage) {
       void refreshFiles(true); // Force refresh when navigating/filtering
     }
   }, [folderStack, currentPath, sortBy, sortOrder, searchQuery, refreshFiles]);
