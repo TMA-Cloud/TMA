@@ -415,7 +415,10 @@ export const FileManager: React.FC = () => {
   };
 
   return (
-    <div className={`${isMobile ? "p-3" : "p-6"} space-y-6`} ref={managerRef}>
+    <div
+      className={`${isMobile ? "p-3" : "p-6 md:p-8"} space-y-6 md:space-y-8`}
+      ref={managerRef}
+    >
       {/* Multi-Select Mode Indicator (Mobile Only) */}
       {isMobile && multiSelectMode && (
         <MultiSelectIndicator
@@ -429,7 +432,7 @@ export const FileManager: React.FC = () => {
 
       {/* Header */}
       <div
-        className={`${isMobile ? "flex-col space-y-3 px-3 py-3" : "flex items-center justify-between px-6 py-4"} rounded-2xl bg-white/80 dark:bg-gray-900/80 shadow-md mb-2 transition-all duration-300 backdrop-blur-lg border border-gray-200/50 dark:border-gray-700/50 animate-slideDown`}
+        className={`${isMobile ? "flex-col space-y-3 px-3 py-3" : "flex items-center justify-between px-6 py-4"} rounded-xl card-premium mb-4 transition-all duration-200 animate-slideDown`}
       >
         <div className={`${isMobile ? "w-full" : "flex-1 min-w-0"}`}>
           <Breadcrumbs />

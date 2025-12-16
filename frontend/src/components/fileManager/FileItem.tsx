@@ -121,16 +121,16 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
       <div
         data-file-id={file.id}
         className={`
-          stagger-item group relative rounded-2xl border-2 cursor-pointer
-          transition-all duration-300 ease-out transform-gpu
-          hover:shadow-2xl hover:scale-[1.03] will-change-transform backdrop-blur-md hover:z-20
+          stagger-item group relative rounded-xl border cursor-pointer
+          transition-all duration-200 ease-out transform-gpu
+          hover-lift will-change-transform hover:z-20
           active:scale-[0.98]
           ${isMobile ? "min-w-0 w-full p-2 select-none" : "p-4 min-w-0"}
           overflow-hidden
           ${
             isSelected
-              ? "border-blue-500 bg-gradient-to-br from-blue-100/80 to-blue-200/60 dark:from-blue-900/40 dark:to-blue-800/30 shadow-lg"
-              : "border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-800/80 hover:border-blue-300 dark:hover:border-blue-600 hover:bg-gradient-to-br hover:from-blue-50/60 hover:to-blue-100/40 dark:hover:from-blue-900/20 dark:hover:to-blue-800/10"
+              ? "border-blue-500 dark:border-blue-400 bg-blue-50/80 dark:bg-blue-900/30 shadow-lg ring-2 ring-blue-500/30 dark:ring-blue-400/30"
+              : "border-gray-200/50 dark:border-slate-700/50 bg-white dark:bg-slate-800/50 hover:border-blue-300/50 dark:hover:border-blue-600/50 hover:bg-gray-50/80 dark:hover:bg-slate-800/80"
           }
           ${isDragOver ? "ring-4 ring-blue-400 ring-offset-2 scale-105" : ""}
         `}
@@ -152,26 +152,26 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
           className={`flex flex-col items-center text-center w-full min-w-0 ${isMobile ? "gap-1" : ""}`}
         >
           <div
-            className={`relative ${isMobile ? "mb-1" : "mb-2"} transition-transform duration-300 group-hover:scale-110 flex-shrink-0`}
+            className={`relative ${isMobile ? "mb-1" : "mb-2"} transition-transform duration-200 group-hover:scale-105 flex-shrink-0`}
           >
             <FileIcon
               file={file}
-              className={`${isMobile ? "w-10 h-10" : "w-14 h-14"} drop-shadow-md transition-all duration-300 ${file.type === "folder" ? "text-blue-500 group-hover:text-blue-600" : "text-gray-600 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-300"}`}
+              className={`${isMobile ? "w-10 h-10" : "w-14 h-14"} transition-all duration-200 ${file.type === "folder" ? "text-blue-500 dark:text-blue-400 group-hover:text-blue-600 dark:group-hover:text-blue-300" : "text-gray-600/80 dark:text-gray-400/80 group-hover:text-gray-700 dark:group-hover:text-gray-300"}`}
             />
             {file.starred && (
               <Star
-                className={`absolute -top-1 -right-1 ${isMobile ? "w-3 h-3" : "w-5 h-5"} text-yellow-400 drop-shadow animate-bounceIn fill-yellow-400`}
+                className={`absolute -top-1 -right-1 ${isMobile ? "w-3 h-3" : "w-5 h-5"} text-yellow-400 fill-yellow-400`}
               />
             )}
             {file.shared && (
               <Share2
-                className={`absolute -top-1 -left-1 ${isMobile ? "w-3 h-3" : "w-5 h-5"} text-green-400 drop-shadow animate-bounceIn`}
+                className={`absolute -top-1 -left-1 ${isMobile ? "w-3 h-3" : "w-5 h-5"} text-green-400`}
               />
             )}
             {/* Quick preview icon on hover for files */}
             {file.type === "file" && !isMobile && (
               <button
-                className="absolute -bottom-3 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 scale-75 group-hover:scale-100 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-full p-1.5 shadow-lg hover:shadow-xl hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:border-blue-400 transition-all duration-300 hover:scale-110"
+                className="absolute -bottom-3 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 scale-90 group-hover:scale-100 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-full p-1.5 shadow-lg hover:shadow-xl hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:border-blue-400 transition-all duration-200"
                 tabIndex={-1}
                 title="Quick preview"
                 onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
@@ -190,7 +190,7 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
                 text={formatFileNameForTooltip(file.name, isMobile ? 20 : 35)}
               >
                 <p
-                  className={`${isMobile ? "text-xs" : "text-base"} font-semibold text-gray-900 dark:text-gray-100 w-full break-words`}
+                  className={`${isMobile ? "text-xs" : "text-base"} font-semibold text-gray-900 dark:text-gray-100 w-full break-words transition-colors duration-200`}
                   style={{
                     display: "-webkit-box",
                     WebkitLineClamp: 2,
@@ -212,7 +212,7 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
           </div>
 
           <div
-            className={`${isMobile ? "text-[10px]" : "text-xs"} text-gray-500 dark:text-gray-400 w-full min-w-0 px-1`}
+            className={`${isMobile ? "text-[10px]" : "text-xs"} text-gray-500/80 dark:text-gray-400/80 w-full min-w-0 px-1`}
           >
             {file.type === "file" && file.size && (
               <p className="truncate">{formatFileSize(file.size)}</p>
@@ -228,14 +228,14 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
     <div
       data-file-id={file.id}
       className={`
-        stagger-item group flex items-center space-x-3 p-3 rounded-xl cursor-pointer
-        transition-all duration-300 ease-out transform-gpu
-        hover:shadow-lg hover:scale-[1.01] active:scale-[0.99]
+        stagger-item group flex items-center space-x-3 p-3.5 rounded-lg cursor-pointer
+        transition-all duration-200 ease-out transform-gpu
+        hover-lift active:scale-[0.99]
         ${isMobile ? "select-none" : ""}
         ${
           isSelected
-            ? "bg-blue-50 dark:bg-blue-900/20 shadow-md border-l-4 border-blue-500"
-            : "hover:bg-blue-50/60 dark:hover:bg-blue-900/30 hover:bg-gradient-to-r hover:from-blue-50/60 hover:to-blue-100/40 dark:hover:from-blue-900/20 dark:hover:to-blue-800/10"
+            ? "bg-blue-50/90 dark:bg-blue-900/30 shadow-md border-l-4 border-blue-500 dark:border-blue-400 ring-2 ring-blue-500/20 dark:ring-blue-400/20"
+            : "hover:bg-gray-50/80 dark:hover:bg-slate-800/60 border-l-4 border-transparent"
         }
         ${isDragOver ? "ring-4 ring-blue-400 ring-offset-2 scale-[1.02]" : ""}
       `}
@@ -252,21 +252,21 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
       onTouchEnd={handleTouchEnd}
       onTouchMove={handleTouchMove}
     >
-      <div className="relative flex-shrink-0 transition-transform duration-300 group-hover:scale-110">
+      <div className="relative flex-shrink-0 transition-transform duration-200 group-hover:scale-105">
         <FileIcon
           file={file}
-          className={`w-10 h-10 drop-shadow-md transition-all duration-300 ${file.type === "folder" ? "text-blue-500 group-hover:text-blue-600" : "text-gray-600 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-300"}`}
+          className={`w-10 h-10 transition-all duration-200 ${file.type === "folder" ? "text-blue-500 dark:text-blue-400 group-hover:text-blue-600 dark:group-hover:text-blue-300" : "text-gray-600/80 dark:text-gray-400/80 group-hover:text-gray-700 dark:group-hover:text-gray-300"}`}
         />
         {file.starred && (
-          <Star className="absolute -top-2 -right-2 w-4 h-4 text-yellow-400 drop-shadow animate-bounceIn fill-yellow-400" />
+          <Star className="absolute -top-2 -right-2 w-4 h-4 text-yellow-400 fill-yellow-400" />
         )}
         {file.shared && (
-          <Share2 className="absolute -top-2 -left-2 w-4 h-4 text-green-400 drop-shadow animate-bounceIn" />
+          <Share2 className="absolute -top-2 -left-2 w-4 h-4 text-green-400" />
         )}
         {/* Quick preview icon on hover for files */}
         {file.type === "file" && (
           <button
-            className="absolute -bottom-3 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 scale-75 group-hover:scale-100 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-full p-1 shadow-lg hover:shadow-xl hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:border-blue-400 transition-all duration-300"
+            className="absolute -bottom-3 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 scale-90 group-hover:scale-100 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-full p-1 shadow-lg hover:shadow-xl hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:border-blue-400 transition-all duration-200"
             tabIndex={-1}
             title="Quick preview"
             onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
@@ -285,7 +285,7 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
             text={formatFileNameForTooltip(file.name, isMobile ? 25 : 40)}
           >
             <p
-              className="text-base font-semibold text-gray-900 dark:text-gray-100 transition-colors duration-200 break-words"
+              className="text-base font-semibold text-gray-900 dark:text-gray-100 transition-colors duration-200 break-words leading-tight"
               style={{
                 wordBreak: "break-word",
                 overflowWrap: "break-word",
@@ -297,7 +297,7 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
             </p>
           </Tooltip>
         </div>
-        <p className="text-xs text-gray-500 dark:text-gray-400 transition-colors duration-200">
+        <p className="text-xs text-gray-500/80 dark:text-gray-400/80 transition-colors duration-200">
           {file.type === "file" &&
             file.size &&
             `${formatFileSize(file.size)} • `}

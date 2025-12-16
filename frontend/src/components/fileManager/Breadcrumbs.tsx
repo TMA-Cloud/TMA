@@ -23,9 +23,9 @@ export const Breadcrumbs: React.FC = () => {
     >
       <button
         onClick={() => setCurrentPath(["My Files"], [null])}
-        className={`flex items-center ${isMobile ? "flex-shrink-0" : "space-x-1"} text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200`}
+        className={`flex items-center ${isMobile ? "flex-shrink-0" : "space-x-1"} text-gray-500/80 hover:text-gray-700 dark:text-gray-400/80 dark:hover:text-gray-200 transition-colors duration-200`}
       >
-        <Home className="w-4 h-4" />
+        <Home className="w-4 h-4 icon-muted" />
       </button>
 
       {shouldTruncate && (
@@ -47,17 +47,17 @@ export const Breadcrumbs: React.FC = () => {
         return (
           <React.Fragment key={index}>
             <ChevronRight
-              className={`w-4 h-4 text-gray-400 ${isMobile ? "flex-shrink-0" : ""}`}
+              className={`w-4 h-4 text-gray-400/60 icon-muted ${isMobile ? "flex-shrink-0" : ""}`}
             />
             <button
               onClick={() => handleNavigation(actualIndex)}
               className={`
                 ${isMobile ? "flex-shrink-0 whitespace-nowrap" : ""}
-                hover:text-gray-700 dark:hover:text-gray-200 transition-colors
+                hover:text-gray-700 dark:hover:text-gray-200 transition-colors duration-200
                 ${
                   actualIndex === currentPath.length - 1
-                    ? "text-gray-900 dark:text-gray-100 font-medium"
-                    : "text-gray-500 dark:text-gray-400"
+                    ? "text-gray-900 dark:text-gray-100 font-semibold"
+                    : "text-gray-500/80 dark:text-gray-400/80"
                 }
               `}
             >

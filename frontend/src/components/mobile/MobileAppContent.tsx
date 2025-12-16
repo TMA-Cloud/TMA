@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useApp } from "../../contexts/AppContext";
 import { useAuth } from "../../contexts/AuthContext";
 import { FileManager } from "../fileManager/FileManager";
@@ -20,6 +20,7 @@ import {
   HardDrive,
   Upload,
   LogOut,
+  ChevronDown,
 } from "lucide-react";
 
 const navItems = [
@@ -34,6 +35,8 @@ const navItems = [
 export const MobileAppContent: React.FC = () => {
   const { currentPath, setCurrentPath, setUploadModalOpen } = useApp();
   const { user, logout } = useAuth();
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   const currentPage = currentPath[0];
 
@@ -65,12 +68,32 @@ export const MobileAppContent: React.FC = () => {
       .toUpperCase();
   };
 
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node)
+      ) {
+        setDropdownOpen(false);
+      }
+    };
+
+    if (dropdownOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [dropdownOpen]);
+
   return (
-    <div className="h-screen w-screen flex flex-col bg-gradient-to-b from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-950">
+    <div className="h-screen w-screen flex flex-col bg-gray-50 dark:bg-slate-900">
       {/* Compact top bar */}
-      <header className="px-4 py-3 flex items-center justify-between bg-white/90 dark:bg-gray-900/90 border-b border-gray-200 dark:border-gray-800 shadow-sm">
+      <header className="px-4 py-3 flex items-center justify-between bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-b border-gray-200/50 dark:border-slate-800/50 shadow-sm">
         <div className="flex items-center space-x-2">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-md">
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-lg transition-all duration-200">
             <HardDrive className="w-5 h-5 text-white" />
           </div>
           <div className="flex flex-col">
@@ -86,20 +109,53 @@ export const MobileAppContent: React.FC = () => {
         <div className="flex items-center space-x-2">
           <button
             onClick={() => setUploadModalOpen(true)}
-            className="inline-flex items-center justify-center rounded-full bg-blue-500 text-white w-9 h-9 shadow-md active:scale-95 transition"
+            className="inline-flex items-center justify-center rounded-full bg-blue-500 hover:bg-blue-600 text-white w-9 h-9 shadow-lg hover:shadow-xl transition-all duration-200 active:scale-95"
             aria-label="Upload"
           >
-            <Upload className="w-4 h-4" />
+            <Upload className="w-4 h-4 transition-transform duration-200" />
           </button>
-          <button
-            onClick={logout}
-            className="inline-flex items-center justify-center rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 w-9 h-9 active:scale-95 transition"
-            aria-label="Logout"
-          >
-            <LogOut className="w-4 h-4" />
-          </button>
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-xs font-bold text-white">
-            {getInitials(user?.name)}
+
+          {/* Profile Dropdown */}
+          <div className="relative" ref={dropdownRef}>
+            <button
+              onClick={() => setDropdownOpen(!dropdownOpen)}
+              className="flex items-center space-x-1 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 rounded-lg p-1 transition-all duration-200"
+            >
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-xs font-bold text-white shadow-lg transition-all duration-200">
+                {getInitials(user?.name)}
+              </div>
+              <ChevronDown
+                className={`w-3 h-3 text-gray-500 dark:text-gray-400 transition-transform duration-300 ease-in-out ${
+                  dropdownOpen ? "rotate-180" : ""
+                }`}
+              />
+            </button>
+
+            {/* Dropdown Menu */}
+            {dropdownOpen && (
+              <>
+                {/* Backdrop */}
+                <div
+                  className="fixed inset-0 bg-black/5 dark:bg-black/20 backdrop-blur-sm animate-fadeIn z-40"
+                  onClick={() => setDropdownOpen(false)}
+                />
+                {/* Dropdown */}
+                <div className="absolute right-0 mt-2 w-40 bg-white/95 dark:bg-slate-800/95 backdrop-blur-xl rounded-xl shadow-2xl border border-gray-200/50 dark:border-slate-700/50 py-1 z-50 overflow-hidden animate-menuIn">
+                  <button
+                    onClick={() => {
+                      logout();
+                      setDropdownOpen(false);
+                    }}
+                    className="w-full flex items-center space-x-3 px-4 py-2.5 text-left text-gray-700 dark:text-gray-300 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 dark:hover:text-red-400 transition-all duration-200 group rounded-lg mx-1"
+                  >
+                    <LogOut className="w-4 h-4 transition-transform duration-200 group-hover:scale-110 group-hover:-translate-x-0.5" />
+                    <span className="text-sm font-medium transition-colors duration-200">
+                      Log out
+                    </span>
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </header>
@@ -110,7 +166,7 @@ export const MobileAppContent: React.FC = () => {
       </main>
 
       {/* Bottom navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-gray-900/95 border-t border-gray-200 dark:border-gray-800 shadow-2xl shadow-black/10">
+      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-t border-gray-200/50 dark:border-slate-800/50 shadow-2xl">
         <div className="flex justify-around py-1.5 px-1">
           {navItems.map((item) => {
             const Icon = item.icon;
@@ -119,22 +175,26 @@ export const MobileAppContent: React.FC = () => {
               <button
                 key={item.id}
                 onClick={() => handleNavClick(item.id)}
-                className="flex flex-col items-center flex-1 px-1 py-1 rounded-xl active:scale-95 transition"
+                className="group flex flex-col items-center flex-1 px-1 py-1 rounded-xl active:scale-95 transition-all duration-200"
               >
                 <div
-                  className={`flex items-center justify-center w-9 h-9 rounded-full text-xs ${
+                  className={`flex items-center justify-center w-9 h-9 rounded-full text-xs transition-all duration-200 ${
                     active
-                      ? "bg-blue-500 text-white shadow-md"
-                      : "text-gray-500 dark:text-gray-400"
+                      ? "bg-blue-500/20 dark:bg-blue-500/30 text-blue-600 dark:text-blue-300 shadow-md"
+                      : "text-gray-500/80 dark:text-gray-400/80"
                   }`}
                 >
-                  <Icon className="w-4 h-4" />
+                  <Icon
+                    className={`w-4 h-4 transition-all duration-200 ${
+                      active ? "icon-rotate-active" : "icon-rotate-on-hover"
+                    }`}
+                  />
                 </div>
                 <span
-                  className={`mt-0.5 text-[10px] font-medium ${
+                  className={`mt-0.5 text-[10px] font-medium transition-colors duration-200 ${
                     active
-                      ? "text-blue-600 dark:text-blue-400"
-                      : "text-gray-500 dark:text-gray-400"
+                      ? "text-blue-600 dark:text-blue-400 font-semibold"
+                      : "text-gray-500/80 dark:text-gray-400/80"
                   }`}
                 >
                   {item.label}

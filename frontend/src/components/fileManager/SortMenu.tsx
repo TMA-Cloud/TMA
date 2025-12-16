@@ -47,7 +47,7 @@ export const SortMenu: React.FC<SortMenuProps> = ({
       <Tooltip text="Sort">
         <button
           ref={sortButtonRef}
-          className="p-2 rounded-xl text-gray-500 hover:text-purple-600 dark:text-gray-400 dark:hover:text-purple-400 shadow-sm transition-all duration-300 hover:scale-110 active:scale-95 hover:bg-purple-50 dark:hover:bg-purple-900/20 hover:shadow-md"
+          className="p-2.5 rounded-xl text-gray-500/80 hover:text-purple-600 dark:text-gray-400/80 dark:hover:text-purple-400 transition-all duration-200 hover-lift hover:bg-purple-50/50 dark:hover:bg-purple-900/20"
           aria-label="Sort"
           onClick={() => {
             if (!showSortMenu && sortButtonRef.current) {
@@ -60,7 +60,7 @@ export const SortMenu: React.FC<SortMenuProps> = ({
             setShowSortMenu((s) => !s);
           }}
         >
-          <SortAsc className="w-5 h-5 transition-transform duration-300" />
+          <SortAsc className="w-5 h-5 transition-transform duration-200 icon-muted" />
         </button>
       </Tooltip>
       {showSortMenu &&
@@ -68,13 +68,13 @@ export const SortMenu: React.FC<SortMenuProps> = ({
           <>
             {/* Overlay */}
             <div
-              className="fixed inset-0 bg-white/30 dark:bg-white/10 transition-opacity duration-300 ease-in-out animate-fadeIn z-[9998]"
+              className="fixed inset-0 bg-black/5 dark:bg-black/20 backdrop-blur-sm transition-opacity duration-200 ease-in-out animate-fadeIn z-[9998]"
               onClick={() => setShowSortMenu(false)}
             />
             {/* Sort menu */}
             <div
               ref={sortMenuRef}
-              className="fixed w-48 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl z-[9999] animate-menuIn"
+              className="fixed w-48 bg-white/95 dark:bg-slate-800/95 backdrop-blur-xl border border-gray-200/50 dark:border-slate-700/50 rounded-xl shadow-2xl z-[9999] animate-menuIn"
               style={{
                 top: `${sortMenuPos.top}px`,
                 right: `${sortMenuPos.right}px`,
@@ -89,10 +89,10 @@ export const SortMenu: React.FC<SortMenuProps> = ({
                     onSortChange(opt.by, opt.order);
                     setShowSortMenu(false);
                   }}
-                  className={`flex items-center w-full px-3 py-2 text-sm text-left transition-all duration-200 hover:bg-gray-100 dark:hover:bg-gray-700 hover:pl-4 ${
+                  className={`flex items-center w-full px-4 py-2.5 text-sm text-left transition-all duration-200 rounded-lg mx-1 ${
                     sortBy === opt.by && sortOrder === opt.order
-                      ? "bg-gray-100 dark:bg-gray-700 font-semibold"
-                      : ""
+                      ? "bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-semibold"
+                      : "text-gray-700 dark:text-gray-300 hover:bg-gray-100/80 dark:hover:bg-slate-700/50"
                   }`}
                 >
                   {sortBy === opt.by && sortOrder === opt.order && (

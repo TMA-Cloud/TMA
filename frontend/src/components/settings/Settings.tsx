@@ -306,55 +306,52 @@ export const Settings: React.FC = () => {
   ];
 
   return (
-    <div className="p-6 md:p-8 space-y-8 bg-gradient-to-b from-gray-50/60 to-white dark:from-gray-900/40 dark:to-gray-950/60 rounded-3xl">
+    <div className="p-6 md:p-8 space-y-8">
       {/* Hero / Header */}
       <div
-        className="relative overflow-hidden border border-gray-200/70 dark:border-gray-800/70 rounded-2xl bg-white/80 dark:bg-gray-900/70 shadow-sm"
+        className="relative overflow-hidden card-premium hover-lift spacing-card"
         style={{ animation: "fadeIn 0.45s ease both" }}
       >
-        <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 via-transparent to-purple-500/10" />
-        <div className="absolute -top-10 -right-10 w-40 h-40 bg-blue-500/20 blur-3xl pointer-events-none" />
-        <div className="relative flex flex-col gap-6 p-6 md:flex-row md:items-center md:justify-between">
-          <div className="space-y-2">
-            <p className="uppercase tracking-[0.35em] text-xs font-semibold text-blue-500">
+        <div className="relative flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+          <div className="space-y-3">
+            <p className="uppercase tracking-[0.35em] text-xs font-semibold text-blue-500/80">
               Control Center
             </p>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
+            <h1 className="text-4xl md:text-5xl font-bold text-gray-900 dark:text-gray-100 tracking-tight">
               Settings
             </h1>
-            <p className="text-gray-600 dark:text-gray-400 max-w-2xl">
-              Manage your account preferences and smoothly adjust application
-              controls without leaving this page.
+            <p className="text-base md:text-lg text-gray-600/80 dark:text-gray-400/80 max-w-2xl">
+              Manage your account preferences and adjust application controls
             </p>
             {user?.name && (
-              <div className="inline-flex items-center gap-2 mt-3 px-3 py-1.5 rounded-full bg-blue-500/10 text-sm text-blue-700 dark:text-blue-200 border border-blue-500/20">
-                <User className="w-4 h-4" />
+              <div className="inline-flex items-center gap-2 mt-4 px-4 py-2 rounded-full bg-blue-50/80 dark:bg-blue-900/30 text-sm font-medium text-blue-700 dark:text-blue-200 border border-blue-200/50 dark:border-blue-800/50">
+                <User className="w-4 h-4 icon-muted" />
                 <span>Signed in as {user.name}</span>
               </div>
             )}
           </div>
 
           <div className="w-full md:w-1/2 space-y-3">
-            <div className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400">
+            <div className="flex items-center justify-between text-sm font-medium text-gray-700 dark:text-gray-300">
               <span>Storage usage</span>
-              <span>
+              <span className="font-semibold">
                 {storageUsagePercent !== null
                   ? `${storageUsagePercent}%`
                   : "Loading..."}
               </span>
             </div>
-            <div className="h-2 w-full rounded-full bg-gray-200/70 dark:bg-gray-800/60 overflow-hidden">
+            <div className="relative h-4 w-full rounded-full bg-gray-200/80 dark:bg-gray-700/80 overflow-hidden border border-gray-300/50 dark:border-gray-600/50 shadow-inner">
               <div
-                className="h-full rounded-full bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 transition-[width] duration-500"
+                className="h-full rounded-full bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 transition-[width] duration-300 shadow-sm"
                 style={{
                   width:
-                    storageUsagePercent !== null
-                      ? `${storageUsagePercent}%`
+                    storageUsagePercent !== null && storageUsagePercent > 0
+                      ? `${Math.max(storageUsagePercent, 1)}%`
                       : "0%",
                 }}
               />
             </div>
-            <p className="text-xs text-gray-500 dark:text-gray-400">
+            <p className="text-xs text-gray-500/80 dark:text-gray-400/80">
               {loading || !usage
                 ? "Calculating storage details..."
                 : `${formatFileSize(usage.used)} used · ${formatFileSize(usage.free)} free of ${formatFileSize(usage.total)}`}
@@ -371,24 +368,22 @@ export const Settings: React.FC = () => {
           return (
             <div
               key={index}
-              className="relative overflow-hidden bg-white/90 dark:bg-gray-900/70 rounded-2xl p-6 border border-gray-200/70 dark:border-gray-800/70 shadow-sm hover:shadow-lg transition-shadow duration-300"
+              className="relative overflow-hidden card-premium hover-lift spacing-card"
               style={{
                 animation: "slideUp 0.45s cubic-bezier(0.16, 1, 0.3, 1) both",
                 animationDelay: `${index * 80}ms`,
               }}
             >
-              <div className="absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-blue-500/40 to-transparent" />
-
-              <div className="flex flex-wrap items-center gap-3 mb-6">
-                <div className="p-3 rounded-2xl bg-blue-500/10 text-blue-600 dark:text-blue-300">
-                  <Icon className="w-5 h-5" />
+              <div className="flex flex-wrap items-center gap-4 mb-6">
+                <div className="p-3 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-300">
+                  <Icon className="w-5 h-5 icon-muted" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                  <h3 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-gray-100 tracking-tight mb-1">
                     {section.title}
                   </h3>
                   {"description" in section && section.description && (
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                    <p className="text-sm text-gray-500/80 dark:text-gray-400/80">
                       {section.description}
                     </p>
                   )}
@@ -418,7 +413,7 @@ export const Settings: React.FC = () => {
                           onClick={handleToggleSignup}
                           disabled={togglingSignup || loadingSignupStatus}
                           className={`
-                            relative inline-flex h-6 w-12 items-center rounded-full transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500
+                            relative inline-flex h-6 w-12 items-center rounded-full transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500
                             ${item.value ? "bg-gradient-to-r from-blue-500 to-indigo-500" : "bg-gray-200 dark:bg-gray-700"}
                             ${togglingSignup || loadingSignupStatus ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}
                           `}
@@ -426,7 +421,7 @@ export const Settings: React.FC = () => {
                         >
                           <span
                             className={`
-                              inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-300
+                              inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-200
                               ${item.value ? "translate-x-7" : "translate-x-1"}
                             `}
                           />

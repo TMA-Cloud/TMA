@@ -398,6 +398,50 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     onActionComplete,
   ]);
 
+  // Calculate adjusted position immediately (before render) to prevent "flying" effect
+  const calculateAdjustedPosition = useMemo(() => {
+    if (isMobile || !isOpen) {
+      return { x: position.x, y: position.y };
+    }
+
+    // Estimate menu dimensions (approximate)
+    const estimatedMenuWidth = 192; // min-w-48 = 12rem = 192px
+    const estimatedItemHeight = 40; // py-2.5 = ~40px per item
+    const estimatedHeaderHeight = 40; // header section
+    const estimatedMenuHeight =
+      estimatedHeaderHeight + menuItems.length * estimatedItemHeight;
+
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const padding = 8;
+    const cursorGap = 8; // Gap between cursor and menu when positioned to the left
+
+    let adjustedX = position.x;
+    let adjustedY = position.y;
+
+    // Check right edge overflow - move to left of cursor with spacing
+    if (position.x + estimatedMenuWidth + padding > viewportWidth) {
+      adjustedX = position.x - estimatedMenuWidth - cursorGap;
+    }
+
+    // Check left edge overflow (if we moved it left)
+    if (adjustedX < padding) {
+      adjustedX = padding;
+    }
+
+    // Check bottom edge overflow - move above cursor with spacing
+    if (position.y + estimatedMenuHeight + padding > viewportHeight) {
+      adjustedY = position.y - estimatedMenuHeight - cursorGap;
+    }
+
+    // Check top edge overflow (if we moved it up)
+    if (adjustedY < padding) {
+      adjustedY = padding;
+    }
+
+    return { x: adjustedX, y: adjustedY };
+  }, [isOpen, position, isMobile, menuItems.length]);
+
   useEffect(() => {
     if (!isOpen || isMobile) return;
 
@@ -501,21 +545,21 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     return (
       <>
         <div
-          className="fixed inset-0 z-50 flex flex-col justify-end bg-black/40 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex flex-col justify-end bg-black/20 dark:bg-black/40 backdrop-blur-sm animate-fadeIn"
           role="dialog"
           aria-modal="true"
           onClick={onClose}
         >
           <div
             ref={menuRef}
-            className="bg-white dark:bg-gray-900 rounded-t-2xl shadow-2xl pt-3 pb-4 px-4 max-h-[70vh] overflow-y-auto animate-slideUp"
+            className="bg-white/95 dark:bg-slate-800/95 backdrop-blur-xl rounded-t-2xl shadow-2xl pt-3 pb-4 px-4 max-h-[70vh] overflow-y-auto animate-slideUp"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-center mb-3">
-              <div className="h-1 w-10 rounded-full bg-gray-300 dark:bg-gray-700" />
+              <div className="h-1 w-10 rounded-full bg-gray-300/50 dark:bg-gray-700/50" />
             </div>
-            <div className="mb-2 text-center">
-              <p className="text-xs text-gray-500 dark:text-gray-400">
+            <div className="mb-3 text-center">
+              <p className="text-xs font-medium text-gray-500/80 dark:text-gray-400/80">
                 {selectedCount} item{selectedCount !== 1 ? "s" : ""} selected
               </p>
             </div>
@@ -532,21 +576,21 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                       }
                     }}
                     className={`
-                      w-full flex items-center justify-between px-3 py-3 rounded-xl
-                      text-sm
+                      w-full flex items-center justify-between px-4 py-3 rounded-lg
+                      text-sm transition-all duration-200
                       ${
                         item.disabled
                           ? "opacity-50 cursor-not-allowed text-gray-400 dark:text-gray-500"
                           : item.danger
-                            ? "text-red-600 dark:text-red-400 bg-red-50/70 dark:bg-red-900/20"
-                            : "text-gray-800 dark:text-gray-100 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700"
+                            ? "text-red-600 dark:text-red-400 bg-red-50/80 dark:bg-red-900/20 hover:bg-red-100/80 dark:hover:bg-red-900/30"
+                            : "text-gray-800 dark:text-gray-100 hover:bg-gray-100/80 dark:hover:bg-slate-700/50"
                       }
                     `}
                     disabled={item.disabled}
                   >
                     <div className="flex items-center space-x-3">
-                      <Icon className="w-5 h-5" />
-                      <span>{item.label}</span>
+                      <Icon className="w-5 h-5 icon-muted" />
+                      <span className="font-medium">{item.label}</span>
                     </div>
                   </button>
                 );
@@ -564,17 +608,17 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     <>
       <div
         ref={menuRef}
-        className="fixed z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-2xl py-2 min-w-48 transition-all duration-200 ease-out animate-menuIn focus:outline-none"
+        className="fixed z-50 bg-white/95 dark:bg-slate-800/95 backdrop-blur-xl border border-gray-200/50 dark:border-slate-700/50 rounded-2xl shadow-2xl py-2 min-w-48 animate-menuIn focus:outline-none"
         style={{
-          left: `${position.x}px`,
-          top: `${position.y}px`,
+          left: `${calculateAdjustedPosition.x}px`,
+          top: `${calculateAdjustedPosition.y}px`,
         }}
         tabIndex={-1}
         role="menu"
         aria-label="File actions menu"
       >
-        <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-700">
-          <p className="text-xs text-gray-500 dark:text-gray-400">
+        <div className="px-4 py-2.5 border-b border-gray-200/30 dark:border-slate-700/30">
+          <p className="text-xs font-medium text-gray-500/80 dark:text-gray-400/80">
             {selectedCount} item{selectedCount !== 1 ? "s" : ""} selected
           </p>
         </div>
@@ -592,18 +636,18 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                 }
               }}
               className={`
-                w-full flex items-center space-x-3 px-3 py-2 text-left
+                w-full flex items-center space-x-3 px-4 py-2.5 text-left
                 transition-all duration-150
-                rounded-md
+                rounded-lg
                 focus:outline-none
                 ${
                   item.disabled
                     ? "opacity-50 cursor-not-allowed text-gray-400 dark:text-gray-500"
                     : isFocused
-                      ? "bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300"
+                      ? "bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
                       : item.danger
-                        ? "text-red-600 dark:text-red-400"
-                        : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                        ? "text-red-600 dark:text-red-400 hover:bg-red-50/50 dark:hover:bg-red-900/20"
+                        : "text-gray-700 dark:text-gray-300 hover:bg-gray-100/80 dark:hover:bg-slate-700/50"
                 }
               `}
               disabled={item.disabled}
@@ -612,8 +656,8 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
               aria-selected={isFocused}
               onMouseEnter={() => setFocusedIndex(index)}
             >
-              <Icon className="w-4 h-4" />
-              <span className="text-sm">{item.label}</span>
+              <Icon className="w-4 h-4 icon-muted" />
+              <span className="text-sm font-medium">{item.label}</span>
             </button>
           );
         })}

@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { Menu, Search, Upload, LogOut, X } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
+import { Menu, Search, Upload, LogOut, X, ChevronDown } from "lucide-react";
 import { useApp } from "../../contexts/AppContext";
 import { useAuth } from "../../contexts/AuthContext";
 
@@ -14,12 +14,34 @@ export const Header: React.FC = () => {
   } = useApp();
   const { logout, user } = useAuth();
   const [scrolled, setScrolled] = useState(false);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8);
     window.addEventListener("scroll", onScroll);
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node)
+      ) {
+        setDropdownOpen(false);
+      }
+    };
+
+    if (dropdownOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [dropdownOpen]);
 
   // Helper for avatar
   const getInitials = (name?: string) => {
@@ -33,7 +55,7 @@ export const Header: React.FC = () => {
 
   return (
     <header
-      className={`bg-white/90 dark:bg-gray-900/90 border-b border-gray-200 dark:border-gray-800 px-4 sm:px-8 py-4 backdrop-blur-md transition-all duration-300 sticky top-0 z-40 ${scrolled ? "shadow-lg" : "shadow-md"}`}
+      className={`bg-white/95 dark:bg-slate-900/95 border-b border-gray-200/50 dark:border-slate-800/50 px-4 sm:px-8 py-4 backdrop-blur-xl transition-all duration-300 sticky top-0 z-40 ${scrolled ? "shadow-lg" : "shadow-sm"}`}
     >
       <div className="flex items-center justify-between">
         {/* Left section */}
@@ -77,33 +99,62 @@ export const Header: React.FC = () => {
         <div className="flex items-center space-x-1 sm:space-x-2">
           <button
             onClick={() => setUploadModalOpen(true)}
-            className="ripple flex items-center space-x-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-xl shadow-md hover:shadow-lg transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-blue-400 hover:scale-105 active:scale-95 transform"
+            className="ripple flex items-center space-x-2 px-5 py-2.5 bg-blue-500 hover:bg-blue-600 text-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 hover-lift font-semibold"
           >
-            <Upload className="w-4 h-4 transition-transform duration-300 group-hover:-translate-y-0.5" />
-            <span className="hidden sm:inline font-medium">Upload</span>
+            <Upload className="w-4 h-4 transition-transform duration-200" />
+            <span className="hidden sm:inline">Upload</span>
           </button>
 
-          <button
-            onClick={logout}
-            className="ripple p-2 text-gray-500 hover:text-red-500 dark:text-gray-400 dark:hover:text-red-400 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-red-400 hover:scale-110 active:scale-95"
-            aria-label="Logout"
-          >
-            <LogOut className="w-5 h-5 transition-transform duration-300" />
-          </button>
+          {/* Profile Dropdown */}
+          <div className="relative" ref={dropdownRef}>
+            <button
+              onClick={() => setDropdownOpen(!dropdownOpen)}
+              className="flex items-center space-x-2 p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2"
+            >
+              {/* Avatar: If you add avatarUrl to user in the future, use it here. For now, always show initials. */}
+              <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center shadow-lg text-white font-bold text-base transition-all duration-200 hover:shadow-xl">
+                {getInitials(user?.name) || "U"}
+              </div>
+              <div className="hidden sm:block text-left">
+                <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                  {user?.name || "Personal Cloud"}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  {user?.email || "Your Files"}
+                </p>
+              </div>
+              <ChevronDown
+                className={`w-4 h-4 text-gray-500 dark:text-gray-400 transition-transform duration-300 ease-in-out ${
+                  dropdownOpen ? "rotate-180" : ""
+                }`}
+              />
+            </button>
 
-          <div className="flex items-center space-x-2 p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer transition-all duration-300 hover:scale-105 active:scale-95">
-            {/* Avatar: If you add avatarUrl to user in the future, use it here. For now, always show initials. */}
-            <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center shadow-lg text-white font-bold text-base transition-all duration-300 hover:shadow-xl hover:from-blue-600 hover:to-blue-700">
-              {getInitials(user?.name) || "U"}
-            </div>
-            <div className="hidden sm:block">
-              <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                {user?.name || "Personal Cloud"}
-              </p>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                {user?.email || "Your Files"}
-              </p>
-            </div>
+            {/* Dropdown Menu */}
+            {dropdownOpen && (
+              <>
+                {/* Backdrop */}
+                <div
+                  className="fixed inset-0 z-40 bg-black/5 dark:bg-black/20 animate-fadeIn"
+                  onClick={() => setDropdownOpen(false)}
+                />
+                {/* Dropdown */}
+                <div className="absolute right-0 mt-2 w-48 bg-white/95 dark:bg-slate-800/95 backdrop-blur-xl rounded-xl shadow-2xl border border-gray-200/50 dark:border-slate-700/50 py-1 z-50 overflow-hidden animate-menuIn">
+                  <button
+                    onClick={() => {
+                      logout();
+                      setDropdownOpen(false);
+                    }}
+                    className="w-full flex items-center space-x-3 px-4 py-2.5 text-left text-gray-700 dark:text-gray-300 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 dark:hover:text-red-400 transition-all duration-200 group rounded-lg mx-1"
+                  >
+                    <LogOut className="w-4 h-4 transition-transform duration-200 group-hover:scale-110 group-hover:-translate-x-0.5" />
+                    <span className="text-sm font-medium transition-colors duration-200">
+                      Log out
+                    </span>
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>

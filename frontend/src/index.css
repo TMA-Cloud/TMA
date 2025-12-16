@@ -6,12 +6,13 @@
   --animate-modalIn: modalIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   --animate-menuIn: menuIn 0.15s cubic-bezier(0.16, 1, 0.3, 1);
   --animate-toastIn: toastIn 0.35s cubic-bezier(0.16, 1, 0.3, 1);
-  --animate-bounceIn: bounceIn 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+  --animate-bounceIn: fadeIn 0.2s ease-in-out;
   --animate-slideUp: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   --animate-slideDown: slideDown 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   --animate-scaleIn: scaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   --animate-shimmer: shimmer 1.5s ease-in-out infinite;
   --animate-actionGlow: actionGlow 2s ease-in-out infinite;
+  --animate-rotate360: rotate360 0.3s ease-in-out;
 }
 
 /* Custom Keyframes Definitions */
@@ -38,11 +39,11 @@
 @keyframes menuIn {
   0% {
     opacity: 0;
-    transform: scale(0.95);
+    transform: translateY(-8px) scale(0.95);
   }
   100% {
     opacity: 1;
-    transform: scale(1);
+    transform: translateY(0) scale(1);
   }
 }
 
@@ -59,15 +60,9 @@
 
 @keyframes bounceIn {
   0% {
-    transform: scale(0.7);
     opacity: 0;
   }
-  80% {
-    transform: scale(1.1);
-    opacity: 1;
-  }
   100% {
-    transform: scale(1);
     opacity: 1;
   }
 }
@@ -103,6 +98,28 @@
     opacity: 1;
     transform: scale(1);
   }
+}
+
+@keyframes rotate360 {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Icon rotation animation */
+.icon-rotate-on-hover {
+  transition: transform 0.5s ease-in-out;
+}
+
+.group:hover .icon-rotate-on-hover {
+  animation: rotate360 0.5s ease-in-out;
+}
+
+.icon-rotate-active {
+  animation: rotate360 0.5s ease-in-out;
 }
 
 @keyframes shimmer {
@@ -606,13 +623,12 @@ html.dark .marquee-corner {
 
 @keyframes badgePop {
   0% {
-    transform: scale(0) rotate(-20deg);
-  }
-  70% {
-    transform: scale(1.15) rotate(5deg);
+    opacity: 0;
+    transform: scale(0.8);
   }
   100% {
-    transform: scale(1) rotate(0);
+    opacity: 1;
+    transform: scale(1);
   }
 }
 
@@ -764,6 +780,151 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+}
+
+/* ==========================================
+   IMPROVED COLOR SYSTEM & DESIGN TOKENS
+   ========================================== */
+
+/* Background layers - darkest to lightest */
+@layer base {
+  :root {
+    /* Main background - darkest */
+    --bg-primary: #0f172a; /* slate-900 */
+    /* Surface 1 - slightly lighter for cards */
+    --bg-surface-1: #1e293b; /* slate-800 */
+    /* Surface 2 - lighter for hover/selected */
+    --bg-surface-2: #334155; /* slate-700 */
+    /* Surface 3 - lightest for active/highlight */
+    --bg-surface-3: #475569; /* slate-600 */
+
+    /* Light mode backgrounds */
+    --bg-primary-light: #f8fafc; /* slate-50 */
+    --bg-surface-1-light: #ffffff; /* white */
+    --bg-surface-2-light: #f1f5f9; /* slate-100 */
+    --bg-surface-3-light: #e2e8f0; /* slate-200 */
+
+    /* Accent colors - only for interactions */
+    --accent-blue: #3b82f6;
+    --accent-blue-hover: #2563eb;
+    --accent-green: #22c55e;
+    --accent-purple: #a855f7;
+    --accent-yellow: #eab308;
+    --accent-red: #ef4444;
+
+    /* Text hierarchy */
+    --text-primary: #f1f5f9; /* slate-100 */
+    --text-secondary: #cbd5e1; /* slate-300 */
+    --text-tertiary: #94a3b8; /* slate-400 */
+
+    --text-primary-light: #0f172a; /* slate-900 */
+    --text-secondary-light: #475569; /* slate-600 */
+    --text-tertiary-light: #64748b; /* slate-500 */
+
+    /* Borders - softer */
+    --border-subtle: rgba(148, 163, 184, 0.1);
+    --border-medium: rgba(148, 163, 184, 0.2);
+    --border-strong: rgba(148, 163, 184, 0.3);
+  }
+}
+
+/* Utility classes for consistent spacing */
+.spacing-section {
+  padding: 1.5rem 0;
+}
+
+.spacing-card {
+  padding: 1.5rem;
+}
+
+@media (min-width: 768px) {
+  .spacing-section {
+    padding: 2rem 0;
+  }
+
+  .spacing-card {
+    padding: 2rem;
+  }
+}
+
+/* Hover elevation effect */
+.hover-lift {
+  transition:
+    transform 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.hover-lift:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 10px 25px -5px rgba(0, 0, 0, 0.2),
+    0 8px 10px -6px rgba(0, 0, 0, 0.1);
+}
+
+html.dark .hover-lift:hover {
+  box-shadow:
+    0 10px 25px -5px rgba(0, 0, 0, 0.4),
+    0 8px 10px -6px rgba(0, 0, 0, 0.2);
+}
+
+/* Selection glow effect */
+.selection-glow {
+  position: relative;
+}
+
+.selection-glow::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  background: linear-gradient(
+    135deg,
+    rgba(59, 130, 246, 0.3),
+    rgba(168, 85, 247, 0.3)
+  );
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  z-index: -1;
+}
+
+.selection-glow.selected::before {
+  opacity: 1;
+}
+
+/* Muted icons utility */
+.icon-muted {
+  opacity: 0.6;
+  transition: opacity 0.2s ease;
+}
+
+.icon-muted:hover {
+  opacity: 1;
+}
+
+/* Premium card styling */
+.card-premium {
+  background: var(--bg-surface-1);
+  border: 1px solid var(--border-subtle);
+  border-radius: 1rem;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+html.dark .card-premium {
+  background: var(--bg-surface-1);
+}
+
+html:not(.dark) .card-premium {
+  background: var(--bg-surface-1-light);
+  border-color: var(--border-medium);
+}
+
+.card-premium:hover {
+  border-color: var(--border-medium);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+html.dark .card-premium:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 /* Reduce motion for users who prefer it */
