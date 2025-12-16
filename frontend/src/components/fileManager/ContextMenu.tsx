@@ -233,8 +233,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
               label: "Link to Folder Share",
               action: async () => {
                 const links = await linkToParentShare(selectedFiles);
-                const base = window.location.origin;
-                const list = Object.values(links).map((t) => `${base}/s/${t}`);
+                const list = Object.values(links);
                 if (list.length) setShareLinkModalOpen(true, list);
                 onActionComplete?.();
               },
@@ -247,8 +246,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
         action: async () => {
           const links = await shareFiles(selectedFiles, !allShared);
           if (!allShared) {
-            const base = window.location.origin;
-            const list = Object.values(links).map((t) => `${base}/s/${t}`);
+            const list = Object.values(links);
             setShareLinkModalOpen(true, list);
           }
           onActionComplete?.();
@@ -265,10 +263,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                   .map((file) => file.id);
                 if (sharedIds.length === 0) return;
                 const links = await getShareLinks(sharedIds);
-                const base = window.location.origin;
-                const list = Object.values(links).map(
-                  (token) => `${base}/s/${token}`,
-                );
+                const list = Object.values(links);
                 if (!list.length) return;
 
                 const text = list.join("\n");

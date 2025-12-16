@@ -61,6 +61,56 @@ TMA Cloud uses a **Single-Origin Architecture** where the backend serves both th
 - ✅ **Cleaner config**: No frontend environment variables needed
 - ✅ **Cookie-based auth**: Works seamlessly across the application
 
+### Custom Share Domain Architecture (Optional)
+
+When `SHARE_BASE_URL` is configured, the system supports routing share links to a dedicated domain:
+
+```bash
+┌─────────────────────────────────────────────┐
+│              Browser (Client)               │
+└──────┬──────────────────────┬───────────────┘
+       │                      │
+       │ Main App             │ Share Links
+       │ main.example.com     │ share.example.com
+       ▼                      ▼
+┌──────────────────┐  ┌───────────────────────┐
+│  Express Server  │  │  Express Server       │
+│  ┌────────────┐  │  │  ┌─────────────────┐  │
+│  │ Full App   │  │  │  │ Share Domain    │  │
+│  │ /api/*     │  │  │  │ Blocking        │  │
+│  │ /          │  │  │  │ Middleware      │  │
+│  │ Static     │  │  │  └─────────────────┘  │
+│  └────────────┘  │  │  ┌─────────────────┐  │
+│                  │  │  │ Only /s/*       │  │
+│                  │  │  │ routes allowed  │  │
+│                  │  │  │ All others: 404 │  │
+│                  │  │  └─────────────────┘  │
+└──────────────────┘  └───────────────────────┘
+       │                      │
+       └──────────┬───────────┘
+                  ▼
+            ┌─────────────┐
+            │ PostgreSQL  │
+            │  Database   │
+            └─────────────┘
+```
+
+**Request Flow on Share Domain:**
+
+1. Request arrives at `share.example.com`
+2. **Share Domain Middleware** checks:
+   - If path is `/s/*`, `/health`, or `/metrics` → Allow
+   - Otherwise → Return 404 immediately (no further processing)
+3. Share link routes handle `/s/*` requests normally
+4. All other routes never execute (blocked early)
+
+**Benefits:**
+
+- **Traffic Isolation**: Share link traffic doesn't impact main app performance
+- **Security**: Share domain locked down to only share endpoints
+- **Scalability**: Can route share domain to CDN or separate infrastructure
+- **Early Blocking**: Non-share routes blocked before logging/parsing (minimal overhead)
+
 ## Backend Architecture
 
 ### Backend Directory Structure
@@ -92,8 +142,11 @@ Handle HTTP requests and implement business logic:
 
 #### 2. **Middleware**
 
+- `requestId.middleware.js` - Request ID generation for tracing (runs first)
+- `shareDomain.middleware.js` - Blocks main app access on share domain (runs early, before logging)
 - `auth.middleware.js` - JWT token verification
-- `error.middleware.js` - Centralized error handling
+- `error.middleware.js` - Centralized error handling (runs last)
+- `rateLimit.middleware.js` - Rate limiting for API endpoints
 
 #### 3. **Models**
 

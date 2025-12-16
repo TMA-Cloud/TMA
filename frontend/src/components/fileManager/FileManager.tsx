@@ -394,8 +394,7 @@ export const FileManager: React.FC = () => {
   const handleShare = async () => {
     const links = await shareFiles(selectedFiles, !allShared);
     if (!allShared) {
-      const base = window.location.origin;
-      const list = Object.values(links).map((t) => `${base}/s/${t}`);
+      const list = Object.values(links);
       setShareLinkModalOpen(true, list);
     }
     closeMultiSelectIfMobile();

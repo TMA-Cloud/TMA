@@ -8,6 +8,7 @@ A self-hosted cloud storage platform providing robust file storage and managemen
 - 🔒 **Signup Control** --- Self-hosted deployments can control user registration
 - 📁 **File Management** --- Upload, download, organize, and manage files and folders
 - 🔗 **Sharing** --- Create shareable links for files and folders
+- 🌐 **Custom Share Domain** --- Dedicated domain for share links to isolate traffic
 - 📝 **Document Editing** --- OnlyOffice integration for online document editing
 - 🎨 **Modern UI** --- React + TypeScript frontend with Tailwind CSS
 - 🗄️ **PostgreSQL** --- Robust database with automatic migrations

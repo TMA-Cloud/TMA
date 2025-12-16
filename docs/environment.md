@@ -31,6 +31,22 @@ Create a `.env` file in the **root directory** of the project with the following
 - **Description:** Public URL of the backend server that OnlyOffice can access
 - **Example:** `BACKEND_URL=https://api.example.com`
 
+#### `SHARE_BASE_URL`
+
+- **Type:** String (URL)
+- **Required:** No
+- **Default:** Request origin derived from proxy-aware headers (`X-Forwarded-Proto` / `X-Forwarded-Host`) or the incoming request host
+- **Description:** Optional base URL used when generating public share links. Set this if want share links to use a dedicated domain or CDN entry point instead of the main app domain. This isolates share link traffic from main application.
+- **Example:** `SHARE_BASE_URL=https://share.example.com`
+- **Behavior:**
+  - If not set, share links will use the request origin (from proxy headers or request host)
+  - If set, all share links will use this configured domain instead
+  - Falls back to `http://localhost` only in the rare case where no origin can be determined (no host header and no proxy headers)
+- **Security:**
+  - When configured, the share domain is locked down to only serve `/s/*` routes (share links)
+  - All other routes (main app, API, static files) return 404 on the share domain
+  - See [Features - Custom Share Domain](features.md#custom-share-domain) for complete details
+
 ---
 
 ### Database Configuration

@@ -46,6 +46,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
     searchQueryRef.current = searchQuery;
   }, [searchQuery]);
 
+  // Helper to build a map of fileId -> full share URL from the backend response.
+  // Backend now returns full URLs in `links`.
+  const buildShareUrlMap = useCallback(
+    (data: { links?: Record<string, string> }) => {
+      const urls: Record<string, string> = {};
+      const linkMap = data?.links || {};
+      for (const [id, url] of Object.entries(linkMap)) {
+        if (typeof url === "string" && url.trim()) {
+          urls[id] = url;
+        }
+      }
+      return urls;
+    },
+    [],
+  );
+
   const refreshFiles = useCallback(
     async (skipSearchCheck = false) => {
       try {
@@ -323,8 +339,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
       body: JSON.stringify({ ids, shared }),
     });
     const data = await res.json();
+    const links = buildShareUrlMap(data);
     await refreshFiles();
-    return data.links || {};
+    return links;
   };
 
   const getShareLinks = async (
@@ -337,7 +354,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
       body: JSON.stringify({ ids }),
     });
     const data = await res.json();
-    return data.links || {};
+    return buildShareUrlMap(data);
   };
 
   const starFilesApi = async (ids: string[], starred: boolean) => {
@@ -410,7 +427,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
     });
     const data = await res.json();
     await refreshFiles();
-    return data.links || {};
+    return buildShareUrlMap(data);
   };
 
   const pasteClipboard = async (parentId: string | null) => {

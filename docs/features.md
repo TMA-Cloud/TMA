@@ -158,6 +158,30 @@ Create shareable links for files and folders:
 - Access shared folders
 - Download shared content
 
+### Custom Share Domain
+
+Configuring a dedicated domain or subdomain exclusively for public share links, separate from main application domain. This feature allows isolate share link traffic from main application.
+
+**Performance Isolation**:
+
+- Prevent share link traffic from impacting the main application performance
+- Use a CDN or dedicated server for share links while keeping the main app on a different infrastructure
+- Scale share link infrastructure independently
+
+**Security Benefits**:
+
+- The share domain is locked down to only serve `/s/*` routes (share links)
+- All other routes (main app, API endpoints, static files) return 404 on the share domain
+- Prevents accidental access to the main application via the share domain
+- Reduces attack surface by isolating public share endpoints
+
+**Operational Flexibility**:
+
+- Use different SSL certificates or CDN configurations for share links
+- Apply different rate limiting or caching strategies
+- Monitor share link traffic separately from main app traffic
+- Easier to migrate or change share link infrastructure without affecting main app
+
 ## OnlyOffice Integration
 
 ### Document Editing

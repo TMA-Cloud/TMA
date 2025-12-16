@@ -15,6 +15,7 @@ const { startAuditCleanup } = require('./services/auditCleanup');
 const errorHandler = require('./middleware/error.middleware');
 // Logging and audit system
 const { requestIdMiddleware } = require('./middleware/requestId.middleware');
+const { blockMainAppOnShareDomain } = require('./middleware/shareDomain.middleware');
 const { logger, httpLogger } = require('./config/logger');
 const { initializeAuditQueue, shutdownAuditQueue } = require('./services/auditLogger');
 const { initializeMetrics, metricsEndpoint, startQueueMetricsUpdater } = require('./services/metrics');
@@ -30,7 +31,11 @@ const METRICS_ALLOWED_IPS = (process.env.METRICS_ALLOWED_IPS || '127.0.0.1')
 // FIRST: Request ID middleware (must be first for proper context propagation)
 app.use(requestIdMiddleware);
 
-// SECOND: HTTP request logging (after requestId so it can use it)
+// Block main app access on share domain (must be very early, before logging and JSON parsing)
+// This stops requests immediately without logging or processing body
+app.use(blockMainAppOnShareDomain);
+
+// SECOND: HTTP request logging (after requestId so it can use it, after blocking so blocked requests aren't logged)
 app.use(httpLogger);
 
 // Security headers

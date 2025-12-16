@@ -44,6 +44,7 @@ const {
   validateBoolean,
   validateFileUpload,
 } = require('../utils/validation');
+const { buildShareLink } = require('../utils/shareLink');
 
 async function listFiles(req, res) {
   try {
@@ -397,9 +398,10 @@ async function shareFilesController(req, res) {
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
-      
+
+      // New contract: links[id] = full URL (respecting SHARE_BASE_URL / proxy headers)
       const links = {};
-      
+
       if (validatedShared) {
         for (const id of validatedIds) {
           const treeIds = await getRecursiveIds([id], req.userId);
@@ -410,7 +412,8 @@ async function shareFilesController(req, res) {
           } else {
             await addFilesToShare(token, treeIds);
           }
-          links[id] = token;
+
+          links[id] = buildShareLink(token, req);
 
           // Log audit event for share creation
           if (isNewShare) {
@@ -480,7 +483,7 @@ async function linkParentShareController(req, res) {
       const treeIds = await getRecursiveIds([id], req.userId);
       await addFilesToShare(shareId, treeIds);
       await setShared([id], true, req.userId);
-      links[id] = shareId;
+      links[id] = buildShareLink(shareId, req);
     }
     sendSuccess(res, { success: true, links });
   } catch (err) {
@@ -709,7 +712,7 @@ async function getShareLinksController(req, res) {
     for (const id of validatedIds) {
       const token = await getShareLink(id, req.userId);
       if (token) {
-        links[id] = token;
+        links[id] = buildShareLink(token, req);
       }
     }
 
