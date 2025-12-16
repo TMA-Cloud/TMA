@@ -19,7 +19,7 @@ TMA Cloud uses [Pino](https://getpino.io/), a high-performance structured loggin
 
 ### Environment Variables
 
-Configure logging via environment variables in `backend/.env`:
+Configure logging via environment variables in the `.env` file:
 
 ```bash
 # Log level (fatal, error, warn, info, debug, trace)

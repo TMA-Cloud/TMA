@@ -18,7 +18,7 @@ const { requestIdMiddleware } = require('./middleware/requestId.middleware');
 const { logger, httpLogger } = require('./config/logger');
 const { initializeAuditQueue, shutdownAuditQueue } = require('./services/auditLogger');
 const { initializeMetrics, metricsEndpoint, startQueueMetricsUpdater } = require('./services/metrics');
-require('dotenv').config();
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
 const app = express();
 

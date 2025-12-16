@@ -19,7 +19,8 @@
  *   LOG_LEVEL - Logging level (default: info)
  */
 
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 // pg-boss v12 is ESM; normalize constructor for CommonJS
 const PgBossModule = require('pg-boss');
 const PgBoss = PgBossModule?.default || PgBossModule?.PgBoss || PgBossModule;

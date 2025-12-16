@@ -30,13 +30,14 @@ npm install
 
 #### Configure Backend Environment Variables
 
-Copy the example environment file:
+Copy the example environment file in the root directory:
 
 ```bash
-cp .env.example .env
+# Copy .env.example to .env in root directory
+cp ../.env.example ../.env
 ```
 
-Edit `.env` with your configuration. See [Environment Variables](environment.md) for detailed information about each variable.
+Edit `.env` in the root directory with your configuration. See [Environment Variables](environment.md) for detailed information about each variable.
 
 **Required variables:**
 
@@ -166,13 +167,13 @@ If running in production mode, verify the audit worker is processing events:
 ### Database Connection Issues
 
 - Verify PostgreSQL is running: `pg_isready`
-- Check database credentials in `.env`
+- Check database credentials in root `.env`
 - Ensure the database exists: `psql -l`
 - Verify the database user has CREATE TABLE permissions
 
 ### Port Already in Use
 
-- Change `BPORT` in backend `.env` to use a different port
+- Change `BPORT` in root `.env` to use a different port
 - In development, Vite will automatically use the next available port after 5173
 
 ### Migration Errors

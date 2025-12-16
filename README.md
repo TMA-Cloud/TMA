@@ -43,8 +43,9 @@ npm run build
 ```bash
 cd backend
 npm install
-cp .env.example .env
-# Edit .env with your configuration
+# Copy .env.example to .env
+cp ../.env.example ../.env
+# Edit ../.env with your configuration
 npm start
 # Access the application at http://localhost:3000
 ```

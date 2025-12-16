@@ -4,7 +4,7 @@ Complete reference for all environment variables used in TMA Cloud.
 
 ## Backend Environment Variables
 
-Create a `.env` file in the `backend/` directory with the following variables.
+Create a `.env` file in the **root directory** of the project with the following variables.
 
 ### Application Configuration
 
