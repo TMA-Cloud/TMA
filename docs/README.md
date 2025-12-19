@@ -5,6 +5,7 @@ Welcome to the TMA Cloud documentation. This directory contains comprehensive do
 ## Getting Started
 
 - **[Setup & Installation](setup.md)** - Step-by-step guide to set up TMA Cloud on your system
+- **[Docker Deployment](docker.md)** - Complete guide for Docker and Docker Compose deployment
 - **[Architecture Overview](architecture.md)** - System architecture and design patterns
 - **[Environment Variables](environment.md)** - Complete reference for all configuration options
 
@@ -28,6 +29,7 @@ Welcome to the TMA Cloud documentation. This directory contains comprehensive do
 docs/
 ├── README.md           # This file - documentation index
 ├── setup.md            # Installation and setup guide
+├── docker.md           # Docker deployment guide
 ├── architecture.md     # System architecture overview
 ├── api.md              # Backend API documentation
 ├── features.md         # Feature documentation
@@ -41,7 +43,7 @@ docs/
 
 ### For New Users
 
-1. Start with [Setup & Installation](setup.md)
+1. Start with [Setup & Installation](setup.md) or [Docker Deployment](docker.md)
 2. Review [Architecture Overview](architecture.md) to understand the system
 3. Check [Environment Variables](environment.md) for configuration
 

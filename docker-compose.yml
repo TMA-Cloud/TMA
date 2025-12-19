@@ -1,0 +1,64 @@
+# =============================================================================
+# Docker Compose Configuration for TMA Cloud
+# =============================================================================
+# This file is for running the application using Docker Compose.
+# It requires a .env file with all necessary environment variables.
+#
+# Usage:
+#   docker-compose up -d        # Start in background
+#   docker-compose logs -f      # View logs
+#   docker-compose down          # Stop and remove
+#
+# Note: Make sure to create a .env file from .env.example before starting.
+# =============================================================================
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: tma-cloud:latest
+    container_name: tma-cloud-app
+    restart: unless-stopped
+    ports:
+      # Map host port to container port
+      # Uses BPORT from .env file, defaults to 3000
+      - "${BPORT:-3000}:3000"
+    env_file:
+      - .env
+    environment:
+      - LOG_FORMAT=json
+    volumes:
+      # Mount uploads directory (persists data outside container)
+      - ./uploads:/app/uploads
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 40s
+    networks:
+      - tma-cloud-network
+
+  # Audit Worker - Required for processing audit events
+  # Without this worker, audit events are queued but not written to the database
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: tma-cloud:latest
+    container_name: tma-cloud-worker
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - LOG_FORMAT=json
+    command: node backend/audit-worker.js
+    depends_on:
+      - app
+    networks:
+      - tma-cloud-network
+
+networks:
+  tma-cloud-network:
+    driver: bridge

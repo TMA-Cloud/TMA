@@ -10,6 +10,8 @@ Before you begin, ensure you have the following installed:
 - **PostgreSQL** (v17 or higher)
 - **npm** or **yarn** package manager
 
+**Note:** For Docker deployment, see [Docker Deployment Guide](docker.md) instead.
+
 ## Installation Steps
 
 ### 1. Clone the Repository
@@ -220,3 +222,4 @@ If running in production mode, verify the audit worker is processing events:
 - Configure [Environment Variables](environment.md) for your deployment
 - **Important:** Ensure the [Audit Worker](audit.md#starting-the-audit-worker) is running in production
 - Review [Logging System](logging.md) for monitoring and debugging
+- For Docker deployment, see [Docker Deployment Guide](docker.md)
