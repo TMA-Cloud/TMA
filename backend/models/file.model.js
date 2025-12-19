@@ -234,6 +234,8 @@ async function createFile(name, size, mimeType, tempPath, parentId = null, userI
   // If custom drive is enabled, file is already uploaded to CUSTOM_DRIVE_PATH
   // Just rename it to the final location with proper name
   if (CUSTOM_DRIVE_ENABLED && CUSTOM_DRIVE_PATH) {
+    let finalPath = null;
+    let renameSucceeded = false;
     try {
       // Get the target folder path
       const folderPath = await getFolderPath(parentId, userId);
@@ -251,10 +253,11 @@ async function createFile(name, size, mimeType, tempPath, parentId = null, userI
       const destPath = path.join(targetDir, name);
 
       // Handle duplicate filenames
-      const finalPath = await getUniqueFilename(destPath, targetDir);
+      finalPath = await getUniqueFilename(destPath, targetDir);
       
       // Rename temp file to final location (same filesystem, so rename works)
       await fs.promises.rename(tempPath, finalPath);
+      renameSucceeded = true; // Track that rename completed successfully
       
       // Get the actual filename (in case it was changed due to duplicates)
       const actualName = path.basename(finalPath);
@@ -269,9 +272,15 @@ async function createFile(name, size, mimeType, tempPath, parentId = null, userI
     } catch (error) {
       // If custom drive save fails, log and throw (don't fall back since file is already in custom drive)
       logger.error('[File] Error saving to custom drive:', error);
-      // Clean up temp file if it still exists
+      // Clean up file - use renameSucceeded flag to determine actual file location
       try {
-        await fs.promises.unlink(tempPath);
+        if (renameSucceeded && finalPath) {
+          // Rename succeeded, file is at finalPath
+          await fs.promises.unlink(finalPath);
+        } else {
+          // Rename didn't succeed (or didn't happen), file is still at tempPath
+          await fs.promises.unlink(tempPath);
+        }
       } catch {
         // Ignore cleanup errors
       }
