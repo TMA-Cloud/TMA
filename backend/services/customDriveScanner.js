@@ -3,6 +3,7 @@ const path = require('path');
 const chokidar = require('chokidar');
 const pool = require('../config/db');
 const { generateId } = require('../utils/id');
+const { logger } = require('../config/logger');
 
 /**
  * Scans the custom drive directory and inserts all files and folders into the database
