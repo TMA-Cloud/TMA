@@ -313,12 +313,25 @@ Optional external drive integration:
 - Sync files to cloud storage
 - Automatic file detection
 - Configurable via environment variables
+- Real-time file system watching for changes
 
 **Setup:**
 
 1. Set `CUSTOM_DRIVE=yes` in environment variables
 2. Configure `CUSTOM_DRIVE_PATH` to absolute path of external directory
 3. Service automatically syncs files
+
+**Important Behavior Changes:**
+
+When Custom Drive is enabled (`CUSTOM_DRIVE=yes`):
+
+- **`UPLOAD_DIR`**: **Ignored** - files are uploaded directly to `CUSTOM_DRIVE_PATH`
+- **`STORAGE_LIMIT`**: **Ignored** - storage dashboard shows actual disk space on the custom drive
+- **`STORAGE_PATH`**: **Ignored** - disk space calculated from `CUSTOM_DRIVE_PATH`
+
+Files are stored with their original filenames directly in the custom drive directory structure.
+
+**Docker Users:** When using Docker, you must also set `CUSTOM_DRIVE_HOST_PATH` to mount your host directory into the container. Set `CUSTOM_DRIVE_PATH=/data/custom_drive` (container path). See [Docker Guide - Custom Drive](docker.md#custom-drive-with-docker) for complete setup.
 
 See [Environment Variables](environment.md#custom-drive-integration-optional) for configuration details.
 

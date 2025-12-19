@@ -155,6 +155,7 @@ Create a `.env` file in the **root directory** of the project with the following
 - **Example:** `UPLOAD_DIR=./uploads`
 - **Absolute Path Example:** `UPLOAD_DIR=/var/www/uploads`
 - **Note:** Ensure the directory exists and is writable
+- **⚠️ Custom Drive Mode:** When `CUSTOM_DRIVE=yes`, this setting is **completely ignored**. Files are uploaded directly to `CUSTOM_DRIVE_PATH`.
 
 #### `STORAGE_LIMIT`
 
@@ -167,6 +168,7 @@ Create a `.env` file in the **root directory** of the project with the following
   - 1 GB: `1073741824`
   - 5 GB: `5368709120`
   - 10 GB: `10737418240`
+- **⚠️ Custom Drive Mode:** When `CUSTOM_DRIVE=yes`, this setting is **ignored**. The storage dashboard shows the actual disk space available on the custom drive path.
 
 #### `STORAGE_PATH`
 
@@ -176,6 +178,7 @@ Create a `.env` file in the **root directory** of the project with the following
 - **Description:** Base path for disk space calculation (used when custom drive is disabled)
 - **Example:** `STORAGE_PATH=/var/www/storage`
 - **Note:** Only used for disk space calculation, not for file storage location
+- **⚠️ Custom Drive Mode:** When `CUSTOM_DRIVE=yes`, this setting is **ignored**. Disk space is calculated from `CUSTOM_DRIVE_PATH` instead.
 
 ---
 
@@ -203,6 +206,14 @@ Create a `.env` file in the **root directory** of the project with the following
 
 ### Custom Drive Integration (Optional)
 
+When Custom Drive is enabled, the application behaves differently:
+
+| Setting | Normal Mode | Custom Drive Mode |
+|---------|-------------|-------------------|
+| `UPLOAD_DIR` | Final storage location | **Ignored** - uploads go directly to `CUSTOM_DRIVE_PATH` |
+| `STORAGE_LIMIT` | Enforced per-user limit | **Ignored** - uses actual disk space |
+| `STORAGE_PATH` | Disk space calculation path | **Ignored** - uses `CUSTOM_DRIVE_PATH` |
+
 #### `CUSTOM_DRIVE`
 
 - **Type:** String
@@ -219,7 +230,20 @@ Create a `.env` file in the **root directory** of the project with the following
 - **Description:** Absolute path to the directory to scan and sync
 - **Example:** `CUSTOM_DRIVE_PATH=/mnt/external_drive`
 - **Windows Example:** `CUSTOM_DRIVE_PATH=C:\ExternalDrive`
+- **Docker Example:** `CUSTOM_DRIVE_PATH=/data/custom_drive`
 - **Note:** Must be an absolute path. The service will watch this directory for changes.
+- **Behavior:** When enabled, all files are stored directly in this path with their original filenames. The storage dashboard shows actual disk space available on this drive.
+- **⚠️ Docker:** When using Docker, set this to `/data/custom_drive` (the container path). See `CUSTOM_DRIVE_HOST_PATH` below.
+
+#### `CUSTOM_DRIVE_HOST_PATH` (Docker Only)
+
+- **Type:** String (Absolute Path)
+- **Required:** No (required when using custom drive with Docker)
+- **Description:** The actual path on your host machine to mount as the custom drive
+- **Linux Example:** `CUSTOM_DRIVE_HOST_PATH=/mnt/nas/cloud_storage`
+- **Windows Example:** `CUSTOM_DRIVE_HOST_PATH=C:/Users/username/my_drive`
+- **Note:** This is only used by Docker Compose. The host path is mounted to `/data/custom_drive` inside the container.
+- **See:** [Docker Guide - Custom Drive](docker.md#custom-drive-with-docker) for complete setup instructions.
 
 ---
 

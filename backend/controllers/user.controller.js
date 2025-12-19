@@ -49,8 +49,6 @@ async function storageUsage(req, res) {
   try {
     // If custom drive is enabled, use custom drive storage calculation
     if (CUSTOM_DRIVE_ENABLED && CUSTOM_DRIVE_PATH) {
-      const used = await getCustomDriveStorageUsage(req.userId);
-      
       // Get disk space information for the custom drive path
       const { size, free: diskFree } = await checkDiskSpace(CUSTOM_DRIVE_PATH);
       
@@ -59,6 +57,10 @@ async function storageUsage(req, res) {
       
       // Free space is the actual free space on the disk
       const free = diskFree;
+      
+      // Used space is calculated from actual disk usage (total - free)
+      // This reflects the real disk usage, not just database-tracked files
+      const used = total - free;
       
       sendSuccess(res, { used, total, free });
     } else {

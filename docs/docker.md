@@ -173,6 +173,69 @@ ports:
 
 Default is `3000:3000` if `BPORT` is not set.
 
+### Custom Drive with Docker
+
+When using Custom Drive mode with Docker, you need to mount the host directory into the container.
+
+**Setup Steps:**
+
+Add these to your `.env` file:
+
+```bash
+# Enable custom drive
+CUSTOM_DRIVE=yes
+
+# Container path - use this exact value
+CUSTOM_DRIVE_PATH=/data/custom_drive
+
+# Host path - your actual directory on the host machine
+# Linux example:
+CUSTOM_DRIVE_HOST_PATH=/mnt/my_nas_drive
+# Windows example (use forward slashes):
+CUSTOM_DRIVE_HOST_PATH=C:/Users/username/my_drive
+```
+
+**Note:** The `docker-compose.yml` automatically mounts `CUSTOM_DRIVE_HOST_PATH` to `/data/custom_drive` inside the container.
+
+**How It Works:**
+
+- `CUSTOM_DRIVE_HOST_PATH` = The actual path on your host machine (where your files are)
+- `CUSTOM_DRIVE_PATH` = The path inside the container (always `/data/custom_drive`)
+- Docker Compose mounts `${CUSTOM_DRIVE_HOST_PATH}` → `/data/custom_drive`
+
+**Example Configuration:**
+
+```bash
+# .env for Linux with NAS mount
+CUSTOM_DRIVE=yes
+CUSTOM_DRIVE_PATH=/data/custom_drive
+CUSTOM_DRIVE_HOST_PATH=/mnt/nas/cloud_storage
+
+# .env for Windows
+CUSTOM_DRIVE=yes
+CUSTOM_DRIVE_PATH=/data/custom_drive
+CUSTOM_DRIVE_HOST_PATH=D:/CloudDrive
+```
+
+**Important Notes:**
+
+- When `CUSTOM_DRIVE=yes`, `UPLOAD_DIR`, `STORAGE_LIMIT`, and `STORAGE_PATH` are all **ignored**
+- Files are uploaded directly to the custom drive path
+- Storage dashboard shows actual disk space of the custom drive
+- Files are stored with original filenames in the custom drive directory
+
+**Permissions:**
+
+Ensure the host directory has correct permissions:
+
+```bash
+# Create directory if needed
+mkdir -p /mnt/my_drive
+
+# Set ownership to container user (UID 1001)
+chown -R 1001:1001 /mnt/my_drive
+```
+
 ### Network Configuration
 
 Both services use the `tma-cloud-network` bridge network for communication.

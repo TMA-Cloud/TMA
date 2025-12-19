@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const { UPLOAD_DIR, CUSTOM_DRIVE_ENABLED, CUSTOM_DRIVE_PATH } = require('../config/paths');
 const { resolveFilePath } = require('../utils/filePath');
+const { logger } = require('../config/logger');
 
 const SORT_FIELDS = {
   name: 'name',
@@ -230,29 +231,29 @@ async function getUniqueFilename(filePath, folderPath) {
 async function createFile(name, size, mimeType, tempPath, parentId = null, userId) {
   const id = generateId(16);
   
-  // If custom drive is enabled, save to custom drive with original name
+  // If custom drive is enabled, file is already uploaded to CUSTOM_DRIVE_PATH
+  // Just rename it to the final location with proper name
   if (CUSTOM_DRIVE_ENABLED && CUSTOM_DRIVE_PATH) {
     try {
       // Get the target folder path
       const folderPath = await getFolderPath(parentId, userId);
       
-      // Ensure the folder exists
+      // Ensure the target folder exists
+      const targetDir = folderPath || CUSTOM_DRIVE_PATH;
       try {
-        await fs.promises.access(folderPath || CUSTOM_DRIVE_PATH);
+        await fs.promises.access(targetDir);
       } catch {
         // Folder doesn't exist, create it
-        await fs.promises.mkdir(folderPath || CUSTOM_DRIVE_PATH, { recursive: true });
+        await fs.promises.mkdir(targetDir, { recursive: true });
       }
 
       // Build the destination path with original filename
-      const destPath = folderPath 
-        ? path.join(folderPath, name)
-        : path.join(CUSTOM_DRIVE_PATH, name);
+      const destPath = path.join(targetDir, name);
 
       // Handle duplicate filenames
-      const finalPath = await getUniqueFilename(destPath, folderPath || CUSTOM_DRIVE_PATH);
+      const finalPath = await getUniqueFilename(destPath, targetDir);
       
-      // Move file to custom drive
+      // Rename temp file to final location (same filesystem, so rename works)
       await fs.promises.rename(tempPath, finalPath);
       
       // Get the actual filename (in case it was changed due to duplicates)
@@ -266,13 +267,20 @@ async function createFile(name, size, mimeType, tempPath, parentId = null, userI
       );
       return result.rows[0];
     } catch (error) {
-      // If custom drive save fails, fall back to regular upload
-      logger.error('[File] Error saving to custom drive, falling back to UPLOAD_DIR:', error);
-      // Continue to regular upload logic below
+      // If custom drive save fails, log and throw (don't fall back since file is already in custom drive)
+      logger.error('[File] Error saving to custom drive:', error);
+      // Clean up temp file if it still exists
+      try {
+        await fs.promises.unlink(tempPath);
+      } catch {
+        // Ignore cleanup errors
+      }
+      throw error;
     }
   }
 
-  // Regular upload behavior (when custom drive is disabled or save failed)
+  // Regular upload behavior (when custom drive is disabled)
+  // File was uploaded to UPLOAD_DIR, rename to final storage name
   const ext = path.extname(name);
   const storageName = id + ext;
   const dest = path.join(UPLOAD_DIR, storageName);

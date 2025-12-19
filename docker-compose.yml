@@ -10,6 +10,31 @@
 #   docker-compose down          # Stop and remove
 #
 # Note: Make sure to create a .env file from .env.example before starting.
+#
+# =============================================================================
+# CUSTOM DRIVE MODE (Docker)
+# =============================================================================
+# To use custom drive with Docker, you need to mount the host directory
+# into the container and set the container path in your .env file.
+#
+# Steps:
+#   1. Set these in your .env file:
+#      CUSTOM_DRIVE=yes
+#      CUSTOM_DRIVE_PATH=/data/custom_drive  (container path - use this exact value)
+#      CUSTOM_DRIVE_HOST_PATH=/path/to/your/drive  (your actual host path)
+#
+#   2. The volume mount below will use CUSTOM_DRIVE_HOST_PATH to map your
+#      host directory to /data/custom_drive inside the container.
+#
+# Example .env for Linux:
+#   CUSTOM_DRIVE=yes
+#   CUSTOM_DRIVE_PATH=/data/custom_drive
+#   CUSTOM_DRIVE_HOST_PATH=/mnt/my_nas_drive
+#
+# Example .env for Windows (with Docker Desktop):
+#   CUSTOM_DRIVE=yes
+#   CUSTOM_DRIVE_PATH=/data/custom_drive
+#   CUSTOM_DRIVE_HOST_PATH=C:/Users/username/my_drive
 # =============================================================================
 
 services:
@@ -31,6 +56,10 @@ services:
     volumes:
       # Mount uploads directory (persists data outside container)
       - ./uploads:/app/uploads
+      # Custom drive mount - maps host path to container path
+      # Only used when CUSTOM_DRIVE=yes and CUSTOM_DRIVE_HOST_PATH is set
+      # IMPORTANT: Set CUSTOM_DRIVE_PATH=/data/custom_drive in .env
+      - ${CUSTOM_DRIVE_HOST_PATH:-./data/custom_drive}:/data/custom_drive
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
       interval: 30s
