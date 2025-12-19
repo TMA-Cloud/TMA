@@ -1,3 +1,5 @@
+const { logger } = require('../config/logger');
+
 /**
  * Input validation utilities to prevent injection attacks and validate user input
  */

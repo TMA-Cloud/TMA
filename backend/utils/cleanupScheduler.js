@@ -1,3 +1,5 @@
+const { logger } = require('../config/logger');
+
 /**
  * Generic cleanup scheduler utility
  * Creates a scheduled cleanup task that runs immediately and then at intervals

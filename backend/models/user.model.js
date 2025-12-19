@@ -1,5 +1,6 @@
 const pool = require('../config/db');
 const { generateId } = require('../utils/id');
+const { logger } = require('../config/logger');
 
 async function createUser(email, password, name) {
   const id = generateId(16);

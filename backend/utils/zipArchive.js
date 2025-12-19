@@ -1,6 +1,7 @@
 const path = require('path');
 const archiver = require('archiver');
 const { resolveFilePath, isValidPath } = require('./filePath');
+const { logger } = require('../config/logger');
 
 /**
  * Create a ZIP archive from a tree of entries and pipe it to a response
