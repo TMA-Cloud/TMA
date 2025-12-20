@@ -13,13 +13,15 @@ const SORT_FIELDS = {
   deletedAt: 'deleted_at',
 };
 
-function buildOrderClause(sortBy = 'modified', order = 'DESC') {
+function buildOrderClause(sortBy = 'modified', order = 'DESC', tableAlias = null) {
   const field = SORT_FIELDS[sortBy] || 'modified';
   const dir = order && order.toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
   // When sorting by size we will compute folder sizes dynamically. However,
   // keep NULL values (shouldn't exist after computing) last just in case.
   const nulls = field === 'size' ? ' NULLS LAST' : '';
-  return `ORDER BY ${field} ${dir}${nulls}`;
+  // Prefix field with table alias if provided (needed for JOIN queries to avoid ambiguity)
+  const qualifiedField = tableAlias ? `${tableAlias}.${field}` : field;
+  return `ORDER BY ${qualifiedField} ${dir}${nulls}`;
 }
 
 async function calculateFolderSize(id, userId) {
@@ -883,9 +885,18 @@ async function getStarredFiles(userId, sortBy = 'modified', order = 'DESC') {
 }
 
 async function getSharedFiles(userId, sortBy = 'modified', order = 'DESC') {
-  const orderClause = sortBy === 'size' ? '' : buildOrderClause(sortBy, order);
+  const orderClause = sortBy === 'size' ? '' : buildOrderClause(sortBy, order, 'f');
+  // Only return top-level shared items (not children of shared folders)
+  // A file is top-level shared if it's shared AND (has no parent OR parent is not shared)
   const result = await pool.query(
-    `SELECT id, name, type, size, modified, mime_type AS "mimeType", starred, shared FROM files WHERE user_id = $1 AND shared = TRUE AND deleted_at IS NULL ${orderClause}`,
+    `SELECT f.id, f.name, f.type, f.size, f.modified, f.mime_type AS "mimeType", f.starred, f.shared 
+     FROM files f
+     LEFT JOIN files parent ON f.parent_id = parent.id AND parent.user_id = $1
+     WHERE f.user_id = $1 
+       AND f.shared = TRUE 
+       AND f.deleted_at IS NULL
+       AND (f.parent_id IS NULL OR parent.shared = FALSE OR parent.shared IS NULL)
+     ${orderClause}`,
     [userId],
   );
   const files = result.rows;
@@ -1005,12 +1016,17 @@ async function searchFiles(userId, query, limit = 100) {
 async function getFileStats(userId) {
   const result = await pool.query(
     `SELECT 
-      COUNT(*) FILTER (WHERE type = 'file' AND deleted_at IS NULL) AS "totalFiles",
-      COUNT(*) FILTER (WHERE type = 'folder' AND deleted_at IS NULL) AS "totalFolders",
-      COUNT(*) FILTER (WHERE shared = TRUE AND deleted_at IS NULL) AS "sharedCount",
-      COUNT(*) FILTER (WHERE starred = TRUE AND deleted_at IS NULL) AS "starredCount"
-     FROM files
-     WHERE user_id = $1`,
+      COUNT(*) FILTER (WHERE f.type = 'file' AND f.deleted_at IS NULL) AS "totalFiles",
+      COUNT(*) FILTER (WHERE f.type = 'folder' AND f.deleted_at IS NULL) AS "totalFolders",
+      COUNT(*) FILTER (
+        WHERE f.shared = TRUE 
+        AND f.deleted_at IS NULL
+        AND (f.parent_id IS NULL OR parent.shared = FALSE OR parent.shared IS NULL)
+      ) AS "sharedCount",
+      COUNT(*) FILTER (WHERE f.starred = TRUE AND f.deleted_at IS NULL) AS "starredCount"
+     FROM files f
+     LEFT JOIN files parent ON f.parent_id = parent.id AND parent.user_id = $1
+     WHERE f.user_id = $1`,
     [userId]
   );
   
