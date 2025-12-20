@@ -14,8 +14,14 @@ export const RenameModal: React.FC = () => {
     if (!renameTarget) return;
     const value = inputRef.current?.value ?? "";
     if (!value.trim()) return;
-    await renameFile(renameTarget.id, value.trim());
-    handleClose();
+    try {
+      await renameFile(renameTarget.id, value.trim());
+      handleClose();
+    } catch (error) {
+      console.error("Failed to rename file:", error);
+      // Error is handled by the API function, but we should still show user feedback
+      // The error will be thrown and can be caught by the caller if needed
+    }
   };
 
   if (!renameTarget) return null;

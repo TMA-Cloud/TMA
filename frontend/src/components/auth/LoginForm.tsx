@@ -13,7 +13,13 @@ export const LoginForm: React.FC<{ onSwitch: () => void }> = ({ onSwitch }) => {
   const [googleEnabled, setGoogleEnabled] = useState(false);
 
   useEffect(() => {
-    checkGoogleAuthEnabled().then(setGoogleEnabled);
+    checkGoogleAuthEnabled()
+      .then(setGoogleEnabled)
+      .catch((err) => {
+        console.error("Failed to check Google auth status:", err);
+        // Default to false on error
+        setGoogleEnabled(false);
+      });
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {

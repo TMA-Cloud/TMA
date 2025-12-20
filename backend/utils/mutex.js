@@ -28,6 +28,9 @@ const fileOperationLock = async (fileId, operation) => {
   const lock = await mutex.lock(`file:${fileId}`);
   try {
     return await operation();
+  } catch (error) {
+    // Re-throw the error so it can be handled by the caller
+    throw error;
   } finally {
     lock.unlock();
   }
@@ -38,6 +41,9 @@ const userOperationLock = async (userId, operation) => {
   const lock = await mutex.lock(`user:${userId}`);
   try {
     return await operation();
+  } catch (error) {
+    // Re-throw the error so it can be handled by the caller
+    throw error;
   } finally {
     lock.unlock();
   }

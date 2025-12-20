@@ -20,8 +20,13 @@ export const CreateFolderModal: React.FC = () => {
       setError("Folder name cannot be empty");
       return;
     }
-    await createFolder(name.trim());
-    handleClose();
+    try {
+      await createFolder(name.trim());
+      handleClose();
+    } catch (error) {
+      console.error("Failed to create folder:", error);
+      setError("Failed to create folder. Please try again.");
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {

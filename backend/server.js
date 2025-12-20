@@ -187,6 +187,22 @@ async function gracefulShutdown(signal) {
 // Store server instance for graceful shutdown
 let server = null;
 
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error({ reason, promise }, 'Unhandled Promise Rejection');
+  // Don't exit in production - let the error handler middleware deal with it
+  if (process.env.NODE_ENV === 'development') {
+    logger.error('Exiting due to unhandled rejection in development mode');
+    process.exit(1);
+  }
+});
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (error) => {
+  logger.error({ err: error }, 'Uncaught Exception');
+  // Always exit on uncaught exceptions as the application is in an undefined state
+  process.exit(1);
+});
 
 runMigrations()
   .then(async () => {

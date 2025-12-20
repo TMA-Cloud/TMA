@@ -207,7 +207,14 @@ async function serveFile(req, res) {
     // Set appropriate headers
     res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(fileRow.name)}"`);
     res.type(fileRow.mimeType || 'application/octet-stream');
-    res.sendFile(filePath);
+    res.sendFile(filePath, (err) => {
+      if (err) {
+        logger.error({ err, fileId: id }, '[ONLYOFFICE] Error sending file');
+        if (!res.headersSent) {
+          res.status(500).json({ error: 'Error sending file' });
+        }
+      }
+    });
   } catch (err) {
     logger.error({ err }, '[ONLYOFFICE] Error serving file');
     res.status(500).json({ error: 'Server error' });

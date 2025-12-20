@@ -232,10 +232,15 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
               icon: Share2,
               label: "Link to Folder Share",
               action: async () => {
-                const links = await linkToParentShare(selectedFiles);
-                const list = Object.values(links);
-                if (list.length) setShareLinkModalOpen(true, list);
-                onActionComplete?.();
+                try {
+                  const links = await linkToParentShare(selectedFiles);
+                  const list = Object.values(links);
+                  if (list.length) setShareLinkModalOpen(true, list);
+                  onActionComplete?.();
+                } catch (error) {
+                  console.error("Failed to link to parent share:", error);
+                  showToast("Failed to link to parent share", "error");
+                }
               },
             },
           ]
@@ -244,12 +249,17 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
         icon: Share2,
         label: allShared ? "Remove from Shared" : "Add to Shared",
         action: async () => {
-          const links = await shareFiles(selectedFiles, !allShared);
-          if (!allShared) {
-            const list = Object.values(links);
-            setShareLinkModalOpen(true, list);
+          try {
+            const links = await shareFiles(selectedFiles, !allShared);
+            if (!allShared) {
+              const list = Object.values(links);
+              setShareLinkModalOpen(true, list);
+            }
+            onActionComplete?.();
+          } catch (error) {
+            console.error("Failed to share files:", error);
+            showToast("Failed to share files", "error");
           }
-          onActionComplete?.();
         },
       },
       ...(anyShared
@@ -258,36 +268,41 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
               icon: Link2,
               label: "Copy Link",
               action: async () => {
-                const sharedIds = selectedItems
-                  .filter((file) => file.shared)
-                  .map((file) => file.id);
-                if (sharedIds.length === 0) return;
-                const links = await getShareLinks(sharedIds);
-                const list = Object.values(links);
-                if (!list.length) return;
-
-                const text = list.join("\n");
                 try {
-                  if (navigator.clipboard?.writeText) {
-                    await navigator.clipboard.writeText(text);
-                  } else {
-                    const textArea = document.createElement("textarea");
-                    textArea.value = text;
-                    textArea.style.position = "fixed";
-                    textArea.style.left = "-999999px";
-                    textArea.style.top = "-999999px";
-                    document.body.appendChild(textArea);
-                    textArea.focus();
-                    textArea.select();
-                    const successful = document.execCommand("copy");
-                    document.body.removeChild(textArea);
-                    if (!successful) throw new Error("Copy command failed");
+                  const sharedIds = selectedItems
+                    .filter((file) => file.shared)
+                    .map((file) => file.id);
+                  if (sharedIds.length === 0) return;
+                  const links = await getShareLinks(sharedIds);
+                  const list = Object.values(links);
+                  if (!list.length) return;
+
+                  const text = list.join("\n");
+                  try {
+                    if (navigator.clipboard?.writeText) {
+                      await navigator.clipboard.writeText(text);
+                    } else {
+                      const textArea = document.createElement("textarea");
+                      textArea.value = text;
+                      textArea.style.position = "fixed";
+                      textArea.style.left = "-999999px";
+                      textArea.style.top = "-999999px";
+                      document.body.appendChild(textArea);
+                      textArea.focus();
+                      textArea.select();
+                      const successful = document.execCommand("copy");
+                      document.body.removeChild(textArea);
+                      if (!successful) throw new Error("Copy command failed");
+                    }
+                    showToast("Link copied to clipboard", "success");
+                    onActionComplete?.();
+                  } catch (error) {
+                    console.error("Failed to copy link:", error);
+                    showToast("Failed to copy link", "error");
                   }
-                  showToast("Link copied to clipboard", "success");
-                  onActionComplete?.();
                 } catch (error) {
-                  console.error("Failed to copy link:", error);
-                  showToast("Failed to copy link", "error");
+                  console.error("Failed to get share links:", error);
+                  showToast("Failed to get share links", "error");
                 }
               },
             },
@@ -297,8 +312,13 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
         icon: Download,
         label: "Download",
         action: async () => {
-          await downloadFiles(selectedFiles);
-          onActionComplete?.();
+          try {
+            await downloadFiles(selectedFiles);
+            onActionComplete?.();
+          } catch (error) {
+            console.error("Failed to download files:", error);
+            showToast("Failed to download files", "error");
+          }
         },
         disabled: isDownloading || selectedFiles.length === 0,
       },
@@ -306,8 +326,13 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
         icon: Star,
         label: allStarred ? "Remove from Starred" : "Add to Starred",
         action: async () => {
-          await starFiles(selectedFiles, !allStarred);
-          onActionComplete?.();
+          try {
+            await starFiles(selectedFiles, !allStarred);
+            onActionComplete?.();
+          } catch (error) {
+            console.error("Failed to update star status:", error);
+            showToast("Failed to update star status", "error");
+          }
         },
       },
       {
@@ -332,10 +357,15 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
               icon: ClipboardPaste,
               label: "Paste",
               action: async () => {
-                await pasteClipboard(
-                  targetId ?? folderStack[folderStack.length - 1],
-                );
-                onActionComplete?.();
+                try {
+                  await pasteClipboard(
+                    targetId ?? folderStack[folderStack.length - 1],
+                  );
+                  onActionComplete?.();
+                } catch (error) {
+                  console.error("Failed to paste files:", error);
+                  showToast("Failed to paste files", "error");
+                }
               },
             },
           ]

@@ -19,7 +19,12 @@ function createZipArchive(res, archiveName, entries, rootId, baseName) {
   res.setHeader('Content-Disposition', `attachment; filename="${zipFilename}"; filename*=UTF-8''${encodedFilename}`);
 
   const archive = archiver('zip');
-  archive.on('error', err => { throw err; });
+  archive.on('error', err => {
+    logger.error('[ZIP] Archive error:', err);
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Failed to create archive' });
+    }
+  });
   archive.pipe(res);
 
   const addEntry = (id, base) => {
