@@ -12,8 +12,8 @@ This page contains the complete gallery of all available UI screenshots.
 - [Document Viewer](#document-viewer)
 - [Shared & Starred Files](#shared--starred-files)
 - [Settings](#settings)
-- [Registered Users](#registered-users)
-- [Admin & Check Updates](#admin--check-updates)
+- [Admin & Registered Users](#admin--registered-users)
+- [Check Updates](#check-updates)
 - [Security Management](#security-management)
 - [Active Sessions Management](#active-sessions-management)
 
@@ -75,17 +75,17 @@ This page contains the complete gallery of all available UI screenshots.
 
 ---
 
-## Registered Users
+## Admin & Registered Users
 
-![Registered Users](images/all-users.png)
+| Admin                              | Registered Users                          |
+|------------------------------------|-------------------------------------------|
+| ![Admin](images/admin-section.png) | ![Registered Users](images/all-users.png) |
 
 ---
 
-## Admin & Check Updates
+## Check Updates
 
-| Admin                              | Check Updates                              |
-|------------------------------------|--------------------------------------------|
-| ![Admin](images/admin-section.png) | ![File Manager](images/update-section.png) |
+![Check Updates](images/update-section.png)
 
 ---
 
