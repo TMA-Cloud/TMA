@@ -157,8 +157,8 @@ function validateBoolean(value) {
  */
 function validateToken(token) {
   if (typeof token !== 'string') return null;
-  // Share tokens are 8 character alphanumeric
-  const tokenRegex = /^[a-zA-Z0-9]{8}$/;
+  // Share tokens are 16 character alphanumeric (~93 bits entropy)
+  const tokenRegex = /^[a-zA-Z0-9]{16}$/;
   return tokenRegex.test(token) ? token : null;
 }
 

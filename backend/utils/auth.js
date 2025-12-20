@@ -2,14 +2,25 @@
  * Authentication utility functions
  */
 
+const { logger } = require('../config/logger');
+
+// Security check: warn if running in production without HTTPS
+if (process.env.NODE_ENV === 'production' && process.env.FORCE_INSECURE_COOKIES === 'true') {
+  logger.warn('[SECURITY] Running in production with FORCE_INSECURE_COOKIES=true. Cookies will not have secure flag. This is insecure!');
+}
+
 /**
  * Get cookie options for JWT tokens
  * @returns {Object} Cookie options
  */
 function getCookieOptions() {
+  const isProduction = process.env.NODE_ENV === 'production';
+  // In production, always use secure cookies unless explicitly overridden (not recommended)
+  const secure = isProduction && process.env.FORCE_INSECURE_COOKIES !== 'true';
+  
   return {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure,
     sameSite: 'lax',
     maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
   };
@@ -45,7 +56,8 @@ function isValidPassword(password, minLength = 6) {
  */
 function generateAuthToken(userId, jwtSecret, expiresIn = '7d') {
   const jwt = require('jsonwebtoken');
-  return jwt.sign({ id: userId }, jwtSecret, { expiresIn });
+  // Explicitly specify algorithm to prevent algorithm confusion attacks
+  return jwt.sign({ id: userId }, jwtSecret, { expiresIn, algorithm: 'HS256' });
 }
 
 module.exports = {

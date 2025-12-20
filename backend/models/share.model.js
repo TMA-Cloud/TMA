@@ -2,7 +2,9 @@ const pool = require('../config/db');
 const { generateId } = require('../utils/id');
 
 async function createShareLink(fileId, userId, fileIds = [fileId]) {
-  const id = generateId(8);
+  // Use 16-character tokens for ~93 bits of entropy (same as file IDs)
+  // This makes brute-force attacks computationally infeasible
+  const id = generateId(16);
   const client = await pool.connect();
   try {
     await client.query('BEGIN');

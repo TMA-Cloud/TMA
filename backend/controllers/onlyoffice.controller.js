@@ -18,8 +18,10 @@ const ONLYOFFICE_URL = process.env.ONLYOFFICE_URL;
 // Only needed if ONLYOFFICE is in Docker/remote - if not set, will derive from request
 const BACKEND_URL = process.env.BACKEND_URL;
 
+// SECURITY: Warn at startup if JWT secret is missing
+// OnlyOffice file serving will be disabled without it
 if (!ONLYOFFICE_JWT_SECRET) {
-  logger.warn('ONLYOFFICE_JWT_SECRET not set; ONLYOFFICE integration will run without JWT.');
+  logger.warn('[SECURITY] ONLYOFFICE_JWT_SECRET not set. OnlyOffice file serving endpoint will reject all requests. Set this secret to enable document editing.');
 }
 
 function getFileTypeFromName(name) {
@@ -29,10 +31,11 @@ function getFileTypeFromName(name) {
 
 function buildSignedFileToken(fileId) {
   if (!ONLYOFFICE_JWT_SECRET) return null;
+  // Explicitly specify algorithm to prevent algorithm confusion attacks
   return jwt.sign(
     { fileId },
     ONLYOFFICE_JWT_SECRET,
-    { expiresIn: '10m' },
+    { expiresIn: '10m', algorithm: 'HS256' },
   );
 }
 
@@ -107,11 +110,17 @@ function buildOnlyofficeConfig(file, userId, userName, downloadUrl, callbackUrl,
  */
 function signConfigToken(config) {
   if (!ONLYOFFICE_JWT_SECRET) return null;
-  return jwt.sign(config, ONLYOFFICE_JWT_SECRET);
+  // Explicitly specify algorithm to prevent algorithm confusion attacks
+  return jwt.sign(config, ONLYOFFICE_JWT_SECRET, { algorithm: 'HS256' });
 }
 
 async function getConfig(req, res) {
   try {
+    // SECURITY: Require JWT secret for OnlyOffice integration
+    if (!ONLYOFFICE_JWT_SECRET) {
+      return res.status(503).json({ message: 'OnlyOffice integration not configured. Set ONLYOFFICE_JWT_SECRET.' });
+    }
+
     const fileId = validateId(req.params.id);
     if (!fileId) {
       return res.status(400).json({ message: 'Invalid file ID' });
@@ -149,24 +158,33 @@ async function serveFile(req, res) {
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-    // Validate token if JWT secret is configured
-    if (ONLYOFFICE_JWT_SECRET) {
-      if (!token) {
-        logger.error('[ONLYOFFICE] Missing token for file', id);
-        return res.status(401).json({ error: 'Missing token' });
-      }
-      try {
-        // Decode token (it's already URL encoded)
-        const decodedToken = decodeURIComponent(String(token));
-        const payload = jwt.verify(decodedToken, ONLYOFFICE_JWT_SECRET);
-        if (payload.fileId !== id) {
-          logger.error('[ONLYOFFICE] Token fileId mismatch', { tokenFileId: payload.fileId, requestedId: id });
-          return res.status(401).json({ error: 'Invalid token' });
-        }
-      } catch (e) {
-        logger.error('[ONLYOFFICE] Token verification failed', e.message);
+    // SECURITY: Require JWT secret to be configured for file serving
+    // Without it, tokens cannot be cryptographically verified
+    if (!ONLYOFFICE_JWT_SECRET) {
+      logger.error('[ONLYOFFICE] File serving disabled - ONLYOFFICE_JWT_SECRET not configured');
+      return res.status(503).json({ error: 'OnlyOffice integration not configured securely' });
+    }
+
+    // SECURITY: Always require a valid token to serve files
+    // This prevents unauthorized file access if someone knows/guesses file IDs
+    if (!token) {
+      logger.error('[ONLYOFFICE] Missing token for file', id);
+      return res.status(401).json({ error: 'Missing token' });
+    }
+
+    // Validate token signature
+    try {
+      // Decode token (it's already URL encoded)
+      const decodedToken = decodeURIComponent(String(token));
+      // Explicitly specify allowed algorithms to prevent algorithm confusion attacks
+      const payload = jwt.verify(decodedToken, ONLYOFFICE_JWT_SECRET, { algorithms: ['HS256'] });
+      if (payload.fileId !== id) {
+        logger.error('[ONLYOFFICE] Token fileId mismatch', { tokenFileId: payload.fileId, requestedId: id });
         return res.status(401).json({ error: 'Invalid token' });
       }
+    } catch (e) {
+      logger.error('[ONLYOFFICE] Token verification failed', e.message);
+      return res.status(401).json({ error: 'Invalid token' });
     }
 
     // Fetch file path directly from DB by id
@@ -198,12 +216,17 @@ async function serveFile(req, res) {
 
 async function getViewerPage(req, res) {
   try {
+    // SECURITY: Require JWT secret for OnlyOffice integration
+    if (!ONLYOFFICE_JWT_SECRET) {
+      return res.status(503).send('OnlyOffice integration not configured. Set ONLYOFFICE_JWT_SECRET.');
+    }
+
     const fileId = validateId(req.params.id);
     if (!fileId) {
       return res.status(400).send('Invalid file ID');
     }
     const userId = req.userId;
-    
+
     const file = await getFile(fileId, userId);
     if (!file) return res.status(404).send('File not found');
 

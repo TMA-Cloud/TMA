@@ -24,7 +24,8 @@ module.exports = function(req, res, next) {
   }
 
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
+    // Explicitly specify allowed algorithms to prevent algorithm confusion attacks
+    const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] });
     req.userId = decoded.id;
 
     // Store userId in CLS context for automatic propagation to logs and audit events
