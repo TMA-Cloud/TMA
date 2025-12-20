@@ -13,6 +13,7 @@ const {
   getUserTokenVersion,
   invalidateAllSessions
 } = require('../models/user.model');
+const { createSession, deleteAllUserSessions, getActiveSessions, deleteSession } = require('../models/session.model');
 const pool = require('../config/db');
 const { getCookieOptions, isValidEmail, isValidPassword, generateAuthToken } = require('../utils/auth');
 const { sendError, sendSuccess } = require('../utils/response');
@@ -120,7 +121,14 @@ async function signup(req, res) {
     }
 
     // New users start with token_version = 1
-    const token = generateAuthToken(user.id, JWT_SECRET, { tokenVersion: 1, req });
+    // Create session record first to get session ID
+    const ipAddress = req?.ip || req?.socket?.remoteAddress || null;
+    const userAgent = req?.headers?.['user-agent'] || null;
+    const session = await createSession(user.id, 1, userAgent, ipAddress);
+    
+    // Generate token with session ID bound to it
+    const token = generateAuthToken(user.id, JWT_SECRET, { tokenVersion: 1, sessionId: session.id, req });
+    
     res.cookie('token', token, getCookieOptions());
     sendSuccess(res, { user });
   } catch (err) {
@@ -160,7 +168,15 @@ async function login(req, res) {
 
     // Get current token version for the user
     const tokenVersion = await getUserTokenVersion(user.id) || 1;
-    const token = generateAuthToken(user.id, JWT_SECRET, { tokenVersion, req });
+    
+    // Create session record first to get session ID
+    const ipAddress = req?.ip || req?.socket?.remoteAddress || null;
+    const userAgent = req?.headers?.['user-agent'] || null;
+    const session = await createSession(user.id, tokenVersion, userAgent, ipAddress);
+    
+    // Generate token with session ID bound to it
+    const token = generateAuthToken(user.id, JWT_SECRET, { tokenVersion, sessionId: session.id, req });
+    
     res.cookie('token', token, getCookieOptions());
     sendSuccess(res, { user: { id: user.id, email: user.email, name: user.name } });
   } catch (err) {
@@ -251,7 +267,15 @@ async function googleCallback(req, res) {
     logger.info({ userId: user.id, email }, 'User authenticated via Google OAuth');
     // Get current token version for the user
     const tokenVersion = await getUserTokenVersion(user.id) || 1;
-    const token = generateAuthToken(user.id, JWT_SECRET, { tokenVersion, req });
+    
+    // Create session record first to get session ID
+    const ipAddress = req?.ip || req?.socket?.remoteAddress || null;
+    const userAgent = req?.headers?.['user-agent'] || null;
+    const session = await createSession(user.id, tokenVersion, userAgent, ipAddress);
+    
+    // Generate token with session ID bound to it
+    const token = generateAuthToken(user.id, JWT_SECRET, { tokenVersion, sessionId: session.id, req });
+    
     res.cookie('token', token, getCookieOptions());
     res.redirect('/');
   } catch (err) {
@@ -262,11 +286,55 @@ async function googleCallback(req, res) {
 
 async function logout(req, res) {
   try {
-    // Log logout event (userId available from auth middleware via req.userId)
-    if (req.userId) {
+    let userId = req.userId || null;
+    let sessionId = null;
+
+    // Try to get userId and sessionId from token (logout may not use authMiddleware)
+    try {
+      const jwt = require('jsonwebtoken');
+      let token;
+      if (req.headers.cookie) {
+        const cookies = req.headers.cookie.split(';').map(c => c.trim());
+        const t = cookies.find(c => c.startsWith('token='));
+        if (t) token = t.slice('token='.length);
+      }
+      if (!token && req.headers.authorization) {
+        token = req.headers.authorization.split(' ')[1];
+      }
+      
+      if (token) {
+        const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] });
+        userId = decoded.id || userId;
+        sessionId = decoded.sid || null;
+      }
+    } catch (err) {
+      // If token decode fails, continue without session ID (token might be expired/invalid)
+      logger.debug({ err }, 'Could not decode token during logout');
+    }
+
+    // Revoke the current session if session ID is available
+    if (sessionId && userId) {
+      try {
+        const deleted = await deleteSession(sessionId, userId);
+        if (deleted) {
+          logger.info({ userId, sessionId }, 'Session revoked on logout');
+        }
+      } catch (err) {
+        // Log error but don't fail logout if session deletion fails
+        logger.warn({ err, userId, sessionId }, 'Failed to revoke session on logout');
+      }
+    }
+
+    // Log logout event
+    if (userId) {
       const { logAuditEvent } = require('../services/auditLogger');
-      await logAuditEvent('auth.logout', { status: 'success', resourceType: 'auth' }, req);
-      logger.info({ userId: req.userId }, 'User logged out');
+      await logAuditEvent('auth.logout', { 
+        status: 'success', 
+        resourceType: 'auth',
+        resourceId: sessionId || null,
+        details: sessionId ? 'User logged out and session revoked' : 'User logged out'
+      }, req);
+      logger.info({ userId, sessionId }, 'User logged out');
     }
 
     res.clearCookie('token');
@@ -290,6 +358,9 @@ async function logoutAllDevices(req, res) {
 
     // Invalidate all sessions
     const newTokenVersion = await invalidateAllSessions(req.userId);
+    
+    // Delete all session records
+    await deleteAllUserSessions(req.userId);
     
     // Log the security event
     const { logAuditEvent } = require('../services/auditLogger');
@@ -325,6 +396,95 @@ async function profile(req, res) {
   }
 }
 
+/**
+ * Get all active sessions for the current user
+ */
+async function getSessions(req, res) {
+  try {
+    if (!req.userId) {
+      return sendError(res, 401, 'Not authenticated');
+    }
+
+    const user = await getUserById(req.userId);
+    if (!user) {
+      return sendError(res, 404, 'User not found');
+    }
+
+    // Get session ID from token to identify current session
+    let currentSessionId = null;
+    try {
+      const jwt = require('jsonwebtoken');
+      const JWT_SECRET = process.env.JWT_SECRET;
+      let token;
+      if (req.headers.cookie) {
+        const cookies = req.headers.cookie.split(';').map(c => c.trim());
+        const t = cookies.find(c => c.startsWith('token='));
+        if (t) token = t.slice('token='.length);
+      }
+      if (!token && req.headers.authorization) {
+        token = req.headers.authorization.split(' ')[1];
+      }
+      if (token) {
+        const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] });
+        currentSessionId = decoded.sid || null;
+      }
+    } catch (err) {
+      // If token decode fails, continue without current session ID
+      logger.debug({ err }, 'Could not decode token to get current session ID');
+    }
+
+    const currentTokenVersion = user.token_version || 1;
+    const sessions = await getActiveSessions(req.userId, currentTokenVersion);
+    
+    // Mark which session is the current one
+    const sessionsWithCurrent = sessions.map(session => ({
+      ...session,
+      isCurrent: session.id === currentSessionId
+    }));
+    
+    sendSuccess(res, { sessions: sessionsWithCurrent });
+  } catch (err) {
+    logger.error({ err, userId: req.userId }, 'Failed to get sessions');
+    sendError(res, 500, 'Failed to get sessions', err);
+  }
+}
+
+/**
+ * Revoke a specific session
+ */
+async function revokeSession(req, res) {
+  try {
+    if (!req.userId) {
+      return sendError(res, 401, 'Not authenticated');
+    }
+
+    const { sessionId } = req.params;
+    if (!sessionId) {
+      return sendError(res, 400, 'Session ID required');
+    }
+
+    const deleted = await deleteSession(sessionId, req.userId);
+    if (!deleted) {
+      return sendError(res, 404, 'Session not found');
+    }
+
+    // Log the security event
+    const { logAuditEvent } = require('../services/auditLogger');
+    await logAuditEvent('auth.session_revoked', {
+      status: 'success',
+      resourceType: 'auth',
+      resourceId: sessionId,
+      details: 'User revoked a specific session'
+    }, req);
+
+    logger.info({ userId: req.userId, sessionId }, 'User revoked a session');
+    sendSuccess(res, { message: 'Session revoked successfully' });
+  } catch (err) {
+    logger.error({ err, userId: req.userId }, 'Failed to revoke session');
+    sendError(res, 500, 'Failed to revoke session', err);
+  }
+}
+
 module.exports = {
   signup,
   login,
@@ -333,5 +493,7 @@ module.exports = {
   logout,
   logoutAllDevices,
   profile,
+  getSessions,
+  revokeSession,
   googleAuthEnabled: !!GOOGLE_AUTH_ENABLED
 };

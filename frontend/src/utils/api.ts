@@ -140,6 +140,46 @@ export async function logoutAllDevices(): Promise<{
   );
 }
 
+export interface ActiveSession {
+  id: string;
+  user_id: string;
+  token_version: number;
+  user_agent: string | null;
+  ip_address: string | null;
+  created_at: string;
+  last_activity: string;
+  isCurrent?: boolean;
+}
+
+/**
+ * Get all active sessions for the current user
+ */
+export async function getActiveSessions(): Promise<{
+  sessions: ActiveSession[];
+}> {
+  return await apiGet<{ sessions: ActiveSession[] }>("/api/sessions");
+}
+
+/**
+ * Make a DELETE request
+ */
+export async function apiDelete<T = unknown>(endpoint: string): Promise<T> {
+  const res = await apiRequest(endpoint, { method: "DELETE" });
+  if (!res.ok) {
+    throw new Error(`API request failed: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+/**
+ * Revoke a specific session
+ */
+export async function revokeSession(sessionId: string): Promise<{
+  message: string;
+}> {
+  return await apiDelete<{ message: string }>(`/api/sessions/${sessionId}`);
+}
+
 export interface VersionInfo {
   frontend: string;
   backend: string;

@@ -13,7 +13,9 @@ This page contains the complete gallery of all available UI screenshots.
 - [Shared & Starred Files](#shared--starred-files)
 - [Settings](#settings)
 - [Registered Users](#registered-users)
-- [Admin & Check Updates Section](#admin--check-updates)
+- [Admin & Check Updates](#admin--check-updates)
+- [Security Management](#security-management)
+- [Active Sessions Management](#active-sessions-management)
 
 ---
 
@@ -84,3 +86,15 @@ This page contains the complete gallery of all available UI screenshots.
 | Admin                              | Check Updates                              |
 |------------------------------------|--------------------------------------------|
 | ![Admin](images/admin-section.png) | ![File Manager](images/update-section.png) |
+
+---
+
+## Security Management
+
+![Security Management](images/security-section.png)
+
+---
+
+## Active Sessions Management
+
+![Active Sessions Management](images/active-sessions.png)

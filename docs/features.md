@@ -54,6 +54,38 @@ Tokens can be bound to the client's browser fingerprint to detect if a stolen to
 - **Configurable**: Can be disabled via `SESSION_BINDING=false` for users who frequently switch browsers
 - **Audit Logging**: Suspicious token usage is logged as `auth.suspicious_token` events
 
+#### Active Sessions Management
+
+Users can view and manage all their active sessions from the Settings page:
+
+- **Session Visibility**: View all active sessions with device information, IP address, and last activity timestamp
+- **Individual Revocation**: Revoke specific sessions without affecting other active sessions
+- **Current Session Identification**: The current session is clearly marked in the list
+- **Real-Time Activity Tracking**: Last activity timestamp updates automatically on each request
+- **Security Monitoring**: Helps users identify suspicious or unauthorized access
+
+**How It Works:**
+
+1. Each login creates a new session record with a unique session ID
+2. Session ID is embedded in the JWT token for validation
+3. Users can view all active sessions from Settings → Security → "View sessions"
+4. Each session shows:
+   - Device type (Windows, Mac, Mobile, etc.)
+   - Browser/User-Agent information
+   - IP address
+   - Creation time
+   - Last activity timestamp (updates on each request)
+5. Users can revoke individual sessions by clicking "Revoke"
+6. Revoked sessions are immediately invalidated - next request with that token fails
+7. If the current session is revoked, the user is automatically logged out
+
+**Session Tracking:**
+
+- Sessions are stored in the `sessions` table with token version binding
+- Only sessions with the current `token_version` are considered active
+- Session activity is updated automatically on each authenticated request
+- Old sessions are cleaned up automatically (30-day retention)
+
 #### Logout All Devices
 
 Users can invalidate all their active sessions from the Settings page:
@@ -67,8 +99,9 @@ Users can invalidate all their active sessions from the Settings page:
 1. User clicks "Logout everywhere" in Settings → Security
 2. Backend increments `token_version` in database
 3. All existing tokens become invalid (version mismatch)
-4. User is logged out and redirected to login page
-5. Other devices will be logged out on their next API request
+4. All session records are deleted from the database
+5. User is logged out and redirected to login page
+6. Other devices will be logged out on their next API request
 
 See [Environment Variables](environment.md#session_binding) for details.
 

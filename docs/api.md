@@ -153,9 +153,107 @@ Log out from all devices by invalidating all tokens.
 **Behavior:**
 
 - Invalidates all existing tokens by incrementing token version
+- Deletes all session records from the database
 - Clears the current session cookie
 - Other devices will be logged out on their next API request
 - Action is logged in audit trail
+
+---
+
+### `GET /api/sessions`
+
+Get all active sessions for the authenticated user.
+
+**Headers:** Requires authentication
+
+**Description:** Returns a list of all active sessions for the current user. Each session includes device information, IP address, creation time, and last activity timestamp. The current session is marked with an `isCurrent` flag.
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "sessions": [
+    {
+      "id": "abc123def456",
+      "user_id": "6N6d5yVv7LNU9LRx",
+      "token_version": 1,
+      "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36...",
+      "ip_address": "192.168.1.100",
+      "created_at": "2025-12-20T10:00:00.000Z",
+      "last_activity": "2025-12-20T10:15:30.000Z",
+      "isCurrent": true
+    },
+    {
+      "id": "xyz789ghi012",
+      "user_id": "6N6d5yVv7LNU9LRx",
+      "token_version": 1,
+      "user_agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)...",
+      "ip_address": "192.168.1.101",
+      "created_at": "2025-12-20T09:30:00.000Z",
+      "last_activity": "2025-12-20T09:45:15.000Z",
+      "isCurrent": false
+    }
+  ]
+}
+```
+
+**Status Codes:**
+
+- `200` - Sessions retrieved successfully
+- `401` - Not authenticated
+- `500` - Server error
+
+**Behavior:**
+
+- Returns only sessions with the current `token_version`
+- Sessions are ordered by `last_activity` (most recent first)
+- Current session is identified by comparing session ID in token
+- Last activity timestamp updates automatically on each request
+
+---
+
+### `DELETE /api/sessions/:sessionId`
+
+Revoke a specific session.
+
+**Headers:** Requires authentication
+
+**Audit Logging:** Creates `auth.session_revoked` audit event.
+
+**Description:** Deletes a specific session record from the database. The session ID is extracted from the URL parameter. Once revoked, any requests using that session's token will fail with a 401 error. If the revoked session is the current session, the user will be automatically logged out.
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "message": "Session revoked successfully"
+}
+```
+
+**Status Codes:**
+
+- `200` - Session revoked successfully
+- `400` - Session ID required
+- `401` - Not authenticated
+- `404` - Session not found (or doesn't belong to user)
+- `500` - Server error
+
+**Behavior:**
+
+- Deletes the session record from the database
+- Session validation in middleware will fail for that session ID
+- Next request with the revoked session's token returns 401
+- If revoking current session, user should be logged out by frontend
+- Action is logged in audit trail
+
+**Security Notes:**
+
+- Users can only revoke their own sessions
+- Session ID is validated against the authenticated user ID
+- Revoking a session doesn't affect other active sessions
+- Current session can be revoked (user will be logged out)
 
 #### GET `/api/profile`
 

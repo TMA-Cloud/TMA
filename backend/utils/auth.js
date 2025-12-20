@@ -71,18 +71,24 @@ function generateClientFingerprint(req) {
  * @param {string} jwtSecret - JWT secret key
  * @param {Object} options - Additional options
  * @param {number} options.tokenVersion - User's current token version
+ * @param {string} options.sessionId - Session ID to bind token to
  * @param {Object} options.req - Express request object for fingerprinting
  * @param {string} options.expiresIn - Token expiration (default: '7d')
  * @returns {string} JWT token
  */
 function generateAuthToken(userId, jwtSecret, options = {}) {
   const jwt = require('jsonwebtoken');
-  const { tokenVersion = 1, req = null, expiresIn = '7d' } = options;
+  const { tokenVersion = 1, sessionId = null, req = null, expiresIn = '7d' } = options;
   
   const payload = { 
     id: userId,
     v: tokenVersion  // Token version for session invalidation
   };
+  
+  // Add session ID if provided (for individual session revocation)
+  if (sessionId) {
+    payload.sid = sessionId;
+  }
   
   // Add client fingerprint if request is available and binding is enabled
   if (SESSION_BINDING_ENABLED && req) {

@@ -101,14 +101,20 @@ Failed login attempt.
 
 User logs out from current session.
 
+**Status:** `success`
+
 **Metadata:**
 
 ```json
 {
   "status": "success",
-  "resourceType": "auth"
+  "resourceType": "auth",
+  "resourceId": "abc123def456",
+  "details": "User logged out and session revoked"
 }
 ```
+
+**Note:** The `resourceId` contains the session ID that was revoked. If the session ID is not available (e.g., token expired), `resourceId` will be `null` and `details` will be "User logged out".
 
 #### `auth.logout_all`
 
@@ -141,6 +147,25 @@ Potential session hijacking detected (token fingerprint mismatch).
 ```
 
 **Note:** This event is logged when a token is used from a different browser than the one that originally received it. This may indicate a stolen token being used by an attacker.
+
+#### `auth.session_revoked`
+
+User revoked a specific session.
+
+**Status:** `success`
+
+**Metadata:**
+
+```json
+{
+  "status": "success",
+  "resourceType": "auth",
+  "resourceId": "abc123def456",
+  "details": "User revoked a specific session"
+}
+```
+
+**Note:** This event is logged when a user revokes an individual session from the Active Sessions page. The `resourceId` contains the session ID that was revoked.
 
 ### File Events
 

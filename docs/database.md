@@ -130,6 +130,41 @@ Stores application-wide settings.
 - `first_user_id` is set when the first user signs up and cannot be changed afterward
 - The foreign key constraint with `ON DELETE RESTRICT` prevents deletion of the first user
 
+### `sessions`
+
+Stores active user sessions for session management and revocation.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | TEXT | PRIMARY KEY | Unique session identifier |
+| `user_id` | TEXT | NOT NULL, FK → users.id | User who owns this session |
+| `token_version` | INTEGER | NOT NULL | Token version when session was created |
+| `user_agent` | TEXT | | Browser/client user agent string |
+| `ip_address` | INET | | IP address of client |
+| `created_at` | TIMESTAMPTZ | NOT NULL, DEFAULT now() | Session creation timestamp |
+| `last_activity` | TIMESTAMPTZ | NOT NULL, DEFAULT now() | Last activity timestamp (updates on each request) |
+
+**Indexes:**
+
+- Primary key on `id`
+- Index on `(user_id, created_at DESC)` - Fast lookup of user's sessions
+- Index on `(user_id, token_version)` - Filter active sessions by token version
+- Index on `last_activity` - For cleanup of old sessions
+
+**Foreign Keys:**
+
+- `user_id` → `users.id` (ON DELETE CASCADE) - Sessions deleted when user is deleted
+
+**Notes:**
+
+- Sessions are created on login/signup with a unique session ID
+- Session ID is embedded in JWT tokens for validation
+- Only sessions with the current `token_version` are considered active
+- `last_activity` is updated automatically on each authenticated request
+- Old sessions are cleaned up periodically (30-day retention)
+- Sessions are deleted when user logs out from all devices
+- Individual sessions can be revoked, which deletes the session record
+
 ### `audit_logs`
 
 Stores comprehensive audit trail of all user actions and system events.
@@ -225,6 +260,13 @@ Tracks applied database migrations.
 - A file can be in many share links
 - Junction table: `share_link_files`
 
+### User → Sessions
+
+- One-to-many relationship
+- A user can have many active sessions
+- Sessions are deleted when user is deleted (CASCADE)
+- Each session is bound to a specific token version
+
 ### User → Audit Logs
 
 - One-to-many relationship
@@ -270,7 +312,12 @@ Tracks applied database migrations.
    - `share_links.token` - Fast lookup by share token
    - `share_link_files.share_link_id` - Fast file lookup for shares
 
-5. **Audit Logs:**
+5. **Sessions:**
+   - `sessions.user_id` - Fast lookup of user's sessions
+   - `sessions.token_version` - Filter active sessions by token version
+   - `sessions.last_activity` - Time-based queries and cleanup
+
+6. **Audit Logs:**
    - `audit_logs.user_id` - Fast lookup of user activity
    - `audit_logs.event_type` - Filter by event type
    - `audit_logs.created_at` - Time-based queries and sorting
@@ -312,6 +359,8 @@ Migrations are stored in `backend/migrations/` and applied automatically on serv
 12. `012_add_signup_setting.sql` - Signup control settings table
 13. `013_create_audit_log.sql` - Audit logs table with indexes
 14. `014_audit_retention.sql` - Audit log retention policy and cleanup
+15. `015_add_token_version.sql` - Token versioning for session invalidation
+16. `016_create_sessions.sql` - Sessions table for active session management
 
 ## Query Patterns
 

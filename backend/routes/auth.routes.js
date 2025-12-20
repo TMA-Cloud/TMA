@@ -8,6 +8,8 @@ const {
   logout,
   logoutAllDevices,
   profile,
+  getSessions,
+  revokeSession,
   googleAuthEnabled
 } = require('../controllers/auth.controller');
 const authMiddleware = require('../middleware/auth.middleware');
@@ -25,5 +27,7 @@ if (googleAuthEnabled) {
 router.post('/logout', logout);
 router.post('/logout-all', authMiddleware, logoutAllDevices);
 router.get('/profile', authMiddleware, profile);
+router.get('/sessions', authMiddleware, getSessions);
+router.delete('/sessions/:sessionId', authMiddleware, revokeSession);
 
 module.exports = router;
