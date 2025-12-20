@@ -8,6 +8,8 @@ import {
   ChevronRight,
   Loader2,
   RefreshCw,
+  Shield,
+  LogOut,
 } from "lucide-react";
 import { formatFileSize } from "../../utils/fileUtils";
 import {
@@ -16,13 +18,14 @@ import {
   fetchAllUsers,
   getCurrentVersions,
   fetchLatestVersions,
+  logoutAllDevices,
 } from "../../utils/api";
 import type { UserSummary, VersionInfo } from "../../utils/api";
 import { useToast } from "../../hooks/useToast";
 import { Modal } from "../ui/Modal";
 
 export const Settings: React.FC = () => {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const { usage, loading } = useStorageUsage();
   const { showToast } = useToast();
   const [signupEnabled, setSignupEnabled] = useState(false);
@@ -44,6 +47,7 @@ export const Settings: React.FC = () => {
   const [checkingVersions, setCheckingVersions] = useState(false);
   const [versionChecked, setVersionChecked] = useState(false);
   const [versionError, setVersionError] = useState<string | null>(null);
+  const [loggingOutAll, setLoggingOutAll] = useState(false);
   const storageUsagePercent =
     usage && usage.total > 0
       ? Math.min(100, Math.round((usage.used / usage.total) * 100))
@@ -163,6 +167,34 @@ export const Settings: React.FC = () => {
 
   const handleCloseUsersModal = () => {
     setUsersModalOpen(false);
+  };
+
+  const handleLogoutAllDevices = async () => {
+    if (loggingOutAll) return;
+
+    try {
+      setLoggingOutAll(true);
+      await logoutAllDevices();
+      showToast("Successfully logged out from all devices", "success");
+    } catch (error) {
+      console.error("Failed to logout from all devices:", error);
+      showToast("Failed to logout from all devices", "error");
+      // Don't return - still clear local session to avoid inconsistent state
+      // (e.g., server may have processed the request before network error)
+    } finally {
+      setLoggingOutAll(false);
+    }
+
+    // Always clear local session to ensure consistent state
+    // If server logout failed, user can simply log back in
+    // If server logout succeeded (or partially succeeded), this ensures local state matches
+    try {
+      await logout();
+    } catch (error) {
+      console.error("Failed to clear local session:", error);
+      // Redirect to login page manually if logout() fails
+      window.location.href = "/";
+    }
   };
 
   const formatSignupDate = (isoString: string) => {
@@ -303,6 +335,24 @@ export const Settings: React.FC = () => {
         },
       ],
     },
+    {
+      title: "Security",
+      icon: Shield,
+      description: "Manage your account security and active sessions.",
+      items: [
+        {
+          label: "Logout All Devices",
+          value: "",
+          action: loggingOutAll ? "Logging out..." : "Logout everywhere",
+          onAction: handleLogoutAllDevices,
+          actionDisabled: loggingOutAll,
+          actionIcon: LogOut,
+          actionVariant: "danger" as const,
+          description:
+            "Sign out from all devices and browsers. You will need to login again.",
+        },
+      ],
+    },
   ];
 
   return (
@@ -431,43 +481,55 @@ export const Settings: React.FC = () => {
                       </div>
                     ) : "action" in item && item.action !== undefined ? (
                       <div className="flex flex-col items-end">
-                        <button
-                          onClick={
-                            "onAction" in item &&
-                            typeof item.onAction === "function"
-                              ? item.onAction
-                              : undefined
-                          }
-                          disabled={
+                        {(() => {
+                          const isDanger =
+                            "actionVariant" in item &&
+                            item.actionVariant === "danger";
+                          const isDisabled =
                             ("actionDisabled" in item &&
                               item.actionDisabled === true) ||
                             !(
                               "onAction" in item &&
                               typeof item.onAction === "function"
-                            )
-                          }
-                          className={`
-                            inline-flex items-center gap-2 px-4 py-2 text-sm rounded-2xl transition-all duration-200 border
-                            ${
-                              ("actionDisabled" in item &&
-                                item.actionDisabled === true) ||
-                              !(
+                            );
+                          const ActionIcon =
+                            "actionIcon" in item && item.actionIcon
+                              ? item.actionIcon
+                              : ChevronRight;
+
+                          return (
+                            <button
+                              onClick={
                                 "onAction" in item &&
                                 typeof item.onAction === "function"
-                              )
-                                ? "bg-gray-200 dark:bg-gray-700 cursor-not-allowed opacity-70 border-transparent"
-                                : "border-blue-500/40 text-blue-600 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/30"
-                            }
-                          `}
-                        >
-                          {item.label === "Registered Users" &&
-                          loadingUsersList ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <ChevronRight className="w-4 h-4" />
-                          )}
-                          <span>{item.action}</span>
-                        </button>
+                                  ? item.onAction
+                                  : undefined
+                              }
+                              disabled={isDisabled}
+                              className={`
+                                inline-flex items-center gap-2 px-4 py-2 text-sm rounded-2xl transition-all duration-200 border
+                                ${
+                                  isDisabled
+                                    ? "bg-gray-200 dark:bg-gray-700 cursor-not-allowed opacity-70 border-transparent"
+                                    : isDanger
+                                      ? "border-red-500/40 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30"
+                                      : "border-blue-500/40 text-blue-600 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/30"
+                                }
+                              `}
+                            >
+                              {item.label === "Registered Users" &&
+                              loadingUsersList ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : item.label === "Logout All Devices" &&
+                                loggingOutAll ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <ActionIcon className="w-4 h-4" />
+                              )}
+                              <span>{item.action}</span>
+                            </button>
+                          );
+                        })()}
                       </div>
                     ) : (
                       <span className="text-base font-semibold text-gray-700 dark:text-gray-200 text-left sm:text-right break-words">

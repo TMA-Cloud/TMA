@@ -65,6 +65,7 @@ docs/
 1. Review [Audit Trail](audit.md) for compliance tracking
 2. Check [Logging System](logging.md) for secret masking and security
 3. See [Features - Security](features.md#security-features) for security features
+4. See [Features - Session Security](features.md#session-security) for session hijacking protection
 
 ## Contributing
 

@@ -6,6 +6,7 @@ const {
   googleLogin,
   googleCallback,
   logout,
+  logoutAllDevices,
   profile,
   googleAuthEnabled
 } = require('../controllers/auth.controller');
@@ -22,6 +23,7 @@ if (googleAuthEnabled) {
   router.get('/google/callback', googleCallback);
 }
 router.post('/logout', logout);
+router.post('/logout-all', authMiddleware, logoutAllDevices);
 router.get('/profile', authMiddleware, profile);
 
 module.exports = router;

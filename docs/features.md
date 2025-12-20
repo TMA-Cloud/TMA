@@ -33,6 +33,45 @@ Optional Google OAuth integration:
 
 See [Setup Guide](setup.md#google-oauth-issues) for troubleshooting.
 
+### Session Security
+
+Multiple layers of protection against session hijacking and token theft:
+
+#### Token Versioning
+
+Each user has a `token_version` that is embedded in their JWT tokens. When a user logs out from all devices, the version is incremented, instantly invalidating all existing tokens.
+
+- **Automatic Invalidation**: All sessions are invalidated when the user clicks "Logout All Devices"
+- **Version Mismatch Detection**: Tokens with outdated versions are rejected with "Session expired" message
+- **Database-Backed**: Token versions are stored in the database for reliable validation
+
+#### Session Binding (Fingerprinting)
+
+Tokens can be bound to the client's browser fingerprint to detect if a stolen token is being used from a different device:
+
+- **Browser Fingerprinting**: Tokens include a hash of the User-Agent header
+- **Mismatch Detection**: Requests from different browsers are blocked and logged as suspicious
+- **Configurable**: Can be disabled via `SESSION_BINDING=false` for users who frequently switch browsers
+- **Audit Logging**: Suspicious token usage is logged as `auth.suspicious_token` events
+
+#### Logout All Devices
+
+Users can invalidate all their active sessions from the Settings page:
+
+- **One-Click Invalidation**: Immediately invalidates all tokens across all devices
+- **Security Response**: Useful if a user suspects their token was stolen or lost a device
+- **Audit Trail**: Action is logged as `auth.logout_all` event
+
+**How It Works:**
+
+1. User clicks "Logout everywhere" in Settings → Security
+2. Backend increments `token_version` in database
+3. All existing tokens become invalid (version mismatch)
+4. User is logged out and redirected to login page
+5. Other devices will be logged out on their next API request
+
+See [Environment Variables](environment.md#session_binding) for details.
+
 ### Signup Control (Self-Hosted)
 
 For self-hosted deployments, signup can be controlled to prevent unauthorized account creation:
@@ -482,6 +521,8 @@ TMA Cloud features **dedicated mobile and desktop UI/UX** that are completely se
 - Email format validation
 - Password strength requirements
 - Complete audit trail of authentication events
+- Session hijacking protection via token versioning and fingerprinting (see [Session Security](#session-security))
+- Logout from all devices to invalidate stolen tokens
 
 ### Logging Security
 

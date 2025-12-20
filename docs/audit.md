@@ -97,6 +97,51 @@ Failed login attempt.
 }
 ```
 
+#### `auth.logout`
+
+User logs out from current session.
+
+**Metadata:**
+
+```json
+{
+  "status": "success",
+  "resourceType": "auth"
+}
+```
+
+#### `auth.logout_all`
+
+User logs out from all devices (invalidates all sessions).
+
+**Metadata:**
+
+```json
+{
+  "status": "success",
+  "resourceType": "auth",
+  "details": "User invalidated all active sessions"
+}
+```
+
+#### `auth.suspicious_token`
+
+Potential session hijacking detected (token fingerprint mismatch).
+
+**Status:** `failure`
+
+**Metadata:**
+
+```json
+{
+  "status": "failure",
+  "resourceType": "auth",
+  "details": "Token fingerprint mismatch - possible session hijacking attempt"
+}
+```
+
+**Note:** This event is logged when a token is used from a different browser than the one that originally received it. This may indicate a stolen token being used by an attacker.
+
 ### File Events
 
 #### `file.upload`
@@ -434,7 +479,16 @@ ORDER BY created_at DESC;
 ```sql
 SELECT event_type, user_id, ip_address, metadata->>'email' as email, created_at
 FROM audit_logs
-WHERE event_type IN ('user.login', 'user.login.failed', 'user.logout')
+WHERE event_type IN ('user.login', 'user.login.failed', 'user.logout', 'auth.logout', 'auth.logout_all')
+ORDER BY created_at DESC;
+```
+
+### View Security Events (Suspicious Activity)
+
+```sql
+SELECT event_type, user_id, ip_address, user_agent, metadata->>'details' as details, created_at
+FROM audit_logs
+WHERE event_type IN ('auth.suspicious_token', 'user.login.failed')
 ORDER BY created_at DESC;
 ```
 

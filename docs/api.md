@@ -113,7 +113,7 @@ Authenticate user and receive JWT token.
 
 Log out current user (clears token cookie).
 
-**Audit Logging:** Creates `user.logout` audit event.
+**Audit Logging:** Creates `auth.logout` audit event.
 
 **Response:**
 
@@ -123,6 +123,39 @@ Log out current user (clears token cookie).
   "message": "Logged out successfully"
 }
 ```
+
+#### POST `/api/logout-all`
+
+Log out from all devices by invalidating all tokens.
+
+**Headers:** Requires authentication
+
+**Audit Logging:** Creates `auth.logout_all` audit event.
+
+**Description:** Increments the user's `token_version` in the database, which invalidates all existing JWT tokens for that user. This is useful when a user suspects their session has been compromised or wants to sign out from all devices.
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "message": "Successfully logged out from all devices",
+  "sessionsInvalidated": true
+}
+```
+
+**Status Codes:**
+
+- `200` - All sessions invalidated successfully
+- `401` - Not authenticated
+- `500` - Server error
+
+**Behavior:**
+
+- Invalidates all existing tokens by incrementing token version
+- Clears the current session cookie
+- Other devices will be logged out on their next API request
+- Action is logged in audit trail
 
 #### GET `/api/profile`
 

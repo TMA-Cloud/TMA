@@ -9,7 +9,9 @@ const {
   createUserWithGoogle,
   updateGoogleId,
   getSignupEnabled,
-  setSignupEnabled
+  setSignupEnabled,
+  getUserTokenVersion,
+  invalidateAllSessions
 } = require('../models/user.model');
 const pool = require('../config/db');
 const { getCookieOptions, isValidEmail, isValidPassword, generateAuthToken } = require('../utils/auth');
@@ -117,7 +119,8 @@ async function signup(req, res) {
       }
     }
 
-    const token = generateAuthToken(user.id, JWT_SECRET);
+    // New users start with token_version = 1
+    const token = generateAuthToken(user.id, JWT_SECRET, { tokenVersion: 1, req });
     res.cookie('token', token, getCookieOptions());
     sendSuccess(res, { user });
   } catch (err) {
@@ -155,7 +158,9 @@ async function login(req, res) {
     await loginSuccess(user.id, email, req);
     logger.info({ userId: user.id, email }, 'User logged in successfully');
 
-    const token = generateAuthToken(user.id, JWT_SECRET);
+    // Get current token version for the user
+    const tokenVersion = await getUserTokenVersion(user.id) || 1;
+    const token = generateAuthToken(user.id, JWT_SECRET, { tokenVersion, req });
     res.cookie('token', token, getCookieOptions());
     sendSuccess(res, { user: { id: user.id, email: user.email, name: user.name } });
   } catch (err) {
@@ -244,7 +249,9 @@ async function googleCallback(req, res) {
     }
 
     logger.info({ userId: user.id, email }, 'User authenticated via Google OAuth');
-    const token = generateAuthToken(user.id, JWT_SECRET);
+    // Get current token version for the user
+    const tokenVersion = await getUserTokenVersion(user.id) || 1;
+    const token = generateAuthToken(user.id, JWT_SECRET, { tokenVersion, req });
     res.cookie('token', token, getCookieOptions());
     res.redirect('/');
   } catch (err) {
@@ -271,6 +278,41 @@ async function logout(req, res) {
   }
 }
 
+/**
+ * Logout from all devices by invalidating all tokens
+ * This increments the user's token_version, making all existing tokens invalid
+ */
+async function logoutAllDevices(req, res) {
+  try {
+    if (!req.userId) {
+      return sendError(res, 401, 'Not authenticated');
+    }
+
+    // Invalidate all sessions
+    const newTokenVersion = await invalidateAllSessions(req.userId);
+    
+    // Log the security event
+    const { logAuditEvent } = require('../services/auditLogger');
+    await logAuditEvent('auth.logout_all', { 
+      status: 'success', 
+      resourceType: 'auth',
+      details: 'User invalidated all active sessions'
+    }, req);
+    logger.info({ userId: req.userId, newTokenVersion }, 'User logged out from all devices');
+
+    // Clear the current session cookie
+    res.clearCookie('token');
+    
+    sendSuccess(res, { 
+      message: 'Successfully logged out from all devices',
+      sessionsInvalidated: true
+    });
+  } catch (err) {
+    logger.error({ err, userId: req.userId }, 'Logout all devices error');
+    sendError(res, 500, 'Failed to logout from all devices', err);
+  }
+}
+
 async function profile(req, res) {
   try {
     const user = await getUserById(req.userId);
@@ -289,6 +331,7 @@ module.exports = {
   googleLogin,
   googleCallback,
   logout,
+  logoutAllDevices,
   profile,
   googleAuthEnabled: !!GOOGLE_AUTH_ENABLED
 };

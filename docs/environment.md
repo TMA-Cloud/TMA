@@ -110,6 +110,24 @@ Create a `.env` file in the **root directory** of the project with the following
 - **Example:** `JWT_SECRET=your_super_secret_jwt_key_here`
 - **Security:** Generate a strong random string (at least 32 characters)
 
+#### `SESSION_BINDING`
+
+- **Type:** String
+- **Required:** No
+- **Default:** `true`
+- **Values:** `true` or `false`
+- **Description:** Enable session binding to prevent token theft. When enabled, tokens are bound to the user's browser fingerprint (User-Agent hash). If a token is used from a different browser, the request is blocked and logged as suspicious.
+- **Example:** `SESSION_BINDING=true`
+- **When to Disable:**
+  - Users frequently switch browsers or devices
+  - Users access the app from multiple User-Agent strings (e.g., browser extensions modifying headers)
+  - Development/testing environments
+- **Security:**
+  - When enabled, stolen tokens cannot be used from different browsers
+  - Suspicious token usage is logged as `auth.suspicious_token` audit events
+  - Provides protection against session hijacking without affecting legitimate users
+- **See:** [Features - Session Security](features.md#session-security) for complete details
+
 ---
 
 ### Google OAuth 2.0 (Optional)

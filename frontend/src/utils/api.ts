@@ -127,6 +127,19 @@ export async function fetchAllUsers(): Promise<{
   return await apiGet<{ users: UserSummary[] }>("/api/user/all");
 }
 
+/**
+ * Logout from all devices by invalidating all tokens
+ * This will log out the user from every device/browser
+ */
+export async function logoutAllDevices(): Promise<{
+  message: string;
+  sessionsInvalidated: boolean;
+}> {
+  return await apiPost<{ message: string; sessionsInvalidated: boolean }>(
+    "/api/logout-all",
+  );
+}
+
 export interface VersionInfo {
   frontend: string;
   backend: string;

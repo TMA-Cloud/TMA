@@ -21,10 +21,44 @@ async function getUserByEmail(email) {
 
 async function getUserById(id) {
   const result = await pool.query(
-    'SELECT id, email, name FROM users WHERE id = $1',
+    'SELECT id, email, name, token_version FROM users WHERE id = $1',
     [id]
   );
   return result.rows[0];
+}
+
+/**
+ * Get user's current token version for validation
+ * @param {string} id - User ID
+ * @returns {number|null} Token version or null if user not found
+ */
+async function getUserTokenVersion(id) {
+  const result = await pool.query(
+    'SELECT token_version FROM users WHERE id = $1',
+    [id]
+  );
+  return result.rows[0]?.token_version ?? null;
+}
+
+/**
+ * Invalidate all user sessions by incrementing token_version
+ * @param {string} userId - User ID
+ * @returns {number} New token version
+ */
+async function invalidateAllSessions(userId) {
+  const result = await pool.query(
+    `UPDATE users 
+     SET token_version = token_version + 1, 
+         last_token_invalidation = NOW() 
+     WHERE id = $1 
+     RETURNING token_version`,
+    [userId]
+  );
+  if (result.rows.length === 0) {
+    throw new Error('User not found');
+  }
+  logger.info({ userId }, 'All user sessions invalidated');
+  return result.rows[0].token_version;
 }
 
 async function getUserStorageUsage(userId) {
@@ -200,5 +234,7 @@ module.exports = {
   getSignupEnabled,
   setSignupEnabled,
   getTotalUserCount,
-  getAllUsersBasic
+  getAllUsersBasic,
+  getUserTokenVersion,
+  invalidateAllSessions
 };
