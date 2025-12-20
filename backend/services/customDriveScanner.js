@@ -60,9 +60,13 @@ async function scanDirectory(dirPath, parentFolderIds, userIds, folderMap) {
 
       try {
         if (entry.isDirectory()) {
+          // Get folder stats for modification time
+          const stats = await fs.stat(entryPath);
+          const modifiedTime = stats.mtime;
+          
           // Batch create folders for all users
           const parentIdMap = parentFolderIds || {};
-          const folderIdsMap = await batchCreateOrUpdateFolders(entry.name, parentIdMap, userIds, entryPath);
+          const folderIdsMap = await batchCreateOrUpdateFolders(entry.name, parentIdMap, userIds, entryPath, modifiedTime);
 
           // Convert Map to object
           const folderIds = {};
@@ -79,6 +83,7 @@ async function scanDirectory(dirPath, parentFolderIds, userIds, folderMap) {
           const stats = await fs.stat(entryPath);
           const mimeType = getMimeType(entry.name);
           const parentIdMap = parentFolderIds || {};
+          const modifiedTime = stats.mtime;
 
           await batchCreateOrUpdateFiles(
             entry.name,
@@ -86,7 +91,8 @@ async function scanDirectory(dirPath, parentFolderIds, userIds, folderMap) {
             mimeType,
             entryPath,
             parentIdMap,
-            userIds
+            userIds,
+            modifiedTime
           );
         }
       } catch (error) {
@@ -106,9 +112,10 @@ async function scanDirectory(dirPath, parentFolderIds, userIds, folderMap) {
  * @param {Object<string, string|null>} parentIds - Map of userId -> parentId
  * @param {string[]} userIds - Array of user IDs
  * @param {string} absolutePath - Absolute path of the folder
+ * @param {Date} [modifiedTime] - Optional modification time from filesystem
  * @returns {Promise<Map<string, string>>} Map of userId -> folderId
  */
-async function batchCreateOrUpdateFolders(name, parentIds, userIds, absolutePath) {
+async function batchCreateOrUpdateFolders(name, parentIds, userIds, absolutePath, modifiedTime = null) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -122,25 +129,53 @@ async function batchCreateOrUpdateFolders(name, parentIds, userIds, absolutePath
 
       // Check if folder already exists for this user and path (case-insensitive)
       const existing = await client.query(
-        'SELECT id, path FROM files WHERE LOWER(path) = $1 AND user_id = $2 AND type = $3 AND deleted_at IS NULL',
+        'SELECT id, name, parent_id, path, modified FROM files WHERE LOWER(path) = $1 AND user_id = $2 AND type = $3 AND deleted_at IS NULL',
         [normalizedPath, userId, 'folder']
       );
 
       if (existing.rows.length > 0) {
-        // Update existing folder (keep same ID)
-        await client.query(
-          'UPDATE files SET name = $1, parent_id = $2, modified = NOW() WHERE id = $3',
-          [name, parentId, existing.rows[0].id]
+        const row = existing.rows[0];
+        // Only update if something actually changed
+        const nameChanged = row.name !== name;
+        const parentChanged = row.parent_id !== parentId;
+        // Check if modification time changed (compare timestamps)
+        // Also update if row.modified is NULL but we have a modifiedTime to set
+        const modifiedChanged = modifiedTime && (
+          !row.modified || 
+          new Date(modifiedTime).getTime() !== new Date(row.modified).getTime()
         );
-        folderIdsMap.set(userId, existing.rows[0].id);
+        
+        if (nameChanged || parentChanged || modifiedChanged) {
+          // Only update modified column if the modification time actually changed
+          if (modifiedChanged) {
+            await client.query(
+              'UPDATE files SET name = $1, parent_id = $2, modified = $3 WHERE id = $4',
+              [name, parentId, modifiedTime, row.id]
+            );
+          } else {
+            // Name or parent changed, but not modified time - don't touch modified column
+            await client.query(
+              'UPDATE files SET name = $1, parent_id = $2 WHERE id = $3',
+              [name, parentId, row.id]
+            );
+          }
+        }
+        folderIdsMap.set(userId, row.id);
       } else {
         // Insert new folder (store original case path)
         const id = generateId(16);
         const originalCasePath = path.resolve(absolutePath);
-        await client.query(
-          'INSERT INTO files(id, name, type, parent_id, user_id, path) VALUES($1, $2, $3, $4, $5, $6)',
-          [id, name, 'folder', parentId, userId, originalCasePath]
-        );
+        if (modifiedTime) {
+          await client.query(
+            'INSERT INTO files(id, name, type, parent_id, user_id, path, modified) VALUES($1, $2, $3, $4, $5, $6, $7)',
+            [id, name, 'folder', parentId, userId, originalCasePath, modifiedTime]
+          );
+        } else {
+          await client.query(
+            'INSERT INTO files(id, name, type, parent_id, user_id, path) VALUES($1, $2, $3, $4, $5, $6)',
+            [id, name, 'folder', parentId, userId, originalCasePath]
+          );
+        }
         folderIdsMap.set(userId, id);
       }
     }
@@ -159,8 +194,8 @@ async function batchCreateOrUpdateFolders(name, parentIds, userIds, absolutePath
 /**
  * Creates a folder entry in the database (single user - for backward compatibility)
  */
-async function createFolderEntry(name, parentId, userId, absolutePath) {
-  const result = await batchCreateOrUpdateFolders(name, { [userId]: parentId }, [userId], absolutePath);
+async function createFolderEntry(name, parentId, userId, absolutePath, modifiedTime = null) {
+  const result = await batchCreateOrUpdateFolders(name, { [userId]: parentId }, [userId], absolutePath, modifiedTime);
   return result.get(userId);
 }
 
@@ -172,9 +207,10 @@ async function createFolderEntry(name, parentId, userId, absolutePath) {
  * @param {string} absolutePath - Absolute path of the file
  * @param {Object<string, string|null>} parentIds - Map of userId -> parentId
  * @param {string[]} userIds - Array of user IDs
+ * @param {Date} [modifiedTime] - Optional modification time from filesystem
  * @returns {Promise<Map<string, Object>>} Map of userId -> {id}
  */
-async function batchCreateOrUpdateFiles(name, size, mimeType, absolutePath, parentIds, userIds) {
+async function batchCreateOrUpdateFiles(name, size, mimeType, absolutePath, parentIds, userIds, modifiedTime = null) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -188,25 +224,55 @@ async function batchCreateOrUpdateFiles(name, size, mimeType, absolutePath, pare
 
       // Check if file already exists for this user and path (case-insensitive)
       const existing = await client.query(
-        'SELECT id, path FROM files WHERE LOWER(path) = $1 AND user_id = $2 AND type = $3 AND deleted_at IS NULL',
+        'SELECT id, name, size, mime_type, parent_id, path, modified FROM files WHERE LOWER(path) = $1 AND user_id = $2 AND type = $3 AND deleted_at IS NULL',
         [normalizedPath, userId, 'file']
       );
 
       if (existing.rows.length > 0) {
-        // Update existing file (keep same ID)
-        await client.query(
-          'UPDATE files SET name = $1, size = $2, mime_type = $3, parent_id = $4, modified = NOW() WHERE id = $5',
-          [name, size, mimeType, parentId, existing.rows[0].id]
+        const row = existing.rows[0];
+        // Only update if something actually changed
+        const nameChanged = row.name !== name;
+        const sizeChanged = row.size !== size;
+        const mimeChanged = row.mime_type !== mimeType;
+        const parentChanged = row.parent_id !== parentId;
+        // Check if modification time changed (compare timestamps)
+        // Also update if row.modified is NULL but we have a modifiedTime to set
+        const modifiedChanged = modifiedTime && (
+          !row.modified || 
+          new Date(modifiedTime).getTime() !== new Date(row.modified).getTime()
         );
-        fileIdsMap.set(userId, { id: existing.rows[0].id });
+        
+        if (nameChanged || sizeChanged || mimeChanged || parentChanged || modifiedChanged) {
+          // Only update modified column if the modification time actually changed
+          if (modifiedChanged) {
+            await client.query(
+              'UPDATE files SET name = $1, size = $2, mime_type = $3, parent_id = $4, modified = $5 WHERE id = $6',
+              [name, size, mimeType, parentId, modifiedTime, row.id]
+            );
+          } else {
+            // Other fields changed, but not modified time - don't touch modified column
+            await client.query(
+              'UPDATE files SET name = $1, size = $2, mime_type = $3, parent_id = $4 WHERE id = $5',
+              [name, size, mimeType, parentId, row.id]
+            );
+          }
+        }
+        fileIdsMap.set(userId, { id: row.id });
       } else {
         // Insert new file (store original case path)
         const id = generateId(16);
         const originalCasePath = path.resolve(absolutePath);
-        await client.query(
-          'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id) VALUES($1, $2, $3, $4, $5, $6, $7, $8)',
-          [id, name, 'file', size, mimeType, originalCasePath, parentId, userId]
-        );
+        if (modifiedTime) {
+          await client.query(
+            'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id, modified) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9)',
+            [id, name, 'file', size, mimeType, originalCasePath, parentId, userId, modifiedTime]
+          );
+        } else {
+          await client.query(
+            'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id) VALUES($1, $2, $3, $4, $5, $6, $7, $8)',
+            [id, name, 'file', size, mimeType, originalCasePath, parentId, userId]
+          );
+        }
         fileIdsMap.set(userId, { id });
       }
     }
@@ -225,8 +291,8 @@ async function batchCreateOrUpdateFiles(name, size, mimeType, absolutePath, pare
 /**
  * Creates a file entry in the database (single user - for backward compatibility)
  */
-async function createFileEntry(name, size, mimeType, absolutePath, parentId, userId) {
-  const result = await batchCreateOrUpdateFiles(name, size, mimeType, absolutePath, { [userId]: parentId }, [userId]);
+async function createFileEntry(name, size, mimeType, absolutePath, parentId, userId, modifiedTime = null) {
+  const result = await batchCreateOrUpdateFiles(name, size, mimeType, absolutePath, { [userId]: parentId }, [userId], modifiedTime);
   const entry = result.get(userId);
   return entry?.id || null;
 }
@@ -329,8 +395,10 @@ async function syncDirectory(dirPath, parentFolderIds, userIds, dbEntries) {
 
       try {
         if (entry.isDirectory()) {
+          const stats = await fs.stat(entryPath);
+          const modifiedTime = stats.mtime;
           const parentIdMap = parentFolderIds || {};
-          const folderIdsMap = await batchCreateOrUpdateFolders(entry.name, parentIdMap, userIds, entryPath);
+          const folderIdsMap = await batchCreateOrUpdateFolders(entry.name, parentIdMap, userIds, entryPath, modifiedTime);
           
           const folderIds = {};
           for (const userId of userIds) {
@@ -342,6 +410,7 @@ async function syncDirectory(dirPath, parentFolderIds, userIds, dbEntries) {
           const stats = await fs.stat(entryPath);
           const mimeType = getMimeType(entry.name);
           const parentIdMap = parentFolderIds || {};
+          const modifiedTime = stats.mtime;
           
           await batchCreateOrUpdateFiles(
             entry.name,
@@ -349,7 +418,8 @@ async function syncDirectory(dirPath, parentFolderIds, userIds, dbEntries) {
             mimeType,
             entryPath,
             parentIdMap,
-            userIds
+            userIds,
+            modifiedTime
           );
         }
       } catch (error) {
@@ -434,10 +504,10 @@ async function handleFileChange(filePath, userIds) {
     });
     
     if (stats.isDirectory()) {
-      await batchCreateOrUpdateFolders(fileName, parentFolderIds, userIds, filePath);
+      await batchCreateOrUpdateFolders(fileName, parentFolderIds, userIds, filePath, stats.mtime);
     } else if (stats.isFile()) {
       const mimeType = getMimeType(fileName);
-      await batchCreateOrUpdateFiles(fileName, stats.size, mimeType, filePath, parentFolderIds, userIds);
+      await batchCreateOrUpdateFiles(fileName, stats.size, mimeType, filePath, parentFolderIds, userIds, stats.mtime);
     }
   } catch (error) {
     // Continue on error
