@@ -379,33 +379,41 @@ File system cleanup:
 
 ### Custom Drive Scanner
 
-Optional external drive integration:
+Per-user external drive integration:
 
-- Watch external directory
-- Sync files to cloud storage
+- Watch external directory per user
+- Sync files to cloud storage automatically
 - Automatic file detection
-- Configurable via environment variables
+- Configurable per-user in Settings page
 - Real-time file system watching for changes
+- Each user can have their own custom drive path
 
-**Setup:**
+**Setup (Admin Only):**
 
-1. Set `CUSTOM_DRIVE=yes` in environment variables
-2. Configure `CUSTOM_DRIVE_PATH` to absolute path of external directory
-3. Service automatically syncs files
+Custom drive settings are managed by administrators only. To configure custom drive for users:
+
+1. Navigate to Settings page (admin access required)
+2. Go to "Custom Drive Management" section
+3. For each user, enable "Use Custom Drive" toggle
+4. Enter absolute path to external directory for that user
+5. Click "Save" to apply changes
+6. System validates path and starts watching for changes
+
+**Note:** Only the first user (admin) can manage custom drive settings for all users. Regular users cannot configure their own custom drive settings.
 
 **Important Behavior Changes:**
 
-When Custom Drive is enabled (`CUSTOM_DRIVE=yes`):
+When a user has Custom Drive enabled:
 
-- **`UPLOAD_DIR`**: **Ignored** - files are uploaded directly to `CUSTOM_DRIVE_PATH`
+- **`UPLOAD_DIR`**: **Ignored** - files are uploaded directly to user's custom drive path
 - **`STORAGE_LIMIT`**: **Ignored** - storage dashboard shows actual disk space on the custom drive
-- **`STORAGE_PATH`**: **Ignored** - disk space calculated from `CUSTOM_DRIVE_PATH`
+- **`STORAGE_PATH`**: **Ignored** - disk space calculated from user's custom drive path
 
-Files are stored with their original filenames directly in the custom drive directory structure.
+Files are stored with their original filenames directly in the user's custom drive directory structure.
 
-**Docker Users:** When using Docker, you must also set `CUSTOM_DRIVE_HOST_PATH` to mount your host directory into the container. Set `CUSTOM_DRIVE_PATH=/data/custom_drive` (container path). See [Docker Guide - Custom Drive](docker.md#custom-drive-with-docker) for complete setup.
+**Docker Users:** If you want to mount host directories for users, set `CUSTOM_DRIVE_MOUNT_1`, `CUSTOM_DRIVE_MOUNT_2`, etc. in your `.env` file. Format: `/host/path:/container/path` (must include colon). Add more mounts as needed. Administrators can then configure users' custom drive paths to any mounted container path via the Settings page. See [Docker Guide - Custom Drive](docker.md#custom-drive-with-docker) for complete setup.
 
-See [Environment Variables](environment.md#custom-drive-integration-optional) for configuration details.
+See [Environment Variables](environment.md#custom-drive-integration-per-user-settings) for more details.
 
 ### Audit Worker
 

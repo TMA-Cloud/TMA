@@ -12,29 +12,29 @@
 # Note: Make sure to create a .env file from .env.example before starting.
 #
 # =============================================================================
-# CUSTOM DRIVE MODE (Docker)
+# CUSTOM DRIVE MODE (Docker - Per-User Settings)
 # =============================================================================
-# To use custom drive with Docker, you need to mount the host directory
-# into the container and set the container path in your .env file.
+# Custom drive is now configured per-user in the web application settings.
+# Users can enable/disable and set their own custom drive path from Settings.
 #
-# Steps:
-#   1. Set these in your .env file:
-#      CUSTOM_DRIVE=yes
-#      CUSTOM_DRIVE_PATH=/data/custom_drive  (container path - use this exact value)
-#      CUSTOM_DRIVE_HOST_PATH=/path/to/your/drive  (your actual host path)
+# IMPORTANT: All custom drive paths MUST be mounted as volumes in Docker.
+# The backend will NOT create directories - they must already exist as mounted volumes.
 #
-#   2. The volume mount below will use CUSTOM_DRIVE_HOST_PATH to map your
-#      host directory to /data/custom_drive inside the container.
+# To mount host directories for users to use as custom drive:
+#   Set CUSTOM_DRIVE_MOUNT_1 through CUSTOM_DRIVE_MOUNT_10 in your .env file
+#   Format: CUSTOM_DRIVE_MOUNT_N=/host/path:/container/path
 #
 # Example .env for Linux:
-#   CUSTOM_DRIVE=yes
-#   CUSTOM_DRIVE_PATH=/data/custom_drive
-#   CUSTOM_DRIVE_HOST_PATH=/mnt/my_nas_drive
+#   CUSTOM_DRIVE_MOUNT_1=/mnt/nas_drive:/data/custom_drive
+#   CUSTOM_DRIVE_MOUNT_2=/mnt/data_col:/data_col
+#   CUSTOM_DRIVE_MOUNT_3=/mnt/backup:/data/backup
 #
 # Example .env for Windows (with Docker Desktop):
-#   CUSTOM_DRIVE=yes
-#   CUSTOM_DRIVE_PATH=/data/custom_drive
-#   CUSTOM_DRIVE_HOST_PATH=C:/Users/username/my_drive
+#   CUSTOM_DRIVE_MOUNT_1=C:/Users/username/my_drive:/data/custom_drive
+#   CUSTOM_DRIVE_MOUNT_2=C:/Users/username/data_col:/data_col
+#
+# Note: Each user can configure their own custom drive path in the Settings page.
+# All paths must be mounted volumes - the backend will only validate they exist and are accessible.
 # =============================================================================
 
 services:
@@ -56,10 +56,18 @@ services:
     volumes:
       # Mount uploads directory (persists data outside container)
       - ./uploads:/app/uploads
-      # Custom drive mount - maps host path to container path
-      # Only used when CUSTOM_DRIVE=yes and CUSTOM_DRIVE_HOST_PATH is set
-      # IMPORTANT: Set CUSTOM_DRIVE_PATH=/data/custom_drive in .env
-      - ${CUSTOM_DRIVE_HOST_PATH:-./data/custom_drive}:/data/custom_drive
+      # Custom drive mounts - configured via environment variables in .env
+      # Set CUSTOM_DRIVE_MOUNT_1, CUSTOM_DRIVE_MOUNT_2, etc. in your .env file
+      # Format: CUSTOM_DRIVE_MOUNT_N=/host/path:/container/path (REQUIRED - must include colon)
+      # Add more mount lines below if you need additional mounts (uncomment and add CUSTOM_DRIVE_MOUNT_3, etc.)
+      # Leave empty if not using that mount slot (will use placeholder that won't consume storage)
+      # Backend will reject placeholder paths if users try to use them
+      - ${CUSTOM_DRIVE_MOUNT_1:-/docker_unused_placeholder_1:/docker_unused_placeholder_1}
+      - ${CUSTOM_DRIVE_MOUNT_2:-/docker_unused_placeholder_2:/docker_unused_placeholder_2}
+      # Uncomment and add more mounts as needed:
+      # - ${CUSTOM_DRIVE_MOUNT_3:-/docker_unused_placeholder_3:/docker_unused_placeholder_3}
+      # - ${CUSTOM_DRIVE_MOUNT_4:-/docker_unused_placeholder_4:/docker_unused_placeholder_4}
+      # - ${CUSTOM_DRIVE_MOUNT_5:-/docker_unused_placeholder_5:/docker_unused_placeholder_5}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
       interval: 30s
@@ -82,6 +90,20 @@ services:
       - .env
     environment:
       - LOG_FORMAT=json
+    volumes:
+      # Mount same volumes as app service for consistency
+      - ./uploads:/app/uploads
+      # Custom drive mounts: Set CUSTOM_DRIVE_MOUNT_1, CUSTOM_DRIVE_MOUNT_2, etc. in .env
+      # Format: CUSTOM_DRIVE_MOUNT_N=/host/path:/container/path (REQUIRED - must include colon)
+      # Add more mount lines below if you need additional mounts (uncomment and add CUSTOM_DRIVE_MOUNT_3, etc.)
+      # Leave empty if not using that mount slot (will use placeholder that won't consume storage)
+      # Backend will reject placeholder paths if users try to use them
+      - ${CUSTOM_DRIVE_MOUNT_1:-/docker_unused_placeholder_1:/docker_unused_placeholder_1}
+      - ${CUSTOM_DRIVE_MOUNT_2:-/docker_unused_placeholder_2:/docker_unused_placeholder_2}
+      # Uncomment and add more mounts as needed:
+      # - ${CUSTOM_DRIVE_MOUNT_3:-/docker_unused_placeholder_3:/docker_unused_placeholder_3}
+      # - ${CUSTOM_DRIVE_MOUNT_4:-/docker_unused_placeholder_4:/docker_unused_placeholder_4}
+      # - ${CUSTOM_DRIVE_MOUNT_5:-/docker_unused_placeholder_5:/docker_unused_placeholder_5}
     command: node backend/audit-worker.js
     depends_on:
       - app

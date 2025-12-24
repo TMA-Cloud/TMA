@@ -4,42 +4,36 @@ const chokidar = require('chokidar');
 const pool = require('../config/db');
 const { generateId } = require('../utils/id');
 const { logger } = require('../config/logger');
+const { getUsersWithCustomDrive } = require('../models/user.model');
 
 /**
- * Scans the custom drive directory and inserts all files and folders into the database
+ * Scans a user's custom drive directory and inserts files/folders into the database
  * Maintains the exact folder structure as it exists on disk
  * @param {string} customDrivePath - The absolute path to the custom drive directory
+ * @param {string} userId - User ID to scan for
  */
-async function scanCustomDrive(customDrivePath) {
+async function scanCustomDrive(customDrivePath, userId) {
   const normalizedPath = path.resolve(customDrivePath);
   
   // Validate that the path exists
   try {
     const stat = await fs.stat(normalizedPath);
     if (!stat.isDirectory()) {
-      logger.error(`[Custom Drive] Path is not a directory: ${normalizedPath}`);
+      logger.error(`[Custom Drive] Path is not a directory: ${normalizedPath} (user: ${userId})`);
       return;
     }
   } catch (error) {
-    logger.error(`[Custom Drive] Cannot access directory: ${normalizedPath}`, error.message);
+    logger.error(`[Custom Drive] Cannot access directory: ${normalizedPath} (user: ${userId})`, error.message);
     return;
   }
 
   try {
-    const usersResult = await pool.query('SELECT id FROM users');
-    const userIds = usersResult.rows.map(row => row.id);
-
-    if (userIds.length === 0) {
-      logger.info('[Custom Drive] No users found, skipping scan');
-      return;
-    }
-
-    logger.info(`[Custom Drive] Starting scan for ${userIds.length} user(s)`);
+    logger.info(`[Custom Drive] Starting scan for user ${userId} at ${normalizedPath}`);
     const folderMap = new Map();
-    await scanDirectory(normalizedPath, null, userIds, folderMap);
-    logger.info('[Custom Drive] Scan completed successfully');
+    await scanDirectory(normalizedPath, null, [userId], folderMap);
+    logger.info(`[Custom Drive] Scan completed successfully for user ${userId}`);
   } catch (error) {
-    logger.error('[Custom Drive] Error during scan:', error);
+    logger.error(`[Custom Drive] Error during scan for user ${userId}:`, error);
     throw error;
   }
 }
@@ -328,39 +322,32 @@ function getMimeType(filename) {
 }
 
 /**
- * Incrementally syncs the custom drive - detects changes and updates database
+ * Incrementally syncs a user's custom drive - detects changes and updates database
  * This is more efficient than a full scan as it only processes changes
  * @param {string} customDrivePath - The absolute path to the custom drive directory
+ * @param {string} userId - User ID to sync for
  */
-async function syncCustomDrive(customDrivePath) {
+async function syncCustomDrive(customDrivePath, userId) {
   const normalizedPath = path.resolve(customDrivePath);
   
   // Validate that the path exists
   try {
     const stat = await fs.stat(normalizedPath);
     if (!stat.isDirectory()) {
-      logger.error(`[Custom Drive] Path is not a directory: ${normalizedPath}`);
+      logger.error(`[Custom Drive] Path is not a directory: ${normalizedPath} (user: ${userId})`);
       return;
     }
   } catch (error) {
-    logger.error(`[Custom Drive] Cannot access directory: ${normalizedPath}`, error.message);
+    logger.error(`[Custom Drive] Cannot access directory: ${normalizedPath} (user: ${userId})`, error.message);
     return;
   }
 
   try {
-    // Get all users
-    const usersResult = await pool.query('SELECT id FROM users');
-    const userIds = usersResult.rows.map(row => row.id);
-
-    if (userIds.length === 0) {
-      return;
-    }
-
     const dbEntries = new Map();
     const normalizedPathLower = normalizedPath.toLowerCase();
     const dbResult = await pool.query(
-      "SELECT id, name, type, size, modified, path FROM files WHERE path IS NOT NULL AND LOWER(path) LIKE $1 || '%' ESCAPE ''",
-      [normalizedPathLower]
+      "SELECT id, name, type, size, modified, path FROM files WHERE user_id = $1 AND path IS NOT NULL AND LOWER(path) LIKE $2 || '%' ESCAPE ''",
+      [userId, normalizedPathLower]
     );
 
     for (const row of dbResult.rows) {
@@ -370,11 +357,11 @@ async function syncCustomDrive(customDrivePath) {
       }
     }
 
-    // Recursively scan and sync
-    await syncDirectory(normalizedPath, null, userIds, dbEntries);
+    // Recursively scan and sync for this user
+    await syncDirectory(normalizedPath, null, [userId], dbEntries);
 
   } catch (error) {
-    logger.error('[Custom Drive] Error during sync:', error);
+    logger.error(`[Custom Drive] Error during sync for user ${userId}:`, error);
     throw error;
   }
 }
@@ -431,48 +418,58 @@ async function syncDirectory(dirPath, parentFolderIds, userIds, dbEntries) {
   }
 }
 
-let watcher = null;
-let processingQueue = new Set();
-let processingTimeout = null;
+// Map of userId -> watcher instance
+const watchers = new Map();
+// Map of userId -> processing queue
+const processingQueues = new Map();
+// Map of userId -> processing timeout
+const processingTimeouts = new Map();
 
 /**
- * Processes a file or folder change
+ * Processes a file or folder change for a specific user
  * Uses debouncing to batch rapid changes
+ * @param {string} filePath - Path to the changed file
+ * @param {string} userId - User ID who owns this custom drive
  */
-async function processChange(filePath) {
+async function processChange(filePath, userId) {
   const normalizedPath = path.resolve(filePath);
+  
+  // Get or create processing queue for this user
+  if (!processingQueues.has(userId)) {
+    processingQueues.set(userId, new Set());
+  }
+  const processingQueue = processingQueues.get(userId);
   
   // Add to processing queue
   processingQueue.add(normalizedPath);
   
-  // Clear existing timeout
-  if (processingTimeout) {
-    clearTimeout(processingTimeout);
+  // Clear existing timeout for this user
+  if (processingTimeouts.has(userId)) {
+    clearTimeout(processingTimeouts.get(userId));
   }
   
   // Debounce: process changes after 500ms of inactivity
-  processingTimeout = setTimeout(async () => {
+  const timeout = setTimeout(async () => {
     const pathsToProcess = Array.from(processingQueue);
     processingQueue.clear();
     
     try {
-      // Get all users
-      const usersResult = await pool.query('SELECT id FROM users');
-      const userIds = usersResult.rows.map(row => row.id);
-      
-      if (userIds.length === 0) return;
-      
       for (const filePathToProcess of pathsToProcess) {
         try {
-          await handleFileChange(filePathToProcess, userIds);
+          await handleFileChange(filePathToProcess, [userId]);
         } catch (error) {
           // Continue processing other files on error
+          logger.error(`[Custom Drive] Error processing ${filePathToProcess} for user ${userId}:`, error.message);
         }
       }
     } catch (error) {
-      logger.error('[Custom Drive] Error processing changes:', error);
+      logger.error(`[Custom Drive] Error processing changes for user ${userId}:`, error);
+    } finally {
+      processingTimeouts.delete(userId);
     }
   }, 500);
+  
+  processingTimeouts.set(userId, timeout);
 }
 
 /**
@@ -547,46 +544,39 @@ async function handleDeletion(filePath, userIds) {
 }
 
 /**
- * Starts the custom drive file watcher if enabled
- * Uses real-time file system watching instead of periodic scanning
+ * Starts a file watcher for a specific user's custom drive
+ * @param {string} userId - User ID
+ * @param {string} customDrivePath - User's custom drive path
  */
-async function startCustomDriveScanner() {
-  const customDriveEnabled = process.env.CUSTOM_DRIVE === 'yes';
-  const customDrivePath = process.env.CUSTOM_DRIVE_PATH;
-
-  if (!customDriveEnabled || !customDrivePath) {
-    return;
-  }
-
+async function startUserWatcher(userId, customDrivePath) {
   const normalizedPath = path.resolve(customDrivePath);
 
   try {
     await fs.stat(normalizedPath);
 
-    // Check if this is the first scan by looking for any existing custom drive files (case-insensitive)
-    // Use ESCAPE '' to disable backslash escaping in LIKE pattern (Windows paths have backslashes)
+    // Check if this is the first scan for this user
     const normalizedPathLower = normalizedPath.toLowerCase();
     const existingFiles = await pool.query(
-      "SELECT COUNT(*) as count FROM files WHERE path IS NOT NULL AND LOWER(path) LIKE $1 || '%' ESCAPE ''",
-      [normalizedPathLower]
+      "SELECT COUNT(*) as count FROM files WHERE user_id = $1 AND path IS NOT NULL AND LOWER(path) LIKE $2 || '%' ESCAPE ''",
+      [userId, normalizedPathLower]
     );
 
     const isFirstScan = parseInt(existingFiles.rows[0].count) === 0;
 
-    logger.info(`[Custom Drive] Found ${existingFiles.rows[0].count} existing files`);
+    logger.info(`[Custom Drive] User ${userId}: Found ${existingFiles.rows[0].count} existing files`);
 
     if (isFirstScan) {
-      logger.info('[Custom Drive] First scan detected, performing full scan...');
-      await scanCustomDrive(customDrivePath);
-      logger.info('[Custom Drive] Initial scan complete');
+      logger.info(`[Custom Drive] User ${userId}: First scan detected, performing full scan...`);
+      await scanCustomDrive(customDrivePath, userId);
+      logger.info(`[Custom Drive] User ${userId}: Initial scan complete`);
     } else {
-      logger.info('[Custom Drive] Existing data found, using full scan to ensure consistency...');
-      await scanCustomDrive(customDrivePath);
-      logger.info('[Custom Drive] Full scan complete');
+      logger.info(`[Custom Drive] User ${userId}: Existing data found, using full scan to ensure consistency...`);
+      await scanCustomDrive(customDrivePath, userId);
+      logger.info(`[Custom Drive] User ${userId}: Full scan complete`);
     }
 
     // Start file watcher for real-time updates
-    watcher = chokidar.watch(normalizedPath, {
+    const watcher = chokidar.watch(normalizedPath, {
       ignored: [
         /(^|[\/\\])\../, // ignore dotfiles
         /node_modules/, // ignore node_modules
@@ -605,32 +595,32 @@ async function startCustomDriveScanner() {
     });
 
     watcher.on('add', (filePath) => {
-      processChange(filePath).catch(err => {
-        logger.error(`[Custom Drive] Error processing add event for ${filePath}:`, err.message);
+      processChange(filePath, userId).catch(err => {
+        logger.error(`[Custom Drive] User ${userId}: Error processing add event for ${filePath}:`, err.message);
       });
     });
 
     watcher.on('change', (filePath) => {
-      processChange(filePath).catch(err => {
-        logger.error(`[Custom Drive] Error processing change event for ${filePath}:`, err.message);
+      processChange(filePath, userId).catch(err => {
+        logger.error(`[Custom Drive] User ${userId}: Error processing change event for ${filePath}:`, err.message);
       });
     });
 
     watcher.on('addDir', (filePath) => {
-      processChange(filePath).catch(err => {
-        logger.error(`[Custom Drive] Error processing addDir event for ${filePath}:`, err.message);
+      processChange(filePath, userId).catch(err => {
+        logger.error(`[Custom Drive] User ${userId}: Error processing addDir event for ${filePath}:`, err.message);
       });
     });
 
     watcher.on('unlink', (filePath) => {
-      processChange(filePath).catch(err => {
-        logger.error(`[Custom Drive] Error processing unlink event for ${filePath}:`, err.message);
+      processChange(filePath, userId).catch(err => {
+        logger.error(`[Custom Drive] User ${userId}: Error processing unlink event for ${filePath}:`, err.message);
       });
     });
 
     watcher.on('unlinkDir', (filePath) => {
-      processChange(filePath).catch(err => {
-        logger.error(`[Custom Drive] Error processing unlinkDir event for ${filePath}:`, err.message);
+      processChange(filePath, userId).catch(err => {
+        logger.error(`[Custom Drive] User ${userId}: Error processing unlinkDir event for ${filePath}:`, err.message);
       });
     });
 
@@ -638,48 +628,126 @@ async function startCustomDriveScanner() {
     watcher.on('error', (error) => {
       // Ignore EPERM errors (permission issues) - these are common on Windows
       if (error.code === 'EPERM') {
-        logger.info('[Custom Drive] Skipping file due to permission restriction');
+        logger.info(`[Custom Drive] User ${userId}: Skipping file due to permission restriction`);
         return;
       }
 
       // Ignore ENOENT errors (file not found) - these happen during rapid deletions
       if (error.code === 'ENOENT') {
-        logger.info('[Custom Drive] File no longer exists, ignoring');
+        logger.info(`[Custom Drive] User ${userId}: File no longer exists, ignoring`);
         return;
       }
 
       // Log other errors
-      logger.error('[Custom Drive] Watcher error:', error.code || error.message);
+      logger.error(`[Custom Drive] User ${userId}: Watcher error:`, error.code || error.message);
     });
 
     watcher.on('ready', () => {
-      logger.info('[Custom Drive] File system watcher ready');
+      logger.info(`[Custom Drive] User ${userId}: File system watcher ready for ${normalizedPath}`);
     });
+
+    // Store watcher
+    watchers.set(userId, watcher);
 
   } catch (error) {
     if (error.code === 'ENOENT') {
-      logger.error(`[Custom Drive] Path does not exist: ${normalizedPath}`);
+      logger.error(`[Custom Drive] User ${userId}: Path does not exist: ${normalizedPath}`);
     } else {
-      logger.error('[Custom Drive] Failed to start watcher:', error);
+      logger.error(`[Custom Drive] User ${userId}: Failed to start watcher:`, error);
     }
   }
 }
 
 /**
- * Stops the file system watcher (useful for testing or graceful shutdown)
+ * Starts custom drive file watchers for all users with custom drive enabled
+ * Uses real-time file system watching instead of periodic scanning
  */
-function stopCustomDriveScanner() {
+async function startCustomDriveScanner() {
+  try {
+    // Get all users with custom drive enabled
+    const users = await getUsersWithCustomDrive();
+    
+    if (users.length === 0) {
+      logger.info('[Custom Drive] No users with custom drive enabled');
+      return;
+    }
+
+    logger.info(`[Custom Drive] Starting watchers for ${users.length} user(s)`);
+
+    // Start a watcher for each user
+    for (const user of users) {
+      await startUserWatcher(user.id, user.custom_drive_path);
+    }
+
+    logger.info(`[Custom Drive] Started ${watchers.size} watcher(s)`);
+  } catch (error) {
+    logger.error('[Custom Drive] Failed to start scanners:', error);
+  }
+}
+
+/**
+ * Stops a specific user's file system watcher
+ * @param {string} userId - User ID
+ */
+function stopUserWatcher(userId) {
+  const watcher = watchers.get(userId);
   if (watcher) {
     watcher.close();
-    watcher = null;
+    watchers.delete(userId);
   }
   
-  if (processingTimeout) {
-    clearTimeout(processingTimeout);
-    processingTimeout = null;
+  const timeout = processingTimeouts.get(userId);
+  if (timeout) {
+    clearTimeout(timeout);
+    processingTimeouts.delete(userId);
   }
   
-  processingQueue.clear();
+  const queue = processingQueues.get(userId);
+  if (queue) {
+    queue.clear();
+    processingQueues.delete(userId);
+  }
+}
+
+/**
+ * Stops all file system watchers (useful for testing or graceful shutdown)
+ */
+function stopCustomDriveScanner() {
+  // Stop all watchers
+  for (const [userId, watcher] of watchers.entries()) {
+    watcher.close();
+  }
+  watchers.clear();
+  
+  // Clear all timeouts
+  for (const [userId, timeout] of processingTimeouts.entries()) {
+    clearTimeout(timeout);
+  }
+  processingTimeouts.clear();
+  
+  // Clear all queues
+  for (const queue of processingQueues.values()) {
+    queue.clear();
+  }
+  processingQueues.clear();
+}
+
+/**
+ * Restart watcher for a specific user (called when user updates custom drive settings)
+ * @param {string} userId - User ID
+ * @param {string|null} customDrivePath - New custom drive path (null to stop)
+ */
+async function restartUserWatcher(userId, customDrivePath) {
+  // Stop existing watcher if any
+  stopUserWatcher(userId);
+  
+  // Start new watcher if path is provided
+  if (customDrivePath) {
+    await startUserWatcher(userId, customDrivePath);
+    logger.info(`[Custom Drive] Restarted watcher for user ${userId}`);
+  } else {
+    logger.info(`[Custom Drive] Stopped watcher for user ${userId}`);
+  }
 }
 
 module.exports = {
@@ -687,5 +755,6 @@ module.exports = {
   syncCustomDrive,
   startCustomDriveScanner,
   stopCustomDriveScanner,
+  restartUserWatcher,
 };
 

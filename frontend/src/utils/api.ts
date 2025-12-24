@@ -30,7 +30,10 @@ async function apiRequest(
 export async function apiGet<T = unknown>(endpoint: string): Promise<T> {
   const res = await apiRequest(endpoint, { method: "GET" });
   if (!res.ok) {
-    throw new Error(`API request failed: ${res.statusText}`);
+    const errorData = await res
+      .json()
+      .catch(() => ({ message: res.statusText }));
+    throw new Error(errorData.message || errorData.error || res.statusText);
   }
   return res.json();
 }
@@ -47,7 +50,30 @@ export async function apiPost<T = unknown>(
     body: data ? JSON.stringify(data) : undefined,
   });
   if (!res.ok) {
-    throw new Error(`API request failed: ${res.statusText}`);
+    const errorData = await res
+      .json()
+      .catch(() => ({ message: res.statusText }));
+    throw new Error(errorData.message || errorData.error || res.statusText);
+  }
+  return res.json();
+}
+
+/**
+ * Make a PUT request
+ */
+export async function apiPut<T = unknown>(
+  endpoint: string,
+  data?: unknown,
+): Promise<T> {
+  const res = await apiRequest(endpoint, {
+    method: "PUT",
+    body: data ? JSON.stringify(data) : undefined,
+  });
+  if (!res.ok) {
+    const errorData = await res
+      .json()
+      .catch(() => ({ message: res.statusText }));
+    throw new Error(errorData.message || errorData.error || res.statusText);
   }
   return res.json();
 }
@@ -112,6 +138,55 @@ export async function toggleSignup(
   return await apiPost<{ signupEnabled: boolean }>("/api/user/signup-toggle", {
     enabled,
   });
+}
+
+/**
+ * Get user's custom drive settings
+ */
+export async function getCustomDriveSettings(targetUserId?: string): Promise<{
+  enabled: boolean;
+  path: string | null;
+}> {
+  const url = targetUserId
+    ? `/api/user/custom-drive?targetUserId=${encodeURIComponent(targetUserId)}`
+    : "/api/user/custom-drive";
+  return await apiGet<{ enabled: boolean; path: string | null }>(url);
+}
+
+/**
+ * Get all users' custom drive settings (admin only)
+ */
+export interface UserCustomDriveInfo {
+  id: string;
+  email: string;
+  name: string;
+  createdAt: string;
+  customDrive: {
+    enabled: boolean;
+    path: string | null;
+  };
+}
+
+export async function getAllUsersCustomDriveSettings(): Promise<{
+  users: UserCustomDriveInfo[];
+}> {
+  return await apiGet<{ users: UserCustomDriveInfo[] }>(
+    "/api/user/custom-drive/all",
+  );
+}
+
+/**
+ * Update user's custom drive settings (admin only)
+ */
+export async function updateCustomDriveSettings(
+  enabled: boolean,
+  path: string | null,
+  targetUserId?: string,
+): Promise<{ enabled: boolean; path: string | null }> {
+  return await apiPut<{ enabled: boolean; path: string | null }>(
+    "/api/user/custom-drive",
+    { enabled, path, targetUserId },
+  );
 }
 
 export interface UserSummary {

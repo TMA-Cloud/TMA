@@ -825,6 +825,162 @@ Enable or disable user signup. Only the first user can perform this action.
 
 ---
 
+### Custom Drive Settings
+
+Custom drive settings allow administrators to configure per-user external drive integration. Only administrators (first user) can manage these settings.
+
+#### GET `/api/user/custom-drive`
+
+Get custom drive settings for a user.
+
+**Headers:** Requires authentication
+
+**Query Parameters:**
+
+- `targetUserId` (optional, string): User ID to get settings for. If not provided, returns current user's settings. Only administrators can query other users' settings.
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "enabled": true,
+  "path": "/data/custom_drive"
+}
+```
+
+**Response Fields:**
+
+- `enabled` (boolean): Whether custom drive is enabled for the user
+- `path` (string | null): Absolute path to the custom drive directory, or null if disabled
+
+**Status Codes:**
+
+- `200` - Settings retrieved successfully
+- `403` - Only administrators can view other users' settings
+- `404` - User not found
+- `500` - Server error
+
+**Security Notes:**
+
+- Users can view their own settings
+- Only administrators can view other users' settings
+- Unauthorized attempts are logged
+
+#### GET `/api/user/custom-drive/all`
+
+Get custom drive settings for all users. Admin only.
+
+**Headers:** Requires authentication
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "users": [
+    {
+      "id": "user_id_1",
+      "email": "user@example.com",
+      "name": "User Name",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "customDrive": {
+        "enabled": true,
+        "path": "/data/custom_drive"
+      }
+    }
+  ]
+}
+```
+
+**Response Fields:**
+
+- `users` (array): Array of user objects with custom drive settings
+  - `id` (string): User ID
+  - `email` (string): User email
+  - `name` (string): User name
+  - `createdAt` (string): User creation timestamp (ISO 8601)
+  - `customDrive` (object): Custom drive settings
+    - `enabled` (boolean): Whether custom drive is enabled
+    - `path` (string | null): Custom drive path or null if disabled
+
+**Status Codes:**
+
+- `200` - Settings retrieved successfully
+- `403` - Only administrators can view all users' settings
+- `500` - Server error
+
+**Security Notes:**
+
+- Only administrators can access this endpoint
+- Unauthorized attempts are logged
+- Creates `admin.custom_drive.list` audit event
+
+#### PUT `/api/user/custom-drive`
+
+Update custom drive settings for a user. Admin only.
+
+**Headers:** Requires authentication
+
+**Audit Logging:** Creates `admin.custom_drive.update` audit event with target user ID, enabled status, and path (masked for security).
+
+**Request Body:**
+
+```json
+{
+  "enabled": true,
+  "path": "/data/custom_drive",
+  "targetUserId": "user_id_1"
+}
+```
+
+**Request Fields:**
+
+- `enabled` (boolean, optional): Whether to enable custom drive. If omitted, current state is preserved.
+- `path` (string | null, optional): Absolute path to custom drive directory. Required if `enabled` is `true`. If `enabled` is `false`, can be `null` or omitted.
+- `targetUserId` (string, optional): User ID to update settings for. If omitted, updates admin's own settings.
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "enabled": true,
+  "path": "/data/custom_drive"
+}
+```
+
+**Status Codes:**
+
+- `200` - Settings updated successfully
+- `400` - Invalid request (e.g., path required when enabling, invalid path format, whitespace-only path)
+- `403` - Only administrators can manage custom drive settings
+- `404` - User not found
+- `500` - Server error
+
+**Security Notes:**
+
+- Only administrators can update custom drive settings
+- Path validation ensures paths are absolute, exist, are directories, and are accessible
+- Placeholder paths (Docker unused mounts) are rejected
+- System paths and critical directories are protected
+- When enabling custom drive, existing files in `UPLOAD_DIR` are cleaned up
+- When disabling custom drive, database records are cleaned up
+- All operations use mutex locks to prevent race conditions
+- Cache is invalidated immediately after updates
+- File system watchers are restarted after path changes
+- Unauthorized attempts are logged
+
+**Important Notes:**
+
+- When `enabled` is `true`, `path` is required and must be a valid absolute path
+- Paths must already exist as mounted volumes (backend does not create directories)
+- Whitespace-only paths are rejected when enabling custom drive
+- Custom drive paths must be accessible and writable
+- Changes take effect immediately for new file operations
+
+---
+
 ### OnlyOffice
 
 #### GET `/api/onlyoffice/config/:id`

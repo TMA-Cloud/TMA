@@ -580,11 +580,13 @@ async function callback(req, res) {
         // Custom drive file - normalize absolute path for security
         filePath = path.resolve(fileRow.path);
         
-        // Security check: verify the file is within the configured CUSTOM_DRIVE_PATH
+        // Security check: verify the file is within the user's configured custom drive path
         // This prevents unauthorized writes to arbitrary system files
-        const customDrivePath = process.env.CUSTOM_DRIVE_PATH;
-        if (!customDrivePath) {
-          logger.error('[ONLYOFFICE] Cannot save to custom drive file - CUSTOM_DRIVE_PATH not configured:', fileId);
+        const { getUserCustomDriveSettings } = require('../models/user.model');
+        const customDrive = await getUserCustomDriveSettings(fileRow.user_id);
+        
+        if (!customDrive.enabled || !customDrive.path) {
+          logger.error('[ONLYOFFICE] Cannot save to custom drive file - user does not have custom drive enabled:', fileId);
           return res.status(200).json({ error: 0 });
         }
         
@@ -594,7 +596,7 @@ async function callback(req, res) {
         let realCustomDrivePath;
         try {
           realFilePath = fs.realpathSync(filePath);
-          realCustomDrivePath = fs.realpathSync(customDrivePath);
+          realCustomDrivePath = fs.realpathSync(customDrive.path);
         } catch (err) {
           logger.error('[ONLYOFFICE] Cannot resolve real path:', { fileId, error: err.message });
           return res.status(200).json({ error: 0 });
@@ -608,10 +610,11 @@ async function callback(req, res) {
             realFilePath === realCustomDrivePath;
         
         if (!isWithinCustomDrive) {
-          logger.error('[ONLYOFFICE] Security violation - file path outside custom drive:', {
+          logger.error('[ONLYOFFICE] Security violation - file path outside user custom drive:', {
             fileId,
             filePath: realFilePath,
-            customDrivePath: realCustomDrivePath
+            customDrivePath: realCustomDrivePath,
+            userId: fileRow.user_id
           });
           return res.status(200).json({ error: 0 });
         }

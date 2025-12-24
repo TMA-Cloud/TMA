@@ -10,6 +10,8 @@ import {
   RefreshCw,
   Shield,
   LogOut,
+  AlertCircle,
+  CheckCircle2,
 } from "lucide-react";
 import { formatFileSize } from "../../utils/fileUtils";
 import {
@@ -21,6 +23,9 @@ import {
   logoutAllDevices,
   getActiveSessions,
   revokeSession,
+  updateCustomDriveSettings,
+  getAllUsersCustomDriveSettings,
+  type UserCustomDriveInfo,
 } from "../../utils/api";
 import type { UserSummary, VersionInfo, ActiveSession } from "../../utils/api";
 import { useToast } from "../../hooks/useToast";
@@ -56,16 +61,78 @@ export const Settings: React.FC = () => {
     null,
   );
   const [sessionsModalOpen, setSessionsModalOpen] = useState(false);
+  const [confirmingUserId, setConfirmingUserId] = useState<string | null>(null);
+  const [confirmingAction, setConfirmingAction] = useState<
+    "enable" | "disable" | null
+  >(null);
+  const [allUsersCustomDrive, setAllUsersCustomDrive] = useState<
+    UserCustomDriveInfo[]
+  >([]);
+  const [loadingAllUsersCustomDrive, setLoadingAllUsersCustomDrive] =
+    useState(false);
+  const [updatingUserCustomDrive, setUpdatingUserCustomDrive] = useState<
+    string | null
+  >(null);
+  const [userCustomDriveLocalState, setUserCustomDriveLocalState] = useState<
+    Record<
+      string,
+      {
+        enabled: boolean;
+        path: string;
+        expanded: boolean;
+        error: string | null;
+      }
+    >
+  >({});
   const storageUsagePercent =
     usage && usage.total > 0
       ? Math.min(100, Math.round((usage.used / usage.total) * 100))
       : null;
+
+  const loadAllUsersCustomDrive = useCallback(async () => {
+    try {
+      setLoadingAllUsersCustomDrive(true);
+      const { users } = await getAllUsersCustomDriveSettings();
+      setAllUsersCustomDrive(users);
+      // Initialize local state for each user
+      const initialState: Record<
+        string,
+        {
+          enabled: boolean;
+          path: string;
+          expanded: boolean;
+          error: string | null;
+        }
+      > = {};
+      users.forEach((user) => {
+        initialState[user.id] = {
+          enabled: user.customDrive.enabled,
+          path: user.customDrive.path || "",
+          expanded: false,
+          error: null,
+        };
+      });
+      setUserCustomDriveLocalState(initialState);
+    } catch (error) {
+      console.error("Failed to load all users custom drive settings:", error);
+      showToast("Failed to load users' custom drive settings", "error");
+    } finally {
+      setLoadingAllUsersCustomDrive(false);
+    }
+  }, [showToast]);
 
   useEffect(() => {
     loadSignupStatus();
     loadCurrentVersions();
     loadActiveSessions();
   }, []);
+
+  useEffect(() => {
+    // Only load custom drive settings if user is admin (after signup status is loaded)
+    if (!loadingSignupStatus && canToggleSignup) {
+      loadAllUsersCustomDrive();
+    }
+  }, [loadingSignupStatus, canToggleSignup, loadAllUsersCustomDrive]);
 
   const loadSignupStatus = async () => {
     try {
@@ -85,6 +152,61 @@ export const Settings: React.FC = () => {
       console.error("Failed to load signup status:", error);
     } finally {
       setLoadingSignupStatus(false);
+    }
+  };
+
+  const handleUpdateUserCustomDrive = async (
+    userId: string,
+    enabled: boolean,
+    path: string | null,
+  ): Promise<boolean> => {
+    if (updatingUserCustomDrive) return false;
+
+    try {
+      setUpdatingUserCustomDrive(userId);
+      await updateCustomDriveSettings(enabled, path, userId);
+      showToast(
+        enabled
+          ? "Custom drive enabled for user"
+          : "Custom drive disabled for user",
+        "success",
+      );
+      // Update local state
+      setUserCustomDriveLocalState((prev) => ({
+        ...prev,
+        [userId]: {
+          enabled,
+          path: path || "",
+          expanded: false,
+          error: null,
+        },
+      }));
+      // Reload all users' settings to sync with server
+      await loadAllUsersCustomDrive();
+      return true;
+    } catch (error) {
+      console.error("Failed to update user custom drive settings:", error);
+      let errorMessage = "Failed to update custom drive settings";
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+      // Update error in local state
+      setUserCustomDriveLocalState((prev) => ({
+        ...prev,
+        [userId]: {
+          ...(prev[userId] || {
+            enabled: false,
+            path: "",
+            expanded: false,
+            error: null,
+          }),
+          error: errorMessage,
+        },
+      }));
+      showToast(errorMessage, "error");
+      return false;
+    } finally {
+      setUpdatingUserCustomDrive(null);
     }
   };
 
@@ -329,6 +451,211 @@ export const Settings: React.FC = () => {
     ...(canToggleSignup
       ? [
           {
+            title: "Custom Drive Management",
+            icon: Shield,
+            description:
+              "Manage custom drive settings for all users (Admin only).",
+            items: [],
+            customContent: (
+              <div className="space-y-4">
+                {loadingAllUsersCustomDrive ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+                    <span className="ml-2 text-gray-600 dark:text-gray-400">
+                      Loading users' custom drive settings...
+                    </span>
+                  </div>
+                ) : allUsersCustomDrive.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                    No users found
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {allUsersCustomDrive.map((userInfo) => {
+                      const isUpdating =
+                        updatingUserCustomDrive === userInfo.id;
+                      const localState = userCustomDriveLocalState[
+                        userInfo.id
+                      ] || {
+                        enabled: userInfo.customDrive.enabled,
+                        path: userInfo.customDrive.path || "",
+                        expanded: false,
+                        error: null,
+                      };
+
+                      return (
+                        <div
+                          key={userInfo.id}
+                          className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 space-y-3"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex-1">
+                              <h4 className="font-medium text-gray-900 dark:text-gray-100">
+                                {userInfo.name || userInfo.email}
+                              </h4>
+                              <p className="text-sm text-gray-500 dark:text-gray-400">
+                                {userInfo.email}
+                              </p>
+                              {localState.enabled &&
+                                localState.path &&
+                                !localState.expanded && (
+                                  <p className="text-xs text-gray-600 dark:text-gray-400 mt-2 font-mono bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded inline-block">
+                                    {localState.path}
+                                  </p>
+                                )}
+                            </div>
+                            <label className="relative inline-flex items-center cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={localState.enabled}
+                                onChange={(e) => {
+                                  const newValue = e.target.checked;
+                                  // Show confirmation modal instead of directly updating
+                                  setConfirmingUserId(userInfo.id);
+                                  setConfirmingAction(
+                                    newValue ? "enable" : "disable",
+                                  );
+                                  // Don't update state yet - wait for confirmation
+                                }}
+                                disabled={isUpdating}
+                                className="sr-only peer"
+                              />
+                              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                            </label>
+                          </div>
+
+                          {localState.enabled && localState.expanded && (
+                            <div className="space-y-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                  Custom Drive Path
+                                </label>
+                                <input
+                                  type="text"
+                                  value={localState.path}
+                                  onChange={(e) => {
+                                    setUserCustomDriveLocalState((prev) => ({
+                                      ...prev,
+                                      [userInfo.id]: {
+                                        enabled:
+                                          prev[userInfo.id]?.enabled || false,
+                                        path: e.target.value,
+                                        expanded:
+                                          prev[userInfo.id]?.expanded || false,
+                                        error: null,
+                                      },
+                                    }));
+                                  }}
+                                  placeholder="/mnt/external_drive or C:\\MyDrive"
+                                  disabled={isUpdating}
+                                  className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 dark:bg-gray-700 dark:text-white ${
+                                    localState.error
+                                      ? "border-red-500 focus:ring-red-500 focus:border-red-500"
+                                      : "border-gray-300 focus:ring-blue-500 focus:border-blue-500 dark:border-gray-600"
+                                  }`}
+                                />
+                              </div>
+
+                              {localState.error && (
+                                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
+                                  <div className="flex items-start gap-2">
+                                    <AlertCircle className="w-4 h-4 text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" />
+                                    <p className="text-sm text-red-700 dark:text-red-400">
+                                      {localState.error}
+                                    </p>
+                                  </div>
+                                </div>
+                              )}
+
+                              <div className="flex items-center gap-3">
+                                <button
+                                  onClick={async () => {
+                                    if (!localState.path.trim()) {
+                                      setUserCustomDriveLocalState((prev) => ({
+                                        ...prev,
+                                        [userInfo.id]: {
+                                          enabled:
+                                            prev[userInfo.id]?.enabled || false,
+                                          path: prev[userInfo.id]?.path || "",
+                                          expanded:
+                                            prev[userInfo.id]?.expanded ||
+                                            false,
+                                          error: "Path is required",
+                                        },
+                                      }));
+                                      return;
+                                    }
+                                    const success =
+                                      await handleUpdateUserCustomDrive(
+                                        userInfo.id,
+                                        true,
+                                        localState.path.trim(),
+                                      );
+                                    // Only update local state on success (handleUpdateUserCustomDrive already handles errors)
+                                    if (success) {
+                                      setUserCustomDriveLocalState((prev) => ({
+                                        ...prev,
+                                        [userInfo.id]: {
+                                          enabled: true,
+                                          path: localState.path.trim(),
+                                          expanded: false,
+                                          error: null,
+                                        },
+                                      }));
+                                    }
+                                    // If not successful, error state is already set by handleUpdateUserCustomDrive
+                                  }}
+                                  disabled={
+                                    isUpdating || !localState.path.trim()
+                                  }
+                                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-colors"
+                                >
+                                  {isUpdating ? (
+                                    <>
+                                      <Loader2 className="w-4 h-4 animate-spin" />
+                                      <span>Saving...</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <CheckCircle2 className="w-4 h-4" />
+                                      <span>Save</span>
+                                    </>
+                                  )}
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setUserCustomDriveLocalState((prev) => ({
+                                      ...prev,
+                                      [userInfo.id]: {
+                                        enabled:
+                                          prev[userInfo.id]?.enabled || false,
+                                        path: userInfo.customDrive.path || "",
+                                        expanded: false,
+                                        error: null,
+                                      },
+                                    }));
+                                  }}
+                                  disabled={isUpdating}
+                                  className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            ),
+          },
+        ]
+      : []),
+    ...(canToggleSignup
+      ? [
+          {
             title: "Administration",
             icon: SettingsIcon,
             description: "Manage workspace access, visibility, and onboarding.",
@@ -514,70 +841,72 @@ export const Settings: React.FC = () => {
               </div>
 
               <div className="space-y-4">
-                {section.items.map((item, itemIndex) => (
-                  <div
-                    key={itemIndex}
-                    className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-2xl bg-gray-50/70 dark:bg-gray-900/60 px-4 py-3 border border-transparent hover:border-blue-500/40 transition-all duration-200"
-                  >
-                    <div>
-                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                        {item.label}
-                      </p>
-                      {"description" in item && item.description && (
-                        <p className="text-sm text-gray-500 dark:text-gray-400">
-                          {item.description}
-                        </p>
-                      )}
-                    </div>
+                {"customContent" in section && section.customContent
+                  ? section.customContent
+                  : section.items?.map((item, itemIndex) => (
+                      <div
+                        key={itemIndex}
+                        className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-2xl bg-gray-50/70 dark:bg-gray-900/60 px-4 py-3 border border-transparent hover:border-blue-500/40 transition-all duration-200"
+                      >
+                        <div>
+                          <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                            {item.label}
+                          </p>
+                          {"description" in item && item.description && (
+                            <p className="text-sm text-gray-500 dark:text-gray-400">
+                              {item.description}
+                            </p>
+                          )}
+                        </div>
 
-                    {"toggle" in item && item.toggle !== undefined ? (
-                      <div className="flex flex-col items-end">
-                        <button
-                          onClick={handleToggleSignup}
-                          disabled={togglingSignup || loadingSignupStatus}
-                          className={`
+                        {"toggle" in item && item.toggle !== undefined ? (
+                          <div className="flex flex-col items-end">
+                            <button
+                              onClick={handleToggleSignup}
+                              disabled={togglingSignup || loadingSignupStatus}
+                              className={`
                             relative inline-flex h-6 w-12 items-center rounded-full transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500
                             ${item.value ? "bg-gradient-to-r from-blue-500 to-indigo-500" : "bg-gray-200 dark:bg-gray-700"}
                             ${togglingSignup || loadingSignupStatus ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}
                           `}
-                          aria-label={item.label}
-                        >
-                          <span
-                            className={`
+                              aria-label={item.label}
+                            >
+                              <span
+                                className={`
                               inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-200
                               ${item.value ? "translate-x-7" : "translate-x-1"}
                             `}
-                          />
-                        </button>
-                      </div>
-                    ) : "action" in item && item.action !== undefined ? (
-                      <div className="flex flex-col items-end">
-                        {(() => {
-                          const isDanger =
-                            "actionVariant" in item &&
-                            item.actionVariant === "danger";
-                          const isDisabled =
-                            ("actionDisabled" in item &&
-                              item.actionDisabled === true) ||
-                            !(
-                              "onAction" in item &&
-                              typeof item.onAction === "function"
-                            );
-                          const ActionIcon =
-                            "actionIcon" in item && item.actionIcon
-                              ? item.actionIcon
-                              : ChevronRight;
+                              />
+                            </button>
+                          </div>
+                        ) : "action" in item && item.action !== undefined ? (
+                          <div className="flex flex-col items-end">
+                            {(() => {
+                              const isDanger =
+                                "actionVariant" in item &&
+                                item.actionVariant === "danger";
+                              const isDisabled =
+                                ("actionDisabled" in item &&
+                                  item.actionDisabled === true) ||
+                                !(
+                                  "onAction" in item &&
+                                  typeof item.onAction === "function"
+                                );
+                              const ActionIcon =
+                                "actionIcon" in item && item.actionIcon
+                                  ? item.actionIcon
+                                  : ChevronRight;
 
-                          return (
-                            <button
-                              onClick={
-                                "onAction" in item &&
-                                typeof item.onAction === "function"
-                                  ? item.onAction
-                                  : undefined
-                              }
-                              disabled={isDisabled}
-                              className={`
+                              return (
+                                <button
+                                  onClick={
+                                    "onAction" in item &&
+                                    typeof item.onAction === "function"
+                                      ? item.onAction
+                                      : undefined
+                                  }
+                                  disabled={isDisabled}
+                                  className={`
                                 inline-flex items-center gap-2 px-4 py-2 text-sm rounded-2xl transition-all duration-200 border
                                 ${
                                   isDisabled
@@ -587,31 +916,31 @@ export const Settings: React.FC = () => {
                                       : "border-blue-500/40 text-blue-600 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/30"
                                 }
                               `}
-                            >
-                              {item.label === "Registered Users" &&
-                              loadingUsersList ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                              ) : item.label === "Active Sessions" &&
-                                loadingSessions ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                              ) : item.label === "Logout All Devices" &&
-                                loggingOutAll ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                              ) : (
-                                <ActionIcon className="w-4 h-4" />
-                              )}
-                              <span>{item.action}</span>
-                            </button>
-                          );
-                        })()}
+                                >
+                                  {item.label === "Registered Users" &&
+                                  loadingUsersList ? (
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                  ) : item.label === "Active Sessions" &&
+                                    loadingSessions ? (
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                  ) : item.label === "Logout All Devices" &&
+                                    loggingOutAll ? (
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                  ) : (
+                                    <ActionIcon className="w-4 h-4" />
+                                  )}
+                                  <span>{item.action}</span>
+                                </button>
+                              );
+                            })()}
+                          </div>
+                        ) : (
+                          <span className="text-base font-semibold text-gray-700 dark:text-gray-200 text-left sm:text-right break-words">
+                            {item.value}
+                          </span>
+                        )}
                       </div>
-                    ) : (
-                      <span className="text-base font-semibold text-gray-700 dark:text-gray-200 text-left sm:text-right break-words">
-                        {item.value}
-                      </span>
-                    )}
-                  </div>
-                ))}
+                    ))}
               </div>
             </div>
           );
@@ -817,6 +1146,249 @@ export const Settings: React.FC = () => {
             </div>
           )}
         </div>
+      </Modal>
+
+      {/* Enable Custom Drive Confirmation Modal */}
+      <Modal
+        isOpen={confirmingAction === "enable" && confirmingUserId !== null}
+        onClose={() => {
+          const userId = confirmingUserId;
+          const userInfo = allUsersCustomDrive.find((u) => u.id === userId);
+          setConfirmingUserId(null);
+          setConfirmingAction(null);
+          // Revert local state to actual server state when modal is closed without confirmation
+          if (userInfo) {
+            setUserCustomDriveLocalState((prev) => ({
+              ...prev,
+              [userId!]: {
+                enabled: userInfo.customDrive.enabled,
+                path: userInfo.customDrive.path || "",
+                expanded: prev[userId!]?.expanded || false,
+                error: null,
+              },
+            }));
+          } else {
+            // User not found in list - remove from local state to prevent UI/server mismatch
+            setUserCustomDriveLocalState((prev) => {
+              const newState = { ...prev };
+              delete newState[userId!];
+              return newState;
+            });
+          }
+        }}
+        title="Enable Custom Drive?"
+        size="md"
+      >
+        {confirmingUserId &&
+          (() => {
+            const userInfo = allUsersCustomDrive.find(
+              (u) => u.id === confirmingUserId,
+            );
+            return (
+              <div className="space-y-4">
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Enable custom drive for{" "}
+                  <strong>{userInfo?.name || userInfo?.email}</strong>?
+                </p>
+                <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="w-5 h-5 text-yellow-600 dark:text-yellow-400 mt-0.5 flex-shrink-0" />
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-yellow-800 dark:text-yellow-300 mb-2">
+                        Warning: This action will clean up the user's current
+                        upload directory
+                      </p>
+                      <ul className="text-sm text-yellow-700 dark:text-yellow-400 space-y-1 list-disc list-inside">
+                        <li>
+                          All files in the user's current upload directory will
+                          be removed from the database
+                        </li>
+                        <li>
+                          Physical files in the upload directory will also be
+                          deleted
+                        </li>
+                        <li>
+                          You will need to configure a custom drive path before
+                          enabling
+                        </li>
+                        <li>
+                          Once enabled, the path cannot be changed without
+                          disabling first
+                        </li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 justify-end">
+                  <button
+                    onClick={() => {
+                      setConfirmingUserId(null);
+                      setConfirmingAction(null);
+                      // Revert checkbox state on cancel to actual current state
+                      if (userInfo) {
+                        setUserCustomDriveLocalState((prev) => ({
+                          ...prev,
+                          [confirmingUserId]: {
+                            enabled: userInfo.customDrive.enabled,
+                            path: userInfo.customDrive.path || "",
+                            expanded: prev[confirmingUserId]?.expanded || false,
+                            error: null,
+                          },
+                        }));
+                      }
+                    }}
+                    className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => {
+                      const userId = confirmingUserId;
+                      setConfirmingUserId(null);
+                      setConfirmingAction(null);
+                      // Enable and expand for path configuration
+                      setUserCustomDriveLocalState((prev) => ({
+                        ...prev,
+                        [userId!]: {
+                          enabled: true,
+                          path: prev[userId!]?.path || "",
+                          expanded: true,
+                          error: null,
+                        },
+                      }));
+                    }}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>Continue</span>
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
+      </Modal>
+
+      {/* Disable Custom Drive Confirmation Modal */}
+      <Modal
+        isOpen={confirmingAction === "disable" && confirmingUserId !== null}
+        onClose={() => {
+          const userId = confirmingUserId;
+          const userInfo = allUsersCustomDrive.find((u) => u.id === userId);
+          setConfirmingUserId(null);
+          setConfirmingAction(null);
+          // Revert local state to actual server state when modal is closed without confirmation
+          if (userInfo) {
+            setUserCustomDriveLocalState((prev) => ({
+              ...prev,
+              [userId!]: {
+                enabled: userInfo.customDrive.enabled,
+                path: userInfo.customDrive.path || "",
+                expanded: prev[userId!]?.expanded || false,
+                error: null,
+              },
+            }));
+          } else {
+            // User not found in list - remove from local state to prevent UI/server mismatch
+            setUserCustomDriveLocalState((prev) => {
+              const newState = { ...prev };
+              delete newState[userId!];
+              return newState;
+            });
+          }
+        }}
+        title="Disable Custom Drive?"
+        size="md"
+      >
+        {confirmingUserId &&
+          (() => {
+            const userInfo = allUsersCustomDrive.find(
+              (u) => u.id === confirmingUserId,
+            );
+            const localState = userCustomDriveLocalState[confirmingUserId];
+            return (
+              <div className="space-y-4">
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Disable custom drive for{" "}
+                  <strong>{userInfo?.name || userInfo?.email}</strong>?
+                </p>
+                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" />
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-red-800 dark:text-red-300 mb-2">
+                        Warning: This action cannot be undone
+                      </p>
+                      <ul className="text-sm text-red-700 dark:text-red-400 space-y-1 list-disc list-inside">
+                        <li>
+                          All custom drive files will be removed from the
+                          database
+                        </li>
+                        <li>The file watcher will be stopped</li>
+                        <li>
+                          The user will need to set up custom drive again if you
+                          want to re-enable it
+                        </li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+                {localState?.path && (
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    Current path:{" "}
+                    <span className="font-mono bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded">
+                      {localState.path}
+                    </span>
+                  </p>
+                )}
+                <div className="flex items-center gap-3 justify-end">
+                  <button
+                    onClick={() => {
+                      setConfirmingUserId(null);
+                      setConfirmingAction(null);
+                      // Revert checkbox state on cancel to actual current state
+                      if (userInfo) {
+                        setUserCustomDriveLocalState((prev) => ({
+                          ...prev,
+                          [confirmingUserId]: {
+                            enabled: userInfo.customDrive.enabled,
+                            path: userInfo.customDrive.path || "",
+                            expanded: prev[confirmingUserId]?.expanded || false,
+                            error: null,
+                          },
+                        }));
+                      }
+                    }}
+                    className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={async () => {
+                      const userId = confirmingUserId;
+                      setConfirmingUserId(null);
+                      setConfirmingAction(null);
+                      // Error handling is done in handleUpdateUserCustomDrive
+                      await handleUpdateUserCustomDrive(userId!, false, null);
+                    }}
+                    disabled={updatingUserCustomDrive === confirmingUserId}
+                    className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                  >
+                    {updatingUserCustomDrive === confirmingUserId ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Disabling...</span>
+                      </>
+                    ) : (
+                      <>
+                        <AlertCircle className="w-4 h-4" />
+                        <span>Yes, Disable Custom Drive</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
       </Modal>
     </div>
   );

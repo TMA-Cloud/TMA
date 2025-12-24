@@ -484,8 +484,12 @@ See [Audit Documentation](audit.md) for detailed information.
 
 ### Custom Drive Scanner
 
-- Optional service to sync external directory
-- Watches for file changes and syncs to database
+- Per-user external drive integration service
+- Watches for file changes in user-specific custom drive directories
+- Syncs file changes to database automatically
+- Configured per-user by administrators via Settings page
+- Each user can have their own custom drive path
+- Real-time file system watching for changes
 
 ### Audit Worker
 

@@ -173,7 +173,7 @@ Create a `.env` file in the **root directory** of the project with the following
 - **Example:** `UPLOAD_DIR=./uploads`
 - **Absolute Path Example:** `UPLOAD_DIR=/var/www/uploads`
 - **Note:** Ensure the directory exists and is writable
-- **⚠️ Custom Drive Mode:** When `CUSTOM_DRIVE=yes`, this setting is **completely ignored**. Files are uploaded directly to `CUSTOM_DRIVE_PATH`.
+- **Note:** If a user has custom drive enabled in their settings, files are uploaded to their custom drive path instead.
 
 #### `STORAGE_LIMIT`
 
@@ -186,7 +186,7 @@ Create a `.env` file in the **root directory** of the project with the following
   - 1 GB: `1073741824`
   - 5 GB: `5368709120`
   - 10 GB: `10737418240`
-- **⚠️ Custom Drive Mode:** When `CUSTOM_DRIVE=yes`, this setting is **ignored**. The storage dashboard shows the actual disk space available on the custom drive path.
+- **Note:** If a user has custom drive enabled, the storage dashboard shows the actual disk space available on their custom drive path.
 
 #### `STORAGE_PATH`
 
@@ -196,7 +196,7 @@ Create a `.env` file in the **root directory** of the project with the following
 - **Description:** Base path for disk space calculation (used when custom drive is disabled)
 - **Example:** `STORAGE_PATH=/var/www/storage`
 - **Note:** Only used for disk space calculation, not for file storage location
-- **⚠️ Custom Drive Mode:** When `CUSTOM_DRIVE=yes`, this setting is **ignored**. Disk space is calculated from `CUSTOM_DRIVE_PATH` instead.
+- **Note:** If a user has custom drive enabled, disk space is calculated from their custom drive path instead.
 
 ---
 
@@ -222,46 +222,56 @@ Create a `.env` file in the **root directory** of the project with the following
 
 ---
 
-### Custom Drive Integration (Optional)
+### Custom Drive Integration (Per-User Settings)
 
-When Custom Drive is enabled, the application behaves differently:
+Custom drive is now configured **per-user** in the web application settings. Administrators can enable/disable custom drive and set custom drive paths for each user from the Settings page.
 
-| Setting | Normal Mode | Custom Drive Mode |
-|---------|-------------|-------------------|
-| `UPLOAD_DIR` | Final storage location | **Ignored** - uploads go directly to `CUSTOM_DRIVE_PATH` |
-| `STORAGE_LIMIT` | Enforced per-user limit | **Ignored** - uses actual disk space |
-| `STORAGE_PATH` | Disk space calculation path | **Ignored** - uses `CUSTOM_DRIVE_PATH` |
+**How It Works:**
 
-#### `CUSTOM_DRIVE`
+- Administrators configure custom drive for users in the Settings page (not via environment variables)
+- Only administrators can manage custom drive settings
+- Each user can have their own custom drive path configured by an administrator
+- Files are stored directly in the user's custom drive path with original filenames
+- Storage dashboard shows actual disk space available on the user's custom drive
+- File system watcher automatically syncs changes in real-time
 
-- **Type:** String
+**Behavior When Custom Drive is Enabled (Per User):**
+
+| Setting         | Normal Mode                  | Custom Drive Mode (User)                                       |
+|-----------------|------------------------------|----------------------------------------------------------------|
+| `UPLOAD_DIR`    | Final storage location       | **Ignored** - uploads go directly to user's custom drive path  |
+| `STORAGE_LIMIT` | Enforced per-user limit      | **Ignored** - uses actual disk space on custom drive           |
+| `STORAGE_PATH`  | Disk space calculation path  | **Ignored** - uses user's custom drive path                    |
+
+#### `CUSTOM_DRIVE_MOUNT_N` (Docker Only - Optional)
+
+- **Type:** String (Host:Container Path Mapping)
 - **Required:** No
-- **Values:** `yes` or `no`
-- **Default:** `no`
-- **Description:** Enable custom drive scanning service
-- **Example:** `CUSTOM_DRIVE=yes`
-
-#### `CUSTOM_DRIVE_PATH`
-
-- **Type:** String (Absolute Path)
-- **Required:** No (required if `CUSTOM_DRIVE=yes`)
-- **Description:** Absolute path to the directory to scan and sync
-- **Example:** `CUSTOM_DRIVE_PATH=/mnt/external_drive`
-- **Windows Example:** `CUSTOM_DRIVE_PATH=C:\ExternalDrive`
-- **Docker Example:** `CUSTOM_DRIVE_PATH=/data/custom_drive`
-- **Note:** Must be an absolute path. The service will watch this directory for changes.
-- **Behavior:** When enabled, all files are stored directly in this path with their original filenames. The storage dashboard shows actual disk space available on this drive.
-- **⚠️ Docker:** When using Docker, set this to `/data/custom_drive` (the container path). See `CUSTOM_DRIVE_HOST_PATH` below.
-
-#### `CUSTOM_DRIVE_HOST_PATH` (Docker Only)
-
-- **Type:** String (Absolute Path)
-- **Required:** No (required when using custom drive with Docker)
-- **Description:** The actual path on your host machine to mount as the custom drive
-- **Linux Example:** `CUSTOM_DRIVE_HOST_PATH=/mnt/nas/cloud_storage`
-- **Windows Example:** `CUSTOM_DRIVE_HOST_PATH=C:/Users/username/my_drive`
-- **Note:** This is only used by Docker Compose. The host path is mounted to `/data/custom_drive` inside the container.
+- **Description:** Mount host directories for users to use as custom drive paths. Supports multiple mounts (CUSTOM_DRIVE_MOUNT_1, CUSTOM_DRIVE_MOUNT_2, CUSTOM_DRIVE_MOUNT_3, etc.)
+- **Format:** `/host/path:/container/path` (REQUIRED - must include colon separator)
+- **Linux Example:** `CUSTOM_DRIVE_MOUNT_1=/mnt/nas_drive:/data/custom_drive`
+- **Windows Example:** `CUSTOM_DRIVE_MOUNT_1=C:/Users/username/my_drive:/data/custom_drive`
+- **Note:**
+  - These are only used by Docker Compose to mount volumes
+  - Format MUST include colon separator (host:container)
+  - Leave empty if not using that mount slot (will use safe placeholder)
+  - Backend will reject placeholder paths if users try to use them
+  - All custom drive paths MUST be mounted as volumes in Docker
+  - The backend will NOT create directories - they must already exist as mounted volumes
 - **See:** [Docker Guide - Custom Drive](docker.md#custom-drive-with-docker) for complete setup instructions.
+
+**Admin Configuration:**
+
+Custom drive settings are managed by administrators (first user) from the Settings page:
+
+1. Navigate to Settings (admin access required)
+2. Go to "Custom Drive Management" section
+3. For each user, enable "Use Custom Drive" toggle
+4. Enter the absolute path to the custom drive directory for that user
+5. Click "Save" to apply changes
+6. The system validates the path and starts watching for changes
+
+**Note:** Only administrators can manage custom drive settings. Regular users cannot configure their own custom drive settings.
 
 ---
 

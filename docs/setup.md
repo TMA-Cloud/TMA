@@ -52,7 +52,7 @@ Edit `.env` in the root directory with your configuration. See [Environment Vari
 
 - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` - For Google OAuth
 - `ONLYOFFICE_JWT_SECRET`, `ONLYOFFICE_URL`, `BACKEND_URL` - For OnlyOffice integration
-- `CUSTOM_DRIVE`, `CUSTOM_DRIVE_PATH` - For custom drive scanning
+- `CUSTOM_DRIVE_MOUNT_N` - Optional Docker mounts for custom drive (format: /host/path:/container/path, supports multiple mounts, administrators configure per-user in Settings)
 - `STORAGE_LIMIT` - Per-user storage limit in bytes
 
 #### Create Database

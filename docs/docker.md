@@ -175,65 +175,81 @@ Default is `3000:3000` if `BPORT` is not set.
 
 ### Custom Drive with Docker
 
-When using Custom Drive mode with Docker, you need to mount the host directory into the container.
+When using Custom Drive mode with Docker, you need to mount host directories into the container.
 
 **Setup Steps:**
 
-Add these to your `.env` file:
+Custom drive is configured per-user in the Settings page. To mount host directories for users to use:
 
-```bash
-# Enable custom drive
-CUSTOM_DRIVE=yes
+1. Add `CUSTOM_DRIVE_MOUNT_1`, `CUSTOM_DRIVE_MOUNT_2`, etc. to your `.env` file (add more as needed):
 
-# Container path - use this exact value
-CUSTOM_DRIVE_PATH=/data/custom_drive
+   ```bash
+   # Format: CUSTOM_DRIVE_MOUNT_N=/host/path:/container/path (REQUIRED - must include colon)
+   # Linux example:
+   CUSTOM_DRIVE_MOUNT_1=/mnt/nas_drive:/data/custom_drive
+   CUSTOM_DRIVE_MOUNT_2=/mnt/data_col:/data_col
+   CUSTOM_DRIVE_MOUNT_3=/mnt/backup:/data/backup
+   
+   # Windows example (use forward slashes):
+   CUSTOM_DRIVE_MOUNT_1=C:/Users/username/my_drive:/data/custom_drive
+   CUSTOM_DRIVE_MOUNT_2=C:/Users/username/data_col:/data_col
+   ```
 
-# Host path - your actual directory on the host machine
-# Linux example:
-CUSTOM_DRIVE_HOST_PATH=/mnt/my_nas_drive
-# Windows example (use forward slashes):
-CUSTOM_DRIVE_HOST_PATH=C:/Users/username/my_drive
-```
+2. Uncomment/add corresponding mount lines in `docker-compose.yml` if you add more than 2 mounts (default shows 2, but you can add more).
 
-**Note:** The `docker-compose.yml` automatically mounts `CUSTOM_DRIVE_HOST_PATH` to `/data/custom_drive` inside the container.
+3. Administrators can then configure users' custom drive in Settings:
+   - Navigate to Settings page (admin access required)
+   - Go to "Custom Drive Management" section
+   - For each user, enable "Use Custom Drive" toggle
+   - Set path to the container path (e.g., `/data/custom_drive` or `/data_col`)
+   - Click "Save" to apply changes
 
 **How It Works:**
 
-- `CUSTOM_DRIVE_HOST_PATH` = The actual path on your host machine (where your files are)
-- `CUSTOM_DRIVE_PATH` = The path inside the container (always `/data/custom_drive`)
-- Docker Compose mounts `${CUSTOM_DRIVE_HOST_PATH}` → `/data/custom_drive`
+- `CUSTOM_DRIVE_MOUNT_N` = Host path and container path separated by colon (host:container)
+- Docker Compose mounts the host path to the container path
+- Administrators configure each user's custom drive path in Settings (must match a mounted container path)
+- Backend validates paths and rejects placeholder paths
+- Only administrators can manage custom drive settings
 
 **Example Configuration:**
 
 ```bash
-# .env for Linux with NAS mount
-CUSTOM_DRIVE=yes
-CUSTOM_DRIVE_PATH=/data/custom_drive
-CUSTOM_DRIVE_HOST_PATH=/mnt/nas/cloud_storage
+# .env for Linux with multiple mounts
+CUSTOM_DRIVE_MOUNT_1=/mnt/nas/cloud_storage:/data/custom_drive
+CUSTOM_DRIVE_MOUNT_2=/mnt/backup:/data/backup
+CUSTOM_DRIVE_MOUNT_3=/mnt/archive:/data/archive
 
 # .env for Windows
-CUSTOM_DRIVE=yes
-CUSTOM_DRIVE_PATH=/data/custom_drive
-CUSTOM_DRIVE_HOST_PATH=D:/CloudDrive
+CUSTOM_DRIVE_MOUNT_1=D:/CloudDrive:/data/custom_drive
+CUSTOM_DRIVE_MOUNT_2=E:/Storage:/data/storage
 ```
 
 **Important Notes:**
 
-- When `CUSTOM_DRIVE=yes`, `UPLOAD_DIR`, `STORAGE_LIMIT`, and `STORAGE_PATH` are all **ignored**
-- Files are uploaded directly to the custom drive path
-- Storage dashboard shows actual disk space of the custom drive
-- Files are stored with original filenames in the custom drive directory
+- **Format is REQUIRED**: Must include colon separator (host:container)
+- Custom drive is configured per-user by administrators in the Settings page (not via environment variables)
+- Only administrators can manage custom drive settings for users
+- When a user has custom drive enabled, `UPLOAD_DIR`, `STORAGE_LIMIT`, and `STORAGE_PATH` are ignored for that user
+- Files are uploaded directly to the user's custom drive path
+- Storage dashboard shows actual disk space of the user's custom drive
+- Files are stored with original filenames in the user's custom drive directory
+- **Backend will NOT create directories** - paths must already exist as mounted volumes
+- Backend validates paths exist and are accessible, and rejects placeholder paths
 
 **Permissions:**
 
-Ensure the host directory has correct permissions:
+Ensure the host directories have correct permissions:
 
 ```bash
 # Create directory if needed
-mkdir -p /mnt/my_drive
+mkdir -p /mnt/nas_drive
 
 # Set ownership to container user (UID 1001)
-chown -R 1001:1001 /mnt/my_drive
+chown -R 1001:1001 /mnt/nas_drive
+
+# Or for quick testing:
+chmod -R 755 /mnt/nas_drive
 ```
 
 ### Network Configuration

@@ -2,9 +2,59 @@ const pool = require('../config/db');
 const { generateId } = require('../utils/id');
 const fs = require('fs');
 const path = require('path');
-const { UPLOAD_DIR, CUSTOM_DRIVE_ENABLED, CUSTOM_DRIVE_PATH } = require('../config/paths');
+const { UPLOAD_DIR } = require('../config/paths');
 const { resolveFilePath } = require('../utils/filePath');
 const { logger } = require('../config/logger');
+const { getUserCustomDriveSettings } = require('./user.model');
+
+/**
+ * Get user's custom drive settings (cached per request)
+ * @param {string} userId - User ID
+ * @returns {Promise<{enabled: boolean, path: string|null}>}
+ */
+let customDriveCache = new Map();
+let cacheTimeouts = new Map(); // Store timeouts to clear them if cache is refreshed
+
+/**
+ * Invalidate custom drive cache for a specific user
+ * Call this when custom drive settings are updated to ensure fresh data
+ * @param {string} userId - User ID
+ */
+function invalidateCustomDriveCache(userId) {
+  if (customDriveCache.has(userId)) {
+    customDriveCache.delete(userId);
+  }
+  if (cacheTimeouts.has(userId)) {
+    clearTimeout(cacheTimeouts.get(userId));
+    cacheTimeouts.delete(userId);
+  }
+}
+
+async function getUserCustomDrive(userId) {
+  // Simple in-memory cache (could be improved with request-level caching)
+  if (customDriveCache.has(userId)) {
+    return customDriveCache.get(userId);
+  }
+  
+  try {
+    const settings = await getUserCustomDriveSettings(userId);
+    customDriveCache.set(userId, settings);
+    // Clear any existing timeout for this userId before setting a new one
+    if (cacheTimeouts.has(userId)) {
+      clearTimeout(cacheTimeouts.get(userId));
+    }
+    // Clear cache after 1 minute
+    const timeout = setTimeout(() => {
+      customDriveCache.delete(userId);
+      cacheTimeouts.delete(userId);
+    }, 60000);
+    cacheTimeouts.set(userId, timeout);
+    return settings;
+  } catch (error) {
+    // If user not found or error, return disabled
+    return { enabled: false, path: null };
+  }
+}
 
 const SORT_FIELDS = {
   name: 'name',
@@ -75,8 +125,11 @@ async function getFiles(userId, parentId = null, sortBy = 'modified', order = 'D
 async function createFolder(name, parentId = null, userId) {
   const id = generateId(16);
   
-  // If custom drive is enabled, create folder in custom drive
-  if (CUSTOM_DRIVE_ENABLED && CUSTOM_DRIVE_PATH) {
+  // Check if user has custom drive enabled
+  const customDrive = await getUserCustomDrive(userId);
+  
+  if (customDrive.enabled && customDrive.path) {
+    let finalPath = null; // Declare outside try block to safely access in catch
     try {
       // Get the parent folder path
       const parentPath = await getFolderPath(parentId, userId);
@@ -84,16 +137,16 @@ async function createFolder(name, parentId = null, userId) {
       // Build the new folder path
       const folderPath = parentPath
         ? path.join(parentPath, name)
-        : path.join(CUSTOM_DRIVE_PATH, name);
+        : path.join(customDrive.path, name);
       
       // Handle duplicate folder names
-      let finalPath = folderPath;
+      finalPath = folderPath;
       let counter = 1;
       while (await fs.promises.access(finalPath).then(() => true).catch(() => false)) {
         const newName = `${name} (${counter})`;
         finalPath = parentPath
           ? path.join(parentPath, newName)
-          : path.join(CUSTOM_DRIVE_PATH, newName);
+          : path.join(customDrive.path, newName);
         counter++;
         if (counter > 10000) {
           throw new Error('Too many duplicate folders');
@@ -114,8 +167,20 @@ async function createFolder(name, parentId = null, userId) {
       );
       return result.rows[0];
     } catch (error) {
-      // If custom drive creation fails, fall back to regular folder (no path)
-      logger.error('[File] Error creating folder in custom drive, creating regular folder:', error);
+      // If custom drive creation fails, clean up orphaned folder on disk
+      logger.error('[File] Error creating folder in custom drive:', error);
+      try {
+        // Clean up the folder that was created on disk but not in database
+        if (finalPath) {
+          await fs.promises.rmdir(finalPath).catch(() => {
+            // Ignore cleanup errors (folder might not be empty or already deleted)
+          });
+        }
+      } catch (cleanupError) {
+        logger.warn({ finalPath, error: cleanupError.message }, 'Failed to clean up orphaned custom drive folder');
+      }
+      // Re-throw the error instead of falling back to avoid duplicate key errors
+      throw error;
     }
   }
   
@@ -132,8 +197,10 @@ async function createFolder(name, parentId = null, userId) {
  * Returns the absolute path if it's a custom drive folder, or null if regular folder
  */
 async function getFolderPath(parentId, userId) {
+  const customDrive = await getUserCustomDrive(userId);
+  
   if (!parentId) {
-    return CUSTOM_DRIVE_ENABLED && CUSTOM_DRIVE_PATH ? CUSTOM_DRIVE_PATH : null;
+    return customDrive.enabled && customDrive.path ? customDrive.path : null;
   }
 
   const result = await pool.query(
@@ -142,7 +209,7 @@ async function getFolderPath(parentId, userId) {
   );
 
   if (result.rows.length === 0) {
-    return CUSTOM_DRIVE_ENABLED && CUSTOM_DRIVE_PATH ? CUSTOM_DRIVE_PATH : null;
+    return customDrive.enabled && customDrive.path ? customDrive.path : null;
   }
 
   const folder = result.rows[0];
@@ -154,10 +221,10 @@ async function getFolderPath(parentId, userId) {
 
   // If custom drive is enabled but folder doesn't have path, use custom drive root
   // For regular folders, we'll need to build the path by traversing up
-  if (CUSTOM_DRIVE_ENABLED && CUSTOM_DRIVE_PATH) {
+  if (customDrive.enabled && customDrive.path) {
     // Try to build path by traversing parent chain
     const folderPath = await buildFolderPath(parentId, userId);
-    return folderPath || CUSTOM_DRIVE_PATH;
+    return folderPath || customDrive.path;
   }
 
   return null;
@@ -167,7 +234,9 @@ async function getFolderPath(parentId, userId) {
  * Builds the folder path by traversing the parent chain
  */
 async function buildFolderPath(folderId, userId) {
-  if (!CUSTOM_DRIVE_ENABLED || !CUSTOM_DRIVE_PATH) {
+  const customDrive = await getUserCustomDrive(userId);
+  
+  if (!customDrive.enabled || !customDrive.path) {
     return null;
   }
 
@@ -199,10 +268,10 @@ async function buildFolderPath(folderId, userId) {
 
   // Build path from custom drive root
   if (pathParts.length > 0) {
-    return path.join(CUSTOM_DRIVE_PATH, ...pathParts);
+    return path.join(customDrive.path, ...pathParts);
   }
 
-  return CUSTOM_DRIVE_PATH;
+  return customDrive.path;
 }
 
 /**
@@ -233,17 +302,20 @@ async function getUniqueFilename(filePath, folderPath) {
 async function createFile(name, size, mimeType, tempPath, parentId = null, userId) {
   const id = generateId(16);
   
-  // If custom drive is enabled, file is already uploaded to CUSTOM_DRIVE_PATH
-  // Just rename it to the final location with proper name
-  if (CUSTOM_DRIVE_ENABLED && CUSTOM_DRIVE_PATH) {
+  // Check if user has custom drive enabled
+  const customDrive = await getUserCustomDrive(userId);
+  
+  // If custom drive is enabled, file is already uploaded directly to custom drive path
+  // Just rename it to the final location with proper name (same filesystem, so rename works)
+  if (customDrive.enabled && customDrive.path) {
     let finalPath = null;
-    let renameSucceeded = false;
+    let renameSucceeded = false; // Track whether rename actually succeeded
     try {
       // Get the target folder path
       const folderPath = await getFolderPath(parentId, userId);
       
       // Ensure the target folder exists
-      const targetDir = folderPath || CUSTOM_DRIVE_PATH;
+      const targetDir = folderPath || customDrive.path;
       try {
         await fs.promises.access(targetDir);
       } catch {
@@ -257,9 +329,9 @@ async function createFile(name, size, mimeType, tempPath, parentId = null, userI
       // Handle duplicate filenames
       finalPath = await getUniqueFilename(destPath, targetDir);
       
-      // Rename temp file to final location (same filesystem, so rename works)
+      // Rename temp file to final location (same filesystem since multer uploaded directly to custom drive)
       await fs.promises.rename(tempPath, finalPath);
-      renameSucceeded = true; // Track that rename completed successfully
+      renameSucceeded = true; // Mark that rename succeeded
       
       // Get the actual filename (in case it was changed due to duplicates)
       const actualName = path.basename(finalPath);
@@ -274,17 +346,26 @@ async function createFile(name, size, mimeType, tempPath, parentId = null, userI
     } catch (error) {
       // If custom drive save fails, log and throw (don't fall back since file is already in custom drive)
       logger.error('[File] Error saving to custom drive:', error);
-      // Clean up file - use renameSucceeded flag to determine actual file location
+      // Clean up the orphaned file based on whether rename succeeded
       try {
         if (renameSucceeded && finalPath) {
-          // Rename succeeded, file is at finalPath
+          // Rename succeeded, so file is at finalPath - delete it
           await fs.promises.unlink(finalPath);
+        } else if (finalPath) {
+          // Rename failed or didn't happen, but finalPath was set
+          // Try finalPath first (in case rename partially succeeded), then tempPath
+          try {
+            await fs.promises.unlink(finalPath);
+          } catch {
+            // finalPath doesn't exist, try tempPath
+            await fs.promises.unlink(tempPath);
+          }
         } else {
-          // Rename didn't succeed (or didn't happen), file is still at tempPath
+          // finalPath wasn't set, file is still at tempPath
           await fs.promises.unlink(tempPath);
         }
-      } catch {
-        // Ignore cleanup errors
+      } catch (cleanupError) {
+        logger.warn({ finalPath, tempPath, renameSucceeded, error: cleanupError.message }, 'Failed to clean up orphaned custom drive file');
       }
       throw error;
     }
@@ -323,11 +404,13 @@ async function copyEntry(id, parentId, userId, client = null) {
     // Get source file path (handles both relative and absolute)
     const sourcePath = resolveFilePath(file.path);
     
-    if (CUSTOM_DRIVE_ENABLED && CUSTOM_DRIVE_PATH) {
+    const customDrive = await getUserCustomDrive(userId);
+    
+    if (customDrive.enabled && customDrive.path) {
       // If custom drive is enabled, copy to custom drive with original name
       try {
         const folderPath = await getFolderPath(parentId, userId);
-        const destDir = folderPath || CUSTOM_DRIVE_PATH;
+        const destDir = folderPath || customDrive.path;
         
         // Ensure destination directory exists
         try {
@@ -372,28 +455,21 @@ async function copyEntry(id, parentId, userId, client = null) {
           ],
         );
       } catch (error) {
-        // Fall back to regular copy if custom drive copy fails
-        logger.error('[File] Error copying to custom drive, falling back to UPLOAD_DIR:', error);
-        const ext = path.extname(file.name);
-        storageName = newId + ext;
-        await fs.promises.copyFile(sourcePath, path.join(UPLOAD_DIR, storageName));
-        newPath = storageName;
-        
-        await dbClient.query(
-          'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id, starred, shared) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',
-          [
-            newId,
-            file.name,
-            file.type,
-            file.size,
-            file.mime_type,
-            newPath,
-            parentId,
-            userId,
-            file.starred,
-            file.shared,
-          ],
-        );
+        // If custom drive copy fails, clean up orphaned file on disk
+        logger.error('[File] Error copying file to custom drive:', error);
+        try {
+          // Clean up the file that was copied to disk but not in database
+          if (newPath && path.isAbsolute(newPath)) {
+            await fs.promises.unlink(newPath).catch(() => {
+              // Ignore cleanup errors (file might not exist or already deleted)
+            });
+          }
+        } catch (cleanupError) {
+          logger.warn({ newPath, error: cleanupError.message }, 'Failed to clean up orphaned custom drive file during copy');
+        }
+        // Re-throw the error instead of falling back to avoid violating custom drive invariant
+        // Custom drive users must have all files in their custom drive path
+        throw error;
       }
     } else {
       // Regular copy to UPLOAD_DIR
@@ -425,21 +501,24 @@ async function copyEntry(id, parentId, userId, client = null) {
     }
   } else if (file.type === 'folder') {
     // For folders created in custom drive, we need to create them on disk
-    if (CUSTOM_DRIVE_ENABLED && CUSTOM_DRIVE_PATH) {
+    const customDrive = await getUserCustomDrive(userId);
+    
+    if (customDrive.enabled && customDrive.path) {
+      let finalPath = null; // Declare outside try block to safely access in catch
       try {
         const parentPath = await getFolderPath(parentId, userId);
         const folderPath = parentPath
           ? path.join(parentPath, file.name)
-          : path.join(CUSTOM_DRIVE_PATH, file.name);
+          : path.join(customDrive.path, file.name);
         
         // Handle duplicate folder names
-        let finalPath = folderPath;
+        finalPath = folderPath;
         let counter = 1;
         while (await fs.promises.access(finalPath).then(() => true).catch(() => false)) {
           const newName = `${file.name} (${counter})`;
           finalPath = parentPath
             ? path.join(parentPath, newName)
-            : path.join(CUSTOM_DRIVE_PATH, newName);
+            : path.join(customDrive.path, newName);
           counter++;
           if (counter > 10000) {
             throw new Error('Too many duplicate folders');
@@ -466,23 +545,20 @@ async function copyEntry(id, parentId, userId, client = null) {
           ],
         );
       } catch (error) {
-        // Fall back to regular folder (no path)
-        logger.error('[File] Error creating folder in custom drive:', error);
-        await dbClient.query(
-          'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id, starred, shared) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',
-          [
-            newId,
-            file.name,
-            file.type,
-            file.size,
-            file.mime_type,
-            null,
-            parentId,
-            userId,
-            file.starred,
-            file.shared,
-          ],
-        );
+        // If custom drive folder creation fails, clean up orphaned folder on disk
+        logger.error('[File] Error creating folder in custom drive during copy:', error);
+        try {
+          // Clean up the folder that was created on disk but not in database
+          if (finalPath) {
+            await fs.promises.rmdir(finalPath).catch(() => {
+              // Ignore cleanup errors (folder might not be empty or already deleted)
+            });
+          }
+        } catch (cleanupError) {
+          logger.warn({ finalPath, error: cleanupError.message }, 'Failed to clean up orphaned custom drive folder during copy');
+        }
+        // Re-throw the error instead of falling back to avoid duplicate key errors
+        throw error;
       }
     } else {
       // Regular folder (no path stored)
@@ -1039,6 +1115,8 @@ async function getFileStats(userId) {
 }
 
 module.exports = {
+  getUserCustomDrive,
+  invalidateCustomDriveCache,
   getFiles,
   createFolder,
   createFile,
