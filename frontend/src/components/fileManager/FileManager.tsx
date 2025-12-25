@@ -152,6 +152,7 @@ export const FileManager: React.FC = () => {
 
   const dragSelectingRef = useRef(false);
   const managerRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLDivElement>(null);
   const [isSelecting, setIsSelecting] = useState(false);
   const [draggingIds, setDraggingIds] = useState<string[]>([]);
   const [dragOverFolder, setDragOverFolder] = useState<string | null>(null);
@@ -431,7 +432,8 @@ export const FileManager: React.FC = () => {
 
       {/* Header */}
       <div
-        className={`${isMobile ? "flex-col space-y-3 px-3 py-3" : "flex items-center justify-between px-6 py-4"} rounded-xl card-premium mb-4 transition-all duration-200 animate-slideDown`}
+        ref={headerRef}
+        className={`${isMobile ? "flex-col space-y-3 px-3 py-3" : "flex items-center justify-between px-6 py-4"} rounded-xl card-premium mb-4 transition-all duration-200 animate-slideDown sticky top-0 z-30`}
       >
         <div className={`${isMobile ? "w-full" : "flex-1 min-w-0"}`}>
           <Breadcrumbs />
