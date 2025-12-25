@@ -25,9 +25,12 @@ function createPeriodicCleanup(cleanupFn, name, intervalHours = 24) {
 
   function start() {
     runCleanup();
-    setInterval(() => {
-      runCleanup();
-    }, intervalHours * 60 * 60 * 1000);
+    setInterval(
+      () => {
+        runCleanup();
+      },
+      intervalHours * 60 * 60 * 1000
+    );
   }
 
   return { start, runCleanup };

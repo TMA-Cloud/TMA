@@ -8,14 +8,14 @@ const { getRequestHost, getShareBaseHost } = require('../utils/shareLink');
  */
 function blockMainAppOnShareDomain(req, res, next) {
   const shareBaseHost = getShareBaseHost();
-  
+
   // If SHARE_BASE_URL is not configured, allow all requests
   if (!shareBaseHost) {
     return next();
   }
 
   const requestHost = getRequestHost(req);
-  
+
   // If request host doesn't match share domain, allow it (normal app access)
   if (!requestHost || requestHost.toLowerCase() !== shareBaseHost.toLowerCase()) {
     return next();
@@ -38,9 +38,9 @@ function blockMainAppOnShareDomain(req, res, next) {
       shareDomain: shareBaseHost,
       requestHost,
     },
-    'Blocked access to main app route on share domain',
+    'Blocked access to main app route on share domain'
   );
-  
+
   // Stop request immediately - don't call next(), don't process body, don't hit routes
   return res.status(404).send('Not Found');
 }

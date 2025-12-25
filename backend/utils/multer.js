@@ -28,7 +28,10 @@ const storage = multer.diskStorage({
           return;
         } catch (error) {
           // If custom drive path fails, log error and fall back to UPLOAD_DIR
-          logger.warn({ userId: req.userId, path: uploadDir, error: error.message }, 'Custom drive path validation failed, falling back to UPLOAD_DIR');
+          logger.warn(
+            { userId: req.userId, path: uploadDir, error: error.message },
+            'Custom drive path validation failed, falling back to UPLOAD_DIR'
+          );
         }
       }
       // Default: upload to UPLOAD_DIR
@@ -41,11 +44,11 @@ const storage = multer.diskStorage({
   },
   filename: function (req, file, cb) {
     // Use temp filename - will be renamed to final name in createFile
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
     cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
-  }
+  },
 });
 
-const upload = multer({ storage: storage });
+const upload = multer({ storage });
 
 module.exports = upload;

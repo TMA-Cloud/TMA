@@ -10,7 +10,7 @@ const {
   profile,
   getSessions,
   revokeSession,
-  googleAuthEnabled
+  googleAuthEnabled,
 } = require('../controllers/auth.controller');
 const authMiddleware = require('../middleware/auth.middleware');
 const { authRateLimiter } = require('../middleware/rateLimit.middleware');

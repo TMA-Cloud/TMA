@@ -12,7 +12,7 @@ if (!JWT_SECRET) {
   process.exit(1);
 }
 
-module.exports = async function(req, res, next) {
+module.exports = async function (req, res, next) {
   let token;
   if (req.headers.cookie) {
     const cookies = req.headers.cookie.split(';').map(c => c.trim());
@@ -37,11 +37,14 @@ module.exports = async function(req, res, next) {
       logger.warn({ userId: decoded.id }, 'Token validation failed: user not found');
       return res.status(401).json({ message: 'Invalid token' });
     }
-    
+
     // Check if token version matches (token.v might be undefined for old tokens)
     const tokenVersion = decoded.v || 1;
     if (tokenVersion !== currentTokenVersion) {
-      logger.warn({ userId: decoded.id, tokenVersion, currentTokenVersion }, 'Token validation failed: session invalidated');
+      logger.warn(
+        { userId: decoded.id, tokenVersion, currentTokenVersion },
+        'Token validation failed: session invalidated'
+      );
       return res.status(401).json({ message: 'Session expired. Please login again.' });
     }
 
@@ -54,19 +57,19 @@ module.exports = async function(req, res, next) {
       // Extract sessionId from URL path (handle both /api/sessions/... and /sessions/...)
       if (req.method === 'DELETE' && req.path) {
         // Match both /api/sessions/:id and /sessions/:id patterns
-        const sessionRevokeMatch = req.path.match(/\/(?:api\/)?sessions\/([^\/]+)$/);
+        const sessionRevokeMatch = req.path.match(/\/(?:api\/)?sessions\/([^/]+)$/);
         if (sessionRevokeMatch && sessionRevokeMatch[1] === decoded.sid) {
           isRevokingOwnSession = true;
         }
       }
-      
+
       if (!isRevokingOwnSession) {
         const sessionValid = await sessionExists(decoded.sid, decoded.id, tokenVersion);
         if (!sessionValid) {
           logger.warn({ userId: decoded.id, sessionId: decoded.sid }, 'Token validation failed: session revoked');
           return res.status(401).json({ message: 'Session has been revoked. Please login again.' });
         }
-        
+
         // Update last activity timestamp for this session (fire-and-forget, don't block request)
         // Only update if session is valid and not being revoked
         updateSessionActivity(decoded.sid).catch(err => {
@@ -84,11 +87,15 @@ module.exports = async function(req, res, next) {
         logger.warn({ userId: decoded.id }, 'Token validation failed: fingerprint mismatch (possible token theft)');
         // Log this as a security event
         const { logAuditEvent } = require('../services/auditLogger');
-        await logAuditEvent('auth.suspicious_token', {
-          status: 'failure',
-          resourceType: 'auth',
-          details: 'Token fingerprint mismatch - possible session hijacking attempt'
-        }, req);
+        await logAuditEvent(
+          'auth.suspicious_token',
+          {
+            status: 'failure',
+            resourceType: 'auth',
+            details: 'Token fingerprint mismatch - possible session hijacking attempt',
+          },
+          req
+        );
         return res.status(401).json({ message: 'Session invalid. Please login again.' });
       }
     }

@@ -24,9 +24,7 @@ require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 const app = express();
 
 // Metrics endpoint IP whitelist
-const METRICS_ALLOWED_IPS = (process.env.METRICS_ALLOWED_IPS || '127.0.0.1')
-  .split(',')
-  .map(ip => ip.trim());
+const METRICS_ALLOWED_IPS = (process.env.METRICS_ALLOWED_IPS || '127.0.0.1').split(',').map(ip => ip.trim());
 
 // FIRST: Request ID middleware (must be first for proper context propagation)
 app.use(requestIdMiddleware);
@@ -73,7 +71,7 @@ app.use((req, res, next) => {
     frameSrc,
     "frame-ancestors 'none'",
     "base-uri 'self'",
-    "form-action 'self'"
+    "form-action 'self'",
   ].join('; ');
   res.setHeader('Content-Security-Policy', csp);
 
@@ -92,13 +90,17 @@ app.get('/health', (req, res) => {
 });
 
 // Metrics endpoint (protected by IP whitelist in production)
-app.get('/metrics', (req, res, next) => {
-  if (process.env.NODE_ENV === 'production' && !METRICS_ALLOWED_IPS.includes(req.ip)) {
-    logger.warn({ ip: req.ip }, 'Unauthorized metrics access attempt');
-    return res.status(403).send('Forbidden');
-  }
-  next();
-}, metricsEndpoint);
+app.get(
+  '/metrics',
+  (req, res, next) => {
+    if (process.env.NODE_ENV === 'production' && !METRICS_ALLOWED_IPS.includes(req.ip)) {
+      logger.warn({ ip: req.ip }, 'Unauthorized metrics access attempt');
+      return res.status(403).send('Forbidden');
+    }
+    next();
+  },
+  metricsEndpoint
+);
 
 // API routes
 app.use('/api', authRoutes);
@@ -119,7 +121,7 @@ app.use((req, res, next) => {
     return next();
   }
   // For all other routes, serve index.html (SPA routing)
-  res.sendFile(path.join(frontendPath, 'index.html'), (err) => {
+  res.sendFile(path.join(frontendPath, 'index.html'), err => {
     if (err) {
       next(err);
     }
@@ -140,7 +142,8 @@ async function runMigrations() {
     const applied = appliedRes.rows.map(r => r.version);
     const migrationsDir = path.join(__dirname, 'migrations');
     if (!fs.existsSync(migrationsDir)) return;
-    const files = fs.readdirSync(migrationsDir)
+    const files = fs
+      .readdirSync(migrationsDir)
       .filter(f => f.endsWith('.sql'))
       .sort();
     for (const file of files) {
@@ -198,7 +201,7 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 // Handle uncaught exceptions
-process.on('uncaughtException', (error) => {
+process.on('uncaughtException', error => {
   logger.error({ err: error }, 'Uncaught Exception');
   // Always exit on uncaught exceptions as the application is in an undefined state
   process.exit(1);
@@ -239,7 +242,7 @@ runMigrations()
     process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
     process.on('SIGINT', () => gracefulShutdown('SIGINT'));
   })
-  .catch((err) => {
+  .catch(err => {
     logger.error({ err }, 'Failed to start server');
     process.exit(1);
   });

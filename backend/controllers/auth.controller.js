@@ -1,5 +1,4 @@
 const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
 const { OAuth2Client } = require('google-auth-library');
 const {
   createUser,
@@ -11,7 +10,7 @@ const {
   getSignupEnabled,
   setSignupEnabled,
   getUserTokenVersion,
-  invalidateAllSessions
+  invalidateAllSessions,
 } = require('../models/user.model');
 const { createSession, deleteAllUserSessions, getActiveSessions, deleteSession } = require('../models/session.model');
 const pool = require('../config/db');
@@ -26,15 +25,10 @@ const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 const GOOGLE_REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI;
 
-const GOOGLE_AUTH_ENABLED =
-  GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET && GOOGLE_REDIRECT_URI;
+const GOOGLE_AUTH_ENABLED = GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET && GOOGLE_REDIRECT_URI;
 let googleClient;
 if (GOOGLE_AUTH_ENABLED) {
-  googleClient = new OAuth2Client(
-    GOOGLE_CLIENT_ID,
-    GOOGLE_CLIENT_SECRET,
-    GOOGLE_REDIRECT_URI
-  );
+  googleClient = new OAuth2Client(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI);
 } else {
   logger.info('Google OAuth disabled (missing credentials)');
 }
@@ -55,14 +49,14 @@ async function signup(req, res) {
     if (!signupEnabled) {
       return sendError(res, 403, 'Signup is currently disabled');
     }
-    
+
     const { email, password, name } = req.body;
-    
+
     // Input validation
     if (!email || !password) {
       return sendError(res, 400, 'Email and password required');
     }
-    
+
     // Validate and sanitize email
     if (!validateEmailUtil(email) || !isValidEmail(email)) {
       await loginFailure(email, 'invalid_email', req);
@@ -86,7 +80,7 @@ async function signup(req, res) {
       await loginFailure(email, 'email_already_in_use', req);
       return sendError(res, 409, 'Email already in use');
     }
-    
+
     const hashed = await bcrypt.hash(password, 10);
     const user = await createUser(email, hashed, validatedName);
 
@@ -111,7 +105,7 @@ async function signup(req, res) {
 
         await client.query('COMMIT');
         logger.info({ userId: user.id }, 'First user created, signup disabled by default');
-      } catch (err) {
+      } catch (_err) {
         await client.query('ROLLBACK');
         // If first_user_id already set, just disable signup
         await setSignupEnabled(false, user.id);
@@ -125,10 +119,10 @@ async function signup(req, res) {
     const ipAddress = req?.ip || req?.socket?.remoteAddress || null;
     const userAgent = req?.headers?.['user-agent'] || null;
     const session = await createSession(user.id, 1, userAgent, ipAddress);
-    
+
     // Generate token with session ID bound to it
     const token = generateAuthToken(user.id, JWT_SECRET, { tokenVersion: 1, sessionId: session.id, req });
-    
+
     res.cookie('token', token, getCookieOptions());
     sendSuccess(res, { user });
   } catch (err) {
@@ -139,11 +133,11 @@ async function signup(req, res) {
 async function login(req, res) {
   try {
     const { email, password } = req.body;
-    
+
     if (!email || !password) {
       return sendError(res, 400, 'Email and password required');
     }
-    
+
     // Validate and sanitize email
     if (!validateEmailUtil(email) || !isValidEmail(email)) {
       await loginFailure(email, 'invalid_email', req);
@@ -167,16 +161,16 @@ async function login(req, res) {
     logger.info({ userId: user.id, email }, 'User logged in successfully');
 
     // Get current token version for the user
-    const tokenVersion = await getUserTokenVersion(user.id) || 1;
-    
+    const tokenVersion = (await getUserTokenVersion(user.id)) || 1;
+
     // Create session record first to get session ID
     const ipAddress = req?.ip || req?.socket?.remoteAddress || null;
     const userAgent = req?.headers?.['user-agent'] || null;
     const session = await createSession(user.id, tokenVersion, userAgent, ipAddress);
-    
+
     // Generate token with session ID bound to it
     const token = generateAuthToken(user.id, JWT_SECRET, { tokenVersion, sessionId: session.id, req });
-    
+
     res.cookie('token', token, getCookieOptions());
     sendSuccess(res, { user: { id: user.id, email: user.email, name: user.name } });
   } catch (err) {
@@ -191,7 +185,7 @@ function googleLogin(req, res) {
   const url = googleClient.generateAuthUrl({
     scope: ['profile', 'email'],
     access_type: 'offline',
-    prompt: 'consent'
+    prompt: 'consent',
   });
   res.redirect(url);
 }
@@ -207,7 +201,7 @@ async function googleCallback(req, res) {
     const { tokens } = await googleClient.getToken(code);
     const ticket = await googleClient.verifyIdToken({
       idToken: tokens.id_token,
-      audience: GOOGLE_CLIENT_ID
+      audience: GOOGLE_CLIENT_ID,
     });
     const payload = ticket.getPayload();
     const googleId = payload.sub;
@@ -250,7 +244,7 @@ async function googleCallback(req, res) {
 
             await client.query('COMMIT');
             logger.info({ userId: user.id }, 'First user created via Google, signup disabled by default');
-          } catch (err) {
+          } catch (_err) {
             await client.query('ROLLBACK');
             // If first_user_id already set, just disable signup
             await setSignupEnabled(false, user.id);
@@ -266,16 +260,16 @@ async function googleCallback(req, res) {
 
     logger.info({ userId: user.id, email }, 'User authenticated via Google OAuth');
     // Get current token version for the user
-    const tokenVersion = await getUserTokenVersion(user.id) || 1;
-    
+    const tokenVersion = (await getUserTokenVersion(user.id)) || 1;
+
     // Create session record first to get session ID
     const ipAddress = req?.ip || req?.socket?.remoteAddress || null;
     const userAgent = req?.headers?.['user-agent'] || null;
     const session = await createSession(user.id, tokenVersion, userAgent, ipAddress);
-    
+
     // Generate token with session ID bound to it
     const token = generateAuthToken(user.id, JWT_SECRET, { tokenVersion, sessionId: session.id, req });
-    
+
     res.cookie('token', token, getCookieOptions());
     res.redirect('/');
   } catch (err) {
@@ -301,7 +295,7 @@ async function logout(req, res) {
       if (!token && req.headers.authorization) {
         token = req.headers.authorization.split(' ')[1];
       }
-      
+
       if (token) {
         const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] });
         userId = decoded.id || userId;
@@ -328,12 +322,16 @@ async function logout(req, res) {
     // Log logout event
     if (userId) {
       const { logAuditEvent } = require('../services/auditLogger');
-      await logAuditEvent('auth.logout', { 
-        status: 'success', 
-        resourceType: 'auth',
-        resourceId: sessionId || null,
-        details: sessionId ? 'User logged out and session revoked' : 'User logged out'
-      }, req);
+      await logAuditEvent(
+        'auth.logout',
+        {
+          status: 'success',
+          resourceType: 'auth',
+          resourceId: sessionId || null,
+          details: sessionId ? 'User logged out and session revoked' : 'User logged out',
+        },
+        req
+      );
       logger.info({ userId, sessionId }, 'User logged out');
     }
 
@@ -358,25 +356,29 @@ async function logoutAllDevices(req, res) {
 
     // Invalidate all sessions
     const newTokenVersion = await invalidateAllSessions(req.userId);
-    
+
     // Delete all session records
     await deleteAllUserSessions(req.userId);
-    
+
     // Log the security event
     const { logAuditEvent } = require('../services/auditLogger');
-    await logAuditEvent('auth.logout_all', { 
-      status: 'success', 
-      resourceType: 'auth',
-      details: 'User invalidated all active sessions'
-    }, req);
+    await logAuditEvent(
+      'auth.logout_all',
+      {
+        status: 'success',
+        resourceType: 'auth',
+        details: 'User invalidated all active sessions',
+      },
+      req
+    );
     logger.info({ userId: req.userId, newTokenVersion }, 'User logged out from all devices');
 
     // Clear the current session cookie
     res.clearCookie('token');
-    
-    sendSuccess(res, { 
+
+    sendSuccess(res, {
       message: 'Successfully logged out from all devices',
-      sessionsInvalidated: true
+      sessionsInvalidated: true,
     });
   } catch (err) {
     logger.error({ err, userId: req.userId }, 'Logout all devices error');
@@ -435,13 +437,13 @@ async function getSessions(req, res) {
 
     const currentTokenVersion = user.token_version || 1;
     const sessions = await getActiveSessions(req.userId, currentTokenVersion);
-    
+
     // Mark which session is the current one
     const sessionsWithCurrent = sessions.map(session => ({
       ...session,
-      isCurrent: session.id === currentSessionId
+      isCurrent: session.id === currentSessionId,
     }));
-    
+
     sendSuccess(res, { sessions: sessionsWithCurrent });
   } catch (err) {
     logger.error({ err, userId: req.userId }, 'Failed to get sessions');
@@ -470,12 +472,16 @@ async function revokeSession(req, res) {
 
     // Log the security event
     const { logAuditEvent } = require('../services/auditLogger');
-    await logAuditEvent('auth.session_revoked', {
-      status: 'success',
-      resourceType: 'auth',
-      resourceId: sessionId,
-      details: 'User revoked a specific session'
-    }, req);
+    await logAuditEvent(
+      'auth.session_revoked',
+      {
+        status: 'success',
+        resourceType: 'auth',
+        resourceId: sessionId,
+        details: 'User revoked a specific session',
+      },
+      req
+    );
 
     logger.info({ userId: req.userId, sessionId }, 'User revoked a session');
     sendSuccess(res, { message: 'Session revoked successfully' });
@@ -495,5 +501,5 @@ module.exports = {
   profile,
   getSessions,
   revokeSession,
-  googleAuthEnabled: !!GOOGLE_AUTH_ENABLED
+  googleAuthEnabled: !!GOOGLE_AUTH_ENABLED,
 };

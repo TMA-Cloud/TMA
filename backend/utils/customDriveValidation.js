@@ -33,18 +33,21 @@ async function validateCustomDrivePath(customDrivePath, userId, pool) {
   try {
     const fs = require('fs');
     const isDocker = fs.existsSync('/.dockerenv') || process.env.DOCKER_CONTAINER === 'true';
-    
+
     if (isDocker) {
-       // Check if path matches placeholder pattern from docker-compose.yml
-       if (normalizedPath.includes('docker_unused_placeholder') || 
-           normalizedPath.startsWith('/docker_unused_placeholder')) {
-         return { 
-           valid: false, 
-           error: 'Cannot use Docker placeholder path. Set a real path in .env (CUSTOM_DRIVE_MOUNT_N=/host/path:/container/path).' 
-         };
-       }
+      // Check if path matches placeholder pattern from docker-compose.yml
+      if (
+        normalizedPath.includes('docker_unused_placeholder') ||
+        normalizedPath.startsWith('/docker_unused_placeholder')
+      ) {
+        return {
+          valid: false,
+          error:
+            'Cannot use Docker placeholder path. Set a real path in .env (CUSTOM_DRIVE_MOUNT_N=/host/path:/container/path).',
+        };
+      }
     }
-  } catch (error) {
+  } catch (_error) {
     // If Docker detection fails, continue with validation (non-Docker environments)
   }
 
@@ -52,20 +55,17 @@ async function validateCustomDrivePath(customDrivePath, userId, pool) {
   const riskyPaths = getRiskyPaths();
   for (const riskyPath of riskyPaths) {
     if (normalizedPath.startsWith(riskyPath.toLowerCase())) {
-      return { 
-        valid: false, 
-        error: `Cannot use system directory: ${riskyPath}. Please use a user-specific directory.` 
+      return {
+        valid: false,
+        error: `Cannot use system directory: ${riskyPath}. Please use a user-specific directory.`,
       };
     }
   }
 
   // 5. Prevent mounting other users' custom drive paths
   // Get current user's existing path (if any) to allow them to keep the same path
-  const currentUserResult = await pool.query(
-    'SELECT custom_drive_path FROM users WHERE id = $1',
-    [userId]
-  );
-  const currentUserPath = currentUserResult.rows[0]?.custom_drive_path 
+  const currentUserResult = await pool.query('SELECT custom_drive_path FROM users WHERE id = $1', [userId]);
+  const currentUserPath = currentUserResult.rows[0]?.custom_drive_path
     ? pathModule.resolve(currentUserResult.rows[0].custom_drive_path).toLowerCase()
     : null;
 
@@ -77,33 +77,37 @@ async function validateCustomDrivePath(customDrivePath, userId, pool) {
   for (const user of existingUsers.rows) {
     if (user.custom_drive_path) {
       const existingPathNormalized = pathModule.resolve(user.custom_drive_path).toLowerCase();
-      
+
       // Check if paths are the same (case-insensitive)
       // Allow user to keep their current path
       if (normalizedPath === existingPathNormalized && normalizedPath !== currentUserPath) {
-        return { 
-          valid: false, 
-          error: 'This path is already in use by another user. Each custom drive path can only be owned by one user.' 
+        return {
+          valid: false,
+          error: 'This path is already in use by another user. Each custom drive path can only be owned by one user.',
         };
       }
-      
+
       // Check if new path is inside existing user's path (prevents subdirectory mounting)
-      if (normalizedPath !== currentUserPath && 
-          (normalizedPath.startsWith(existingPathNormalized + pathModule.sep) ||
-           (normalizedPath.startsWith(existingPathNormalized) && normalizedPath.length > existingPathNormalized.length))) {
-        return { 
-          valid: false, 
-          error: 'Cannot mount a directory inside another user\'s custom drive path.' 
+      if (
+        normalizedPath !== currentUserPath &&
+        (normalizedPath.startsWith(existingPathNormalized + pathModule.sep) ||
+          (normalizedPath.startsWith(existingPathNormalized) && normalizedPath.length > existingPathNormalized.length))
+      ) {
+        return {
+          valid: false,
+          error: "Cannot mount a directory inside another user's custom drive path.",
         };
       }
-      
+
       // Check if existing path is inside new path (prevents parent directory mounting)
-      if (normalizedPath !== currentUserPath &&
-          (existingPathNormalized.startsWith(normalizedPath + pathModule.sep) ||
-           (existingPathNormalized.startsWith(normalizedPath) && existingPathNormalized.length > normalizedPath.length))) {
-        return { 
-          valid: false, 
-          error: 'Cannot mount a directory that contains another user\'s custom drive path.' 
+      if (
+        normalizedPath !== currentUserPath &&
+        (existingPathNormalized.startsWith(normalizedPath + pathModule.sep) ||
+          (existingPathNormalized.startsWith(normalizedPath) && existingPathNormalized.length > normalizedPath.length))
+      ) {
+        return {
+          valid: false,
+          error: "Cannot mount a directory that contains another user's custom drive path.",
         };
       }
     }
@@ -112,11 +116,10 @@ async function validateCustomDrivePath(customDrivePath, userId, pool) {
   // 6. Prevent mounting UPLOAD_DIR (where regular files are stored)
   const { UPLOAD_DIR } = require('../config/paths');
   const uploadDirNormalized = pathModule.resolve(UPLOAD_DIR).toLowerCase();
-  if (normalizedPath === uploadDirNormalized || 
-      normalizedPath.startsWith(uploadDirNormalized + pathModule.sep)) {
-    return { 
-      valid: false, 
-      error: 'Cannot use the default upload directory as custom drive path.' 
+  if (normalizedPath === uploadDirNormalized || normalizedPath.startsWith(uploadDirNormalized + pathModule.sep)) {
+    return {
+      valid: false,
+      error: 'Cannot use the default upload directory as custom drive path.',
     };
   }
 
@@ -165,11 +168,11 @@ function getRiskyPaths() {
       '/tmp',
       '/usr',
       '/var',
-      '/home',  // Block /home to prevent accessing other users' home directories
+      '/home', // Block /home to prevent accessing other users' home directories
       '/lost+found',
       '/snap'
     );
-    
+
     // Add user's home directory subdirectories that are risky
     const homedir = os.homedir();
     if (homedir) {
@@ -206,7 +209,7 @@ async function isPathTaken(customDrivePath, userId, pool) {
     return {
       taken: true,
       ownerId: result.rows[0].id,
-      ownerEmail: result.rows[0].email
+      ownerEmail: result.rows[0].email,
     };
   }
 
@@ -216,6 +219,5 @@ async function isPathTaken(customDrivePath, userId, pool) {
 module.exports = {
   validateCustomDrivePath,
   getRiskyPaths,
-  isPathTaken
+  isPathTaken,
 };
-

@@ -28,5 +28,3 @@ router.options('/callback', (req, res) => {
 });
 
 module.exports = router;
-
-

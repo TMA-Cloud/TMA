@@ -1,12 +1,7 @@
 const { validateAndResolveFile } = require('../utils/fileDownload');
 const { sendError } = require('../utils/response');
 const { createZipArchive } = require('../utils/zipArchive');
-const {
-  getFileByToken,
-  getFolderContentsByShare,
-  isFileShared,
-  getSharedTree,
-} = require('../models/share.model');
+const { getFileByToken, getFolderContentsByShare, isFileShared, getSharedTree } = require('../models/share.model');
 const pool = require('../config/db');
 const { validateToken, validateId } = require('../utils/validation');
 const { logger } = require('../config/logger');
@@ -20,7 +15,7 @@ function escapeHtml(text) {
     '<': '&lt;',
     '>': '&gt;',
     '"': '&quot;',
-    "'": '&#039;'
+    "'": '&#039;',
   };
   return String(text).replace(/[&<>"']/g, m => map[m]);
 }
@@ -59,7 +54,9 @@ async function handleShared(req, res) {
       if (!success) {
         return res.status(400).send(error || 'Invalid file path');
       }
-      res.download(filePath, file.name, err => { if (err) logger.error({ err }, 'Error sending file'); });
+      res.download(filePath, file.name, err => {
+        if (err) logger.error({ err }, 'Error sending file');
+      });
     }
   } catch (err) {
     sendError(res, 500, 'Server error', err);
@@ -77,12 +74,16 @@ async function downloadFolderZip(req, res) {
 
     // Log share download (ZIP)
     const { logAuditEvent } = require('../services/auditLogger');
-    await logAuditEvent('share.download', {
-      status: 'success',
-      resourceType: 'share',
-      resourceId: token,
-      metadata: { fileName: file.name, downloadType: 'zip' }
-    }, req);
+    await logAuditEvent(
+      'share.download',
+      {
+        status: 'success',
+        resourceType: 'share',
+        resourceId: token,
+        metadata: { fileName: file.name, downloadType: 'zip' },
+      },
+      req
+    );
     logger.info({ shareToken: token, folderId: file.id }, 'Share folder downloaded as ZIP');
 
     const entries = await getSharedTree(token, file.id);
@@ -104,21 +105,24 @@ async function downloadSharedItem(req, res) {
     }
     const allowed = await isFileShared(token, fileId);
     if (!allowed) return res.status(404).send('Not found');
-    const res2 = await pool.query(
-      'SELECT id, name, type, mime_type AS "mimeType", path FROM files WHERE id = $1',
-      [fileId]
-    );
+    const res2 = await pool.query('SELECT id, name, type, mime_type AS "mimeType", path FROM files WHERE id = $1', [
+      fileId,
+    ]);
     const file = res2.rows[0];
     if (!file) return res.status(404).send('Not found');
 
     // Log share item download
     const { logAuditEvent } = require('../services/auditLogger');
-    await logAuditEvent('share.download', {
-      status: 'success',
-      resourceType: 'share',
-      resourceId: token,
-      metadata: { fileName: file.name, fileId, fileType: file.type }
-    }, req);
+    await logAuditEvent(
+      'share.download',
+      {
+        status: 'success',
+        resourceType: 'share',
+        resourceId: token,
+        metadata: { fileName: file.name, fileId, fileType: file.type },
+      },
+      req
+    );
     logger.info({ shareToken: token, fileId, fileType: file.type }, 'Share item downloaded');
 
     if (file.type === 'file') {
@@ -126,7 +130,9 @@ async function downloadSharedItem(req, res) {
       if (!success) {
         return res.status(400).send(error || 'Invalid file path');
       }
-      return res.download(filePath, file.name, err => { if (err) logger.error({ err }, 'Error sending file'); });
+      return res.download(filePath, file.name, err => {
+        if (err) logger.error({ err }, 'Error sending file');
+      });
     }
     // folder: create zip of shared contents under this folder
     const entries = await getSharedTree(token, fileId);

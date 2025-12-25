@@ -14,7 +14,7 @@ const { getUsersWithCustomDrive } = require('../models/user.model');
  */
 async function scanCustomDrive(customDrivePath, userId) {
   const normalizedPath = path.resolve(customDrivePath);
-  
+
   // Validate that the path exists
   try {
     const stat = await fs.stat(normalizedPath);
@@ -57,10 +57,16 @@ async function scanDirectory(dirPath, parentFolderIds, userIds, folderMap) {
           // Get folder stats for modification time
           const stats = await fs.stat(entryPath);
           const modifiedTime = stats.mtime;
-          
+
           // Batch create folders for all users
           const parentIdMap = parentFolderIds || {};
-          const folderIdsMap = await batchCreateOrUpdateFolders(entry.name, parentIdMap, userIds, entryPath, modifiedTime);
+          const folderIdsMap = await batchCreateOrUpdateFolders(
+            entry.name,
+            parentIdMap,
+            userIds,
+            entryPath,
+            modifiedTime
+          );
 
           // Convert Map to object
           const folderIds = {};
@@ -134,24 +140,21 @@ async function batchCreateOrUpdateFolders(name, parentIds, userIds, absolutePath
         const parentChanged = row.parent_id !== parentId;
         // Check if modification time changed (compare timestamps)
         // Also update if row.modified is NULL but we have a modifiedTime to set
-        const modifiedChanged = modifiedTime && (
-          !row.modified || 
-          new Date(modifiedTime).getTime() !== new Date(row.modified).getTime()
-        );
-        
+        const modifiedChanged =
+          modifiedTime && (!row.modified || new Date(modifiedTime).getTime() !== new Date(row.modified).getTime());
+
         if (nameChanged || parentChanged || modifiedChanged) {
           // Only update modified column if the modification time actually changed
           if (modifiedChanged) {
-            await client.query(
-              'UPDATE files SET name = $1, parent_id = $2, modified = $3 WHERE id = $4',
-              [name, parentId, modifiedTime, row.id]
-            );
+            await client.query('UPDATE files SET name = $1, parent_id = $2, modified = $3 WHERE id = $4', [
+              name,
+              parentId,
+              modifiedTime,
+              row.id,
+            ]);
           } else {
             // Name or parent changed, but not modified time - don't touch modified column
-            await client.query(
-              'UPDATE files SET name = $1, parent_id = $2 WHERE id = $3',
-              [name, parentId, row.id]
-            );
+            await client.query('UPDATE files SET name = $1, parent_id = $2 WHERE id = $3', [name, parentId, row.id]);
           }
         }
         folderIdsMap.set(userId, row.id);
@@ -188,7 +191,7 @@ async function batchCreateOrUpdateFolders(name, parentIds, userIds, absolutePath
 /**
  * Creates a folder entry in the database (single user - for backward compatibility)
  */
-async function createFolderEntry(name, parentId, userId, absolutePath, modifiedTime = null) {
+async function _createFolderEntry(name, parentId, userId, absolutePath, modifiedTime = null) {
   const result = await batchCreateOrUpdateFolders(name, { [userId]: parentId }, [userId], absolutePath, modifiedTime);
   return result.get(userId);
 }
@@ -231,11 +234,9 @@ async function batchCreateOrUpdateFiles(name, size, mimeType, absolutePath, pare
         const parentChanged = row.parent_id !== parentId;
         // Check if modification time changed (compare timestamps)
         // Also update if row.modified is NULL but we have a modifiedTime to set
-        const modifiedChanged = modifiedTime && (
-          !row.modified || 
-          new Date(modifiedTime).getTime() !== new Date(row.modified).getTime()
-        );
-        
+        const modifiedChanged =
+          modifiedTime && (!row.modified || new Date(modifiedTime).getTime() !== new Date(row.modified).getTime());
+
         if (nameChanged || sizeChanged || mimeChanged || parentChanged || modifiedChanged) {
           // Only update modified column if the modification time actually changed
           if (modifiedChanged) {
@@ -245,10 +246,13 @@ async function batchCreateOrUpdateFiles(name, size, mimeType, absolutePath, pare
             );
           } else {
             // Other fields changed, but not modified time - don't touch modified column
-            await client.query(
-              'UPDATE files SET name = $1, size = $2, mime_type = $3, parent_id = $4 WHERE id = $5',
-              [name, size, mimeType, parentId, row.id]
-            );
+            await client.query('UPDATE files SET name = $1, size = $2, mime_type = $3, parent_id = $4 WHERE id = $5', [
+              name,
+              size,
+              mimeType,
+              parentId,
+              row.id,
+            ]);
           }
         }
         fileIdsMap.set(userId, { id: row.id });
@@ -285,8 +289,16 @@ async function batchCreateOrUpdateFiles(name, size, mimeType, absolutePath, pare
 /**
  * Creates a file entry in the database (single user - for backward compatibility)
  */
-async function createFileEntry(name, size, mimeType, absolutePath, parentId, userId, modifiedTime = null) {
-  const result = await batchCreateOrUpdateFiles(name, size, mimeType, absolutePath, { [userId]: parentId }, [userId], modifiedTime);
+async function _createFileEntry(name, size, mimeType, absolutePath, parentId, userId, modifiedTime = null) {
+  const result = await batchCreateOrUpdateFiles(
+    name,
+    size,
+    mimeType,
+    absolutePath,
+    { [userId]: parentId },
+    [userId],
+    modifiedTime
+  );
   const entry = result.get(userId);
   return entry?.id || null;
 }
@@ -329,7 +341,7 @@ function getMimeType(filename) {
  */
 async function syncCustomDrive(customDrivePath, userId) {
   const normalizedPath = path.resolve(customDrivePath);
-  
+
   // Validate that the path exists
   try {
     const stat = await fs.stat(normalizedPath);
@@ -359,7 +371,6 @@ async function syncCustomDrive(customDrivePath, userId) {
 
     // Recursively scan and sync for this user
     await syncDirectory(normalizedPath, null, [userId], dbEntries);
-
   } catch (error) {
     logger.error(`[Custom Drive] Error during sync for user ${userId}:`, error);
     throw error;
@@ -385,20 +396,26 @@ async function syncDirectory(dirPath, parentFolderIds, userIds, dbEntries) {
           const stats = await fs.stat(entryPath);
           const modifiedTime = stats.mtime;
           const parentIdMap = parentFolderIds || {};
-          const folderIdsMap = await batchCreateOrUpdateFolders(entry.name, parentIdMap, userIds, entryPath, modifiedTime);
-          
+          const folderIdsMap = await batchCreateOrUpdateFolders(
+            entry.name,
+            parentIdMap,
+            userIds,
+            entryPath,
+            modifiedTime
+          );
+
           const folderIds = {};
           for (const userId of userIds) {
             folderIds[userId] = folderIdsMap.get(userId);
           }
-          
+
           await syncDirectory(entryPath, folderIds, userIds, dbEntries);
         } else if (entry.isFile()) {
           const stats = await fs.stat(entryPath);
           const mimeType = getMimeType(entry.name);
           const parentIdMap = parentFolderIds || {};
           const modifiedTime = stats.mtime;
-          
+
           await batchCreateOrUpdateFiles(
             entry.name,
             stats.size,
@@ -409,11 +426,11 @@ async function syncDirectory(dirPath, parentFolderIds, userIds, dbEntries) {
             modifiedTime
           );
         }
-      } catch (error) {
+      } catch (_error) {
         // Continue with other entries on error
       }
     }
-  } catch (error) {
+  } catch (_error) {
     // Skip directories we can't read (permissions, etc.)
   }
 }
@@ -433,26 +450,26 @@ const processingTimeouts = new Map();
  */
 async function processChange(filePath, userId) {
   const normalizedPath = path.resolve(filePath);
-  
+
   // Get or create processing queue for this user
   if (!processingQueues.has(userId)) {
     processingQueues.set(userId, new Set());
   }
   const processingQueue = processingQueues.get(userId);
-  
+
   // Add to processing queue
   processingQueue.add(normalizedPath);
-  
+
   // Clear existing timeout for this user
   if (processingTimeouts.has(userId)) {
     clearTimeout(processingTimeouts.get(userId));
   }
-  
+
   // Debounce: process changes after 500ms of inactivity
   const timeout = setTimeout(async () => {
     const pathsToProcess = Array.from(processingQueue);
     processingQueue.clear();
-    
+
     try {
       for (const filePathToProcess of pathsToProcess) {
         try {
@@ -468,7 +485,7 @@ async function processChange(filePath, userId) {
       processingTimeouts.delete(userId);
     }
   }, 500);
-  
+
   processingTimeouts.set(userId, timeout);
 }
 
@@ -478,12 +495,12 @@ async function processChange(filePath, userId) {
 async function handleFileChange(filePath, userIds) {
   try {
     const stats = await fs.stat(filePath).catch(() => null);
-    
+
     if (!stats) {
       await handleDeletion(filePath, userIds);
       return;
     }
-    
+
     const parentDir = path.dirname(filePath);
     const fileName = path.basename(filePath);
 
@@ -493,20 +510,20 @@ async function handleFileChange(filePath, userIds) {
       'SELECT id, user_id FROM files WHERE LOWER(path) = $1 AND user_id = ANY($2::text[]) AND type = $3',
       [normalizedParentDir, userIds, 'folder']
     );
-    
+
     const parentFolderIds = {};
     userIds.forEach(userId => {
       const parentRow = parentResult.rows.find(r => r.user_id === userId);
       parentFolderIds[userId] = parentRow?.id || null;
     });
-    
+
     if (stats.isDirectory()) {
       await batchCreateOrUpdateFolders(fileName, parentFolderIds, userIds, filePath, stats.mtime);
     } else if (stats.isFile()) {
       const mimeType = getMimeType(fileName);
       await batchCreateOrUpdateFiles(fileName, stats.size, mimeType, filePath, parentFolderIds, userIds, stats.mtime);
     }
-  } catch (error) {
+  } catch (_error) {
     // Continue on error
   }
 }
@@ -522,10 +539,10 @@ async function handleDeletion(filePath, userIds) {
     logger.info(`[Custom Drive] File deleted from disk: ${filePath}`);
 
     // Hard delete from database (remove entries completely)
-    const result1 = await pool.query(
-      'DELETE FROM files WHERE LOWER(path) = $1 AND user_id = ANY($2::text[])',
-      [normalizedPath, userIds]
-    );
+    const result1 = await pool.query('DELETE FROM files WHERE LOWER(path) = $1 AND user_id = ANY($2::text[])', [
+      normalizedPath,
+      userIds,
+    ]);
 
     // Delete children (case-insensitive, ESCAPE '' to handle backslashes)
     const result2 = await pool.query(
@@ -578,7 +595,7 @@ async function startUserWatcher(userId, customDrivePath) {
     // Start file watcher for real-time updates
     const watcher = chokidar.watch(normalizedPath, {
       ignored: [
-        /(^|[\/\\])\../, // ignore dotfiles
+        /(^|[/\\])\../, // ignore dotfiles
         /node_modules/, // ignore node_modules
         /\.git/, // ignore .git
       ],
@@ -586,7 +603,7 @@ async function startUserWatcher(userId, customDrivePath) {
       ignoreInitial: true, // Don't trigger events for existing files
       awaitWriteFinish: {
         stabilityThreshold: 1000, // Wait 1 second after file stops changing
-        pollInterval: 500
+        pollInterval: 500,
       },
       depth: 99, // Watch all subdirectories
       usePolling: false, // Use native events (faster, but set to true for network drives)
@@ -594,38 +611,38 @@ async function startUserWatcher(userId, customDrivePath) {
       atomic: true, // Handle atomic writes better
     });
 
-    watcher.on('add', (filePath) => {
+    watcher.on('add', filePath => {
       processChange(filePath, userId).catch(err => {
         logger.error(`[Custom Drive] User ${userId}: Error processing add event for ${filePath}:`, err.message);
       });
     });
 
-    watcher.on('change', (filePath) => {
+    watcher.on('change', filePath => {
       processChange(filePath, userId).catch(err => {
         logger.error(`[Custom Drive] User ${userId}: Error processing change event for ${filePath}:`, err.message);
       });
     });
 
-    watcher.on('addDir', (filePath) => {
+    watcher.on('addDir', filePath => {
       processChange(filePath, userId).catch(err => {
         logger.error(`[Custom Drive] User ${userId}: Error processing addDir event for ${filePath}:`, err.message);
       });
     });
 
-    watcher.on('unlink', (filePath) => {
+    watcher.on('unlink', filePath => {
       processChange(filePath, userId).catch(err => {
         logger.error(`[Custom Drive] User ${userId}: Error processing unlink event for ${filePath}:`, err.message);
       });
     });
 
-    watcher.on('unlinkDir', (filePath) => {
+    watcher.on('unlinkDir', filePath => {
       processChange(filePath, userId).catch(err => {
         logger.error(`[Custom Drive] User ${userId}: Error processing unlinkDir event for ${filePath}:`, err.message);
       });
     });
 
     // Handle errors gracefully
-    watcher.on('error', (error) => {
+    watcher.on('error', error => {
       // Ignore EPERM errors (permission issues) - these are common on Windows
       if (error.code === 'EPERM') {
         logger.info(`[Custom Drive] User ${userId}: Skipping file due to permission restriction`);
@@ -648,7 +665,6 @@ async function startUserWatcher(userId, customDrivePath) {
 
     // Store watcher
     watchers.set(userId, watcher);
-
   } catch (error) {
     if (error.code === 'ENOENT') {
       logger.error(`[Custom Drive] User ${userId}: Path does not exist: ${normalizedPath}`);
@@ -666,7 +682,7 @@ async function startCustomDriveScanner() {
   try {
     // Get all users with custom drive enabled
     const users = await getUsersWithCustomDrive();
-    
+
     if (users.length === 0) {
       logger.info('[Custom Drive] No users with custom drive enabled');
       return;
@@ -695,13 +711,13 @@ function stopUserWatcher(userId) {
     watcher.close();
     watchers.delete(userId);
   }
-  
+
   const timeout = processingTimeouts.get(userId);
   if (timeout) {
     clearTimeout(timeout);
     processingTimeouts.delete(userId);
   }
-  
+
   const queue = processingQueues.get(userId);
   if (queue) {
     queue.clear();
@@ -714,17 +730,17 @@ function stopUserWatcher(userId) {
  */
 function stopCustomDriveScanner() {
   // Stop all watchers
-  for (const [userId, watcher] of watchers.entries()) {
+  for (const [_userId, watcher] of watchers.entries()) {
     watcher.close();
   }
   watchers.clear();
-  
+
   // Clear all timeouts
-  for (const [userId, timeout] of processingTimeouts.entries()) {
+  for (const [_userId, timeout] of processingTimeouts.entries()) {
     clearTimeout(timeout);
   }
   processingTimeouts.clear();
-  
+
   // Clear all queues
   for (const queue of processingQueues.values()) {
     queue.clear();
@@ -740,7 +756,7 @@ function stopCustomDriveScanner() {
 async function restartUserWatcher(userId, customDrivePath) {
   // Stop existing watcher if any
   stopUserWatcher(userId);
-  
+
   // Start new watcher if path is provided
   if (customDrivePath) {
     await startUserWatcher(userId, customDrivePath);
@@ -757,4 +773,3 @@ module.exports = {
   stopCustomDriveScanner,
   restartUserWatcher,
 };
-

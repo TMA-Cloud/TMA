@@ -55,36 +55,36 @@ router.get('/', (_req, res) => {
 router.get('/latest', requireAdmin, (req, res) => {
   const url = 'https://tma-cloud.github.io/updates/versions.json';
   let responseSent = false;
-  
+
   const sendLocalError = (statusCode, message) => {
     if (!responseSent) {
       responseSent = true;
       res.status(statusCode).json({ error: message });
     }
   };
-  
-  const request = https.get(url, (httpsRes) => {
+
+  const request = https.get(url, httpsRes => {
     // Check response status code
     if (httpsRes.statusCode !== 200) {
       sendLocalError(502, `GitHub returned status ${httpsRes.statusCode}`);
       return;
     }
-    
+
     let data = '';
-    
+
     // Handle response stream errors
-    httpsRes.on('error', (error) => {
+    httpsRes.on('error', error => {
       console.error('Error reading response stream:', error);
       sendLocalError(502, 'Error reading response from GitHub');
     });
-    
-    httpsRes.on('data', (chunk) => {
+
+    httpsRes.on('data', chunk => {
       data += chunk;
     });
-    
+
     httpsRes.on('end', () => {
       if (responseSent) return;
-      
+
       try {
         const versions = JSON.parse(data);
         responseSent = true;
@@ -95,13 +95,13 @@ router.get('/latest', requireAdmin, (req, res) => {
       }
     });
   });
-  
+
   // Handle request-level errors
-  request.on('error', (error) => {
+  request.on('error', error => {
     console.error('Error fetching latest versions:', error);
     sendLocalError(500, 'Failed to fetch latest versions');
   });
-  
+
   // Set timeout to prevent hanging requests (10 seconds)
   request.setTimeout(10000, () => {
     request.destroy();
@@ -110,4 +110,3 @@ router.get('/latest', requireAdmin, (req, res) => {
 });
 
 module.exports = router;
-

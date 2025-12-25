@@ -28,31 +28,31 @@ setInterval(cleanupRateLimitStore, 5 * 60 * 1000);
  * @param {Function} options.keyGenerator - Function to generate rate limit key
  * @returns {Function} Express middleware
  */
-function createRateLimiter({ windowMs = 15 * 60 * 1000, max = 100, keyGenerator = (req) => req.ip }) {
+function createRateLimiter({ windowMs = 15 * 60 * 1000, max = 100, keyGenerator = req => req.ip }) {
   return (req, res, next) => {
     const key = keyGenerator(req);
     const now = Date.now();
-    
+
     const record = rateLimitStore.get(key);
-    
+
     if (!record || now > record.resetTime) {
       // Create new record
       rateLimitStore.set(key, {
         count: 1,
-        resetTime: now + windowMs
+        resetTime: now + windowMs,
       });
       return next();
     }
-    
+
     // Increment count
     record.count++;
-    
+
     if (record.count > max) {
       return res.status(429).json({
-        error: 'Too many requests, please try again later'
+        error: 'Too many requests, please try again later',
       });
     }
-    
+
     next();
   };
 }
@@ -63,11 +63,11 @@ function createRateLimiter({ windowMs = 15 * 60 * 1000, max = 100, keyGenerator 
 const authRateLimiter = createRateLimiter({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 5, // 5 attempts per 15 minutes
-  keyGenerator: (req) => {
+  keyGenerator: req => {
     // Use IP + email if available for login/signup
     const email = req.body?.email || '';
     return `auth:${req.ip}:${email}`;
-  }
+  },
 });
 
 /**
@@ -76,7 +76,7 @@ const authRateLimiter = createRateLimiter({
 const apiRateLimiter = createRateLimiter({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 100, // 100 requests per 15 minutes
-  keyGenerator: (req) => `api:${req.ip}`
+  keyGenerator: req => `api:${req.ip}`,
 });
 
 /**
@@ -85,7 +85,7 @@ const apiRateLimiter = createRateLimiter({
 const uploadRateLimiter = createRateLimiter({
   windowMs: 60 * 60 * 1000, // 1 hour
   max: 50, // 50 uploads per hour
-  keyGenerator: (req) => `upload:${req.userId || req.ip}`
+  keyGenerator: req => `upload:${req.userId || req.ip}`,
 });
 
 module.exports = {
@@ -94,4 +94,3 @@ module.exports = {
   apiRateLimiter,
   uploadRateLimiter,
 };
-

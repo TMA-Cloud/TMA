@@ -3,7 +3,7 @@ const fs = require('fs');
 const http = require('http');
 const https = require('https');
 const jwt = require('jsonwebtoken');
-const { resolveFilePath, isValidPath } = require('../utils/filePath');
+const { resolveFilePath } = require('../utils/filePath');
 const { validateAndResolveFile } = require('../utils/fileDownload');
 const { getFile } = require('../models/file.model');
 const { getUserById } = require('../models/user.model');
@@ -21,22 +21,23 @@ const BACKEND_URL = process.env.BACKEND_URL;
 // SECURITY: Warn at startup if JWT secret is missing
 // OnlyOffice file serving will be disabled without it
 if (!ONLYOFFICE_JWT_SECRET) {
-  logger.warn('[SECURITY] ONLYOFFICE_JWT_SECRET not set. OnlyOffice file serving endpoint will reject all requests. Set this secret to enable document editing.');
+  logger.warn(
+    '[SECURITY] ONLYOFFICE_JWT_SECRET not set. OnlyOffice file serving endpoint will reject all requests. Set this secret to enable document editing.'
+  );
 }
 
 function getFileTypeFromName(name) {
-  const ext = path.extname(name || '').toLowerCase().replace(/^\./, '');
+  const ext = path
+    .extname(name || '')
+    .toLowerCase()
+    .replace(/^\./, '');
   return ext || 'docx';
 }
 
 function buildSignedFileToken(fileId) {
   if (!ONLYOFFICE_JWT_SECRET) return null;
   // Explicitly specify algorithm to prevent algorithm confusion attacks
-  return jwt.sign(
-    { fileId },
-    ONLYOFFICE_JWT_SECRET,
-    { expiresIn: '10m', algorithm: 'HS256' },
-  );
+  return jwt.sign({ fileId }, ONLYOFFICE_JWT_SECRET, { expiresIn: '10m', algorithm: 'HS256' });
 }
 
 /**
@@ -81,7 +82,7 @@ function buildOnlyofficeUrls(req, fileId, token) {
 function buildOnlyofficeConfig(file, userId, userName, downloadUrl, callbackUrl, isMobile = false) {
   const fileType = getFileTypeFromName(file.name);
   const viewOnly = fileType === 'pdf';
-  
+
   return {
     document: {
       fileType,
@@ -90,7 +91,7 @@ function buildOnlyofficeConfig(file, userId, userName, downloadUrl, callbackUrl,
       url: downloadUrl,
     },
     editorConfig: {
-      callbackUrl: callbackUrl,
+      callbackUrl,
       mode: viewOnly ? 'view' : 'edit',
       lang: 'en',
       customization: {
@@ -126,7 +127,7 @@ async function getConfig(req, res) {
       return res.status(400).json({ message: 'Invalid file ID' });
     }
     const userId = req.userId;
-    
+
     const file = await getFile(fileId, userId);
     if (!file) return res.status(404).json({ message: 'File not found' });
 
@@ -189,10 +190,7 @@ async function serveFile(req, res) {
 
     // Fetch file path directly from DB by id
     const db = require('../config/db');
-    const result = await db.query(
-      'SELECT name, mime_type AS "mimeType", path FROM files WHERE id = $1',
-      [id],
-    );
+    const result = await db.query('SELECT name, mime_type AS "mimeType", path FROM files WHERE id = $1', [id]);
     const fileRow = result.rows[0];
     if (!fileRow) {
       logger.error('[ONLYOFFICE] File not found in DB', id);
@@ -207,7 +205,7 @@ async function serveFile(req, res) {
     // Set appropriate headers
     res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(fileRow.name)}"`);
     res.type(fileRow.mimeType || 'application/octet-stream');
-    res.sendFile(filePath, (err) => {
+    res.sendFile(filePath, err => {
       if (err) {
         logger.error({ err, fileId: id }, '[ONLYOFFICE] Error sending file');
         if (!res.headersSent) {
@@ -244,25 +242,32 @@ async function getViewerPage(req, res) {
     const config = buildOnlyofficeConfig(file, userId, userName, downloadUrl, callbackUrl, isMobile);
     const configToken = signConfigToken(config);
     const onlyofficeJsUrl = getOnlyofficeJsUrl();
-    
+
     // Add token to config if JWT is enabled (for viewer page)
     if (configToken) {
       config.token = configToken;
     }
 
     // Log audit event for document opening
-    await logAuditEvent('document.open', {
-      status: 'success',
-      resourceType: 'file',
-      resourceId: file.id,
-      metadata: {
-        fileName: file.name,
-        fileType: config.document.fileType,
-        mode: config.editorConfig.mode,
+    await logAuditEvent(
+      'document.open',
+      {
+        status: 'success',
+        resourceType: 'file',
+        resourceId: file.id,
+        metadata: {
+          fileName: file.name,
+          fileType: config.document.fileType,
+          mode: config.editorConfig.mode,
+        },
       },
-    }, req);
+      req
+    );
 
-    logger.info({ fileId: file.id, fileName: file.name, mode: config.editorConfig.mode }, 'Document opened in ONLYOFFICE');
+    logger.info(
+      { fileId: file.id, fileName: file.name, mode: config.editorConfig.mode },
+      'Document opened in ONLYOFFICE'
+    );
 
     // Generate HTML page
     const html = `<!DOCTYPE html>
@@ -407,18 +412,20 @@ async function getViewerPage(req, res) {
 function downloadFile(url) {
   return new Promise((resolve, reject) => {
     const protocol = url.startsWith('https') ? https : http;
-    
-    protocol.get(url, (response) => {
-      if (response.statusCode !== 200) {
-        reject(new Error(`Failed to download: ${response.statusCode}`));
-        return;
-      }
-      
-      const chunks = [];
-      response.on('data', (chunk) => chunks.push(chunk));
-      response.on('end', () => resolve(Buffer.concat(chunks)));
-      response.on('error', reject);
-    }).on('error', reject);
+
+    protocol
+      .get(url, response => {
+        if (response.statusCode !== 200) {
+          reject(new Error(`Failed to download: ${response.statusCode}`));
+          return;
+        }
+
+        const chunks = [];
+        response.on('data', chunk => chunks.push(chunk));
+        response.on('end', () => resolve(Buffer.concat(chunks)));
+        response.on('error', reject);
+      })
+      .on('error', reject);
   });
 }
 
@@ -441,7 +448,7 @@ async function callback(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  
+
   // Handle OPTIONS preflight
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
@@ -461,7 +468,7 @@ async function callback(req, res) {
 
     if (shouldSave && body.url) {
       const fileId = extractFileIdFromKey(body.key);
-      
+
       if (!fileId) {
         logger.error('[ONLYOFFICE] Could not extract file ID from key:', body.key);
         return res.status(200).json({ error: 0 }); // Still return success to OnlyOffice
@@ -479,7 +486,7 @@ async function callback(req, res) {
         logger.error('[ONLYOFFICE] Invalid URL format:', body.url);
         return res.status(200).json({ error: 0 });
       }
-      
+
       // Additional SSRF protection: block localhost and private IP ranges,
       // but allow the configured ONLYOFFICE server host/IP.
       try {
@@ -500,28 +507,25 @@ async function callback(req, res) {
         }
 
         // Block localhost variations (IPv4, IPv6, domain)
-        const localhostPatterns = [
-          'localhost', '127.0.0.1', '0.0.0.0', '::1', '::',
-          '[::1]', '[::ffff:127.0.0.1]'
-        ];
+        const localhostPatterns = ['localhost', '127.0.0.1', '0.0.0.0', '::1', '::', '[::1]', '[::ffff:127.0.0.1]'];
 
         // Block private IPv4 ranges
         const privateIPv4Patterns = [
-          /^10\./,                    // 10.0.0.0/8
-          /^192\.168\./,              // 192.168.0.0/16
+          /^10\./, // 10.0.0.0/8
+          /^192\.168\./, // 192.168.0.0/16
           /^172\.(1[6-9]|2[0-9]|3[0-1])\./, // 172.16.0.0/12
-          /^169\.254\./,              // 169.254.0.0/16 (link-local)
+          /^169\.254\./, // 169.254.0.0/16 (link-local)
         ];
 
         // Block private IPv6 ranges
         const privateIPv6Patterns = [
-          /^fe80:/i,                  // fe80::/10 (link-local)
-          /^fc00:/i,                  // fc00::/7 (unique local)
-          /^fd00:/i,                  // fd00::/8 (unique local)
-          /^::ffff:127\./i,           // IPv4-mapped localhost
-          /^::ffff:10\./i,            // IPv4-mapped 10.0.0.0/8
-          /^::ffff:192\.168\./i,      // IPv4-mapped 192.168.0.0/16
-          /^::ffff:169\.254\./i,      // IPv4-mapped link-local
+          /^fe80:/i, // fe80::/10 (link-local)
+          /^fc00:/i, // fc00::/7 (unique local)
+          /^fd00:/i, // fd00::/8 (unique local)
+          /^::ffff:127\./i, // IPv4-mapped localhost
+          /^::ffff:10\./i, // IPv4-mapped 10.0.0.0/8
+          /^::ffff:192\.168\./i, // IPv4-mapped 192.168.0.0/16
+          /^::ffff:169\.254\./i, // IPv4-mapped link-local
         ];
 
         // Skip local/private checks for trusted ONLYOFFICE host
@@ -555,10 +559,7 @@ async function callback(req, res) {
 
       // Get file info from database
       const db = require('../config/db');
-      const fileResult = await db.query(
-        'SELECT id, name, path, user_id FROM files WHERE id = $1',
-        [validatedFileId]
-      );
+      const fileResult = await db.query('SELECT id, name, path, user_id FROM files WHERE id = $1', [validatedFileId]);
 
       if (fileResult.rows.length === 0) {
         logger.error('[ONLYOFFICE] File not found in database:', fileId);
@@ -566,7 +567,7 @@ async function callback(req, res) {
       }
 
       const fileRow = fileResult.rows[0];
-      
+
       // Determine the file path
       // - Custom drive files have absolute paths stored directly
       // - Uploaded files have relative paths that need to be resolved
@@ -575,21 +576,24 @@ async function callback(req, res) {
         logger.error('[ONLYOFFICE] File has no path:', fileId);
         return res.status(200).json({ error: 0 });
       }
-      
+
       if (path.isAbsolute(fileRow.path)) {
         // Custom drive file - normalize absolute path for security
         filePath = path.resolve(fileRow.path);
-        
+
         // Security check: verify the file is within the user's configured custom drive path
         // This prevents unauthorized writes to arbitrary system files
         const { getUserCustomDriveSettings } = require('../models/user.model');
         const customDrive = await getUserCustomDriveSettings(fileRow.user_id);
-        
+
         if (!customDrive.enabled || !customDrive.path) {
-          logger.error('[ONLYOFFICE] Cannot save to custom drive file - user does not have custom drive enabled:', fileId);
+          logger.error(
+            '[ONLYOFFICE] Cannot save to custom drive file - user does not have custom drive enabled:',
+            fileId
+          );
           return res.status(200).json({ error: 0 });
         }
-        
+
         // Use fs.realpathSync to resolve symlinks and get the actual target path
         // This prevents symlink attacks where a symlink inside custom drive points outside
         let realFilePath;
@@ -601,24 +605,24 @@ async function callback(req, res) {
           logger.error('[ONLYOFFICE] Cannot resolve real path:', { fileId, error: err.message });
           return res.status(200).json({ error: 0 });
         }
-        
+
         // Check if real file path starts with real custom drive path (case-insensitive on Windows)
-        const isWithinCustomDrive = process.platform === 'win32'
-          ? realFilePath.toLowerCase().startsWith(realCustomDrivePath.toLowerCase() + path.sep) ||
-            realFilePath.toLowerCase() === realCustomDrivePath.toLowerCase()
-          : realFilePath.startsWith(realCustomDrivePath + path.sep) ||
-            realFilePath === realCustomDrivePath;
-        
+        const isWithinCustomDrive =
+          process.platform === 'win32'
+            ? realFilePath.toLowerCase().startsWith(realCustomDrivePath.toLowerCase() + path.sep) ||
+              realFilePath.toLowerCase() === realCustomDrivePath.toLowerCase()
+            : realFilePath.startsWith(realCustomDrivePath + path.sep) || realFilePath === realCustomDrivePath;
+
         if (!isWithinCustomDrive) {
           logger.error('[ONLYOFFICE] Security violation - file path outside user custom drive:', {
             fileId,
             filePath: realFilePath,
             customDrivePath: realCustomDrivePath,
-            userId: fileRow.user_id
+            userId: fileRow.user_id,
           });
           return res.status(200).json({ error: 0 });
         }
-        
+
         // Use the real path for writing to ensure we write to the actual file
         filePath = realFilePath;
       } else {
@@ -640,25 +644,29 @@ async function callback(req, res) {
 
       // Update file size and modified timestamp in database
       const newSize = fileBuffer.length;
-      await db.query(
-        'UPDATE files SET size = $1, modified = NOW() WHERE id = $2',
-        [newSize, validatedFileId]
-      );
+      await db.query('UPDATE files SET size = $1, modified = NOW() WHERE id = $2', [newSize, validatedFileId]);
 
       // Log audit event for document save
-      await logAuditEvent('document.save', {
-        status: 'success',
-        resourceType: 'file',
-        resourceId: validatedFileId,
-        metadata: {
-          fileName: fileRow.name,
-          fileSize: newSize,
-          oldSize: fileRow.size || 0,
-          savedVia: 'onlyoffice',
+      await logAuditEvent(
+        'document.save',
+        {
+          status: 'success',
+          resourceType: 'file',
+          resourceId: validatedFileId,
+          metadata: {
+            fileName: fileRow.name,
+            fileSize: newSize,
+            oldSize: fileRow.size || 0,
+            savedVia: 'onlyoffice',
+          },
         },
-      }, req);
+        req
+      );
 
-      logger.info({ fileId: validatedFileId, fileName: fileRow.name, newSize, oldSize: fileRow.size }, 'Document saved via ONLYOFFICE');
+      logger.info(
+        { fileId: validatedFileId, fileName: fileRow.name, newSize, oldSize: fileRow.size },
+        'Document saved via ONLYOFFICE'
+      );
     } else if (status === 3) {
       logger.error('[ONLYOFFICE] Document saving error for:', body.key);
     }
@@ -679,5 +687,3 @@ module.exports = {
   callback,
   getViewerPage,
 };
-
-

@@ -2,7 +2,7 @@ const { validateAndResolveFile } = require('../utils/fileDownload');
 const { sendError, sendSuccess } = require('../utils/response');
 const { createZipArchive } = require('../utils/zipArchive');
 const { logger } = require('../config/logger');
-const { logAuditEvent, fileUploaded, fileDownloaded, fileDeleted } = require('../services/auditLogger');
+const { logAuditEvent, fileUploaded, fileDownloaded } = require('../services/auditLogger');
 const {
   getFiles,
   createFolder,
@@ -32,7 +32,7 @@ const {
   removeFilesFromShares,
 } = require('../models/share.model');
 const pool = require('../config/db');
-const { userOperationLock, fileOperationLock } = require('../utils/mutex');
+const { userOperationLock } = require('../utils/mutex');
 const {
   validateId,
   validateIdArray,
@@ -74,12 +74,16 @@ async function addFolder(req, res) {
     const folder = await createFolder(name, validatedParentId, req.userId);
 
     // Log folder creation
-    await logAuditEvent('folder.create', {
-      status: 'success',
-      resourceType: 'folder',
-      resourceId: folder.id,
-      metadata: { folderName: name, parentId: validatedParentId }
-    }, req);
+    await logAuditEvent(
+      'folder.create',
+      {
+        status: 'success',
+        resourceType: 'folder',
+        resourceId: folder.id,
+        metadata: { folderName: name, parentId: validatedParentId },
+      },
+      req
+    );
     logger.info({ folderId: folder.id, name }, 'Folder created');
 
     sendSuccess(res, folder);
@@ -108,15 +112,8 @@ async function uploadFile(req, res) {
       return sendError(res, 400, 'Invalid parent ID');
     }
 
-    const file = await userOperationLock(req.userId, async () => {
-      return await createFile(
-        req.file.originalname,
-        req.file.size,
-        req.file.mimetype,
-        req.file.path,
-        parentId,
-        req.userId
-      );
+    const file = await userOperationLock(req.userId, () => {
+      return createFile(req.file.originalname, req.file.size, req.file.mimetype, req.file.path, parentId, req.userId);
     });
 
     // Log file upload
@@ -126,11 +123,15 @@ async function uploadFile(req, res) {
     sendSuccess(res, file);
   } catch (err) {
     // Log upload failure
-    await logAuditEvent('file.upload', {
-      status: 'error',
-      errorMessage: err.message,
-      metadata: { fileName: req.file?.originalname }
-    }, req);
+    await logAuditEvent(
+      'file.upload',
+      {
+        status: 'error',
+        errorMessage: err.message,
+        metadata: { fileName: req.file?.originalname },
+      },
+      req
+    );
     sendError(res, 500, 'Server error', err);
   }
 }
@@ -148,20 +149,20 @@ async function moveFilesController(req, res) {
     }
 
     // Get file and target folder names for audit logging
-    const fileInfoResult = await pool.query(
-      'SELECT id, name, type FROM files WHERE id = ANY($1) AND user_id = $2',
-      [validatedIds, req.userId]
-    );
+    const fileInfoResult = await pool.query('SELECT id, name, type FROM files WHERE id = ANY($1) AND user_id = $2', [
+      validatedIds,
+      req.userId,
+    ]);
     const fileInfo = fileInfoResult.rows.map(f => ({ id: f.id, name: f.name, type: f.type }));
     const fileNames = fileInfo.map(f => f.name);
     const fileTypes = fileInfo.map(f => f.type);
 
     let targetFolderName = 'Root';
     if (validatedParentId) {
-      const targetResult = await pool.query(
-        'SELECT name FROM files WHERE id = $1 AND user_id = $2',
-        [validatedParentId, req.userId]
-      );
+      const targetResult = await pool.query('SELECT name FROM files WHERE id = $1 AND user_id = $2', [
+        validatedParentId,
+        req.userId,
+      ]);
       if (targetResult.rows[0]) {
         targetFolderName = targetResult.rows[0].name;
       }
@@ -172,19 +173,23 @@ async function moveFilesController(req, res) {
     });
 
     // Log file move with details
-    await logAuditEvent('file.move', {
-      status: 'success',
-      resourceType: fileTypes[0] || 'file', // Use actual type (file/folder)
-      resourceId: validatedIds[0],
-      metadata: {
-        fileCount: validatedIds.length,
-        fileIds: validatedIds,
-        fileNames: fileNames,
-        fileTypes: fileTypes,
-        targetParentId: validatedParentId,
-        targetFolderName: targetFolderName,
-      }
-    }, req);
+    await logAuditEvent(
+      'file.move',
+      {
+        status: 'success',
+        resourceType: fileTypes[0] || 'file', // Use actual type (file/folder)
+        resourceId: validatedIds[0],
+        metadata: {
+          fileCount: validatedIds.length,
+          fileIds: validatedIds,
+          fileNames,
+          fileTypes,
+          targetParentId: validatedParentId,
+          targetFolderName,
+        },
+      },
+      req
+    );
     logger.info({ fileIds: validatedIds, fileNames, targetFolderName }, 'Files moved');
 
     sendSuccess(res, { success: true });
@@ -206,20 +211,20 @@ async function copyFilesController(req, res) {
     }
 
     // Get file and target folder names for audit logging
-    const fileInfoResult = await pool.query(
-      'SELECT id, name, type FROM files WHERE id = ANY($1) AND user_id = $2',
-      [validatedIds, req.userId]
-    );
+    const fileInfoResult = await pool.query('SELECT id, name, type FROM files WHERE id = ANY($1) AND user_id = $2', [
+      validatedIds,
+      req.userId,
+    ]);
     const fileInfo = fileInfoResult.rows.map(f => ({ id: f.id, name: f.name, type: f.type }));
     const fileNames = fileInfo.map(f => f.name);
     const fileTypes = fileInfo.map(f => f.type);
 
     let targetFolderName = 'Root';
     if (validatedParentId) {
-      const targetResult = await pool.query(
-        'SELECT name FROM files WHERE id = $1 AND user_id = $2',
-        [validatedParentId, req.userId]
-      );
+      const targetResult = await pool.query('SELECT name FROM files WHERE id = $1 AND user_id = $2', [
+        validatedParentId,
+        req.userId,
+      ]);
       if (targetResult.rows[0]) {
         targetFolderName = targetResult.rows[0].name;
       }
@@ -230,19 +235,23 @@ async function copyFilesController(req, res) {
     });
 
     // Log file copy with details
-    await logAuditEvent('file.copy', {
-      status: 'success',
-      resourceType: fileTypes[0] || 'file', // Use actual type (file/folder)
-      resourceId: validatedIds[0],
-      metadata: {
-        fileCount: validatedIds.length,
-        fileIds: validatedIds,
-        fileNames: fileNames,
-        fileTypes: fileTypes,
-        targetParentId: validatedParentId,
-        targetFolderName: targetFolderName,
-      }
-    }, req);
+    await logAuditEvent(
+      'file.copy',
+      {
+        status: 'success',
+        resourceType: fileTypes[0] || 'file', // Use actual type (file/folder)
+        resourceId: validatedIds[0],
+        metadata: {
+          fileCount: validatedIds.length,
+          fileIds: validatedIds,
+          fileNames,
+          fileTypes,
+          targetParentId: validatedParentId,
+          targetFolderName,
+        },
+      },
+      req
+    );
     logger.info({ fileIds: validatedIds, fileNames, targetFolderName }, 'Files copied');
 
     sendSuccess(res, { success: true });
@@ -264,12 +273,16 @@ async function downloadFile(req, res) {
 
     // If it's a folder, zip it first
     if (file.type === 'folder') {
-      await logAuditEvent('folder.download', {
-        status: 'success',
-        resourceType: 'folder',
-        resourceId: fileId,
-        metadata: { folderName: file.name }
-      }, req);
+      await logAuditEvent(
+        'folder.download',
+        {
+          status: 'success',
+          resourceType: 'folder',
+          resourceId: fileId,
+          metadata: { folderName: file.name },
+        },
+        req
+      );
       logger.info({ folderId: fileId, name: file.name }, 'Folder downloaded (zipped)');
 
       return await userOperationLock(req.userId, async () => {
@@ -325,12 +338,16 @@ async function renameFileController(req, res) {
     }
 
     // Log file rename
-    await logAuditEvent('file.rename', {
-      status: 'success',
-      resourceType: file.type,
-      resourceId: validatedId,
-      metadata: { newName: name, oldName: file.name }
-    }, req);
+    await logAuditEvent(
+      'file.rename',
+      {
+        status: 'success',
+        resourceType: file.type,
+        resourceId: validatedId,
+        metadata: { newName: name, oldName: file.name },
+      },
+      req
+    );
     logger.info({ fileId: validatedId, newName: name }, 'File renamed');
 
     sendSuccess(res, file);
@@ -352,10 +369,10 @@ async function starFilesController(req, res) {
     }
 
     // Get file names for audit logging
-    const fileInfoResult = await pool.query(
-      'SELECT id, name, type FROM files WHERE id = ANY($1) AND user_id = $2',
-      [validatedIds, req.userId]
-    );
+    const fileInfoResult = await pool.query('SELECT id, name, type FROM files WHERE id = ANY($1) AND user_id = $2', [
+      validatedIds,
+      req.userId,
+    ]);
     const fileInfo = fileInfoResult.rows.map(f => ({ id: f.id, name: f.name, type: f.type }));
     const fileNames = fileInfo.map(f => f.name);
     const fileTypes = fileInfo.map(f => f.type);
@@ -363,18 +380,22 @@ async function starFilesController(req, res) {
     await setStarred(validatedIds, validatedStarred, req.userId);
 
     // Log star/unstar with file details
-    await logAuditEvent(validatedStarred ? 'file.star' : 'file.unstar', {
-      status: 'success',
-      resourceType: fileTypes[0] || 'file', // Use actual type (file/folder)
-      resourceId: validatedIds[0], // First file ID
-      metadata: {
-        fileCount: validatedIds.length,
-        fileIds: validatedIds,
-        fileNames: fileNames,
-        fileTypes: fileTypes,
-        starred: validatedStarred,
-      }
-    }, req);
+    await logAuditEvent(
+      validatedStarred ? 'file.star' : 'file.unstar',
+      {
+        status: 'success',
+        resourceType: fileTypes[0] || 'file', // Use actual type (file/folder)
+        resourceId: validatedIds[0], // First file ID
+        metadata: {
+          fileCount: validatedIds.length,
+          fileIds: validatedIds,
+          fileNames,
+          fileTypes,
+          starred: validatedStarred,
+        },
+      },
+      req
+    );
     logger.debug({ fileIds: validatedIds, fileNames, starred: validatedStarred }, 'Files starred status changed');
 
     sendSuccess(res, { success: true });
@@ -394,7 +415,7 @@ async function shareFilesController(req, res) {
     if (validatedShared === null) {
       return sendError(res, 400, 'shared must be a boolean');
     }
-    
+
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
@@ -417,15 +438,19 @@ async function shareFilesController(req, res) {
 
           // Log audit event for share creation
           if (isNewShare) {
-            await logAuditEvent('share.create', {
-              status: 'success',
-              resourceType: 'share',
-              resourceId: token,
-              metadata: {
-                fileId: id,
-                fileCount: treeIds.length,
+            await logAuditEvent(
+              'share.create',
+              {
+                status: 'success',
+                resourceType: 'share',
+                resourceId: token,
+                metadata: {
+                  fileId: id,
+                  fileCount: treeIds.length,
+                },
               },
-            }, req);
+              req
+            );
             logger.info({ fileId: id, shareToken: token, fileCount: treeIds.length }, 'Share link created');
           }
         }
@@ -437,14 +462,18 @@ async function shareFilesController(req, res) {
           await deleteShareLink(id, req.userId);
 
           // Log audit event for share deletion
-          await logAuditEvent('share.delete', {
-            status: 'success',
-            resourceType: 'share',
-            resourceId: id,
-            metadata: {
-              fileId: id,
+          await logAuditEvent(
+            'share.delete',
+            {
+              status: 'success',
+              resourceType: 'share',
+              resourceId: id,
+              metadata: {
+                fileId: id,
+              },
             },
-          }, req);
+            req
+          );
           logger.info({ fileId: id }, 'Share link deleted');
         }
         await setShared(validatedIds, false, req.userId);
@@ -472,10 +501,10 @@ async function linkParentShareController(req, res) {
     }
     const links = {};
     for (const id of validatedIds) {
-      const parentRes = await pool.query(
-        'SELECT parent_id FROM files WHERE id = $1 AND user_id = $2',
-        [id, req.userId]
-      );
+      const parentRes = await pool.query('SELECT parent_id FROM files WHERE id = $1 AND user_id = $2', [
+        id,
+        req.userId,
+      ]);
       const parentId = parentRes.rows[0]?.parent_id;
       if (!parentId) continue;
       const shareId = await getShareLink(parentId, req.userId);
@@ -522,10 +551,10 @@ async function deleteFilesController(req, res) {
     }
 
     // Get file names for audit logging
-    const fileInfoResult = await pool.query(
-      'SELECT id, name, type FROM files WHERE id = ANY($1) AND user_id = $2',
-      [validatedIds, req.userId]
-    );
+    const fileInfoResult = await pool.query('SELECT id, name, type FROM files WHERE id = ANY($1) AND user_id = $2', [
+      validatedIds,
+      req.userId,
+    ]);
     const fileInfo = fileInfoResult.rows.map(f => ({ id: f.id, name: f.name, type: f.type }));
     const fileNames = fileInfo.map(f => f.name);
     const fileTypes = fileInfo.map(f => f.type);
@@ -533,18 +562,22 @@ async function deleteFilesController(req, res) {
     await deleteFiles(validatedIds, req.userId);
 
     // Log file deletion (soft delete to trash) with details
-    await logAuditEvent('file.delete', {
-      status: 'success',
-      resourceType: fileTypes[0] || 'file', // Use actual type (file/folder)
-      resourceId: validatedIds[0],
-      metadata: {
-        fileCount: validatedIds.length,
-        fileIds: validatedIds,
-        fileNames: fileNames,
-        fileTypes: fileTypes,
-        permanent: false,
-      }
-    }, req);
+    await logAuditEvent(
+      'file.delete',
+      {
+        status: 'success',
+        resourceType: fileTypes[0] || 'file', // Use actual type (file/folder)
+        resourceId: validatedIds[0],
+        metadata: {
+          fileCount: validatedIds.length,
+          fileIds: validatedIds,
+          fileNames,
+          fileTypes,
+          permanent: false,
+        },
+      },
+      req
+    );
     logger.info({ fileIds: validatedIds, fileNames }, 'Files moved to trash');
 
     sendSuccess(res, { success: true });
@@ -584,18 +617,22 @@ async function deleteForeverController(req, res) {
     await permanentlyDeleteFiles(validatedIds, req.userId);
 
     // Log permanent deletion with details
-    await logAuditEvent('file.delete.permanent', {
-      status: 'success',
-      resourceType: fileTypes[0] || 'file', // Use actual type (file/folder)
-      resourceId: validatedIds[0],
-      metadata: {
-        fileCount: validatedIds.length,
-        fileIds: validatedIds,
-        fileNames: fileNames,
-        fileTypes: fileTypes,
-        permanent: true,
-      }
-    }, req);
+    await logAuditEvent(
+      'file.delete.permanent',
+      {
+        status: 'success',
+        resourceType: fileTypes[0] || 'file', // Use actual type (file/folder)
+        resourceId: validatedIds[0],
+        metadata: {
+          fileCount: validatedIds.length,
+          fileIds: validatedIds,
+          fileNames,
+          fileTypes,
+          permanent: true,
+        },
+      },
+      req
+    );
     logger.info({ fileIds: validatedIds, fileNames }, 'Files permanently deleted');
 
     sendSuccess(res, { success: true });
@@ -628,17 +665,21 @@ async function restoreFilesController(req, res) {
     await restoreFiles(validatedIds, req.userId);
 
     // Log file restore with details
-    await logAuditEvent('file.restore', {
-      status: 'success',
-      resourceType: fileTypes[0] || 'file', // Use actual type (file/folder)
-      resourceId: validatedIds[0],
-      metadata: {
-        fileCount: validatedIds.length,
-        fileIds: validatedIds,
-        fileNames: fileNames,
-        fileTypes: fileTypes,
-      }
-    }, req);
+    await logAuditEvent(
+      'file.restore',
+      {
+        status: 'success',
+        resourceType: fileTypes[0] || 'file', // Use actual type (file/folder)
+        resourceId: validatedIds[0],
+        metadata: {
+          fileCount: validatedIds.length,
+          fileIds: validatedIds,
+          fileNames,
+          fileTypes,
+        },
+      },
+      req
+    );
     logger.info({ fileIds: validatedIds, fileNames }, 'Files restored from trash');
 
     sendSuccess(res, { success: true, message: `Restored ${fileInfo.length} file(s) from trash` });
@@ -651,7 +692,7 @@ async function emptyTrashController(req, res) {
   try {
     // Get all trash files for the user
     const trashFiles = await getTrashFiles(req.userId);
-    
+
     if (trashFiles.length === 0) {
       return sendSuccess(res, { success: true, message: 'Trash is already empty' });
     }
@@ -663,19 +704,23 @@ async function emptyTrashController(req, res) {
     await permanentlyDeleteFiles(allIds, req.userId);
 
     // Log empty trash action with details
-    await logAuditEvent('file.delete.permanent', {
-      status: 'success',
-      resourceType: 'file',
-      resourceId: allIds[0] || null,
-      metadata: {
-        fileCount: allIds.length,
-        fileIds: allIds,
-        fileNames: fileNames,
-        fileTypes: fileTypes,
-        permanent: true,
-        action: 'empty_trash',
-      }
-    }, req);
+    await logAuditEvent(
+      'file.delete.permanent',
+      {
+        status: 'success',
+        resourceType: 'file',
+        resourceId: allIds[0] || null,
+        metadata: {
+          fileCount: allIds.length,
+          fileIds: allIds,
+          fileNames,
+          fileTypes,
+          permanent: true,
+          action: 'empty_trash',
+        },
+      },
+      req
+    );
     logger.info({ fileCount: allIds.length, fileNames }, 'Trash emptied');
 
     sendSuccess(res, { success: true, message: `Deleted ${allIds.length} file(s) from trash` });

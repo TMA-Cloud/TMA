@@ -1,13 +1,13 @@
 const express = require('express');
 const auth = require('../middleware/auth.middleware');
-const { 
-  storageUsage, 
-  getSignupStatus, 
-  toggleSignup, 
+const {
+  storageUsage,
+  getSignupStatus,
+  toggleSignup,
   listUsers,
   getCustomDriveSettings,
   updateCustomDriveSettings,
-  getAllUsersCustomDriveSettings
+  getAllUsersCustomDriveSettings,
 } = require('../controllers/user.controller');
 
 const router = express.Router();

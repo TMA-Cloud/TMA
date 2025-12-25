@@ -79,7 +79,6 @@ async function cleanupDuplicates() {
     } else {
       console.log(`\n⚠️  ${remainingDuplicates.rows.length} duplicates still remain`);
     }
-
   } catch (error) {
     console.error('❌ Error during cleanup:', error);
     throw error;
@@ -92,7 +91,7 @@ cleanupDuplicates()
     console.log('\nCleanup complete! You can now restart your server.');
     process.exit(0);
   })
-  .catch((error) => {
+  .catch(error => {
     console.error('\nCleanup failed:', error);
     process.exit(1);
   });

@@ -61,10 +61,7 @@ async function getActiveSessions(userId, currentTokenVersion) {
  * @returns {Promise<void>}
  */
 async function updateSessionActivity(sessionId) {
-  await pool.query(
-    'UPDATE sessions SET last_activity = NOW() WHERE id = $1',
-    [sessionId]
-  );
+  await pool.query('UPDATE sessions SET last_activity = NOW() WHERE id = $1', [sessionId]);
 }
 
 /**
@@ -74,10 +71,10 @@ async function updateSessionActivity(sessionId) {
  * @returns {Promise<boolean>} True if session was deleted
  */
 async function deleteSession(sessionId, userId) {
-  const result = await pool.query(
-    'DELETE FROM sessions WHERE id = $1 AND user_id = $2 RETURNING id',
-    [sessionId, userId]
-  );
+  const result = await pool.query('DELETE FROM sessions WHERE id = $1 AND user_id = $2 RETURNING id', [
+    sessionId,
+    userId,
+  ]);
   return result.rows.length > 0;
 }
 

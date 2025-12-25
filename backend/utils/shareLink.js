@@ -10,7 +10,10 @@ if (rawShareBaseUrl) {
     configuredShareOrigin = new URL(rawShareBaseUrl).origin;
   } catch (error) {
     // Keep running with fallback while warning about the bad config.
-    logger.warn({ err: error, shareBaseUrl: rawShareBaseUrl }, 'Invalid SHARE_BASE_URL, falling back to request origin');
+    logger.warn(
+      { err: error, shareBaseUrl: rawShareBaseUrl },
+      'Invalid SHARE_BASE_URL, falling back to request origin'
+    );
   }
 }
 
@@ -24,7 +27,7 @@ function getRequestOrigin(req) {
   if (!protocol) {
     logger.warn(
       { forwardedProto, fallbackProtocol: req.protocol },
-      'Invalid X-Forwarded-Proto header when determining share link origin; falling back to request protocol',
+      'Invalid X-Forwarded-Proto header when determining share link origin; falling back to request protocol'
     );
     protocol = req.protocol || 'https';
   }
@@ -39,7 +42,7 @@ function getRequestOrigin(req) {
         forwardedHost,
         requestHost: req.get('host'),
       },
-      'Could not determine request host for share link origin; falling back to relative URLs',
+      'Could not determine request host for share link origin; falling back to relative URLs'
     );
     return '';
   }
@@ -56,7 +59,7 @@ function getShareBaseUrl(req) {
     base = 'http://localhost';
     logger.warn(
       {},
-      'Unable to determine share link base URL from request or SHARE_BASE_URL; falling back to http://localhost.',
+      'Unable to determine share link base URL from request or SHARE_BASE_URL; falling back to http://localhost.'
     );
   }
 

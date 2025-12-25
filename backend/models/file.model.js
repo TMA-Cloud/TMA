@@ -12,8 +12,8 @@ const { getUserCustomDriveSettings } = require('./user.model');
  * @param {string} userId - User ID
  * @returns {Promise<{enabled: boolean, path: string|null}>}
  */
-let customDriveCache = new Map();
-let cacheTimeouts = new Map(); // Store timeouts to clear them if cache is refreshed
+const customDriveCache = new Map();
+const cacheTimeouts = new Map(); // Store timeouts to clear them if cache is refreshed
 
 /**
  * Invalidate custom drive cache for a specific user
@@ -35,7 +35,7 @@ async function getUserCustomDrive(userId) {
   if (customDriveCache.has(userId)) {
     return customDriveCache.get(userId);
   }
-  
+
   try {
     const settings = await getUserCustomDriveSettings(userId);
     customDriveCache.set(userId, settings);
@@ -50,7 +50,7 @@ async function getUserCustomDrive(userId) {
     }, 60000);
     cacheTimeouts.set(userId, timeout);
     return settings;
-  } catch (error) {
+  } catch (_error) {
     // If user not found or error, return disabled
     return { enabled: false, path: null };
   }
@@ -84,18 +84,18 @@ async function calculateFolderSize(id, userId) {
        WHERE f.user_id = $2
      )
      SELECT COALESCE(SUM(size), 0) AS size FROM sub WHERE type = 'file'`,
-    [id, userId],
+    [id, userId]
   );
   return parseInt(res.rows[0].size, 10) || 0;
 }
 
 async function fillFolderSizes(files, userId) {
   await Promise.all(
-    files.map(async (f) => {
+    files.map(async f => {
       if (f.type === 'folder') {
         f.size = await calculateFolderSize(f.id, userId);
       }
-    }),
+    })
   );
   return files;
 }
@@ -124,41 +124,42 @@ async function getFiles(userId, parentId = null, sortBy = 'modified', order = 'D
 
 async function createFolder(name, parentId = null, userId) {
   const id = generateId(16);
-  
+
   // Check if user has custom drive enabled
   const customDrive = await getUserCustomDrive(userId);
-  
+
   if (customDrive.enabled && customDrive.path) {
     let finalPath = null; // Declare outside try block to safely access in catch
     try {
       // Get the parent folder path
       const parentPath = await getFolderPath(parentId, userId);
-      
+
       // Build the new folder path
-      const folderPath = parentPath
-        ? path.join(parentPath, name)
-        : path.join(customDrive.path, name);
-      
+      const folderPath = parentPath ? path.join(parentPath, name) : path.join(customDrive.path, name);
+
       // Handle duplicate folder names
       finalPath = folderPath;
       let counter = 1;
-      while (await fs.promises.access(finalPath).then(() => true).catch(() => false)) {
+      while (
+        await fs.promises
+          .access(finalPath)
+          .then(() => true)
+          .catch(() => false)
+      ) {
         const newName = `${name} (${counter})`;
-        finalPath = parentPath
-          ? path.join(parentPath, newName)
-          : path.join(customDrive.path, newName);
+        finalPath = parentPath ? path.join(parentPath, newName) : path.join(customDrive.path, newName);
         counter++;
         if (counter > 10000) {
           throw new Error('Too many duplicate folders');
         }
       }
-      
+
       // Create the folder on disk
       await fs.promises.mkdir(finalPath, { recursive: true });
-      
+
       // Get the actual folder name (in case it was changed due to duplicates)
       const actualName = path.basename(finalPath);
-      
+
       // Store absolute path in database
       const absolutePath = path.resolve(finalPath);
       const result = await pool.query(
@@ -183,7 +184,7 @@ async function createFolder(name, parentId = null, userId) {
       throw error;
     }
   }
-  
+
   // Regular folder creation (when custom drive is disabled or creation failed)
   const result = await pool.query(
     'INSERT INTO files(id, name, type, parent_id, user_id) VALUES($1,$2,$3,$4,$5) RETURNING id, name, type, size, modified, mime_type AS "mimeType", starred, shared',
@@ -198,22 +199,19 @@ async function createFolder(name, parentId = null, userId) {
  */
 async function getFolderPath(parentId, userId) {
   const customDrive = await getUserCustomDrive(userId);
-  
+
   if (!parentId) {
     return customDrive.enabled && customDrive.path ? customDrive.path : null;
   }
 
-  const result = await pool.query(
-    'SELECT path, type FROM files WHERE id = $1 AND user_id = $2',
-    [parentId, userId]
-  );
+  const result = await pool.query('SELECT path, type FROM files WHERE id = $1 AND user_id = $2', [parentId, userId]);
 
   if (result.rows.length === 0) {
     return customDrive.enabled && customDrive.path ? customDrive.path : null;
   }
 
   const folder = result.rows[0];
-  
+
   // If it's a custom drive folder (has absolute path), use it
   if (folder.path && path.isAbsolute(folder.path)) {
     return folder.path;
@@ -235,7 +233,7 @@ async function getFolderPath(parentId, userId) {
  */
 async function buildFolderPath(folderId, userId) {
   const customDrive = await getUserCustomDrive(userId);
-  
+
   if (!customDrive.enabled || !customDrive.path) {
     return null;
   }
@@ -245,15 +243,15 @@ async function buildFolderPath(folderId, userId) {
 
   // Traverse up the parent chain to build the path
   while (currentId) {
-    const result = await pool.query(
-      'SELECT name, parent_id, path FROM files WHERE id = $1 AND user_id = $2',
-      [currentId, userId]
-    );
+    const result = await pool.query('SELECT name, parent_id, path FROM files WHERE id = $1 AND user_id = $2', [
+      currentId,
+      userId,
+    ]);
 
     if (result.rows.length === 0) break;
 
     const folder = result.rows[0];
-    
+
     // If we hit a custom drive folder (has absolute path), use it as base
     if (folder.path && path.isAbsolute(folder.path)) {
       return folder.path;
@@ -277,19 +275,24 @@ async function buildFolderPath(folderId, userId) {
 /**
  * Generates a unique filename if the file already exists
  */
-async function getUniqueFilename(filePath, folderPath) {
+async function getUniqueFilename(filePath, _folderPath) {
   const dir = path.dirname(filePath);
   const ext = path.extname(filePath);
   const baseName = path.basename(filePath, ext);
-  
+
   let finalPath = filePath;
   let counter = 1;
 
-  while (await fs.promises.access(finalPath).then(() => true).catch(() => false)) {
+  while (
+    await fs.promises
+      .access(finalPath)
+      .then(() => true)
+      .catch(() => false)
+  ) {
     const newName = `${baseName} (${counter})${ext}`;
     finalPath = path.join(dir, newName);
     counter++;
-    
+
     // Safety limit
     if (counter > 10000) {
       throw new Error('Too many duplicate files');
@@ -301,10 +304,10 @@ async function getUniqueFilename(filePath, folderPath) {
 
 async function createFile(name, size, mimeType, tempPath, parentId = null, userId) {
   const id = generateId(16);
-  
+
   // Check if user has custom drive enabled
   const customDrive = await getUserCustomDrive(userId);
-  
+
   // If custom drive is enabled, file is already uploaded directly to custom drive path
   // Just rename it to the final location with proper name (same filesystem, so rename works)
   if (customDrive.enabled && customDrive.path) {
@@ -313,7 +316,7 @@ async function createFile(name, size, mimeType, tempPath, parentId = null, userI
     try {
       // Get the target folder path
       const folderPath = await getFolderPath(parentId, userId);
-      
+
       // Ensure the target folder exists
       const targetDir = folderPath || customDrive.path;
       try {
@@ -328,14 +331,14 @@ async function createFile(name, size, mimeType, tempPath, parentId = null, userI
 
       // Handle duplicate filenames
       finalPath = await getUniqueFilename(destPath, targetDir);
-      
+
       // Rename temp file to final location (same filesystem since multer uploaded directly to custom drive)
       await fs.promises.rename(tempPath, finalPath);
       renameSucceeded = true; // Mark that rename succeeded
-      
+
       // Get the actual filename (in case it was changed due to duplicates)
       const actualName = path.basename(finalPath);
-      
+
       // Store absolute path in database
       const absolutePath = path.resolve(finalPath);
       const result = await pool.query(
@@ -365,7 +368,10 @@ async function createFile(name, size, mimeType, tempPath, parentId = null, userI
           await fs.promises.unlink(tempPath);
         }
       } catch (cleanupError) {
-        logger.warn({ finalPath, tempPath, renameSucceeded, error: cleanupError.message }, 'Failed to clean up orphaned custom drive file');
+        logger.warn(
+          { finalPath, tempPath, renameSucceeded, error: cleanupError.message },
+          'Failed to clean up orphaned custom drive file'
+        );
       }
       throw error;
     }
@@ -385,10 +391,11 @@ async function createFile(name, size, mimeType, tempPath, parentId = null, userI
 }
 
 async function moveFiles(ids, parentId = null, userId) {
-  await pool.query(
-    'UPDATE files SET parent_id = $1, modified = NOW() WHERE id = ANY($2::text[]) AND user_id = $3',
-    [parentId, ids, userId],
-  );
+  await pool.query('UPDATE files SET parent_id = $1, modified = NOW() WHERE id = ANY($2::text[]) AND user_id = $3', [
+    parentId,
+    ids,
+    userId,
+  ]);
 }
 
 async function copyEntry(id, parentId, userId, client = null) {
@@ -399,30 +406,35 @@ async function copyEntry(id, parentId, userId, client = null) {
   const newId = generateId(16);
   let storageName = null;
   let newPath = null;
-  
+
   if (file.type === 'file') {
     // Get source file path (handles both relative and absolute)
     const sourcePath = resolveFilePath(file.path);
-    
+
     const customDrive = await getUserCustomDrive(userId);
-    
+
     if (customDrive.enabled && customDrive.path) {
       // If custom drive is enabled, copy to custom drive with original name
       try {
         const folderPath = await getFolderPath(parentId, userId);
         const destDir = folderPath || customDrive.path;
-        
+
         // Ensure destination directory exists
         try {
           await fs.promises.access(destDir);
         } catch {
           await fs.promises.mkdir(destDir, { recursive: true });
         }
-        
+
         // Handle duplicate filenames
         let destPath = path.join(destDir, file.name);
         let counter = 1;
-        while (await fs.promises.access(destPath).then(() => true).catch(() => false)) {
+        while (
+          await fs.promises
+            .access(destPath)
+            .then(() => true)
+            .catch(() => false)
+        ) {
           const ext = path.extname(file.name);
           const baseName = path.basename(file.name, ext);
           const newName = `${baseName} (${counter})${ext}`;
@@ -432,13 +444,13 @@ async function copyEntry(id, parentId, userId, client = null) {
             throw new Error('Too many duplicate files');
           }
         }
-        
+
         await fs.promises.copyFile(sourcePath, destPath);
         newPath = path.resolve(destPath);
-        
+
         // Get the actual filename (in case it was changed due to duplicates)
         const actualName = path.basename(destPath);
-        
+
         await dbClient.query(
           'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id, starred, shared) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',
           [
@@ -452,7 +464,7 @@ async function copyEntry(id, parentId, userId, client = null) {
             userId,
             file.starred,
             file.shared,
-          ],
+          ]
         );
       } catch (error) {
         // If custom drive copy fails, clean up orphaned file on disk
@@ -465,7 +477,10 @@ async function copyEntry(id, parentId, userId, client = null) {
             });
           }
         } catch (cleanupError) {
-          logger.warn({ newPath, error: cleanupError.message }, 'Failed to clean up orphaned custom drive file during copy');
+          logger.warn(
+            { newPath, error: cleanupError.message },
+            'Failed to clean up orphaned custom drive file during copy'
+          );
         }
         // Re-throw the error instead of falling back to avoid violating custom drive invariant
         // Custom drive users must have all files in their custom drive path
@@ -482,53 +497,43 @@ async function copyEntry(id, parentId, userId, client = null) {
         throw new Error('File copy operation failed');
       }
       newPath = storageName;
-      
+
       await dbClient.query(
         'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id, starred, shared) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',
-        [
-          newId,
-          file.name,
-          file.type,
-          file.size,
-          file.mime_type,
-          newPath,
-          parentId,
-          userId,
-          file.starred,
-          file.shared,
-        ],
+        [newId, file.name, file.type, file.size, file.mime_type, newPath, parentId, userId, file.starred, file.shared]
       );
     }
   } else if (file.type === 'folder') {
     // For folders created in custom drive, we need to create them on disk
     const customDrive = await getUserCustomDrive(userId);
-    
+
     if (customDrive.enabled && customDrive.path) {
       let finalPath = null; // Declare outside try block to safely access in catch
       try {
         const parentPath = await getFolderPath(parentId, userId);
-        const folderPath = parentPath
-          ? path.join(parentPath, file.name)
-          : path.join(customDrive.path, file.name);
-        
+        const folderPath = parentPath ? path.join(parentPath, file.name) : path.join(customDrive.path, file.name);
+
         // Handle duplicate folder names
         finalPath = folderPath;
         let counter = 1;
-        while (await fs.promises.access(finalPath).then(() => true).catch(() => false)) {
+        while (
+          await fs.promises
+            .access(finalPath)
+            .then(() => true)
+            .catch(() => false)
+        ) {
           const newName = `${file.name} (${counter})`;
-          finalPath = parentPath
-            ? path.join(parentPath, newName)
-            : path.join(customDrive.path, newName);
+          finalPath = parentPath ? path.join(parentPath, newName) : path.join(customDrive.path, newName);
           counter++;
           if (counter > 10000) {
             throw new Error('Too many duplicate folders');
           }
         }
-        
+
         await fs.promises.mkdir(finalPath, { recursive: true });
         const actualName = path.basename(finalPath);
         newPath = path.resolve(finalPath);
-        
+
         await dbClient.query(
           'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id, starred, shared) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',
           [
@@ -542,7 +547,7 @@ async function copyEntry(id, parentId, userId, client = null) {
             userId,
             file.starred,
             file.shared,
-          ],
+          ]
         );
       } catch (error) {
         // If custom drive folder creation fails, clean up orphaned folder on disk
@@ -555,7 +560,10 @@ async function copyEntry(id, parentId, userId, client = null) {
             });
           }
         } catch (cleanupError) {
-          logger.warn({ finalPath, error: cleanupError.message }, 'Failed to clean up orphaned custom drive folder during copy');
+          logger.warn(
+            { finalPath, error: cleanupError.message },
+            'Failed to clean up orphaned custom drive folder during copy'
+          );
         }
         // Re-throw the error instead of falling back to avoid duplicate key errors
         throw error;
@@ -564,21 +572,10 @@ async function copyEntry(id, parentId, userId, client = null) {
       // Regular folder (no path stored)
       await dbClient.query(
         'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id, starred, shared) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',
-        [
-          newId,
-          file.name,
-          file.type,
-          file.size,
-          file.mime_type,
-          null,
-          parentId,
-          userId,
-          file.starred,
-          file.shared,
-        ],
+        [newId, file.name, file.type, file.size, file.mime_type, null, parentId, userId, file.starred, file.shared]
       );
     }
-    
+
     // Recursively copy folder contents
     const children = await dbClient.query('SELECT id FROM files WHERE parent_id = $1 AND user_id = $2', [id, userId]);
     for (const child of children.rows) {
@@ -615,16 +612,13 @@ async function getFile(id, userId) {
 async function renameFile(id, name, userId) {
   const result = await pool.query(
     'UPDATE files SET name = $1, modified = NOW() WHERE id = $2 AND user_id = $3 RETURNING id, name, type, size, modified, mime_type AS "mimeType", starred, shared',
-    [name, id, userId],
+    [name, id, userId]
   );
   return result.rows[0];
 }
 
 async function setStarred(ids, starred, userId) {
-  await pool.query(
-    'UPDATE files SET starred = $1 WHERE id = ANY($2::text[]) AND user_id = $3',
-    [starred, ids, userId],
-  );
+  await pool.query('UPDATE files SET starred = $1 WHERE id = ANY($2::text[]) AND user_id = $3', [starred, ids, userId]);
 }
 
 async function getRecursiveIds(ids, userId) {
@@ -636,7 +630,7 @@ async function getRecursiveIds(ids, userId) {
        WHERE f.user_id = $2
      )
      SELECT id FROM sub`,
-    [ids, userId],
+    [ids, userId]
   );
   return res.rows.map(r => r.id);
 }
@@ -651,7 +645,7 @@ async function getFolderTree(folderId, userId) {
        WHERE f.user_id = $2 AND f.deleted_at IS NULL
      )
      SELECT id, name, type, path, parent_id FROM sub`,
-    [folderId, userId],
+    [folderId, userId]
   );
   return res.rows;
 }
@@ -661,7 +655,7 @@ async function setShared(ids, shared, userId) {
   if (allIds.length === 0) return [];
   const res = await pool.query(
     'UPDATE files SET shared = $1 WHERE id = ANY($2::text[]) AND user_id = $3 RETURNING id',
-    [shared, allIds, userId],
+    [shared, allIds, userId]
   );
   return res.rows.map(r => r.id);
 }
@@ -671,7 +665,7 @@ async function deleteFiles(ids, userId) {
   if (allIds.length === 0) return;
   await pool.query(
     'UPDATE files SET deleted_at = NOW() WHERE id = ANY($1::text[]) AND user_id = $2 AND deleted_at IS NULL',
-    [allIds, userId],
+    [allIds, userId]
   );
 }
 
@@ -679,7 +673,7 @@ async function getTrashFiles(userId, sortBy = 'deletedAt', order = 'DESC') {
   const orderClause = sortBy === 'size' ? '' : buildOrderClause(sortBy, order);
   const res = await pool.query(
     `SELECT id, name, type, size, modified, mime_type AS "mimeType", starred, shared, deleted_at AS "deletedAt", parent_id AS "parentId" FROM files WHERE user_id = $1 AND deleted_at IS NOT NULL ${orderClause}`,
-    [userId],
+    [userId]
   );
   const files = res.rows;
   if (sortBy === 'size') {
@@ -704,7 +698,7 @@ async function getRecursiveTrashIds(ids, userId) {
        WHERE f.user_id = $2 AND f.deleted_at IS NOT NULL
      )
      SELECT id FROM sub`,
-    [ids, userId],
+    [ids, userId]
   );
   return res.rows.map(r => r.id);
 }
@@ -744,7 +738,7 @@ async function restoreFiles(ids, userId) {
           'SELECT id FROM files WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL',
           [targetParentId, userId]
         );
-        
+
         // If parent doesn't exist or is deleted, restore to root
         if (parentCheck.rows.length === 0) {
           targetParentId = null;
@@ -785,10 +779,7 @@ async function restoreFiles(ids, userId) {
 
       // Update name if it was changed due to conflict
       if (finalName !== file.name) {
-        await client.query(
-          'UPDATE files SET name = $1 WHERE id = $2 AND user_id = $3',
-          [finalName, file.id, userId]
-        );
+        await client.query('UPDATE files SET name = $1 WHERE id = $2 AND user_id = $3', [finalName, file.id, userId]);
       }
 
       // Restore file: clear deleted_at and update parent_id
@@ -810,17 +801,17 @@ async function restoreFiles(ids, userId) {
 async function permanentlyDeleteFiles(ids, userId) {
   const allIds = await getRecursiveIds(ids, userId);
   if (allIds.length === 0) return;
-  const files = await pool.query(
-    'SELECT id, path, type FROM files WHERE id = ANY($1::text[]) AND user_id = $2',
-    [allIds, userId],
-  );
-  
+  const files = await pool.query('SELECT id, path, type FROM files WHERE id = ANY($1::text[]) AND user_id = $2', [
+    allIds,
+    userId,
+  ]);
+
   // Delete files first, then folders
   const foldersToDelete = [];
-  
+
   for (const f of files.rows) {
     if (!f.path) continue;
-    
+
     try {
       if (f.type === 'file') {
         // Resolve file path (handles both relative and absolute paths)
@@ -838,7 +829,7 @@ async function permanentlyDeleteFiles(ids, userId) {
       logger.error(`[File] Error deleting ${f.type} ${f.path}:`, error.message);
     }
   }
-  
+
   // Delete folders (in reverse order to handle nested folders)
   // Sort by path length descending so deeper folders are deleted first
   foldersToDelete.sort((a, b) => b.length - a.length);
@@ -854,20 +845,20 @@ async function permanentlyDeleteFiles(ids, userId) {
       logger.error(`[File] Error deleting folder ${folderPath}:`, error.message);
     }
   }
-  
+
   await pool.query('DELETE FROM files WHERE id = ANY($1::text[]) AND user_id = $2', [allIds, userId]);
 }
 
 async function cleanupExpiredTrash() {
   const expired = await pool.query(
-    "SELECT id, path, type FROM files WHERE deleted_at IS NOT NULL AND deleted_at < NOW() - INTERVAL '15 days'",
+    "SELECT id, path, type FROM files WHERE deleted_at IS NOT NULL AND deleted_at < NOW() - INTERVAL '15 days'"
   );
-  
+
   const foldersToDelete = [];
-  
+
   for (const f of expired.rows) {
     if (!f.path) continue;
-    
+
     try {
       if (f.type === 'file') {
         // Resolve file path (handles both relative and absolute paths)
@@ -884,7 +875,7 @@ async function cleanupExpiredTrash() {
       logger.error(`[Trash] Error cleaning up ${f.type} ${f.path}:`, error.message);
     }
   }
-  
+
   // Delete folders (in reverse order)
   foldersToDelete.sort((a, b) => b.length - a.length);
   for (const folderPath of foldersToDelete) {
@@ -897,10 +888,8 @@ async function cleanupExpiredTrash() {
       logger.error(`[Trash] Error deleting folder ${folderPath}:`, error.message);
     }
   }
-  
-  await pool.query(
-    "DELETE FROM files WHERE deleted_at IS NOT NULL AND deleted_at < NOW() - INTERVAL '15 days'",
-  );
+
+  await pool.query("DELETE FROM files WHERE deleted_at IS NOT NULL AND deleted_at < NOW() - INTERVAL '15 days'");
 }
 
 async function cleanupOrphanFiles() {
@@ -914,9 +903,7 @@ async function cleanupOrphanFiles() {
   const diskSet = new Set(diskFiles);
 
   // Only check files in UPLOAD_DIR, not custom drive files (which have absolute paths)
-  const dbRes = await pool.query(
-    "SELECT id, path FROM files WHERE type = 'file' AND path IS NOT NULL"
-  );
+  const dbRes = await pool.query("SELECT id, path FROM files WHERE type = 'file' AND path IS NOT NULL");
   const dbSet = new Set();
   for (const row of dbRes.rows) {
     if (!row.path) continue;
@@ -938,7 +925,9 @@ async function cleanupOrphanFiles() {
     if (!dbSet.has(file)) {
       try {
         await fs.promises.unlink(path.join(uploadsDir, file));
-      } catch {}
+      } catch {
+        // Ignore deletion errors for orphan cleanup
+      }
     }
   }
 }
@@ -947,7 +936,7 @@ async function getStarredFiles(userId, sortBy = 'modified', order = 'DESC') {
   const orderClause = sortBy === 'size' ? '' : buildOrderClause(sortBy, order);
   const result = await pool.query(
     `SELECT id, name, type, size, modified, mime_type AS "mimeType", starred, shared FROM files WHERE user_id = $1 AND starred = TRUE AND deleted_at IS NULL ${orderClause}`,
-    [userId],
+    [userId]
   );
   const files = result.rows;
   if (sortBy === 'size') {
@@ -973,7 +962,7 @@ async function getSharedFiles(userId, sortBy = 'modified', order = 'DESC') {
        AND f.deleted_at IS NULL
        AND (f.parent_id IS NULL OR parent.shared = FALSE OR parent.shared IS NULL)
      ${orderClause}`,
-    [userId],
+    [userId]
   );
   const files = result.rows;
   if (sortBy === 'size') {
@@ -1002,7 +991,7 @@ async function searchFiles(userId, query, limit = 100) {
 
   const searchTerm = query.trim();
   const searchLength = searchTerm.length;
-  
+
   // For very short queries (1-2 chars), use prefix matching only for better performance
   // For longer queries, use trigram similarity for fuzzy matching
   // Use optimized query patterns to leverage GIN indexes effectively
@@ -1105,7 +1094,7 @@ async function getFileStats(userId) {
      WHERE f.user_id = $1`,
     [userId]
   );
-  
+
   return {
     totalFiles: parseInt(result.rows[0].totalFiles, 10) || 0,
     totalFolders: parseInt(result.rows[0].totalFolders, 10) || 0,

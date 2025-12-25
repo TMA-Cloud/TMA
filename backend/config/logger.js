@@ -50,14 +50,21 @@ function maskCookie(cookieStr) {
 
   // Common Set-Cookie options (these should not be masked)
   const cookieOptions = [
-    'path', 'domain', 'expires', 'max-age', 'secure',
-    'httponly', 'samesite', 'partitioned', 'priority'
+    'path',
+    'domain',
+    'expires',
+    'max-age',
+    'secure',
+    'httponly',
+    'samesite',
+    'partitioned',
+    'priority',
   ];
 
   // Split by semicolon and process each part
   const parts = cookieStr.split(';').map(part => part.trim());
 
-  const maskedParts = parts.map((part, index) => {
+  const maskedParts = parts.map(part => {
     // Check if this part contains an equals sign
     const equalsIndex = part.indexOf('=');
 
@@ -163,21 +170,22 @@ const baseLoggerOptions = {
 
   // Pretty-print logs if LOG_FORMAT=pretty (default in development)
   // Use JSON format if LOG_FORMAT=json (default in production)
-  transport: logFormat === 'pretty'
-    ? {
-        target: 'pino-pretty',
-        options: {
-          colorize: true,
-          translateTime: 'yyyy-mm-dd HH:MM:ss.l',
-          ignore: 'pid,hostname',
-          singleLine: false,
-        },
-      }
-    : undefined,
+  transport:
+    logFormat === 'pretty'
+      ? {
+          target: 'pino-pretty',
+          options: {
+            colorize: true,
+            translateTime: 'yyyy-mm-dd HH:MM:ss.l',
+            ignore: 'pid,hostname',
+            singleLine: false,
+          },
+        }
+      : undefined,
 
   // Custom serializers for request/response objects with sensitive data masking
   serializers: {
-    req: (req) => {
+    req: req => {
       const headers = { ...req.headers };
 
       // Mask sensitive request headers
@@ -203,12 +211,12 @@ const baseLoggerOptions = {
         url: req.url,
         query: req.query,
         params: req.params,
-        headers: headers,
+        headers,
         remoteAddress: req.ip || req.socket?.remoteAddress,
         remotePort: req.socket?.remotePort,
       };
     },
-    res: (res) => {
+    res: res => {
       const headers = res.getHeaders ? { ...res.getHeaders() } : {};
 
       // Mask sensitive response headers
@@ -226,7 +234,7 @@ const baseLoggerOptions = {
 
       return {
         statusCode: res.statusCode,
-        headers: headers,
+        headers,
       };
     },
     err: pino.stdSerializers.err,
@@ -271,11 +279,11 @@ const httpLogger = pinoHttp({
   logger,
 
   // Generate request ID from CLS context
-  genReqId: (req) => req.requestId || getRequestId(),
+  genReqId: req => req.requestId || getRequestId(),
 
   // Custom serializers for pino-http (overrides default serializers)
   serializers: {
-    req: (req) => {
+    req: req => {
       const headers = { ...req.headers };
 
       // Mask sensitive request headers
@@ -301,12 +309,12 @@ const httpLogger = pinoHttp({
         url: req.url,
         query: req.query,
         params: req.params,
-        headers: headers,
+        headers,
         remoteAddress: req.ip || req.socket?.remoteAddress,
         remotePort: req.socket?.remotePort,
       };
     },
-    res: (res) => {
+    res: res => {
       const headers = res.getHeaders ? { ...res.getHeaders() } : {};
 
       // Mask sensitive response headers
@@ -324,7 +332,7 @@ const httpLogger = pinoHttp({
 
       return {
         statusCode: res.statusCode,
-        headers: headers,
+        headers,
       };
     },
     err: pino.stdSerializers.err,
@@ -357,7 +365,7 @@ const httpLogger = pinoHttp({
 
   // Don't log health checks to reduce noise
   autoLogging: {
-    ignore: (req) => req.url === '/health',
+    ignore: req => req.url === '/health',
   },
 });
 

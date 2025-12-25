@@ -10,7 +10,7 @@ let isInitialized = false;
 
 const AUDIT_QUEUE = 'audit-events';
 // pg-boss enforces expiration strictly < 24h; clamp to a safe default.
-const MAX_JOB_TTL_SECONDS = (60 * 60 * 24) - 60; // 23h 59m to stay under limit
+const MAX_JOB_TTL_SECONDS = 60 * 60 * 24 - 60; // 23h 59m to stay under limit
 const AUDIT_JOB_TTL_SECONDS = Math.min(
   parseInt(process.env.AUDIT_JOB_TTL_SECONDS || '82800', 10), // default 23h
   MAX_JOB_TTL_SECONDS
@@ -59,7 +59,7 @@ async function initializeAuditQueue() {
       monitorStateIntervalSeconds: 60,
     });
 
-    boss.on('error', (error) => {
+    boss.on('error', error => {
       logger.error({ err: error }, 'pg-boss error');
     });
 
@@ -147,7 +147,7 @@ function redactMetadata(metadata) {
     const lowerKey = key.toLowerCase();
 
     // Check if the key contains any sensitive keywords
-    if (sensitiveKeys.some((sk) => lowerKey.includes(sk))) {
+    if (sensitiveKeys.some(sk => lowerKey.includes(sk))) {
       redacted[key] = '[REDACTED]';
     }
     // Recursively redact nested objects
@@ -222,16 +222,12 @@ async function logAuditEvent(action, options = {}, req = null) {
       return;
     }
 
-    const jobId = await boss.send(
-      AUDIT_QUEUE,
-      event,
-      {
-        retryLimit: 3, // Retry up to 3 times
-        retryDelay: 60, // Wait 60 seconds before first retry
-        retryBackoff: true, // Exponential backoff (60s, 120s, 240s)
-        expireInSeconds: AUDIT_JOB_TTL_SECONDS, // Must be < 24h per pg-boss policy
-      }
-    );
+    const jobId = await boss.send(AUDIT_QUEUE, event, {
+      retryLimit: 3, // Retry up to 3 times
+      retryDelay: 60, // Wait 60 seconds before first retry
+      retryBackoff: true, // Exponential backoff (60s, 120s, 240s)
+      expireInSeconds: AUDIT_JOB_TTL_SECONDS, // Must be < 24h per pg-boss policy
+    });
 
     logger.debug({ jobId, action }, 'Audit event queued');
   } catch (error) {

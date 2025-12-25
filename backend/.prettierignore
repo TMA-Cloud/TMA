@@ -1,0 +1,18 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+coverage/
+
+# Uploads and user data
+uploads/
+
+# Lock files
+package-lock.json
+
+# Logs
+*.log
+
+# Minified files
+*.min.js

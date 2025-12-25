@@ -7,7 +7,9 @@ const { logger } = require('../config/logger');
 
 // Security check: warn if running in production without HTTPS
 if (process.env.NODE_ENV === 'production' && process.env.FORCE_INSECURE_COOKIES === 'true') {
-  logger.warn('[SECURITY] Running in production with FORCE_INSECURE_COOKIES=true. Cookies will not have secure flag. This is insecure!');
+  logger.warn(
+    '[SECURITY] Running in production with FORCE_INSECURE_COOKIES=true. Cookies will not have secure flag. This is insecure!'
+  );
 }
 
 // Session binding: when enabled, tokens are bound to client fingerprint
@@ -21,12 +23,12 @@ function getCookieOptions() {
   const isProduction = process.env.NODE_ENV === 'production';
   // In production, always use secure cookies unless explicitly overridden (not recommended)
   const secure = isProduction && process.env.FORCE_INSECURE_COOKIES !== 'true';
-  
+
   return {
     httpOnly: true,
     secure,
     sameSite: 'lax',
-    maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
   };
 }
 
@@ -79,22 +81,22 @@ function generateClientFingerprint(req) {
 function generateAuthToken(userId, jwtSecret, options = {}) {
   const jwt = require('jsonwebtoken');
   const { tokenVersion = 1, sessionId = null, req = null, expiresIn = '7d' } = options;
-  
-  const payload = { 
+
+  const payload = {
     id: userId,
-    v: tokenVersion  // Token version for session invalidation
+    v: tokenVersion, // Token version for session invalidation
   };
-  
+
   // Add session ID if provided (for individual session revocation)
   if (sessionId) {
     payload.sid = sessionId;
   }
-  
+
   // Add client fingerprint if request is available and binding is enabled
   if (SESSION_BINDING_ENABLED && req) {
     payload.fp = generateClientFingerprint(req);
   }
-  
+
   // Explicitly specify algorithm to prevent algorithm confusion attacks
   return jwt.sign(payload, jwtSecret, { expiresIn, algorithm: 'HS256' });
 }
@@ -126,4 +128,3 @@ module.exports = {
   validateClientFingerprint,
   SESSION_BINDING_ENABLED,
 };
-

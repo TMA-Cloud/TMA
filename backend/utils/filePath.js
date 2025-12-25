@@ -19,11 +19,11 @@ function resolveFilePath(dbPath) {
 
   // For relative paths (regular uploaded files), join with UPLOAD_DIR
   const filePath = path.join(UPLOAD_DIR, dbPath);
-  
+
   // Ensure the resolved path is within uploads directory (security check)
   const resolvedUploadDir = path.resolve(UPLOAD_DIR);
   const resolvedFilePath = path.resolve(filePath);
-  
+
   if (!resolvedFilePath.startsWith(resolvedUploadDir)) {
     throw new Error('Invalid file path: path traversal detected');
   }
@@ -38,12 +38,12 @@ function resolveFilePath(dbPath) {
  */
 function isValidPath(dbPath) {
   if (!dbPath) return false;
-  
+
   // Absolute paths (custom drive) are allowed
   if (path.isAbsolute(dbPath)) {
     return true;
   }
-  
+
   // Relative paths should not contain path traversal sequences
   return !dbPath.includes('..') && !dbPath.includes('/') && !dbPath.includes('\\');
 }
@@ -52,4 +52,3 @@ module.exports = {
   resolveFilePath,
   isValidPath,
 };
-

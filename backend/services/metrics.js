@@ -1,6 +1,5 @@
 const promClient = require('prom-client');
 const { logger } = require('../config/logger');
-const { getBoss } = require('./auditLogger');
 const pool = require('../config/db');
 
 // Create a registry for metrics

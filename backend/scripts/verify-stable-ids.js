@@ -27,7 +27,7 @@ async function saveSnapshot() {
     const snapshot = {
       timestamp: new Date().toISOString(),
       count: result.rows.length,
-      files: result.rows
+      files: result.rows,
     };
 
     await fs.writeFile(SNAPSHOT_FILE, JSON.stringify(snapshot, null, 2));
@@ -36,7 +36,6 @@ async function saveSnapshot() {
     console.log(`   Timestamp: ${snapshot.timestamp}`);
     console.log(`\nNow restart your server and run:`);
     console.log(`   node scripts/verify-stable-ids.js check`);
-
   } catch (error) {
     console.error('❌ Error saving snapshot:', error);
     throw error;
@@ -100,13 +99,13 @@ async function checkSnapshot() {
           type: oldFile.type,
           name: oldFile.name,
           oldId: oldFile.id,
-          newId: newFile.id
+          newId: newFile.id,
         });
       }
     }
 
     // Check for new files
-    for (const [key, newFile] of currentMap) {
+    for (const [key] of currentMap) {
       if (!snapshotMap.has(key)) {
         newFiles++;
       }
@@ -134,7 +133,6 @@ async function checkSnapshot() {
     } else {
       console.log('⚠️  No files to compare. Make sure you have data in your database.');
     }
-
   } catch (error) {
     if (error.code === 'ENOENT') {
       console.error('❌ No snapshot found!');

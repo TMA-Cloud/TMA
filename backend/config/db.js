@@ -10,11 +10,11 @@ const pool = new Pool({
   user: process.env.DB_USER || 'postgres',
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME || 'cloud_store',
-  ssl: process.env.DB_SSLMODE === 'require' ? { rejectUnauthorized: false } : false
+  ssl: process.env.DB_SSLMODE === 'require' ? { rejectUnauthorized: false } : false,
 });
 
 // Error handling
-pool.on('error', (err, client) => {
+pool.on('error', (err, _client) => {
   logger.error({ err }, 'Unexpected error on idle database client');
 });
 
@@ -25,7 +25,7 @@ pool.connect((err, client, release) => {
     return;
   }
   logger.info('Database connected successfully');
-  client.query('SELECT NOW()', (err, result) => {
+  client.query('SELECT NOW()', (err, _result) => {
     release();
     if (err) {
       logger.error({ err }, 'Database query test failed');

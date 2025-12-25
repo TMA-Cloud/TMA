@@ -7,16 +7,18 @@ class Mutex {
     while (this.promises.has(key)) {
       await this.promises.get(key);
     }
-    
+
     let resolve;
-    const promise = new Promise(r => resolve = r);
+    const promise = new Promise(r => {
+      resolve = r;
+    });
     this.promises.set(key, promise);
-    
+
     return {
       unlock: () => {
         this.promises.delete(key);
         resolve();
-      }
+      },
     };
   }
 }
@@ -28,9 +30,6 @@ const fileOperationLock = async (fileId, operation) => {
   const lock = await mutex.lock(`file:${fileId}`);
   try {
     return await operation();
-  } catch (error) {
-    // Re-throw the error so it can be handled by the caller
-    throw error;
   } finally {
     lock.unlock();
   }
@@ -41,9 +40,6 @@ const userOperationLock = async (userId, operation) => {
   const lock = await mutex.lock(`user:${userId}`);
   try {
     return await operation();
-  } catch (error) {
-    // Re-throw the error so it can be handled by the caller
-    throw error;
   } finally {
     lock.unlock();
   }
@@ -52,5 +48,5 @@ const userOperationLock = async (userId, operation) => {
 module.exports = {
   Mutex,
   fileOperationLock,
-  userOperationLock
+  userOperationLock,
 };

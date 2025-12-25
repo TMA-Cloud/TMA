@@ -14,6 +14,7 @@ function validateString(input, maxLength = 1000) {
   if (typeof input !== 'string') return null;
   if (input.length > maxLength) return null;
   // Remove null bytes and control characters (except newlines and tabs)
+  // eslint-disable-next-line no-control-regex -- Intentional for security validation
   return input.replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, '').trim() || null;
 }
 
@@ -43,6 +44,7 @@ function validateFileName(name) {
   if (trimmed.includes('..') || trimmed.includes('/') || trimmed.includes('\\')) return false;
 
   // Prevent null bytes and control characters
+  // eslint-disable-next-line no-control-regex -- Intentional for security validation
   if (trimmed.includes('\x00') || /[\x00-\x1F\x7F]/.test(trimmed)) return false;
 
   // Prevent absolute paths (Unix and Windows)
@@ -68,11 +70,11 @@ function validateFileName(name) {
 function validateIdArray(ids, maxLength = 100) {
   if (!Array.isArray(ids)) return null;
   if (ids.length === 0 || ids.length > maxLength) return null;
-  
+
   // Validate each ID is a string and matches expected format (16 char alphanumeric)
   const idRegex = /^[a-zA-Z0-9]{16}$/;
   const validIds = ids.filter(id => typeof id === 'string' && idRegex.test(id));
-  
+
   return validIds.length === ids.length ? validIds : null;
 }
 
@@ -106,7 +108,7 @@ function validateSortBy(sortBy) {
 function validateSortOrder(order) {
   if (typeof order !== 'string') return null;
   const upperOrder = order.toUpperCase();
-  return (upperOrder === 'ASC' || upperOrder === 'DESC') ? upperOrder : null;
+  return upperOrder === 'ASC' || upperOrder === 'DESC' ? upperOrder : null;
 }
 
 /**
@@ -120,6 +122,7 @@ function validateSearchQuery(query, maxLength = 200) {
   const trimmed = query.trim();
   if (trimmed.length === 0 || trimmed.length > maxLength) return null;
   // Remove potentially dangerous characters but allow normal search terms
+  // eslint-disable-next-line no-control-regex -- Intentional for security validation
   return trimmed.replace(/[\x00-\x1F\x7F]/g, '') || null;
 }
 
@@ -176,10 +179,38 @@ function validateFileUpload(mimeType, filename) {
 
   // List of executable file types that should be forced to download (not execute)
   const executableExtensions = [
-    '.exe', '.dll', '.bat', '.cmd', '.com', '.pif', '.scr', '.vbs', '.js', '.jse',
-    '.ws', '.wsf', '.wsh', '.ps1', '.psm1', '.msi', '.msp', '.jar', '.app', '.deb',
-    '.rpm', '.dmg', '.pkg', '.sh', '.bash', '.csh', '.ksh', '.command', '.action',
-    '.html', '.htm', '.svg' // Can contain scripts
+    '.exe',
+    '.dll',
+    '.bat',
+    '.cmd',
+    '.com',
+    '.pif',
+    '.scr',
+    '.vbs',
+    '.js',
+    '.jse',
+    '.ws',
+    '.wsf',
+    '.wsh',
+    '.ps1',
+    '.psm1',
+    '.msi',
+    '.msp',
+    '.jar',
+    '.app',
+    '.deb',
+    '.rpm',
+    '.dmg',
+    '.pkg',
+    '.sh',
+    '.bash',
+    '.csh',
+    '.ksh',
+    '.command',
+    '.action',
+    '.html',
+    '.htm',
+    '.svg', // Can contain scripts
   ];
 
   // Check for MIME type spoofing attempts (when extension doesn't match MIME)
@@ -218,7 +249,7 @@ function validateFileUpload(mimeType, filename) {
   return {
     valid: true,
     error: null,
-    requiresDownload
+    requiresDownload,
   };
 }
 
@@ -236,4 +267,3 @@ module.exports = {
   validateToken,
   validateFileUpload,
 };
-

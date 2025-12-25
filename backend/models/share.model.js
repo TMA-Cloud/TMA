@@ -8,14 +8,8 @@ async function createShareLink(fileId, userId, fileIds = [fileId]) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    await client.query(
-      'INSERT INTO share_links(id, file_id, user_id) VALUES($1,$2,$3)',
-      [id, fileId, userId]
-    );
-    await client.query(
-      'INSERT INTO share_link_files(share_id, file_id) SELECT $1, unnest($2::text[])',
-      [id, fileIds]
-    );
+    await client.query('INSERT INTO share_links(id, file_id, user_id) VALUES($1,$2,$3)', [id, fileId, userId]);
+    await client.query('INSERT INTO share_link_files(share_id, file_id) SELECT $1, unnest($2::text[])', [id, fileIds]);
     await client.query('COMMIT');
   } catch (err) {
     await client.query('ROLLBACK');
@@ -27,10 +21,7 @@ async function createShareLink(fileId, userId, fileIds = [fileId]) {
 }
 
 async function getShareLink(fileId, userId) {
-  const res = await pool.query(
-    'SELECT id FROM share_links WHERE file_id = $1 AND user_id = $2',
-    [fileId, userId]
-  );
+  const res = await pool.query('SELECT id FROM share_links WHERE file_id = $1 AND user_id = $2', [fileId, userId]);
   return res.rows[0]?.id || null;
 }
 
@@ -93,10 +84,7 @@ async function getFolderContentsByShare(token, folderId) {
 }
 
 async function isFileShared(token, fileId) {
-  const res = await pool.query(
-    'SELECT 1 FROM share_link_files WHERE share_id = $1 AND file_id = $2',
-    [token, fileId]
-  );
+  const res = await pool.query('SELECT 1 FROM share_link_files WHERE share_id = $1 AND file_id = $2', [token, fileId]);
   return res.rowCount > 0;
 }
 

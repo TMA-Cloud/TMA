@@ -26,11 +26,7 @@ const PgBossModule = require('pg-boss');
 const PgBoss = PgBossModule?.default || PgBossModule?.PgBoss || PgBossModule;
 const { Pool } = require('pg');
 const pino = require('pino');
-const {
-  incrementEventsProcessed,
-  incrementEventsFailed,
-  recordProcessingDuration,
-} = require('./services/metrics');
+const { incrementEventsProcessed, incrementEventsFailed, recordProcessingDuration } = require('./services/metrics');
 
 const isDevelopment = process.env.NODE_ENV !== 'production';
 const logLevel = process.env.LOG_LEVEL || 'info';
@@ -68,16 +64,17 @@ const logger = pino({
     ],
     remove: true,
   },
-  transport: logFormat === 'pretty'
-    ? {
-        target: 'pino-pretty',
-        options: {
-          colorize: true,
-          translateTime: 'yyyy-mm-dd HH:MM:ss.l',
-          ignore: 'pid,hostname,service,environment',
-        },
-      }
-    : undefined,
+  transport:
+    logFormat === 'pretty'
+      ? {
+          target: 'pino-pretty',
+          options: {
+            colorize: true,
+            translateTime: 'yyyy-mm-dd HH:MM:ss.l',
+            ignore: 'pid,hostname,service,environment',
+          },
+        }
+      : undefined,
 });
 
 // Database connection pool for writing audit logs
@@ -90,7 +87,7 @@ const pool = new Pool({
   max: 20, // Maximum pool size
 });
 
-pool.on('error', (err) => {
+pool.on('error', err => {
   logger.error({ err }, 'Unexpected database pool error');
 });
 
@@ -188,10 +185,7 @@ async function processAuditEvent(job) {
     recordProcessingDuration(duration);
     incrementEventsProcessed();
 
-    logger.info(
-      { jobId: job.id, auditLogId, action: event.action, duration },
-      'Audit event processed successfully'
-    );
+    logger.info({ jobId: job.id, auditLogId, action: event.action, duration }, 'Audit event processed successfully');
   } catch (error) {
     // Determine failure reason
     let reason = 'unknown';
@@ -255,7 +249,7 @@ async function initializeWorker() {
       migrate: true,
     });
 
-    boss.on('error', (error) => {
+    boss.on('error', error => {
       logger.error({ err: error }, 'pg-boss error');
     });
 
@@ -270,21 +264,14 @@ async function initializeWorker() {
     logger.info('pg-boss started successfully');
 
     // Subscribe to audit events queue
-    await boss.work(
-      AUDIT_QUEUE,
-      { batchSize: CONCURRENCY },
-      async (jobs) => {
-        // Handler now receives an array in pg-boss v10+
-        for (const job of jobs) {
-          await processAuditEvent(job);
-        }
+    await boss.work(AUDIT_QUEUE, { batchSize: CONCURRENCY }, async jobs => {
+      // Handler now receives an array in pg-boss v10+
+      for (const job of jobs) {
+        await processAuditEvent(job);
       }
-    );
+    });
 
-    logger.info(
-      { queue: AUDIT_QUEUE, concurrency: CONCURRENCY },
-      'Audit worker started successfully'
-    );
+    logger.info({ queue: AUDIT_QUEUE, concurrency: CONCURRENCY }, 'Audit worker started successfully');
   } catch (error) {
     logger.error({ err: error }, 'Failed to initialize audit worker');
     process.exit(1);
@@ -325,13 +312,13 @@ process.on('unhandledRejection', (reason, promise) => {
   logger.error({ reason, promise }, 'Unhandled Promise Rejection');
 });
 
-process.on('uncaughtException', (error) => {
+process.on('uncaughtException', error => {
   logger.error({ err: error }, 'Uncaught Exception');
   process.exit(1);
 });
 
 // Start the worker
-initializeWorker().catch((error) => {
+initializeWorker().catch(error => {
   logger.error({ err: error }, 'Fatal error during worker initialization');
   process.exit(1);
 });
