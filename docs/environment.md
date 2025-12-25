@@ -100,6 +100,73 @@ Create a `.env` file in the **root directory** of the project with the following
 
 ---
 
+### Redis Configuration
+
+Redis is used for caching frequently accessed data to improve performance and reduce database load.
+
+#### `REDIS_HOST`
+
+- **Type:** String
+- **Required:** No
+- **Default:** `localhost`
+- **Description:** Redis server host address
+- **Example:** `REDIS_HOST=localhost`
+- **Docker Example:** `REDIS_HOST=redis` (use container name when using docker-compose)
+- **Production Example:** `REDIS_HOST=redis.example.com`
+
+#### `REDIS_PORT`
+
+- **Type:** Number
+- **Required:** No
+- **Default:** `6379`
+- **Description:** Redis server port number
+- **Example:** `REDIS_PORT=6379`
+
+#### `REDIS_PASSWORD`
+
+- **Type:** String
+- **Required:** No (recommended for production)
+- **Description:** Redis server password for authentication
+- **Example:** `REDIS_PASSWORD=your_secure_redis_password`
+- **Security Note:** Always set a strong password in production environments
+- **Docker:** If set, Redis container will require this password
+
+#### `REDIS_DB`
+
+- **Type:** Number
+- **Required:** No
+- **Default:** `0`
+- **Description:** Redis database number (0-15)
+- **Example:** `REDIS_DB=0`
+- **Note:** Use different database numbers to separate environments (e.g., 0 for production, 1 for staging)
+
+**What Gets Cached:**
+
+- File listings and metadata
+- Search results (with hashed queries for security)
+- User data (passwords never cached, emails hashed in keys)
+- Share link information
+- Session validation
+- File statistics and folder sizes
+- Custom drive settings
+
+**Cache Behavior:**
+
+- Automatic cache invalidation on data mutations
+- Configurable TTLs based on data volatility (1-10 minutes)
+- Graceful degradation if Redis is unavailable
+- Non-blocking SCAN operations for pattern deletion
+- Privacy-focused: emails hashed, passwords never cached
+
+**Security Features:**
+
+- Email addresses hashed in cache keys (GDPR compliance)
+- Search queries hashed to prevent cache key injection
+- User data properly isolated by user ID
+- No sensitive data (passwords, plaintext emails) in cache
+
+---
+
 ### Authentication
 
 #### `JWT_SECRET`

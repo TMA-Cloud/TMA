@@ -8,6 +8,7 @@ Before you begin, ensure you have the following installed:
 
 - **Node.js** (v25 or higher)
 - **PostgreSQL** (v17 or higher)
+- **Redis** (v6 or higher) - Required for caching
 - **npm** or **yarn** package manager
 
 **Note:** For Docker deployment, see [Docker Deployment Guide](docker.md) instead.
@@ -45,6 +46,7 @@ Edit `.env` in the root directory with your configuration. See [Environment Vari
 
 - `JWT_SECRET` - Secret key for JWT tokens
 - `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` - Database connection details
+- `REDIS_HOST`, `REDIS_PORT` - Redis connection details (password optional but recommended)
 - `BPORT` - Backend server port (default: 3000)
 - `UPLOAD_DIR` - Directory to store uploaded files
 
@@ -64,6 +66,39 @@ CREATE DATABASE cloud_storage;
 ```
 
 The application will automatically run migrations on startup to create the necessary tables.
+
+#### Setup Redis
+
+Install and start Redis server:
+
+**Linux/macOS:**
+
+```bash
+# Install Redis (varies by distribution)
+# Ubuntu/Debian:
+sudo apt-get install redis-server
+
+# macOS (Homebrew):
+brew install redis
+brew services start redis
+
+# Start Redis
+redis-server
+```
+
+**Windows:**
+
+- Download Redis from [Redis for Windows](https://github.com/microsoftarchive/redis/releases) or use WSL
+- Or use Docker: `docker run -d -p 6379:6379 redis:alpine`
+
+**Verify Redis is running:**
+
+```bash
+redis-cli ping
+# Should return: PONG
+```
+
+**Note:** Redis is optional but highly recommended. The application will continue to work without Redis, but caching will be disabled and performance will be reduced.
 
 ### 3. Frontend Setup
 
@@ -172,6 +207,14 @@ If running in production mode, verify the audit worker is processing events:
 - Check database credentials in root `.env`
 - Ensure the database exists: `psql -l`
 - Verify the database user has CREATE TABLE permissions
+
+### Redis Connection Issues
+
+- Verify Redis is running: `redis-cli ping` (should return `PONG`)
+- Check Redis connection details in root `.env` (`REDIS_HOST`, `REDIS_PORT`)
+- If using password, verify `REDIS_PASSWORD` is correct
+- Check Redis logs for connection errors
+- **Note:** Application will continue to work without Redis, but caching will be disabled
 
 ### Port Already in Use
 

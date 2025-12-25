@@ -1,6 +1,7 @@
 const pool = require('../config/db');
 const { generateId } = require('../utils/id');
 const { logger } = require('../config/logger');
+const { getCache, setCache, deleteCache, deleteCachePattern, cacheKeys, DEFAULT_TTL } = require('../utils/cache');
 
 /**
  * Create a new session record
@@ -18,6 +19,10 @@ async function createSession(userId, tokenVersion, userAgent, ipAddress) {
      RETURNING id, user_id, token_version, user_agent, ip_address, created_at, last_activity`,
     [id, userId, tokenVersion, userAgent || null, ipAddress || null]
   );
+
+  // Invalidate active sessions cache
+  await deleteCache(cacheKeys.activeSessions(userId, tokenVersion));
+
   return result.rows[0];
 }
 
@@ -29,12 +34,25 @@ async function createSession(userId, tokenVersion, userAgent, ipAddress) {
  * @returns {Promise<boolean>} True if session exists and is valid
  */
 async function sessionExists(sessionId, userId, tokenVersion) {
+  // Try to get from cache first
+  const cacheKey = cacheKeys.session(sessionId, userId, tokenVersion);
+  const cached = await getCache(cacheKey);
+  if (cached !== null) {
+    return cached;
+  }
+
+  // Cache miss - query database
   const result = await pool.query(
     `SELECT id FROM sessions 
      WHERE id = $1 AND user_id = $2 AND token_version = $3`,
     [sessionId, userId, tokenVersion]
   );
-  return result.rows.length > 0;
+  const exists = result.rows.length > 0;
+
+  // Cache the result (5 minutes TTL)
+  await setCache(cacheKey, exists, DEFAULT_TTL);
+
+  return exists;
 }
 
 /**
@@ -45,6 +63,14 @@ async function sessionExists(sessionId, userId, tokenVersion) {
  * @returns {Promise<Array>} Array of active sessions
  */
 async function getActiveSessions(userId, currentTokenVersion) {
+  // Try to get from cache first
+  const cacheKey = cacheKeys.activeSessions(userId, currentTokenVersion);
+  const cached = await getCache(cacheKey);
+  if (cached !== null) {
+    return cached;
+  }
+
+  // Cache miss - query database
   const result = await pool.query(
     `SELECT id, user_id, token_version, user_agent, ip_address, created_at, last_activity
      FROM sessions
@@ -52,7 +78,12 @@ async function getActiveSessions(userId, currentTokenVersion) {
      ORDER BY last_activity DESC`,
     [userId, currentTokenVersion]
   );
-  return result.rows;
+  const sessions = result.rows;
+
+  // Cache the result (2 minutes TTL)
+  await setCache(cacheKey, sessions, 120);
+
+  return sessions;
 }
 
 /**
@@ -71,11 +102,26 @@ async function updateSessionActivity(sessionId) {
  * @returns {Promise<boolean>} True if session was deleted
  */
 async function deleteSession(sessionId, userId) {
+  // Get token version before deleting for cache invalidation
+  const sessionResult = await pool.query('SELECT token_version FROM sessions WHERE id = $1 AND user_id = $2', [
+    sessionId,
+    userId,
+  ]);
+  const tokenVersion = sessionResult.rows[0]?.token_version;
+
   const result = await pool.query('DELETE FROM sessions WHERE id = $1 AND user_id = $2 RETURNING id', [
     sessionId,
     userId,
   ]);
-  return result.rows.length > 0;
+  const deleted = result.rows.length > 0;
+
+  // Invalidate cache
+  if (deleted && tokenVersion !== undefined) {
+    await deleteCache(cacheKeys.session(sessionId, userId, tokenVersion));
+    await deleteCache(cacheKeys.activeSessions(userId, tokenVersion));
+  }
+
+  return deleted;
 }
 
 /**
@@ -84,7 +130,18 @@ async function deleteSession(sessionId, userId) {
  * @returns {Promise<void>}
  */
 async function deleteAllUserSessions(userId) {
+  // Get token version before deleting for cache invalidation
+  const sessionsResult = await pool.query('SELECT DISTINCT token_version FROM sessions WHERE user_id = $1', [userId]);
+  const tokenVersions = sessionsResult.rows.map(r => r.token_version);
+
   await pool.query('DELETE FROM sessions WHERE user_id = $1', [userId]);
+
+  // Invalidate cache for all token versions
+  for (const tokenVersion of tokenVersions) {
+    await deleteCache(cacheKeys.activeSessions(userId, tokenVersion));
+  }
+  await deleteCachePattern(`session:${userId}:*`);
+
   logger.info({ userId }, 'All user sessions deleted');
 }
 

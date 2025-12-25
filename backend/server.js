@@ -1,6 +1,9 @@
+// Load environment variables FIRST before any other imports
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+
 const express = require('express');
 const fs = require('fs');
-const path = require('path');
 const pool = require('./config/db');
 const authRoutes = require('./routes/auth.routes');
 const fileRoutes = require('./routes/file.routes');
@@ -19,7 +22,7 @@ const { blockMainAppOnShareDomain } = require('./middleware/shareDomain.middlewa
 const { logger, httpLogger } = require('./config/logger');
 const { initializeAuditQueue, shutdownAuditQueue } = require('./services/auditLogger');
 const { initializeMetrics, metricsEndpoint, startQueueMetricsUpdater } = require('./services/metrics');
-require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+const { connectRedis, disconnectRedis } = require('./config/redis');
 
 const app = express();
 
@@ -175,6 +178,9 @@ async function gracefulShutdown(signal) {
     // Shutdown audit queue
     await shutdownAuditQueue();
 
+    // Disconnect Redis
+    await disconnectRedis();
+
     // Close database pool
     await pool.end();
     logger.info('Database pool closed');
@@ -210,6 +216,14 @@ process.on('uncaughtException', error => {
 runMigrations()
   .then(async () => {
     const port = process.env.BPORT || 3000;
+
+    // Initialize Redis connection
+    try {
+      await connectRedis();
+    } catch (error) {
+      logger.error({ err: error }, 'Failed to connect to Redis - continuing without cache');
+      // Continue anyway - Redis is optional for graceful degradation
+    }
 
     // Initialize audit system
     try {

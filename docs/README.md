@@ -46,6 +46,7 @@ docs/
 1. Start with [Setup & Installation](setup.md) or [Docker Deployment](docker.md)
 2. Review [Architecture Overview](architecture.md) to understand the system
 3. Check [Environment Variables](environment.md) for configuration
+4. Ensure Redis is installed and running for optimal performance
 
 ### For Developers
 

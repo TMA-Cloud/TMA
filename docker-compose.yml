@@ -77,6 +77,28 @@ services:
     networks:
       - tma-cloud-network
 
+  # Redis - Caching layer for improved performance
+  # Optional but highly recommended for production
+  redis:
+    image: redis:latest
+    container_name: tma-cloud-redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    command: >
+      redis-server
+      ${REDIS_PASSWORD:+--requirepass ${REDIS_PASSWORD}}
+      --appendonly yes
+    volumes:
+      - redis-data:/data
+    networks:
+      - tma-cloud-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
   # Audit Worker - Required for processing audit events
   # Without this worker, audit events are queued but not written to the database
   worker:
@@ -109,6 +131,10 @@ services:
       - app
     networks:
       - tma-cloud-network
+
+volumes:
+  redis-data:
+    driver: local
 
 networks:
   tma-cloud-network:

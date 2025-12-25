@@ -10,6 +10,7 @@ A self-hosted cloud storage platform providing robust file storage and managemen
 - 🔗 **Sharing** --- Create shareable links for files and folders
 - 🌐 **Custom Share Domain** --- Dedicated domain for share links to isolate traffic
 - 📝 **Document Editing** --- OnlyOffice integration for online document editing
+- ⚡ **Redis Caching** --- High-performance caching layer for improved response times
 - 🎨 **Modern UI** --- React + TypeScript frontend with Tailwind CSS
 - 🗄️ **PostgreSQL** --- Robust database with automatic migrations
 - 🧹 **Background Services** --- Automatic cleanup of trash and orphaned files
@@ -21,6 +22,7 @@ A self-hosted cloud storage platform providing robust file storage and managemen
 
 - Node.js (v25+)
 - PostgreSQL (v17+)
+- Redis (v6+)
 - npm or yarn
 
 ### Installation

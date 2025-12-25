@@ -31,6 +31,7 @@ All API endpoints implement comprehensive security measures:
 - **Path Traversal Protection**: File paths are validated to prevent directory traversal
 - **Audit Logging**: All critical operations automatically logged to audit trail
 - **Structured Logging**: All requests logged with automatic secret masking (JWTs, passwords, cookies)
+- **Redis Caching**: Frequently accessed data is cached for performance, with automatic invalidation on mutations
 
 #### POST `/api/signup`
 

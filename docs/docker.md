@@ -50,12 +50,15 @@ Using Docker Compose:
 docker compose up -d
 ```
 
-This starts both:
+This starts three services:
 
 - **App container** (`tma-cloud-app`) - Main application server
 - **Worker container** (`tma-cloud-worker`) - Audit event processor
+- **Redis container** (`tma-cloud-redis`) - Caching layer (optional but recommended)
 
 Access the application at `http://localhost:3000` (or your configured `BPORT`).
+
+**Note:** Redis is optional but highly recommended. The application will continue to work without Redis, but caching will be disabled and performance will be reduced.
 
 ## Docker Files Overview
 
@@ -80,7 +83,7 @@ Multi-stage production Dockerfile that:
 
 ### docker-compose.yml
 
-Orchestrates two services:
+Orchestrates three services:
 
 #### App Service
 
@@ -99,6 +102,25 @@ Orchestrates two services:
 - Restart policy: `unless-stopped`
 
 **Important:** Without the worker, audit events are queued but not written to the database.
+
+#### Redis Service
+
+- **Optional but recommended** for caching layer
+- Provides high-performance caching for frequently accessed data
+- Persistent storage with AOF (Append Only File) enabled
+- Password-protected if `REDIS_PASSWORD` is set in `.env`
+- Health check configured
+- Data persisted in `redis-data` volume
+- Restart policy: `unless-stopped`
+
+**Configuration:**
+
+- Set `REDIS_HOST=redis` in `.env` (container name)
+- Set `REDIS_PORT=6379` (default, matches container port)
+- Set `REDIS_PASSWORD` in `.env` for production security
+- Set `REDIS_DB=0` (default database number)
+
+**Note:** If Redis is unavailable, the application gracefully degrades and continues to work without caching.
 
 ### Makefile
 
@@ -141,6 +163,24 @@ When using Docker, ensure `UPLOAD_DIR` in `.env` matches the container path:
 - If mounting custom path (`/my_path/uploads:/my_path/uploads`), set: `UPLOAD_DIR=/my_path/uploads`
 
 The path in `.env` must be the **container path**, not the host path.
+
+**Redis Configuration:**
+
+When using Docker Compose with the included Redis service:
+
+- Set `REDIS_HOST=redis` (container name)
+- Set `REDIS_PORT=6379` (default, matches container port)
+- Set `REDIS_PASSWORD` in `.env` for production security (optional but recommended)
+- Set `REDIS_DB=0` (default database number)
+
+If using an external Redis server:
+
+- Set `REDIS_HOST` to your Redis server hostname or IP
+- Set `REDIS_PORT` to your Redis server port
+- Set `REDIS_PASSWORD` if your Redis server requires authentication
+- Set `REDIS_DB` to your preferred database number
+
+**Note:** The application gracefully degrades if Redis is unavailable, but caching will be disabled.
 
 ### Volume Mounts
 

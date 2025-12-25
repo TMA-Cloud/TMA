@@ -396,7 +396,7 @@ async function updateCustomDriveSettings(req, res) {
 
       // Invalidate cache for this user to ensure fresh data is used immediately after update
       const { invalidateCustomDriveCache } = require('../models/file.model');
-      invalidateCustomDriveCache(targetUserIdFinal);
+      await invalidateCustomDriveCache(targetUserIdFinal);
 
       // Restart watcher for target user if custom drive is enabled
       if (finalEnabled && finalPath) {

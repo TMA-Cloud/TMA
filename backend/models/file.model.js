@@ -6,53 +6,46 @@ const { UPLOAD_DIR } = require('../config/paths');
 const { resolveFilePath } = require('../utils/filePath');
 const { logger } = require('../config/logger');
 const { getUserCustomDriveSettings } = require('./user.model');
-
-/**
- * Get user's custom drive settings (cached per request)
- * @param {string} userId - User ID
- * @returns {Promise<{enabled: boolean, path: string|null}>}
- */
-const customDriveCache = new Map();
-const cacheTimeouts = new Map(); // Store timeouts to clear them if cache is refreshed
+const {
+  getCache,
+  setCache,
+  deleteCache,
+  deleteCachePattern,
+  cacheKeys,
+  invalidateFileCache,
+  invalidateSearchCache,
+  DEFAULT_TTL,
+} = require('../utils/cache');
 
 /**
  * Invalidate custom drive cache for a specific user
  * Call this when custom drive settings are updated to ensure fresh data
  * @param {string} userId - User ID
  */
-function invalidateCustomDriveCache(userId) {
-  if (customDriveCache.has(userId)) {
-    customDriveCache.delete(userId);
-  }
-  if (cacheTimeouts.has(userId)) {
-    clearTimeout(cacheTimeouts.get(userId));
-    cacheTimeouts.delete(userId);
-  }
+async function invalidateCustomDriveCache(userId) {
+  await deleteCache(cacheKeys.customDrive(userId));
 }
 
 async function getUserCustomDrive(userId) {
-  // Simple in-memory cache (could be improved with request-level caching)
-  if (customDriveCache.has(userId)) {
-    return customDriveCache.get(userId);
+  // Try to get from Redis cache first
+  const cacheKey = cacheKeys.customDrive(userId);
+  const cached = await getCache(cacheKey);
+  if (cached !== null) {
+    return cached;
   }
 
+  // Cache miss - query database
   try {
     const settings = await getUserCustomDriveSettings(userId);
-    customDriveCache.set(userId, settings);
-    // Clear any existing timeout for this userId before setting a new one
-    if (cacheTimeouts.has(userId)) {
-      clearTimeout(cacheTimeouts.get(userId));
-    }
-    // Clear cache after 1 minute
-    const timeout = setTimeout(() => {
-      customDriveCache.delete(userId);
-      cacheTimeouts.delete(userId);
-    }, 60000);
-    cacheTimeouts.set(userId, timeout);
+    // Cache the result (1 minute TTL)
+    await setCache(cacheKey, settings, 60);
     return settings;
   } catch (_error) {
     // If user not found or error, return disabled
-    return { enabled: false, path: null };
+    const defaultSettings = { enabled: false, path: null };
+    // Cache the default to avoid repeated queries
+    await setCache(cacheKey, defaultSettings, 60);
+    return defaultSettings;
   }
 }
 
@@ -75,6 +68,14 @@ function buildOrderClause(sortBy = 'modified', order = 'DESC', tableAlias = null
 }
 
 async function calculateFolderSize(id, userId) {
+  // Try to get from cache first
+  const cacheKey = cacheKeys.folderSize(id, userId);
+  const cached = await getCache(cacheKey);
+  if (cached !== null) {
+    return cached;
+  }
+
+  // Cache miss - query database
   const res = await pool.query(
     `WITH RECURSIVE sub AS (
        SELECT id, size, type FROM files WHERE id = $1 AND user_id = $2
@@ -86,7 +87,12 @@ async function calculateFolderSize(id, userId) {
      SELECT COALESCE(SUM(size), 0) AS size FROM sub WHERE type = 'file'`,
     [id, userId]
   );
-  return parseInt(res.rows[0].size, 10) || 0;
+  const size = parseInt(res.rows[0].size, 10) || 0;
+
+  // Cache the result (5 minutes TTL - folder sizes change less frequently)
+  await setCache(cacheKey, size, DEFAULT_TTL);
+
+  return size;
 }
 
 async function fillFolderSizes(files, userId) {
@@ -101,6 +107,14 @@ async function fillFolderSizes(files, userId) {
 }
 
 async function getFiles(userId, parentId = null, sortBy = 'modified', order = 'DESC') {
+  // Try to get from cache first
+  const cacheKey = cacheKeys.files(userId, parentId, sortBy, order);
+  const cached = await getCache(cacheKey);
+  if (cached !== null) {
+    return cached;
+  }
+
+  // Cache miss - query database
   const orderClause = sortBy === 'size' ? '' : buildOrderClause(sortBy, order);
   const result = await pool.query(
     `SELECT id, name, type, size, modified, mime_type AS "mimeType", starred, shared
@@ -119,6 +133,10 @@ async function getFiles(userId, parentId = null, sortBy = 'modified', order = 'D
       return order && order.toUpperCase() === 'ASC' ? diff : -diff;
     });
   }
+
+  // Cache the result (shorter TTL for file listings as they change frequently)
+  await setCache(cacheKey, files, 60); // 1 minute TTL
+
   return files;
 }
 
@@ -166,6 +184,12 @@ async function createFolder(name, parentId = null, userId) {
         'INSERT INTO files(id, name, type, parent_id, user_id, path) VALUES($1,$2,$3,$4,$5,$6) RETURNING id, name, type, size, modified, mime_type AS "mimeType", starred, shared',
         [id, actualName, 'folder', parentId, userId, absolutePath]
       );
+
+      // Invalidate cache
+      await invalidateFileCache(userId, parentId);
+      await invalidateSearchCache(userId);
+      await deleteCache(cacheKeys.fileStats(userId));
+
       return result.rows[0];
     } catch (error) {
       // If custom drive creation fails, clean up orphaned folder on disk
@@ -190,6 +214,12 @@ async function createFolder(name, parentId = null, userId) {
     'INSERT INTO files(id, name, type, parent_id, user_id) VALUES($1,$2,$3,$4,$5) RETURNING id, name, type, size, modified, mime_type AS "mimeType", starred, shared',
     [id, name, 'folder', parentId, userId]
   );
+
+  // Invalidate cache for this user's file listings
+  await invalidateFileCache(userId, parentId);
+  await invalidateSearchCache(userId);
+  await deleteCache(cacheKeys.fileStats(userId));
+
   return result.rows[0];
 }
 
@@ -345,6 +375,12 @@ async function createFile(name, size, mimeType, tempPath, parentId = null, userI
         'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id, name, type, size, modified, mime_type AS "mimeType", starred, shared',
         [id, actualName, 'file', size, mimeType, absolutePath, parentId, userId]
       );
+
+      // Invalidate cache
+      await invalidateFileCache(userId, parentId);
+      await invalidateSearchCache(userId);
+      await deleteCache(cacheKeys.fileStats(userId));
+
       return result.rows[0];
     } catch (error) {
       // If custom drive save fails, log and throw (don't fall back since file is already in custom drive)
@@ -387,15 +423,37 @@ async function createFile(name, size, mimeType, tempPath, parentId = null, userI
     'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id, name, type, size, modified, mime_type AS "mimeType", starred, shared',
     [id, name, 'file', size, mimeType, storageName, parentId, userId]
   );
+
+  // Invalidate cache
+  await invalidateFileCache(userId, parentId);
+  await invalidateSearchCache(userId);
+  await deleteCache(cacheKeys.fileStats(userId));
+
   return result.rows[0];
 }
 
 async function moveFiles(ids, parentId = null, userId) {
+  // Get old parent IDs before moving
+  const oldParentsResult = await pool.query(
+    'SELECT DISTINCT parent_id FROM files WHERE id = ANY($1::text[]) AND user_id = $2',
+    [ids, userId]
+  );
+  const oldParentIds = oldParentsResult.rows.map(r => r.parent_id);
+
   await pool.query('UPDATE files SET parent_id = $1, modified = NOW() WHERE id = ANY($2::text[]) AND user_id = $3', [
     parentId,
     ids,
     userId,
   ]);
+
+  // Invalidate cache for both old and new parent folders
+  await invalidateFileCache(userId, parentId);
+  for (const oldParentId of oldParentIds) {
+    if (oldParentId !== parentId) {
+      await invalidateFileCache(userId, oldParentId);
+    }
+  }
+  await invalidateSearchCache(userId);
 }
 
 async function copyEntry(id, parentId, userId, client = null) {
@@ -593,6 +651,11 @@ async function copyFiles(ids, parentId = null, userId) {
       await copyEntry(id, parentId, userId, client);
     }
     await client.query('COMMIT');
+
+    // Invalidate cache after copying
+    await invalidateFileCache(userId, parentId);
+    await invalidateSearchCache(userId);
+    await deleteCache(cacheKeys.fileStats(userId));
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;
@@ -602,23 +665,53 @@ async function copyFiles(ids, parentId = null, userId) {
 }
 
 async function getFile(id, userId) {
+  // Try to get from cache first
+  const cacheKey = cacheKeys.file(id, userId);
+  const cached = await getCache(cacheKey);
+  if (cached !== null) {
+    return cached;
+  }
+
+  // Cache miss - query database
   const result = await pool.query(
     'SELECT id, name, type, mime_type AS "mimeType", path FROM files WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL',
     [id, userId]
   );
-  return result.rows[0];
+  const file = result.rows[0];
+
+  // Cache the result (5 minutes TTL)
+  if (file) {
+    await setCache(cacheKey, file, DEFAULT_TTL);
+  }
+
+  return file;
 }
 
 async function renameFile(id, name, userId) {
+  // Get parent ID before renaming for cache invalidation
+  const fileResult = await pool.query('SELECT parent_id FROM files WHERE id = $1 AND user_id = $2', [id, userId]);
+  const parentId = fileResult.rows[0]?.parent_id || null;
+
   const result = await pool.query(
     'UPDATE files SET name = $1, modified = NOW() WHERE id = $2 AND user_id = $3 RETURNING id, name, type, size, modified, mime_type AS "mimeType", starred, shared',
     [name, id, userId]
   );
+
+  // Invalidate cache
+  await invalidateFileCache(userId, parentId);
+  await invalidateSearchCache(userId);
+
   return result.rows[0];
 }
 
 async function setStarred(ids, starred, userId) {
   await pool.query('UPDATE files SET starred = $1 WHERE id = ANY($2::text[]) AND user_id = $3', [starred, ids, userId]);
+
+  // Invalidate cache (starred status affects file listings and stats)
+  await invalidateFileCache(userId);
+  await deleteCache(cacheKeys.fileStats(userId));
+  // Invalidate starred files cache
+  await deleteCachePattern(`files:${userId}:starred:*`);
 }
 
 async function getRecursiveIds(ids, userId) {
@@ -657,16 +750,48 @@ async function setShared(ids, shared, userId) {
     'UPDATE files SET shared = $1 WHERE id = ANY($2::text[]) AND user_id = $3 RETURNING id',
     [shared, allIds, userId]
   );
+
+  // Invalidate cache (shared status affects file listings and stats)
+  await invalidateFileCache(userId);
+  await deleteCache(cacheKeys.fileStats(userId));
+  // Invalidate shared files cache
+  await deleteCachePattern(`files:${userId}:shared:*`);
+
   return res.rows.map(r => r.id);
 }
 
 async function deleteFiles(ids, userId) {
+  // Get parent IDs before deleting for cache invalidation
+  const parentsResult = await pool.query(
+    'SELECT DISTINCT parent_id FROM files WHERE id = ANY($1::text[]) AND user_id = $2',
+    [ids, userId]
+  );
+  const parentIds = parentsResult.rows.map(r => r.parent_id).filter(p => p !== null);
+
   const allIds = await getRecursiveIds(ids, userId);
   if (allIds.length === 0) return;
   await pool.query(
     'UPDATE files SET deleted_at = NOW() WHERE id = ANY($1::text[]) AND user_id = $2 AND deleted_at IS NULL',
     [allIds, userId]
   );
+
+  // Invalidate cache for all affected parent folders
+  await invalidateFileCache(userId);
+  for (const parentId of parentIds) {
+    await invalidateFileCache(userId, parentId);
+    // Invalidate folder size cache for parent folders
+    await deleteCache(cacheKeys.folderSize(parentId, userId));
+  }
+  await invalidateSearchCache(userId);
+  await deleteCache(cacheKeys.fileStats(userId));
+  // Invalidate starred, shared, and trash caches
+  await deleteCachePattern(`files:${userId}:starred:*`);
+  await deleteCachePattern(`files:${userId}:shared:*`);
+  await deleteCachePattern(`files:${userId}:trash:*`);
+  // Invalidate folder size caches for deleted folders
+  for (const id of allIds) {
+    await deleteCachePattern(`folder:${userId}:${id}:*`);
+  }
 }
 
 async function getTrashFiles(userId, sortBy = 'deletedAt', order = 'DESC') {
@@ -790,6 +915,11 @@ async function restoreFiles(ids, userId) {
     }
 
     await client.query('COMMIT');
+
+    // Invalidate cache after restore
+    await invalidateFileCache(userId);
+    await invalidateSearchCache(userId);
+    await deleteCache(cacheKeys.fileStats(userId));
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;
@@ -847,6 +977,11 @@ async function permanentlyDeleteFiles(ids, userId) {
   }
 
   await pool.query('DELETE FROM files WHERE id = ANY($1::text[]) AND user_id = $2', [allIds, userId]);
+
+  // Invalidate cache after permanent deletion
+  await invalidateFileCache(userId);
+  await invalidateSearchCache(userId);
+  await deleteCache(cacheKeys.fileStats(userId));
 }
 
 async function cleanupExpiredTrash() {
@@ -933,6 +1068,14 @@ async function cleanupOrphanFiles() {
 }
 
 async function getStarredFiles(userId, sortBy = 'modified', order = 'DESC') {
+  // Try to get from cache first
+  const cacheKey = cacheKeys.starredFiles(userId, sortBy, order);
+  const cached = await getCache(cacheKey);
+  if (cached !== null) {
+    return cached;
+  }
+
+  // Cache miss - query database
   const orderClause = sortBy === 'size' ? '' : buildOrderClause(sortBy, order);
   const result = await pool.query(
     `SELECT id, name, type, size, modified, mime_type AS "mimeType", starred, shared FROM files WHERE user_id = $1 AND starred = TRUE AND deleted_at IS NULL ${orderClause}`,
@@ -946,10 +1089,22 @@ async function getStarredFiles(userId, sortBy = 'modified', order = 'DESC') {
       return order && order.toUpperCase() === 'ASC' ? diff : -diff;
     });
   }
+
+  // Cache the result (1 minute TTL)
+  await setCache(cacheKey, files, 60);
+
   return files;
 }
 
 async function getSharedFiles(userId, sortBy = 'modified', order = 'DESC') {
+  // Try to get from cache first
+  const cacheKey = cacheKeys.sharedFiles(userId, sortBy, order);
+  const cached = await getCache(cacheKey);
+  if (cached !== null) {
+    return cached;
+  }
+
+  // Cache miss - query database
   const orderClause = sortBy === 'size' ? '' : buildOrderClause(sortBy, order, 'f');
   // Only return top-level shared items (not children of shared folders)
   // A file is top-level shared if it's shared AND (has no parent OR parent is not shared)
@@ -972,6 +1127,10 @@ async function getSharedFiles(userId, sortBy = 'modified', order = 'DESC') {
       return order && order.toUpperCase() === 'ASC' ? diff : -diff;
     });
   }
+
+  // Cache the result (1 minute TTL)
+  await setCache(cacheKey, files, 60);
+
   return files;
 }
 
@@ -991,6 +1150,13 @@ async function searchFiles(userId, query, limit = 100) {
 
   const searchTerm = query.trim();
   const searchLength = searchTerm.length;
+
+  // Try to get from cache first
+  const cacheKey = cacheKeys.search(userId, searchTerm, limit);
+  const cached = await getCache(cacheKey);
+  if (cached !== null) {
+    return cached;
+  }
 
   // For very short queries (1-2 chars), use prefix matching only for better performance
   // For longer queries, use trigram similarity for fuzzy matching
@@ -1069,6 +1235,9 @@ async function searchFiles(userId, query, limit = 100) {
   // Fill folder sizes for folders (only if needed, in batches)
   await fillFolderSizes(files, userId);
 
+  // Cache the result (shorter TTL for search results)
+  await setCache(cacheKey, files, 120); // 2 minutes TTL
+
   return files;
 }
 
@@ -1079,6 +1248,14 @@ async function searchFiles(userId, query, limit = 100) {
  * @returns {Promise<Object>} Object with totalFiles, totalFolders, sharedCount, starredCount
  */
 async function getFileStats(userId) {
+  // Try to get from cache first
+  const cacheKey = cacheKeys.fileStats(userId);
+  const cached = await getCache(cacheKey);
+  if (cached !== null) {
+    return cached;
+  }
+
+  // Cache miss - query database
   const result = await pool.query(
     `SELECT 
       COUNT(*) FILTER (WHERE f.type = 'file' AND f.deleted_at IS NULL) AS "totalFiles",
@@ -1095,12 +1272,17 @@ async function getFileStats(userId) {
     [userId]
   );
 
-  return {
+  const stats = {
     totalFiles: parseInt(result.rows[0].totalFiles, 10) || 0,
     totalFolders: parseInt(result.rows[0].totalFolders, 10) || 0,
     sharedCount: parseInt(result.rows[0].sharedCount, 10) || 0,
     starredCount: parseInt(result.rows[0].starredCount, 10) || 0,
   };
+
+  // Cache the result
+  await setCache(cacheKey, stats, DEFAULT_TTL);
+
+  return stats;
 }
 
 module.exports = {

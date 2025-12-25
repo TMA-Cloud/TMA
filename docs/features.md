@@ -644,13 +644,104 @@ Rate limit violations return HTTP 429 (Too Many Requests).
 
 ## Performance
 
+### Redis Caching
+
+Redis for comprehensive caching to improve performance and reduce database load.
+
+#### Cached Data Types
+
+**File Operations:**
+
+- File listings (by folder, sort order)
+- Search results (with hashed queries)
+- File metadata and statistics
+- Folder sizes (recursive calculations)
+- Starred, shared, and trash file listings
+
+**User Data:**
+
+- User information (by ID)
+- User storage usage
+- Token versions for session validation
+- Custom drive settings
+
+**Share Links:**
+
+- Share link lookups
+- Share folder contents
+- File share status checks
+
+**Session Management:**
+
+- Session existence validation
+- Active sessions lists
+
+**App Settings:**
+
+- Signup enabled status
+- User count (admin function)
+
+#### Cache Security & Privacy
+
+**Email Protection:**
+
+- Email addresses are hashed (SHA256) in cache keys
+- Prevents email dumps if Redis is compromised
+- GDPR/compliance-friendly approach
+
+**Password Protection:**
+
+- Passwords are **never cached**, even if hashed
+- `getUserByEmail()` always queries database for authentication
+- Ensures sensitive credentials never enter cache
+
+**Search Query Protection:**
+
+- Search queries are hashed before being used in cache keys
+- Prevents cache key injection attacks
+- Ensures uniform key length
+
+**Data Isolation:**
+
+- All cache keys include user ID for proper isolation
+- Pattern-based invalidation respects user boundaries
+- No cross-user data leakage possible
+
+#### Cache Invalidation
+
+Automatic cache invalidation ensures data consistency:
+
+- **File Operations**: Create, update, delete, move, copy invalidate relevant caches
+- **User Operations**: User updates invalidate user-specific caches
+- **Share Operations**: Share creation/deletion invalidates share caches
+- **Session Operations**: Token version changes invalidate session caches
+
+#### Performance Characteristics
+
+- **TTL Strategy**: Different TTLs based on data volatility
+  - File listings: 1 minute (frequently changing)
+  - Search results: 2 minutes
+  - User data: 5-10 minutes (less frequently changing)
+  - Folder sizes: 5 minutes
+- **Non-Blocking Operations**: SCAN instead of KEYS for pattern deletion
+- **Batch Processing**: Keys deleted in batches to avoid overwhelming Redis
+- **Graceful Degradation**: Application continues to work if Redis is unavailable
+
+#### Cache Implementation
+
+- **Entrypoint Loading**: Environment variables loaded once at application startup
+- **Connection Management**: Automatic reconnection and error handling
+- **Pattern Matching**: Efficient SCAN-based pattern deletion for cache invalidation
+- **Key Naming**: Consistent, namespaced key structure for easy management
+
 ### Optimizations
 
 - Lazy loading of components
 - Debounced search
 - Optimistic UI updates
 - Efficient file listing
-- Cached API responses
+- Redis caching layer
+- Database query optimization
 
 ### Scalability
 
@@ -658,6 +749,7 @@ Rate limit violations return HTTP 429 (Too Many Requests).
 - Efficient queries
 - Background processing
 - Resource cleanup
+- Redis caching for reduced database load
 
 ## Error Handling
 

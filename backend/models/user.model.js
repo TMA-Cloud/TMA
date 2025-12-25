@@ -1,6 +1,7 @@
 const pool = require('../config/db');
 const { generateId } = require('../utils/id');
 const { logger } = require('../config/logger');
+const { getCache, setCache, deleteCache, cacheKeys, invalidateFileCache, DEFAULT_TTL } = require('../utils/cache');
 
 async function createUser(email, password, name) {
   const id = generateId(16);
@@ -8,17 +9,52 @@ async function createUser(email, password, name) {
     'INSERT INTO users(id, email, password, name) VALUES($1,$2,$3,$4) RETURNING id, email, name',
     [id, email, password, name]
   );
-  return result.rows[0];
+
+  // Cache the new user (without password for security)
+  const user = result.rows[0];
+  await setCache(
+    cacheKeys.userById(id),
+    { id: user.id, email: user.email, name: user.name, token_version: 0 },
+    DEFAULT_TTL * 2
+  );
+  // Note: We don't cache userByEmail on creation to avoid caching password
+  // The password will be cached on first lookup if needed, but we should avoid that too
+
+  // Invalidate user count cache
+  await deleteCache(cacheKeys.userCount());
+  await deleteCache(cacheKeys.allUsers());
+  await deleteCache(cacheKeys.signupEnabled());
+
+  return user;
 }
 
 async function getUserByEmail(email) {
+  // SECURITY: Do NOT cache getUserByEmail because it's used for authentication
+  // and contains password hashes. Password hashes should never be cached.
+  // Always query from database to ensure we have the latest password hash
+  // and to avoid storing sensitive data in Redis.
   const result = await pool.query('SELECT id, email, password, name FROM users WHERE email = $1', [email]);
   return result.rows[0];
 }
 
 async function getUserById(id) {
+  // Try to get from cache first
+  const cacheKey = cacheKeys.userById(id);
+  const cached = await getCache(cacheKey);
+  if (cached !== null) {
+    return cached;
+  }
+
+  // Cache miss - query database
   const result = await pool.query('SELECT id, email, name, token_version FROM users WHERE id = $1', [id]);
-  return result.rows[0];
+  const user = result.rows[0];
+
+  // Cache the result (longer TTL for user data)
+  if (user) {
+    await setCache(cacheKey, user, DEFAULT_TTL * 2); // 10 minutes TTL
+  }
+
+  return user;
 }
 
 /**
@@ -27,8 +63,23 @@ async function getUserById(id) {
  * @returns {number|null} Token version or null if user not found
  */
 async function getUserTokenVersion(id) {
+  // Try to get from cache first
+  const cacheKey = cacheKeys.userTokenVersion(id);
+  const cached = await getCache(cacheKey);
+  if (cached !== null) {
+    return cached;
+  }
+
+  // Cache miss - query database
   const result = await pool.query('SELECT token_version FROM users WHERE id = $1', [id]);
-  return result.rows[0]?.token_version ?? null;
+  const tokenVersion = result.rows[0]?.token_version ?? null;
+
+  // Cache the result (5 minutes TTL)
+  if (tokenVersion !== null) {
+    await setCache(cacheKey, tokenVersion, DEFAULT_TTL);
+  }
+
+  return tokenVersion;
 }
 
 /**
@@ -48,21 +99,54 @@ async function invalidateAllSessions(userId) {
   if (result.rows.length === 0) {
     throw new Error('User not found');
   }
+
+  // Invalidate user cache when token version changes
+  await deleteCache(cacheKeys.userById(userId));
+  await deleteCache(cacheKeys.userTokenVersion(userId));
+
   logger.info({ userId }, 'All user sessions invalidated');
   return result.rows[0].token_version;
 }
 
 async function getUserStorageUsage(userId) {
+  // Try to get from cache first
+  const cacheKey = cacheKeys.userStorage(userId);
+  const cached = await getCache(cacheKey);
+  if (cached !== null) {
+    return cached;
+  }
+
+  // Cache miss - query database
   const res = await pool.query(
     "SELECT COALESCE(SUM(size), 0) AS used FROM files WHERE user_id = $1 AND type = 'file' AND deleted_at IS NULL",
     [userId]
   );
-  return Number(res.rows[0].used) || 0;
+  const usage = Number(res.rows[0].used) || 0;
+
+  // Cache the result (shorter TTL as storage usage changes with file operations)
+  await setCache(cacheKey, usage, 120); // 2 minutes TTL
+
+  return usage;
 }
 
 async function getUserByGoogleId(googleId) {
+  // Try to get from cache first
+  const cacheKey = cacheKeys.userByGoogleId(googleId);
+  const cached = await getCache(cacheKey);
+  if (cached !== null) {
+    return cached;
+  }
+
+  // Cache miss - query database
   const res = await pool.query('SELECT id, email, name, google_id FROM users WHERE google_id = $1', [googleId]);
-  return res.rows[0];
+  const user = res.rows[0];
+
+  // Cache the result (10 minutes TTL)
+  if (user) {
+    await setCache(cacheKey, user, DEFAULT_TTL * 2);
+  }
+
+  return user;
 }
 
 async function createUserWithGoogle(googleId, email, name) {
@@ -71,11 +155,43 @@ async function createUserWithGoogle(googleId, email, name) {
     'INSERT INTO users(id, email, name, google_id) VALUES($1,$2,$3,$4) RETURNING id, email, name, google_id',
     [id, email, name, googleId]
   );
-  return result.rows[0];
+
+  // Cache the new user
+  const user = result.rows[0];
+  await setCache(
+    cacheKeys.userById(id),
+    { id: user.id, email: user.email, name: user.name, token_version: 0 },
+    DEFAULT_TTL * 2
+  );
+  await setCache(
+    cacheKeys.userByEmail(email),
+    { id: user.id, email: user.email, name: user.name, google_id: user.google_id },
+    DEFAULT_TTL * 2
+  );
+  await setCache(cacheKeys.userByGoogleId(googleId), user, DEFAULT_TTL * 2);
+
+  // Invalidate user count cache
+  await deleteCache(cacheKeys.userCount());
+  await deleteCache(cacheKeys.allUsers());
+  await deleteCache(cacheKeys.signupEnabled());
+
+  return user;
 }
 
 async function updateGoogleId(userId, googleId) {
+  // Get user email before updating for cache invalidation
+  const userResult = await pool.query('SELECT email FROM users WHERE id = $1', [userId]);
+  const email = userResult.rows[0]?.email;
+
   await pool.query('UPDATE users SET google_id = $1 WHERE id = $2', [googleId, userId]);
+
+  // Invalidate user cache
+  await deleteCache(cacheKeys.userById(userId));
+  // Invalidate email cache if email exists
+  if (email) {
+    const { invalidateEmailCache } = require('../utils/cache');
+    await invalidateEmailCache(email);
+  }
 }
 
 async function isFirstUser(userId) {
@@ -111,25 +227,83 @@ async function isFirstUser(userId) {
 }
 
 async function getSignupEnabled() {
+  // Try to get from cache first
+  const cacheKey = cacheKeys.signupEnabled();
+  const cached = await getCache(cacheKey);
+  if (cached !== null) {
+    return cached;
+  }
+
+  // Cache miss - query database
   const result = await pool.query('SELECT signup_enabled FROM app_settings WHERE id = $1', ['app_settings']);
+  let signupEnabled;
   if (result.rows.length === 0) {
     // If settings don't exist, check if any users exist
     const userCountResult = await pool.query('SELECT COUNT(*) as count FROM users');
     const userCount = parseInt(userCountResult.rows[0].count, 10);
     // If no users exist, signup should be enabled
-    return userCount === 0;
+    signupEnabled = userCount === 0;
+  } else {
+    signupEnabled = result.rows[0].signup_enabled;
   }
-  return result.rows[0].signup_enabled;
+
+  // Cache the result (5 minutes TTL - changes infrequently)
+  await setCache(cacheKey, signupEnabled, DEFAULT_TTL);
+
+  return signupEnabled;
 }
 
 async function getTotalUserCount() {
+  // Try to get from cache first
+  const cacheKey = cacheKeys.userCount();
+  const cached = await getCache(cacheKey);
+  if (cached !== null) {
+    return cached;
+  }
+
+  // Cache miss - query database
   const result = await pool.query('SELECT COUNT(*) AS count FROM users');
-  return Number(result.rows[0]?.count || 0);
+  const count = Number(result.rows[0]?.count || 0);
+
+  // Cache the result (5 minutes TTL)
+  await setCache(cacheKey, count, DEFAULT_TTL);
+
+  return count;
 }
 
 async function getAllUsersBasic() {
+  // Try to get from cache first (without emails for security)
+  const cacheKey = cacheKeys.allUsers();
+  const cached = await getCache(cacheKey);
+
+  if (cached !== null) {
+    // Cache hit - fetch emails separately from database (emails not cached for security)
+    // This gives us cache performance while protecting sensitive email data
+    const emailResult = await pool.query('SELECT id, email FROM users ORDER BY created_at ASC');
+    const emailMap = new Map(emailResult.rows.map(row => [row.id, row.email]));
+
+    // Merge cached data with fresh emails
+    return cached.map(user => ({
+      ...user,
+      email: emailMap.get(user.id) || null,
+    }));
+  }
+
+  // Cache miss - query database
   const result = await pool.query('SELECT id, email, name, created_at FROM users ORDER BY created_at ASC');
-  return result.rows;
+  const users = result.rows;
+
+  // Cache users WITHOUT emails for security (emails are sensitive PII)
+  // If Redis is compromised, attackers won't get a clean email dump
+  const usersWithoutEmails = users.map(user => ({
+    id: user.id,
+    name: user.name,
+    created_at: user.created_at,
+  }));
+  await setCache(cacheKey, usersWithoutEmails, 120);
+
+  // Return full data with emails (from database, not cache)
+  return users;
 }
 
 async function setSignupEnabled(enabled, userId) {
@@ -182,6 +356,9 @@ async function setSignupEnabled(enabled, userId) {
     ]);
 
     await client.query('COMMIT');
+
+    // Invalidate signup enabled cache
+    await deleteCache(cacheKeys.signupEnabled());
 
     // Log security event
     logger.info(`[SECURITY] Signup ${enabled ? 'enabled' : 'disabled'} by first user (ID: ${userId})`);
@@ -403,6 +580,11 @@ async function updateUserCustomDriveSettings(userId, enabled, path) {
     }
 
     logger.info({ userId }, 'User custom drive disabled');
+
+    // Invalidate custom drive cache
+    await deleteCache(cacheKeys.customDrive(userId));
+    // Also invalidate file cache as custom drive changes affect file paths
+    await invalidateFileCache(userId);
 
     return {
       enabled: false,

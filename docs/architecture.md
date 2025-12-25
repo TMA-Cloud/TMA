@@ -22,13 +22,13 @@ TMA Cloud uses a **Single-Origin Architecture** where the backend serves both th
 │  │  (Frontend UI)   │  │   /api/*        │  │
 │  │  Served at /     │  │   /s/*          │  │
 │  └──────────────────┘  └─────────────────┘  │
-└──────────────────┬──────────────────────────┘
-                   │
-                   ▼
-            ┌─────────────┐
-            │ PostgreSQL  │
-            │  Database   │
-            └─────────────┘
+└──────┬───────────────────────────┬──────────┘
+       │                           │
+       ▼                           ▼
+┌─────────────┐            ┌─────────────┐
+│ PostgreSQL  │            │    Redis    │
+│  Database   │            │   (Cache)   │
+└─────────────┘            └─────────────┘
 ```
 
 ### Development Architecture
@@ -39,18 +39,23 @@ TMA Cloud uses a **Single-Origin Architecture** where the backend serves both th
 └──────┬───────┘                 │  (Express)  │
        │                         │   :3000     │
        │ http://localhost:5173   │             │
-       ▼                         └──────┬──────┘
-┌─────────────────────────┐            │
-│  Vite Dev Server        │            │
-│  ┌──────────────────┐   │            │
-│  │  Frontend (HMR)  │   │            ▼
-│  └──────────────────┘   │     ┌─────────────┐
-│  ┌──────────────────┐   │     │ PostgreSQL  │
-│  │  Proxy to :3000  │───┼────►└─────────────┘
-│  │  /api/* → :3000  │   │
-│  │  /s/* → :3000    │   │
-│  └──────────────────┘   │
-└─────────────────────────┘
+       ▼                         └──┬──────┬───┘
+┌─────────────────────────┐         │      │
+│  Vite Dev Server        │         │      │
+│  ┌──────────────────┐   │         │      │
+│  │  Frontend (HMR)  │   │         │      │
+│  └──────────────────┘   │         │      │
+│  ┌──────────────────┐   │         │      │
+│  │  Proxy to :3000  │───┼─────────┼──────┼───┐
+│  │  /api/* → :3000  │   │         │      │   │
+│  │  /s/* → :3000    │   │         │      │   │
+│  └──────────────────┘   │         │      │   │
+└─────────────────────────┘         │      │   │
+                                    ▼      ▼   ▼
+                            ┌──────────┐ ┌──────────┐
+                            │PostgreSQL│ │  Redis   │
+                            │ Database │ │ (Cache)  │
+                            └──────────┘ └──────────┘
 ```
 
 ### Key Benefits
@@ -117,14 +122,14 @@ When `SHARE_BASE_URL` is configured, the system supports routing share links to 
 
 ```bash
 backend/
-├── config/          # Configuration files (database, paths)
+├── config/          # Configuration files (database, redis, paths, logger)
 ├── controllers/     # Request handlers (business logic)
 ├── middleware/      # Express middleware (auth, error handling)
 ├── migrations/      # Database migration files
 ├── models/          # Data models and database queries
 ├── routes/          # API route definitions
 ├── services/        # Background services (cleanup, scanning)
-├── utils/           # Utility functions
+├── utils/           # Utility functions (cache, file operations, etc.)
 └── uploads/         # File storage directory
 ```
 
@@ -165,7 +170,31 @@ Background processes:
 - `customDriveScanner.js` - Custom drive synchronization
 - `auditLogger.js` - Audit event logging service
 
-#### 5. **Routes**
+#### 5. **Caching Layer**
+
+Redis-based caching system for improved performance:
+
+- `config/redis.js` - Redis client configuration and connection management
+- `utils/cache.js` - Cache utilities (get, set, delete, pattern invalidation)
+- **Cached Data:**
+  - File listings and metadata
+  - User data (without passwords/emails in sensitive contexts)
+  - Search results
+  - Share link information
+  - Session validation
+  - File statistics
+  - Folder sizes
+- **Security Features:**
+  - Emails hashed in cache keys (privacy/compliance)
+  - Search queries hashed to prevent cache key injection
+  - Passwords never cached
+  - User data properly isolated by user ID
+- **Performance:**
+  - Non-blocking SCAN operations for pattern deletion
+  - Configurable TTLs based on data volatility
+  - Automatic cache invalidation on data mutations
+
+#### 6. **Routes**
 
 API endpoint definitions:
 
@@ -176,7 +205,7 @@ API endpoint definitions:
 - `/s` - Public share endpoints
 - `/metrics` - Application metrics (restricted by IP)
 
-#### 6. **Workers**
+#### 7. **Workers**
 
 Standalone worker processes:
 
@@ -505,13 +534,21 @@ See [Audit Documentation](audit.md) for detailed information.
 - File storage on local filesystem
 - No load balancing
 
+### Current Optimizations
+
+- **Redis Caching**: Comprehensive caching layer for frequently accessed data
+  - File listings, search results, user data, session validation
+  - Reduces database load and improves response times
+  - Non-blocking SCAN operations for efficient cache management
+  - Automatic cache invalidation on data mutations
+
 ### Potential Improvements
 
 - Object storage (S3, Azure Blob) for files
-- Redis for session management
 - CDN for static assets
 - Horizontal scaling with load balancer
 - Database read replicas
+- Redis cluster for high availability
 
 ## Technology Choices
 
@@ -519,6 +556,7 @@ See [Audit Documentation](audit.md) for detailed information.
 
 - **Express.js**: Mature, flexible web framework
 - **PostgreSQL**: Reliable relational database
+- **Redis**: High-performance caching layer (v5+)
 - **JWT**: Stateless authentication
 - **Multer**: File upload handling
 - **Pino**: High-performance structured logging
