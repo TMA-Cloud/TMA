@@ -1,10 +1,11 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   getAllUsersCustomDriveSettings,
   updateCustomDriveSettings,
   type UserCustomDriveInfo,
 } from "../../../utils/api";
 import { useToast } from "../../../hooks/useToast";
+import { useAuth } from "../../../contexts/AuthContext";
 
 export type UserCustomDriveLocalState = Record<
   string,
@@ -18,6 +19,7 @@ export type UserCustomDriveLocalState = Record<
 
 export function useCustomDriveManagement(canToggleSignup: boolean) {
   const { showToast } = useToast();
+  const { user } = useAuth();
   const [allUsersCustomDrive, setAllUsersCustomDrive] = useState<
     UserCustomDriveInfo[]
   >([]);
@@ -33,10 +35,24 @@ export function useCustomDriveManagement(canToggleSignup: boolean) {
     "enable" | "disable" | null
   >(null);
 
+  // Track if component should make API calls
+  const shouldLoadRef = useRef(false);
+
   const loadAllUsersCustomDrive = useCallback(async () => {
+    // Early return if should not load - prevents calls after logout
+    if (!shouldLoadRef.current) {
+      return;
+    }
+
     try {
       setLoadingAllUsersCustomDrive(true);
       const { users } = await getAllUsersCustomDriveSettings();
+
+      // Check again after async operation - user might have logged out
+      if (!shouldLoadRef.current) {
+        return;
+      }
+
       setAllUsersCustomDrive(users);
       // Initialize local state for each user
       const initialState: UserCustomDriveLocalState = {};
@@ -50,29 +66,67 @@ export function useCustomDriveManagement(canToggleSignup: boolean) {
       });
       setUserCustomDriveLocalState(initialState);
     } catch (error) {
-      console.error("Failed to load all users custom drive settings:", error);
-      showToast("Failed to load users' custom drive settings", "error");
+      // Don't show error toast for 401 (unauthorized) - expected after logout
+      // Check for common 401 error messages
+      const errorMessage =
+        error instanceof Error
+          ? error.message.toLowerCase()
+          : String(error).toLowerCase();
+      if (
+        errorMessage.includes("401") ||
+        errorMessage.includes("unauthorized") ||
+        errorMessage.includes("not authenticated")
+      ) {
+        return;
+      }
+      // Only show error if we should still be loading (user still authenticated)
+      if (shouldLoadRef.current) {
+        console.error("Failed to load all users custom drive settings:", error);
+        showToast("Failed to load users' custom drive settings", "error");
+      }
     } finally {
       setLoadingAllUsersCustomDrive(false);
     }
   }, [showToast]);
 
   useEffect(() => {
-    if (canToggleSignup) {
+    // Update ref based on current conditions
+    const shouldLoad = canToggleSignup && !!user;
+    shouldLoadRef.current = shouldLoad;
+
+    // Only load if user is authenticated and has permission
+    if (shouldLoad) {
       loadAllUsersCustomDrive();
+    } else {
+      // Clear data when user logs out or loses permission
+      setAllUsersCustomDrive([]);
+      setUserCustomDriveLocalState({});
     }
-  }, [canToggleSignup, loadAllUsersCustomDrive]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canToggleSignup, user]); // Intentionally exclude loadAllUsersCustomDrive to prevent unnecessary re-runs
 
   const handleUpdateUserCustomDrive = async (
     userId: string,
     enabled: boolean,
     path: string | null,
   ): Promise<boolean> => {
+    // Prevent concurrent updates to avoid race conditions
     if (updatingUserCustomDrive) return false;
+
+    // Check if user is still authenticated before proceeding
+    if (!user || !shouldLoadRef.current) {
+      return false;
+    }
 
     try {
       setUpdatingUserCustomDrive(userId);
       await updateCustomDriveSettings(enabled, path, userId);
+
+      // Check again after async operation - user might have logged out
+      if (!shouldLoadRef.current) {
+        return false;
+      }
+
       showToast(
         enabled
           ? "Custom drive enabled for user"
@@ -89,8 +143,10 @@ export function useCustomDriveManagement(canToggleSignup: boolean) {
           error: null,
         },
       }));
-      // Reload all users' settings to sync with server
-      await loadAllUsersCustomDrive();
+      // Reload all users' settings to sync with server (only if still authenticated)
+      if (shouldLoadRef.current) {
+        await loadAllUsersCustomDrive();
+      }
       return true;
     } catch (error) {
       console.error("Failed to update user custom drive settings:", error);

@@ -231,7 +231,6 @@ async function getAllUsersCustomDriveSettings(req, res) {
     );
 
     // Note: No audit logging for view operations - only log actual changes
-    logger.info({ userId: req.userId, userCount: usersWithSettings.length }, 'All users custom drive settings viewed');
 
     sendSuccess(res, { users: usersWithSettings });
   } catch (err) {
@@ -264,6 +263,7 @@ async function updateCustomDriveSettings(req, res) {
       return sendError(res, 400, 'enabled must be a boolean');
     }
     
+    // Basic validation before acquiring lock
     // If enabling, path is required
     if (enabled === true) {
       if (!path || typeof path !== 'string' || path.trim().length === 0) {
@@ -271,74 +271,78 @@ async function updateCustomDriveSettings(req, res) {
       }
     }
     
-    // Get current settings to determine what to update
-    const currentSettings = await getUserCustomDriveSettings(targetUserIdFinal);
-    const newEnabled = enabled !== undefined ? enabled : currentSettings.enabled;
-    
-    // Process path: validate whitespace-only paths before processing
-    let processedPath;
-    if (path !== undefined) {
-      // Path was explicitly provided in request
-      if (path === null) {
-        processedPath = null;
-      } else if (typeof path === 'string') {
-        const trimmed = path.trim();
-        if (trimmed === '') {
-          // Whitespace-only path provided - reject if not explicitly disabling
-          // If enabled is not explicitly set to false, this is an invalid update
-          if (enabled !== false && newEnabled) {
-            return sendError(res, 400, 'Custom drive path cannot be empty or whitespace-only when custom drive is enabled');
-          }
-          // If explicitly disabling, whitespace path is acceptable (will be cleared)
-          processedPath = null;
-        } else {
-          processedPath = trimmed;
-        }
-      } else {
-        processedPath = null;
-      }
-    } else {
-      // Path not provided - use current setting
-      processedPath = currentSettings.path;
-    }
-    
-    // If disabling, clear path
-    const finalEnabled = newEnabled;
-    const finalPath = finalEnabled ? processedPath : null;
-    
-    // Validate path if enabling
-    if (finalEnabled && finalPath) {
-      const fs = require('fs').promises;
-      
-      try {
-        // Check if path exists and is accessible
-        const stats = await fs.stat(finalPath);
-        if (!stats.isDirectory()) {
-          return sendError(res, 400, 'Custom drive path must be a directory');
-        }
-        // Path exists and is a directory - verify we have read/write access
-        try {
-          await fs.access(finalPath, fs.constants.R_OK | fs.constants.W_OK);
-        } catch (accessError) {
-          return sendError(res, 403, `No permission to access custom drive path: ${finalPath}. In Docker, ensure the volume is mounted with correct permissions (read/write access for the container user).`);
-        }
-      } catch (error) {
-        if (error.code === 'ENOENT') {
-          return sendError(res, 400, `Custom drive path does not exist: ${finalPath}. In Docker, ensure the path is mounted as a volume in docker-compose.yml.`);
-        } else if (error.code === 'EACCES') {
-          return sendError(res, 403, `No permission to access custom drive path: ${finalPath}. In Docker, ensure the volume is mounted with correct permissions (read/write access for the container user).`);
-        } else {
-          return sendError(res, 400, `Cannot access custom drive path: ${error.message}`);
-        }
-      }
-    }
-    
-    // Acquire user operation lock to prevent race conditions with concurrent file operations
-    // This ensures that if a user is uploading a file while settings are being changed,
-    // the operations are serialized to prevent filesystem inconsistencies
+    // Acquire user operation lock to prevent race conditions with concurrent updates
+    // This ensures that concurrent updates to the same user are serialized
     const { userOperationLock } = require('../utils/mutex');
     
     const updated = await userOperationLock(targetUserIdFinal, async () => {
+      // Get current settings INSIDE the lock to prevent TOCTOU race conditions
+      // This ensures we always work with the latest state
+      const currentSettings = await getUserCustomDriveSettings(targetUserIdFinal);
+      const newEnabled = enabled !== undefined ? enabled : currentSettings.enabled;
+      
+      // Process path: validate whitespace-only paths before processing
+      let processedPath;
+      if (path !== undefined) {
+        // Path was explicitly provided in request
+        if (path === null) {
+          processedPath = null;
+        } else if (typeof path === 'string') {
+          const trimmed = path.trim();
+          if (trimmed === '') {
+            // Whitespace-only path provided - reject if not explicitly disabling
+            // If enabled is not explicitly set to false, this is an invalid update
+            if (enabled !== false && newEnabled) {
+              throw new Error('Custom drive path cannot be empty or whitespace-only when custom drive is enabled');
+            }
+            // If explicitly disabling, whitespace path is acceptable (will be cleared)
+            processedPath = null;
+          } else {
+            processedPath = trimmed;
+          }
+        } else {
+          processedPath = null;
+        }
+      } else {
+        // Path not provided - use current setting
+        processedPath = currentSettings.path;
+      }
+      
+      // If disabling, clear path
+      const finalEnabled = newEnabled;
+      const finalPath = finalEnabled ? processedPath : null;
+      
+      // Validate path if enabling (inside lock to prevent race conditions)
+      if (finalEnabled && finalPath) {
+        const fs = require('fs').promises;
+        
+        try {
+          // Check if path exists and is accessible
+          const stats = await fs.stat(finalPath);
+          if (!stats.isDirectory()) {
+            throw new Error('Custom drive path must be a directory');
+          }
+          // Path exists and is a directory - verify we have read/write access
+          try {
+            await fs.access(finalPath, fs.constants.R_OK | fs.constants.W_OK);
+          } catch (accessError) {
+            throw new Error(`No permission to access custom drive path: ${finalPath}. In Docker, ensure the volume is mounted with correct permissions (read/write access for the container user).`);
+          }
+        } catch (error) {
+          if (error.code === 'ENOENT') {
+            throw new Error(`Custom drive path does not exist: ${finalPath}. In Docker, ensure the path is mounted as a volume in docker-compose.yml.`);
+          } else if (error.code === 'EACCES') {
+            throw new Error(`No permission to access custom drive path: ${finalPath}. In Docker, ensure the volume is mounted with correct permissions (read/write access for the container user).`);
+          } else if (!error.code) {
+            // Re-throw our custom error messages (custom errors don't have a code property)
+            throw error;
+          } else {
+            // Unexpected filesystem error with a code property
+            throw new Error(`Cannot access custom drive path: ${error.message || error.code}`);
+          }
+        }
+      }
+      
       // Update settings
       let result;
       try {
@@ -348,7 +352,7 @@ async function updateCustomDriveSettings(req, res) {
         if (err.code === '23505' || err.constraint === 'idx_users_custom_drive_path_unique') {
           throw new Error('This path is already in use by another user. Each custom drive path can only be owned by one user.');
         }
-        // Re-throw validation errors
+        // Re-throw validation errors (including path validation errors)
         throw err;
       }
       
@@ -375,34 +379,38 @@ async function updateCustomDriveSettings(req, res) {
         }
       }
       
-      return result;
+      // Return both the result and the final values for logging outside the lock
+      return { result, finalEnabled, finalPath };
     });
     
-    // Log settings update
+    // Log settings update (using values returned from the lock)
     await logAuditEvent('admin.custom_drive.update', {
       status: 'success',
       resourceType: 'settings',
       metadata: {
         setting: 'custom_drive',
         targetUserId: targetUserIdFinal,
-        enabled: finalEnabled,
-        path: finalPath ? '***' : null // Don't log full path for security
+        enabled: updated.finalEnabled,
+        path: updated.finalPath ? '***' : null // Don't log full path for security
       }
     }, req);
-    logger.info({ adminUserId: req.userId, targetUserId: targetUserIdFinal, enabled: finalEnabled }, 'Custom drive settings updated by admin');
+    logger.info({ adminUserId: req.userId, targetUserId: targetUserIdFinal, enabled: updated.finalEnabled }, 'Custom drive settings updated by admin');
     
-    sendSuccess(res, updated);
+    sendSuccess(res, updated.result);
   } catch (err) {
     if (err.message === 'User not found') {
       return sendError(res, 404, 'User not found');
     }
     // Handle validation errors (path security, etc.)
-    if (err.message.includes('path') || 
+    if (err.message && (
+        err.message.includes('path') || 
         err.message.includes('Path') || 
         err.message.includes('directory') ||
         err.message.includes('system') ||
         err.message.includes('already in use') ||
-        err.message.includes('Cannot mount')) {
+        err.message.includes('Cannot mount') ||
+        err.message.includes('permission') ||
+        err.message.includes('does not exist'))) {
       return sendError(res, 400, err.message);
     }
     logger.error({ err }, 'Failed to update custom drive settings');
