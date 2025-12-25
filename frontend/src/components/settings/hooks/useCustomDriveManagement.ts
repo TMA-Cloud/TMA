@@ -156,13 +156,14 @@ export function useCustomDriveManagement(canToggleSignup: boolean) {
 
   const handleProceedEnable = () => {
     const userId = confirmingUserId;
+    const userInfo = allUsersCustomDrive.find((u) => u.id === userId);
     setConfirmingUserId(null);
     setConfirmingAction(null);
-    // Enable and expand for path configuration
+    // Expand for path configuration, but keep enabled state as server state until save succeeds
     setUserCustomDriveLocalState((prev) => ({
       ...prev,
       [userId!]: {
-        enabled: true,
+        enabled: userInfo?.customDrive.enabled || false,
         path: prev[userId!]?.path || "",
         expanded: true,
         error: null,
