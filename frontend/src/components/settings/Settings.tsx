@@ -1,234 +1,91 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState } from "react";
 import { useAuth } from "../../contexts/AuthContext";
 import { useStorageUsage } from "../../hooks/useStorageUsage";
-import {
-  User,
-  HardDrive,
-  Settings as SettingsIcon,
-  ChevronRight,
-  Loader2,
-  RefreshCw,
-  Shield,
-  LogOut,
-  AlertCircle,
-  CheckCircle2,
-} from "lucide-react";
-import { formatFileSize } from "../../utils/fileUtils";
-import {
-  getSignupStatus,
-  toggleSignup,
-  fetchAllUsers,
-  getCurrentVersions,
-  fetchLatestVersions,
-  logoutAllDevices,
-  getActiveSessions,
-  revokeSession,
-  updateCustomDriveSettings,
-  getAllUsersCustomDriveSettings,
-  type UserCustomDriveInfo,
-} from "../../utils/api";
-import type { UserSummary, VersionInfo, ActiveSession } from "../../utils/api";
+import { fetchAllUsers, type UserSummary } from "../../utils/api";
 import { useToast } from "../../hooks/useToast";
-import { Modal } from "../ui/Modal";
+
+// Hooks
+import { useSignupStatus } from "./hooks/useSignupStatus";
+import { useVersions } from "./hooks/useVersions";
+import { useSessions } from "./hooks/useSessions";
+import { useCustomDriveManagement } from "./hooks/useCustomDriveManagement";
+
+// Components
+import { SettingsHeader } from "./components/SettingsHeader";
+import { ProfileSection } from "./sections/ProfileSection";
+import { StorageSection } from "./sections/StorageSection";
+import { CustomDriveManagementSection } from "./sections/CustomDriveManagementSection";
+import { AdministrationSection } from "./sections/AdministrationSection";
+import { UpdatesSection } from "./sections/UpdatesSection";
+import { SecuritySection } from "./sections/SecuritySection";
+
+// Modals
+import { UsersModal } from "./modals/UsersModal";
+import { SessionsModal } from "./modals/SessionsModal";
+import { CustomDriveEnableModal } from "./modals/CustomDriveEnableModal";
+import { CustomDriveDisableModal } from "./modals/CustomDriveDisableModal";
 
 export const Settings: React.FC = () => {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const { usage, loading } = useStorageUsage();
   const { showToast } = useToast();
-  const [signupEnabled, setSignupEnabled] = useState(false);
-  const [canToggleSignup, setCanToggleSignup] = useState(false);
-  const [totalUsers, setTotalUsers] = useState<number | null>(null);
-  const [additionalUsers, setAdditionalUsers] = useState<number | null>(null);
-  const [loadingSignupStatus, setLoadingSignupStatus] = useState(true);
-  const [togglingSignup, setTogglingSignup] = useState(false);
+
+  // Signup status hook
+  const {
+    signupEnabled,
+    canToggleSignup,
+    totalUsers,
+    additionalUsers,
+    loadingSignupStatus,
+    togglingSignup,
+    handleToggleSignup,
+  } = useSignupStatus();
+
+  // Versions hook
+  const {
+    versionStatusText,
+    versionDescription,
+    checkingVersions,
+    versionError,
+    handleCheckVersions,
+  } = useVersions();
+
+  // Sessions hook
+  const {
+    activeSessions,
+    loadingSessions,
+    revokingSessionId,
+    loggingOutAll,
+    loadActiveSessions,
+    handleRevokeSession,
+    handleLogoutAllDevices,
+  } = useSessions();
+
+  // Custom drive management hook
+  const {
+    allUsersCustomDrive,
+    loadingAllUsersCustomDrive,
+    updatingUserCustomDrive,
+    userCustomDriveLocalState,
+    setUserCustomDriveLocalState,
+    confirmingUserId,
+    confirmingAction,
+    handleUpdateUserCustomDrive,
+    handleConfirmEnable,
+    handleConfirmDisable,
+    handleCancelConfirmation,
+    handleProceedEnable,
+    handleProceedDisable,
+  } = useCustomDriveManagement(canToggleSignup);
+
+  // Users modal state
   const [usersModalOpen, setUsersModalOpen] = useState(false);
   const [usersList, setUsersList] = useState<UserSummary[]>([]);
   const [loadingUsersList, setLoadingUsersList] = useState(false);
   const [usersListError, setUsersListError] = useState<string | null>(null);
-  const [currentVersions, setCurrentVersions] = useState<VersionInfo | null>(
-    null,
-  );
-  const [latestVersions, setLatestVersions] = useState<VersionInfo | null>(
-    null,
-  );
-  const [checkingVersions, setCheckingVersions] = useState(false);
-  const [versionChecked, setVersionChecked] = useState(false);
-  const [versionError, setVersionError] = useState<string | null>(null);
-  const [loggingOutAll, setLoggingOutAll] = useState(false);
-  const [activeSessions, setActiveSessions] = useState<ActiveSession[]>([]);
-  const [loadingSessions, setLoadingSessions] = useState(false);
-  const [revokingSessionId, setRevokingSessionId] = useState<string | null>(
-    null,
-  );
   const [sessionsModalOpen, setSessionsModalOpen] = useState(false);
-  const [confirmingUserId, setConfirmingUserId] = useState<string | null>(null);
-  const [confirmingAction, setConfirmingAction] = useState<
-    "enable" | "disable" | null
-  >(null);
-  const [allUsersCustomDrive, setAllUsersCustomDrive] = useState<
-    UserCustomDriveInfo[]
-  >([]);
-  const [loadingAllUsersCustomDrive, setLoadingAllUsersCustomDrive] =
-    useState(false);
-  const [updatingUserCustomDrive, setUpdatingUserCustomDrive] = useState<
-    string | null
-  >(null);
-  const [userCustomDriveLocalState, setUserCustomDriveLocalState] = useState<
-    Record<
-      string,
-      {
-        enabled: boolean;
-        path: string;
-        expanded: boolean;
-        error: string | null;
-      }
-    >
-  >({});
-  const storageUsagePercent =
-    usage && usage.total > 0
-      ? Math.min(100, Math.round((usage.used / usage.total) * 100))
-      : null;
 
-  const loadAllUsersCustomDrive = useCallback(async () => {
-    try {
-      setLoadingAllUsersCustomDrive(true);
-      const { users } = await getAllUsersCustomDriveSettings();
-      setAllUsersCustomDrive(users);
-      // Initialize local state for each user
-      const initialState: Record<
-        string,
-        {
-          enabled: boolean;
-          path: string;
-          expanded: boolean;
-          error: string | null;
-        }
-      > = {};
-      users.forEach((user) => {
-        initialState[user.id] = {
-          enabled: user.customDrive.enabled,
-          path: user.customDrive.path || "",
-          expanded: false,
-          error: null,
-        };
-      });
-      setUserCustomDriveLocalState(initialState);
-    } catch (error) {
-      console.error("Failed to load all users custom drive settings:", error);
-      showToast("Failed to load users' custom drive settings", "error");
-    } finally {
-      setLoadingAllUsersCustomDrive(false);
-    }
-  }, [showToast]);
-
-  useEffect(() => {
-    loadSignupStatus();
-    loadCurrentVersions();
-    loadActiveSessions();
-  }, []);
-
-  useEffect(() => {
-    // Only load custom drive settings if user is admin (after signup status is loaded)
-    if (!loadingSignupStatus && canToggleSignup) {
-      loadAllUsersCustomDrive();
-    }
-  }, [loadingSignupStatus, canToggleSignup, loadAllUsersCustomDrive]);
-
-  const loadSignupStatus = async () => {
-    try {
-      setLoadingSignupStatus(true);
-      const status = await getSignupStatus();
-      setSignupEnabled(status.signupEnabled);
-      setCanToggleSignup(status.canToggle);
-      setTotalUsers(
-        typeof status.totalUsers === "number" ? status.totalUsers : null,
-      );
-      setAdditionalUsers(
-        typeof status.additionalUsers === "number"
-          ? status.additionalUsers
-          : null,
-      );
-    } catch (error) {
-      console.error("Failed to load signup status:", error);
-    } finally {
-      setLoadingSignupStatus(false);
-    }
-  };
-
-  const handleUpdateUserCustomDrive = async (
-    userId: string,
-    enabled: boolean,
-    path: string | null,
-  ): Promise<boolean> => {
-    if (updatingUserCustomDrive) return false;
-
-    try {
-      setUpdatingUserCustomDrive(userId);
-      await updateCustomDriveSettings(enabled, path, userId);
-      showToast(
-        enabled
-          ? "Custom drive enabled for user"
-          : "Custom drive disabled for user",
-        "success",
-      );
-      // Update local state
-      setUserCustomDriveLocalState((prev) => ({
-        ...prev,
-        [userId]: {
-          enabled,
-          path: path || "",
-          expanded: false,
-          error: null,
-        },
-      }));
-      // Reload all users' settings to sync with server
-      await loadAllUsersCustomDrive();
-      return true;
-    } catch (error) {
-      console.error("Failed to update user custom drive settings:", error);
-      let errorMessage = "Failed to update custom drive settings";
-      if (error instanceof Error) {
-        errorMessage = error.message;
-      }
-      // Update error in local state
-      setUserCustomDriveLocalState((prev) => ({
-        ...prev,
-        [userId]: {
-          ...(prev[userId] || {
-            enabled: false,
-            path: "",
-            expanded: false,
-            error: null,
-          }),
-          error: errorMessage,
-        },
-      }));
-      showToast(errorMessage, "error");
-      return false;
-    } finally {
-      setUpdatingUserCustomDrive(null);
-    }
-  };
-
-  const handleToggleSignup = async () => {
-    if (!canToggleSignup || togglingSignup) return;
-
-    try {
-      setTogglingSignup(true);
-      const newStatus = !signupEnabled;
-      await toggleSignup(newStatus);
-      setSignupEnabled(newStatus);
-      showToast(
-        newStatus ? "Signup enabled" : "Signup disabled",
-        newStatus ? "success" : "info",
-      );
-    } catch (error) {
-      console.error("Failed to toggle signup:", error);
-      showToast("Failed to update signup setting", "error");
-    } finally {
-      setTogglingSignup(false);
-    }
-  };
+  // Data is loaded automatically by hooks on mount
 
   const loadUsersList = async () => {
     try {
@@ -236,8 +93,6 @@ export const Settings: React.FC = () => {
       setUsersListError(null);
       const { users } = await fetchAllUsers();
       setUsersList(users);
-      setTotalUsers(users.length);
-      setAdditionalUsers(Math.max(users.length - 1, 0));
     } catch (error) {
       console.error("Failed to load users list:", error);
       setUsersListError("Unable to load users right now");
@@ -252,1144 +107,113 @@ export const Settings: React.FC = () => {
     loadUsersList();
   };
 
-  const loadCurrentVersions = async () => {
-    try {
-      const versions = await getCurrentVersions();
-      setCurrentVersions(versions);
-    } catch (error) {
-      console.error("Failed to load current versions:", error);
-      setVersionError("Unable to load current version information");
-    }
-  };
-
-  const handleCheckVersions = useCallback(async () => {
-    if (checkingVersions) return;
-
-    try {
-      setCheckingVersions(true);
-      setVersionError(null);
-
-      // Always fetch fresh current versions to detect backend redeployments
-      const [current, latest] = await Promise.all([
-        getCurrentVersions(),
-        fetchLatestVersions(),
-      ]);
-
-      setCurrentVersions(current);
-      setLatestVersions(latest);
-      setVersionChecked(true);
-
-      const allUpToDate =
-        current.frontend === latest.frontend &&
-        current.backend === latest.backend;
-
-      showToast(
-        allUpToDate ? "All components are up to date" : "Updates are available",
-        allUpToDate ? "success" : "info",
-      );
-    } catch (error) {
-      console.error("Failed to check versions:", error);
-      setVersionError("Unable to check for updates right now");
-      showToast("Failed to check for updates", "error");
-    } finally {
-      setCheckingVersions(false);
-    }
-  }, [checkingVersions, showToast]);
-
-  const handleCloseUsersModal = () => {
-    setUsersModalOpen(false);
-  };
-
-  const loadActiveSessions = async () => {
-    try {
-      setLoadingSessions(true);
-      const { sessions } = await getActiveSessions();
-      setActiveSessions(sessions);
-    } catch (error) {
-      console.error("Failed to load active sessions:", error);
-    } finally {
-      setLoadingSessions(false);
-    }
-  };
-
   const handleShowSessions = () => {
     setSessionsModalOpen(true);
     loadActiveSessions();
   };
 
-  const handleRevokeSession = async (sessionId: string) => {
-    if (revokingSessionId) return;
+  const confirmingUserInfo = confirmingUserId
+    ? allUsersCustomDrive.find((u) => u.id === confirmingUserId)
+    : undefined;
 
-    // Check if this is the current session
-    const sessionToRevoke = activeSessions.find((s) => s.id === sessionId);
-    const isRevokingCurrent = sessionToRevoke?.isCurrent || false;
-
-    try {
-      setRevokingSessionId(sessionId);
-      await revokeSession(sessionId);
-      showToast("Session revoked successfully", "success");
-
-      // If revoking current session, user will be logged out on next request
-      if (isRevokingCurrent) {
-        // Give a moment for the toast to show, then logout
-        setTimeout(async () => {
-          try {
-            await logout();
-          } catch (error) {
-            console.error("Failed to logout after revoking session:", error);
-            window.location.href = "/";
-          }
-        }, 1000);
-      } else {
-        // Reload sessions to update the list
-        await loadActiveSessions();
-      }
-    } catch (error) {
-      console.error("Failed to revoke session:", error);
-      showToast("Failed to revoke session", "error");
-    } finally {
-      setRevokingSessionId(null);
-    }
-  };
-
-  const handleLogoutAllDevices = async () => {
-    if (loggingOutAll) return;
-
-    try {
-      setLoggingOutAll(true);
-      await logoutAllDevices();
-      showToast("Successfully logged out from all devices", "success");
-      // Clear sessions list since all are invalidated
-      setActiveSessions([]);
-    } catch (error) {
-      console.error("Failed to logout from all devices:", error);
-      showToast("Failed to logout from all devices", "error");
-      // Don't return - still clear local session to avoid inconsistent state
-      // (e.g., server may have processed the request before network error)
-    } finally {
-      setLoggingOutAll(false);
-    }
-
-    // Always clear local session to ensure consistent state
-    // If server logout failed, user can simply log back in
-    // If server logout succeeded (or partially succeeded), this ensures local state matches
-    try {
-      await logout();
-    } catch (error) {
-      console.error("Failed to clear local session:", error);
-      // Redirect to login page manually if logout() fails
-      window.location.href = "/";
-    }
-  };
-
-  const formatSignupDate = (isoString: string) => {
-    const date = new Date(isoString);
-    if (Number.isNaN(date.getTime())) {
-      return "Unknown";
-    }
-    return date.toLocaleString();
-  };
-
-  const versionStatusText = (key: keyof VersionInfo) => {
-    const current = currentVersions?.[key];
-    if (!current) {
-      return "Loading current version...";
-    }
-
-    if (!versionChecked || !latestVersions) {
-      return `Current v${current}`;
-    }
-
-    const latest = latestVersions[key];
-    if (!latest) {
-      return `Current v${current}`;
-    }
-
-    if (current === latest) {
-      return `☑️ Up to date (v${current})`;
-    }
-
-    return `⚠️ Outdated (current v${current}, latest v${latest})`;
-  };
-
-  const versionDescription = (key: keyof VersionInfo) => {
-    if (versionError) return versionError;
-    if (checkingVersions && !versionChecked) return "Checking update feed...";
-    if (latestVersions?.[key])
-      return `Latest available: v${latestVersions[key]}`;
-    return "Version reported by this installation.";
-  };
-
-  const settingsSections = [
-    {
-      title: "Profile",
-      icon: User,
-      description: "Personal information that appears on shared items.",
-      items: [
-        { label: "Full Name", value: user?.name || "" },
-        { label: "Email", value: user?.email || "" },
-      ],
-    },
-    {
-      title: "Storage",
-      icon: HardDrive,
-      description: "Track how your allocated drive space is being used.",
-      items: [
-        {
-          label: "Used Space",
-          value:
-            loading || !usage
-              ? "Loading..."
-              : `${formatFileSize(usage.used)} of ${formatFileSize(usage.total)}`,
-        },
-        {
-          label: "Available Space",
-          value: loading || !usage ? "Loading..." : formatFileSize(usage.free),
-        },
-      ],
-    },
-    ...(canToggleSignup
-      ? [
-          {
-            title: "Custom Drive Management",
-            icon: Shield,
-            description:
-              "Manage custom drive settings for all users (Admin only).",
-            items: [],
-            customContent: (
-              <div className="space-y-4">
-                {loadingAllUsersCustomDrive ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
-                    <span className="ml-2 text-gray-600 dark:text-gray-400">
-                      Loading users' custom drive settings...
-                    </span>
-                  </div>
-                ) : allUsersCustomDrive.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-                    No users found
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {allUsersCustomDrive.map((userInfo) => {
-                      const isUpdating =
-                        updatingUserCustomDrive === userInfo.id;
-                      const localState = userCustomDriveLocalState[
-                        userInfo.id
-                      ] || {
-                        enabled: userInfo.customDrive.enabled,
-                        path: userInfo.customDrive.path || "",
-                        expanded: false,
-                        error: null,
-                      };
-
-                      return (
-                        <div
-                          key={userInfo.id}
-                          className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 space-y-3"
-                        >
-                          <div className="flex items-center justify-between">
-                            <div className="flex-1">
-                              <h4 className="font-medium text-gray-900 dark:text-gray-100">
-                                {userInfo.name || userInfo.email}
-                              </h4>
-                              <p className="text-sm text-gray-500 dark:text-gray-400">
-                                {userInfo.email}
-                              </p>
-                              {localState.enabled &&
-                                localState.path &&
-                                !localState.expanded && (
-                                  <p className="text-xs text-gray-600 dark:text-gray-400 mt-2 font-mono bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded inline-block">
-                                    {localState.path}
-                                  </p>
-                                )}
-                            </div>
-                            <label className="relative inline-flex items-center cursor-pointer">
-                              <input
-                                type="checkbox"
-                                checked={localState.enabled}
-                                onChange={(e) => {
-                                  const newValue = e.target.checked;
-                                  // Show confirmation modal instead of directly updating
-                                  setConfirmingUserId(userInfo.id);
-                                  setConfirmingAction(
-                                    newValue ? "enable" : "disable",
-                                  );
-                                  // Don't update state yet - wait for confirmation
-                                }}
-                                disabled={isUpdating}
-                                className="sr-only peer"
-                              />
-                              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
-                            </label>
-                          </div>
-
-                          {localState.enabled && localState.expanded && (
-                            <div className="space-y-3 pt-3 border-t border-gray-200 dark:border-gray-700">
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                  Custom Drive Path
-                                </label>
-                                <input
-                                  type="text"
-                                  value={localState.path}
-                                  onChange={(e) => {
-                                    setUserCustomDriveLocalState((prev) => ({
-                                      ...prev,
-                                      [userInfo.id]: {
-                                        enabled:
-                                          prev[userInfo.id]?.enabled || false,
-                                        path: e.target.value,
-                                        expanded:
-                                          prev[userInfo.id]?.expanded || false,
-                                        error: null,
-                                      },
-                                    }));
-                                  }}
-                                  placeholder="/mnt/external_drive or C:\\MyDrive"
-                                  disabled={isUpdating}
-                                  className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 dark:bg-gray-700 dark:text-white ${
-                                    localState.error
-                                      ? "border-red-500 focus:ring-red-500 focus:border-red-500"
-                                      : "border-gray-300 focus:ring-blue-500 focus:border-blue-500 dark:border-gray-600"
-                                  }`}
-                                />
-                              </div>
-
-                              {localState.error && (
-                                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
-                                  <div className="flex items-start gap-2">
-                                    <AlertCircle className="w-4 h-4 text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" />
-                                    <p className="text-sm text-red-700 dark:text-red-400">
-                                      {localState.error}
-                                    </p>
-                                  </div>
-                                </div>
-                              )}
-
-                              <div className="flex items-center gap-3">
-                                <button
-                                  onClick={async () => {
-                                    if (!localState.path.trim()) {
-                                      setUserCustomDriveLocalState((prev) => ({
-                                        ...prev,
-                                        [userInfo.id]: {
-                                          enabled:
-                                            prev[userInfo.id]?.enabled || false,
-                                          path: prev[userInfo.id]?.path || "",
-                                          expanded:
-                                            prev[userInfo.id]?.expanded ||
-                                            false,
-                                          error: "Path is required",
-                                        },
-                                      }));
-                                      return;
-                                    }
-                                    const success =
-                                      await handleUpdateUserCustomDrive(
-                                        userInfo.id,
-                                        true,
-                                        localState.path.trim(),
-                                      );
-                                    // Only update local state on success (handleUpdateUserCustomDrive already handles errors)
-                                    if (success) {
-                                      setUserCustomDriveLocalState((prev) => ({
-                                        ...prev,
-                                        [userInfo.id]: {
-                                          enabled: true,
-                                          path: localState.path.trim(),
-                                          expanded: false,
-                                          error: null,
-                                        },
-                                      }));
-                                    }
-                                    // If not successful, error state is already set by handleUpdateUserCustomDrive
-                                  }}
-                                  disabled={
-                                    isUpdating || !localState.path.trim()
-                                  }
-                                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-colors"
-                                >
-                                  {isUpdating ? (
-                                    <>
-                                      <Loader2 className="w-4 h-4 animate-spin" />
-                                      <span>Saving...</span>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <CheckCircle2 className="w-4 h-4" />
-                                      <span>Save</span>
-                                    </>
-                                  )}
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    setUserCustomDriveLocalState((prev) => ({
-                                      ...prev,
-                                      [userInfo.id]: {
-                                        enabled:
-                                          prev[userInfo.id]?.enabled || false,
-                                        path: userInfo.customDrive.path || "",
-                                        expanded: false,
-                                        error: null,
-                                      },
-                                    }));
-                                  }}
-                                  disabled={isUpdating}
-                                  className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                >
-                                  Cancel
-                                </button>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            ),
-          },
-        ]
-      : []),
-    ...(canToggleSignup
-      ? [
-          {
-            title: "Administration",
-            icon: SettingsIcon,
-            description: "Manage workspace access, visibility, and onboarding.",
-            items: [
-              {
-                label: "Other Registered Users",
-                value: loadingSignupStatus
-                  ? "Loading..."
-                  : additionalUsers === null
-                    ? "Unavailable"
-                    : additionalUsers === 0
-                      ? "No other users yet"
-                      : `${additionalUsers} ${
-                          additionalUsers === 1 ? "user" : "users"
-                        }`,
-              },
-              {
-                label: "Total Users (including you)",
-                value: loadingSignupStatus
-                  ? "Loading..."
-                  : totalUsers === null
-                    ? "Unavailable"
-                    : totalUsers.toString(),
-              },
-              {
-                label: "Registered Users",
-                value: "",
-                action: loadingUsersList ? "Loading..." : "Show all users",
-                onAction: handleShowUsers,
-                actionDisabled: loadingUsersList,
-                description: "Review every account currently registered",
-              },
-              {
-                label: "Allow User Signup",
-                value: signupEnabled,
-                toggle: true,
-                description: "Enable or disable new user registration",
-              },
-            ],
-          },
-        ]
-      : []),
-    {
-      title: "Updates",
-      icon: RefreshCw,
-      description: "Check whether this deployment is up to date.",
-      items: [
-        {
-          label: "Frontend",
-          value: versionStatusText("frontend"),
-          description: versionDescription("frontend"),
-        },
-        {
-          label: "Backend",
-          value: versionStatusText("backend"),
-          description: versionDescription("backend"),
-        },
-        {
-          label: "Check for Updates",
-          value: "",
-          action: checkingVersions ? "Checking..." : "Check now",
-          onAction: handleCheckVersions,
-          actionDisabled: checkingVersions,
-          description:
-            versionError ??
-            "Fetches latest version tags from tma-cloud.github.io",
-        },
-      ],
-    },
-    {
-      title: "Security",
-      icon: Shield,
-      description: "Manage your account security and active sessions.",
-      items: [
-        {
-          label: "Active Sessions",
-          value: "",
-          action: loadingSessions ? "Loading..." : "View sessions",
-          onAction: handleShowSessions,
-          actionDisabled: loadingSessions,
-          description: `View and manage all active sessions. ${activeSessions.length > 0 ? `${activeSessions.length} active session${activeSessions.length === 1 ? "" : "s"}` : "No active sessions"}.`,
-        },
-        {
-          label: "Logout All Devices",
-          value: "",
-          action: loggingOutAll ? "Logging out..." : "Logout everywhere",
-          onAction: handleLogoutAllDevices,
-          actionDisabled: loggingOutAll,
-          actionIcon: LogOut,
-          actionVariant: "danger" as const,
-          description:
-            "Sign out from all devices and browsers. You will need to login again.",
-        },
-      ],
-    },
-  ];
+  const confirmingLocalState = confirmingUserId
+    ? userCustomDriveLocalState[confirmingUserId]
+    : undefined;
 
   return (
     <div className="p-6 md:p-8 space-y-8">
-      {/* Hero / Header */}
-      <div
-        className="relative overflow-hidden card-premium hover-lift spacing-card"
-        style={{ animation: "fadeIn 0.45s ease both" }}
-      >
-        <div className="relative flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
-          <div className="space-y-3">
-            <p className="uppercase tracking-[0.35em] text-xs font-semibold text-blue-500/80">
-              Control Center
-            </p>
-            <h1 className="text-4xl md:text-5xl font-bold text-gray-900 dark:text-gray-100 tracking-tight">
-              Settings
-            </h1>
-            <p className="text-base md:text-lg text-gray-600/80 dark:text-gray-400/80 max-w-2xl">
-              Manage your account preferences and adjust application controls
-            </p>
-            {user?.name && (
-              <div className="inline-flex items-center gap-2 mt-4 px-4 py-2 rounded-full bg-blue-50/80 dark:bg-blue-900/30 text-sm font-medium text-blue-700 dark:text-blue-200 border border-blue-200/50 dark:border-blue-800/50">
-                <User className="w-4 h-4 icon-muted" />
-                <span>Signed in as {user.name}</span>
-              </div>
-            )}
-          </div>
-
-          <div className="w-full md:w-1/2 space-y-3">
-            <div className="flex items-center justify-between text-sm font-medium text-gray-700 dark:text-gray-300">
-              <span>Storage usage</span>
-              <span className="font-semibold">
-                {storageUsagePercent !== null
-                  ? `${storageUsagePercent}%`
-                  : "Loading..."}
-              </span>
-            </div>
-            <div className="relative h-4 w-full rounded-full bg-gray-200/80 dark:bg-gray-700/80 overflow-hidden border border-gray-300/50 dark:border-gray-600/50 shadow-inner">
-              <div
-                className="h-full rounded-full bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 transition-[width] duration-300 shadow-sm"
-                style={{
-                  width:
-                    storageUsagePercent !== null && storageUsagePercent > 0
-                      ? `${Math.max(storageUsagePercent, 1)}%`
-                      : "0%",
-                }}
-              />
-            </div>
-            <p className="text-xs text-gray-500/80 dark:text-gray-400/80">
-              {loading || !usage
-                ? "Calculating storage details..."
-                : usage.used > 0
-                  ? `${formatFileSize(usage.used)} used · ${formatFileSize(usage.free)} free of ${formatFileSize(usage.total)}`
-                  : `${formatFileSize(usage.free)} free of ${formatFileSize(usage.total)}`}
-            </p>
-          </div>
-        </div>
-      </div>
+      <SettingsHeader
+        userName={user?.name}
+        usage={usage ?? undefined}
+        loading={loading}
+      />
 
       {/* Settings Sections */}
       <div className="space-y-8">
-        {settingsSections.map((section, index) => {
-          const Icon = section.icon;
+        <ProfileSection userName={user?.name} userEmail={user?.email} />
 
-          return (
-            <div
-              key={index}
-              className="relative overflow-hidden card-premium hover-lift spacing-card"
-              style={{
-                animation: "slideUp 0.45s cubic-bezier(0.16, 1, 0.3, 1) both",
-                animationDelay: `${index * 80}ms`,
-              }}
-            >
-              <div className="flex flex-wrap items-center gap-4 mb-6">
-                <div className="p-3 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-300">
-                  <Icon className="w-5 h-5 icon-muted" />
-                </div>
-                <div>
-                  <h3 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-gray-100 tracking-tight mb-1">
-                    {section.title}
-                  </h3>
-                  {"description" in section && section.description && (
-                    <p className="text-sm text-gray-500/80 dark:text-gray-400/80">
-                      {section.description}
-                    </p>
-                  )}
-                </div>
-              </div>
+        <StorageSection usage={usage ?? undefined} loading={loading} />
 
-              <div className="space-y-4">
-                {"customContent" in section && section.customContent
-                  ? section.customContent
-                  : section.items?.map((item, itemIndex) => (
-                      <div
-                        key={itemIndex}
-                        className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-2xl bg-gray-50/70 dark:bg-gray-900/60 px-4 py-3 border border-transparent hover:border-blue-500/40 transition-all duration-200"
-                      >
-                        <div>
-                          <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                            {item.label}
-                          </p>
-                          {"description" in item && item.description && (
-                            <p className="text-sm text-gray-500 dark:text-gray-400">
-                              {item.description}
-                            </p>
-                          )}
-                        </div>
+        {canToggleSignup && (
+          <CustomDriveManagementSection
+            allUsersCustomDrive={allUsersCustomDrive}
+            loadingAllUsersCustomDrive={loadingAllUsersCustomDrive}
+            updatingUserCustomDrive={updatingUserCustomDrive}
+            userCustomDriveLocalState={userCustomDriveLocalState}
+            setUserCustomDriveLocalState={setUserCustomDriveLocalState}
+            onConfirmEnable={handleConfirmEnable}
+            onConfirmDisable={handleConfirmDisable}
+            onUpdateUserCustomDrive={handleUpdateUserCustomDrive}
+          />
+        )}
 
-                        {"toggle" in item && item.toggle !== undefined ? (
-                          <div className="flex flex-col items-end">
-                            <button
-                              onClick={handleToggleSignup}
-                              disabled={togglingSignup || loadingSignupStatus}
-                              className={`
-                            relative inline-flex h-6 w-12 items-center rounded-full transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500
-                            ${item.value ? "bg-gradient-to-r from-blue-500 to-indigo-500" : "bg-gray-200 dark:bg-gray-700"}
-                            ${togglingSignup || loadingSignupStatus ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}
-                          `}
-                              aria-label={item.label}
-                            >
-                              <span
-                                className={`
-                              inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-200
-                              ${item.value ? "translate-x-7" : "translate-x-1"}
-                            `}
-                              />
-                            </button>
-                          </div>
-                        ) : "action" in item && item.action !== undefined ? (
-                          <div className="flex flex-col items-end">
-                            {(() => {
-                              const isDanger =
-                                "actionVariant" in item &&
-                                item.actionVariant === "danger";
-                              const isDisabled =
-                                ("actionDisabled" in item &&
-                                  item.actionDisabled === true) ||
-                                !(
-                                  "onAction" in item &&
-                                  typeof item.onAction === "function"
-                                );
-                              const ActionIcon =
-                                "actionIcon" in item && item.actionIcon
-                                  ? item.actionIcon
-                                  : ChevronRight;
+        {canToggleSignup && (
+          <AdministrationSection
+            loadingSignupStatus={loadingSignupStatus}
+            additionalUsers={additionalUsers}
+            totalUsers={totalUsers}
+            signupEnabled={signupEnabled}
+            loadingUsersList={loadingUsersList}
+            onToggleSignup={handleToggleSignup}
+            togglingSignup={togglingSignup}
+            onShowUsers={handleShowUsers}
+          />
+        )}
 
-                              return (
-                                <button
-                                  onClick={
-                                    "onAction" in item &&
-                                    typeof item.onAction === "function"
-                                      ? item.onAction
-                                      : undefined
-                                  }
-                                  disabled={isDisabled}
-                                  className={`
-                                inline-flex items-center gap-2 px-4 py-2 text-sm rounded-2xl transition-all duration-200 border
-                                ${
-                                  isDisabled
-                                    ? "bg-gray-200 dark:bg-gray-700 cursor-not-allowed opacity-70 border-transparent"
-                                    : isDanger
-                                      ? "border-red-500/40 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30"
-                                      : "border-blue-500/40 text-blue-600 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/30"
-                                }
-                              `}
-                                >
-                                  {item.label === "Registered Users" &&
-                                  loadingUsersList ? (
-                                    <Loader2 className="w-4 h-4 animate-spin" />
-                                  ) : item.label === "Active Sessions" &&
-                                    loadingSessions ? (
-                                    <Loader2 className="w-4 h-4 animate-spin" />
-                                  ) : item.label === "Logout All Devices" &&
-                                    loggingOutAll ? (
-                                    <Loader2 className="w-4 h-4 animate-spin" />
-                                  ) : (
-                                    <ActionIcon className="w-4 h-4" />
-                                  )}
-                                  <span>{item.action}</span>
-                                </button>
-                              );
-                            })()}
-                          </div>
-                        ) : (
-                          <span className="text-base font-semibold text-gray-700 dark:text-gray-200 text-left sm:text-right break-words">
-                            {item.value}
-                          </span>
-                        )}
-                      </div>
-                    ))}
-              </div>
-            </div>
-          );
-        })}
+        <UpdatesSection
+          versionStatusText={versionStatusText}
+          versionDescription={versionDescription}
+          checkingVersions={checkingVersions}
+          versionError={versionError}
+          onCheckVersions={handleCheckVersions}
+        />
+
+        <SecuritySection
+          activeSessionsCount={activeSessions.length}
+          loadingSessions={loadingSessions}
+          loggingOutAll={loggingOutAll}
+          onShowSessions={handleShowSessions}
+          onLogoutAllDevices={handleLogoutAllDevices}
+        />
       </div>
 
-      <Modal
+      {/* Modals */}
+      <UsersModal
         isOpen={usersModalOpen}
-        onClose={handleCloseUsersModal}
-        title="All Registered Users"
-        size="lg"
-      >
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-gray-600 dark:text-gray-300">
-              {usersList.length > 0
-                ? `${usersList.length} user${usersList.length === 1 ? "" : "s"} total`
-                : "No users to display yet"}
-            </p>
-            <button
-              onClick={loadUsersList}
-              disabled={loadingUsersList}
-              className={`
-                px-3 py-1 text-sm rounded-lg transition-colors duration-200 border
-                ${
-                  loadingUsersList
-                    ? "border-gray-300 dark:border-gray-600 text-gray-400 cursor-not-allowed"
-                    : "border-blue-500 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20"
-                }
-              `}
-            >
-              {loadingUsersList ? "Refreshing..." : "Refresh"}
-            </button>
-          </div>
+        onClose={() => setUsersModalOpen(false)}
+        usersList={usersList}
+        loadingUsersList={loadingUsersList}
+        usersListError={usersListError}
+        onRefresh={loadUsersList}
+      />
 
-          {usersListError && (
-            <p className="text-sm text-red-500 dark:text-red-400">
-              {usersListError}
-            </p>
-          )}
-
-          {loadingUsersList ? (
-            <p className="text-center text-gray-600 dark:text-gray-300 flex items-center justify-center gap-2">
-              <Loader2 className="w-4 h-4 animate-spin" />
-              Loading users...
-            </p>
-          ) : usersList.length === 0 ? (
-            <p className="text-center text-gray-600 dark:text-gray-300">
-              Once people sign up, their accounts will appear here.
-            </p>
-          ) : (
-            <div className="overflow-x-auto max-h-[60vh]">
-              <table className="min-w-full text-sm">
-                <thead>
-                  <tr className="text-left text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700">
-                    <th className="py-2 pr-4 font-medium">Name</th>
-                    <th className="py-2 pr-4 font-medium">Email</th>
-                    <th className="py-2 font-medium">Joined</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {usersList.map((listedUser) => (
-                    <tr
-                      key={listedUser.id}
-                      className="border-b border-gray-100 dark:border-gray-800 last:border-b-0 hover:bg-gray-50/60 dark:hover:bg-gray-900/40 transition-colors"
-                    >
-                      <td className="py-2 pr-4 text-gray-900 dark:text-gray-100">
-                        {listedUser.name || "Unnamed"}
-                      </td>
-                      <td className="py-2 pr-4 text-gray-700 dark:text-gray-300">
-                        {listedUser.email}
-                      </td>
-                      <td className="py-2 text-gray-600 dark:text-gray-400">
-                        {formatSignupDate(listedUser.createdAt)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      </Modal>
-
-      <Modal
+      <SessionsModal
         isOpen={sessionsModalOpen}
         onClose={() => setSessionsModalOpen(false)}
-        title="Active Sessions"
-        size="lg"
-      >
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-gray-600 dark:text-gray-300">
-              {activeSessions.length > 0
-                ? `${activeSessions.length} active session${activeSessions.length === 1 ? "" : "s"}`
-                : "No active sessions"}
-            </p>
-            <button
-              onClick={loadActiveSessions}
-              disabled={loadingSessions}
-              className={`
-                px-3 py-1 text-sm rounded-lg transition-colors duration-200 border
-                ${
-                  loadingSessions
-                    ? "border-gray-300 dark:border-gray-600 text-gray-400 cursor-not-allowed"
-                    : "border-blue-500 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20"
-                }
-              `}
-            >
-              {loadingSessions ? "Refreshing..." : "Refresh"}
-            </button>
-          </div>
+        activeSessions={activeSessions}
+        loadingSessions={loadingSessions}
+        revokingSessionId={revokingSessionId}
+        onRefresh={loadActiveSessions}
+        onRevokeSession={handleRevokeSession}
+      />
 
-          {loadingSessions ? (
-            <p className="text-center text-gray-600 dark:text-gray-300 flex items-center justify-center gap-2">
-              <Loader2 className="w-4 h-4 animate-spin" />
-              Loading sessions...
-            </p>
-          ) : activeSessions.length === 0 ? (
-            <p className="text-center text-gray-600 dark:text-gray-300">
-              No active sessions found.
-            </p>
-          ) : (
-            <div className="space-y-3 overflow-y-auto max-h-[60vh]">
-              {activeSessions.map((session) => {
-                const isRevoking = revokingSessionId === session.id;
-                const userAgent = session.user_agent || "Unknown device";
-                const ipAddress = session.ip_address || "Unknown location";
-                const createdAt = new Date(session.created_at);
-                const lastActivity = new Date(session.last_activity);
-                const isCurrentSession = session.isCurrent || false;
-
-                // Parse user agent to get device info
-                const getDeviceInfo = (ua: string) => {
-                  if (
-                    ua.includes("Mobile") ||
-                    ua.includes("Android") ||
-                    ua.includes("iPhone")
-                  ) {
-                    return "Mobile";
-                  }
-                  if (ua.includes("Windows")) return "Windows";
-                  if (ua.includes("Mac")) return "Mac";
-                  if (ua.includes("Linux")) return "Linux";
-                  return "Unknown";
-                };
-
-                return (
-                  <div
-                    key={session.id}
-                    className="flex flex-col gap-3 p-4 rounded-xl bg-gray-50/70 dark:bg-gray-900/60 border border-gray-200 dark:border-gray-700"
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                            {getDeviceInfo(userAgent)}
-                          </p>
-                          {isCurrentSession && (
-                            <span className="px-2 py-0.5 text-xs rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
-                              Current
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">
-                          {userAgent.length > 60
-                            ? `${userAgent.substring(0, 60)}...`
-                            : userAgent}
-                        </p>
-                        <div className="text-xs text-gray-500 dark:text-gray-500 space-y-0.5">
-                          <p>IP: {ipAddress}</p>
-                          <p>Created: {createdAt.toLocaleString()}</p>
-                          <p>Last activity: {lastActivity.toLocaleString()}</p>
-                        </div>
-                      </div>
-                      {!isCurrentSession && (
-                        <button
-                          onClick={() => handleRevokeSession(session.id)}
-                          disabled={isRevoking}
-                          className={`
-                            px-3 py-1.5 text-xs rounded-lg transition-colors duration-200 border
-                            ${
-                              isRevoking
-                                ? "border-gray-300 dark:border-gray-600 text-gray-400 cursor-not-allowed"
-                                : "border-red-500/40 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30"
-                            }
-                          `}
-                        >
-                          {isRevoking ? (
-                            <span className="flex items-center gap-1">
-                              <Loader2 className="w-3 h-3 animate-spin" />
-                              Revoking...
-                            </span>
-                          ) : (
-                            "Revoke"
-                          )}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      </Modal>
-
-      {/* Enable Custom Drive Confirmation Modal */}
-      <Modal
+      <CustomDriveEnableModal
         isOpen={confirmingAction === "enable" && confirmingUserId !== null}
-        onClose={() => {
-          const userId = confirmingUserId;
-          const userInfo = allUsersCustomDrive.find((u) => u.id === userId);
-          setConfirmingUserId(null);
-          setConfirmingAction(null);
-          // Revert local state to actual server state when modal is closed without confirmation
-          if (userInfo) {
-            setUserCustomDriveLocalState((prev) => ({
-              ...prev,
-              [userId!]: {
-                enabled: userInfo.customDrive.enabled,
-                path: userInfo.customDrive.path || "",
-                expanded: prev[userId!]?.expanded || false,
-                error: null,
-              },
-            }));
-          } else {
-            // User not found in list - remove from local state to prevent UI/server mismatch
-            setUserCustomDriveLocalState((prev) => {
-              const newState = { ...prev };
-              delete newState[userId!];
-              return newState;
-            });
-          }
-        }}
-        title="Enable Custom Drive?"
-        size="md"
-      >
-        {confirmingUserId &&
-          (() => {
-            const userInfo = allUsersCustomDrive.find(
-              (u) => u.id === confirmingUserId,
-            );
-            return (
-              <div className="space-y-4">
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  Enable custom drive for{" "}
-                  <strong>{userInfo?.name || userInfo?.email}</strong>?
-                </p>
-                <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3">
-                  <div className="flex items-start gap-2">
-                    <AlertCircle className="w-5 h-5 text-yellow-600 dark:text-yellow-400 mt-0.5 flex-shrink-0" />
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-yellow-800 dark:text-yellow-300 mb-2">
-                        Warning: This action will clean up the user's current
-                        upload directory
-                      </p>
-                      <ul className="text-sm text-yellow-700 dark:text-yellow-400 space-y-1 list-disc list-inside">
-                        <li>
-                          All files in the user's current upload directory will
-                          be removed from the database
-                        </li>
-                        <li>
-                          Physical files in the upload directory will also be
-                          deleted
-                        </li>
-                        <li>
-                          You will need to configure a custom drive path before
-                          enabling
-                        </li>
-                        <li>
-                          Once enabled, the path cannot be changed without
-                          disabling first
-                        </li>
-                      </ul>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 justify-end">
-                  <button
-                    onClick={() => {
-                      setConfirmingUserId(null);
-                      setConfirmingAction(null);
-                      // Revert checkbox state on cancel to actual current state
-                      if (userInfo) {
-                        setUserCustomDriveLocalState((prev) => ({
-                          ...prev,
-                          [confirmingUserId]: {
-                            enabled: userInfo.customDrive.enabled,
-                            path: userInfo.customDrive.path || "",
-                            expanded: prev[confirmingUserId]?.expanded || false,
-                            error: null,
-                          },
-                        }));
-                      }
-                    }}
-                    className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={() => {
-                      const userId = confirmingUserId;
-                      setConfirmingUserId(null);
-                      setConfirmingAction(null);
-                      // Enable and expand for path configuration
-                      setUserCustomDriveLocalState((prev) => ({
-                        ...prev,
-                        [userId!]: {
-                          enabled: true,
-                          path: prev[userId!]?.path || "",
-                          expanded: true,
-                          error: null,
-                        },
-                      }));
-                    }}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2"
-                  >
-                    <CheckCircle2 className="w-4 h-4" />
-                    <span>Continue</span>
-                  </button>
-                </div>
-              </div>
-            );
-          })()}
-      </Modal>
+        onClose={handleCancelConfirmation}
+        userInfo={confirmingUserInfo}
+        onCancel={handleCancelConfirmation}
+        onProceed={handleProceedEnable}
+      />
 
-      {/* Disable Custom Drive Confirmation Modal */}
-      <Modal
+      <CustomDriveDisableModal
         isOpen={confirmingAction === "disable" && confirmingUserId !== null}
-        onClose={() => {
-          const userId = confirmingUserId;
-          const userInfo = allUsersCustomDrive.find((u) => u.id === userId);
-          setConfirmingUserId(null);
-          setConfirmingAction(null);
-          // Revert local state to actual server state when modal is closed without confirmation
-          if (userInfo) {
-            setUserCustomDriveLocalState((prev) => ({
-              ...prev,
-              [userId!]: {
-                enabled: userInfo.customDrive.enabled,
-                path: userInfo.customDrive.path || "",
-                expanded: prev[userId!]?.expanded || false,
-                error: null,
-              },
-            }));
-          } else {
-            // User not found in list - remove from local state to prevent UI/server mismatch
-            setUserCustomDriveLocalState((prev) => {
-              const newState = { ...prev };
-              delete newState[userId!];
-              return newState;
-            });
-          }
-        }}
-        title="Disable Custom Drive?"
-        size="md"
-      >
-        {confirmingUserId &&
-          (() => {
-            const userInfo = allUsersCustomDrive.find(
-              (u) => u.id === confirmingUserId,
-            );
-            const localState = userCustomDriveLocalState[confirmingUserId];
-            return (
-              <div className="space-y-4">
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  Disable custom drive for{" "}
-                  <strong>{userInfo?.name || userInfo?.email}</strong>?
-                </p>
-                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
-                  <div className="flex items-start gap-2">
-                    <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" />
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-red-800 dark:text-red-300 mb-2">
-                        Warning: This action cannot be undone
-                      </p>
-                      <ul className="text-sm text-red-700 dark:text-red-400 space-y-1 list-disc list-inside">
-                        <li>
-                          All custom drive files will be removed from the
-                          database
-                        </li>
-                        <li>The file watcher will be stopped</li>
-                        <li>
-                          The user will need to set up custom drive again if you
-                          want to re-enable it
-                        </li>
-                      </ul>
-                    </div>
-                  </div>
-                </div>
-                {localState?.path && (
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
-                    Current path:{" "}
-                    <span className="font-mono bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded">
-                      {localState.path}
-                    </span>
-                  </p>
-                )}
-                <div className="flex items-center gap-3 justify-end">
-                  <button
-                    onClick={() => {
-                      setConfirmingUserId(null);
-                      setConfirmingAction(null);
-                      // Revert checkbox state on cancel to actual current state
-                      if (userInfo) {
-                        setUserCustomDriveLocalState((prev) => ({
-                          ...prev,
-                          [confirmingUserId]: {
-                            enabled: userInfo.customDrive.enabled,
-                            path: userInfo.customDrive.path || "",
-                            expanded: prev[confirmingUserId]?.expanded || false,
-                            error: null,
-                          },
-                        }));
-                      }
-                    }}
-                    className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={async () => {
-                      const userId = confirmingUserId;
-                      setConfirmingUserId(null);
-                      setConfirmingAction(null);
-                      // Error handling is done in handleUpdateUserCustomDrive
-                      await handleUpdateUserCustomDrive(userId!, false, null);
-                    }}
-                    disabled={updatingUserCustomDrive === confirmingUserId}
-                    className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
-                  >
-                    {updatingUserCustomDrive === confirmingUserId ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        <span>Disabling...</span>
-                      </>
-                    ) : (
-                      <>
-                        <AlertCircle className="w-4 h-4" />
-                        <span>Yes, Disable Custom Drive</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-            );
-          })()}
-      </Modal>
+        onClose={handleCancelConfirmation}
+        userInfo={confirmingUserInfo}
+        localState={confirmingLocalState}
+        updating={updatingUserCustomDrive === confirmingUserId}
+        onCancel={handleCancelConfirmation}
+        onProceed={handleProceedDisable}
+      />
     </div>
   );
 };
