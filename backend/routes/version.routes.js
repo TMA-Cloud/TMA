@@ -3,10 +3,28 @@ const fs = require('fs');
 const path = require('path');
 const https = require('https');
 const auth = require('../middleware/auth.middleware');
+const { isFirstUser } = require('../models/user.model');
+const { sendError } = require('../utils/response');
+const { logger } = require('../config/logger');
 
 const router = express.Router();
 
 router.use(auth);
+
+// Middleware to check if user is admin (first user)
+async function requireAdmin(req, res, next) {
+  try {
+    const userIsFirst = await isFirstUser(req.userId);
+    if (!userIsFirst) {
+      logger.warn({ userId: req.userId }, 'Unauthorized version check attempt');
+      return sendError(res, 403, 'Only the admin can check for updates');
+    }
+    next();
+  } catch (err) {
+    logger.error({ err }, 'Failed to check admin status');
+    return sendError(res, 500, 'Server error');
+  }
+}
 
 function readPackageVersion(packagePath) {
   try {
@@ -33,11 +51,12 @@ router.get('/', (_req, res) => {
 });
 
 // Proxy endpoint to fetch latest versions from GitHub (avoids CORS issues)
-router.get('/latest', (req, res) => {
+// Only admin (first user) can check for updates
+router.get('/latest', requireAdmin, (req, res) => {
   const url = 'https://tma-cloud.github.io/updates/versions.json';
   let responseSent = false;
   
-  const sendError = (statusCode, message) => {
+  const sendLocalError = (statusCode, message) => {
     if (!responseSent) {
       responseSent = true;
       res.status(statusCode).json({ error: message });
@@ -47,7 +66,7 @@ router.get('/latest', (req, res) => {
   const request = https.get(url, (httpsRes) => {
     // Check response status code
     if (httpsRes.statusCode !== 200) {
-      sendError(502, `GitHub returned status ${httpsRes.statusCode}`);
+      sendLocalError(502, `GitHub returned status ${httpsRes.statusCode}`);
       return;
     }
     
@@ -56,7 +75,7 @@ router.get('/latest', (req, res) => {
     // Handle response stream errors
     httpsRes.on('error', (error) => {
       console.error('Error reading response stream:', error);
-      sendError(502, 'Error reading response from GitHub');
+      sendLocalError(502, 'Error reading response from GitHub');
     });
     
     httpsRes.on('data', (chunk) => {
@@ -72,7 +91,7 @@ router.get('/latest', (req, res) => {
         res.json(versions);
       } catch (error) {
         console.error('Error parsing versions JSON:', error);
-        sendError(500, 'Failed to parse versions data');
+        sendLocalError(500, 'Failed to parse versions data');
       }
     });
   });
@@ -80,13 +99,13 @@ router.get('/latest', (req, res) => {
   // Handle request-level errors
   request.on('error', (error) => {
     console.error('Error fetching latest versions:', error);
-    sendError(500, 'Failed to fetch latest versions');
+    sendLocalError(500, 'Failed to fetch latest versions');
   });
   
   // Set timeout to prevent hanging requests (10 seconds)
   request.setTimeout(10000, () => {
     request.destroy();
-    sendError(504, 'Request timeout while fetching versions');
+    sendLocalError(504, 'Request timeout while fetching versions');
   });
 });
 

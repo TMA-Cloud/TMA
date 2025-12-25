@@ -160,13 +160,15 @@ export const Settings: React.FC = () => {
           />
         )}
 
-        <UpdatesSection
-          versionStatusText={versionStatusText}
-          versionDescription={versionDescription}
-          checkingVersions={checkingVersions}
-          versionError={versionError}
-          onCheckVersions={handleCheckVersions}
-        />
+        {canToggleSignup && (
+          <UpdatesSection
+            versionStatusText={versionStatusText}
+            versionDescription={versionDescription}
+            checkingVersions={checkingVersions}
+            versionError={versionError}
+            onCheckVersions={handleCheckVersions}
+          />
+        )}
 
         <SecuritySection
           activeSessionsCount={activeSessions.length}
