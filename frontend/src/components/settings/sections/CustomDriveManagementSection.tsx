@@ -19,6 +19,7 @@ interface CustomDriveManagementSectionProps {
     enabled: boolean,
     path: string | null,
   ) => Promise<boolean>;
+  currentUserId?: string;
 }
 
 export const CustomDriveManagementSection: React.FC<
@@ -32,7 +33,20 @@ export const CustomDriveManagementSection: React.FC<
   onConfirmEnable,
   onConfirmDisable,
   onUpdateUserCustomDrive,
+  currentUserId,
 }) => {
+  // Sort users: current user first, then others
+  const sortedUsers = React.useMemo(() => {
+    if (!currentUserId) return allUsersCustomDrive;
+
+    const currentUser = allUsersCustomDrive.find((u) => u.id === currentUserId);
+    const otherUsers = allUsersCustomDrive.filter(
+      (u) => u.id !== currentUserId,
+    );
+
+    return currentUser ? [currentUser, ...otherUsers] : allUsersCustomDrive;
+  }, [allUsersCustomDrive, currentUserId]);
+
   return (
     <SettingsSection
       title="Custom Drive Management"
@@ -47,13 +61,14 @@ export const CustomDriveManagementSection: React.FC<
               Loading users' custom drive settings...
             </span>
           </div>
-        ) : allUsersCustomDrive.length === 0 ? (
+        ) : sortedUsers.length === 0 ? (
           <div className="text-center py-8 text-gray-500 dark:text-gray-400">
             No users found
           </div>
         ) : (
           <div className="space-y-4">
-            {allUsersCustomDrive.map((userInfo) => {
+            {sortedUsers.map((userInfo) => {
+              const isCurrentUser = currentUserId === userInfo.id;
               const isUpdating = updatingUserCustomDrive === userInfo.id;
               const localState = userCustomDriveLocalState[userInfo.id] || {
                 enabled: userInfo.customDrive.enabled,
@@ -65,14 +80,28 @@ export const CustomDriveManagementSection: React.FC<
               return (
                 <div
                   key={userInfo.id}
-                  className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 space-y-3"
+                  className={`stagger-item hover-lift border rounded-lg p-4 space-y-3 ${
+                    isCurrentUser
+                      ? "border-green-500/50 dark:border-green-500/50 bg-green-50/30 dark:bg-green-900/10"
+                      : "border-gray-200 dark:border-gray-700"
+                  }`}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
-                      <h4 className="font-medium text-gray-900 dark:text-gray-100">
-                        {userInfo.name || userInfo.email}
-                      </h4>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {isCurrentUser && (
+                          <div className="flex items-center gap-1.5">
+                            <div className="w-3 h-3 rounded-full bg-green-500 flex-shrink-0 shadow-sm"></div>
+                            <span className="text-xs font-semibold text-green-600 dark:text-green-400 px-2 py-0.5 bg-green-100 dark:bg-green-900/30 rounded">
+                              You
+                            </span>
+                          </div>
+                        )}
+                        <h4 className="font-medium text-gray-900 dark:text-gray-100">
+                          {userInfo.name || userInfo.email}
+                        </h4>
+                      </div>
+                      <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                         {userInfo.email}
                       </p>
                       {localState.enabled &&
@@ -103,7 +132,7 @@ export const CustomDriveManagementSection: React.FC<
                   </div>
 
                   {localState.expanded && (
-                    <div className="space-y-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                    <div className="space-y-3 pt-3 border-t border-gray-200 dark:border-gray-700 animate-fadeIn">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                           Custom Drive Path

@@ -37,7 +37,7 @@ export const SettingsItem: React.FC<SettingsItemProps> = ({
   loadingStates,
 }) => {
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-2xl bg-gray-50/70 dark:bg-gray-900/60 px-4 py-3 border border-transparent hover:border-blue-500/40 transition-all duration-200">
+    <div className="stagger-item hover-lift flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-2xl bg-gray-50/70 dark:bg-gray-900/60 px-4 py-3 border border-transparent hover:border-blue-500/40 transition-all duration-200">
       <div>
         <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
           {label}

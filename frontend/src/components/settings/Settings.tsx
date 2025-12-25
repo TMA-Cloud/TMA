@@ -144,6 +144,7 @@ export const Settings: React.FC = () => {
             onConfirmEnable={handleConfirmEnable}
             onConfirmDisable={handleConfirmDisable}
             onUpdateUserCustomDrive={handleUpdateUserCustomDrive}
+            currentUserId={user?.id}
           />
         )}
 
