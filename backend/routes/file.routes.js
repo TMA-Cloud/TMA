@@ -21,6 +21,7 @@ const {
   searchFiles,
   getFileStats,
 } = require('../controllers/file.controller');
+const { streamFileEvents } = require('../controllers/file/file.events.controller');
 const auth = require('../middleware/auth.middleware');
 const upload = require('../utils/multer');
 const { apiRateLimiter, uploadRateLimiter } = require('../middleware/rateLimit.middleware');
@@ -30,6 +31,7 @@ const router = express.Router();
 router.use(auth);
 router.use(apiRateLimiter);
 
+router.get('/events', streamFileEvents);
 router.get('/', listFiles);
 router.get('/stats', getFileStats);
 router.get('/search', searchFiles);

@@ -51,6 +51,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   const uploadDismissTimeoutsRef = useRef<Map<string, number>>(new Map());
   const searchQueryRef = useRef<string>(""); // Track current search query to ignore stale results
   const abortControllerRef = useRef<AbortController | null>(null); // For cancelling fetch requests
+  const eventSourceRef = useRef<EventSource | null>(null); // For SSE connection
 
   const operationQueue = usePromiseQueue();
 
@@ -298,6 +299,61 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
       void refreshFiles(true);
     }
   }, [searchQuery, debouncedSearch, cancelSearch, refreshFiles]);
+
+  // Connect to Server-Sent Events for real-time file updates
+  useEffect(() => {
+    // Create EventSource connection
+    const eventSource = new EventSource("/api/files/events", {
+      withCredentials: true,
+    });
+
+    eventSource.onopen = () => {
+      console.log("Connected to file events stream");
+    };
+
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+
+        // Handle connection confirmation
+        if (data.type === "connected") {
+          console.log("File events stream connected:", data.message);
+          return;
+        }
+
+        // Handle errors
+        if (data.type === "error") {
+          console.error("File events stream error:", data.message);
+          return;
+        }
+
+        // Handle file events - refresh files list when any event occurs
+        // All users receive the same events (broadcast)
+        if (data.type && data.data) {
+          console.log("File event received:", data.type, data.data);
+          // Refresh files list to show latest changes
+          void refreshFiles(true);
+        }
+      } catch (error) {
+        console.error("Failed to parse file event:", error);
+      }
+    };
+
+    eventSource.onerror = (error) => {
+      console.error("File events stream error:", error);
+      // EventSource will automatically reconnect
+    };
+
+    eventSourceRef.current = eventSource;
+
+    // Cleanup on unmount
+    return () => {
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+      }
+    };
+  }, [refreshFiles]);
 
   useEffect(() => {
     // Only refresh files when not searching and searchQuery is empty

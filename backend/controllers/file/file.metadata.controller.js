@@ -12,6 +12,7 @@ const {
 const pool = require('../../config/db');
 const { validateIdArray, validateSortBy, validateSortOrder, validateBoolean } = require('../../utils/validation');
 const { buildShareLink } = require('../../utils/shareLink');
+const { publishFileEvent, EventTypes } = require('../../services/fileEvents');
 
 /**
  * Star or unstar files/folders
@@ -57,6 +58,17 @@ async function starFilesController(req, res) {
       req
     );
     logger.debug({ fileIds: validatedIds, fileNames, starred: validatedStarred }, 'Files starred status changed');
+
+    // Publish file starred events
+    for (const file of fileInfo) {
+      await publishFileEvent(EventTypes.FILE_STARRED, {
+        id: file.id,
+        name: file.name,
+        type: file.type,
+        starred: validatedStarred,
+        userId: req.userId,
+      });
+    }
 
     sendSuccess(res, { success: true });
   } catch (err) {
@@ -132,9 +144,35 @@ async function shareFilesController(req, res) {
           }
         }
         await setShared(validatedIds, true, req.userId);
+
+        // Get file info for event publishing
+        const fileInfoResult = await pool.query(
+          'SELECT id, name, type FROM files WHERE id = ANY($1) AND user_id = $2',
+          [validatedIds, req.userId]
+        );
+        const fileInfo = fileInfoResult.rows.map(f => ({ id: f.id, name: f.name, type: f.type }));
+
+        // Publish file shared events
+        for (const file of fileInfo) {
+          await publishFileEvent(EventTypes.FILE_SHARED, {
+            id: file.id,
+            name: file.name,
+            type: file.type,
+            shared: true,
+            userId: req.userId,
+          });
+        }
       } else {
         const treeIds = await getRecursiveIds(validatedIds, req.userId);
         await removeFilesFromShares(treeIds, req.userId);
+
+        // Get file info for event publishing
+        const fileInfoResult = await pool.query(
+          'SELECT id, name, type FROM files WHERE id = ANY($1) AND user_id = $2',
+          [validatedIds, req.userId]
+        );
+        const fileInfo = fileInfoResult.rows.map(f => ({ id: f.id, name: f.name, type: f.type }));
+
         for (const id of validatedIds) {
           await deleteShareLink(id, req.userId);
 
@@ -154,6 +192,17 @@ async function shareFilesController(req, res) {
           logger.info({ fileId: id }, 'Share link deleted');
         }
         await setShared(validatedIds, false, req.userId);
+
+        // Publish file unshared events
+        for (const file of fileInfo) {
+          await publishFileEvent(EventTypes.FILE_SHARED, {
+            id: file.id,
+            name: file.name,
+            type: file.type,
+            shared: false,
+            userId: req.userId,
+          });
+        }
       }
 
       await client.query('COMMIT');
@@ -232,6 +281,22 @@ async function linkParentShareController(req, res) {
       await addFilesToShare(shareId, treeIds);
       await setShared([id], true, req.userId);
       links[id] = buildShareLink(shareId, req);
+
+      // Get file info for event publishing
+      const fileInfoResult = await pool.query('SELECT id, name, type FROM files WHERE id = $1 AND user_id = $2', [
+        id,
+        req.userId,
+      ]);
+      if (fileInfoResult.rows[0]) {
+        const file = fileInfoResult.rows[0];
+        await publishFileEvent(EventTypes.FILE_SHARED, {
+          id: file.id,
+          name: file.name,
+          type: file.type,
+          shared: true,
+          userId: req.userId,
+        });
+      }
     }
     sendSuccess(res, { success: true, links });
   } catch (err) {

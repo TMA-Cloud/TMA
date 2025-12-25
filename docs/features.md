@@ -191,6 +191,85 @@ For self-hosted deployments, signup can be controlled to prevent unauthorized ac
 - Sort order (ascending/descending)
 - Filter by type
 
+### Real-Time File Events
+
+Real-time file event broadcasting system that notifies all connected users when file operations occur. Built using Redis pub/sub and Server-Sent Events (SSE) for efficient, scalable event distribution.
+
+**Key Features:**
+
+- **Broadcast to All Users**: All connected users receive the same events simultaneously
+- **Automatic UI Updates**: File lists automatically refresh when events are received
+- **Comprehensive Event Coverage**: Tracks all major file operations
+- **Efficient Architecture**: Redis pub/sub for event distribution, SSE for client delivery
+- **Graceful Degradation**: System continues to work if Redis is unavailable (events are skipped)
+
+**Supported Events:**
+
+- **File Uploaded** (`file.uploaded`): When a file is uploaded
+- **File Deleted** (`file.deleted`): When files are moved to trash
+- **File Renamed** (`file.renamed`): When a file or folder is renamed
+- **File Moved** (`file.moved`): When files/folders are moved to a different location
+- **File Copied** (`file.copied`): When files/folders are copied
+- **Folder Created** (`folder.created`): When a new folder is created
+- **File Restored** (`file.restored`): When files are restored from trash
+- **File Permanently Deleted** (`file.permanently_deleted`): When files are permanently deleted
+- **File Starred** (`file.starred`): When files are starred or unstarred
+- **File Shared** (`file.shared`): When files are shared or unshared
+
+**How It Works:**
+
+1. **Event Publishing**: When a file operation occurs, the controller publishes an event to Redis pub/sub channel `file:events`
+2. **Event Distribution**: Redis broadcasts the event to all subscribers
+3. **SSE Streaming**: The backend SSE endpoint (`/api/files/events`) subscribes to Redis and streams events to connected clients
+4. **Client Reception**: Frontend connects to SSE endpoint and receives events in real-time
+5. **UI Updates**: When events are received, the file list automatically refreshes to show the latest changes
+
+**Event Data Structure:**
+
+Each event includes:
+
+```json
+{
+  "type": "file.uploaded",
+  "timestamp": "2024-01-15T10:30:00.000Z",
+  "data": {
+    "id": "file_id",
+    "name": "example.pdf",
+    "type": "file",
+    "size": 1024,
+    "mimeType": "application/pdf",
+    "parentId": "parent_folder_id",
+    "userId": "user_id"
+  }
+}
+```
+
+**Connection Management:**
+
+- **Automatic Reconnection**: SSE automatically reconnects if connection is lost
+- **Keepalive Pings**: Server sends keepalive messages every 30 seconds to maintain connection
+- **Connection Cleanup**: Connections are properly closed when clients disconnect
+- **Error Handling**: Connection errors are logged but don't affect application functionality
+
+**Requirements:**
+
+- **Redis**: Redis must be installed and running for real-time events to work
+- **SSE Support**: Modern browsers with Server-Sent Events support (all major browsers)
+- **Authentication**: SSE endpoint requires authentication (same as other API endpoints)
+
+**Performance:**
+
+- **Non-Blocking**: Event publishing is non-blocking and doesn't affect operation performance
+- **Efficient Broadcasting**: Redis pub/sub efficiently distributes events to all subscribers
+- **Minimal Overhead**: SSE connections are lightweight and efficient
+- **Scalable**: System scales with Redis pub/sub capabilities
+
+**Configuration:**
+
+No additional configuration required. The system automatically uses the Redis connection configured for caching. If Redis is unavailable, events are skipped but the application continues to function normally.
+
+See [API Documentation - Real-Time Events](api.md#real-time-file-events) for endpoint details.
+
 ### File Metadata
 
 Each file stores:

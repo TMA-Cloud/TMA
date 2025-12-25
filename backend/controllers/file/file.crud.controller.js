@@ -3,6 +3,7 @@ const { sendError, sendSuccess } = require('../../utils/response');
 const { createZipArchive } = require('../../utils/zipArchive');
 const { logger } = require('../../config/logger');
 const { logAuditEvent, fileUploaded, fileDownloaded } = require('../../services/auditLogger');
+const { publishFileEvent, EventTypes } = require('../../services/fileEvents');
 const {
   getFiles,
   createFolder,
@@ -66,6 +67,15 @@ async function addFolder(req, res) {
     );
     logger.info({ folderId: folder.id, name }, 'Folder created');
 
+    // Publish folder created event
+    await publishFileEvent(EventTypes.FOLDER_CREATED, {
+      id: folder.id,
+      name: folder.name,
+      type: folder.type,
+      parentId: validatedParentId,
+      userId: req.userId,
+    });
+
     sendSuccess(res, folder);
   } catch (err) {
     sendError(res, 500, 'Server error', err);
@@ -102,6 +112,17 @@ async function uploadFile(req, res) {
     // Log file upload
     await fileUploaded(file.id, file.name, file.size, req);
     logger.info({ fileId: file.id, fileName: file.name, fileSize: file.size }, 'File uploaded');
+
+    // Publish file uploaded event
+    await publishFileEvent(EventTypes.FILE_UPLOADED, {
+      id: file.id,
+      name: file.name,
+      type: file.type,
+      size: file.size,
+      mimeType: file.mimeType,
+      parentId,
+      userId: req.userId,
+    });
 
     sendSuccess(res, file);
   } catch (err) {
@@ -214,6 +235,15 @@ async function renameFile(req, res) {
       req
     );
     logger.info({ fileId: validatedId, newName: name }, 'File renamed');
+
+    // Publish file renamed event
+    await publishFileEvent(EventTypes.FILE_RENAMED, {
+      id: validatedId,
+      name,
+      oldName: file.name,
+      type: file.type,
+      userId: req.userId,
+    });
 
     sendSuccess(res, file);
   } catch (err) {

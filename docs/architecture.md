@@ -169,6 +169,7 @@ Background processes:
 - `orphanCleanup.js` - Cleanup of orphaned files
 - `customDriveScanner.js` - Custom drive synchronization
 - `auditLogger.js` - Audit event logging service
+- `fileEvents.js` - Real-time file event publishing and subscription service
 
 #### 5. **Caching Layer**
 
@@ -194,7 +195,28 @@ Redis-based caching system for improved performance:
   - Configurable TTLs based on data volatility
   - Automatic cache invalidation on data mutations
 
-#### 6. **Routes**
+#### 6. **Real-Time Events System**
+
+Redis pub/sub and Server-Sent Events (SSE) for real-time file event broadcasting:
+
+- `services/fileEvents.js` - Event publishing and subscription service
+- `controllers/file/file.events.controller.js` - SSE endpoint controller
+- **Architecture:**
+  - Controllers publish events to Redis pub/sub channel `file:events`
+  - SSE endpoint subscribes to Redis and streams events to connected clients
+  - All connected users receive the same events simultaneously
+- **Event Types:**
+  - File operations: upload, delete, rename, move, copy
+  - Folder operations: create
+  - Trash operations: restore, permanent delete
+  - Metadata operations: star, share
+- **Performance:**
+  - Non-blocking event publishing
+  - Efficient Redis pub/sub distribution
+  - Lightweight SSE connections
+  - Automatic reconnection on client disconnect
+
+#### 7. **Routes**
 
 API endpoint definitions:
 
@@ -205,7 +227,7 @@ API endpoint definitions:
 - `/s` - Public share endpoints
 - `/metrics` - Application metrics (restricted by IP)
 
-#### 7. **Workers**
+#### 8. **Workers**
 
 Standalone worker processes:
 

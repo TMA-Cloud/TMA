@@ -740,6 +740,142 @@ GET /api/files/abc123def/download
 GET /api/files/xyz789ghi/download
 ```
 
+#### GET `/api/files/events`
+
+Real-time file events stream using Server-Sent Events (SSE). Broadcasts file operation events to all connected clients in real-time.
+
+**Authentication:** Required (same as other file endpoints)
+
+**Response Type:** `text/event-stream` (Server-Sent Events)
+
+**Connection:**
+
+- Establishes a persistent SSE connection
+- Automatically reconnects if connection is lost
+- Server sends keepalive pings every 30 seconds
+- Connection remains open until client disconnects
+
+**Event Format:**
+
+Each event is sent in SSE format:
+
+```json
+data: {"type":"file.uploaded","timestamp":"2024-01-15T10:30:00.000Z","data":{...}}
+
+```
+
+**Event Types:**
+
+- `file.uploaded` - File uploaded
+- `file.deleted` - File moved to trash
+- `file.renamed` - File/folder renamed
+- `file.moved` - File/folder moved
+- `file.copied` - File/folder copied
+- `folder.created` - Folder created
+- `file.restored` - File restored from trash
+- `file.permanently_deleted` - File permanently deleted
+- `file.starred` - File starred/unstarred
+- `file.shared` - File shared/unshared
+
+**Event Data Structure:**
+
+```json
+{
+  "type": "file.uploaded",
+  "timestamp": "2024-01-15T10:30:00.000Z",
+  "data": {
+    "id": "file_id",
+    "name": "example.pdf",
+    "type": "file",
+    "size": 1024,
+    "mimeType": "application/pdf",
+    "parentId": "parent_folder_id",
+    "userId": "user_id"
+  }
+}
+```
+
+**Special Events:**
+
+- `connected` - Sent immediately upon connection
+
+  ```json
+  {"type":"connected","message":"Connected to file events stream"}
+  ```
+
+- `error` - Sent if connection to event stream fails
+
+  ```json
+  {"type":"error","message":"Failed to connect to event stream"}
+  ```
+
+**Keepalive:**
+
+Server sends keepalive messages every 30 seconds to maintain connection:
+
+```json
+: keepalive
+
+```
+
+**Client Usage:**
+
+```javascript
+const eventSource = new EventSource('/api/files/events', {
+  withCredentials: true
+});
+
+eventSource.onmessage = (event) => {
+  const data = JSON.parse(event.data);
+  // Handle event: refresh file list, update UI, etc.
+};
+
+eventSource.onerror = (error) => {
+  // Handle connection errors
+  // EventSource will automatically reconnect
+};
+```
+
+**Requirements:**
+
+- **Redis**: Redis must be installed and running for events to be published
+- **Browser Support**: Modern browsers with SSE support
+- **Authentication**: Requires valid authentication cookie
+
+**Behavior:**
+
+- **Broadcast**: All connected users receive the same events
+- **Non-Blocking**: Event publishing doesn't block file operations
+- **Graceful Degradation**: If Redis is unavailable, events are skipped but operations continue normally
+- **Automatic Cleanup**: Connections are properly closed when clients disconnect
+
+**Status Codes:**
+
+- `200` - Connection established (streaming)
+- `401` - Unauthorized (authentication required)
+- `500` - Server error (connection closed)
+
+**Example:**
+
+```bash
+# Connect to event stream
+GET /api/files/events
+Content-Type: text/event-stream
+Cache-Control: no-cache
+Connection: keep-alive
+
+# Response stream
+data: {"type":"connected","message":"Connected to file events stream"}
+
+data: {"type":"file.uploaded","timestamp":"2024-01-15T10:30:00.000Z","data":{"id":"abc123","name":"document.pdf","type":"file","size":1024,"mimeType":"application/pdf","parentId":null,"userId":"user123"}}
+
+: keepalive
+
+data: {"type":"file.renamed","timestamp":"2024-01-15T10:31:00.000Z","data":{"id":"abc123","name":"renamed_document.pdf","oldName":"document.pdf","type":"file","userId":"user123"}}
+```
+
+See [Features Documentation - Real-Time File Events](features.md#real-time-file-events) for more details.
+
 ---
 
 ### User

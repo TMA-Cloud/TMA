@@ -4,6 +4,7 @@ const { logAuditEvent } = require('../../services/auditLogger');
 const { deleteFiles, getTrashFiles, restoreFiles, permanentlyDeleteFiles } = require('../../models/file.model');
 const pool = require('../../config/db');
 const { validateIdArray, validateSortBy, validateSortOrder } = require('../../utils/validation');
+const { publishFileEvent, EventTypes } = require('../../services/fileEvents');
 
 /**
  * Delete files/folders (move to trash)
@@ -45,6 +46,17 @@ async function deleteFilesController(req, res) {
       req
     );
     logger.info({ fileIds: validatedIds, fileNames }, 'Files moved to trash');
+
+    // Publish file deleted events
+    for (const file of fileInfo) {
+      await publishFileEvent(EventTypes.FILE_DELETED, {
+        id: file.id,
+        name: file.name,
+        type: file.type,
+        userId: req.userId,
+        permanent: false,
+      });
+    }
 
     sendSuccess(res, { success: true });
   } catch (err) {
@@ -110,6 +122,16 @@ async function restoreFilesController(req, res) {
     );
     logger.info({ fileIds: validatedIds, fileNames }, 'Files restored from trash');
 
+    // Publish file restored events
+    for (const file of fileInfo) {
+      await publishFileEvent(EventTypes.FILE_RESTORED, {
+        id: file.id,
+        name: file.name,
+        type: file.type,
+        userId: req.userId,
+      });
+    }
+
     sendSuccess(res, { success: true, message: `Restored ${fileInfo.length} file(s) from trash` });
   } catch (err) {
     sendError(res, 500, 'Server error', err);
@@ -157,6 +179,17 @@ async function deleteForeverController(req, res) {
     );
     logger.info({ fileIds: validatedIds, fileNames }, 'Files permanently deleted');
 
+    // Publish file permanently deleted events
+    for (const file of fileInfo) {
+      await publishFileEvent(EventTypes.FILE_PERMANENTLY_DELETED, {
+        id: file.id,
+        name: file.name,
+        type: file.type,
+        userId: req.userId,
+        permanent: true,
+      });
+    }
+
     sendSuccess(res, { success: true });
   } catch (err) {
     sendError(res, 500, 'Server error', err);
@@ -200,6 +233,18 @@ async function emptyTrashController(req, res) {
       req
     );
     logger.info({ fileCount: allIds.length, fileNames }, 'Trash emptied');
+
+    // Publish file permanently deleted events for all files
+    for (const file of trashFiles) {
+      await publishFileEvent(EventTypes.FILE_PERMANENTLY_DELETED, {
+        id: file.id,
+        name: file.name,
+        type: file.type,
+        userId: req.userId,
+        permanent: true,
+        action: 'empty_trash',
+      });
+    }
 
     sendSuccess(res, { success: true, message: `Deleted ${allIds.length} file(s) from trash` });
   } catch (err) {

@@ -5,6 +5,7 @@ const { moveFiles, copyFiles } = require('../../models/file.model');
 const pool = require('../../config/db');
 const { userOperationLock } = require('../../utils/mutex');
 const { validateId, validateIdArray } = require('../../utils/validation');
+const { publishFileEvent, EventTypes } = require('../../services/fileEvents');
 
 /**
  * Move files or folders to a different location
@@ -64,6 +65,18 @@ async function moveFilesController(req, res) {
       req
     );
     logger.info({ fileIds: validatedIds, fileNames, targetFolderName }, 'Files moved');
+
+    // Publish file moved events
+    for (const file of fileInfo) {
+      await publishFileEvent(EventTypes.FILE_MOVED, {
+        id: file.id,
+        name: file.name,
+        type: file.type,
+        parentId: validatedParentId,
+        targetFolderName,
+        userId: req.userId,
+      });
+    }
 
     sendSuccess(res, { success: true });
   } catch (err) {
@@ -129,6 +142,25 @@ async function copyFilesController(req, res) {
       req
     );
     logger.info({ fileIds: validatedIds, fileNames, targetFolderName }, 'Files copied');
+
+    // Query for newly created files (copies) to get their IDs
+    // We find them by matching name, type, and parentId, and created after the copy operation
+    const newFilesResult = await pool.query(
+      'SELECT id, name, type FROM files WHERE name = ANY($1) AND type = ANY($2) AND parent_id = $3 AND user_id = $4 ORDER BY modified DESC LIMIT $5',
+      [fileNames, fileTypes, validatedParentId, req.userId, validatedIds.length]
+    );
+
+    // Publish file copied events
+    for (const file of newFilesResult.rows) {
+      await publishFileEvent(EventTypes.FILE_COPIED, {
+        id: file.id,
+        name: file.name,
+        type: file.type,
+        parentId: validatedParentId,
+        targetFolderName,
+        userId: req.userId,
+      });
+    }
 
     sendSuccess(res, { success: true });
   } catch (err) {
