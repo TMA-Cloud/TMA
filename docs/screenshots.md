@@ -21,8 +21,8 @@ This page contains the complete gallery of all available UI screenshots.
 
 ## Authentication
 
-| Login | Signup |
-|-------|--------|
+| Login                      | Signup                       |
+|----------------------------|------------------------------|
 | ![Login](images/login.png) | ![Signup](images/signup.png) |
 
 ---
@@ -36,16 +36,16 @@ This page contains the complete gallery of all available UI screenshots.
 
 ## Dashboard & File Manager Mobile View
 
-| Dashboard                                         | File Manager                                            |
-|---------------------------------------------------|---------------------------------------------------------|
+| Dashboard                                  | File Manager                                     |
+|--------------------------------------------|--------------------------------------------------|
 | ![Dashboard](images/dashboard(mobile).png) | ![File Manager](images/file-manager(mobile).png) |
 
 ---
 
 ## Uploading & Sharing
 
-| Upload Modal | Share Link |
-|--------------|------------|
+| Upload Modal                             | Share Link                           |
+|------------------------------------------|--------------------------------------|
 | ![Upload Modal](images/upload-modal.png) | ![Share Link](images/share-link.png) |
 
 ---

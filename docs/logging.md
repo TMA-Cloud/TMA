@@ -38,14 +38,14 @@ See [Environment Variables](environment.md) for detailed configuration options.
 
 Pino supports the following log levels (in order of severity):
 
-| Level | Value | Description | Use Case |
-|-------|-------|-------------|----------|
-| `fatal` | 60 | Application crash | Critical errors that require immediate attention |
-| `error` | 50 | Error conditions | Errors that don't crash the app but need investigation |
-| `warn` | 40 | Warning conditions | Potential issues or deprecated usage |
-| `info` | 30 | Informational | General application flow (default for production) |
-| `debug` | 20 | Debug information | Detailed debugging info (recommended for development) |
-| `trace` | 10 | Very detailed | Extremely detailed tracing (rarely needed) |
+| Level    | Value | Description          | Use Case                                                |
+|----------|-------|----------------------|---------------------------------------------------------|
+| `fatal`  | 60    | Application crash    | Critical errors that require immediate attention        |
+| `error`  | 50    | Error conditions     | Errors that don't crash the app but need investigation  |
+| `warn`   | 40    | Warning conditions   | Potential issues or deprecated usage                    |
+| `info`   | 30    | Informational        | General application flow (default for production)       |
+| `debug`  | 20    | Debug information    | Detailed debugging info (recommended for development)   |
+| `trace`  | 10    | Very detailed        | Extremely detailed tracing (rarely needed)              |
 
 **Recommendation:**
 
@@ -91,14 +91,14 @@ Human-readable colored output:
 
 All sensitive data is automatically masked in logs at any log level:
 
-| Data Type | Masking Strategy | Example |
-|-----------|------------------|---------|
-| **Passwords** | Fully redacted | `[REDACTED]` |
-| **JWT Tokens** | Partial masking | `eyJhbGci...***...XVCmVw` |
-| **Cookies** | Value masking, preserve options | `sessionId=abc1***def4; HttpOnly; Secure` |
-| **Authorization Headers** | Bearer token masking | `Bearer eyJh...***...mVw` |
-| **API Keys** | Partial masking | `sk_t***key` |
-| **OAuth Secrets** | Fully redacted | `[REDACTED]` |
+| Data Type                    | Masking Strategy                  | Example                                     |
+|------------------------------|-----------------------------------|---------------------------------------------|
+| **Passwords**                | Fully redacted                    | `[REDACTED]`                                |
+| **JWT Tokens**               | Partial masking                   | `eyJhbGci...***...XVCmVw`                   |
+| **Cookies**                  | Value masking, preserve options   | `sessionId=abc1***def4; HttpOnly; Secure`   |
+| **Authorization Headers**    | Bearer token masking              | `Bearer eyJh...***...mVw`                   |
+| **API Keys**                 | Partial masking                   | `sk_t***key`                                |
+| **OAuth Secrets**            | Fully redacted                    | `[REDACTED]`                                |
 
 ## Request Logging
 

@@ -12,15 +12,15 @@ TMA Cloud uses PostgreSQL as the database. The schema is managed through migrati
 
 Stores user account information.
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| `id` | VARCHAR(255) | PRIMARY KEY | Unique user identifier |
-| `email` | VARCHAR(255) | UNIQUE, NOT NULL | User email address |
-| `password` | VARCHAR(255) | | Hashed password (nullable for OAuth users) |
-| `name` | VARCHAR(255) | NOT NULL | User display name |
-| `google_id` | VARCHAR(255) | UNIQUE | Google OAuth ID (optional) |
-| `created_at` | TIMESTAMPTZ | NOT NULL, DEFAULT now() | Account creation timestamp |
-| `updated_at` | TIMESTAMPTZ | NOT NULL, DEFAULT now() | Last update timestamp |
+| Column         | Type         | Constraints              | Description                                  |
+|----------------|--------------|--------------------------|----------------------------------------------|
+| `id`           | VARCHAR(255) | PRIMARY KEY              | Unique user identifier                       |
+| `email`        | VARCHAR(255) | UNIQUE, NOT NULL         | User email address                           |
+| `password`     | VARCHAR(255) |                          | Hashed password (nullable for OAuth users)   |
+| `name`         | VARCHAR(255) | NOT NULL                 | User display name                            |
+| `google_id`    | VARCHAR(255) | UNIQUE                   | Google OAuth ID (optional)                   |
+| `created_at`   | TIMESTAMPTZ  | NOT NULL, DEFAULT now()  | Account creation timestamp                   |
+| `updated_at`   | TIMESTAMPTZ  | NOT NULL, DEFAULT now()  | Last update timestamp                        |
 
 **Indexes:**
 
@@ -32,20 +32,20 @@ Stores user account information.
 
 Stores files and folders.
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| `id` | VARCHAR(255) | PRIMARY KEY | Unique file identifier |
-| `name` | VARCHAR(255) | NOT NULL | File or folder name |
-| `type` | VARCHAR(50) | NOT NULL | 'file' or 'folder' |
-| `size` | BIGINT | DEFAULT 0 | File size in bytes |
-| `mime_type` | VARCHAR(255) | | MIME type for files |
-| `user_id` | VARCHAR(255) | NOT NULL, FK → users.id | Owner user ID |
-| `parent_id` | VARCHAR(255) | FK → files.id | Parent folder ID (null for root) |
-| `path` | TEXT | | Full path to file |
-| `starred` | BOOLEAN | DEFAULT false | Starred status |
-| `deleted_at` | TIMESTAMPTZ | | Soft delete timestamp (null if not deleted) |
-| `created_at` | TIMESTAMPTZ | NOT NULL, DEFAULT now() | Creation timestamp |
-| `updated_at` | TIMESTAMPTZ | NOT NULL, DEFAULT now() | Last update timestamp |
+| Column         | Type         | Constraints              | Description                                    |
+|----------------|--------------|--------------------------|------------------------------------------------|
+| `id`           | VARCHAR(255) | PRIMARY KEY              | Unique file identifier                         |
+| `name`         | VARCHAR(255) | NOT NULL                 | File or folder name                            |
+| `type`         | VARCHAR(50)  | NOT NULL                 | 'file' or 'folder'                             |
+| `size`         | BIGINT       | DEFAULT 0                | File size in bytes                             |
+| `mime_type`    | VARCHAR(255) |                          | MIME type for files                            |
+| `user_id`      | VARCHAR(255) | NOT NULL, FK → users.id  | Owner user ID                                  |
+| `parent_id`    | VARCHAR(255) | FK → files.id            | Parent folder ID (null for root)               |
+| `path`         | TEXT         |                          | Full path to file                              |
+| `starred`      | BOOLEAN      | DEFAULT false            | Starred status                                 |
+| `deleted_at`   | TIMESTAMPTZ  |                          | Soft delete timestamp (null if not deleted)    |
+| `created_at`   | TIMESTAMPTZ  | NOT NULL, DEFAULT now()  | Creation timestamp                             |
+| `updated_at`   | TIMESTAMPTZ  | NOT NULL, DEFAULT now()  | Last update timestamp                          |
 
 **Indexes:**
 
@@ -65,13 +65,13 @@ Stores files and folders.
 
 Stores share link metadata.
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| `id` | VARCHAR(255) | PRIMARY KEY | Unique share link ID |
-| `token` | VARCHAR(255) | UNIQUE, NOT NULL | Public share token |
-| `user_id` | VARCHAR(255) | NOT NULL, FK → users.id | Creator user ID |
-| `expires_at` | TIMESTAMPTZ | | Expiration timestamp (null = no expiration) |
-| `created_at` | TIMESTAMPTZ | NOT NULL, DEFAULT now() | Creation timestamp |
+| Column        | Type          | Constraints              | Description                                   |
+|---------------|---------------|--------------------------|-----------------------------------------------|
+| `id`          | VARCHAR(255)  | PRIMARY KEY              | Unique share link ID                          |
+| `token`       | VARCHAR(255)  | UNIQUE, NOT NULL         | Public share token                            |
+| `user_id`     | VARCHAR(255)  | NOT NULL, FK → users.id  | Creator user ID                               |
+| `expires_at`  | TIMESTAMPTZ   |                          | Expiration timestamp (null = no expiration)   |
+| `created_at`  | TIMESTAMPTZ   | NOT NULL, DEFAULT now()  | Creation timestamp                            |
 
 **Indexes:**
 
@@ -87,11 +87,11 @@ Stores share link metadata.
 
 Junction table linking share links to files.
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| `share_link_id` | VARCHAR(255) | NOT NULL, FK → share_links.id | Share link ID |
-| `file_id` | VARCHAR(255) | NOT NULL, FK → files.id | File ID |
-| `created_at` | TIMESTAMPTZ | NOT NULL, DEFAULT now() | Link creation timestamp |
+| Column          | Type          | Constraints                    | Description              |
+|-----------------|---------------|--------------------------------|--------------------------|
+| `share_link_id` | VARCHAR(255)  | NOT NULL, FK → share_links.id  | Share link ID            |
+| `file_id`       | VARCHAR(255)  | NOT NULL, FK → files.id        | File ID                  |
+| `created_at`    | TIMESTAMPTZ   | NOT NULL, DEFAULT now()        | Link creation timestamp  |
 
 **Indexes:**
 
@@ -108,12 +108,12 @@ Junction table linking share links to files.
 
 Stores application-wide settings.
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| `id` | TEXT | PRIMARY KEY | Settings identifier (always 'app_settings') |
-| `signup_enabled` | BOOLEAN | DEFAULT true | Whether new user registration is enabled |
-| `first_user_id` | TEXT | UNIQUE, FK → users.id | Immutable ID of the first user (set once) |
-| `updated_at` | TIMESTAMPTZ | DEFAULT now() | Last update timestamp |
+| Column           | Type         | Constraints             | Description                                   |
+|------------------|--------------|-------------------------|-----------------------------------------------|
+| `id`             | TEXT         | PRIMARY KEY             | Settings identifier (always 'app_settings')   |
+| `signup_enabled` | BOOLEAN      | DEFAULT true            | Whether new user registration is enabled      |
+| `first_user_id`  | TEXT         | UNIQUE, FK → users.id   | Immutable ID of the first user (set once)     |
+| `updated_at`     | TIMESTAMPTZ  | DEFAULT now()           | Last update timestamp                         |
 
 **Indexes:**
 
@@ -134,15 +134,15 @@ Stores application-wide settings.
 
 Stores active user sessions for session management and revocation.
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| `id` | TEXT | PRIMARY KEY | Unique session identifier |
-| `user_id` | TEXT | NOT NULL, FK → users.id | User who owns this session |
-| `token_version` | INTEGER | NOT NULL | Token version when session was created |
-| `user_agent` | TEXT | | Browser/client user agent string |
-| `ip_address` | INET | | IP address of client |
-| `created_at` | TIMESTAMPTZ | NOT NULL, DEFAULT now() | Session creation timestamp |
-| `last_activity` | TIMESTAMPTZ | NOT NULL, DEFAULT now() | Last activity timestamp (updates on each request) |
+| Column           | Type         | Constraints              | Description                                         |
+|------------------|--------------|--------------------------|-----------------------------------------------------|
+| `id`             | TEXT         | PRIMARY KEY              | Unique session identifier                           |
+| `user_id`        | TEXT         | NOT NULL, FK → users.id  | User who owns this session                          |
+| `token_version`  | INTEGER      | NOT NULL                 | Token version when session was created              |
+| `user_agent`     | TEXT         |                          | Browser/client user agent string                    |
+| `ip_address`     | INET         |                          | IP address of client                                |
+| `created_at`     | TIMESTAMPTZ  | NOT NULL, DEFAULT now()  | Session creation timestamp                          |
+| `last_activity`  | TIMESTAMPTZ  | NOT NULL, DEFAULT now()  | Last activity timestamp (updates on each request)   |
 
 **Indexes:**
 
@@ -169,18 +169,18 @@ Stores active user sessions for session management and revocation.
 
 Stores comprehensive audit trail of all user actions and system events.
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| `id` | SERIAL | PRIMARY KEY | Auto-incrementing audit log ID |
-| `event_type` | VARCHAR(100) | NOT NULL | Event type (e.g., 'user.login', 'file.upload') |
-| `user_id` | VARCHAR(16) | FK → users.id | User who performed the action (null for anonymous) |
-| `status` | VARCHAR(20) | NOT NULL | Event status ('success', 'failure') |
-| `resource_type` | VARCHAR(50) | | Type of resource affected (e.g., 'file', 'folder', 'share') |
-| `resource_id` | VARCHAR(255) | | ID of affected resource |
-| `ip_address` | INET | | IP address of client |
-| `user_agent` | TEXT | | Browser/client user agent |
-| `metadata` | JSONB | | Additional event-specific data (searchable) |
-| `created_at` | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | When event occurred |
+| Column           | Type          | Constraints                | Description                                                     |
+|------------------|---------------|----------------------------|-----------------------------------------------------------------|
+| `id`             | SERIAL        | PRIMARY KEY                | Auto-incrementing audit log ID                                  |
+| `event_type`     | VARCHAR(100)  | NOT NULL                   | Event type (e.g., 'user.login', 'file.upload')                  |
+| `user_id`        | VARCHAR(16)   | FK → users.id              | User who performed the action (null for anonymous)              |
+| `status`         | VARCHAR(20)   | NOT NULL                   | Event status ('success', 'failure')                             |
+| `resource_type`  | VARCHAR(50)   |                            | Type of resource affected (e.g., 'file', 'folder', 'share')     |
+| `resource_id`    | VARCHAR(255)  |                            | ID of affected resource                                         |
+| `ip_address`     | INET          |                            | IP address of client                                            |
+| `user_agent`     | TEXT          |                            | Browser/client user agent                                       |
+| `metadata`       | JSONB         |                            | Additional event-specific data (searchable)                     |
+| `created_at`     | TIMESTAMP     | DEFAULT CURRENT_TIMESTAMP  | When event occurred                                             |
 
 **Indexes:**
 
@@ -223,10 +223,10 @@ pg-boss creates several tables for job queue management (prefixed with `pgboss.`
 
 Tracks applied database migrations.
 
-| Column | Type | Constraints | Description |
-|--------|------|-------------|-------------|
-| `version` | VARCHAR(255) | PRIMARY KEY | Migration version identifier |
-| `applied_at` | TIMESTAMPTZ | NOT NULL, DEFAULT now() | Migration application timestamp |
+| Column        | Type          | Constraints               | Description                      |
+|---------------|---------------|---------------------------|----------------------------------|
+| `version`     | VARCHAR(255)  | PRIMARY KEY               | Migration version identifier     |
+| `applied_at`  | TIMESTAMPTZ   | NOT NULL, DEFAULT now()   | Migration application timestamp  |
 
 **Indexes:**
 

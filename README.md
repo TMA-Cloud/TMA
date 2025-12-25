@@ -60,8 +60,8 @@ Full gallery: [View All Screenshots](docs/screenshots.md)
 
 ### Dashboard & File Manager
 
-| Dashboard | File Manager |
-|-----------|--------------|
+| Dashboard                               | File Manager                                  |
+|-----------------------------------------|-----------------------------------------------|
 | ![Dashboard](docs/images/dashboard.png) | ![File Manager](docs/images/file-manager.png) |
 
 ## Documentation

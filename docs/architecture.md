@@ -17,11 +17,11 @@ TMA Cloud uses a **Single-Origin Architecture** where the backend serves both th
                    ▼
 ┌─────────────────────────────────────────────┐
 │         Express Backend Server              │
-│  ┌──────────────────┐  ┌─────────────────┐ │
-│  │  Static Files    │  │   API Routes    │ │
-│  │  (Frontend UI)   │  │   /api/*        │ │
-│  │  Served at /     │  │   /s/*          │ │
-│  └──────────────────┘  └─────────────────┘ │
+│  ┌──────────────────┐  ┌─────────────────┐  │
+│  │  Static Files    │  │   API Routes    │  │
+│  │  (Frontend UI)   │  │   /api/*        │  │
+│  │  Served at /     │  │   /s/*          │  │
+│  └──────────────────┘  └─────────────────┘  │
 └──────────────────┬──────────────────────────┘
                    │
                    ▼
