@@ -12,6 +12,7 @@ import { Dashboard } from "./components/dashboard/Dashboard";
 import { FileManager } from "./components/fileManager/FileManager";
 import { Settings } from "./components/settings/Settings";
 import { UploadModal } from "./components/upload/UploadModal";
+import { UploadProgress } from "./components/upload/UploadProgress";
 import { CreateFolderModal } from "./components/folder/CreateFolderModal";
 import { ImageViewerModal } from "./components/viewer/ImageViewerModal";
 import { DocumentViewerModal } from "./components/viewer/DocumentViewerModal";
@@ -22,7 +23,13 @@ import { SignupForm } from "./components/auth/SignupForm";
 import { MobileAppContent } from "./components/mobile/MobileAppContent";
 
 const AppContent: React.FC = () => {
-  const { currentPath, sidebarOpen } = useApp();
+  const {
+    currentPath,
+    sidebarOpen,
+    uploadProgress,
+    setUploadProgress,
+    setIsUploadProgressInteracting,
+  } = useApp();
   const isMobile = useIsMobile();
 
   const renderContent = () => {
@@ -77,6 +84,13 @@ const AppContent: React.FC = () => {
       <DocumentViewerModal />
       <RenameModal />
       <ShareLinkModal />
+      <UploadProgress
+        uploads={uploadProgress}
+        onDismiss={(id) => {
+          setUploadProgress((prev) => prev.filter((item) => item.id !== id));
+        }}
+        onInteractionChange={setIsUploadProgressInteracting}
+      />
     </div>
   );
 };

@@ -5,6 +5,7 @@ import { FileManager } from "../fileManager/FileManager";
 import { Dashboard } from "../dashboard/Dashboard";
 import { Settings } from "../settings/Settings";
 import { UploadModal } from "../upload/UploadModal";
+import { UploadProgress } from "../upload/UploadProgress";
 import { CreateFolderModal } from "../folder/CreateFolderModal";
 import { ImageViewerModal } from "../viewer/ImageViewerModal";
 import { DocumentViewerModal } from "../viewer/DocumentViewerModal";
@@ -33,7 +34,14 @@ const navItems = [
 ] as const;
 
 export const MobileAppContent: React.FC = () => {
-  const { currentPath, setCurrentPath, setUploadModalOpen } = useApp();
+  const {
+    currentPath,
+    setCurrentPath,
+    setUploadModalOpen,
+    uploadProgress,
+    setUploadProgress,
+    setIsUploadProgressInteracting,
+  } = useApp();
   const { user, logout } = useAuth();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -212,6 +220,13 @@ export const MobileAppContent: React.FC = () => {
       <DocumentViewerModal />
       <RenameModal />
       <ShareLinkModal />
+      <UploadProgress
+        uploads={uploadProgress}
+        onDismiss={(id) => {
+          setUploadProgress((prev) => prev.filter((item) => item.id !== id));
+        }}
+        onInteractionChange={setIsUploadProgressInteracting}
+      />
     </div>
   );
 };

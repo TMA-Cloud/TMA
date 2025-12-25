@@ -1,5 +1,5 @@
 import React, { useState, useRef } from "react";
-import { Upload, X, File, CheckCircle } from "lucide-react";
+import { Upload, X, File, CheckCircle, AlertCircle } from "lucide-react";
 import { Modal } from "../ui/Modal";
 import { useApp } from "../../contexts/AppContext";
 import { formatFileSize } from "../../utils/fileUtils";
@@ -12,7 +12,12 @@ interface UploadFile {
 }
 
 export const UploadModal: React.FC = () => {
-  const { uploadModalOpen, setUploadModalOpen, uploadFile } = useApp();
+  const {
+    uploadModalOpen,
+    setUploadModalOpen,
+    uploadFileWithProgress,
+    uploadProgress,
+  } = useApp();
   const [uploadFiles, setUploadFiles] = useState<UploadFile[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -64,51 +69,34 @@ export const UploadModal: React.FC = () => {
 
   const handleClose = () => {
     setUploadModalOpen(false);
-    setTimeout(() => setUploadFiles([]), 300);
+    // Don't clear files on close - keep them for when user reopens modal
   };
 
   const startUpload = async () => {
+    if (uploadFiles.length === 0) return;
+
+    // Close the modal immediately when upload starts
+    setUploadModalOpen(false);
+
     setIsUploading(true);
     try {
-      for (const uploadFileItem of uploadFiles) {
-        if (
-          uploadFileItem.status !== "pending" &&
-          uploadFileItem.status !== "error"
-        )
-          continue;
-
-        setUploadFiles((prev) =>
-          prev.map((f) =>
-            f.id === uploadFileItem.id
-              ? { ...f, status: "uploading" as const }
-              : f,
-          ),
+      // Start all pending uploads
+      const uploadPromises = uploadFiles
+        .filter((f) => f.status === "pending" || f.status === "error")
+        .map((uploadFileItem) =>
+          uploadFileWithProgress(uploadFileItem.file).catch((error) => {
+            console.error(
+              "Upload failed for file:",
+              uploadFileItem.file.name,
+              error,
+            );
+          }),
         );
 
-        try {
-          await uploadFile(uploadFileItem.file);
-          setUploadFiles((prev) =>
-            prev.map((f) =>
-              f.id === uploadFileItem.id
-                ? { ...f, progress: 100, status: "completed" as const }
-                : f,
-            ),
-          );
-        } catch (error) {
-          console.error(
-            "Upload failed for file:",
-            uploadFileItem.file.name,
-            error,
-          );
-          setUploadFiles((prev) =>
-            prev.map((f) =>
-              f.id === uploadFileItem.id
-                ? { ...f, status: "error" as const }
-                : f,
-            ),
-          );
-        }
-      }
+      await Promise.all(uploadPromises);
+      // Clear files that were successfully started (they're now in global uploadProgress)
+      // Keep files with errors so user can retry
+      setUploadFiles((prev) => prev.filter((f) => f.status === "error"));
     } finally {
       setIsUploading(false);
     }
@@ -160,54 +148,105 @@ export const UploadModal: React.FC = () => {
           </div>
         </div>
 
-        {/* Upload List */}
-        {uploadFiles.length > 0 && (
-          <div className="space-y-3 max-h-64 overflow-y-auto">
-            <h4 className="font-medium text-gray-900 dark:text-gray-100">
-              Files ({uploadFiles.length})
+        {/* Active Uploads from Global State */}
+        {uploadProgress.filter((u) => u.status === "uploading").length > 0 && (
+          <div className="space-y-3">
+            <h4 className="font-semibold text-gray-900 dark:text-gray-100">
+              Uploading (
+              {uploadProgress.filter((u) => u.status === "uploading").length})
             </h4>
-
-            {uploadFiles.map((uploadFile) => (
-              <div
-                key={uploadFile.id}
-                className="flex items-center space-x-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg"
-              >
-                <div className="flex-shrink-0">
-                  {uploadFile.status === "completed" ? (
-                    <CheckCircle className="w-6 h-6 text-green-500" />
-                  ) : (
-                    <File className="w-6 h-6 text-gray-400" />
-                  )}
-                </div>
-
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
-                    {uploadFile.file.name}
-                  </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    {formatFileSize(uploadFile.file.size)}
-                  </p>
-
-                  {uploadFile.status === "uploading" && (
-                    <div className="mt-1">
-                      <div className="bg-gray-200 dark:bg-gray-600 rounded-full h-1">
-                        <div
-                          className="bg-blue-500 h-1 rounded-full transition-all duration-300"
-                          style={{ width: `${uploadFile.progress}%` }}
-                        />
+            <div className="space-y-2 max-h-48 overflow-y-auto">
+              {uploadProgress
+                .filter((u) => u.status === "uploading")
+                .map((upload) => (
+                  <div
+                    key={upload.id}
+                    className="flex items-center space-x-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800"
+                  >
+                    <div className="flex-shrink-0">
+                      <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                        <Upload className="w-4 h-4 text-blue-600 dark:text-blue-400 animate-pulse" />
                       </div>
                     </div>
-                  )}
-                </div>
 
-                <button
-                  onClick={() => removeFile(uploadFile.id)}
-                  className="flex-shrink-0 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                        {upload.fileName}
+                      </p>
+                      <div className="flex items-center justify-between mt-1">
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          {formatFileSize(upload.fileSize)}
+                        </p>
+                        <p className="text-xs font-semibold text-blue-600 dark:text-blue-400">
+                          {upload.progress}%
+                        </p>
+                      </div>
+                      <div className="mt-2">
+                        <div className="bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 overflow-hidden">
+                          <div
+                            className="bg-gradient-to-r from-blue-500 to-blue-600 h-1.5 rounded-full transition-all duration-500 ease-out"
+                            style={{ width: `${upload.progress}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+            </div>
+          </div>
+        )}
+
+        {/* Pending Files List */}
+        {uploadFiles.length > 0 && (
+          <div className="space-y-3">
+            <h4 className="font-semibold text-gray-900 dark:text-gray-100">
+              Files to Upload ({uploadFiles.length})
+            </h4>
+            <div className="space-y-2 max-h-48 overflow-y-auto">
+              {uploadFiles.map((uploadFile) => (
+                <div
+                  key={uploadFile.id}
+                  className="flex items-center space-x-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg"
                 >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            ))}
+                  <div className="flex-shrink-0">
+                    {uploadFile.status === "completed" ? (
+                      <CheckCircle className="w-6 h-6 text-green-500" />
+                    ) : uploadFile.status === "error" ? (
+                      <AlertCircle className="w-6 h-6 text-red-500" />
+                    ) : (
+                      <File className="w-6 h-6 text-gray-400" />
+                    )}
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                      {uploadFile.file.name}
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      {formatFileSize(uploadFile.file.size)}
+                    </p>
+
+                    {uploadFile.status === "uploading" && (
+                      <div className="mt-1">
+                        <div className="bg-gray-200 dark:bg-gray-600 rounded-full h-1">
+                          <div
+                            className="bg-blue-500 h-1 rounded-full transition-all duration-300"
+                            style={{ width: `${uploadFile.progress}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <button
+                    onClick={() => removeFile(uploadFile.id)}
+                    className="flex-shrink-0 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 

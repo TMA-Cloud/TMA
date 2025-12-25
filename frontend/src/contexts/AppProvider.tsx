@@ -36,10 +36,72 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [isSearching, setIsSearching] = useState<boolean>(false);
   const [isDownloading, setIsDownloading] = useState<boolean>(false);
+  const [uploadProgress, setUploadProgress] = useState<
+    Array<{
+      id: string;
+      fileName: string;
+      fileSize: number;
+      progress: number;
+      status: "uploading" | "completed" | "error";
+    }>
+  >([]);
+  const [isUploadProgressInteracting, setIsUploadProgressInteracting] =
+    useState(false);
+  const isUploadProgressInteractingRef = useRef(false);
+  const uploadDismissTimeoutsRef = useRef<Map<string, number>>(new Map());
   const searchQueryRef = useRef<string>(""); // Track current search query to ignore stale results
   const abortControllerRef = useRef<AbortController | null>(null); // For cancelling fetch requests
 
   const operationQueue = usePromiseQueue();
+
+  // Keep ref in sync with state
+  useEffect(() => {
+    isUploadProgressInteractingRef.current = isUploadProgressInteracting;
+  }, [isUploadProgressInteracting]);
+
+  // When user stops interacting, dismiss completed items after a short delay
+  useEffect(() => {
+    if (!isUploadProgressInteracting) {
+      // User stopped interacting, wait 2 seconds then dismiss completed items
+      const checkTimeout = setTimeout(() => {
+        // Double-check that user is still not interacting
+        if (!isUploadProgressInteractingRef.current) {
+          // Dismiss all completed and error items (errors after longer delay)
+          setUploadProgress((prev) => {
+            const itemsToKeep = prev.filter((item) => {
+              if (item.status === "completed") {
+                // Clean up any pending timeouts for dismissed items
+                const timeout = uploadDismissTimeoutsRef.current.get(item.id);
+                if (timeout) {
+                  clearTimeout(timeout);
+                  uploadDismissTimeoutsRef.current.delete(item.id);
+                }
+                return false; // Dismiss completed items
+              }
+              if (item.status === "error") {
+                // Dismiss error items too (they've been visible long enough)
+                const timeout = uploadDismissTimeoutsRef.current.get(item.id);
+                if (timeout) {
+                  clearTimeout(timeout);
+                  uploadDismissTimeoutsRef.current.delete(item.id);
+                }
+                return false; // Dismiss error items
+              }
+              return true; // Keep uploading items
+            });
+            return itemsToKeep;
+          });
+        }
+      }, 2000); // Wait 2 seconds after user stops interacting
+      return () => clearTimeout(checkTimeout);
+    } else {
+      // User started interacting, cancel any pending dismissals
+      uploadDismissTimeoutsRef.current.forEach((timeout) => {
+        clearTimeout(timeout);
+      });
+      uploadDismissTimeoutsRef.current.clear();
+    }
+  }, [isUploadProgressInteracting]);
 
   // Keep ref in sync with state
   useEffect(() => {
@@ -290,6 +352,154 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         console.error("Upload failed", error);
         throw error;
       }
+    });
+  };
+
+  const uploadFileWithProgress = async (
+    file: File,
+    onProgress?: (progress: number) => void,
+  ) => {
+    return operationQueue.add(async () => {
+      return new Promise<void>((resolve, reject) => {
+        const uploadId = `${Date.now()}-${Math.random()}`;
+        const xhr = new XMLHttpRequest();
+        const data = new FormData();
+        data.append("file", file);
+        const parentId = folderStack[folderStack.length - 1];
+        if (parentId) data.append("parentId", parentId);
+
+        // Add upload to progress list
+        setUploadProgress((prev) => [
+          ...prev,
+          {
+            id: uploadId,
+            fileName: file.name,
+            fileSize: file.size,
+            progress: 0,
+            status: "uploading",
+          },
+        ]);
+
+        xhr.upload.addEventListener("progress", (e) => {
+          if (e.lengthComputable) {
+            const progress = Math.round((e.loaded / e.total) * 100);
+            setUploadProgress((prev) =>
+              prev.map((item) =>
+                item.id === uploadId ? { ...item, progress } : item,
+              ),
+            );
+            if (onProgress) {
+              onProgress(progress);
+            }
+          }
+        });
+
+        xhr.addEventListener("load", async () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            setUploadProgress((prev) =>
+              prev.map((item) =>
+                item.id === uploadId
+                  ? { ...item, progress: 100, status: "completed" }
+                  : item,
+              ),
+            );
+            await refreshFiles();
+            // Auto-dismiss after 3 seconds, but only if user is not interacting
+            const dismissTimeout = setTimeout(() => {
+              // Check current interaction state using ref (always up-to-date)
+              if (!isUploadProgressInteractingRef.current) {
+                setUploadProgress((prev) =>
+                  prev.filter((item) => item.id !== uploadId),
+                );
+                uploadDismissTimeoutsRef.current.delete(uploadId);
+              } else {
+                // If user is interacting, schedule a retry
+                const retryTimeout = setTimeout(() => {
+                  // Check again if user stopped interacting
+                  if (!isUploadProgressInteractingRef.current) {
+                    setUploadProgress((prev) =>
+                      prev.filter((item) => item.id !== uploadId),
+                    );
+                  }
+                  uploadDismissTimeoutsRef.current.delete(uploadId);
+                }, 2000);
+                uploadDismissTimeoutsRef.current.set(uploadId, retryTimeout);
+              }
+            }, 3000);
+            uploadDismissTimeoutsRef.current.set(uploadId, dismissTimeout);
+            resolve();
+          } else {
+            setUploadProgress((prev) =>
+              prev.map((item) =>
+                item.id === uploadId ? { ...item, status: "error" } : item,
+              ),
+            );
+            // Auto-dismiss failed uploads after 10 seconds if user is not interacting
+            const errorDismissTimeout = setTimeout(() => {
+              if (!isUploadProgressInteractingRef.current) {
+                setUploadProgress((prev) =>
+                  prev.filter((item) => item.id !== uploadId),
+                );
+                uploadDismissTimeoutsRef.current.delete(uploadId);
+              } else {
+                // If user is interacting, retry after 5 more seconds
+                const retryTimeout = setTimeout(() => {
+                  if (!isUploadProgressInteractingRef.current) {
+                    setUploadProgress((prev) =>
+                      prev.filter((item) => item.id !== uploadId),
+                    );
+                  }
+                  uploadDismissTimeoutsRef.current.delete(uploadId);
+                }, 5000);
+                uploadDismissTimeoutsRef.current.set(uploadId, retryTimeout);
+              }
+            }, 10000); // 10 seconds for failed uploads
+            uploadDismissTimeoutsRef.current.set(uploadId, errorDismissTimeout);
+            reject(new Error(`Upload failed: ${xhr.statusText}`));
+          }
+        });
+
+        xhr.addEventListener("error", () => {
+          setUploadProgress((prev) =>
+            prev.map((item) =>
+              item.id === uploadId ? { ...item, status: "error" } : item,
+            ),
+          );
+          // Auto-dismiss failed uploads after 10 seconds if user is not interacting
+          const errorDismissTimeout = setTimeout(() => {
+            if (!isUploadProgressInteractingRef.current) {
+              setUploadProgress((prev) =>
+                prev.filter((item) => item.id !== uploadId),
+              );
+              uploadDismissTimeoutsRef.current.delete(uploadId);
+            } else {
+              // If user is interacting, retry after 5 more seconds
+              const retryTimeout = setTimeout(() => {
+                if (!isUploadProgressInteractingRef.current) {
+                  setUploadProgress((prev) =>
+                    prev.filter((item) => item.id !== uploadId),
+                  );
+                }
+                uploadDismissTimeoutsRef.current.delete(uploadId);
+              }, 5000);
+              uploadDismissTimeoutsRef.current.set(uploadId, retryTimeout);
+            }
+          }, 10000); // 10 seconds for failed uploads
+          uploadDismissTimeoutsRef.current.set(uploadId, errorDismissTimeout);
+          reject(new Error("Upload failed"));
+        });
+
+        xhr.addEventListener("abort", () => {
+          setUploadProgress((prev) =>
+            prev.filter((item) => item.id !== uploadId),
+          );
+          reject(new Error("Upload cancelled"));
+        });
+
+        xhr.open("POST", `/api/files/upload`);
+        xhr.withCredentials = true;
+        xhr.send(data);
+      });
     });
   };
 
@@ -662,6 +872,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         searchFiles: searchFilesApi,
         isDownloading,
         downloadFiles,
+        uploadProgress,
+        setUploadProgress,
+        uploadFileWithProgress,
+        setIsUploadProgressInteracting,
       }}
     >
       {children}

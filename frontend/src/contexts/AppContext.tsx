@@ -91,6 +91,27 @@ export interface AppContextType {
   searchFiles: (query: string) => Promise<void>;
   isDownloading: boolean;
   downloadFiles: (ids: string[]) => Promise<void>;
+  uploadProgress: Array<{
+    id: string;
+    fileName: string;
+    fileSize: number;
+    progress: number;
+    status: "uploading" | "completed" | "error";
+  }>;
+  setUploadProgress: (
+    progress: Array<{
+      id: string;
+      fileName: string;
+      fileSize: number;
+      progress: number;
+      status: "uploading" | "completed" | "error";
+    }>,
+  ) => void;
+  uploadFileWithProgress: (
+    file: File,
+    onProgress?: (progress: number) => void,
+  ) => Promise<void>;
+  setIsUploadProgressInteracting: (isInteracting: boolean) => void;
 }
 
 export const AppContext = createContext<AppContextType | undefined>(undefined);
