@@ -230,12 +230,7 @@ async function getAllUsersCustomDriveSettings(req, res) {
       })
     );
 
-    // Log admin action
-    await logAuditEvent('admin.custom_drive.list', {
-      status: 'success',
-      resourceType: 'settings',
-      metadata: { userCount: usersWithSettings.length }
-    }, req);
+    // Note: No audit logging for view operations - only log actual changes
     logger.info({ userId: req.userId, userCount: usersWithSettings.length }, 'All users custom drive settings viewed');
 
     sendSuccess(res, { users: usersWithSettings });
