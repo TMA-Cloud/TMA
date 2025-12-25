@@ -170,6 +170,12 @@ async function updateUserCustomDriveSettings(userId, enabled, path) {
 
     logger.info({ userId, enabled, path: resolvedPath }, 'User custom drive settings updated');
 
+    // Invalidate custom drive cache
+    await deleteCache(cacheKeys.customDrive(userId));
+    // Also invalidate file cache as custom drive changes affect file paths
+    // This ensures /api/files?sortBy= cache is cleared immediately when switching to custom drive
+    await invalidateFileCache(userId);
+
     return {
       enabled: result.rows[0].custom_drive_enabled,
       path: result.rows[0].custom_drive_path,
