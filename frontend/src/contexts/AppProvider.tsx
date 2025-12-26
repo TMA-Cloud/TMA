@@ -52,7 +52,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   const searchQueryRef = useRef<string>(""); // Track current search query to ignore stale results
   const abortControllerRef = useRef<AbortController | null>(null); // For cancelling fetch requests
   const eventSourceRef = useRef<EventSource | null>(null); // For SSE connection
-  const currentUserIdRef = useRef<string | null>(null); // Track current user ID to ignore own events
   const sseRefreshTimeoutRef = useRef<number | null>(null); // For debouncing SSE refresh
   const currentPathRef = useRef<string[]>(currentPath); // Track current path for SSE relevance check
   const folderStackRef = useRef<(string | null)[]>(folderStack); // Track folder stack for SSE relevance check
@@ -320,24 +319,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, [searchQuery, debouncedSearch, cancelSearch, refreshFiles]);
 
-  // Fetch current user ID once on mount
-  useEffect(() => {
-    const fetchCurrentUserId = async () => {
-      try {
-        const res = await fetch("/api/auth/profile", {
-          credentials: "include",
-        });
-        if (res.ok) {
-          const user = await res.json();
-          currentUserIdRef.current = user.id || null;
-        }
-      } catch (error) {
-        console.error("Failed to fetch current user ID:", error);
-      }
-    };
-    void fetchCurrentUserId();
-  }, []);
-
   // Helper function to check if event is relevant (uses refs, no dependencies)
   const isEventRelevant = (
     eventType: string,
@@ -431,21 +412,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         if (data.type && data.data) {
           const eventData = data.data;
 
-          // 1. Ignore own events (if user already updated UI locally)
-          if (
-            currentUserIdRef.current &&
-            eventData.userId === currentUserIdRef.current
-          ) {
-            return;
-          }
-
-          // 2. Filter by relevance - only refresh if event affects current view
+          // Filter by relevance - only refresh if event affects current view
           // Uses refs to get current values without causing re-renders
           if (!isEventRelevant(data.type, eventData)) {
             return;
           }
 
-          // 3. Debounce/throttle refresh - batch multiple events
+          // Debounce/throttle refresh - batch multiple events
           debouncedSSERefresh();
         }
       } catch (error) {
