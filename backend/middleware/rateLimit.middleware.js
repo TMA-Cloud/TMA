@@ -88,9 +88,83 @@ const uploadRateLimiter = createRateLimiter({
   keyGenerator: req => `upload:${req.userId || req.ip}`,
 });
 
+/**
+ * Rate limiter for SSE (Server-Sent Events) connections
+ * Limits concurrent SSE connections per user to prevent resource exhaustion
+ */
+const sseConnectionTracker = new Map(); // userId -> connection count
+
+/**
+ * Track and limit SSE connections per user
+ * @param {number} maxConnectionsPerUser - Maximum concurrent connections per user (default: 3)
+ */
+function createSSEConnectionLimiter(maxConnectionsPerUser = 3) {
+  return (req, res, next) => {
+    // Only apply to authenticated requests with userId
+    if (!req.userId) {
+      return next();
+    }
+
+    const userId = req.userId;
+    const currentConnections = sseConnectionTracker.get(userId) || 0;
+
+    if (currentConnections >= maxConnectionsPerUser) {
+      return res.status(429).json({
+        error: 'Too many active connections. Please close other tabs or wait a moment.',
+      });
+    }
+
+    // Increment connection count
+    sseConnectionTracker.set(userId, currentConnections + 1);
+
+    // Track connection cleanup
+    const originalEnd = res.end;
+    res.end = function (...args) {
+      // Decrement on connection close
+      const count = sseConnectionTracker.get(userId) || 0;
+      if (count > 0) {
+        sseConnectionTracker.set(userId, count - 1);
+      } else {
+        sseConnectionTracker.delete(userId);
+      }
+      return originalEnd.apply(this, args);
+    };
+
+    // Also handle connection errors
+    req.on('close', () => {
+      const count = sseConnectionTracker.get(userId) || 0;
+      if (count > 0) {
+        sseConnectionTracker.set(userId, count - 1);
+      } else {
+        sseConnectionTracker.delete(userId);
+      }
+    });
+
+    next();
+  };
+}
+
+// Clean up stale connection tracking (users who disconnected without cleanup)
+setInterval(
+  () => {
+    // This is a safety net - the connection cleanup should handle this
+    // But we'll keep it for edge cases
+    for (const [userId, count] of sseConnectionTracker.entries()) {
+      if (count <= 0) {
+        sseConnectionTracker.delete(userId);
+      }
+    }
+  },
+  5 * 60 * 1000
+); // Every 5 minutes
+
+const sseConnectionLimiter = createSSEConnectionLimiter(3); // Max 3 concurrent SSE connections per user
+
 module.exports = {
   createRateLimiter,
   authRateLimiter,
   apiRateLimiter,
   uploadRateLimiter,
+  sseConnectionLimiter,
+  createSSEConnectionLimiter,
 };

@@ -24,14 +24,15 @@ const {
 const { streamFileEvents } = require('../controllers/file/file.events.controller');
 const auth = require('../middleware/auth.middleware');
 const upload = require('../utils/multer');
-const { apiRateLimiter, uploadRateLimiter } = require('../middleware/rateLimit.middleware');
+const { apiRateLimiter, uploadRateLimiter, sseConnectionLimiter } = require('../middleware/rateLimit.middleware');
 const { attachCustomDrivePath } = require('../middleware/customDrive.middleware');
 const router = express.Router();
 
 router.use(auth);
 router.use(apiRateLimiter);
 
-router.get('/events', streamFileEvents);
+// SSE endpoint with dedicated connection limiting
+router.get('/events', sseConnectionLimiter, streamFileEvents);
 router.get('/', listFiles);
 router.get('/stats', getFileStats);
 router.get('/search', searchFiles);

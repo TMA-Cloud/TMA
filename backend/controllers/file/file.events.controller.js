@@ -5,6 +5,7 @@ const { logger } = require('../../config/logger');
 const KEEPALIVE_INTERVAL = 30000; // 30 seconds
 const MAX_RETRY_ATTEMPTS = 3;
 const RETRY_DELAY = 1000; // 1 second
+const IDLE_TIMEOUT = 5 * 60 * 1000; // 5 minutes - close idle connections
 
 /**
  * Server-Sent Events endpoint for real-time file events
@@ -29,8 +30,10 @@ async function streamFileEvents(req, res) {
 
   let subscriber = null;
   let keepAliveInterval = null;
+  let idleTimeout = null;
   let isCleanedUp = false;
   let isConnectionClosed = false;
+  let lastActivity = Date.now();
   const userId = req.userId;
 
   // Helper function to check if connection is still alive
@@ -45,6 +48,8 @@ async function streamFileEvents(req, res) {
     }
     try {
       res.write(data);
+      lastActivity = Date.now(); // Update activity timestamp
+      resetIdleTimeout(); // Reset idle timeout on activity
       return true;
     } catch (err) {
       // Connection closed or error
@@ -54,6 +59,19 @@ async function streamFileEvents(req, res) {
     }
   };
 
+  // Reset idle timeout when there's activity
+  const resetIdleTimeout = () => {
+    if (idleTimeout) {
+      clearTimeout(idleTimeout);
+    }
+    idleTimeout = setTimeout(() => {
+      if (isConnectionAlive()) {
+        logger.debug({ userId, idleTime: Date.now() - lastActivity }, 'Closing idle SSE connection');
+        void cleanup();
+      }
+    }, IDLE_TIMEOUT);
+  };
+
   // Helper function to cleanup resources (idempotent)
   const cleanup = async () => {
     if (isCleanedUp) {
@@ -61,6 +79,11 @@ async function streamFileEvents(req, res) {
     }
     isCleanedUp = true;
     isConnectionClosed = true;
+
+    if (idleTimeout) {
+      clearTimeout(idleTimeout);
+      idleTimeout = null;
+    }
 
     if (keepAliveInterval) {
       clearInterval(keepAliveInterval);
@@ -161,6 +184,14 @@ async function streamFileEvents(req, res) {
       return;
     }
 
+    // Check if connection is idle
+    const timeSinceLastActivity = Date.now() - lastActivity;
+    if (timeSinceLastActivity > IDLE_TIMEOUT) {
+      logger.debug({ userId, idleTime: timeSinceLastActivity }, 'Connection idle, closing');
+      void cleanup();
+      return;
+    }
+
     try {
       // Use comment-style keepalive (lighter weight)
       if (!safeWrite(`: keepalive\n\n`)) {
@@ -171,6 +202,9 @@ async function streamFileEvents(req, res) {
       void cleanup();
     }
   }, KEEPALIVE_INTERVAL);
+
+  // Start idle timeout monitoring
+  resetIdleTimeout();
 
   // Clean up on error
   req.on('error', async err => {
