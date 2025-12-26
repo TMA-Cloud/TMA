@@ -3,32 +3,71 @@
  */
 
 /**
- * Make a fetch request with default options
+ * Request options with additional configuration
+ */
+interface ApiRequestOptions extends RequestInit {
+  /**
+   * If true, 401 errors will be handled silently (no console errors)
+   * Useful for authentication checks where 401 is expected
+   *
+   * Note: Currently only returns the response without throwing; doesn't suppress
+   * console logs by itself. Consider removing if not used elsewhere.
+   */
+  silentAuth?: boolean;
+  /**
+   * AbortSignal for request cancellation
+   */
+  signal?: AbortSignal;
+}
+
+/**
+ * Make a fetch request with default options and enhanced error handling
  * Using relative URLs since frontend and backend are served from the same origin
  */
 async function apiRequest(
   endpoint: string,
-  options: RequestInit = {},
+  options: ApiRequestOptions = {},
 ): Promise<Response> {
   const url = endpoint.startsWith("http") ? endpoint : endpoint;
+  const { silentAuth = false, ...fetchOptions } = options;
 
   const defaultOptions: RequestInit = {
     credentials: "include",
     headers: {
       "Content-Type": "application/json",
-      ...options.headers,
+      ...fetchOptions.headers,
     },
-    ...options,
+    ...fetchOptions,
   };
 
-  return fetch(url, defaultOptions);
+  try {
+    const response = await fetch(url, defaultOptions);
+
+    // Handle 401 silently if requested (for auth checks)
+    if (response.status === 401 && silentAuth) {
+      // Return response without throwing - let caller handle it
+      return response;
+    }
+
+    return response;
+  } catch (error) {
+    // Only log network errors if not in silent mode
+    if (!silentAuth && error instanceof TypeError) {
+      // Network errors are real failures, but we'll let the caller decide
+      throw error;
+    }
+    throw error;
+  }
 }
 
 /**
  * Make a GET request
  */
-export async function apiGet<T = unknown>(endpoint: string): Promise<T> {
-  const res = await apiRequest(endpoint, { method: "GET" });
+export async function apiGet<T = unknown>(
+  endpoint: string,
+  options?: ApiRequestOptions,
+): Promise<T> {
+  const res = await apiRequest(endpoint, { method: "GET", ...options });
   if (!res.ok) {
     const errorData = await res
       .json()
@@ -44,10 +83,12 @@ export async function apiGet<T = unknown>(endpoint: string): Promise<T> {
 export async function apiPost<T = unknown>(
   endpoint: string,
   data?: unknown,
+  options?: ApiRequestOptions,
 ): Promise<T> {
   const res = await apiRequest(endpoint, {
     method: "POST",
     body: data ? JSON.stringify(data) : undefined,
+    ...options,
   });
   if (!res.ok) {
     const errorData = await res
@@ -64,10 +105,12 @@ export async function apiPost<T = unknown>(
 export async function apiPut<T = unknown>(
   endpoint: string,
   data?: unknown,
+  options?: ApiRequestOptions,
 ): Promise<T> {
   const res = await apiRequest(endpoint, {
     method: "PUT",
     body: data ? JSON.stringify(data) : undefined,
+    ...options,
   });
   if (!res.ok) {
     const errorData = await res
@@ -238,8 +281,11 @@ export async function getActiveSessions(): Promise<{
 /**
  * Make a DELETE request
  */
-export async function apiDelete<T = unknown>(endpoint: string): Promise<T> {
-  const res = await apiRequest(endpoint, { method: "DELETE" });
+export async function apiDelete<T = unknown>(
+  endpoint: string,
+  options?: ApiRequestOptions,
+): Promise<T> {
+  const res = await apiRequest(endpoint, { method: "DELETE", ...options });
   if (!res.ok) {
     throw new Error(`API request failed: ${res.statusText}`);
   }
@@ -365,4 +411,216 @@ export async function downloadFile(
   link.click();
   document.body.removeChild(link);
   window.URL.revokeObjectURL(downloadUrl);
+}
+
+/**
+ * Auth state management using localStorage
+ * Used as an optimization hint to avoid unnecessary API calls on first visit.
+ * Includes cross-tab synchronization via storage events.
+ */
+export const AUTH_STATE_KEY = "tma_cloud_auth_state";
+const AUTH_STATE_MAX_AGE = 7 * 24 * 60 * 60 * 1000; // 7 days (matches token expiry)
+
+interface AuthState {
+  timestamp: number;
+  version: number; // For future compatibility
+}
+
+const AUTH_STATE_VERSION = 1;
+
+/**
+ * Set authentication state with timestamp
+ * Triggers storage event for cross-tab synchronization
+ * Only updates if state actually changes to prevent infinite loops
+ */
+export function setAuthState(authenticated: boolean): void {
+  try {
+    if (authenticated) {
+      // Check if auth state already exists and is valid
+      // Only update if it doesn't exist or is invalid to prevent infinite loops
+      const existing = localStorage.getItem(AUTH_STATE_KEY);
+      if (existing) {
+        try {
+          const existingState: AuthState = JSON.parse(existing);
+          // If state exists, is valid version, and timestamp is recent (within 1 hour),
+          // don't update to avoid triggering unnecessary storage events
+          if (
+            existingState.version === AUTH_STATE_VERSION &&
+            Date.now() - existingState.timestamp < 60 * 60 * 1000 // 1 hour
+          ) {
+            // State is already valid and recent, no need to update
+            return;
+          }
+        } catch {
+          // Invalid existing state, proceed to update
+        }
+      }
+
+      // Update auth state with fresh timestamp
+      const state: AuthState = {
+        timestamp: Date.now(),
+        version: AUTH_STATE_VERSION,
+      };
+      localStorage.setItem(AUTH_STATE_KEY, JSON.stringify(state));
+    } else {
+      // Only remove if it exists to avoid unnecessary storage events
+      if (localStorage.getItem(AUTH_STATE_KEY)) {
+        localStorage.removeItem(AUTH_STATE_KEY);
+      }
+    }
+  } catch {
+    // Ignore localStorage errors (e.g., private browsing mode)
+  }
+}
+
+/**
+ * Check if we have a valid authentication state
+ * Validates timestamp to avoid using stale data
+ */
+export function hasAuthState(): boolean {
+  try {
+    const stored = localStorage.getItem(AUTH_STATE_KEY);
+    if (!stored) return false;
+
+    let state: AuthState;
+    try {
+      state = JSON.parse(stored);
+    } catch {
+      // Invalid JSON, clear it
+      localStorage.removeItem(AUTH_STATE_KEY);
+      return false;
+    }
+
+    // Validate version
+    if (state.version !== AUTH_STATE_VERSION) {
+      localStorage.removeItem(AUTH_STATE_KEY);
+      return false;
+    }
+
+    // Validate timestamp is reasonable (not in future, not too old)
+    const now = Date.now();
+    const age = now - state.timestamp;
+
+    // Reject if timestamp is in the future
+    if (age < 0) {
+      localStorage.removeItem(AUTH_STATE_KEY);
+      return false;
+    }
+
+    // Reject if timestamp is too old (beyond token expiry period)
+    if (age > AUTH_STATE_MAX_AGE) {
+      localStorage.removeItem(AUTH_STATE_KEY);
+      return false;
+    }
+
+    // State is valid
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Check if we might be coming from an OAuth callback
+ * Uses sessionStorage flag set when OAuth flow is initiated
+ *
+ * Note: sessionStorage is per-tab, so if OAuth redirects to a new tab/window
+ * or browser restores a different session context, the flag may not carry over.
+ * This is a best-effort hint, not a guarantee.
+ */
+function mightBeAuthCallback(): boolean {
+  try {
+    // Check sessionStorage for OAuth indicator (set by OAuth button click)
+    if (sessionStorage.getItem("oauth_initiated") === "true") {
+      sessionStorage.removeItem("oauth_initiated");
+      return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Silent authentication check
+ *
+ * Returns null if not authenticated, or {user, authenticated: true} if authenticated.
+ *
+ * Uses localStorage as an optimization hint to avoid unnecessary API calls on first visit.
+ * Always makes API call when there's evidence of previous auth (validated state or OAuth flow).
+ * Treats 401 responses as expected (not logged as errors).
+ *
+ * Note: Uses raw fetch() instead of apiRequest() for direct control over abort signal handling.
+ * The apiRequest() function also supports signal, so we could unify later to reduce code duplication.
+ * Current approach is simpler and works well for this specific use case.
+ *
+ * @param signal - Optional AbortSignal to cancel the request
+ * @returns null if not authenticated, or {user, authenticated: true} if authenticated
+ */
+export async function checkAuthSilently(signal?: AbortSignal): Promise<{
+  user: unknown;
+  authenticated: boolean;
+} | null> {
+  // Check if we have a valid auth state (optimization hint)
+  const hasValidAuthState = hasAuthState();
+  const mightBeOAuth = mightBeAuthCallback();
+
+  // Only skip API call if we have no valid auth state AND no OAuth indicators
+  // This prevents console errors on genuine first visits
+  if (!hasValidAuthState && !mightBeOAuth) {
+    return null;
+  }
+
+  try {
+    // Make the API call to verify token is still valid
+    const response = await fetch("/api/profile", {
+      method: "GET",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      signal, // Pass abort signal to actually cancel the request
+    });
+
+    // If fetch returns, it usually didn't abort (abort throws AbortError)
+    // AbortError is handled in catch block below
+
+    if (response.status === 401) {
+      // Expected: user is not authenticated (token expired or invalid)
+      // Clear auth state and return null (401 is expected, not an error)
+      setAuthState(false);
+      return null;
+    }
+
+    if (response.ok) {
+      const data = await response.json();
+      // Only update auth state if it doesn't already exist or is stale
+      // This prevents infinite loops from storage events
+      setAuthState(true);
+      return { user: data, authenticated: true };
+    }
+
+    // Unexpected error status (not 401) - only log in development
+    if (import.meta.env.DEV) {
+      console.warn(
+        `[Auth] Unexpected status ${response.status} from /api/profile: ${response.statusText}`,
+      );
+    }
+    return null;
+  } catch (error) {
+    // Handle abort errors silently
+    if (error instanceof Error && error.name === "AbortError") {
+      return null;
+    }
+
+    // Handle network errors gracefully
+    // Only log in development mode for debugging
+    if (import.meta.env.DEV) {
+      if (error instanceof TypeError && error.message.includes("fetch")) {
+        console.warn("[Auth] Network error during auth check:", error);
+      }
+    }
+    // Return null on any error - treat as unauthenticated
+    return null;
+  }
 }
