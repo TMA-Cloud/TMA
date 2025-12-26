@@ -17,12 +17,12 @@ async function deleteFilesController(req, res) {
       return sendError(res, 400, 'Invalid ids array');
     }
 
-    // Get file names for audit logging
-    const fileInfoResult = await pool.query('SELECT id, name, type FROM files WHERE id = ANY($1) AND user_id = $2', [
-      validatedIds,
-      req.userId,
-    ]);
-    const fileInfo = fileInfoResult.rows.map(f => ({ id: f.id, name: f.name, type: f.type }));
+    // Get file names and parent_id for audit logging and events
+    const fileInfoResult = await pool.query(
+      'SELECT id, name, type, parent_id FROM files WHERE id = ANY($1) AND user_id = $2',
+      [validatedIds, req.userId]
+    );
+    const fileInfo = fileInfoResult.rows.map(f => ({ id: f.id, name: f.name, type: f.type, parentId: f.parent_id }));
     const fileNames = fileInfo.map(f => f.name);
     const fileTypes = fileInfo.map(f => f.type);
 
@@ -53,6 +53,7 @@ async function deleteFilesController(req, res) {
         id: file.id,
         name: file.name,
         type: file.type,
+        parentId: file.parentId || null,
         userId: req.userId,
         permanent: false,
       });
@@ -89,12 +90,12 @@ async function restoreFilesController(req, res) {
       return sendError(res, 400, 'Invalid ids array');
     }
 
-    // Get file names for audit logging (from trash)
+    // Get file names and parent_id for audit logging and events (from trash)
     const fileInfoResult = await pool.query(
-      'SELECT id, name, type FROM files WHERE id = ANY($1) AND user_id = $2 AND deleted_at IS NOT NULL',
+      'SELECT id, name, type, parent_id FROM files WHERE id = ANY($1) AND user_id = $2 AND deleted_at IS NOT NULL',
       [validatedIds, req.userId]
     );
-    const fileInfo = fileInfoResult.rows.map(f => ({ id: f.id, name: f.name, type: f.type }));
+    const fileInfo = fileInfoResult.rows.map(f => ({ id: f.id, name: f.name, type: f.type, parentId: f.parent_id }));
     const fileNames = fileInfo.map(f => f.name);
     const fileTypes = fileInfo.map(f => f.type);
 
@@ -128,6 +129,7 @@ async function restoreFilesController(req, res) {
         id: file.id,
         name: file.name,
         type: file.type,
+        parentId: file.parentId || null,
         userId: req.userId,
       });
     }
@@ -149,12 +151,12 @@ async function deleteForeverController(req, res) {
       return sendError(res, 400, 'Invalid ids array');
     }
 
-    // Get file names for audit logging (from trash)
+    // Get file names and parent_id for audit logging and events (from trash)
     const fileInfoResult = await pool.query(
-      'SELECT id, name, type FROM files WHERE id = ANY($1) AND user_id = $2 AND deleted_at IS NOT NULL',
+      'SELECT id, name, type, parent_id FROM files WHERE id = ANY($1) AND user_id = $2 AND deleted_at IS NOT NULL',
       [validatedIds, req.userId]
     );
-    const fileInfo = fileInfoResult.rows.map(f => ({ id: f.id, name: f.name, type: f.type }));
+    const fileInfo = fileInfoResult.rows.map(f => ({ id: f.id, name: f.name, type: f.type, parentId: f.parent_id }));
     const fileNames = fileInfo.map(f => f.name);
     const fileTypes = fileInfo.map(f => f.type);
 
@@ -185,6 +187,7 @@ async function deleteForeverController(req, res) {
         id: file.id,
         name: file.name,
         type: file.type,
+        parentId: file.parentId || null,
         userId: req.userId,
         permanent: true,
       });
@@ -240,6 +243,7 @@ async function emptyTrashController(req, res) {
         id: file.id,
         name: file.name,
         type: file.type,
+        parentId: file.parentId || file.parent_id || null,
         userId: req.userId,
         permanent: true,
         action: 'empty_trash',

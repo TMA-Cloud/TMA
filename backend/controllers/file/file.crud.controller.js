@@ -242,6 +242,7 @@ async function renameFile(req, res) {
       name,
       oldName: file.name,
       type: file.type,
+      parentId: file.parentId || null,
       userId: req.userId,
     });
 

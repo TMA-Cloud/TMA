@@ -29,12 +29,12 @@ async function starFilesController(req, res) {
       return sendError(res, 400, 'starred must be a boolean');
     }
 
-    // Get file names for audit logging
-    const fileInfoResult = await pool.query('SELECT id, name, type FROM files WHERE id = ANY($1) AND user_id = $2', [
-      validatedIds,
-      req.userId,
-    ]);
-    const fileInfo = fileInfoResult.rows.map(f => ({ id: f.id, name: f.name, type: f.type }));
+    // Get file names and parent_id for audit logging and events
+    const fileInfoResult = await pool.query(
+      'SELECT id, name, type, parent_id FROM files WHERE id = ANY($1) AND user_id = $2',
+      [validatedIds, req.userId]
+    );
+    const fileInfo = fileInfoResult.rows.map(f => ({ id: f.id, name: f.name, type: f.type, parentId: f.parent_id }));
     const fileNames = fileInfo.map(f => f.name);
     const fileTypes = fileInfo.map(f => f.type);
 
@@ -65,6 +65,7 @@ async function starFilesController(req, res) {
         id: file.id,
         name: file.name,
         type: file.type,
+        parentId: file.parentId || null,
         starred: validatedStarred,
         userId: req.userId,
       });
@@ -145,12 +146,17 @@ async function shareFilesController(req, res) {
         }
         await setShared(validatedIds, true, req.userId);
 
-        // Get file info for event publishing
+        // Get file info and parent_id for event publishing
         const fileInfoResult = await pool.query(
-          'SELECT id, name, type FROM files WHERE id = ANY($1) AND user_id = $2',
+          'SELECT id, name, type, parent_id FROM files WHERE id = ANY($1) AND user_id = $2',
           [validatedIds, req.userId]
         );
-        const fileInfo = fileInfoResult.rows.map(f => ({ id: f.id, name: f.name, type: f.type }));
+        const fileInfo = fileInfoResult.rows.map(f => ({
+          id: f.id,
+          name: f.name,
+          type: f.type,
+          parentId: f.parent_id,
+        }));
 
         // Publish file shared events
         for (const file of fileInfo) {
@@ -158,6 +164,7 @@ async function shareFilesController(req, res) {
             id: file.id,
             name: file.name,
             type: file.type,
+            parentId: file.parentId || null,
             shared: true,
             userId: req.userId,
           });
@@ -166,12 +173,17 @@ async function shareFilesController(req, res) {
         const treeIds = await getRecursiveIds(validatedIds, req.userId);
         await removeFilesFromShares(treeIds, req.userId);
 
-        // Get file info for event publishing
+        // Get file info and parent_id for event publishing
         const fileInfoResult = await pool.query(
-          'SELECT id, name, type FROM files WHERE id = ANY($1) AND user_id = $2',
+          'SELECT id, name, type, parent_id FROM files WHERE id = ANY($1) AND user_id = $2',
           [validatedIds, req.userId]
         );
-        const fileInfo = fileInfoResult.rows.map(f => ({ id: f.id, name: f.name, type: f.type }));
+        const fileInfo = fileInfoResult.rows.map(f => ({
+          id: f.id,
+          name: f.name,
+          type: f.type,
+          parentId: f.parent_id,
+        }));
 
         for (const id of validatedIds) {
           await deleteShareLink(id, req.userId);
@@ -199,6 +211,7 @@ async function shareFilesController(req, res) {
             id: file.id,
             name: file.name,
             type: file.type,
+            parentId: file.parentId || null,
             shared: false,
             userId: req.userId,
           });
@@ -282,17 +295,18 @@ async function linkParentShareController(req, res) {
       await setShared([id], true, req.userId);
       links[id] = buildShareLink(shareId, req);
 
-      // Get file info for event publishing
-      const fileInfoResult = await pool.query('SELECT id, name, type FROM files WHERE id = $1 AND user_id = $2', [
-        id,
-        req.userId,
-      ]);
+      // Get file info and parent_id for event publishing
+      const fileInfoResult = await pool.query(
+        'SELECT id, name, type, parent_id FROM files WHERE id = $1 AND user_id = $2',
+        [id, req.userId]
+      );
       if (fileInfoResult.rows[0]) {
         const file = fileInfoResult.rows[0];
         await publishFileEvent(EventTypes.FILE_SHARED, {
           id: file.id,
           name: file.name,
           type: file.type,
+          parentId: file.parent_id || null,
           shared: true,
           userId: req.userId,
         });

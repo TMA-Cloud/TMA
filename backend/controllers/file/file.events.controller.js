@@ -3,7 +3,7 @@ const { logger } = require('../../config/logger');
 
 /**
  * Server-Sent Events endpoint for real-time file events
- * All users receive the same events (broadcast to everyone)
+ * Each user subscribes to their own private channel for privacy
  */
 async function streamFileEvents(req, res) {
   // Set headers for SSE
@@ -16,23 +16,41 @@ async function streamFileEvents(req, res) {
   res.write(`data: ${JSON.stringify({ type: 'connected', message: 'Connected to file events stream' })}\n\n`);
 
   let subscriber = null;
+  let keepAliveInterval = null;
+  let isCleanedUp = false; // Flag to prevent double cleanup
+  const userId = req.userId;
+
+  // Helper function to cleanup resources (idempotent)
+  const cleanup = async () => {
+    if (isCleanedUp) {
+      return; // Already cleaned up
+    }
+    isCleanedUp = true;
+
+    if (keepAliveInterval) {
+      clearInterval(keepAliveInterval);
+      keepAliveInterval = null;
+    }
+    if (subscriber) {
+      await unsubscribeFromFileEvents(subscriber, userId);
+      subscriber = null;
+    }
+  };
 
   // Handle client disconnect
   req.on('close', async () => {
-    logger.debug('Client disconnected from file events stream');
-    if (subscriber) {
-      await unsubscribeFromFileEvents(subscriber);
-    }
+    logger.debug({ userId }, 'Client disconnected from file events stream');
+    await cleanup();
     res.end();
   });
 
-  // Subscribe to Redis pub/sub
-  subscriber = await subscribeToFileEvents(event => {
+  // Subscribe to Redis pub/sub (user-specific channel for privacy)
+  subscriber = await subscribeToFileEvents(userId, event => {
     try {
       // Send event to client
       res.write(`data: ${JSON.stringify(event)}\n\n`);
     } catch (err) {
-      logger.error({ err, event }, 'Failed to send event to client');
+      logger.error({ err, event, userId }, 'Failed to send event to client');
     }
   });
 
@@ -43,24 +61,31 @@ async function streamFileEvents(req, res) {
   }
 
   // Send keepalive ping every 30 seconds
-  const keepAliveInterval = setInterval(() => {
+  keepAliveInterval = setInterval(() => {
     try {
       res.write(`: keepalive\n\n`);
     } catch (_err) {
-      logger.debug('Client disconnected, stopping keepalive');
-      clearInterval(keepAliveInterval);
-      if (subscriber) {
-        unsubscribeFromFileEvents(subscriber).catch(() => {});
-      }
+      logger.debug({ userId }, 'Client disconnected, stopping keepalive');
+      void cleanup(); // Fire and forget, cleanup will handle idempotency
     }
   }, 30000);
 
   // Clean up on error
-  req.on('error', async _err => {
-    clearInterval(keepAliveInterval);
-    if (subscriber) {
-      await unsubscribeFromFileEvents(subscriber);
+  req.on('error', async err => {
+    // Ignore expected connection errors (client disconnect, aborted, etc.)
+    // These are normal and don't need error logging
+    const isExpectedError =
+      err.code === 'ECONNRESET' ||
+      err.code === 'EPIPE' ||
+      err.message === 'aborted' ||
+      err.message?.includes('aborted');
+
+    if (!isExpectedError) {
+      logger.warn({ userId, err }, 'Unexpected request error, cleaning up');
+    } else {
+      logger.debug({ userId, code: err.code }, 'Client disconnected (expected), cleaning up');
     }
+    await cleanup();
   });
 }
 

@@ -285,7 +285,13 @@ async function renameFile(id, name, userId) {
   await invalidateFileCache(userId, parentId);
   await invalidateSearchCache(userId);
 
-  return result.rows[0];
+  // Include parentId in the returned file object for event publishing
+  const file = result.rows[0];
+  if (file) {
+    file.parentId = parentId;
+  }
+
+  return file;
 }
 
 module.exports = {

@@ -52,6 +52,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   const searchQueryRef = useRef<string>(""); // Track current search query to ignore stale results
   const abortControllerRef = useRef<AbortController | null>(null); // For cancelling fetch requests
   const eventSourceRef = useRef<EventSource | null>(null); // For SSE connection
+  const currentUserIdRef = useRef<string | null>(null); // Track current user ID to ignore own events
+  const sseRefreshTimeoutRef = useRef<number | null>(null); // For debouncing SSE refresh
+  const currentPathRef = useRef<string[]>(currentPath); // Track current path for SSE relevance check
+  const folderStackRef = useRef<(string | null)[]>(folderStack); // Track folder stack for SSE relevance check
+  const refreshFilesRef = useRef<
+    ((skipSearchCheck?: boolean) => Promise<void>) | null
+  >(null); // Track refreshFiles function for SSE
 
   const operationQueue = usePromiseQueue();
 
@@ -104,10 +111,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, [isUploadProgressInteracting]);
 
-  // Keep ref in sync with state
+  // Keep refs in sync with state
   useEffect(() => {
     searchQueryRef.current = searchQuery;
   }, [searchQuery]);
+
+  useEffect(() => {
+    currentPathRef.current = currentPath;
+  }, [currentPath]);
+
+  useEffect(() => {
+    folderStackRef.current = folderStack;
+  }, [folderStack]);
 
   // Helper to build a map of fileId -> full share URL from the backend response.
   // Backend now returns full URLs in `links`.
@@ -178,6 +193,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
     },
     [folderStack, currentPath, sortBy, sortOrder, searchQuery],
   );
+
+  // Keep refreshFiles ref in sync (after refreshFiles is declared)
+  useEffect(() => {
+    refreshFilesRef.current = refreshFiles;
+  }, [refreshFiles]);
 
   const searchFilesApi = useCallback(
     async (query: string) => {
@@ -300,7 +320,88 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, [searchQuery, debouncedSearch, cancelSearch, refreshFiles]);
 
+  // Fetch current user ID once on mount
+  useEffect(() => {
+    const fetchCurrentUserId = async () => {
+      try {
+        const res = await fetch("/api/auth/profile", {
+          credentials: "include",
+        });
+        if (res.ok) {
+          const user = await res.json();
+          currentUserIdRef.current = user.id || null;
+        }
+      } catch (error) {
+        console.error("Failed to fetch current user ID:", error);
+      }
+    };
+    void fetchCurrentUserId();
+  }, []);
+
+  // Helper function to check if event is relevant (uses refs, no dependencies)
+  const isEventRelevant = (
+    eventType: string,
+    eventData: {
+      parentId?: string | null;
+      id?: string;
+      starred?: boolean;
+      shared?: boolean;
+    },
+  ) => {
+    const currentPage = currentPathRef.current[0];
+    const currentParentId =
+      folderStackRef.current[folderStackRef.current.length - 1];
+
+    // If in Starred view, only refresh for star/unstar events
+    if (currentPage === "Starred") {
+      return eventData.starred !== undefined;
+    }
+
+    // If in Shared view, only refresh for share/unshare events
+    if (currentPage === "Shared") {
+      return eventData.shared !== undefined;
+    }
+
+    // If in Trash view, only refresh for trash-related events
+    if (currentPage === "Trash") {
+      return (
+        eventType === "file.deleted" ||
+        eventType === "file.restored" ||
+        eventType === "file.permanently_deleted"
+      );
+    }
+
+    // For "My Files" view, check if event's parentId matches current folder
+    if (currentPage === "My Files") {
+      // If we're at root (no parentId), only refresh if event is also at root
+      if (!currentParentId) {
+        return !eventData.parentId;
+      }
+      // Otherwise, refresh if parentId matches
+      return eventData.parentId === currentParentId;
+    }
+
+    // Default: refresh for all events (fallback)
+    return true;
+  };
+
+  // Debounced refresh function for SSE events (uses refs, no dependencies)
+  const debouncedSSERefresh = () => {
+    // Clear any pending refresh
+    if (sseRefreshTimeoutRef.current) {
+      clearTimeout(sseRefreshTimeoutRef.current);
+    }
+    // Schedule a refresh after 800ms (debounce window)
+    sseRefreshTimeoutRef.current = setTimeout(() => {
+      if (refreshFilesRef.current) {
+        void refreshFilesRef.current(true);
+      }
+      sseRefreshTimeoutRef.current = null;
+    }, 800);
+  };
+
   // Connect to Server-Sent Events for real-time file updates
+  // This effect runs once on mount and uses refs to access current values
   useEffect(() => {
     // Create EventSource connection
     const eventSource = new EventSource("/api/files/events", {
@@ -327,12 +428,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
           return;
         }
 
-        // Handle file events - refresh files list when any event occurs
-        // All users receive the same events (broadcast)
+        // Handle file events
         if (data.type && data.data) {
-          console.log("File event received:", data.type, data.data);
-          // Refresh files list to show latest changes
-          void refreshFiles(true);
+          const eventData = data.data;
+
+          // 1. Ignore own events (if user already updated UI locally)
+          if (
+            currentUserIdRef.current &&
+            eventData.userId === currentUserIdRef.current
+          ) {
+            console.log("Ignoring own event:", data.type);
+            return;
+          }
+
+          // 2. Filter by relevance - only refresh if event affects current view
+          // Uses refs to get current values without causing re-renders
+          if (!isEventRelevant(data.type, eventData)) {
+            console.log("Event not relevant to current view:", data.type);
+            return;
+          }
+
+          // 3. Debounce/throttle refresh - batch multiple events
+          console.log(
+            "File event received (will refresh):",
+            data.type,
+            eventData,
+          );
+          debouncedSSERefresh();
         }
       } catch (error) {
         console.error("Failed to parse file event:", error);
@@ -348,12 +470,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
 
     // Cleanup on unmount
     return () => {
+      if (sseRefreshTimeoutRef.current) {
+        clearTimeout(sseRefreshTimeoutRef.current);
+        sseRefreshTimeoutRef.current = null;
+      }
       if (eventSourceRef.current) {
         eventSourceRef.current.close();
         eventSourceRef.current = null;
       }
     };
-  }, [refreshFiles]);
+  }, []); // Empty dependency array - connection created once, uses refs for current values
 
   useEffect(() => {
     // Only refresh files when not searching and searchQuery is empty
