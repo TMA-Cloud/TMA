@@ -235,7 +235,7 @@ export const MarqueeSelector: React.FC<MarqueeSelectorProps> = ({
             top: `${selectionRect.top}px`,
             width: `${selectionRect.width}px`,
             height: `${selectionRect.height}px`,
-            zIndex: 9999,
+            zIndex: 10,
           }}
         >
           {/* Inner glow layer */}
