@@ -98,8 +98,16 @@ export const MobileAppContent: React.FC = () => {
 
   return (
     <div className="h-screen w-screen flex flex-col bg-gray-50 dark:bg-slate-900">
+      {/* Backdrop - covers entire screen when dropdown is open */}
+      {dropdownOpen && (
+        <div
+          className="fixed inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-sm animate-fadeIn z-[9998]"
+          onClick={() => setDropdownOpen(false)}
+        />
+      )}
+
       {/* Compact top bar */}
-      <header className="px-4 py-3 flex items-center justify-between bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-b border-gray-200/50 dark:border-slate-800/50 shadow-sm">
+      <header className="relative px-4 py-3 flex items-center justify-between bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-b border-gray-200/50 dark:border-slate-800/50 shadow-sm z-[9999]">
         <div className="flex items-center space-x-2">
           <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-lg transition-all duration-200">
             <HardDrive className="w-5 h-5 text-white" />
@@ -124,10 +132,10 @@ export const MobileAppContent: React.FC = () => {
           </button>
 
           {/* Profile Dropdown */}
-          <div className="relative" ref={dropdownRef}>
+          <div className="relative z-[10000]" ref={dropdownRef}>
             <button
               onClick={() => setDropdownOpen(!dropdownOpen)}
-              className="flex items-center space-x-1 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 rounded-lg p-1 transition-all duration-200"
+              className="flex items-center space-x-1 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 rounded-lg p-1 transition-all duration-200 relative z-[10001]"
             >
               <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-xs font-bold text-white shadow-lg transition-all duration-200">
                 {getInitials(user?.name)}
@@ -141,28 +149,20 @@ export const MobileAppContent: React.FC = () => {
 
             {/* Dropdown Menu */}
             {dropdownOpen && (
-              <>
-                {/* Backdrop */}
-                <div
-                  className="fixed inset-0 bg-black/5 dark:bg-black/20 backdrop-blur-sm animate-fadeIn z-40"
-                  onClick={() => setDropdownOpen(false)}
-                />
-                {/* Dropdown */}
-                <div className="absolute right-0 mt-2 w-40 bg-white/95 dark:bg-slate-800/95 backdrop-blur-xl rounded-xl shadow-2xl border border-gray-200/50 dark:border-slate-700/50 py-1 z-50 overflow-hidden animate-menuIn">
-                  <button
-                    onClick={() => {
-                      logout();
-                      setDropdownOpen(false);
-                    }}
-                    className="w-full flex items-center space-x-3 px-4 py-2.5 text-left text-gray-700 dark:text-gray-300 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 dark:hover:text-red-400 transition-all duration-200 group rounded-lg mx-1"
-                  >
-                    <LogOut className="w-4 h-4 transition-transform duration-200 group-hover:scale-110 group-hover:-translate-x-0.5" />
-                    <span className="text-sm font-medium transition-colors duration-200">
-                      Log out
-                    </span>
-                  </button>
-                </div>
-              </>
+              <div className="absolute right-0 mt-2 w-40 bg-white/95 dark:bg-slate-800/95 backdrop-blur-xl rounded-xl shadow-2xl border border-gray-200/50 dark:border-slate-700/50 py-1 z-[10002] overflow-hidden animate-menuIn">
+                <button
+                  onClick={() => {
+                    logout();
+                    setDropdownOpen(false);
+                  }}
+                  className="w-full flex items-center space-x-3 px-4 py-2.5 text-left text-gray-700 dark:text-gray-300 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 dark:hover:text-red-400 transition-all duration-200 group rounded-lg mx-1"
+                >
+                  <LogOut className="w-4 h-4 transition-transform duration-200 group-hover:scale-110 group-hover:-translate-x-0.5" />
+                  <span className="text-sm font-medium transition-colors duration-200">
+                    Log out
+                  </span>
+                </button>
+              </div>
             )}
           </div>
         </div>
