@@ -409,7 +409,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
     });
 
     eventSource.onopen = () => {
-      console.log("Connected to file events stream");
+      // Connection established
     };
 
     eventSource.onmessage = (event) => {
@@ -418,7 +418,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
 
         // Handle connection confirmation
         if (data.type === "connected") {
-          console.log("File events stream connected:", data.message);
           return;
         }
 
@@ -437,23 +436,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
             currentUserIdRef.current &&
             eventData.userId === currentUserIdRef.current
           ) {
-            console.log("Ignoring own event:", data.type);
             return;
           }
 
           // 2. Filter by relevance - only refresh if event affects current view
           // Uses refs to get current values without causing re-renders
           if (!isEventRelevant(data.type, eventData)) {
-            console.log("Event not relevant to current view:", data.type);
             return;
           }
 
           // 3. Debounce/throttle refresh - batch multiple events
-          console.log(
-            "File event received (will refresh):",
-            data.type,
-            eventData,
-          );
           debouncedSSERefresh();
         }
       } catch (error) {
