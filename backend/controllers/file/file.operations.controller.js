@@ -5,7 +5,7 @@ const { moveFiles, copyFiles } = require('../../models/file.model');
 const pool = require('../../config/db');
 const { userOperationLock } = require('../../utils/mutex');
 const { validateId, validateIdArray } = require('../../utils/validation');
-const { publishFileEvent, EventTypes } = require('../../services/fileEvents');
+const { publishFileEventsBatch, EventTypes } = require('../../services/fileEvents');
 
 /**
  * Move files or folders to a different location
@@ -66,17 +66,20 @@ async function moveFilesController(req, res) {
     );
     logger.info({ fileIds: validatedIds, fileNames, targetFolderName }, 'Files moved');
 
-    // Publish file moved events
-    for (const file of fileInfo) {
-      await publishFileEvent(EventTypes.FILE_MOVED, {
-        id: file.id,
-        name: file.name,
-        type: file.type,
-        parentId: validatedParentId,
-        targetFolderName,
-        userId: req.userId,
-      });
-    }
+    // Publish file moved events in batch (optimized)
+    await publishFileEventsBatch(
+      fileInfo.map(file => ({
+        eventType: EventTypes.FILE_MOVED,
+        eventData: {
+          id: file.id,
+          name: file.name,
+          type: file.type,
+          parentId: validatedParentId,
+          targetFolderName,
+          userId: req.userId,
+        },
+      }))
+    );
 
     sendSuccess(res, { success: true });
   } catch (err) {
@@ -150,17 +153,20 @@ async function copyFilesController(req, res) {
       [fileNames, fileTypes, validatedParentId, req.userId, validatedIds.length]
     );
 
-    // Publish file copied events
-    for (const file of newFilesResult.rows) {
-      await publishFileEvent(EventTypes.FILE_COPIED, {
-        id: file.id,
-        name: file.name,
-        type: file.type,
-        parentId: validatedParentId,
-        targetFolderName,
-        userId: req.userId,
-      });
-    }
+    // Publish file copied events in batch (optimized)
+    await publishFileEventsBatch(
+      newFilesResult.rows.map(file => ({
+        eventType: EventTypes.FILE_COPIED,
+        eventData: {
+          id: file.id,
+          name: file.name,
+          type: file.type,
+          parentId: validatedParentId,
+          targetFolderName,
+          userId: req.userId,
+        },
+      }))
+    );
 
     sendSuccess(res, { success: true });
   } catch (err) {

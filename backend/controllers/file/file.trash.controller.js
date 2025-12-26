@@ -4,7 +4,7 @@ const { logAuditEvent } = require('../../services/auditLogger');
 const { deleteFiles, getTrashFiles, restoreFiles, permanentlyDeleteFiles } = require('../../models/file.model');
 const pool = require('../../config/db');
 const { validateIdArray, validateSortBy, validateSortOrder } = require('../../utils/validation');
-const { publishFileEvent, EventTypes } = require('../../services/fileEvents');
+const { publishFileEventsBatch, EventTypes } = require('../../services/fileEvents');
 
 /**
  * Delete files/folders (move to trash)
@@ -47,17 +47,20 @@ async function deleteFilesController(req, res) {
     );
     logger.info({ fileIds: validatedIds, fileNames }, 'Files moved to trash');
 
-    // Publish file deleted events
-    for (const file of fileInfo) {
-      await publishFileEvent(EventTypes.FILE_DELETED, {
-        id: file.id,
-        name: file.name,
-        type: file.type,
-        parentId: file.parentId || null,
-        userId: req.userId,
-        permanent: false,
-      });
-    }
+    // Publish file deleted events in batch (optimized)
+    await publishFileEventsBatch(
+      fileInfo.map(file => ({
+        eventType: EventTypes.FILE_DELETED,
+        eventData: {
+          id: file.id,
+          name: file.name,
+          type: file.type,
+          parentId: file.parentId || null,
+          userId: req.userId,
+          permanent: false,
+        },
+      }))
+    );
 
     sendSuccess(res, { success: true });
   } catch (err) {
@@ -123,16 +126,19 @@ async function restoreFilesController(req, res) {
     );
     logger.info({ fileIds: validatedIds, fileNames }, 'Files restored from trash');
 
-    // Publish file restored events
-    for (const file of fileInfo) {
-      await publishFileEvent(EventTypes.FILE_RESTORED, {
-        id: file.id,
-        name: file.name,
-        type: file.type,
-        parentId: file.parentId || null,
-        userId: req.userId,
-      });
-    }
+    // Publish file restored events in batch (optimized)
+    await publishFileEventsBatch(
+      fileInfo.map(file => ({
+        eventType: EventTypes.FILE_RESTORED,
+        eventData: {
+          id: file.id,
+          name: file.name,
+          type: file.type,
+          parentId: file.parentId || null,
+          userId: req.userId,
+        },
+      }))
+    );
 
     sendSuccess(res, { success: true, message: `Restored ${fileInfo.length} file(s) from trash` });
   } catch (err) {
@@ -181,17 +187,20 @@ async function deleteForeverController(req, res) {
     );
     logger.info({ fileIds: validatedIds, fileNames }, 'Files permanently deleted');
 
-    // Publish file permanently deleted events
-    for (const file of fileInfo) {
-      await publishFileEvent(EventTypes.FILE_PERMANENTLY_DELETED, {
-        id: file.id,
-        name: file.name,
-        type: file.type,
-        parentId: file.parentId || null,
-        userId: req.userId,
-        permanent: true,
-      });
-    }
+    // Publish file permanently deleted events in batch (optimized)
+    await publishFileEventsBatch(
+      fileInfo.map(file => ({
+        eventType: EventTypes.FILE_PERMANENTLY_DELETED,
+        eventData: {
+          id: file.id,
+          name: file.name,
+          type: file.type,
+          parentId: file.parentId || null,
+          userId: req.userId,
+          permanent: true,
+        },
+      }))
+    );
 
     sendSuccess(res, { success: true });
   } catch (err) {
@@ -237,18 +246,21 @@ async function emptyTrashController(req, res) {
     );
     logger.info({ fileCount: allIds.length, fileNames }, 'Trash emptied');
 
-    // Publish file permanently deleted events for all files
-    for (const file of trashFiles) {
-      await publishFileEvent(EventTypes.FILE_PERMANENTLY_DELETED, {
-        id: file.id,
-        name: file.name,
-        type: file.type,
-        parentId: file.parentId || file.parent_id || null,
-        userId: req.userId,
-        permanent: true,
-        action: 'empty_trash',
-      });
-    }
+    // Publish file permanently deleted events in batch (optimized)
+    await publishFileEventsBatch(
+      trashFiles.map(file => ({
+        eventType: EventTypes.FILE_PERMANENTLY_DELETED,
+        eventData: {
+          id: file.id,
+          name: file.name,
+          type: file.type,
+          parentId: file.parentId || file.parent_id || null,
+          userId: req.userId,
+          permanent: true,
+          action: 'empty_trash',
+        },
+      }))
+    );
 
     sendSuccess(res, { success: true, message: `Deleted ${allIds.length} file(s) from trash` });
   } catch (err) {

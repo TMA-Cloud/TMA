@@ -1,8 +1,14 @@
 const { subscribeToFileEvents, unsubscribeFromFileEvents } = require('../../services/fileEvents');
 const { logger } = require('../../config/logger');
 
+// Configuration
+const KEEPALIVE_INTERVAL = 30000; // 30 seconds
+const MAX_RETRY_ATTEMPTS = 3;
+const RETRY_DELAY = 1000; // 1 second
+
 /**
  * Server-Sent Events endpoint for real-time file events
+ * Optimized for better performance, stability, and resource management
  * Each user subscribes to their own private channel for privacy
  */
 async function streamFileEvents(req, res) {
@@ -13,12 +19,40 @@ async function streamFileEvents(req, res) {
   res.setHeader('X-Accel-Buffering', 'no'); // Disable nginx buffering
 
   // Send initial connection message
-  res.write(`data: ${JSON.stringify({ type: 'connected', message: 'Connected to file events stream' })}\n\n`);
+  try {
+    res.write(`data: ${JSON.stringify({ type: 'connected', message: 'Connected to file events stream' })}\n\n`);
+  } catch (err) {
+    logger.error({ err, userId: req.userId }, 'Failed to send initial connection message');
+    res.end();
+    return;
+  }
 
   let subscriber = null;
   let keepAliveInterval = null;
-  let isCleanedUp = false; // Flag to prevent double cleanup
+  let isCleanedUp = false;
+  let isConnectionClosed = false;
   const userId = req.userId;
+
+  // Helper function to check if connection is still alive
+  const isConnectionAlive = () => {
+    return !isConnectionClosed && !res.destroyed && !res.writableEnded;
+  };
+
+  // Helper function to safely write to response
+  const safeWrite = data => {
+    if (!isConnectionAlive()) {
+      return false;
+    }
+    try {
+      res.write(data);
+      return true;
+    } catch (err) {
+      // Connection closed or error
+      isConnectionClosed = true;
+      logger.debug({ userId, err: err.message }, 'Failed to write to SSE connection');
+      return false;
+    }
+  };
 
   // Helper function to cleanup resources (idempotent)
   const cleanup = async () => {
@@ -26,14 +60,29 @@ async function streamFileEvents(req, res) {
       return; // Already cleaned up
     }
     isCleanedUp = true;
+    isConnectionClosed = true;
 
     if (keepAliveInterval) {
       clearInterval(keepAliveInterval);
       keepAliveInterval = null;
     }
+
     if (subscriber) {
-      await unsubscribeFromFileEvents(subscriber, userId);
+      try {
+        await unsubscribeFromFileEvents(subscriber, userId);
+      } catch (err) {
+        logger.debug({ err, userId }, 'Error during unsubscribe cleanup');
+      }
       subscriber = null;
+    }
+
+    // Ensure response is closed
+    if (!res.destroyed && !res.writableEnded) {
+      try {
+        res.end();
+      } catch (_err) {
+        // Ignore errors when closing response
+      }
     }
   };
 
@@ -41,51 +90,117 @@ async function streamFileEvents(req, res) {
   req.on('close', async () => {
     logger.debug({ userId }, 'Client disconnected from file events stream');
     await cleanup();
-    res.end();
+  });
+
+  // Handle request abort
+  req.on('aborted', async () => {
+    logger.debug({ userId }, 'Request aborted');
+    await cleanup();
   });
 
   // Subscribe to Redis pub/sub (user-specific channel for privacy)
-  subscriber = await subscribeToFileEvents(userId, event => {
+  let retryCount = 0;
+  while (retryCount < MAX_RETRY_ATTEMPTS && !subscriber && isConnectionAlive()) {
     try {
-      // Send event to client
-      res.write(`data: ${JSON.stringify(event)}\n\n`);
+      subscriber = await subscribeToFileEvents(userId, event => {
+        if (!isConnectionAlive()) {
+          return;
+        }
+
+        try {
+          // Send event to client
+          const eventData = `data: ${JSON.stringify(event)}\n\n`;
+          if (!safeWrite(eventData)) {
+            // Connection closed, trigger cleanup
+            void cleanup();
+          }
+        } catch (err) {
+          logger.error({ err, event, userId }, 'Failed to send event to client');
+          // Don't throw - continue processing other events
+        }
+      });
+
+      if (subscriber) {
+        break; // Successfully subscribed
+      }
     } catch (err) {
-      logger.error({ err, event, userId }, 'Failed to send event to client');
+      logger.error({ err, userId, retryCount }, 'Failed to subscribe to file events');
     }
-  });
+
+    if (!subscriber && retryCount < MAX_RETRY_ATTEMPTS - 1) {
+      // Wait before retry
+      await new Promise(resolve => {
+        setTimeout(
+          () => {
+            resolve();
+          },
+          RETRY_DELAY * (retryCount + 1)
+        );
+      });
+      retryCount++;
+    } else {
+      retryCount++;
+    }
+  }
 
   if (!subscriber) {
-    res.write(`data: ${JSON.stringify({ type: 'error', message: 'Failed to connect to event stream' })}\n\n`);
+    const errorMsg = { type: 'error', message: 'Failed to connect to event stream' };
+    try {
+      res.write(`data: ${JSON.stringify(errorMsg)}\n\n`);
+    } catch (err) {
+      logger.debug({ err, userId }, 'Failed to send error message');
+    }
     res.end();
     return;
   }
 
-  // Send keepalive ping every 30 seconds
+  // Send keepalive ping at optimized interval
   keepAliveInterval = setInterval(() => {
-    try {
-      res.write(`: keepalive\n\n`);
-    } catch (_err) {
-      logger.debug({ userId }, 'Client disconnected, stopping keepalive');
-      void cleanup(); // Fire and forget, cleanup will handle idempotency
+    if (!isConnectionAlive()) {
+      void cleanup();
+      return;
     }
-  }, 30000);
+
+    try {
+      // Use comment-style keepalive (lighter weight)
+      if (!safeWrite(`: keepalive\n\n`)) {
+        void cleanup();
+      }
+    } catch (_err) {
+      logger.debug({ userId }, 'Keepalive failed, cleaning up');
+      void cleanup();
+    }
+  }, KEEPALIVE_INTERVAL);
 
   // Clean up on error
   req.on('error', async err => {
     // Ignore expected connection errors (client disconnect, aborted, etc.)
-    // These are normal and don't need error logging
     const isExpectedError =
       err.code === 'ECONNRESET' ||
       err.code === 'EPIPE' ||
+      err.code === 'ECONNABORTED' ||
       err.message === 'aborted' ||
-      err.message?.includes('aborted');
+      err.message?.includes('aborted') ||
+      err.message?.includes('socket hang up');
 
     if (!isExpectedError) {
-      logger.warn({ userId, err }, 'Unexpected request error, cleaning up');
+      logger.warn({ userId, err: err.message, code: err.code }, 'Unexpected request error, cleaning up');
     } else {
       logger.debug({ userId, code: err.code }, 'Client disconnected (expected), cleaning up');
     }
     await cleanup();
+  });
+
+  // Handle response errors
+  res.on('error', async err => {
+    logger.debug({ userId, err: err.message }, 'Response error, cleaning up');
+    await cleanup();
+  });
+
+  // Handle response finish
+  res.on('finish', () => {
+    logger.debug({ userId }, 'Response finished');
+    void cleanup();
   });
 }
 

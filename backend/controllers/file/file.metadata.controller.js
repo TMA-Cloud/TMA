@@ -12,7 +12,7 @@ const {
 const pool = require('../../config/db');
 const { validateIdArray, validateSortBy, validateSortOrder, validateBoolean } = require('../../utils/validation');
 const { buildShareLink } = require('../../utils/shareLink');
-const { publishFileEvent, EventTypes } = require('../../services/fileEvents');
+const { publishFileEventsBatch, EventTypes } = require('../../services/fileEvents');
 
 /**
  * Star or unstar files/folders
@@ -59,17 +59,20 @@ async function starFilesController(req, res) {
     );
     logger.debug({ fileIds: validatedIds, fileNames, starred: validatedStarred }, 'Files starred status changed');
 
-    // Publish file starred events
-    for (const file of fileInfo) {
-      await publishFileEvent(EventTypes.FILE_STARRED, {
-        id: file.id,
-        name: file.name,
-        type: file.type,
-        parentId: file.parentId || null,
-        starred: validatedStarred,
-        userId: req.userId,
-      });
-    }
+    // Publish file starred events in batch (optimized)
+    await publishFileEventsBatch(
+      fileInfo.map(file => ({
+        eventType: EventTypes.FILE_STARRED,
+        eventData: {
+          id: file.id,
+          name: file.name,
+          type: file.type,
+          parentId: file.parentId || null,
+          starred: validatedStarred,
+          userId: req.userId,
+        },
+      }))
+    );
 
     sendSuccess(res, { success: true });
   } catch (err) {
@@ -158,17 +161,20 @@ async function shareFilesController(req, res) {
           parentId: f.parent_id,
         }));
 
-        // Publish file shared events
-        for (const file of fileInfo) {
-          await publishFileEvent(EventTypes.FILE_SHARED, {
-            id: file.id,
-            name: file.name,
-            type: file.type,
-            parentId: file.parentId || null,
-            shared: true,
-            userId: req.userId,
-          });
-        }
+        // Publish file shared events in batch (optimized)
+        await publishFileEventsBatch(
+          fileInfo.map(file => ({
+            eventType: EventTypes.FILE_SHARED,
+            eventData: {
+              id: file.id,
+              name: file.name,
+              type: file.type,
+              parentId: file.parentId || null,
+              shared: true,
+              userId: req.userId,
+            },
+          }))
+        );
       } else {
         const treeIds = await getRecursiveIds(validatedIds, req.userId);
         await removeFilesFromShares(treeIds, req.userId);
@@ -205,17 +211,20 @@ async function shareFilesController(req, res) {
         }
         await setShared(validatedIds, false, req.userId);
 
-        // Publish file unshared events
-        for (const file of fileInfo) {
-          await publishFileEvent(EventTypes.FILE_SHARED, {
-            id: file.id,
-            name: file.name,
-            type: file.type,
-            parentId: file.parentId || null,
-            shared: false,
-            userId: req.userId,
-          });
-        }
+        // Publish file unshared events in batch (optimized)
+        await publishFileEventsBatch(
+          fileInfo.map(file => ({
+            eventType: EventTypes.FILE_SHARED,
+            eventData: {
+              id: file.id,
+              name: file.name,
+              type: file.type,
+              parentId: file.parentId || null,
+              shared: false,
+              userId: req.userId,
+            },
+          }))
+        );
       }
 
       await client.query('COMMIT');
@@ -302,14 +311,19 @@ async function linkParentShareController(req, res) {
       );
       if (fileInfoResult.rows[0]) {
         const file = fileInfoResult.rows[0];
-        await publishFileEvent(EventTypes.FILE_SHARED, {
-          id: file.id,
-          name: file.name,
-          type: file.type,
-          parentId: file.parent_id || null,
-          shared: true,
-          userId: req.userId,
-        });
+        await publishFileEventsBatch([
+          {
+            eventType: EventTypes.FILE_SHARED,
+            eventData: {
+              id: file.id,
+              name: file.name,
+              type: file.type,
+              parentId: file.parent_id || null,
+              shared: true,
+              userId: req.userId,
+            },
+          },
+        ]);
       }
     }
     sendSuccess(res, { success: true, links });

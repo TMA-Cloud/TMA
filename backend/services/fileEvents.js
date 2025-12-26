@@ -62,7 +62,67 @@ async function publishFileEvent(eventType, eventData, userId = null) {
 }
 
 /**
+ * Publish multiple file events in batch (optimized for bulk operations)
+ * @param {Array<{eventType: string, eventData: Object, userId?: string}>} events - Array of events to publish
+ */
+async function publishFileEventsBatch(events) {
+  if (!isRedisConnected()) {
+    logger.debug('Redis not connected, skipping batch file event publication');
+    return;
+  }
+
+  if (!Array.isArray(events) || events.length === 0) {
+    return;
+  }
+
+  // Group events by userId for efficient publishing
+  const eventsByUser = new Map();
+
+  for (const { eventType, eventData, userId } of events) {
+    const targetUserId = userId || eventData?.userId;
+    if (!targetUserId) {
+      logger.warn({ eventType, eventData }, 'Cannot publish file event: no userId provided');
+      continue;
+    }
+
+    if (!eventsByUser.has(targetUserId)) {
+      eventsByUser.set(targetUserId, []);
+    }
+
+    eventsByUser.get(targetUserId).push({
+      type: eventType,
+      timestamp: new Date().toISOString(),
+      data: eventData,
+    });
+  }
+
+  // Publish all events in parallel (grouped by user)
+  const publishPromises = [];
+  for (const [targetUserId, userEvents] of eventsByUser.entries()) {
+    const channel = getUserEventsChannel(targetUserId);
+    // Publish events sequentially for each user to maintain order
+    for (const event of userEvents) {
+      publishPromises.push(
+        redisClient.publish(channel, JSON.stringify(event)).catch(err => {
+          logger.error({ err, eventType: event.type, userId: targetUserId }, 'Failed to publish batch event');
+        })
+      );
+    }
+  }
+
+  // Wait for all publishes to complete (but don't block on errors)
+  await Promise.allSettled(publishPromises);
+
+  logger.debug({ eventCount: events.length, userCount: eventsByUser.size }, 'Batch file events published');
+}
+
+// Track active subscriptions for connection management
+const activeSubscriptions = new Map(); // userId -> subscriber client
+const MAX_CONNECTIONS = 10000; // Maximum concurrent SSE connections
+
+/**
  * Subscribe to file events from Redis (per-user channel for privacy)
+ * Optimized with connection tracking and limits
  * @param {string} userId - User ID to subscribe to events for
  * @param {Function} callback - Callback function to handle events
  * @returns {Promise<Object>} Redis subscriber client
@@ -78,22 +138,53 @@ async function subscribeToFileEvents(userId, callback) {
     return null;
   }
 
+  // Check connection limit
+  if (activeSubscriptions.size >= MAX_CONNECTIONS) {
+    logger.warn({ activeConnections: activeSubscriptions.size }, 'Maximum SSE connections reached');
+    return null;
+  }
+
   try {
     // Create a separate subscriber client (Redis requires separate clients for pub/sub)
     const subscriber = redisClient.duplicate();
     await subscriber.connect();
 
     const channel = getUserEventsChannel(userId);
+
+    // Subscribe with error handling
     await subscriber.subscribe(channel, message => {
       try {
         const event = JSON.parse(message);
         callback(event);
       } catch (err) {
-        logger.error({ err, message }, 'Failed to parse file event message');
+        logger.error({ err, message, userId }, 'Failed to parse file event message');
       }
     });
 
-    logger.info({ channel, userId }, 'Subscribed to user file events channel');
+    // Track active subscription
+    activeSubscriptions.set(userId, subscriber);
+
+    // Handle subscriber errors
+    subscriber.on('error', err => {
+      logger.error({ err, userId, channel }, 'Subscriber client error');
+      // Remove from tracking on error
+      if (activeSubscriptions.get(userId) === subscriber) {
+        activeSubscriptions.delete(userId);
+      }
+    });
+
+    // Handle subscriber disconnect
+    subscriber.on('end', () => {
+      logger.debug({ userId, channel }, 'Subscriber client disconnected');
+      if (activeSubscriptions.get(userId) === subscriber) {
+        activeSubscriptions.delete(userId);
+      }
+    });
+
+    logger.debug(
+      { channel, userId, activeConnections: activeSubscriptions.size },
+      'Subscribed to user file events channel'
+    );
     return subscriber;
   } catch (err) {
     logger.error({ err, userId }, 'Failed to subscribe to file events');
@@ -103,12 +194,20 @@ async function subscribeToFileEvents(userId, callback) {
 
 /**
  * Unsubscribe from file events
+ * Optimized with better cleanup and connection tracking
  * @param {Object} subscriber - Redis subscriber client
  * @param {string} userId - User ID (optional, for logging)
  */
 async function unsubscribeFromFileEvents(subscriber, userId = null) {
   if (!subscriber) {
     return;
+  }
+
+  // Remove from tracking first
+  if (userId && activeSubscriptions.has(userId)) {
+    if (activeSubscriptions.get(userId) === subscriber) {
+      activeSubscriptions.delete(userId);
+    }
   }
 
   try {
@@ -123,10 +222,13 @@ async function unsubscribeFromFileEvents(subscriber, userId = null) {
       const channel = getUserEventsChannel(userId);
       try {
         await subscriber.unsubscribe(channel);
-        logger.info({ channel, userId }, 'Unsubscribed from user file events channel');
+        logger.debug(
+          { channel, userId, activeConnections: activeSubscriptions.size },
+          'Unsubscribed from user file events channel'
+        );
       } catch (unsubErr) {
         // Handle unsubscribe errors gracefully
-        if (unsubErr.message && unsubErr.message.includes('closed')) {
+        if (unsubErr.message && (unsubErr.message.includes('closed') || unsubErr.type === 'ClientClosedError')) {
           logger.debug({ userId, channel }, 'Channel already unsubscribed (client closed)');
           return;
         }
@@ -136,9 +238,9 @@ async function unsubscribeFromFileEvents(subscriber, userId = null) {
       // Fallback: try to unsubscribe from all channels
       try {
         await subscriber.unsubscribe();
-        logger.info('Unsubscribed from file events channel');
+        logger.debug({ userId }, 'Unsubscribed from all file events channels');
       } catch (unsubErr) {
-        if (unsubErr.message && unsubErr.message.includes('closed')) {
+        if (unsubErr.message && (unsubErr.message.includes('closed') || unsubErr.type === 'ClientClosedError')) {
           logger.debug({ userId }, 'Already unsubscribed (client closed)');
           return;
         }
@@ -167,10 +269,23 @@ async function unsubscribeFromFileEvents(subscriber, userId = null) {
   }
 }
 
+/**
+ * Get statistics about active SSE connections
+ * @returns {Object} Connection statistics
+ */
+function getConnectionStats() {
+  return {
+    activeConnections: activeSubscriptions.size,
+    maxConnections: MAX_CONNECTIONS,
+  };
+}
+
 module.exports = {
   EventTypes,
   publishFileEvent,
+  publishFileEventsBatch,
   subscribeToFileEvents,
   unsubscribeFromFileEvents,
   getUserEventsChannel,
+  getConnectionStats,
 };
