@@ -15,6 +15,7 @@ const EventTypes = {
   FILE_PERMANENTLY_DELETED: 'file.permanently_deleted',
   FILE_STARRED: 'file.starred',
   FILE_SHARED: 'file.shared',
+  FILE_UPDATED: 'file.updated',
 };
 
 /**

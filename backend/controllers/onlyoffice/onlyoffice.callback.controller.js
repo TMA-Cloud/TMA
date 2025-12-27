@@ -7,6 +7,14 @@ const { resolveFilePath } = require('../../utils/filePath');
 const { logger } = require('../../config/logger');
 const { logAuditEvent } = require('../../services/auditLogger');
 const { getOnlyOfficeConfig } = require('./onlyoffice.utils');
+const {
+  invalidateFileCache,
+  deleteCache,
+  deleteCachePattern,
+  cacheKeys,
+  invalidateSearchCache,
+} = require('../../utils/cache');
+const { publishFileEvent, EventTypes } = require('../../services/fileEvents');
 
 /**
  * Download file from URL
@@ -165,7 +173,9 @@ async function callback(req, res) {
 
       // Get file info from database
       const db = require('../../config/db');
-      const fileResult = await db.query('SELECT id, name, path, user_id FROM files WHERE id = $1', [validatedFileId]);
+      const fileResult = await db.query('SELECT id, name, path, user_id, parent_id, size FROM files WHERE id = $1', [
+        validatedFileId,
+      ]);
 
       if (fileResult.rows.length === 0) {
         logger.error('[ONLYOFFICE] File not found in database:', fileId);
@@ -251,6 +261,36 @@ async function callback(req, res) {
       // Update file size and modified timestamp in database
       const newSize = fileBuffer.length;
       await db.query('UPDATE files SET size = $1, modified = NOW() WHERE id = $2', [newSize, validatedFileId]);
+
+      // Invalidate cache to ensure frontend sees updated file immediately
+      const userId = fileRow.user_id;
+      const parentId = fileRow.parent_id;
+
+      // Invalidate file listing cache for the parent folder (and root if needed)
+      await invalidateFileCache(userId, parentId);
+
+      // Invalidate single file cache
+      await deleteCache(cacheKeys.file(validatedFileId, userId));
+
+      // Invalidate file stats cache (size changed)
+      await deleteCache(cacheKeys.fileStats(userId));
+
+      // Invalidate search cache (modified date changed, affects search results)
+      await invalidateSearchCache(userId);
+
+      // Invalidate starred/shared caches if the file might be in those views
+      // (Use pattern-based deletion to invalidate all sort orders)
+      await deleteCachePattern(`files:${userId}:starred:*`);
+      await deleteCachePattern(`files:${userId}:shared:*`);
+
+      // Publish file updated event to notify frontend in real-time
+      await publishFileEvent(EventTypes.FILE_UPDATED, {
+        id: validatedFileId,
+        name: fileRow.name,
+        size: newSize,
+        parentId,
+        userId,
+      });
 
       // Log audit event for document save
       await logAuditEvent(
