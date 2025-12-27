@@ -78,6 +78,7 @@ async function downloadSharedItem(req, res) {
       if (!success) {
         return res.status(400).send(error || 'Invalid file path');
       }
+
       return res.download(filePath, file.name, err => {
         if (err) logger.error({ err }, 'Error sending file');
       });

@@ -178,10 +178,124 @@ async function setSignupEnabled(enabled, userId) {
   }
 }
 
+async function getOnlyOfficeSettings() {
+  // Try to get from cache first
+  const cacheKey = cacheKeys.onlyOfficeSettings();
+  const cached = await getCache(cacheKey);
+  if (cached !== null) {
+    return cached;
+  }
+
+  // Cache miss - query database
+  const result = await pool.query('SELECT onlyoffice_jwt_secret, onlyoffice_url FROM app_settings WHERE id = $1', [
+    'app_settings',
+  ]);
+
+  const settings = {
+    jwtSecret: null,
+    url: null,
+  };
+
+  if (result.rows.length > 0) {
+    settings.jwtSecret = result.rows[0].onlyoffice_jwt_secret || null;
+    settings.url = result.rows[0].onlyoffice_url || null;
+  }
+
+  // Cache the result (5 minutes TTL)
+  await setCache(cacheKey, settings, DEFAULT_TTL);
+
+  return settings;
+}
+
+async function setOnlyOfficeSettings(jwtSecret, url, userId) {
+  // Use transaction to ensure atomicity and verify user is first user
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Verify user is the first user using stored first_user_id
+    const settingsResult = await client.query('SELECT first_user_id FROM app_settings WHERE id = $1', ['app_settings']);
+
+    if (settingsResult.rows.length === 0) {
+      throw new Error('App settings not found');
+    }
+
+    const storedFirstUserId = settingsResult.rows[0].first_user_id;
+
+    // If first_user_id is not set yet, set it now (should only happen once)
+    if (!storedFirstUserId) {
+      // Get the actual first user
+      const firstUserResult = await client.query('SELECT id FROM users ORDER BY created_at ASC LIMIT 1 FOR UPDATE');
+
+      if (firstUserResult.rows.length === 0) {
+        throw new Error('No users exist');
+      }
+
+      const actualFirstUserId = firstUserResult.rows[0].id;
+
+      // Only allow if the requesting user is the actual first user
+      if (actualFirstUserId !== userId) {
+        await client.query('ROLLBACK');
+        throw new Error('Only the first user can configure OnlyOffice');
+      }
+
+      // Set the first_user_id (immutable after this point)
+      await client.query('UPDATE app_settings SET first_user_id = $1 WHERE id = $2 AND first_user_id IS NULL', [
+        actualFirstUserId,
+        'app_settings',
+      ]);
+    } else if (storedFirstUserId !== userId) {
+      // Verify the requesting user matches the stored first user ID
+      await client.query('ROLLBACK');
+      throw new Error('Only the first user can configure OnlyOffice');
+    }
+
+    // Enforce "both or none" - both fields must be provided together or both must be null
+    const hasJwtSecret = jwtSecret !== null;
+    const hasUrl = url !== null;
+    if (hasJwtSecret !== hasUrl) {
+      await client.query('ROLLBACK');
+      throw new Error('Both URL and JWT Secret must be provided together, or both must be empty');
+    }
+
+    // Validate inputs
+    if (jwtSecret !== null && (typeof jwtSecret !== 'string' || jwtSecret.trim().length === 0)) {
+      await client.query('ROLLBACK');
+      throw new Error('JWT secret must be a non-empty string or null');
+    }
+
+    if (url !== null && (typeof url !== 'string' || url.trim().length === 0)) {
+      await client.query('ROLLBACK');
+      throw new Error('OnlyOffice URL must be a non-empty string or null');
+    }
+
+    // Update OnlyOffice settings
+    await client.query(
+      'UPDATE app_settings SET onlyoffice_jwt_secret = $1, onlyoffice_url = $2, updated_at = NOW() WHERE id = $3',
+      [jwtSecret, url, 'app_settings']
+    );
+
+    await client.query('COMMIT');
+
+    // Invalidate OnlyOffice settings cache
+    await deleteCache(cacheKeys.onlyOfficeSettings());
+
+    // Log security event
+    logger.info(`[SECURITY] OnlyOffice settings updated by first user (ID: ${userId})`);
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 module.exports = {
   isFirstUser,
   getSignupEnabled,
   setSignupEnabled,
   getTotalUserCount,
   getAllUsersBasic,
+  getOnlyOfficeSettings,
+  setOnlyOfficeSettings,
 };

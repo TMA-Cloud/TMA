@@ -8,6 +8,9 @@ const {
   getCustomDriveSettings,
   updateCustomDriveSettings,
   getAllUsersCustomDriveSettings,
+  checkOnlyOfficeConfigured,
+  getOnlyOfficeConfig,
+  updateOnlyOfficeConfig,
 } = require('../controllers/user.controller');
 
 const router = express.Router();
@@ -21,5 +24,8 @@ router.get('/all', listUsers);
 router.get('/custom-drive/all', getAllUsersCustomDriveSettings);
 router.get('/custom-drive', getCustomDriveSettings);
 router.put('/custom-drive', updateCustomDriveSettings);
+router.get('/onlyoffice-configured', checkOnlyOfficeConfigured);
+router.get('/onlyoffice-config', getOnlyOfficeConfig);
+router.put('/onlyoffice-config', updateOnlyOfficeConfig);
 
 module.exports = router;

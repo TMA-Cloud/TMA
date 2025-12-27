@@ -6,7 +6,7 @@ const { validateId } = require('../../utils/validation');
 const { resolveFilePath } = require('../../utils/filePath');
 const { logger } = require('../../config/logger');
 const { logAuditEvent } = require('../../services/auditLogger');
-const { ONLYOFFICE_URL } = require('./onlyoffice.utils');
+const { getOnlyOfficeConfig } = require('./onlyoffice.utils');
 
 /**
  * Download file from URL
@@ -100,14 +100,15 @@ async function callback(req, res) {
 
         // If this callback comes from our configured ONLYOFFICE server, allow it
         let isTrustedOnlyofficeHost = false;
-        if (ONLYOFFICE_URL) {
+        const onlyOfficeConfig = await getOnlyOfficeConfig();
+        if (onlyOfficeConfig.url) {
           try {
-            const allowedOnlyofficeHost = new URL(ONLYOFFICE_URL).hostname.toLowerCase();
+            const allowedOnlyofficeHost = new URL(onlyOfficeConfig.url).hostname.toLowerCase();
             if (hostname === allowedOnlyofficeHost) {
               isTrustedOnlyofficeHost = true;
             }
           } catch {
-            // If ONLYOFFICE_URL is misconfigured, fall through to normal checks
+            // If OnlyOffice URL is misconfigured, fall through to normal checks
           }
         }
 

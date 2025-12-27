@@ -2,7 +2,7 @@ const jwt = require('jsonwebtoken');
 const { validateId } = require('../../utils/validation');
 const { validateAndResolveFile } = require('../../utils/fileDownload');
 const { logger } = require('../../config/logger');
-const { ONLYOFFICE_JWT_SECRET } = require('./onlyoffice.utils');
+const { getOnlyOfficeConfig } = require('./onlyoffice.utils');
 
 /**
  * Serve file to ONLYOFFICE server
@@ -23,9 +23,10 @@ async function serveFile(req, res) {
 
     // SECURITY: Require JWT secret to be configured for file serving
     // Without it, tokens cannot be cryptographically verified
-    if (!ONLYOFFICE_JWT_SECRET) {
-      logger.error('[ONLYOFFICE] File serving disabled - ONLYOFFICE_JWT_SECRET not configured');
-      return res.status(503).json({ error: 'OnlyOffice integration not configured securely' });
+    const onlyOfficeConfig = await getOnlyOfficeConfig();
+    if (!onlyOfficeConfig.jwtSecret) {
+      logger.warn('[ONLYOFFICE] File serving disabled - OnlyOffice JWT secret not configured');
+      return res.status(424).json({ error: 'OnlyOffice integration not configured securely' });
     }
 
     // SECURITY: Always require a valid token to serve files
@@ -40,7 +41,7 @@ async function serveFile(req, res) {
       // Decode token (it's already URL encoded)
       const decodedToken = decodeURIComponent(String(token));
       // Explicitly specify allowed algorithms to prevent algorithm confusion attacks
-      const payload = jwt.verify(decodedToken, ONLYOFFICE_JWT_SECRET, { algorithms: ['HS256'] });
+      const payload = jwt.verify(decodedToken, onlyOfficeConfig.jwtSecret, { algorithms: ['HS256'] });
       if (payload.fileId !== id) {
         logger.error('[ONLYOFFICE] Token fileId mismatch', { tokenFileId: payload.fileId, requestedId: id });
         return res.status(401).json({ error: 'Invalid token' });

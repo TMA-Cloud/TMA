@@ -56,6 +56,8 @@ export const FileManager: React.FC = () => {
     restoreFiles,
     deleteForever,
     setShareLinkModalOpen,
+    onlyOfficeConfigured,
+    canConfigureOnlyOffice,
   } = useApp();
 
   const { showToast } = useToast();
@@ -298,6 +300,21 @@ export const FileManager: React.FC = () => {
       if (file.mimeType && file.mimeType.startsWith("image/")) {
         setImageViewerFile(file);
       } else if (ONLYOFFICE_EXTS.has(getExt(file.name))) {
+        // Check if OnlyOffice is configured before opening (using cached value)
+        if (!onlyOfficeConfigured) {
+          if (canConfigureOnlyOffice) {
+            showToast(
+              "OnlyOffice not configured. Configure in Settings.",
+              "error",
+            );
+          } else {
+            showToast(
+              "OnlyOffice not configured. Contact administrator.",
+              "error",
+            );
+          }
+          return;
+        }
         setDocumentViewerFile?.(file);
       }
     }

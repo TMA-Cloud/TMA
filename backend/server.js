@@ -29,6 +29,9 @@ const app = express();
 // Metrics endpoint IP whitelist
 const METRICS_ALLOWED_IPS = (process.env.METRICS_ALLOWED_IPS || '127.0.0.1').split(',').map(ip => ip.trim());
 
+// Import OnlyOffice origin cache utility
+const { getCachedOnlyOfficeOrigin } = require('./utils/onlyofficeOriginCache');
+
 // FIRST: Request ID middleware (must be first for proper context propagation)
 app.use(requestIdMiddleware);
 
@@ -51,16 +54,14 @@ app.use((req, res, next) => {
   let scriptSrc = "script-src 'self' 'unsafe-inline' 'unsafe-eval'";
   let connectSrc = "connect-src 'self'";
   let frameSrc = "frame-src 'self'";
-  const onlyofficeBase = process.env.ONLYOFFICE_URL;
-  if (onlyofficeBase) {
-    try {
-      const onlyofficeOrigin = new URL(onlyofficeBase).origin;
-      scriptSrc += ` ${onlyofficeOrigin}`;
-      connectSrc += ` ${onlyofficeOrigin}`;
-      frameSrc += ` ${onlyofficeOrigin}`;
-    } catch {
-      // ignore invalid URL, fall back to strict defaults
-    }
+
+  // Get OnlyOffice origin from in-memory cache (synchronous, 60s TTL)
+  // Uses stale-while-revalidate pattern: returns cached value immediately, refreshes in background if expired
+  const onlyofficeOrigin = getCachedOnlyOfficeOrigin();
+  if (onlyofficeOrigin) {
+    scriptSrc += ` ${onlyofficeOrigin}`;
+    connectSrc += ` ${onlyofficeOrigin}`;
+    frameSrc += ` ${onlyofficeOrigin}`;
   }
 
   // Content Security Policy - allow only necessary sources

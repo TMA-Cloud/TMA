@@ -53,7 +53,7 @@ Edit `.env` in the root directory with your configuration. See [Environment Vari
 **Optional variables:**
 
 - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` - For Google OAuth
-- `ONLYOFFICE_JWT_SECRET`, `ONLYOFFICE_URL`, `BACKEND_URL` - For OnlyOffice integration
+- `BACKEND_URL` - Public backend URL (required for OnlyOffice integration, see [Environment Variables](environment.md#backend-url))
 - `CUSTOM_DRIVE_MOUNT_N` - Optional Docker mounts for custom drive (format: /host/path:/container/path, supports multiple mounts, administrators configure per-user in Settings)
 - `STORAGE_LIMIT` - Per-user storage limit in bytes
 
@@ -244,10 +244,16 @@ If running in production mode, verify the audit worker is processing events:
 
 ### OnlyOffice Integration Issues
 
-- Verify `ONLYOFFICE_URL` points to your Document Server
-- Ensure `ONLYOFFICE_JWT_SECRET` matches your Document Server configuration
-- Check that the Document Server can reach your backend via `BACKEND_URL`
-- Verify firewall rules allow communication between servers
+- **Configuration**: OnlyOffice settings are configured via the Settings page (admin-only), not environment variables
+  - Navigate to Settings → OnlyOffice Integration
+  - Enter your OnlyOffice Document Server URL and JWT Secret
+  - Both fields must be provided together (or both cleared)
+- **Document Server**: Verify your OnlyOffice Document Server is running and accessible
+- **JWT Secret**: Ensure the JWT Secret matches your Document Server configuration
+- **Backend URL**: Verify `BACKEND_URL` environment variable is set to the public URL of your backend (see [Environment Variables](environment.md#backend-url))
+- **Network**: Check that the Document Server can reach your backend via `BACKEND_URL`
+- **Firewall**: Verify firewall rules allow communication between servers
+- **CSP Headers**: CSP headers are automatically updated when settings are saved (uses in-memory cache for performance)
 
 ### Audit Worker Issues
 

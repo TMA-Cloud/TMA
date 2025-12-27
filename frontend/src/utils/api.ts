@@ -246,6 +246,42 @@ export async function fetchAllUsers(): Promise<{
 }
 
 /**
+ * Check if OnlyOffice is configured (all authenticated users)
+ */
+export async function checkOnlyOfficeConfigured(): Promise<{
+  configured: boolean;
+}> {
+  return await apiGet<{ configured: boolean }>(
+    "/api/user/onlyoffice-configured",
+  );
+}
+
+/**
+ * Get OnlyOffice configuration (admin only)
+ */
+export async function getOnlyOfficeConfig(): Promise<{
+  jwtSecretSet: boolean;
+  url: string | null;
+}> {
+  return await apiGet<{ jwtSecretSet: boolean; url: string | null }>(
+    "/api/user/onlyoffice-config",
+  );
+}
+
+/**
+ * Update OnlyOffice configuration (admin only)
+ */
+export async function updateOnlyOfficeConfig(
+  jwtSecret: string | null,
+  url: string | null,
+): Promise<{ jwtSecretSet: boolean; url: string | null }> {
+  return await apiPut<{ jwtSecretSet: boolean; url: string | null }>(
+    "/api/user/onlyoffice-config",
+    { jwtSecret, url },
+  );
+}
+
+/**
  * Logout from all devices by invalidating all tokens
  * This will log out the user from every device/browser
  */

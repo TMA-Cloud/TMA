@@ -16,6 +16,7 @@ import { ProfileSection } from "./sections/ProfileSection";
 import { StorageSection } from "./sections/StorageSection";
 import { CustomDriveManagementSection } from "./sections/CustomDriveManagementSection";
 import { AdministrationSection } from "./sections/AdministrationSection";
+import { OnlyOfficeSection } from "./sections/OnlyOfficeSection";
 import { UpdatesSection } from "./sections/UpdatesSection";
 import { SecuritySection } from "./sections/SecuritySection";
 
@@ -159,6 +160,10 @@ export const Settings: React.FC = () => {
             togglingSignup={togglingSignup}
             onShowUsers={handleShowUsers}
           />
+        )}
+
+        {canToggleSignup && (
+          <OnlyOfficeSection canConfigure={canToggleSignup} />
         )}
 
         {canToggleSignup && (

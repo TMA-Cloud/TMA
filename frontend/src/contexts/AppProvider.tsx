@@ -1,7 +1,11 @@
 import React, { useCallback, useEffect, useState, useRef } from "react";
 import { AppContext, type FileItem, type FileItemResponse } from "./AppContext";
 import { usePromiseQueue, useDebouncedCallback } from "../utils/debounce";
-import { downloadFile as downloadFileApi } from "../utils/api";
+import {
+  downloadFile as downloadFileApi,
+  checkOnlyOfficeConfigured,
+  getSignupStatus,
+} from "../utils/api";
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
@@ -47,6 +51,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   >([]);
   const [isUploadProgressInteracting, setIsUploadProgressInteracting] =
     useState(false);
+  const [onlyOfficeConfigured, setOnlyOfficeConfigured] = useState(false);
+  const [canConfigureOnlyOffice, setCanConfigureOnlyOffice] = useState(false);
   const isUploadProgressInteractingRef = useRef(false);
   const uploadDismissTimeoutsRef = useRef<Map<string, number>>(new Map());
   const searchQueryRef = useRef<string>(""); // Track current search query to ignore stale results
@@ -957,6 +963,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   };
 
+  const refreshOnlyOfficeConfig = useCallback(async () => {
+    try {
+      // Use the public endpoint that works for all users
+      const result = await checkOnlyOfficeConfigured();
+      setOnlyOfficeConfigured(result.configured);
+    } catch (error) {
+      console.error("Failed to load OnlyOffice config:", error);
+      setOnlyOfficeConfigured(false);
+    }
+  }, []);
+
+  // Load admin status and OnlyOffice config status on mount
+  useEffect(() => {
+    const loadAdminStatus = async () => {
+      try {
+        const status = await getSignupStatus();
+        setCanConfigureOnlyOffice(status.canToggle);
+      } catch (error) {
+        console.error("Failed to load admin status:", error);
+        setCanConfigureOnlyOffice(false);
+      }
+    };
+    void loadAdminStatus();
+    void refreshOnlyOfficeConfig();
+  }, [refreshOnlyOfficeConfig]);
+
   return (
     <AppContext.Provider
       value={{
@@ -1023,6 +1055,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         setUploadProgress,
         uploadFileWithProgress,
         setIsUploadProgressInteracting,
+        onlyOfficeConfigured,
+        canConfigureOnlyOffice,
+        refreshOnlyOfficeConfig,
       }}
     >
       {children}

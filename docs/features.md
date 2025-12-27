@@ -354,12 +354,35 @@ Online document editing with OnlyOffice:
 
 ### Setup
 
+OnlyOffice configuration is managed through the web application Settings page (admin-only):
+
 1. Install OnlyOffice Document Server
-2. Configure environment variables (see [Environment Variables](environment.md#backend-onlyoffice-integration-optional))
-   - `ONLYOFFICE_JWT_SECRET` - JWT secret for document server communication
-   - `ONLYOFFICE_URL` - Document server URL
-   - `BACKEND_URL` - Public backend URL accessible by document server
-3. No frontend configuration needed - OnlyOffice integration is handled automatically
+2. Log in as the first user (admin)
+3. Navigate to Settings → OnlyOffice Integration
+4. Configure the following:
+   - **OnlyOffice Document Server URL**: Base URL of your OnlyOffice Document Server (e.g., `http://localhost` or `https://documentserver.example.com`)
+   - **JWT Secret**: Secret key for signing OnlyOffice requests (must match your Document Server configuration)
+5. Click "Save Settings" to apply
+6. Ensure `BACKEND_URL` environment variable is set to the public URL of your backend (see [Environment Variables](environment.md#backend-url))
+
+**Security Features:**
+
+- Only the first user (admin) can configure OnlyOffice settings
+- JWT secret is never returned in API responses (only a boolean indicating if it's configured)
+- Both URL and JWT Secret must be provided together (or both cleared) - partial configuration is not allowed
+- CSP (Content Security Policy) headers are automatically updated to allow the configured OnlyOffice origin
+
+**Performance:**
+
+- In-memory cache (60-second TTL) reduces database lookups for CSP middleware
+- Stale-while-revalidate pattern ensures fast response times
+- Background cache refresh keeps settings up-to-date
+
+**Configuration Status:**
+
+- All authenticated users can check if OnlyOffice is configured (read-only status)
+- Non-admin users see "Contact administrator" message if OnlyOffice is not configured
+- Admin users can configure settings from the Settings page
 
 See [Setup Guide](setup.md#onlyoffice-integration-issues) for troubleshooting.
 

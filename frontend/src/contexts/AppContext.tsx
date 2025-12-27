@@ -112,6 +112,9 @@ export interface AppContextType {
     onProgress?: (progress: number) => void,
   ) => Promise<void>;
   setIsUploadProgressInteracting: (isInteracting: boolean) => void;
+  onlyOfficeConfigured: boolean;
+  canConfigureOnlyOffice: boolean;
+  refreshOnlyOfficeConfig: () => Promise<void>;
 }
 
 export const AppContext = createContext<AppContextType | undefined>(undefined);

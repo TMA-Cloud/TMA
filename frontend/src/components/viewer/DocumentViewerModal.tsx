@@ -46,10 +46,12 @@ export const DocumentViewerModal: React.FC = () => {
   const appContext = useApp();
   const documentViewerFile = appContext.documentViewerFile ?? null;
   const setDocumentViewerFile = appContext.setDocumentViewerFile;
+  const refreshOnlyOfficeConfig = appContext.refreshOnlyOfficeConfig;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const editorRef = useRef<DocsAPIEditor | null>(null);
+  const lastRefreshedFileIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     return () => {
@@ -76,7 +78,20 @@ export const DocumentViewerModal: React.FC = () => {
             credentials: "include",
           },
         );
-        if (!res.ok) throw new Error("Failed to fetch ONLYOFFICE config");
+        if (!res.ok) {
+          if (res.status === 424 || res.status === 503) {
+            // Refresh config status once per file when error occurs (gentle refresh)
+            if (documentViewerFile.id !== lastRefreshedFileIdRef.current) {
+              lastRefreshedFileIdRef.current = documentViewerFile.id;
+              // Fire and forget - don't wait for it, just refresh the cache
+              void refreshOnlyOfficeConfig();
+            }
+            throw new Error(
+              "OnlyOffice not configured. Configure in Settings.",
+            );
+          }
+          throw new Error("Failed to fetch ONLYOFFICE config");
+        }
         const { config, token, onlyofficeJsUrl } = await res.json();
 
         // Load ONLYOFFICE JS if needed
@@ -116,7 +131,7 @@ export const DocumentViewerModal: React.FC = () => {
     };
 
     void load();
-  }, [documentViewerFile]);
+  }, [documentViewerFile, refreshOnlyOfficeConfig]);
 
   if (!documentViewerFile) return null;
 

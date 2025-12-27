@@ -4,10 +4,13 @@ const {
   setSignupEnabled,
   getTotalUserCount,
   getAllUsersBasic,
+  getOnlyOfficeSettings,
+  setOnlyOfficeSettings,
 } = require('../../models/user.model');
 const { sendError, sendSuccess } = require('../../utils/response');
 const { logger } = require('../../config/logger');
 const { logAuditEvent } = require('../../services/auditLogger');
+const { invalidateOnlyOfficeOriginCache } = require('../../utils/onlyofficeOriginCache');
 
 /**
  * Get signup status and admin information
@@ -141,8 +144,167 @@ async function listUsers(req, res) {
   }
 }
 
+/**
+ * Check if OnlyOffice is configured (all authenticated users)
+ * Returns only whether it's configured, not the actual secrets
+ */
+async function checkOnlyOfficeConfigured(req, res) {
+  try {
+    const settings = await getOnlyOfficeSettings();
+    const isConfigured = !!(settings.jwtSecret && settings.url);
+
+    sendSuccess(res, {
+      configured: isConfigured,
+    });
+  } catch (err) {
+    logger.error({ err }, 'Failed to check OnlyOffice configuration');
+    sendError(res, 500, 'Server error', err);
+  }
+}
+
+/**
+ * Get OnlyOffice settings (admin only)
+ */
+async function getOnlyOfficeConfig(req, res) {
+  try {
+    // Verify user is first user before proceeding
+    const userIsFirst = await isFirstUser(req.userId);
+    if (!userIsFirst) {
+      await logAuditEvent(
+        'admin.settings.read',
+        {
+          status: 'failure',
+          resourceType: 'settings',
+          metadata: { action: 'get_onlyoffice_config', reason: 'unauthorized' },
+        },
+        req
+      );
+      logger.warn({ userId: req.userId }, 'Unauthorized OnlyOffice config read attempt');
+      return sendError(res, 403, 'Only the first user can view OnlyOffice settings');
+    }
+
+    const settings = await getOnlyOfficeSettings();
+
+    sendSuccess(res, {
+      jwtSecretSet: settings.jwtSecret !== null && settings.jwtSecret !== undefined,
+      url: settings.url,
+    });
+  } catch (err) {
+    logger.error({ err }, 'Failed to get OnlyOffice settings');
+    sendError(res, 500, 'Server error', err);
+  }
+}
+
+/**
+ * Update OnlyOffice settings (admin only)
+ */
+async function updateOnlyOfficeConfig(req, res) {
+  try {
+    // Verify user is first user before proceeding
+    const userIsFirst = await isFirstUser(req.userId);
+    if (!userIsFirst) {
+      await logAuditEvent(
+        'admin.settings.update',
+        {
+          status: 'failure',
+          resourceType: 'settings',
+          metadata: { action: 'update_onlyoffice_config', reason: 'unauthorized' },
+        },
+        req
+      );
+      logger.warn({ userId: req.userId }, 'Unauthorized OnlyOffice config update attempt');
+      return sendError(res, 403, 'Only the first user can configure OnlyOffice');
+    }
+
+    const { jwtSecret, url } = req.body;
+
+    // Normalize undefined to null for consistent validation
+    const normalizedJwtSecret = jwtSecret !== undefined ? jwtSecret : null;
+    const normalizedUrl = url !== undefined ? url : null;
+
+    // Enforce "both or none" - both fields must be provided together or both must be null
+    const hasJwtSecret = normalizedJwtSecret !== null;
+    const hasUrl = normalizedUrl !== null;
+    if (hasJwtSecret !== hasUrl) {
+      return sendError(res, 400, 'Both URL and JWT Secret must be provided together, or both must be empty');
+    }
+
+    // Validate inputs (allow null to clear settings)
+    if (
+      normalizedJwtSecret !== null &&
+      (typeof normalizedJwtSecret !== 'string' || normalizedJwtSecret.trim().length === 0)
+    ) {
+      return sendError(res, 400, 'JWT secret must be a non-empty string or null');
+    }
+
+    if (normalizedUrl !== null && (typeof normalizedUrl !== 'string' || normalizedUrl.trim().length === 0)) {
+      return sendError(res, 400, 'OnlyOffice URL must be a non-empty string or null');
+    }
+
+    // Validate URL format if provided
+    if (normalizedUrl !== null) {
+      try {
+        new URL(normalizedUrl);
+      } catch {
+        return sendError(res, 400, 'Invalid URL format');
+      }
+    }
+
+    // setOnlyOfficeSettings will do additional security checks internally and invalidate cache
+    await setOnlyOfficeSettings(normalizedJwtSecret, normalizedUrl, req.userId);
+
+    // Invalidate in-memory CSP cache so new origin is used immediately
+    invalidateOnlyOfficeOriginCache();
+
+    // Log admin action
+    await logAuditEvent(
+      'admin.settings.update',
+      {
+        status: 'success',
+        resourceType: 'settings',
+        metadata: {
+          setting: 'onlyoffice_config',
+          hasJwtSecret: jwtSecret !== null && jwtSecret !== undefined,
+          url: url || null,
+        },
+      },
+      req
+    );
+    logger.info(
+      { userId: req.userId, hasJwtSecret: !!normalizedJwtSecret, url: normalizedUrl },
+      'OnlyOffice settings updated'
+    );
+
+    const updatedSettings = await getOnlyOfficeSettings();
+    sendSuccess(res, {
+      jwtSecretSet: updatedSettings.jwtSecret !== null && updatedSettings.jwtSecret !== undefined,
+      url: updatedSettings.url,
+    });
+  } catch (err) {
+    if (err.message === 'Only the first user can configure OnlyOffice') {
+      await logAuditEvent(
+        'admin.settings.update',
+        {
+          status: 'failure',
+          resourceType: 'settings',
+          errorMessage: err.message,
+          metadata: { action: 'update_onlyoffice_config' },
+        },
+        req
+      );
+      logger.warn({ userId: req.userId }, 'Unauthorized OnlyOffice config update attempt');
+      return sendError(res, 403, err.message);
+    }
+    logger.error({ err }, 'Failed to update OnlyOffice settings');
+    sendError(res, 500, 'Server error', err);
+  }
+}
+
 module.exports = {
   getSignupStatus,
   toggleSignup,
   listUsers,
+  checkOnlyOfficeConfigured,
+  getOnlyOfficeConfig,
+  updateOnlyOfficeConfig,
 };

@@ -3,7 +3,7 @@ const { getFile } = require('../../models/file.model');
 const { logger } = require('../../config/logger');
 const { logAuditEvent } = require('../../services/auditLogger');
 const {
-  ONLYOFFICE_JWT_SECRET,
+  getOnlyOfficeConfig,
   getUserName,
   buildSignedFileToken,
   buildOnlyofficeUrls,
@@ -18,9 +18,10 @@ const {
  */
 async function getViewerPage(req, res) {
   try {
-    // SECURITY: Require JWT secret for OnlyOffice integration
-    if (!ONLYOFFICE_JWT_SECRET) {
-      return res.status(503).send('OnlyOffice integration not configured. Set ONLYOFFICE_JWT_SECRET.');
+    // SECURITY: Require both JWT secret and URL for OnlyOffice integration
+    const onlyOfficeConfig = await getOnlyOfficeConfig();
+    if (!onlyOfficeConfig.jwtSecret || !onlyOfficeConfig.url) {
+      return res.status(424).send('OnlyOffice integration not configured. Configure it in Settings.');
     }
 
     const fileId = validateId(req.params.id);
@@ -33,12 +34,12 @@ async function getViewerPage(req, res) {
     if (!file) return res.status(404).send('File not found');
 
     const userName = await getUserName(userId);
-    const token = buildSignedFileToken(file.id);
+    const token = await buildSignedFileToken(file.id);
     const { downloadUrl, callbackUrl } = buildOnlyofficeUrls(req, file.id, token);
     const isMobile = isMobileDevice(req);
     const config = buildOnlyofficeConfig(file, userId, userName, downloadUrl, callbackUrl, isMobile);
-    const configToken = signConfigToken(config);
-    const onlyofficeJsUrl = getOnlyofficeJsUrl();
+    const configToken = await signConfigToken(config);
+    const onlyofficeJsUrl = await getOnlyofficeJsUrl();
 
     // Add token to config if JWT is enabled (for viewer page)
     if (configToken) {

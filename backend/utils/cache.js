@@ -277,6 +277,7 @@ const cacheKeys = {
   signupEnabled: () => `app:signup_enabled`,
   userCount: () => `app:user_count`,
   allUsers: () => `app:all_users`,
+  onlyOfficeSettings: () => `app:onlyoffice_settings`,
 
   // Google OAuth cache keys
   userByGoogleId: googleId => `user:google:${googleId}`,

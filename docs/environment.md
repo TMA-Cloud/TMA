@@ -267,28 +267,6 @@ Redis is used for caching frequently accessed data to improve performance and re
 
 ---
 
-### Backend OnlyOffice Integration (Optional)
-
-#### `ONLYOFFICE_JWT_SECRET`
-
-- **Type:** String
-- **Required:** No (required if using OnlyOffice with JWT)
-- **Description:** JWT secret for OnlyOffice document server communication
-- **Example:** `ONLYOFFICE_JWT_SECRET=your_onlyoffice_jwt_secret`
-- **Note:** Must match the secret configured in OnlyOffice Document Server. If not set, OnlyOffice integration runs without JWT.
-
-#### `ONLYOFFICE_URL`
-
-- **Type:** String (URL)
-- **Required:** No
-- **Default:** `http://localhost:2202`
-- **Description:** Base URL of OnlyOffice Document Server (used for viewer page generation)
-- **Example:** `ONLYOFFICE_URL=http://localhost:2202`
-- **Production Example:** `ONLYOFFICE_URL=https://documentserver.example.com`
-- **Note:** Used to construct the JavaScript API URL for standalone viewer pages
-
----
-
 ### Custom Drive Integration (Per-User Settings)
 
 Custom drive is now configured **per-user** in the web application settings. Administrators can enable/disable custom drive and set custom drive paths for each user from the Settings page.

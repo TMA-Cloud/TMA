@@ -1,18 +1,59 @@
 const path = require('path');
 const jwt = require('jsonwebtoken');
-const { getUserById } = require('../../models/user.model');
-const { logger } = require('../../config/logger');
+const { getUserById, getOnlyOfficeSettings } = require('../../models/user.model');
 
-const ONLYOFFICE_JWT_SECRET = process.env.ONLYOFFICE_JWT_SECRET;
-const ONLYOFFICE_URL = process.env.ONLYOFFICE_URL;
 const BACKEND_URL = process.env.BACKEND_URL;
 
-// SECURITY: Warn at startup if JWT secret is missing
-// OnlyOffice file serving will be disabled without it
-if (!ONLYOFFICE_JWT_SECRET) {
-  logger.warn(
-    '[SECURITY] ONLYOFFICE_JWT_SECRET not set. OnlyOffice file serving endpoint will reject all requests. Set this secret to enable document editing.'
-  );
+/**
+ * Get OnlyOffice settings from database
+ * Uses Redis cache (via getOnlyOfficeSettings) to reduce database queries
+ */
+async function getOnlyOfficeConfig() {
+  const settings = await getOnlyOfficeSettings();
+  return {
+    jwtSecret: settings.jwtSecret,
+    url: settings.url,
+  };
+}
+
+/**
+ * OnlyOffice supported file extensions
+ */
+const ONLYOFFICE_EXTS = new Set([
+  '.docx',
+  '.doc',
+  '.docm',
+  '.dotx',
+  '.dotm',
+  '.dot',
+  '.xlsx',
+  '.xls',
+  '.xlsm',
+  '.xlsb',
+  '.xltx',
+  '.xltm',
+  '.csv',
+  '.pptx',
+  '.ppt',
+  '.pptm',
+  '.ppsx',
+  '.ppsm',
+  '.pps',
+  '.potx',
+  '.potm',
+  '.odt',
+  '.ods',
+  '.odp',
+  '.pdf',
+]);
+
+/**
+ * Check if a file is supported by OnlyOffice
+ */
+function isOnlyOfficeSupported(fileName) {
+  if (!fileName) return false;
+  const ext = path.extname(fileName).toLowerCase();
+  return ONLYOFFICE_EXTS.has(ext);
 }
 
 /**
@@ -29,18 +70,20 @@ function getFileTypeFromName(name) {
 /**
  * Build signed JWT token for file access
  */
-function buildSignedFileToken(fileId) {
-  if (!ONLYOFFICE_JWT_SECRET) return null;
+async function buildSignedFileToken(fileId) {
+  const config = await getOnlyOfficeConfig();
+  if (!config.jwtSecret) return null;
   // Explicitly specify algorithm to prevent algorithm confusion attacks
-  return jwt.sign({ fileId }, ONLYOFFICE_JWT_SECRET, { expiresIn: '10m', algorithm: 'HS256' });
+  return jwt.sign({ fileId }, config.jwtSecret, { expiresIn: '10m', algorithm: 'HS256' });
 }
 
 /**
  * Get ONLYOFFICE JavaScript API URL
  */
-function getOnlyofficeJsUrl() {
-  return ONLYOFFICE_URL
-    ? `${ONLYOFFICE_URL}/web-apps/apps/api/documents/api.js`
+async function getOnlyofficeJsUrl() {
+  const config = await getOnlyOfficeConfig();
+  return config.url
+    ? `${config.url}/web-apps/apps/api/documents/api.js`
     : 'http://localhost/web-apps/apps/api/documents/api.js';
 }
 
@@ -104,16 +147,17 @@ function buildOnlyofficeConfig(file, userId, userName, downloadUrl, callbackUrl,
 /**
  * Sign ONLYOFFICE config with JWT token
  */
-function signConfigToken(config) {
-  if (!ONLYOFFICE_JWT_SECRET) return null;
+async function signConfigToken(config) {
+  const onlyOfficeConfig = await getOnlyOfficeConfig();
+  if (!onlyOfficeConfig.jwtSecret) return null;
   // Explicitly specify algorithm to prevent algorithm confusion attacks
-  return jwt.sign(config, ONLYOFFICE_JWT_SECRET, { algorithm: 'HS256' });
+  return jwt.sign(config, onlyOfficeConfig.jwtSecret, { algorithm: 'HS256' });
 }
 
 module.exports = {
-  ONLYOFFICE_JWT_SECRET,
-  ONLYOFFICE_URL,
   BACKEND_URL,
+  getOnlyOfficeConfig,
+  isOnlyOfficeSupported,
   getFileTypeFromName,
   buildSignedFileToken,
   getOnlyofficeJsUrl,
