@@ -25,6 +25,7 @@ export const DesktopImageViewer: React.FC<DesktopImageViewerProps> = ({
   const dragOrigin = useRef<{ x: number; y: number } | null>(null);
   const [dragging, setDragging] = useState(false);
   const lastMousePos = useRef({ x: 0, y: 0 });
+  const rafId = useRef<number | null>(null);
 
   useEffect(() => {
     let revoke: (() => void) | undefined;
@@ -67,7 +68,7 @@ export const DesktopImageViewer: React.FC<DesktopImageViewerProps> = ({
               // Apply the initial transform
               requestAnimationFrame(() => {
                 if (wrapperRef.current) {
-                  wrapperRef.current.style.transform = `translate(${offset.current.x}px, ${offset.current.y}px) scale(${scale})`;
+                  wrapperRef.current.style.transform = `translate3d(${offset.current.x}px, ${offset.current.y}px, 0) scale(${scale})`;
                   wrapperRef.current.style.transformOrigin = "0 0";
                 }
               });
@@ -119,10 +120,13 @@ export const DesktopImageViewer: React.FC<DesktopImageViewerProps> = ({
     }
   };
 
-  const applyTransform = (newZoom = zoom) => {
-    clampOffset(newZoom);
+  const applyTransform = (newZoom = zoom, skipClamp = false) => {
+    if (!skipClamp) {
+      clampOffset(newZoom);
+    }
     if (wrapperRef.current) {
-      wrapperRef.current.style.transform = `translate(${offset.current.x}px, ${offset.current.y}px) scale(${newZoom})`;
+      // Use translate3d for GPU acceleration
+      wrapperRef.current.style.transform = `translate3d(${offset.current.x}px, ${offset.current.y}px, 0) scale(${newZoom})`;
     }
   };
 
@@ -137,17 +141,41 @@ export const DesktopImageViewer: React.FC<DesktopImageViewerProps> = ({
   const handlePointerMove = (e: PointerEvent) => {
     lastMousePos.current = { x: e.clientX, y: e.clientY };
     if (!dragOrigin.current) return;
+
     const dx = e.clientX - dragOrigin.current.x;
     const dy = e.clientY - dragOrigin.current.y;
     dragOrigin.current = { x: e.clientX, y: e.clientY };
     offset.current.x += dx;
     offset.current.y += dy;
-    applyTransform();
+
+    // Cancel any pending animation frame
+    if (rafId.current !== null) {
+      cancelAnimationFrame(rafId.current);
+    }
+
+    // Use requestAnimationFrame for smooth updates
+    rafId.current = requestAnimationFrame(() => {
+      // Skip clamping during drag for better performance
+      applyTransform(zoom, true);
+      rafId.current = null;
+    });
   };
 
   const handlePointerUp = () => {
     setDragging(false);
     dragOrigin.current = null;
+
+    // Cancel any pending animation frame
+    if (rafId.current !== null) {
+      cancelAnimationFrame(rafId.current);
+      rafId.current = null;
+    }
+
+    // Clamp offset after drag ends
+    requestAnimationFrame(() => {
+      applyTransform(zoom, false);
+    });
+
     window.removeEventListener("pointermove", handlePointerMove);
     window.removeEventListener("pointerup", handlePointerUp);
   };
@@ -177,7 +205,7 @@ export const DesktopImageViewer: React.FC<DesktopImageViewerProps> = ({
       // Apply transform inline to avoid dependency on applyTransform
       clampOffset(newZoom);
       if (wrapperRef.current) {
-        wrapperRef.current.style.transform = `translate(${offset.current.x}px, ${offset.current.y}px) scale(${newZoom})`;
+        wrapperRef.current.style.transform = `translate3d(${offset.current.x}px, ${offset.current.y}px, 0) scale(${newZoom})`;
       }
 
       return newZoom;
@@ -224,6 +252,11 @@ export const DesktopImageViewer: React.FC<DesktopImageViewerProps> = ({
     container.addEventListener("wheel", handleWheel, { passive: false });
     return () => {
       container.removeEventListener("wheel", handleWheel);
+      // Clean up any pending animation frames
+      if (rafId.current !== null) {
+        cancelAnimationFrame(rafId.current);
+        rafId.current = null;
+      }
     };
   }, [handleWheel]);
 
@@ -240,13 +273,16 @@ export const DesktopImageViewer: React.FC<DesktopImageViewerProps> = ({
           }
           onDoubleClick={resetZoom}
           className={`w-full h-full touch-none ${dragging ? "cursor-grabbing" : "cursor-grab"}`}
+          style={{ willChange: dragging ? "transform" : "auto" }}
         >
           <div
             ref={wrapperRef}
-            className="transition-transform will-change-transform"
+            className="will-change-transform"
             style={{
-              transform: `translate(${offset.current.x}px, ${offset.current.y}px) scale(${zoom})`,
+              transform: `translate3d(${offset.current.x}px, ${offset.current.y}px, 0) scale(${zoom})`,
               transformOrigin: "0 0",
+              backfaceVisibility: "hidden",
+              perspective: 1000,
             }}
           >
             {loading ? (
