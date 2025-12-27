@@ -74,6 +74,22 @@ export const formatFileSize = (bytes?: number): string => {
 
 export const formatDate = (date: Date): string => {
   const now = new Date();
+
+  // Check if it's today (same day, month, year)
+  const isToday =
+    date.getDate() === now.getDate() &&
+    date.getMonth() === now.getMonth() &&
+    date.getFullYear() === now.getFullYear();
+
+  if (isToday) {
+    // Return time in 12-hour format (e.g., "2:30 PM")
+    return date.toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    });
+  }
+
   const diffTime = Math.abs(now.getTime() - date.getTime());
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
