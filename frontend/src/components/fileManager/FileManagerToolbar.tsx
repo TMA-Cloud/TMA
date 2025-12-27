@@ -70,8 +70,8 @@ export const FileManagerToolbar: React.FC<FileManagerToolbarProps> = ({
     <div
       className={`flex items-center ${isMobile ? "justify-end w-full flex-wrap gap-2" : "space-x-2"}`}
     >
-      {/* Action buttons - only show when files are selected, but not on Trash page */}
-      {selectedFiles.length > 0 && !isTrashView && (
+      {/* Action buttons - only show when files are selected, but not on Trash page, and not on mobile */}
+      {selectedFiles.length > 0 && !isTrashView && !isMobile && (
         <>
           {/* Hide "Add to Share" on Shared page */}
           {!isSharedView && (
