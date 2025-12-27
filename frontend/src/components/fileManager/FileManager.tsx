@@ -315,7 +315,13 @@ export const FileManager: React.FC = () => {
           }
           return;
         }
-        setDocumentViewerFile?.(file);
+        // On mobile, open in new tab instead of modal
+        if (isMobile) {
+          const url = `/api/onlyoffice/viewer/${file.id}`;
+          window.open(url, "_blank", "noopener,noreferrer");
+        } else {
+          setDocumentViewerFile?.(file);
+        }
       }
     }
     closeMultiSelectIfMobile();
