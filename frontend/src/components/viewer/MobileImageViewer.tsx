@@ -128,6 +128,17 @@ export const MobileImageViewer: React.FC<MobileImageViewerProps> = ({
     }
   }, [imageViewerFile, loading, controlsVisible, zoom]);
 
+  // Attach wheel event listener with passive: false to allow preventDefault
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    container.addEventListener("wheel", handleWheel, { passive: false });
+    return () => {
+      container.removeEventListener("wheel", handleWheel);
+    };
+  }, []);
+
   const navigateToImage = (direction: "next" | "prev") => {
     if (direction === "next" && hasNext) {
       setImageViewerFile(imageFiles[currentIndex + 1]);
@@ -202,7 +213,7 @@ export const MobileImageViewer: React.FC<MobileImageViewerProps> = ({
     window.removeEventListener("pointerup", handlePointerUp);
   };
 
-  const handleWheel = (e: React.WheelEvent) => {
+  const handleWheel = (e: WheelEvent) => {
     e.preventDefault();
   };
 
@@ -400,7 +411,6 @@ export const MobileImageViewer: React.FC<MobileImageViewerProps> = ({
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
         onPointerDown={handlePointerDown}
-        onWheel={handleWheel}
         onMouseMove={(e) =>
           (lastMousePos.current = { x: e.clientX, y: e.clientY })
         }

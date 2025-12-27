@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Modal } from "../ui/Modal";
 import { ZoomIn, ZoomOut } from "lucide-react";
 import { type FileItem } from "../../contexts/AppContext";
@@ -152,28 +152,37 @@ export const DesktopImageViewer: React.FC<DesktopImageViewerProps> = ({
     window.removeEventListener("pointerup", handlePointerUp);
   };
 
-  const handleWheel = (e: React.WheelEvent) => {
+  const handleWheel = useCallback((e: WheelEvent) => {
     e.preventDefault();
-    const newZoom =
-      e.deltaY < 0 ? Math.min(zoom + 0.25, 5) : Math.max(zoom - 0.25, 0.25);
-    const wrap = wrapperRef.current;
-    if (!wrap) {
-      setZoom(newZoom);
-      return;
-    }
+    setZoom((currentZoom) => {
+      const minZoom = Math.max(0.1, initialFitZoom.current || 0.25);
+      const newZoom =
+        e.deltaY < 0
+          ? Math.min(currentZoom + 0.25, 5)
+          : Math.max(currentZoom - 0.25, minZoom);
+      const wrap = wrapperRef.current;
+      if (!wrap) {
+        return newZoom;
+      }
 
-    const rect = wrap.getBoundingClientRect();
-    const imgX = (e.clientX - rect.left - offset.current.x) / zoom;
-    const imgY = (e.clientY - rect.top - offset.current.y) / zoom;
+      const rect = wrap.getBoundingClientRect();
+      const imgX = (e.clientX - rect.left - offset.current.x) / currentZoom;
+      const imgY = (e.clientY - rect.top - offset.current.y) / currentZoom;
 
-    offset.current = {
-      x: e.clientX - rect.left - imgX * newZoom,
-      y: e.clientY - rect.top - imgY * newZoom,
-    };
+      offset.current = {
+        x: e.clientX - rect.left - imgX * newZoom,
+        y: e.clientY - rect.top - imgY * newZoom,
+      };
 
-    setZoom(newZoom);
-    applyTransform(newZoom);
-  };
+      // Apply transform inline to avoid dependency on applyTransform
+      clampOffset(newZoom);
+      if (wrapperRef.current) {
+        wrapperRef.current.style.transform = `translate(${offset.current.x}px, ${offset.current.y}px) scale(${newZoom})`;
+      }
+
+      return newZoom;
+    });
+  }, []);
 
   const zoomAtCursor = (newZoom: number) => {
     const wrap = wrapperRef.current;
@@ -193,7 +202,10 @@ export const DesktopImageViewer: React.FC<DesktopImageViewerProps> = ({
   };
 
   const zoomInHandler = () => zoomAtCursor(Math.min(zoom + 0.25, 5));
-  const zoomOutHandler = () => zoomAtCursor(Math.max(zoom - 0.25, 0.25));
+  const zoomOutHandler = () => {
+    const minZoom = Math.max(0.1, initialFitZoom.current || 0.25);
+    zoomAtCursor(Math.max(zoom - 0.25, minZoom));
+  };
 
   const resetZoom = () => {
     // Reset to initial fit zoom
@@ -204,6 +216,17 @@ export const DesktopImageViewer: React.FC<DesktopImageViewerProps> = ({
     applyTransform(fitZoom);
   };
 
+  // Attach wheel event listener with passive: false to allow preventDefault
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    container.addEventListener("wheel", handleWheel, { passive: false });
+    return () => {
+      container.removeEventListener("wheel", handleWheel);
+    };
+  }, [handleWheel]);
+
   if (!imageViewerFile) return null;
 
   return (
@@ -212,7 +235,6 @@ export const DesktopImageViewer: React.FC<DesktopImageViewerProps> = ({
         <div
           ref={containerRef}
           onPointerDown={handlePointerDown}
-          onWheel={handleWheel}
           onMouseMove={(e) =>
             (lastMousePos.current = { x: e.clientX, y: e.clientY })
           }
@@ -252,7 +274,7 @@ export const DesktopImageViewer: React.FC<DesktopImageViewerProps> = ({
           <button
             onClick={zoomOutHandler}
             className="p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700"
-            disabled={zoom <= 0.25}
+            disabled={zoom <= Math.max(0.1, initialFitZoom.current || 0.25)}
             title="Zoom Out"
           >
             <ZoomOut className="w-5 h-5" />
