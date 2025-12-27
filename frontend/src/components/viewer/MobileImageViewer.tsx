@@ -392,7 +392,7 @@ export const MobileImageViewer: React.FC<MobileImageViewerProps> = ({
   if (!imageViewerFile) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] bg-black">
+    <div className="fixed inset-0 z-[10000] bg-black">
       {/* Image viewer container - full screen */}
       <div
         ref={containerRef}
@@ -410,7 +410,7 @@ export const MobileImageViewer: React.FC<MobileImageViewerProps> = ({
       >
         {/* Top bar with close button and title - overlays the image */}
         <div
-          className={`absolute top-0 left-0 right-0 z-10 bg-gradient-to-b from-black/80 to-transparent px-4 py-2 flex items-center justify-between transition-opacity duration-300 ${
+          className={`absolute top-0 left-0 right-0 z-20 bg-gradient-to-b from-black/80 to-transparent px-4 py-2 flex items-center justify-between transition-opacity duration-300 ${
             controlsVisible ? "opacity-100" : "opacity-0 pointer-events-none"
           }`}
           style={{
@@ -470,7 +470,7 @@ export const MobileImageViewer: React.FC<MobileImageViewerProps> = ({
           {hasPrev && (
             <button
               onClick={() => navigateToImage("prev")}
-              className={`absolute left-4 top-1/2 -translate-y-1/2 z-10 w-12 h-12 flex items-center justify-center rounded-full bg-black/50 backdrop-blur-md text-white active:scale-95 transition ${
+              className={`absolute left-4 top-1/2 -translate-y-1/2 z-20 w-12 h-12 flex items-center justify-center rounded-full bg-black/50 backdrop-blur-md text-white active:scale-95 transition ${
                 controlsVisible
                   ? "opacity-100"
                   : "opacity-0 pointer-events-none"
@@ -483,7 +483,7 @@ export const MobileImageViewer: React.FC<MobileImageViewerProps> = ({
           {hasNext && (
             <button
               onClick={() => navigateToImage("next")}
-              className={`absolute right-4 top-1/2 -translate-y-1/2 z-10 w-12 h-12 flex items-center justify-center rounded-full bg-black/50 backdrop-blur-md text-white active:scale-95 transition ${
+              className={`absolute right-4 top-1/2 -translate-y-1/2 z-20 w-12 h-12 flex items-center justify-center rounded-full bg-black/50 backdrop-blur-md text-white active:scale-95 transition ${
                 controlsVisible
                   ? "opacity-100"
                   : "opacity-0 pointer-events-none"
@@ -498,7 +498,7 @@ export const MobileImageViewer: React.FC<MobileImageViewerProps> = ({
 
       {/* Bottom controls bar */}
       <div
-        className={`absolute bottom-0 left-0 right-0 z-10 bg-gradient-to-t from-black/80 to-transparent px-4 py-4 transition-opacity duration-300 ${
+        className={`absolute bottom-0 left-0 right-0 z-20 bg-gradient-to-t from-black/80 to-transparent px-4 py-4 transition-opacity duration-300 ${
           controlsVisible ? "opacity-100" : "opacity-0 pointer-events-none"
         }`}
       >
