@@ -94,8 +94,8 @@ export const Settings: React.FC = () => {
       setUsersListError(null);
       const { users } = await fetchAllUsers();
       setUsersList(users);
-    } catch (error) {
-      console.error("Failed to load users list:", error);
+    } catch {
+      // Error handled by toast notification and error state
       setUsersListError("Unable to load users right now");
       showToast("Failed to load user list", "error");
     } finally {

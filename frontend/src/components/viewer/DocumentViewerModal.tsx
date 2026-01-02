@@ -1,7 +1,9 @@
 import React, { useEffect, useRef, useState } from "react";
 import { ExternalLink } from "lucide-react";
 import { useApp } from "../../contexts/AppContext";
+import { useAuth } from "../../contexts/AuthContext";
 import { ONLYOFFICE_EXTS, getExt } from "../../utils/fileUtils";
+import { getErrorMessage, isAuthError } from "../../utils/errorUtils";
 
 interface DocsAPIEditor {
   destroyEditor?: () => void;
@@ -44,6 +46,7 @@ declare global {
 
 export const DocumentViewerModal: React.FC = () => {
   const appContext = useApp();
+  const { user } = useAuth();
   const documentViewerFile = appContext.documentViewerFile ?? null;
   const setDocumentViewerFile = appContext.setDocumentViewerFile;
   const refreshOnlyOfficeConfig = appContext.refreshOnlyOfficeConfig;
@@ -52,6 +55,7 @@ export const DocumentViewerModal: React.FC = () => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const editorRef = useRef<DocsAPIEditor | null>(null);
   const lastRefreshedFileIdRef = useRef<string | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     return () => {
@@ -67,7 +71,32 @@ export const DocumentViewerModal: React.FC = () => {
     const ext = getExt(documentViewerFile.name);
     if (!ONLYOFFICE_EXTS.has(ext)) return;
 
+    // Don't load if user is not authenticated
+    if (!user) {
+      return;
+    }
+
+    // Cancel any previous request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
+    // Create new abort controller for this request
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+
     const load = async () => {
+      // Check if user is still authenticated before making the call
+      if (!user) {
+        abortController.abort();
+        return;
+      }
+
+      // Check if request was aborted before making the call
+      if (abortController.signal.aborted) {
+        return;
+      }
+
       setLoading(true);
       setError(null);
       try {
@@ -76,9 +105,21 @@ export const DocumentViewerModal: React.FC = () => {
           `/api/onlyoffice/config/${documentViewerFile.id}`,
           {
             credentials: "include",
+            signal: abortController.signal,
           },
         );
+
+        // Check if request was aborted after fetch
+        if (abortController.signal.aborted) {
+          return;
+        }
+
         if (!res.ok) {
+          // Don't show error for authentication errors - expected after logout
+          if (res.status === 401) {
+            return;
+          }
+
           if (res.status === 424 || res.status === 503) {
             // Refresh config status once per file when error occurs (gentle refresh)
             if (documentViewerFile.id !== lastRefreshedFileIdRef.current) {
@@ -122,16 +163,50 @@ export const DocumentViewerModal: React.FC = () => {
           config,
         );
       } catch (e) {
-        const errorMessage =
-          e instanceof Error ? e.message : "Failed to open document";
+        // Ignore abort errors (expected when cancelling requests)
+        if (e instanceof Error && e.name === "AbortError") {
+          return;
+        }
+
+        // Don't show error for authentication errors - expected after logout
+        if (isAuthError(e)) {
+          return;
+        }
+
+        const errorMessage = getErrorMessage(e, "Failed to open document");
         setError(errorMessage);
       } finally {
-        setLoading(false);
+        // Only update loading state if this request wasn't aborted
+        if (
+          !abortController.signal.aborted &&
+          abortControllerRef.current === abortController
+        ) {
+          setLoading(false);
+          abortControllerRef.current = null;
+        }
       }
     };
 
     void load();
-  }, [documentViewerFile, refreshOnlyOfficeConfig]);
+
+    // Cleanup: abort request if component unmounts or file changes
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+    };
+  }, [documentViewerFile, refreshOnlyOfficeConfig, user]);
+
+  // Cancel any in-flight requests when user logs out
+  useEffect(() => {
+    if (!user) {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+    }
+  }, [user]);
 
   if (!documentViewerFile) return null;
 

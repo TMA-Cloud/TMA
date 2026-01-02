@@ -6,18 +6,14 @@ const {
   createUserWithGoogle,
   updateGoogleId,
   getSignupEnabled,
-  getUserTokenVersion,
 } = require('../../models/user.model');
-const { createSession } = require('../../models/session.model');
-const pool = require('../../config/db');
-const { getCookieOptions, isValidEmail, generateAuthToken } = require('../../utils/auth');
-const { sendError, sendSuccess } = require('../../utils/response');
+const { sendError } = require('../../utils/response');
 const { validateEmail: validateEmailUtil } = require('../../utils/validation');
 const { logger } = require('../../config/logger');
 const { loginSuccess, loginFailure, userSignup } = require('../../services/auditLogger');
-const { setSignupEnabled } = require('../../models/user.model');
+const { handleFirstUserSetup } = require('../../models/user.model');
+const { createSessionAndToken, setAuthCookieAndRespond } = require('../../utils/authSession');
 
-const JWT_SECRET = process.env.JWT_SECRET;
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 const GOOGLE_REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI;
@@ -28,11 +24,6 @@ if (GOOGLE_AUTH_ENABLED) {
   googleClient = new OAuth2Client(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI);
 } else {
   logger.info('Google OAuth disabled (missing credentials)');
-}
-
-if (!JWT_SECRET) {
-  logger.error('JWT_SECRET environment variable is required');
-  process.exit(1);
 }
 
 if (!GOOGLE_AUTH_ENABLED) {
@@ -50,8 +41,8 @@ async function login(req, res) {
       return sendError(res, 400, 'Email and password required');
     }
 
-    // Validate and sanitize email
-    if (!validateEmailUtil(email) || !isValidEmail(email)) {
+    // Validate email (validateEmailUtil already checks format and length)
+    if (!validateEmailUtil(email)) {
       await loginFailure(email, 'invalid_email', req);
       return sendError(res, 400, 'Invalid email format');
     }
@@ -72,19 +63,10 @@ async function login(req, res) {
     await loginSuccess(user.id, email, req);
     logger.info({ userId: user.id, email }, 'User logged in successfully');
 
-    // Get current token version for the user
-    const tokenVersion = (await getUserTokenVersion(user.id)) || 1;
+    // Create session and generate token
+    const { token } = await createSessionAndToken(user.id, req);
 
-    // Create session record first to get session ID
-    const ipAddress = req?.ip || req?.socket?.remoteAddress || null;
-    const userAgent = req?.headers?.['user-agent'] || null;
-    const session = await createSession(user.id, tokenVersion, userAgent, ipAddress);
-
-    // Generate token with session ID bound to it
-    const token = generateAuthToken(user.id, JWT_SECRET, { tokenVersion, sessionId: session.id, req });
-
-    res.cookie('token', token, getCookieOptions());
-    sendSuccess(res, { user: { id: user.id, email: user.email, name: user.name } });
+    setAuthCookieAndRespond(res, token, { user: { id: user.id, email: user.email, name: user.name } });
   } catch (err) {
     sendError(res, 500, 'Server error', err);
   }
@@ -145,31 +127,8 @@ async function googleCallback(req, res) {
         // Log signup
         await userSignup(user.id, email, 'google', req);
 
-        // After first user signs up, disable signup by default and lock first_user_id
-        const userCountResult = await pool.query('SELECT COUNT(*) as count FROM users');
-        const userCount = parseInt(userCountResult.rows[0].count, 10);
-        if (userCount === 1) {
-          // This is the first user, set first_user_id and disable signup atomically
-          const client = await pool.connect();
-          try {
-            await client.query('BEGIN');
-
-            // Set first_user_id (immutable after this)
-            await client.query(
-              'UPDATE app_settings SET first_user_id = $1, signup_enabled = false, updated_at = NOW() WHERE id = $2 AND first_user_id IS NULL',
-              [user.id, 'app_settings']
-            );
-
-            await client.query('COMMIT');
-            logger.info({ userId: user.id }, 'First user created via Google, signup disabled by default');
-          } catch (_err) {
-            await client.query('ROLLBACK');
-            // If first_user_id already set, just disable signup
-            await setSignupEnabled(false, user.id);
-          } finally {
-            client.release();
-          }
-        }
+        // Handle first user setup
+        await handleFirstUserSetup(user.id);
       }
     } else {
       // User found by Google ID - log login
@@ -177,18 +136,11 @@ async function googleCallback(req, res) {
     }
 
     logger.info({ userId: user.id, email }, 'User authenticated via Google OAuth');
-    // Get current token version for the user
-    const tokenVersion = (await getUserTokenVersion(user.id)) || 1;
 
-    // Create session record first to get session ID
-    const ipAddress = req?.ip || req?.socket?.remoteAddress || null;
-    const userAgent = req?.headers?.['user-agent'] || null;
-    const session = await createSession(user.id, tokenVersion, userAgent, ipAddress);
+    // Create session and generate token
+    const { token } = await createSessionAndToken(user.id, req);
 
-    // Generate token with session ID bound to it
-    const token = generateAuthToken(user.id, JWT_SECRET, { tokenVersion, sessionId: session.id, req });
-
-    res.cookie('token', token, getCookieOptions());
+    res.cookie('token', token, require('../../utils/auth').getCookieOptions());
     res.redirect('/');
   } catch (err) {
     logger.error({ err }, 'Google OAuth authentication failed');

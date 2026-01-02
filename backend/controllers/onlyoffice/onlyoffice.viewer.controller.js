@@ -1,5 +1,5 @@
-const { validateId } = require('../../utils/validation');
 const { getFile } = require('../../models/file.model');
+const { validateSingleId } = require('../../utils/controllerHelpers');
 const { logger } = require('../../config/logger');
 const { logAuditEvent } = require('../../services/auditLogger');
 const {
@@ -24,9 +24,9 @@ async function getViewerPage(req, res) {
       return res.status(424).send('OnlyOffice integration not configured. Configure it in Settings.');
     }
 
-    const fileId = validateId(req.params.id);
-    if (!fileId) {
-      return res.status(400).send('Invalid file ID');
+    const { valid, id: fileId, error } = validateSingleId(req);
+    if (!valid) {
+      return res.status(400).send(error);
     }
     const userId = req.userId;
 

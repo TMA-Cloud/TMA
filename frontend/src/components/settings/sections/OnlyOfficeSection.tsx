@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 import {
   FileText,
   Pencil,
@@ -9,10 +9,12 @@ import {
 } from "lucide-react";
 import { useToast } from "../../../hooks/useToast";
 import { useApp } from "../../../contexts/AppContext";
+import { useAuth } from "../../../contexts/AuthContext";
 import {
   getOnlyOfficeConfig,
   updateOnlyOfficeConfig,
 } from "../../../utils/api";
+import { getErrorMessage, isAuthError } from "../../../utils/errorUtils";
 
 interface OnlyOfficeSectionProps {
   canConfigure: boolean;
@@ -23,6 +25,7 @@ export const OnlyOfficeSection: React.FC<OnlyOfficeSectionProps> = ({
 }) => {
   const { showToast } = useToast();
   const { refreshOnlyOfficeConfig } = useApp();
+  const { user } = useAuth();
   const [jwtSecret, setJwtSecret] = useState("");
   const [url, setUrl] = useState("");
   const [originalUrl, setOriginalUrl] = useState("");
@@ -33,11 +36,31 @@ export const OnlyOfficeSection: React.FC<OnlyOfficeSectionProps> = ({
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [hasLoadedSettings, setHasLoadedSettings] = useState(false);
   const [showJwtSecret, setShowJwtSecret] = useState(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const loadSettings = useCallback(async () => {
+    // Don't load settings if user is not authenticated
+    if (!user || !canConfigure) {
+      return;
+    }
+
+    // Cancel any previous request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
+    // Create new abort controller for this request
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+
     try {
       setLoading(true);
-      const config = await getOnlyOfficeConfig();
+      // Check if request was aborted before making the call
+      if (abortController.signal.aborted) {
+        return;
+      }
+
+      const config = await getOnlyOfficeConfig(abortController.signal);
       const urlValue = config.url || "";
       // Never prefill JWT secret - always start empty
       setJwtSecret("");
@@ -51,18 +74,44 @@ export const OnlyOfficeSection: React.FC<OnlyOfficeSectionProps> = ({
         setIsCollapsed(true);
       }
     } catch (error) {
-      console.error("Failed to load OnlyOffice settings:", error);
+      // Ignore abort errors (expected when cancelling requests)
+      if (error instanceof Error && error.name === "AbortError") {
+        return;
+      }
+      // Don't show error toast for authentication errors - expected after logout
+      if (isAuthError(error)) {
+        return;
+      }
+      // Error handled by toast notification
       showToast("Failed to load OnlyOffice settings", "error");
     } finally {
-      setLoading(false);
+      // Only update loading state if this request wasn't aborted
+      if (
+        !abortController.signal.aborted &&
+        abortControllerRef.current === abortController
+      ) {
+        setLoading(false);
+        abortControllerRef.current = null;
+      }
     }
-  }, [showToast]);
+  }, [showToast, user, canConfigure]);
+
+  // Cancel any in-flight requests when user logs out
+  useEffect(() => {
+    if (!user) {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+    }
+  }, [user]);
 
   useEffect(() => {
-    if (canConfigure) {
+    // Only load settings if user is authenticated and can configure
+    if (canConfigure && user) {
       loadSettings();
     }
-  }, [canConfigure, loadSettings]);
+  }, [canConfigure, user, loadSettings]);
 
   const handleEdit = () => {
     if (isCollapsed) {
@@ -98,44 +147,13 @@ export const OnlyOfficeSection: React.FC<OnlyOfficeSectionProps> = ({
   const handleSave = async () => {
     if (!canConfigure) return;
 
-    // Check if user entered only whitespace (invalid input)
-    const hasOnlyWhitespaceJwt =
-      jwtSecret.length > 0 && jwtSecret.trim().length === 0;
-    const hasOnlyWhitespaceUrl = url.length > 0 && url.trim().length === 0;
-
-    if (hasOnlyWhitespaceJwt || hasOnlyWhitespaceUrl) {
-      showToast("Spaces alone are not allowed", "error");
-      return;
-    }
-
-    // Validate inputs - trim whitespace
-    const trimmedJwtSecret = jwtSecret.trim();
-    const trimmedUrl = url.trim();
-
-    // Require both fields together - cannot have one without the other
-    if (
-      (trimmedJwtSecret && !trimmedUrl) ||
-      (!trimmedJwtSecret && trimmedUrl)
-    ) {
-      showToast("Both fields required together", "error");
-      return;
-    }
-
-    // Validate URL format if provided (allow empty to clear settings)
-    if (trimmedUrl) {
-      try {
-        new URL(trimmedUrl);
-      } catch {
-        showToast("Invalid URL format", "error");
-        return;
-      }
-    }
-
     try {
       setSaving(true);
+      // Backend handles all validation (trimming, URL format, both-or-none rule)
+      // Send raw values - backend will validate and return appropriate error messages
       const response = await updateOnlyOfficeConfig(
-        trimmedJwtSecret || null,
-        trimmedUrl || null,
+        jwtSecret || null,
+        url || null,
       );
       const savedUrl = response.url || "";
       // Never store JWT secret - always clear it after save
@@ -150,9 +168,8 @@ export const OnlyOfficeSection: React.FC<OnlyOfficeSectionProps> = ({
       // Refresh OnlyOffice config cache in app context (after backend cache is invalidated)
       try {
         await refreshOnlyOfficeConfig();
-      } catch (error) {
-        // Log error but don't fail the save operation
-        console.error("Failed to refresh OnlyOffice config cache:", error);
+      } catch {
+        // Error handled silently - cache refresh is non-critical
       }
 
       // Show appropriate message based on what was saved
@@ -162,12 +179,11 @@ export const OnlyOfficeSection: React.FC<OnlyOfficeSectionProps> = ({
         showToast("Settings cleared", "success");
       }
     } catch (error) {
-      console.error("Failed to save OnlyOffice settings:", error);
-      const errorMessage =
-        error instanceof Error
-          ? error.message
-          : "Failed to save OnlyOffice settings";
-      showToast(errorMessage, "error");
+      // Error handled by toast notification
+      showToast(
+        getErrorMessage(error, "Failed to save OnlyOffice settings"),
+        "error",
+      );
       // Don't collapse on error so user can see and fix
     } finally {
       setSaving(false);

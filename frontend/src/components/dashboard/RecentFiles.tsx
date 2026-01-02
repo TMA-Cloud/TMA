@@ -1,6 +1,6 @@
 import React from "react";
 import { type FileItem } from "../../contexts/AppContext";
-import { getFileIcon, formatFileSize } from "../../utils/fileUtils";
+import { getFileIcon, formatFileSize, formatDate } from "../../utils/fileUtils";
 import { Tooltip } from "../ui/Tooltip";
 
 interface RecentFilesProps {
@@ -37,7 +37,7 @@ export const RecentFiles: React.FC<RecentFilesProps> = ({ files }) => {
                     <span>{formatFileSize(file.size)}</span>
                   )}
                   <span>•</span>
-                  <span>{file.modified.toLocaleDateString()}</span>
+                  <span>{formatDate(file.modified)}</span>
                 </div>
               </div>
             </div>

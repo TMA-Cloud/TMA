@@ -193,14 +193,14 @@ For self-hosted deployments, signup can be controlled to prevent unauthorized ac
 
 ### Real-Time File Events
 
-Real-time file event broadcasting system that notifies all connected users when file operations occur. Built using Redis pub/sub and Server-Sent Events (SSE) for efficient, scalable event distribution.
+Real-time file event broadcasting system that notifies all connected users when file operations occur. Built using Redis pub/sub and Server-Sent Events (SSE) for event distribution.
 
 **Key Features:**
 
 - **Broadcast to All Users**: All connected users receive the same events simultaneously
 - **Automatic UI Updates**: File lists automatically refresh when events are received
-- **Comprehensive Event Coverage**: Tracks all major file operations
-- **Efficient Architecture**: Redis pub/sub for event distribution, SSE for client delivery
+- **Event Coverage**: Tracks all major file operations
+- **Architecture**: Redis pub/sub for event distribution, SSE for client delivery
 - **Graceful Degradation**: System continues to work if Redis is unavailable (events are skipped)
 
 **Supported Events:**
@@ -260,8 +260,8 @@ Each event includes:
 **Performance:**
 
 - **Non-Blocking**: Event publishing is non-blocking and doesn't affect operation performance
-- **Efficient Broadcasting**: Redis pub/sub efficiently distributes events to all subscribers
-- **Minimal Overhead**: SSE connections are lightweight and efficient
+- **Broadcasting**: Redis pub/sub distributes events to all subscribers
+- **Minimal Overhead**: SSE connections are lightweight
 - **Scalable**: System scales with Redis pub/sub capabilities
 
 **Configuration:**
@@ -547,7 +547,7 @@ TMA Cloud uses **Pino** for high-performance structured logging with automatic s
 
 **Key Features:**
 
-- Structured JSON logs for easy parsing
+- Structured JSON logs for parsing and analysis
 - Automatic secret masking (passwords, tokens, cookies)
 - Request/response logging with context propagation
 - Multiple log levels (fatal, error, warn, info, debug, trace)
@@ -557,7 +557,7 @@ See [Logging Documentation](logging.md) for complete details, configuration, and
 
 ### Audit Trail
 
-Comprehensive audit logging system tracks all critical user actions and system events. The system uses a queue-based architecture to ensure reliable event capture without impacting performance.
+Audit logging system tracks all critical user actions and system events. The system uses a queue-based architecture to ensure reliable event capture without impacting performance.
 
 **Tracked Events:**
 
@@ -596,14 +596,14 @@ See [API Documentation - Metrics](api.md#monitoring) for endpoint details, avail
 
 ### Responsive Design
 
-TMA Cloud features **dedicated mobile and desktop UI/UX** that are completely separate, ensuring optimal experience on all devices.
+TMA Cloud features **dedicated mobile and desktop UI/UX** that are completely separate, providing device-specific interfaces.
 
 #### Mobile/Responsive UI (≤ 1024px)
 
-- **Dedicated Mobile Layout**: Completely separate UI optimized for mobile and tablet devices
-- **Bottom Navigation Bar**: Easy thumb-reach navigation with Home, Files, Shared, Starred, Trash, and Settings
+- **Dedicated Mobile Layout**: Completely separate UI for mobile and tablet devices
+- **Bottom Navigation Bar**: Thumb-accessible navigation with Home, Files, Shared, Starred, Trash, and Settings
 - **Compact Header**: Streamlined top bar with app logo, current section, upload button, and user profile
-- **Mobile-Optimized File Manager**:
+- **Mobile File Manager**:
   - Truncated breadcrumbs with ellipsis for deep folder navigation
   - Text wrapping in grid view to prevent overflow
   - Compact spacing and touch-friendly controls
@@ -635,14 +635,14 @@ TMA Cloud features **dedicated mobile and desktop UI/UX** that are completely se
   - Double-click to reset zoom
   - Zoom controls in bottom-right corner
 - **Desktop Context Menu**: Right-click context menu with all file actions
-- **Full Feature Access**: All features optimized for mouse and keyboard interaction
+- **Full Feature Access**: All features designed for mouse and keyboard interaction
 
 #### Viewport Detection
 
 - Automatic detection of viewport size
-- Seamless switching between mobile and desktop UI
+- Automatic switching between mobile and desktop UI
 - No conflicts between mobile and desktop implementations
-- Each UI is completely isolated and optimized for its platform
+- Each UI is completely isolated and designed for its platform
 
 ### Accessibility
 
@@ -693,7 +693,7 @@ TMA Cloud features **dedicated mobile and desktop UI/UX** that are completely se
 
 - **Single-Origin Architecture**: Frontend and backend on same domain (no CORS needed)
 - **Security Headers**: X-Content-Type-Options, X-Frame-Options, X-XSS-Protection, CSP, Referrer-Policy
-- **Comprehensive Input Validation**: All endpoints validate and sanitize user input
+- **Input Validation**: All endpoints validate and sanitize user input
 - **Error Message Sanitization**: Generic error messages prevent information leakage
 - **Rate Limiting** (when enabled):
   - Authentication endpoints: 5 requests per 15 minutes
@@ -748,7 +748,7 @@ Rate limit violations return HTTP 429 (Too Many Requests).
 
 ### Redis Caching
 
-Redis for comprehensive caching to improve performance and reduce database load.
+Redis for caching to improve performance and reduce database load.
 
 #### Cached Data Types
 
@@ -833,22 +833,22 @@ Automatic cache invalidation ensures data consistency:
 
 - **Entrypoint Loading**: Environment variables loaded once at application startup
 - **Connection Management**: Automatic reconnection and error handling
-- **Pattern Matching**: Efficient SCAN-based pattern deletion for cache invalidation
-- **Key Naming**: Consistent, namespaced key structure for easy management
+- **Pattern Matching**: SCAN-based pattern deletion for cache invalidation
+- **Key Naming**: Consistent, namespaced key structure for management
 
 ### Optimizations
 
 - Lazy loading of components
 - Debounced search
 - Optimistic UI updates
-- Efficient file listing
+- File listing
 - Redis caching layer
-- Database query optimization
+- Database query caching
 
 ### Scalability
 
 - Database indexing
-- Efficient queries
+- Database queries
 - Background processing
 - Resource cleanup
 - Redis caching for reduced database load
@@ -890,7 +890,7 @@ Automatic cache invalidation ensures data consistency:
 - **Click and drag**: Pan around zoomed images
 - **Double-click**: Reset zoom to fit-to-screen
 - **Zoom controls**: Bottom-right corner with zoom percentage display
-- **Smooth interactions**: Optimized for mouse and keyboard
+- **Responsive interactions**: Designed for mouse and keyboard
 
 ### Mobile Image Viewer
 
@@ -903,7 +903,7 @@ Automatic cache invalidation ensures data consistency:
 - **Double-tap zoom**: Double-tap to zoom to 2x, double-tap again to reset
 - **Image counter**: Shows current image position (e.g., "2 / 5")
 - **Navigation arrows**: Previous/next buttons when multiple images available
-- **Smooth animations**: Polished transitions and interactions
+- **Animations**: Transitions and interactions
 
 ## File Types
 
@@ -930,7 +930,7 @@ Automatic cache invalidation ensures data consistency:
 - Single server deployment
 - Local file storage
 - No real-time collaboration (without OnlyOffice)
-- No file versioning (basic)
+- No file versioning
 - Limited file preview types
 
 ### Future Enhancements

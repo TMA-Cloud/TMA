@@ -1,6 +1,6 @@
 const jwt = require('jsonwebtoken');
-const { validateId } = require('../../utils/validation');
 const { validateAndResolveFile } = require('../../utils/fileDownload');
+const { validateSingleId } = require('../../utils/controllerHelpers');
 const { logger } = require('../../config/logger');
 const { getOnlyOfficeConfig } = require('./onlyoffice.utils');
 
@@ -10,9 +10,9 @@ const { getOnlyOfficeConfig } = require('./onlyoffice.utils');
  */
 async function serveFile(req, res) {
   try {
-    const id = validateId(req.params.id);
-    if (!id) {
-      return res.status(400).json({ error: 'Invalid file ID' });
+    const { valid, id, error } = validateSingleId(req);
+    if (!valid) {
+      return res.status(400).json({ error });
     }
     const token = req.query.t;
 
@@ -59,10 +59,10 @@ async function serveFile(req, res) {
       logger.error('[ONLYOFFICE] File not found in DB', id);
       return res.status(404).json({ error: 'File not found' });
     }
-    const { success, filePath, error } = validateAndResolveFile(fileRow);
+    const { success, filePath, error: fileError } = validateAndResolveFile(fileRow);
     if (!success) {
-      logger.error('[ONLYOFFICE] File validation failed', id, error);
-      return res.status(404).json({ error: error || 'File not found' });
+      logger.error('[ONLYOFFICE] File validation failed', id, fileError);
+      return res.status(404).json({ error: fileError || 'File not found' });
     }
 
     // Set appropriate headers

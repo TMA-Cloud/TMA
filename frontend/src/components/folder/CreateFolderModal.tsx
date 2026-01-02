@@ -23,8 +23,8 @@ export const CreateFolderModal: React.FC = () => {
     try {
       await createFolder(name.trim());
       handleClose();
-    } catch (error) {
-      console.error("Failed to create folder:", error);
+    } catch {
+      // Error handled by error state
       setError("Failed to create folder. Please try again.");
     }
   };

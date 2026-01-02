@@ -1,52 +1,48 @@
-class Mutex {
-  constructor() {
-    this.promises = new Map();
+/**
+ * Mutex utility for key-based locking
+ * Uses a Map of mutexes to support per-key locking
+ */
+
+const { Mutex } = require('async-mutex');
+
+// Map of keys to mutex instances
+const mutexMap = new Map();
+
+/**
+ * Get or create a mutex for a specific key
+ * @param {string} key - Lock key
+ * @returns {Mutex} Mutex instance for the key
+ */
+function getMutex(key) {
+  if (!mutexMap.has(key)) {
+    mutexMap.set(key, new Mutex());
   }
-
-  async lock(key) {
-    while (this.promises.has(key)) {
-      await this.promises.get(key);
-    }
-
-    let resolve;
-    const promise = new Promise(r => {
-      resolve = r;
-    });
-    this.promises.set(key, promise);
-
-    return {
-      unlock: () => {
-        this.promises.delete(key);
-        resolve();
-      },
-    };
-  }
+  return mutexMap.get(key);
 }
 
-const mutex = new Mutex();
-
-// File operation locks to prevent concurrent modifications
+/**
+ * File operation locks to prevent concurrent modifications
+ * @param {string} fileId - File ID to lock
+ * @param {Function} operation - Operation to execute
+ * @returns {Promise<any>} Result of the operation
+ */
 const fileOperationLock = async (fileId, operation) => {
-  const lock = await mutex.lock(`file:${fileId}`);
-  try {
-    return await operation();
-  } finally {
-    lock.unlock();
-  }
+  const mutex = getMutex(`file:${fileId}`);
+  return mutex.runExclusive(operation);
 };
 
-// User operation locks to prevent concurrent user-level operations
+/**
+ * User operation locks to prevent concurrent user-level operations
+ * @param {string} userId - User ID to lock
+ * @param {Function} operation - Operation to execute
+ * @returns {Promise<any>} Result of the operation
+ */
 const userOperationLock = async (userId, operation) => {
-  const lock = await mutex.lock(`user:${userId}`);
-  try {
-    return await operation();
-  } finally {
-    lock.unlock();
-  }
+  const mutex = getMutex(`user:${userId}`);
+  return mutex.runExclusive(operation);
 };
 
 module.exports = {
-  Mutex,
   fileOperationLock,
   userOperationLock,
 };

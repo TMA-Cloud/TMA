@@ -1,10 +1,10 @@
 # Audit Logging System
 
-Comprehensive audit trail documentation for TMA Cloud.
+Audit trail documentation for TMA Cloud.
 
 ## Overview
 
-TMA Cloud includes a robust audit logging system that tracks all critical user actions and system events. The system uses a queue-based architecture with PostgreSQL and pg-boss to ensure audit events are reliably captured without impacting application performance.
+TMA Cloud includes an audit logging system that tracks all critical user actions and system events. The system uses a queue-based architecture with PostgreSQL and pg-boss to ensure audit events are reliably captured without impacting application performance.
 
 ### Key Features
 
@@ -562,7 +562,7 @@ ORDER BY count DESC;
 
 ## Logging Audit Events in Code
 
-### Basic Usage
+### Usage Examples
 
 ```javascript
 const { logAuditEvent } = require('../services/auditLogger');

@@ -22,7 +22,7 @@ Cookie: token=<jwt_token>
 
 ### Security
 
-All API endpoints implement comprehensive security measures:
+All API endpoints implement security measures:
 
 - **Input Validation**: All inputs are validated and sanitized
 - **Rate Limiting**: Endpoints are rate-limited to prevent abuse

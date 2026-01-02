@@ -86,12 +86,8 @@ export const UploadModal: React.FC = () => {
       const uploadPromises = uploadFiles
         .filter((f) => f.status === "pending" || f.status === "error")
         .map((uploadFileItem) =>
-          uploadFileWithProgress(uploadFileItem.file).catch((error) => {
-            console.error(
-              "Upload failed for file:",
-              uploadFileItem.file.name,
-              error,
-            );
+          uploadFileWithProgress(uploadFileItem.file).catch(() => {
+            // Error handled by upload progress UI
           }),
         );
 

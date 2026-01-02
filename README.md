@@ -1,6 +1,6 @@
 # TMA Cloud
 
-A self-hosted cloud storage platform providing robust file storage and management capabilities.
+A self-hosted cloud storage platform with file storage and management capabilities.
 
 ## Features
 

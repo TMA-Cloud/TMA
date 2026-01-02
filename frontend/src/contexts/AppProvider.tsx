@@ -5,6 +5,7 @@ import {
   downloadFile as downloadFileApi,
   checkOnlyOfficeConfigured,
   getSignupStatus,
+  hasAuthState,
 } from "../utils/api";
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
@@ -129,18 +130,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
     folderStackRef.current = folderStack;
   }, [folderStack]);
 
-  // Helper to build a map of fileId -> full share URL from the backend response.
-  // Backend now returns full URLs in `links`.
+  // Helper to extract share URLs from backend response.
+  // Backend already provides full URLs in `links` - just return them as-is.
   const buildShareUrlMap = useCallback(
     (data: { links?: Record<string, string> }) => {
-      const urls: Record<string, string> = {};
-      const linkMap = data?.links || {};
-      for (const [id, url] of Object.entries(linkMap)) {
-        if (typeof url === "string" && url.trim()) {
-          urls[id] = url;
-        }
-      }
-      return urls;
+      return data?.links || {};
     },
     [],
   );
@@ -179,9 +173,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         const url = new URL(urlPath, window.location.origin);
         if (parentId) url.searchParams.append("parentId", parentId);
         url.searchParams.append("sortBy", sortBy);
-        // Only append order if it has a valid value, and convert to uppercase for backend
+        // Only append order if it has a valid value
+        // Backend will validate and convert to uppercase
         if (sortOrder && sortOrder.trim()) {
-          url.searchParams.append("order", sortOrder.toUpperCase());
+          url.searchParams.append("order", sortOrder);
         }
         const res = await fetch(url.toString(), { credentials: "include" });
         const data: FileItemResponse[] = await res.json();
@@ -192,8 +187,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
             deletedAt: f.deletedAt ? new Date(f.deletedAt) : undefined,
           })),
         );
-      } catch (e) {
-        console.error("Failed to load files", e);
+      } catch {
+        // Silently handle file loading errors - UI will show empty state
       }
     },
     [folderStack, currentPath, sortBy, sortOrder, searchQuery],
@@ -281,7 +276,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
           searchQueryRef.current.trim() === trimmedQuery &&
           !abortController.signal.aborted
         ) {
-          console.error("Failed to search files", e);
+          // Silently handle search errors - UI will show empty results
           setFiles([]);
         }
       } finally {
@@ -300,7 +295,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
 
   // Debounced search function with cancellation support
   const [debouncedSearch, cancelSearch] = useDebouncedCallback(
-    searchFilesApi,
+    ((query: string) => searchFilesApi(query)) as (
+      ...args: unknown[]
+    ) => unknown,
     300,
   );
 
@@ -410,7 +407,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
 
         // Handle errors
         if (data.type === "error") {
-          console.error("File events stream error:", data.message);
+          // Silently handle file events stream errors
           return;
         }
 
@@ -427,13 +424,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
           // Debounce/throttle refresh - batch multiple events
           debouncedSSERefresh();
         }
-      } catch (error) {
-        console.error("Failed to parse file event:", error);
+      } catch {
+        // Silently handle file event parsing errors
       }
     };
 
-    eventSource.onerror = (error) => {
-      console.error("File events stream error:", error);
+    eventSource.onerror = () => {
+      // Silently handle file events stream errors
       // EventSource will automatically reconnect
     };
 
@@ -468,43 +465,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   }, [folderStack, currentPath, sortBy, sortOrder, searchQuery, refreshFiles]);
 
   const createFolder = async (name: string) => {
-    try {
-      const res = await fetch(`/api/files/folder`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          name,
-          parentId: folderStack[folderStack.length - 1],
-        }),
-      });
-      if (!res.ok) {
-        throw new Error("Failed to create folder");
-      }
-      await refreshFiles();
-    } catch (error) {
-      console.error("Failed to create folder:", error);
-      throw error;
+    const res = await fetch(`/api/files/folder`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        name,
+        parentId: folderStack[folderStack.length - 1],
+      }),
+    });
+    if (!res.ok) {
+      throw new Error("Failed to create folder");
     }
+    await refreshFiles();
   };
 
   const uploadFile = async (file: File) => {
     return operationQueue.add(async () => {
-      try {
-        const data = new FormData();
-        data.append("file", file);
-        const parentId = folderStack[folderStack.length - 1];
-        if (parentId) data.append("parentId", parentId);
-        await fetch(`/api/files/upload`, {
-          method: "POST",
-          credentials: "include",
-          body: data,
-        });
-        await refreshFiles();
-      } catch (error) {
-        console.error("Upload failed", error);
-        throw error;
-      }
+      const data = new FormData();
+      data.append("file", file);
+      const parentId = folderStack[folderStack.length - 1];
+      if (parentId) data.append("parentId", parentId);
+      await fetch(`/api/files/upload`, {
+        method: "POST",
+        credentials: "include",
+        body: data,
+      });
+      await refreshFiles();
     });
   };
 
@@ -658,60 +645,45 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const moveFiles = async (ids: string[], parentId: string | null) => {
     return operationQueue.add(async () => {
-      try {
-        const res = await fetch(`/api/files/move`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ ids, parentId }),
-        });
-        if (!res.ok) {
-          throw new Error("Failed to move files");
-        }
-        await refreshFiles();
-      } catch (error) {
-        console.error("Failed to move files:", error);
-        throw error;
+      const res = await fetch(`/api/files/move`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ ids, parentId }),
+      });
+      if (!res.ok) {
+        throw new Error("Failed to move files");
       }
+      await refreshFiles();
     });
   };
 
   const copyFilesApi = async (ids: string[], parentId: string | null) => {
     return operationQueue.add(async () => {
-      try {
-        const res = await fetch(`/api/files/copy`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ ids, parentId }),
-        });
-        if (!res.ok) {
-          throw new Error("Failed to copy files");
-        }
-        await refreshFiles();
-      } catch (error) {
-        console.error("Failed to copy files:", error);
-        throw error;
+      const res = await fetch(`/api/files/copy`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ ids, parentId }),
+      });
+      if (!res.ok) {
+        throw new Error("Failed to copy files");
       }
+      await refreshFiles();
     });
   };
 
   const renameFileApi = async (id: string, name: string) => {
-    try {
-      const res = await fetch(`/api/files/rename`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ id, name }),
-      });
-      if (!res.ok) {
-        throw new Error("Failed to rename file");
-      }
-      await refreshFiles();
-    } catch (error) {
-      console.error("Failed to rename file:", error);
-      throw error;
+    const res = await fetch(`/api/files/rename`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ id, name }),
+    });
+    if (!res.ok) {
+      throw new Error("Failed to rename file");
     }
+    await refreshFiles();
   };
 
   const setShareLinkModalOpen = (open: boolean, links: string[] = []) => {
@@ -727,81 +699,61 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
     ids: string[],
     shared: boolean,
   ): Promise<Record<string, string>> => {
-    try {
-      const res = await fetch(`/api/files/share`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ ids, shared }),
-      });
-      if (!res.ok) {
-        throw new Error("Failed to share files");
-      }
-      const data = await res.json();
-      const links = buildShareUrlMap(data);
-      await refreshFiles();
-      return links;
-    } catch (error) {
-      console.error("Failed to share files:", error);
-      throw error;
+    const res = await fetch(`/api/files/share`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ ids, shared }),
+    });
+    if (!res.ok) {
+      throw new Error("Failed to share files");
     }
+    const data = await res.json();
+    const links = buildShareUrlMap(data);
+    await refreshFiles();
+    return links;
   };
 
   const getShareLinks = async (
     ids: string[],
   ): Promise<Record<string, string>> => {
-    try {
-      const res = await fetch(`/api/files/share/links`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ ids }),
-      });
-      if (!res.ok) {
-        throw new Error("Failed to get share links");
-      }
-      const data = await res.json();
-      return buildShareUrlMap(data);
-    } catch (error) {
-      console.error("Failed to get share links:", error);
-      throw error;
+    const res = await fetch(`/api/files/share/links`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ ids }),
+    });
+    if (!res.ok) {
+      throw new Error("Failed to get share links");
     }
+    const data = await res.json();
+    return buildShareUrlMap(data);
   };
 
   const starFilesApi = async (ids: string[], starred: boolean) => {
-    try {
-      const res = await fetch(`/api/files/star`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ ids, starred }),
-      });
-      if (!res.ok) {
-        throw new Error("Failed to update star status");
-      }
-      await refreshFiles();
-    } catch (error) {
-      console.error("Failed to update star status:", error);
-      throw error;
+    const res = await fetch(`/api/files/star`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ ids, starred }),
+    });
+    if (!res.ok) {
+      throw new Error("Failed to update star status");
     }
+    await refreshFiles();
   };
 
   const deleteFilesApi = async (ids: string[]) => {
-    try {
-      const res = await fetch(`/api/files/delete`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ ids }),
-      });
-      if (!res.ok) {
-        throw new Error("Failed to delete files");
-      }
-      await refreshFiles();
-    } catch (error) {
-      console.error("Failed to delete files:", error);
-      throw error;
+    const res = await fetch(`/api/files/delete`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ ids }),
+    });
+    if (!res.ok) {
+      throw new Error("Failed to delete files");
     }
+    await refreshFiles();
   };
 
   const restoreFilesApi = async (ids: string[]) => {
@@ -820,21 +772,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   const deleteForeverApi = async (ids: string[]) => {
-    try {
-      const res = await fetch(`/api/files/trash/delete`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ ids }),
-      });
-      if (!res.ok) {
-        throw new Error("Failed to permanently delete files");
-      }
-      await refreshFiles();
-    } catch (error) {
-      console.error("Failed to permanently delete files:", error);
-      throw error;
+    const res = await fetch(`/api/files/trash/delete`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ ids }),
+    });
+    if (!res.ok) {
+      throw new Error("Failed to permanently delete files");
     }
+    await refreshFiles();
   };
 
   const emptyTrashApi = async () => {
@@ -854,23 +801,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   const linkToParentShareApi = async (
     ids: string[],
   ): Promise<Record<string, string>> => {
-    try {
-      const res = await fetch(`/api/files/link-parent-share`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ ids }),
-      });
-      if (!res.ok) {
-        throw new Error("Failed to link to parent share");
-      }
-      const data = await res.json();
-      await refreshFiles();
-      return buildShareUrlMap(data);
-    } catch (error) {
-      console.error("Failed to link to parent share:", error);
-      throw error;
+    const res = await fetch(`/api/files/link-parent-share`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ ids }),
+    });
+    if (!res.ok) {
+      throw new Error("Failed to link to parent share");
     }
+    const data = await res.json();
+    await refreshFiles();
+    return buildShareUrlMap(data);
   };
 
   const pasteClipboard = async (parentId: string | null) => {
@@ -893,7 +835,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         setClipboard(null);
         setTimeout(() => setPasteProgress(null), 300);
       } catch (error) {
-        console.error("Paste operation failed", error);
+        // Error handled by paste progress UI
         setPasteProgress(null);
         throw error;
       }
@@ -955,8 +897,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
           await downloadFileApi(id, filename);
         }
       }
-    } catch (error) {
-      console.error("Download failed", error);
+    } catch {
+      // Error handled by download progress UI
       // Error is already logged, user will see download failure in browser
     } finally {
       setIsDownloading(false);
@@ -964,12 +906,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   const refreshOnlyOfficeConfig = useCallback(async () => {
+    // Don't refresh if user is not authenticated (check via auth state)
+    // This prevents errors after logout
+    if (!hasAuthState()) {
+      setOnlyOfficeConfigured(false);
+      return;
+    }
+
     try {
       // Use the public endpoint that works for all users
       const result = await checkOnlyOfficeConfigured();
       setOnlyOfficeConfigured(result.configured);
-    } catch (error) {
-      console.error("Failed to load OnlyOffice config:", error);
+    } catch {
+      // Error handled silently - feature will be unavailable
       setOnlyOfficeConfigured(false);
     }
   }, []);
@@ -980,8 +929,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
       try {
         const status = await getSignupStatus();
         setCanConfigureOnlyOffice(status.canToggle);
-      } catch (error) {
-        console.error("Failed to load admin status:", error);
+      } catch {
+        // Error handled silently - admin features will be unavailable
         setCanConfigureOnlyOffice(false);
       }
     };

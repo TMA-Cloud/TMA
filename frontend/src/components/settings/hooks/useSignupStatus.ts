@@ -25,8 +25,8 @@ export function useSignupStatus() {
           ? status.additionalUsers
           : null,
       );
-    } catch (error) {
-      console.error("Failed to load signup status:", error);
+    } catch {
+      // Error handled silently - signup toggle will be unavailable
     } finally {
       setLoadingSignupStatus(false);
     }
@@ -44,8 +44,8 @@ export function useSignupStatus() {
         newStatus ? "Signup enabled" : "Signup disabled",
         newStatus ? "success" : "info",
       );
-    } catch (error) {
-      console.error("Failed to toggle signup:", error);
+    } catch {
+      // Error handled by toast notification
       showToast("Failed to update signup setting", "error");
     } finally {
       setTogglingSignup(false);

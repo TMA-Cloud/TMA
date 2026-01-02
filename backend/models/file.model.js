@@ -11,6 +11,7 @@
  * - file.trash.model.js - Trash operations
  * - file.cleanup.model.js - Cleanup operations
  * - file.search.model.js - Search and stats
+ * - file.info.model.js - File info query utilities
  */
 
 const cacheModels = require('./file/file.cache.model');
@@ -20,6 +21,7 @@ const metadataModels = require('./file/file.metadata.model');
 const trashModels = require('./file/file.trash.model');
 const cleanupModels = require('./file/file.cleanup.model');
 const searchModels = require('./file/file.search.model');
+const infoModels = require('./file/file.info.model');
 
 module.exports = {
   ...cacheModels,
@@ -29,4 +31,5 @@ module.exports = {
   ...trashModels,
   ...cleanupModels,
   ...searchModels,
+  ...infoModels,
 };

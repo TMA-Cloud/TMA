@@ -20,8 +20,8 @@ export function useStorageUsage() {
         const data = await res.json();
         setUsage({ used: data.used, total: data.total, free: data.free });
       }
-    } catch (err) {
-      console.error("Failed to fetch storage usage", err);
+    } catch {
+      // Error handled silently - storage usage will show as unavailable
     } finally {
       setLoading(false);
     }

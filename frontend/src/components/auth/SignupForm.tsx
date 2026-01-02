@@ -3,6 +3,7 @@ import { useAuth } from "../../contexts/AuthContext";
 import { PasswordInput } from "./PasswordInput";
 import { SocialAuthButtons } from "./SocialAuthButtons";
 import { checkGoogleAuthEnabled } from "../../utils/api";
+import { getErrorMessage } from "../../utils/errorUtils";
 
 export const SignupForm: React.FC<{ onSwitch: () => void }> = ({
   onSwitch,
@@ -18,8 +19,8 @@ export const SignupForm: React.FC<{ onSwitch: () => void }> = ({
   useEffect(() => {
     checkGoogleAuthEnabled()
       .then(setGoogleEnabled)
-      .catch((err) => {
-        console.error("Failed to check Google auth status:", err);
+      .catch(() => {
+        // Error handled silently - Google auth will be unavailable
         // Default to false on error
         setGoogleEnabled(false);
       });
@@ -31,7 +32,7 @@ export const SignupForm: React.FC<{ onSwitch: () => void }> = ({
     try {
       await signup(email, password, name);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to sign up");
+      setError(getErrorMessage(err, "Failed to sign up"));
     }
   };
 

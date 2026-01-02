@@ -1,23 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-// Generic debounce function
-export function debounce<T extends (...args: unknown[]) => unknown>(
-  func: T,
-  wait: number,
-): (...args: Parameters<T>) => void {
-  let timeoutId: NodeJS.Timeout | null = null;
-
-  return (...args: Parameters<T>) => {
-    if (timeoutId) {
-      clearTimeout(timeoutId);
-    }
-
-    timeoutId = setTimeout(() => {
-      func(...args);
-    }, wait);
-  };
-}
-
 // Hook for debounced callbacks with cancellation support
 export function useDebouncedCallback<T extends (...args: unknown[]) => unknown>(
   callback: T,
@@ -89,8 +71,8 @@ export class PromiseQueue {
       const operation = this.queue.shift()!;
       try {
         await operation();
-      } catch (error) {
-        console.error("Queue operation failed:", error);
+      } catch {
+        // Error is propagated to caller via promise rejection
       }
     }
 

@@ -150,7 +150,21 @@ async function buildFolderPath(folderId, userId) {
 }
 
 /**
- * Generates a unique filename if the file already exists
+ * Generates a unique name by appending a counter
+ * @param {string} baseName - Base name without extension
+ * @param {string} ext - File extension (including dot)
+ * @param {number} counter - Counter to append
+ * @returns {string} Unique name
+ */
+function generateUniqueName(baseName, ext, counter) {
+  return `${baseName} (${counter})${ext}`;
+}
+
+/**
+ * Generates a unique filename if the file already exists (filesystem check)
+ * @param {string} filePath - Full file path to check
+ * @param {string} _folderPath - Unused parameter (kept for backward compatibility)
+ * @returns {Promise<string>} Unique file path
  */
 async function getUniqueFilename(filePath, _folderPath) {
   const dir = path.dirname(filePath);
@@ -166,13 +180,44 @@ async function getUniqueFilename(filePath, _folderPath) {
       .then(() => true)
       .catch(() => false)
   ) {
-    const newName = `${baseName} (${counter})${ext}`;
+    const newName = generateUniqueName(baseName, ext, counter);
     finalPath = path.join(dir, newName);
     counter++;
 
     // Safety limit
     if (counter > 10000) {
       throw new Error('Too many duplicate files');
+    }
+  }
+
+  return finalPath;
+}
+
+/**
+ * Generates a unique folder name if the folder already exists (filesystem check)
+ * @param {string} folderPath - Full folder path to check
+ * @returns {Promise<string>} Unique folder path
+ */
+async function getUniqueFolderPath(folderPath) {
+  const dir = path.dirname(folderPath);
+  const baseName = path.basename(folderPath);
+
+  let finalPath = folderPath;
+  let counter = 1;
+
+  while (
+    await fs.promises
+      .access(finalPath)
+      .then(() => true)
+      .catch(() => false)
+  ) {
+    const newName = generateUniqueName(baseName, '', counter);
+    finalPath = path.join(dir, newName);
+    counter++;
+
+    // Safety limit
+    if (counter > 10000) {
+      throw new Error('Too many duplicate folders');
     }
   }
 
@@ -187,4 +232,6 @@ module.exports = {
   getFolderPath,
   buildFolderPath,
   getUniqueFilename,
+  getUniqueFolderPath,
+  generateUniqueName,
 };

@@ -3,7 +3,8 @@ const { sendError } = require('../../utils/response');
 const { createZipArchive } = require('../../utils/zipArchive');
 const { getFileByToken, isFileShared, getSharedTree } = require('../../models/share.model');
 const pool = require('../../config/db');
-const { validateToken, validateId } = require('../../utils/validation');
+const { validateToken } = require('../../utils/validation');
+const { validateSingleId } = require('../../utils/controllerHelpers');
 const { logger } = require('../../config/logger');
 const { logAuditEvent } = require('../../services/auditLogger');
 
@@ -48,9 +49,9 @@ async function downloadSharedItem(req, res) {
     if (!token) {
       return res.status(400).send('Invalid share token');
     }
-    const fileId = validateId(req.params.id);
-    if (!fileId) {
-      return res.status(400).send('Invalid file ID');
+    const { valid, id: fileId, error } = validateSingleId(req);
+    if (!valid) {
+      return res.status(400).send(error);
     }
     const allowed = await isFileShared(token, fileId);
     if (!allowed) return res.status(404).send('Not found');

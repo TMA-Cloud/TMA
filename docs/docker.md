@@ -1,14 +1,14 @@
 # Docker Deployment Guide
 
-Complete guide for deploying TMA Cloud using Docker and Docker Compose.
+Guide for deploying TMA Cloud using Docker and Docker Compose.
 
 ## Overview
 
-TMA Cloud includes production-ready Docker configuration with:
+TMA Cloud includes Docker configuration with:
 
-- **Multi-stage Dockerfile** - Optimized builds with minimal image size
-- **Docker Compose** - Easy multi-container orchestration
-- **Makefile** - Convenient build commands
+- **Multi-stage Dockerfile** - Builds with minimal image size
+- **Docker Compose** - Multi-container orchestration
+- **Makefile** - Build commands
 - **Dynamic versioning** - Automatic version extraction from `package.json`
 
 ## Prerequisites
@@ -72,7 +72,7 @@ Multi-stage production Dockerfile that:
   - Non-root user (`nodejs`, UID 1001) for security
   - Health checks for container monitoring
   - Proper signal handling with `dumb-init`
-  - Optimized layer caching
+  - Layer caching
 
 **Key Features:**
 
@@ -124,7 +124,7 @@ Orchestrates three services:
 
 ### Makefile
 
-Provides convenient build commands:
+Provides build commands:
 
 - `make build` - Build Docker image (extracts version automatically)
 - `make build-no-cache` - Build without cache

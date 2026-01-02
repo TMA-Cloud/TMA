@@ -221,7 +221,7 @@ const cacheKeys = {
   search: (userId, query, limit = 100) => {
     const normalizedQuery = query.toLowerCase().trim();
     // Hash the query to prevent cache key injection and ensure uniform key length
-    const queryHash = crypto.createHash('sha256').update(normalizedQuery).digest('hex').substring(0, 16);
+    const queryHash = crypto.createHash('sha256').update(normalizedQuery).digest('hex').slice(0, 16);
     return `search:${userId}:${queryHash}:${limit}`;
   },
 
@@ -230,7 +230,7 @@ const cacheKeys = {
   userByEmail: email => {
     // Hash email for privacy/compliance (GDPR, etc.)
     const normalizedEmail = email.toLowerCase().trim();
-    const emailHash = crypto.createHash('sha256').update(normalizedEmail).digest('hex').substring(0, 16);
+    const emailHash = crypto.createHash('sha256').update(normalizedEmail).digest('hex').slice(0, 16);
     return `user:email:${emailHash}`;
   },
   userStorage: userId => `storage:${userId}:usage`,

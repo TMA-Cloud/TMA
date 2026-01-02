@@ -30,15 +30,51 @@ export const Dashboard: React.FC = () => {
       try {
         const data = await apiGet<FileStats>("/api/files/stats");
         setStats(data);
-      } catch (error) {
-        console.error("Failed to fetch file stats", error);
+      } catch {
+        // Error handled silently - stats will show as unavailable
       }
     };
 
     fetchStats();
-    // Refresh stats periodically to keep counts up to date
-    const interval = setInterval(fetchStats, 30000); // Refresh every 30 seconds
-    return () => clearInterval(interval);
+
+    // Refresh stats periodically, but pause when tab is hidden to save resources
+    let interval: NodeJS.Timeout | null = null;
+
+    const startPolling = () => {
+      // Only poll if tab is visible
+      if (document.visibilityState === "visible") {
+        interval = setInterval(fetchStats, 60000); // Refresh every 60 seconds (reduced from 30s)
+      }
+    };
+
+    const stopPolling = () => {
+      if (interval) {
+        clearInterval(interval);
+        interval = null;
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        // Tab became visible - fetch immediately and start polling
+        fetchStats();
+        startPolling();
+      } else {
+        // Tab is hidden - stop polling to save resources
+        stopPolling();
+      }
+    };
+
+    // Start polling if tab is visible
+    startPolling();
+
+    // Listen for visibility changes
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      stopPolling();
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, []);
 
   const quickActions = [

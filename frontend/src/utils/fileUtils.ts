@@ -10,6 +10,8 @@ import {
   Presentation as FilePresentation,
   FileCode,
 } from "lucide-react";
+import { format, formatDistanceToNow, isToday, isYesterday } from "date-fns";
+import bytes from "bytes";
 import { type FileItem } from "../contexts/AppContext";
 
 export const getFileIcon = (file: FileItem) => {
@@ -62,44 +64,42 @@ export const getFileIcon = (file: FileItem) => {
   return File;
 };
 
-export const formatFileSize = (bytes?: number): string => {
-  if (!bytes) return "";
-
-  const k = 1024;
-  const sizes = ["B", "KB", "MB", "GB", "TB"];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
+/**
+ * Format file size using bytes package for consistent formatting
+ * @param size - File size in bytes
+ * @returns Formatted size string (e.g., "1.5 MB")
+ */
+export const formatFileSize = (size?: number): string => {
+  if (!size) return "";
+  return bytes(size, { decimalPlaces: 1 });
 };
 
+/**
+ * Format date using date-fns for better date handling
+ * Shows relative time for recent dates, absolute date for older ones
+ * @param date - Date to format
+ * @returns Formatted date string
+ */
 export const formatDate = (date: Date): string => {
-  const now = new Date();
-
-  // Check if it's today (same day, month, year)
-  const isToday =
-    date.getDate() === now.getDate() &&
-    date.getMonth() === now.getMonth() &&
-    date.getFullYear() === now.getFullYear();
-
-  if (isToday) {
+  if (isToday(date)) {
     // Return time in 12-hour format (e.g., "2:30 PM")
-    return date.toLocaleTimeString("en-US", {
-      hour: "numeric",
-      minute: "2-digit",
-      hour12: true,
-    });
+    return format(date, "h:mm a");
   }
 
-  const diffTime = Math.abs(now.getTime() - date.getTime());
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-  if (diffDays === 1) {
+  if (isYesterday(date)) {
     return "Yesterday";
-  } else if (diffDays < 7) {
-    return `${diffDays} days ago`;
-  } else {
-    return date.toLocaleDateString();
   }
+
+  // For dates within the last week, show relative time
+  const daysAgo = Math.floor(
+    (Date.now() - date.getTime()) / (1000 * 60 * 60 * 24),
+  );
+  if (daysAgo < 7) {
+    return formatDistanceToNow(date, { addSuffix: true });
+  }
+
+  // For older dates, show absolute date
+  return format(date, "MMM d, yyyy");
 };
 
 export const ONLYOFFICE_EXTS = new Set([

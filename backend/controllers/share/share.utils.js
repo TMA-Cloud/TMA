@@ -1,17 +1,8 @@
 /**
  * HTML escaping function to prevent XSS
+ * Uses escape-html package for better performance and correctness
  */
-function escapeHtml(text) {
-  if (!text) return '';
-  const map = {
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#039;',
-  };
-  return String(text).replace(/[&<>"']/g, m => map[m]);
-}
+const escapeHtml = require('escape-html');
 
 module.exports = {
   escapeHtml,

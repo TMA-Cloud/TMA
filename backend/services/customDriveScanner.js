@@ -1,6 +1,8 @@
 const fs = require('fs').promises;
 const path = require('path');
 const chokidar = require('chokidar');
+const debounce = require('lodash.debounce');
+const mime = require('mime-types');
 const pool = require('../config/db');
 const { generateId } = require('../utils/id');
 const { logger } = require('../config/logger');
@@ -141,7 +143,7 @@ async function batchCreateOrUpdateFolders(name, parentIds, userIds, absolutePath
         // Check if modification time changed (compare timestamps)
         // Also update if row.modified is NULL but we have a modifiedTime to set
         const modifiedChanged =
-          modifiedTime && (!row.modified || new Date(modifiedTime).getTime() !== new Date(row.modified).getTime());
+          modifiedTime && (!row.modified || new Date(modifiedTime).valueOf() !== new Date(row.modified).valueOf());
 
         if (nameChanged || parentChanged || modifiedChanged) {
           // Only update modified column if the modification time actually changed
@@ -235,7 +237,7 @@ async function batchCreateOrUpdateFiles(name, size, mimeType, absolutePath, pare
         // Check if modification time changed (compare timestamps)
         // Also update if row.modified is NULL but we have a modifiedTime to set
         const modifiedChanged =
-          modifiedTime && (!row.modified || new Date(modifiedTime).getTime() !== new Date(row.modified).getTime());
+          modifiedTime && (!row.modified || new Date(modifiedTime).valueOf() !== new Date(row.modified).valueOf());
 
         if (nameChanged || sizeChanged || mimeChanged || parentChanged || modifiedChanged) {
           // Only update modified column if the modification time actually changed
@@ -304,33 +306,14 @@ async function _createFileEntry(name, size, mimeType, absolutePath, parentId, us
 }
 
 /**
- * Gets MIME type from file extension
+ * Gets MIME type from file extension using mime-types package
+ * Provides comprehensive MIME type support instead of limited hardcoded list
  * @param {string} filename - File name
  * @returns {string} MIME type
  */
 function getMimeType(filename) {
-  const ext = path.extname(filename).toLowerCase();
-  const mimeTypes = {
-    '.txt': 'text/plain',
-    '.html': 'text/html',
-    '.css': 'text/css',
-    '.js': 'text/javascript',
-    '.json': 'application/json',
-    '.png': 'image/png',
-    '.jpg': 'image/jpeg',
-    '.jpeg': 'image/jpeg',
-    '.gif': 'image/gif',
-    '.svg': 'image/svg+xml',
-    '.pdf': 'application/pdf',
-    '.doc': 'application/msword',
-    '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    '.xls': 'application/vnd.ms-excel',
-    '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    '.zip': 'application/zip',
-    '.mp4': 'video/mp4',
-    '.mp3': 'audio/mpeg',
-  };
-  return mimeTypes[ext] || 'application/octet-stream';
+  const mimeType = mime.lookup(filename);
+  return mimeType || 'application/octet-stream';
 }
 
 /**
@@ -439,8 +422,35 @@ async function syncDirectory(dirPath, parentFolderIds, userIds, dbEntries) {
 const watchers = new Map();
 // Map of userId -> processing queue
 const processingQueues = new Map();
-// Map of userId -> processing timeout
-const processingTimeouts = new Map();
+// Map of userId -> debounced process function
+const debouncedProcessors = new Map();
+
+/**
+ * Process queued changes for a user
+ * @param {string} userId - User ID
+ */
+async function processQueuedChanges(userId) {
+  const processingQueue = processingQueues.get(userId);
+  if (!processingQueue || processingQueue.size === 0) {
+    return;
+  }
+
+  const pathsToProcess = Array.from(processingQueue);
+  processingQueue.clear();
+
+  try {
+    for (const filePathToProcess of pathsToProcess) {
+      try {
+        await handleFileChange(filePathToProcess, [userId]);
+      } catch (error) {
+        // Continue processing other files on error
+        logger.error(`[Custom Drive] Error processing ${filePathToProcess} for user ${userId}:`, error.message);
+      }
+    }
+  } catch (error) {
+    logger.error(`[Custom Drive] Error processing changes for user ${userId}:`, error);
+  }
+}
 
 /**
  * Processes a file or folder change for a specific user
@@ -448,7 +458,7 @@ const processingTimeouts = new Map();
  * @param {string} filePath - Path to the changed file
  * @param {string} userId - User ID who owns this custom drive
  */
-async function processChange(filePath, userId) {
+function processChange(filePath, userId) {
   const normalizedPath = path.resolve(filePath);
 
   // Get or create processing queue for this user
@@ -460,33 +470,18 @@ async function processChange(filePath, userId) {
   // Add to processing queue
   processingQueue.add(normalizedPath);
 
-  // Clear existing timeout for this user
-  if (processingTimeouts.has(userId)) {
-    clearTimeout(processingTimeouts.get(userId));
+  // Get or create debounced processor for this user
+  if (!debouncedProcessors.has(userId)) {
+    const debounced = debounce(() => processQueuedChanges(userId), 500, {
+      leading: false,
+      trailing: true,
+      maxWait: 2000, // Process at least every 2 seconds even if changes keep coming
+    });
+    debouncedProcessors.set(userId, debounced);
   }
 
-  // Debounce: process changes after 500ms of inactivity
-  const timeout = setTimeout(async () => {
-    const pathsToProcess = Array.from(processingQueue);
-    processingQueue.clear();
-
-    try {
-      for (const filePathToProcess of pathsToProcess) {
-        try {
-          await handleFileChange(filePathToProcess, [userId]);
-        } catch (error) {
-          // Continue processing other files on error
-          logger.error(`[Custom Drive] Error processing ${filePathToProcess} for user ${userId}:`, error.message);
-        }
-      }
-    } catch (error) {
-      logger.error(`[Custom Drive] Error processing changes for user ${userId}:`, error);
-    } finally {
-      processingTimeouts.delete(userId);
-    }
-  }, 500);
-
-  processingTimeouts.set(userId, timeout);
+  // Trigger debounced processing
+  debouncedProcessors.get(userId)();
 }
 
 /**
@@ -712,10 +707,11 @@ function stopUserWatcher(userId) {
     watchers.delete(userId);
   }
 
-  const timeout = processingTimeouts.get(userId);
-  if (timeout) {
-    clearTimeout(timeout);
-    processingTimeouts.delete(userId);
+  // Cancel debounced processor if it exists
+  const debounced = debouncedProcessors.get(userId);
+  if (debounced) {
+    debounced.cancel();
+    debouncedProcessors.delete(userId);
   }
 
   const queue = processingQueues.get(userId);
@@ -735,11 +731,11 @@ function stopCustomDriveScanner() {
   }
   watchers.clear();
 
-  // Clear all timeouts
-  for (const [_userId, timeout] of processingTimeouts.entries()) {
-    clearTimeout(timeout);
+  // Cancel all debounced processors
+  for (const [_userId, debounced] of debouncedProcessors.entries()) {
+    debounced.cancel();
   }
-  processingTimeouts.clear();
+  debouncedProcessors.clear();
 
   // Clear all queues
   for (const queue of processingQueues.values()) {

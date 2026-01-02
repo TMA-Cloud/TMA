@@ -23,8 +23,8 @@ export function useSessions() {
       setLoadingSessions(true);
       const { sessions } = await getActiveSessions();
       setActiveSessions(sessions);
-    } catch (error) {
-      console.error("Failed to load active sessions:", error);
+    } catch {
+      // Error handled silently - sessions list will be empty
     } finally {
       setLoadingSessions(false);
     }
@@ -48,8 +48,8 @@ export function useSessions() {
         setTimeout(async () => {
           try {
             await logout();
-          } catch (error) {
-            console.error("Failed to logout after revoking session:", error);
+          } catch {
+            // Error handled silently - session already revoked, redirecting
             window.location.href = "/";
           }
         }, 1000);
@@ -57,8 +57,8 @@ export function useSessions() {
         // Reload sessions to update the list
         await loadActiveSessions();
       }
-    } catch (error) {
-      console.error("Failed to revoke session:", error);
+    } catch {
+      // Error handled by toast notification
       showToast("Failed to revoke session", "error");
     } finally {
       setRevokingSessionId(null);
@@ -74,8 +74,8 @@ export function useSessions() {
       showToast("Successfully logged out from all devices", "success");
       // Clear sessions list since all are invalidated
       setActiveSessions([]);
-    } catch (error) {
-      console.error("Failed to logout from all devices:", error);
+    } catch {
+      // Error handled by toast notification
       showToast("Failed to logout from all devices", "error");
       // Don't return - still clear local session to avoid inconsistent state
       // (e.g., server may have processed the request before network error)
@@ -88,8 +88,8 @@ export function useSessions() {
     // If server logout succeeded (or partially succeeded), this ensures local state matches
     try {
       await logout();
-    } catch (error) {
-      console.error("Failed to clear local session:", error);
+    } catch {
+      // Error handled silently - redirecting to login page
       // Redirect to login page manually if logout() fails
       window.location.href = "/";
     }

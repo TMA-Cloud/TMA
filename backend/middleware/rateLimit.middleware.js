@@ -1,96 +1,72 @@
 /**
- * Rate limiting middleware to prevent brute force attacks
+ * Rate limiting middleware using express-rate-limit
+ * Replaces custom implementation with industry-standard package
  */
 
-// Simple in-memory rate limiter (for production, consider using Redis)
-const rateLimitStore = new Map();
-
-/**
- * Cleans up old entries from rate limit store
- */
-function cleanupRateLimitStore() {
-  const now = Date.now();
-  for (const [key, data] of rateLimitStore.entries()) {
-    if (now > data.resetTime) {
-      rateLimitStore.delete(key);
-    }
-  }
-}
-
-// Clean up every 5 minutes
-setInterval(cleanupRateLimitStore, 5 * 60 * 1000);
-
-/**
- * Creates a rate limiter middleware
- * @param {Object} options - Rate limit options
- * @param {number} options.windowMs - Time window in milliseconds
- * @param {number} options.max - Maximum number of requests per window
- * @param {Function} options.keyGenerator - Function to generate rate limit key
- * @returns {Function} Express middleware
- */
-function createRateLimiter({ windowMs = 15 * 60 * 1000, max = 100, keyGenerator = req => req.ip }) {
-  return (req, res, next) => {
-    const key = keyGenerator(req);
-    const now = Date.now();
-
-    const record = rateLimitStore.get(key);
-
-    if (!record || now > record.resetTime) {
-      // Create new record
-      rateLimitStore.set(key, {
-        count: 1,
-        resetTime: now + windowMs,
-      });
-      return next();
-    }
-
-    // Increment count
-    record.count++;
-
-    if (record.count > max) {
-      return res.status(429).json({
-        error: 'Too many requests, please try again later',
-      });
-    }
-
-    next();
-  };
-}
+const rateLimit = require('express-rate-limit');
+const { ipKeyGenerator } = require('express-rate-limit');
 
 /**
  * Rate limiter for authentication endpoints (stricter)
+ * 5 attempts per 15 minutes per IP/email combination
  */
-const authRateLimiter = createRateLimiter({
+const authRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // 5 attempts per 15 minutes
+  max: 5, // 5 attempts per window
+  message: { error: 'Too many requests, please try again later' },
+  standardHeaders: true, // Return rate limit info in `RateLimit-*` headers
+  legacyHeaders: false, // Disable `X-RateLimit-*` headers
   keyGenerator: req => {
     // Use IP + email if available for login/signup
+    // Use ipKeyGenerator helper for IPv6 safety
+    const ip = ipKeyGenerator(req.ip || req.socket?.remoteAddress || 'unknown');
     const email = req.body?.email || '';
-    return `auth:${req.ip}:${email}`;
+    return `auth:${ip}:${email}`;
+  },
+  skip: req => {
+    // Skip rate limiting for OPTIONS requests
+    return req.method === 'OPTIONS';
   },
 });
 
 /**
  * Rate limiter for general API endpoints
+ * 100 requests per 15 minutes per IP
  */
-const apiRateLimiter = createRateLimiter({
+const apiRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // 100 requests per 15 minutes
-  keyGenerator: req => `api:${req.ip}`,
+  max: 100, // 100 requests per window
+  message: { error: 'Too many requests, please try again later' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: req => `api:${ipKeyGenerator(req.ip || req.socket?.remoteAddress || 'unknown')}`,
+  skip: req => req.method === 'OPTIONS',
 });
 
 /**
  * Rate limiter for file upload endpoints
+ * 50 uploads per hour per user/IP
  */
-const uploadRateLimiter = createRateLimiter({
+const uploadRateLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
   max: 50, // 50 uploads per hour
-  keyGenerator: req => `upload:${req.userId || req.ip}`,
+  message: { error: 'Too many uploads, please try again later' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: req => {
+    if (req.userId) {
+      return `upload:${req.userId}`;
+    }
+    const ip = ipKeyGenerator(req.ip || req.socket?.remoteAddress || 'unknown');
+    return `upload:${ip}`;
+  },
+  skip: req => req.method === 'OPTIONS',
 });
 
 /**
  * Rate limiter for SSE (Server-Sent Events) connections
  * Limits concurrent SSE connections per user to prevent resource exhaustion
+ * Note: This is connection limiting, not request rate limiting
  */
 const sseConnectionTracker = new Map(); // userId -> connection count
 
@@ -161,7 +137,6 @@ setInterval(
 const sseConnectionLimiter = createSSEConnectionLimiter(3); // Max 3 concurrent SSE connections per user
 
 module.exports = {
-  createRateLimiter,
   authRateLimiter,
   apiRateLimiter,
   uploadRateLimiter,

@@ -1,5 +1,6 @@
 import React from "react";
 import { Loader2 } from "lucide-react";
+import { format } from "date-fns";
 import { Modal } from "../../ui/Modal";
 import type { UserSummary } from "../../../utils/api";
 
@@ -12,12 +13,21 @@ interface UsersModalProps {
   onRefresh: () => void;
 }
 
+/**
+ * Format signup date using date-fns for consistent formatting
+ * @param isoString - ISO date string
+ * @returns Formatted date string or "Unknown" if invalid
+ */
 const formatSignupDate = (isoString: string) => {
-  const date = new Date(isoString);
-  if (Number.isNaN(date.getTime())) {
+  try {
+    const date = new Date(isoString);
+    if (Number.isNaN(date.getTime())) {
+      return "Unknown";
+    }
+    return format(date, "MMM d, yyyy 'at' h:mm a");
+  } catch {
     return "Unknown";
   }
-  return date.toLocaleString();
 };
 
 export const UsersModal: React.FC<UsersModalProps> = ({

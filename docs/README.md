@@ -1,27 +1,27 @@
 # Documentation Index
 
-Welcome to the TMA Cloud documentation. This directory contains comprehensive documentation for all aspects of the project.
+Welcome to the TMA Cloud documentation. This directory contains documentation for all aspects of the project.
 
 ## Getting Started
 
-- **[Setup & Installation](setup.md)** - Step-by-step guide to set up TMA Cloud on your system
-- **[Docker Deployment](docker.md)** - Complete guide for Docker and Docker Compose deployment
+- **[Setup & Installation](setup.md)** - Guide to set up TMA Cloud on your system
+- **[Docker Deployment](docker.md)** - Guide for Docker and Docker Compose deployment
 - **[Architecture Overview](architecture.md)** - System architecture and design patterns
-- **[Environment Variables](environment.md)** - Complete reference for all configuration options
+- **[Environment Variables](environment.md)** - Reference for all configuration options
 
 ## API & Development
 
-- **[API Documentation](api.md)** - Complete REST API reference with all endpoints
+- **[API Documentation](api.md)** - REST API reference with all endpoints
 - **[Database Schema](database.md)** - Database structure, tables, and relationships
 
 ## Features
 
-- **[Features Documentation](features.md)** - Detailed documentation of all features
+- **[Features Documentation](features.md)** - Documentation of all features
 
 ## Monitoring & Security
 
 - **[Logging System](logging.md)** - Structured logging, secret masking, and log formats
-- **[Audit Trail](audit.md)** - Comprehensive audit logging and event tracking
+- **[Audit Trail](audit.md)** - Audit logging and event tracking
 
 ## Documentation Structure
 
@@ -46,7 +46,7 @@ docs/
 1. Start with [Setup & Installation](setup.md) or [Docker Deployment](docker.md)
 2. Review [Architecture Overview](architecture.md) to understand the system
 3. Check [Environment Variables](environment.md) for configuration
-4. Ensure Redis is installed and running for optimal performance
+4. Ensure Redis is installed and running for improved performance
 
 ### For Developers
 

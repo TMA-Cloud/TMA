@@ -167,7 +167,7 @@ Stores active user sessions for session management and revocation.
 
 ### `audit_logs`
 
-Stores comprehensive audit trail of all user actions and system events.
+Stores audit trail of all user actions and system events.
 
 | Column           | Type          | Constraints                | Description                                                     |
 |------------------|---------------|----------------------------|-----------------------------------------------------------------|

@@ -290,6 +290,40 @@ async function setOnlyOfficeSettings(jwtSecret, url, userId) {
   }
 }
 
+/**
+ * Handle first user setup: set first_user_id and disable signup atomically
+ * This is called after a new user is created to ensure the first user is properly set
+ * @param {string} userId - User ID of the newly created user
+ * @returns {Promise<void>}
+ */
+async function handleFirstUserSetup(userId) {
+  const userCountResult = await pool.query('SELECT COUNT(*) as count FROM users');
+  const userCount = parseInt(userCountResult.rows[0].count, 10);
+
+  if (userCount === 1) {
+    // This is the first user, set first_user_id and disable signup atomically
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Set first_user_id (immutable after this)
+      await client.query(
+        'UPDATE app_settings SET first_user_id = $1, signup_enabled = false, updated_at = NOW() WHERE id = $2 AND first_user_id IS NULL',
+        [userId, 'app_settings']
+      );
+
+      await client.query('COMMIT');
+      logger.info({ userId }, 'First user created, signup disabled by default');
+    } catch (_err) {
+      await client.query('ROLLBACK');
+      // If first_user_id already set, just disable signup
+      await setSignupEnabled(false, userId);
+    } finally {
+      client.release();
+    }
+  }
+}
+
 module.exports = {
   isFirstUser,
   getSignupEnabled,
@@ -298,4 +332,5 @@ module.exports = {
   getAllUsersBasic,
   getOnlyOfficeSettings,
   setOnlyOfficeSettings,
+  handleFirstUserSetup,
 };

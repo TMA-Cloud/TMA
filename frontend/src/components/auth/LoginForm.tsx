@@ -15,8 +15,8 @@ export const LoginForm: React.FC<{ onSwitch: () => void }> = ({ onSwitch }) => {
   useEffect(() => {
     checkGoogleAuthEnabled()
       .then(setGoogleEnabled)
-      .catch((err) => {
-        console.error("Failed to check Google auth status:", err);
+      .catch(() => {
+        // Error handled silently - Google auth will be unavailable
         // Default to false on error
         setGoogleEnabled(false);
       });

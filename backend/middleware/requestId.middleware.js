@@ -1,5 +1,5 @@
 const { createNamespace } = require('cls-hooked');
-const { v4: uuidv4 } = require('uuid');
+const { nanoid } = require('nanoid');
 
 // Create a continuation-local-storage namespace for request context
 const requestContext = createNamespace('request-context');
@@ -23,7 +23,7 @@ const requestContext = createNamespace('request-context');
 function requestIdMiddleware(req, res, next) {
   requestContext.run(() => {
     // Generate unique request ID (or use existing if provided by client)
-    const requestId = req.headers['x-request-id'] || uuidv4();
+    const requestId = req.headers['x-request-id'] || nanoid();
 
     // Store in CLS namespace
     requestContext.set('requestId', requestId);

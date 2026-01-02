@@ -17,8 +17,8 @@ export const RenameModal: React.FC = () => {
     try {
       await renameFile(renameTarget.id, value.trim());
       handleClose();
-    } catch (error) {
-      console.error("Failed to rename file:", error);
+    } catch {
+      // Error handled by API function
       // Error is handled by the API function, but we should still show user feedback
       // The error will be thrown and can be caught by the caller if needed
     }

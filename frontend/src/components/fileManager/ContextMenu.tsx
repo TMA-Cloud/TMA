@@ -23,6 +23,7 @@ import { useApp } from "../../contexts/AppContext";
 import { useToast } from "../../hooks/useToast";
 import { useIsMobile } from "../../hooks/useIsMobile";
 import { Modal } from "../ui/Modal";
+import { getErrorMessage } from "../../utils/errorUtils";
 
 interface ContextMenuProps {
   isOpen: boolean;
@@ -102,11 +103,8 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
       );
       onActionComplete?.();
     } catch (error: unknown) {
-      const errorMessage =
-        error instanceof Error ? error.message : "Unknown error";
-      console.error("Failed to restore:", error);
       showToast(
-        errorMessage || "Failed to restore files. Please try again.",
+        getErrorMessage(error, "Failed to restore files. Please try again."),
         "error",
       );
     }
@@ -143,15 +141,11 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
       }
       onActionComplete?.();
     } catch (error: unknown) {
-      const errorMessage =
-        error instanceof Error ? error.message : "Unknown error";
-      console.error(
-        `Failed to ${type === "deleteForever" ? "delete forever" : "delete"}:`,
-        error,
-      );
       showToast(
-        errorMessage ||
+        getErrorMessage(
+          error,
           `Failed to ${type === "deleteForever" ? "permanently delete" : "delete"}. Please try again.`,
+        ),
         "error",
       );
     } finally {
@@ -237,8 +231,8 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                   const list = Object.values(links);
                   if (list.length) setShareLinkModalOpen(true, list);
                   onActionComplete?.();
-                } catch (error) {
-                  console.error("Failed to link to parent share:", error);
+                } catch {
+                  // Error handled by toast notification
                   showToast("Failed to link to parent share", "error");
                 }
               },
@@ -256,8 +250,8 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
               setShareLinkModalOpen(true, list);
             }
             onActionComplete?.();
-          } catch (error) {
-            console.error("Failed to share files:", error);
+          } catch {
+            // Error handled by toast notification
             showToast("Failed to share files", "error");
           }
         },
@@ -296,12 +290,12 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                     }
                     showToast("Link copied to clipboard", "success");
                     onActionComplete?.();
-                  } catch (error) {
-                    console.error("Failed to copy link:", error);
+                  } catch {
+                    // Error handled by toast notification
                     showToast("Failed to copy link", "error");
                   }
-                } catch (error) {
-                  console.error("Failed to get share links:", error);
+                } catch {
+                  // Error handled by toast notification
                   showToast("Failed to get share links", "error");
                 }
               },
@@ -315,8 +309,8 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
           try {
             await downloadFiles(selectedFiles);
             onActionComplete?.();
-          } catch (error) {
-            console.error("Failed to download files:", error);
+          } catch {
+            // Error handled by toast notification
             showToast("Failed to download files", "error");
           }
         },
@@ -329,8 +323,8 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
           try {
             await starFiles(selectedFiles, !allStarred);
             onActionComplete?.();
-          } catch (error) {
-            console.error("Failed to update star status:", error);
+          } catch {
+            // Error handled by toast notification
             showToast("Failed to update star status", "error");
           }
         },
@@ -362,8 +356,8 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                     targetId ?? folderStack[folderStack.length - 1],
                   );
                   onActionComplete?.();
-                } catch (error) {
-                  console.error("Failed to paste files:", error);
+                } catch {
+                  // Error handled by toast notification
                   showToast("Failed to paste files", "error");
                 }
               },

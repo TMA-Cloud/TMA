@@ -64,7 +64,7 @@ TMA Cloud uses a **Single-Origin Architecture** where the backend serves both th
 - ✅ **Simplified deployment**: Single server, single port
 - ✅ **Better security**: No cross-origin requests in production
 - ✅ **Cleaner config**: No frontend environment variables needed
-- ✅ **Cookie-based auth**: Works seamlessly across the application
+- ✅ **Cookie-based auth**: Works across the application
 
 ### Custom Share Domain Architecture (Optional)
 
@@ -278,12 +278,12 @@ Global state management:
 
 - `MobileAppContent` - Dedicated mobile layout with bottom navigation
 - Compact header with app logo and essential controls
-- Bottom navigation bar for easy thumb access
+- Bottom navigation bar for thumb-accessible navigation
 
 #### 3. **File Management Components**
 
 - **Desktop**: `FileManager`, `FileItem`, `Breadcrumbs` - Traditional file browsing
-- **Mobile**: Same components with mobile-optimized styling and interactions
+- **Mobile**: Same components with mobile-specific styling and interactions
 - **Context Menu**:
   - Desktop: Right-click floating menu
   - Mobile: Bottom sheet with press-and-hold activation
@@ -425,7 +425,7 @@ TMA Cloud uses **Pino** for high-performance structured logging:
 
 **Features:**
 
-- **Structured Logging**: JSON-formatted logs for easy parsing
+- **Structured Logging**: JSON-formatted logs for parsing and analysis
 - **Secret Masking**: Automatic redaction of JWTs, passwords, cookies, tokens
 - **Multiple Formats**: JSON (production) or Pretty (development)
 - **Request Logging**: HTTP middleware logs all requests with context
@@ -526,7 +526,6 @@ See [Audit Documentation](audit.md) for detailed information.
   - Transaction-safe restore operations
 - Trash Cleanup: Automatically deletes files from trash after 15 days
 - Runs periodically via scheduler
-- Runs periodically via scheduler
 
 ### Orphan Cleanup
 
@@ -558,7 +557,7 @@ See [Audit Documentation](audit.md) for detailed information.
 
 ### Current Optimizations
 
-- **Redis Caching**: Comprehensive caching layer for frequently accessed data
+- **Redis Caching**: Caching layer for frequently accessed data
   - File listings, search results, user data, session validation
   - Reduces database load and improves response times
   - Non-blocking SCAN operations for efficient cache management

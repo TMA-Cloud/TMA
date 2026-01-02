@@ -1,5 +1,6 @@
 import React from "react";
 import { Loader2 } from "lucide-react";
+import { format } from "date-fns";
 import { Modal } from "../../ui/Modal";
 import type { ActiveSession } from "../../../utils/api";
 
@@ -99,13 +100,25 @@ export const SessionsModal: React.FC<SessionsModalProps> = ({
                       </div>
                       <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">
                         {userAgent.length > 60
-                          ? `${userAgent.substring(0, 60)}...`
+                          ? `${userAgent.slice(0, 60)}...`
                           : userAgent}
                       </p>
                       <div className="text-xs text-gray-500 dark:text-gray-500 space-y-0.5">
                         <p>IP: {ipAddress}</p>
-                        <p>Created: {createdAt.toLocaleString()}</p>
-                        <p>Last activity: {lastActivity.toLocaleString()}</p>
+                        <p>
+                          Created:{" "}
+                          {format(
+                            new Date(createdAt),
+                            "MMM d, yyyy 'at' h:mm a",
+                          )}
+                        </p>
+                        <p>
+                          Last activity:{" "}
+                          {format(
+                            new Date(lastActivity),
+                            "MMM d, yyyy 'at' h:mm a",
+                          )}
+                        </p>
                       </div>
                     </div>
                     {!isCurrentSession && (

@@ -22,8 +22,8 @@ export function useVersions() {
     try {
       const versions = await getCurrentVersions();
       setCurrentVersions(versions);
-    } catch (error) {
-      console.error("Failed to load current versions:", error);
+    } catch {
+      // Error handled by error state
       setVersionError("Unable to load current version information");
     }
   }, []);
@@ -53,8 +53,8 @@ export function useVersions() {
         allUpToDate ? "All components are up to date" : "Updates are available",
         allUpToDate ? "success" : "info",
       );
-    } catch (error) {
-      console.error("Failed to check versions:", error);
+    } catch {
+      // Error handled by error state and toast notification
       setVersionError("Unable to check for updates right now");
       showToast("Failed to check for updates", "error");
     } finally {

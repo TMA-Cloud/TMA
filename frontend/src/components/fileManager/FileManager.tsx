@@ -7,6 +7,7 @@ import { DownloadProgress } from "./DownloadProgress";
 import { ONLYOFFICE_EXTS, getExt } from "../../utils/fileUtils";
 import { useIsMobile } from "../../hooks/useIsMobile";
 import { useToast } from "../../hooks/useToast";
+import { getErrorMessage } from "../../utils/errorUtils";
 import {
   createDragPreview,
   moveDragPreview,
@@ -82,11 +83,8 @@ export const FileManager: React.FC = () => {
         "success",
       );
     } catch (error: unknown) {
-      const errorMessage =
-        error instanceof Error ? error.message : "Unknown error";
-      console.error("Failed to empty trash:", error);
       showToast(
-        errorMessage || "Failed to empty trash. Please try again.",
+        getErrorMessage(error, "Failed to empty trash. Please try again."),
         "error",
       );
     }
@@ -103,10 +101,10 @@ export const FileManager: React.FC = () => {
         "success",
       );
     } catch (error: unknown) {
-      const errorMessage =
-        error instanceof Error ? error.message : "Unknown error";
-      console.error("Failed to delete:", error);
-      showToast(errorMessage || "Failed to delete. Please try again.", "error");
+      showToast(
+        getErrorMessage(error, "Failed to delete. Please try again."),
+        "error",
+      );
     }
   };
 
@@ -121,11 +119,11 @@ export const FileManager: React.FC = () => {
         "success",
       );
     } catch (error: unknown) {
-      const errorMessage =
-        error instanceof Error ? error.message : "Unknown error";
-      console.error("Failed to delete forever:", error);
       showToast(
-        errorMessage || "Failed to permanently delete. Please try again.",
+        getErrorMessage(
+          error,
+          "Failed to permanently delete. Please try again.",
+        ),
         "error",
       );
     }
@@ -142,11 +140,8 @@ export const FileManager: React.FC = () => {
         "success",
       );
     } catch (error: unknown) {
-      const errorMessage =
-        error instanceof Error ? error.message : "Unknown error";
-      console.error("Failed to restore:", error);
       showToast(
-        errorMessage || "Failed to restore files. Please try again.",
+        getErrorMessage(error, "Failed to restore files. Please try again."),
         "error",
       );
     }

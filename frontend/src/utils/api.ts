@@ -1,6 +1,7 @@
 /**
  * API utility functions
  */
+import { ApiError } from "./errorUtils";
 
 /**
  * Request options with additional configuration
@@ -28,7 +29,6 @@ async function apiRequest(
   endpoint: string,
   options: ApiRequestOptions = {},
 ): Promise<Response> {
-  const url = endpoint.startsWith("http") ? endpoint : endpoint;
   const { silentAuth = false, ...fetchOptions } = options;
 
   const defaultOptions: RequestInit = {
@@ -41,7 +41,7 @@ async function apiRequest(
   };
 
   try {
-    const response = await fetch(url, defaultOptions);
+    const response = await fetch(endpoint, defaultOptions);
 
     // Handle 401 silently if requested (for auth checks)
     if (response.status === 401 && silentAuth) {
@@ -72,7 +72,10 @@ export async function apiGet<T = unknown>(
     const errorData = await res
       .json()
       .catch(() => ({ message: res.statusText }));
-    throw new Error(errorData.message || errorData.error || res.statusText);
+    throw new ApiError(
+      errorData.message || errorData.error || res.statusText,
+      res.status,
+    );
   }
   return res.json();
 }
@@ -94,7 +97,10 @@ export async function apiPost<T = unknown>(
     const errorData = await res
       .json()
       .catch(() => ({ message: res.statusText }));
-    throw new Error(errorData.message || errorData.error || res.statusText);
+    throw new ApiError(
+      errorData.message || errorData.error || res.statusText,
+      res.status,
+    );
   }
   return res.json();
 }
@@ -116,7 +122,10 @@ export async function apiPut<T = unknown>(
     const errorData = await res
       .json()
       .catch(() => ({ message: res.statusText }));
-    throw new Error(errorData.message || errorData.error || res.statusText);
+    throw new ApiError(
+      errorData.message || errorData.error || res.statusText,
+      res.status,
+    );
   }
   return res.json();
 }
@@ -134,7 +143,13 @@ export async function apiPostForm<T = unknown>(
     headers: {}, // Don't set Content-Type, let browser set it with boundary
   });
   if (!res.ok) {
-    throw new Error(`API request failed: ${res.statusText}`);
+    const errorData = await res
+      .json()
+      .catch(() => ({ message: res.statusText }));
+    throw new ApiError(
+      errorData.message || errorData.error || res.statusText,
+      res.status,
+    );
   }
   return res.json();
 }
@@ -259,12 +274,13 @@ export async function checkOnlyOfficeConfigured(): Promise<{
 /**
  * Get OnlyOffice configuration (admin only)
  */
-export async function getOnlyOfficeConfig(): Promise<{
+export async function getOnlyOfficeConfig(signal?: AbortSignal): Promise<{
   jwtSecretSet: boolean;
   url: string | null;
 }> {
   return await apiGet<{ jwtSecretSet: boolean; url: string | null }>(
     "/api/user/onlyoffice-config",
+    { signal },
   );
 }
 
@@ -323,7 +339,13 @@ export async function apiDelete<T = unknown>(
 ): Promise<T> {
   const res = await apiRequest(endpoint, { method: "DELETE", ...options });
   if (!res.ok) {
-    throw new Error(`API request failed: ${res.statusText}`);
+    const errorData = await res
+      .json()
+      .catch(() => ({ message: res.statusText }));
+    throw new ApiError(
+      errorData.message || errorData.error || res.statusText,
+      res.status,
+    );
   }
   return res.json();
 }

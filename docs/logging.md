@@ -1,14 +1,14 @@
 # Logging System
 
-Comprehensive logging documentation for TMA Cloud.
+Logging documentation for TMA Cloud.
 
 ## Overview
 
-TMA Cloud uses [Pino](https://getpino.io/), a high-performance structured logging library for Node.js, to provide comprehensive application logging with automatic secret masking and multiple output formats.
+TMA Cloud uses [Pino](https://getpino.io/), a structured logging library for Node.js, to provide application logging with automatic secret masking and multiple output formats.
 
 ### Key Features
 
-- **Structured Logging**: JSON-formatted logs for easy parsing and analysis
+- **Structured Logging**: JSON-formatted logs for parsing and analysis
 - **High Performance**: Asynchronous logging with minimal overhead
 - **Secret Masking**: Automatic redaction of sensitive data (JWTs, passwords, cookies, tokens)
 - **Multiple Formats**: JSON for production, pretty-print for development
@@ -182,7 +182,7 @@ userId: "user_abc123"
 
 ## Logging in Code
 
-### Basic Logging
+### Logging Examples
 
 ```javascript
 const { logger } = require('./config/logger');

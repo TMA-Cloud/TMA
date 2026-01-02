@@ -6,7 +6,7 @@
  * - user.crud.model.js - Basic CRUD operations (createUser, getUserByEmail, getUserById, getUserByGoogleId, createUserWithGoogle, updateGoogleId)
  * - user.auth.model.js - Authentication/session operations (getUserTokenVersion, invalidateAllSessions)
  * - user.storage.model.js - Storage operations (getUserStorageUsage)
- * - user.admin.model.js - Admin operations (isFirstUser, getSignupEnabled, setSignupEnabled, getTotalUserCount, getAllUsersBasic)
+ * - user.admin.model.js - Admin operations (isFirstUser, getSignupEnabled, setSignupEnabled, getTotalUserCount, getAllUsersBasic, handleFirstUserSetup)
  * - user.customDrive.model.js - Custom drive operations (getUserCustomDriveSettings, updateUserCustomDriveSettings, getUsersWithCustomDrive)
  */
 

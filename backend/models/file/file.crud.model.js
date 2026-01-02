@@ -14,7 +14,13 @@ const {
   DEFAULT_TTL,
 } = require('../../utils/cache');
 const { getUserCustomDrive } = require('./file.cache.model');
-const { buildOrderClause, fillFolderSizes, getFolderPath, getUniqueFilename } = require('./file.utils.model');
+const {
+  buildOrderClause,
+  fillFolderSizes,
+  getFolderPath,
+  getUniqueFilename,
+  getUniqueFolderPath,
+} = require('./file.utils.model');
 
 /**
  * Get files in a directory
@@ -71,22 +77,8 @@ async function createFolder(name, parentId = null, userId) {
       // Build the new folder path
       const folderPath = parentPath ? path.join(parentPath, name) : path.join(customDrive.path, name);
 
-      // Handle duplicate folder names
-      finalPath = folderPath;
-      let counter = 1;
-      while (
-        await fs.promises
-          .access(finalPath)
-          .then(() => true)
-          .catch(() => false)
-      ) {
-        const newName = `${name} (${counter})`;
-        finalPath = parentPath ? path.join(parentPath, newName) : path.join(customDrive.path, newName);
-        counter++;
-        if (counter > 10000) {
-          throw new Error('Too many duplicate folders');
-        }
-      }
+      // Handle duplicate folder names using utility function
+      finalPath = await getUniqueFolderPath(folderPath);
 
       // Create the folder on disk
       await fs.promises.mkdir(finalPath, { recursive: true });

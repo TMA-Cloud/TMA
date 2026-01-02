@@ -7,7 +7,7 @@ const { resolveFilePath } = require('../../utils/filePath');
 const { logger } = require('../../config/logger');
 const { invalidateFileCache, invalidateSearchCache, deleteCache, cacheKeys } = require('../../utils/cache');
 const { getUserCustomDrive } = require('./file.cache.model');
-const { getFolderPath } = require('./file.utils.model');
+const { getFolderPath, getUniqueFilename, getUniqueFolderPath } = require('./file.utils.model');
 
 /**
  * Move files to a different parent folder
@@ -67,25 +67,8 @@ async function copyEntry(id, parentId, userId, client = null) {
           await fs.promises.mkdir(destDir, { recursive: true });
         }
 
-        // Handle duplicate filenames
-        let destPath = path.join(destDir, file.name);
-        let counter = 1;
-        while (
-          await fs.promises
-            .access(destPath)
-            .then(() => true)
-            .catch(() => false)
-        ) {
-          const ext = path.extname(file.name);
-          const baseName = path.basename(file.name, ext);
-          const newName = `${baseName} (${counter})${ext}`;
-          destPath = path.join(destDir, newName);
-          counter++;
-          if (counter > 10000) {
-            throw new Error('Too many duplicate files');
-          }
-        }
-
+        // Handle duplicate filenames using utility function
+        const destPath = await getUniqueFilename(path.join(destDir, file.name), destDir);
         await fs.promises.copyFile(sourcePath, destPath);
         newPath = path.resolve(destPath);
 
@@ -154,23 +137,8 @@ async function copyEntry(id, parentId, userId, client = null) {
         const parentPath = await getFolderPath(parentId, userId);
         const folderPath = parentPath ? path.join(parentPath, file.name) : path.join(customDrive.path, file.name);
 
-        // Handle duplicate folder names
-        finalPath = folderPath;
-        let counter = 1;
-        while (
-          await fs.promises
-            .access(finalPath)
-            .then(() => true)
-            .catch(() => false)
-        ) {
-          const newName = `${file.name} (${counter})`;
-          finalPath = parentPath ? path.join(parentPath, newName) : path.join(customDrive.path, newName);
-          counter++;
-          if (counter > 10000) {
-            throw new Error('Too many duplicate folders');
-          }
-        }
-
+        // Handle duplicate folder names using utility function
+        finalPath = await getUniqueFolderPath(folderPath);
         await fs.promises.mkdir(finalPath, { recursive: true });
         const actualName = path.basename(finalPath);
         newPath = path.resolve(finalPath);

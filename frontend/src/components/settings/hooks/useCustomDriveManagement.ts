@@ -6,6 +6,7 @@ import {
 } from "../../../utils/api";
 import { useToast } from "../../../hooks/useToast";
 import { useAuth } from "../../../contexts/AuthContext";
+import { getErrorMessage } from "../../../utils/errorUtils";
 
 export type UserCustomDriveLocalState = Record<
   string,
@@ -68,10 +69,7 @@ export function useCustomDriveManagement(canToggleSignup: boolean) {
     } catch (error) {
       // Don't show error toast for 401 (unauthorized) - expected after logout
       // Check for common 401 error messages
-      const errorMessage =
-        error instanceof Error
-          ? error.message.toLowerCase()
-          : String(error).toLowerCase();
+      const errorMessage = getErrorMessage(error, "").toLowerCase();
       if (
         errorMessage.includes("401") ||
         errorMessage.includes("unauthorized") ||
@@ -81,7 +79,7 @@ export function useCustomDriveManagement(canToggleSignup: boolean) {
       }
       // Only show error if we should still be loading (user still authenticated)
       if (shouldLoadRef.current) {
-        console.error("Failed to load all users custom drive settings:", error);
+        // Error handled by toast notification
         showToast("Failed to load users' custom drive settings", "error");
       }
     } finally {
@@ -149,11 +147,11 @@ export function useCustomDriveManagement(canToggleSignup: boolean) {
       }
       return true;
     } catch (error) {
-      console.error("Failed to update user custom drive settings:", error);
-      let errorMessage = "Failed to update custom drive settings";
-      if (error instanceof Error) {
-        errorMessage = error.message;
-      }
+      // Error handled by toast notification
+      const errorMessage = getErrorMessage(
+        error,
+        "Failed to update custom drive settings",
+      );
       // Update error in local state
       setUserCustomDriveLocalState((prev) => ({
         ...prev,

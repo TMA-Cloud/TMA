@@ -35,8 +35,8 @@ export const ShareLinkModal: React.FC = () => {
       setCopiedLink(link);
       showToast("Link copied to clipboard", "success");
       setTimeout(() => setCopiedLink(null), 2000);
-    } catch (error) {
-      console.error("Failed to copy link:", error);
+    } catch {
+      // Error handled by toast notification
       showToast("Failed to copy link", "error");
     }
   };

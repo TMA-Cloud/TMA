@@ -19,8 +19,8 @@ function maskSecret(value) {
   if (len <= 8) return '***';
 
   // Show first 4 and last 4 characters for long values
-  const start = value.substring(0, 4);
-  const end = value.substring(len - 4);
+  const start = value.slice(0, 4);
+  const end = value.slice(-4);
   return `${start}${'*'.repeat(Math.min(20, len - 8))}${end}`;
 }
 
@@ -36,7 +36,7 @@ function maskJWT(token) {
   if (parts.length !== 3) return maskSecret(token);
 
   // Mask the payload entirely, show partial header and signature
-  return `${parts[0].substring(0, 8)}...***...${parts[2].substring(parts[2].length - 8)}`;
+  return `${parts[0].slice(0, 8)}...***...${parts[2].slice(-8)}`;
 }
 
 /**
@@ -73,8 +73,8 @@ function maskCookie(cookieStr) {
       return part;
     }
 
-    const name = part.substring(0, equalsIndex).trim();
-    const value = part.substring(equalsIndex + 1).trim();
+    const name = part.slice(0, equalsIndex).trim();
+    const value = part.slice(equalsIndex + 1).trim();
 
     // Check if this is a known cookie option (case-insensitive)
     const isOption = cookieOptions.includes(name.toLowerCase());
