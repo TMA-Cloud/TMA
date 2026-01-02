@@ -1,47 +1,24 @@
 # API Documentation
 
-Complete API reference for TMA Cloud backend endpoints.
+REST API reference for TMA Cloud backend.
 
 ## Base URL
 
 All API endpoints are prefixed with `/api` unless otherwise specified.
 
+## Authentication
+
+Most endpoints require JWT token sent as httpOnly cookie. Rate limiting: 5 attempts per 15 minutes for auth endpoints.
+
 ## Endpoints
 
-### Authentication
-
-Most endpoints require authentication via JWT token. The token is sent as an httpOnly cookie automatically by the browser.
-
-**Rate Limiting:** Authentication endpoints (`/api/signup`, `/api/login`) are rate-limited to 5 attempts per 15 minutes per IP address and email combination.
-
-### Headers
-
-```bash
-Cookie: token=<jwt_token>
-```
-
-### Security
-
-All API endpoints implement security measures:
-
-- **Input Validation**: All inputs are validated and sanitized
-- **Rate Limiting**: Endpoints are rate-limited to prevent abuse
-- **SQL Injection Protection**: All queries use parameterized statements
-- **XSS Protection**: User-generated content is properly escaped
-- **Path Traversal Protection**: File paths are validated to prevent directory traversal
-- **Audit Logging**: All critical operations automatically logged to audit trail
-- **Structured Logging**: All requests logged with automatic secret masking (JWTs, passwords, cookies)
-- **Redis Caching**: Frequently accessed data is cached for performance, with automatic invalidation on mutations
+### Authentication Endpoints
 
 #### POST `/api/signup`
 
-Create a new user account.
+Create new user account. Respects signup enabled/disabled setting.
 
-**Note:** This endpoint respects the signup enabled/disabled setting. If signup is disabled, returns 403 Forbidden.
-
-**Audit Logging:** Creates `user.signup` audit event (success or failure).
-
-**Request Body:**
+**Request:**
 
 ```json
 {
@@ -51,43 +28,13 @@ Create a new user account.
 }
 ```
 
-**Response (Success):**
-
-```json
-{
-  "success": true,
-  "message": "User created successfully",
-  "user": {
-    "id": "user_id",
-    "email": "user@example.com",
-    "name": "User Name"
-  }
-}
-```
-
-**Response (Signup Disabled):**
-
-```json
-{
-  "message": "Signup is currently disabled"
-}
-```
-
-**Status Codes:**
-
-- `200` - User created successfully
-- `400` - Invalid input (email/password validation)
-- `403` - Signup is currently disabled
-- `409` - Email already in use
-- `500` - Server error
+**Status Codes:** `200` - Success, `400` - Invalid input, `403` - Signup disabled, `409` - Email exists
 
 #### POST `/api/login`
 
 Authenticate user and receive JWT token.
 
-**Audit Logging:** Creates `user.login` audit event (success) or `user.login.failed` audit event (failure).
-
-**Request Body:**
+**Request:**
 
 ```json
 {
@@ -96,197 +43,29 @@ Authenticate user and receive JWT token.
 }
 ```
 
-**Response:**
-
-```json
-{
-  "success": true,
-  "message": "Login successful",
-  "user": {
-    "id": "user_id",
-    "email": "user@example.com",
-    "name": "User Name"
-  }
-}
-```
-
 #### POST `/api/logout`
 
 Log out current user (clears token cookie).
-
-**Audit Logging:** Creates `auth.logout` audit event.
-
-**Response:**
-
-```json
-{
-  "success": true,
-  "message": "Logged out successfully"
-}
-```
 
 #### POST `/api/logout-all`
 
 Log out from all devices by invalidating all tokens.
 
-**Headers:** Requires authentication
+#### GET `/api/sessions`
 
-**Audit Logging:** Creates `auth.logout_all` audit event.
+Get all active sessions for authenticated user.
 
-**Description:** Increments the user's `token_version` in the database, which invalidates all existing JWT tokens for that user. This is useful when a user suspects their session has been compromised or wants to sign out from all devices.
-
-**Response:**
-
-```json
-{
-  "success": true,
-  "message": "Successfully logged out from all devices",
-  "sessionsInvalidated": true
-}
-```
-
-**Status Codes:**
-
-- `200` - All sessions invalidated successfully
-- `401` - Not authenticated
-- `500` - Server error
-
-**Behavior:**
-
-- Invalidates all existing tokens by incrementing token version
-- Deletes all session records from the database
-- Clears the current session cookie
-- Other devices will be logged out on their next API request
-- Action is logged in audit trail
-
----
-
-### `GET /api/sessions`
-
-Get all active sessions for the authenticated user.
-
-**Headers:** Requires authentication
-
-**Description:** Returns a list of all active sessions for the current user. Each session includes device information, IP address, creation time, and last activity timestamp. The current session is marked with an `isCurrent` flag.
-
-**Response:**
-
-```json
-{
-  "success": true,
-  "sessions": [
-    {
-      "id": "abc123def456",
-      "user_id": "6N6d5yVv7LNU9LRx",
-      "token_version": 1,
-      "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36...",
-      "ip_address": "192.168.1.100",
-      "created_at": "2025-12-20T10:00:00.000Z",
-      "last_activity": "2025-12-20T10:15:30.000Z",
-      "isCurrent": true
-    },
-    {
-      "id": "xyz789ghi012",
-      "user_id": "6N6d5yVv7LNU9LRx",
-      "token_version": 1,
-      "user_agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)...",
-      "ip_address": "192.168.1.101",
-      "created_at": "2025-12-20T09:30:00.000Z",
-      "last_activity": "2025-12-20T09:45:15.000Z",
-      "isCurrent": false
-    }
-  ]
-}
-```
-
-**Status Codes:**
-
-- `200` - Sessions retrieved successfully
-- `401` - Not authenticated
-- `500` - Server error
-
-**Behavior:**
-
-- Returns only sessions with the current `token_version`
-- Sessions are ordered by `last_activity` (most recent first)
-- Current session is identified by comparing session ID in token
-- Last activity timestamp updates automatically on each request
-
----
-
-### `DELETE /api/sessions/:sessionId`
+#### DELETE `/api/sessions/:sessionId`
 
 Revoke a specific session.
-
-**Headers:** Requires authentication
-
-**Audit Logging:** Creates `auth.session_revoked` audit event.
-
-**Description:** Deletes a specific session record from the database. The session ID is extracted from the URL parameter. Once revoked, any requests using that session's token will fail with a 401 error. If the revoked session is the current session, the user will be automatically logged out.
-
-**Response:**
-
-```json
-{
-  "success": true,
-  "message": "Session revoked successfully"
-}
-```
-
-**Status Codes:**
-
-- `200` - Session revoked successfully
-- `400` - Session ID required
-- `401` - Not authenticated
-- `404` - Session not found (or doesn't belong to user)
-- `500` - Server error
-
-**Behavior:**
-
-- Deletes the session record from the database
-- Session validation in middleware will fail for that session ID
-- Next request with the revoked session's token returns 401
-- If revoking current session, user should be logged out by frontend
-- Action is logged in audit trail
-
-**Security Notes:**
-
-- Users can only revoke their own sessions
-- Session ID is validated against the authenticated user ID
-- Revoking a session doesn't affect other active sessions
-- Current session can be revoked (user will be logged out)
 
 #### GET `/api/profile`
 
 Get current user profile.
 
-**Headers:** Requires authentication
-
-**Response:**
-
-```json
-{
-  "success": true,
-  "user": {
-    "id": "user_id",
-    "email": "user@example.com",
-    "name": "User Name",
-    "created_at": "2024-01-01T00:00:00Z"
-  }
-}
-```
-
 #### GET `/api/google/enabled`
 
 Check if Google OAuth is enabled.
-
-**Response:**
-
-```json
-{
-  "enabled": true
-}
-```
 
 #### GET `/api/google/login`
 
@@ -296,587 +75,83 @@ Initiate Google OAuth login (redirects to Google).
 
 Google OAuth callback endpoint.
 
-**Note:** If signup is disabled and the user doesn't exist, redirects to frontend with `?error=signup_disabled`.
-
----
-
 ### File Management
-
-All file endpoints require authentication.
 
 #### GET `/api/files`
 
-List files and folders in a directory.
-
-**Query Parameters:**
-
-- `parentId` (optional): Parent folder ID (default: null for root)
-- `sortBy` (optional): Sort field (`name`, `created_at`, `updated_at`, `size`, `type`)
-- `order` (optional): Sort order (`asc`, `desc`)
-
-**Response:**
-
-```json
-{
-  "success": true,
-  "files": [
-    {
-      "id": "file_id",
-      "name": "document.pdf",
-      "type": "file",
-      "size": 1024,
-      "mime_type": "application/pdf",
-      "created_at": "2024-01-01T00:00:00Z",
-      "updated_at": "2024-01-01T00:00:00Z",
-      "parent_id": "parent_id",
-      "path": "/folder/document.pdf"
-    }
-  ]
-}
-```
+List files and folders. Query: `parentId`, `sortBy`, `order`.
 
 #### GET `/api/files/stats`
 
-Get file statistics (total files, total size, etc.).
-
-**Response:**
-
-```json
-{
-  "success": true,
-  "stats": {
-    "total_files": 100,
-    "total_folders": 10,
-    "total_size": 1048576
-  }
-}
-```
+Get file statistics (total files, total size).
 
 #### GET `/api/files/search`
 
-Search for files and folders.
-
-**Query Parameters:**
-
-- `q` or `query`: Search query string (required)
-- `limit` (optional): Maximum number of results (default: 100)
-
-**Response:**
-
-```json
-{
-  "success": true,
-  "files": [...]
-}
-```
+Search files. Query: `q` or `query` (required), `limit` (optional).
 
 #### POST `/api/files/folder`
 
-Create a new folder.
-
-**Request Body:**
-
-```json
-{
-  "name": "New Folder",
-  "parent_id": "parent_id" // optional, null for root
-}
-```
-
-**Response:**
-
-```json
-{
-  "success": true,
-  "file": {
-    "id": "folder_id",
-    "name": "New Folder",
-    "type": "folder"
-  }
-}
-```
+Create folder. Body: `{ "name": "New Folder", "parent_id": "parent_id" }`
 
 #### POST `/api/files/upload`
 
-Upload a file.
-
-**Request:** Multipart form data
-
-- `file`: File to upload
-- `parent_id` (optional): Parent folder ID
-- `path` (optional): Target path
-
-**Response:**
-
-```json
-{
-  "success": true,
-  "file": {
-    "id": "file_id",
-    "name": "uploaded.pdf",
-    "type": "file",
-    "size": 1024
-  }
-}
-```
+Upload file. Multipart form: `file`, `parent_id` (optional), `path` (optional).
 
 #### POST `/api/files/move`
 
-Move files or folders.
-
-**Request Body:**
-
-```json
-{
-  "ids": ["id1", "id2"],
-  "parentId": "target_folder_id" // optional, null for root
-}
-```
-
-**Response:**
-
-```json
-{
-  "success": true,
-  "message": "Files moved successfully"
-}
-```
+Move files/folders. Body: `{ "ids": ["id1", "id2"], "parentId": "target_folder_id" }`
 
 #### POST `/api/files/copy`
 
-Copy files or folders.
-
-**Request Body:**
-
-```json
-{
-  "ids": ["id1", "id2"],
-  "parentId": "target_folder_id" // optional, null for root
-}
-```
-
-**Response:**
-
-```json
-{
-  "success": true,
-  "message": "Files copied successfully"
-}
-```
+Copy files/folders. Body: `{ "ids": ["id1", "id2"], "parentId": "target_folder_id" }`
 
 #### POST `/api/files/rename`
 
-Rename a file or folder.
-
-**Request Body:**
-
-```json
-{
-  "id": "file_id",
-  "name": "New Name"
-}
-```
-
-**Response:**
-
-```json
-{
-  "success": true,
-  "file": {
-    "id": "file_id",
-    "name": "New Name"
-  }
-}
-```
+Rename file/folder. Body: `{ "id": "file_id", "name": "New Name" }`
 
 #### POST `/api/files/star`
 
-Star/unstar files.
-
-**Request Body:**
-
-```json
-{
-  "ids": ["id1", "id2"],
-  "starred": true
-}
-```
-
-**Response:**
-
-```json
-{
-  "success": true,
-  "message": "Files starred successfully"
-}
-```
+Star/unstar files. Body: `{ "ids": ["id1", "id2"], "starred": true }`
 
 #### GET `/api/files/starred`
 
-List all starred files.
-
-**Query Parameters:**
-
-- `sortBy` (optional): Sort field (`name`, `created_at`, `updated_at`, `size`, `type`)
-- `order` (optional): Sort order (`asc`, `desc`)
-
-**Response:**
-
-```json
-{
-  "success": true,
-  "files": [...]
-}
-```
+List starred files. Query: `sortBy`, `order`.
 
 #### POST `/api/files/share`
 
-Share or unshare files/folders.
-
-**Request Body:**
-
-```json
-{
-  "ids": ["id1", "id2"],
-  "shared": true // true to share, false to unshare
-}
-```
-
-**Response:**
-
-```json
-{
-  "success": true,
-  "links": {
-    "id1": "share_token_1",
-    "id2": "share_token_2"
-  }
-}
-```
-
-**Note:** When sharing, creates or reuses share links. When unsharing (`shared: false`), removes files from share links.
+Share/unshare files. Body: `{ "ids": ["id1", "id2"], "shared": true }`
 
 #### GET `/api/files/shared`
 
-List files shared by current user.
-
-**Query Parameters:**
-
-- `sortBy` (optional): Sort field (`name`, `created_at`, `updated_at`, `size`, `type`)
-- `order` (optional): Sort order (`asc`, `desc`)
-
-**Response:**
-
-```json
-{
-  "success": true,
-  "files": [...]
-}
-```
+List files shared by current user. Query: `sortBy`, `order`.
 
 #### POST `/api/files/link-parent-share`
 
-Link files to their parent folder's share link.
-
-**Request Body:**
-
-```json
-{
-  "ids": ["id1", "id2"]
-}
-```
-
-**Response:**
-
-```json
-{
-  "success": true,
-  "links": {
-    "id1": "parent_share_token",
-    "id2": "parent_share_token"
-  }
-}
-```
-
-**Note:** Adds files to their parent folder's existing share link if one exists.
+Link files to parent folder's share link. Body: `{ "ids": ["id1", "id2"] }`
 
 #### POST `/api/files/delete`
 
-Move files to trash.
-
-**Request Body:**
-
-```json
-{
-  "ids": ["id1", "id2"]
-}
-```
-
-**Response:**
-
-```json
-{
-  "success": true,
-  "message": "Files moved to trash"
-}
-```
+Move files to trash. Body: `{ "ids": ["id1", "id2"] }`
 
 #### GET `/api/files/trash`
 
-List files in trash.
-
-**Query Parameters:**
-
-- `sortBy` (optional): Sort field (`name`, `created_at`, `updated_at`, `size`, `type`)
-- `order` (optional): Sort order (`asc`, `desc`)
-
-**Response:**
-
-```json
-{
-  "success": true,
-  "files": [...]
-}
-```
+List files in trash. Query: `sortBy`, `order`.
 
 #### POST `/api/files/trash/restore`
 
-Restore files from trash to their original location.
-
-**Request Body:**
-
-```json
-{
-  "ids": ["id1", "id2"]
-}
-```
-
-**Response:**
-
-```json
-{
-  "success": true,
-  "message": "Restored 2 file(s) from trash"
-}
-```
-
-**Behavior:**
-
-- Restores files to their original parent folder if it still exists
-- If the original parent folder was deleted, files are restored to the root directory
-- Automatically handles name conflicts by renaming restored files (e.g., "file (1).txt")
-- Recursively restores all children of selected folders
-- All operations are performed in a transaction (all-or-nothing)
-
-**Status Codes:**
-
-- `200` - Files restored successfully
-- `400` - Invalid ids array
-- `404` - No files found in trash to restore
-- `500` - Server error
+Restore files from trash. Body: `{ "ids": ["id1", "id2"] }`
 
 #### POST `/api/files/trash/delete`
 
-Permanently delete files from trash.
-
-**Request Body:**
-
-```json
-{
-  "ids": ["id1", "id2"]
-}
-```
-
-**Response:**
-
-```json
-{
-  "success": true,
-  "message": "Files deleted permanently"
-}
-```
+Permanently delete files. Body: `{ "ids": ["id1", "id2"] }`
 
 #### GET `/api/files/:id/download`
 
-Download a file or folder.
-
-**Parameters:**
-
-- `id` (path): File or folder ID
-
-**Response:**
-
-- For files: File stream with appropriate Content-Type and Content-Disposition headers
-- For folders: ZIP archive stream with `application/zip` Content-Type
-
-**Headers:**
-
-- `Content-Type`: MIME type of the file (for files) or `application/zip` (for folders)
-- `Content-Disposition`: `attachment; filename="filename.ext"; filename*=UTF-8''encoded_filename`
-  - Uses RFC 5987 encoding for filenames with special characters
-  - For folders, the filename will be `foldername.zip`
-
-**Behavior:**
-
-- **Files**: Downloads directly with original filename and extension preserved
-- **Folders**: Automatically zipped before download with `.zip` extension added
-- Concurrent download requests for the same user are prevented using mutex locks
-- Deleted files/folders cannot be downloaded (returns 404)
-
-**Status Codes:**
-
-- `200` - Download successful
-- `400` - Invalid file ID
-- `404` - File/folder not found or deleted
-- `500` - Server error
-
-**Example:**
-
-```bash
-# Download a file
-GET /api/files/abc123def/download
-
-# Download a folder (returns ZIP)
-GET /api/files/xyz789ghi/download
-```
+Download file or folder (folders return ZIP).
 
 #### GET `/api/files/events`
 
-Real-time file events stream using Server-Sent Events (SSE). Broadcasts file operation events to all connected clients in real-time.
-
-**Authentication:** Required (same as other file endpoints)
-
-**Response Type:** `text/event-stream` (Server-Sent Events)
-
-**Connection:**
-
-- Establishes a persistent SSE connection
-- Automatically reconnects if connection is lost
-- Server sends keepalive pings every 30 seconds
-- Connection remains open until client disconnects
-
-**Event Format:**
-
-Each event is sent in SSE format:
-
-```json
-data: {"type":"file.uploaded","timestamp":"2024-01-15T10:30:00.000Z","data":{...}}
-
-```
-
-**Event Types:**
-
-- `file.uploaded` - File uploaded
-- `file.deleted` - File moved to trash
-- `file.renamed` - File/folder renamed
-- `file.moved` - File/folder moved
-- `file.copied` - File/folder copied
-- `folder.created` - Folder created
-- `file.restored` - File restored from trash
-- `file.permanently_deleted` - File permanently deleted
-- `file.starred` - File starred/unstarred
-- `file.shared` - File shared/unshared
-
-**Event Data Structure:**
-
-```json
-{
-  "type": "file.uploaded",
-  "timestamp": "2024-01-15T10:30:00.000Z",
-  "data": {
-    "id": "file_id",
-    "name": "example.pdf",
-    "type": "file",
-    "size": 1024,
-    "mimeType": "application/pdf",
-    "parentId": "parent_folder_id",
-    "userId": "user_id"
-  }
-}
-```
-
-**Special Events:**
-
-- `connected` - Sent immediately upon connection
-
-  ```json
-  {"type":"connected","message":"Connected to file events stream"}
-  ```
-
-- `error` - Sent if connection to event stream fails
-
-  ```json
-  {"type":"error","message":"Failed to connect to event stream"}
-  ```
-
-**Keepalive:**
-
-Server sends keepalive messages every 30 seconds to maintain connection:
-
-```json
-: keepalive
-
-```
-
-**Client Usage:**
-
-```javascript
-const eventSource = new EventSource('/api/files/events', {
-  withCredentials: true
-});
-
-eventSource.onmessage = (event) => {
-  const data = JSON.parse(event.data);
-  // Handle event: refresh file list, update UI, etc.
-};
-
-eventSource.onerror = (error) => {
-  // Handle connection errors
-  // EventSource will automatically reconnect
-};
-```
-
-**Requirements:**
-
-- **Redis**: Redis must be installed and running for events to be published
-- **Browser Support**: Modern browsers with SSE support
-- **Authentication**: Requires valid authentication cookie
-
-**Behavior:**
-
-- **Broadcast**: All connected users receive the same events
-- **Non-Blocking**: Event publishing doesn't block file operations
-- **Graceful Degradation**: If Redis is unavailable, events are skipped but operations continue normally
-- **Automatic Cleanup**: Connections are properly closed when clients disconnect
-
-**Status Codes:**
-
-- `200` - Connection established (streaming)
-- `401` - Unauthorized (authentication required)
-- `500` - Server error (connection closed)
-
-**Example:**
-
-```bash
-# Connect to event stream
-GET /api/files/events
-Content-Type: text/event-stream
-Cache-Control: no-cache
-Connection: keep-alive
-
-# Response stream
-data: {"type":"connected","message":"Connected to file events stream"}
-
-data: {"type":"file.uploaded","timestamp":"2024-01-15T10:30:00.000Z","data":{"id":"abc123","name":"document.pdf","type":"file","size":1024,"mimeType":"application/pdf","parentId":null,"userId":"user123"}}
-
-: keepalive
-
-data: {"type":"file.renamed","timestamp":"2024-01-15T10:31:00.000Z","data":{"id":"abc123","name":"renamed_document.pdf","oldName":"document.pdf","type":"file","userId":"user123"}}
-```
-
-See [Features Documentation - Real-Time File Events](features.md#real-time-file-events) for more details.
-
----
+Real-time file events stream (Server-Sent Events). Requires Redis.
 
 ### User
 
@@ -884,239 +159,25 @@ See [Features Documentation - Real-Time File Events](features.md#real-time-file-
 
 Get storage usage information.
 
-**Response:**
-
-```json
-{
-  "success": true,
-  "used": 1048576,
-  "total": 1073741824,
-  "free": 1072693248
-}
-```
-
-**Note:**
-
-- If custom drive is enabled, returns actual disk space from the custom drive path
-- Otherwise, returns user storage usage with storage limit
-
 #### GET `/api/user/signup-status`
 
-Get current signup status and whether the current user can toggle it.
-
-**Headers:** Requires authentication
-
-**Response:**
-
-```json
-{
-  "success": true,
-  "signupEnabled": false,
-  "canToggle": true
-}
-```
-
-**Response Fields:**
-
-- `signupEnabled` (boolean): Whether new user registration is currently enabled
-- `canToggle` (boolean): Whether the current user has permission to toggle signup (only true for first user)
+Get signup status and whether current user can toggle it.
 
 #### POST `/api/user/signup-toggle`
 
-Enable or disable user signup. Only the first user can perform this action.
-
-**Headers:** Requires authentication
-
-**Audit Logging:** Creates `settings.signup.toggle` audit event with new status.
-
-**Request Body:**
-
-```json
-{
-  "enabled": true
-}
-```
-
-**Response:**
-
-```json
-{
-  "success": true,
-  "signupEnabled": true
-}
-```
-
-**Status Codes:**
-
-- `200` - Signup status updated successfully
-- `400` - Invalid request (enabled must be boolean)
-- `403` - Only the first user can toggle signup
-- `500` - Server error
-
-**Security Notes:**
-
-- Only the first user (oldest account by creation date) can toggle signup
-- The first user ID is immutable once set
-- All operations use database transactions for atomicity
-- Unauthorized attempts are logged
-
----
-
-### Custom Drive Settings
-
-Custom drive settings allow administrators to configure per-user external drive integration. Only administrators (first user) can manage these settings.
+Enable/disable user signup (first user only). Body: `{ "enabled": true }`
 
 #### GET `/api/user/custom-drive`
 
-Get custom drive settings for a user.
-
-**Headers:** Requires authentication
-
-**Query Parameters:**
-
-- `targetUserId` (optional, string): User ID to get settings for. If not provided, returns current user's settings. Only administrators can query other users' settings.
-
-**Response:**
-
-```json
-{
-  "success": true,
-  "enabled": true,
-  "path": "/data/custom_drive"
-}
-```
-
-**Response Fields:**
-
-- `enabled` (boolean): Whether custom drive is enabled for the user
-- `path` (string | null): Absolute path to the custom drive directory, or null if disabled
-
-**Status Codes:**
-
-- `200` - Settings retrieved successfully
-- `403` - Only administrators can view other users' settings
-- `404` - User not found
-- `500` - Server error
-
-**Security Notes:**
-
-- Users can view their own settings
-- Only administrators can view other users' settings
-- Unauthorized attempts are logged
+Get custom drive settings. Query: `targetUserId` (optional, admin only).
 
 #### GET `/api/user/custom-drive/all`
 
-Get custom drive settings for all users. Admin only.
-
-**Headers:** Requires authentication
-
-**Response:**
-
-```json
-{
-  "success": true,
-  "users": [
-    {
-      "id": "user_id_1",
-      "email": "user@example.com",
-      "name": "User Name",
-      "createdAt": "2024-01-01T00:00:00.000Z",
-      "customDrive": {
-        "enabled": true,
-        "path": "/data/custom_drive"
-      }
-    }
-  ]
-}
-```
-
-**Response Fields:**
-
-- `users` (array): Array of user objects with custom drive settings
-  - `id` (string): User ID
-  - `email` (string): User email
-  - `name` (string): User name
-  - `createdAt` (string): User creation timestamp (ISO 8601)
-  - `customDrive` (object): Custom drive settings
-    - `enabled` (boolean): Whether custom drive is enabled
-    - `path` (string | null): Custom drive path or null if disabled
-
-**Status Codes:**
-
-- `200` - Settings retrieved successfully
-- `403` - Only administrators can view all users' settings
-- `500` - Server error
-
-**Security Notes:**
-
-- Only administrators can access this endpoint
-- Unauthorized attempts are logged
-- Creates `admin.custom_drive.list` audit event
+Get custom drive settings for all users (admin only).
 
 #### PUT `/api/user/custom-drive`
 
-Update custom drive settings for a user. Admin only.
-
-**Headers:** Requires authentication
-
-**Audit Logging:** Creates `admin.custom_drive.update` audit event with target user ID, enabled status, and path (masked for security).
-
-**Request Body:**
-
-```json
-{
-  "enabled": true,
-  "path": "/data/custom_drive",
-  "targetUserId": "user_id_1"
-}
-```
-
-**Request Fields:**
-
-- `enabled` (boolean, optional): Whether to enable custom drive. If omitted, current state is preserved.
-- `path` (string | null, optional): Absolute path to custom drive directory. Required if `enabled` is `true`. If `enabled` is `false`, can be `null` or omitted.
-- `targetUserId` (string, optional): User ID to update settings for. If omitted, updates admin's own settings.
-
-**Response:**
-
-```json
-{
-  "success": true,
-  "enabled": true,
-  "path": "/data/custom_drive"
-}
-```
-
-**Status Codes:**
-
-- `200` - Settings updated successfully
-- `400` - Invalid request (e.g., path required when enabling, invalid path format, whitespace-only path)
-- `403` - Only administrators can manage custom drive settings
-- `404` - User not found
-- `500` - Server error
-
-**Security Notes:**
-
-- Only administrators can update custom drive settings
-- Path validation ensures paths are absolute, exist, are directories, and are accessible
-- Placeholder paths (Docker unused mounts) are rejected
-- System paths and critical directories are protected
-- When enabling custom drive, existing files in `UPLOAD_DIR` are cleaned up
-- When disabling custom drive, database records are cleaned up
-- All operations use mutex locks to prevent race conditions
-- Cache is invalidated immediately after updates
-- File system watchers are restarted after path changes
-- Unauthorized attempts are logged
-
-**Important Notes:**
-
-- When `enabled` is `true`, `path` is required and must be a valid absolute path
-- Paths must already exist as mounted volumes (backend does not create directories)
-- Whitespace-only paths are rejected when enabling custom drive
-- Custom drive paths must be accessible and writable
-- Changes take effect immediately for new file operations
-
----
+Update custom drive settings (admin only). Body: `{ "enabled": true, "path": "/data/custom_drive", "targetUserId": "user_id" }`
 
 ### OnlyOffice
 
@@ -1124,71 +185,31 @@ Update custom drive settings for a user. Admin only.
 
 Get OnlyOffice editor configuration for a file.
 
-**Response:**
-
-```json
-{
-  "document": {
-    "fileType": "pdf",
-    "key": "file_key",
-    "title": "document.pdf",
-    "url": "https://example.com/api/onlyoffice/file/:id?token=..."
-  },
-  "documentType": "text",
-  "editorConfig": {
-    "mode": "edit",
-    "callbackUrl": "https://example.com/api/onlyoffice/callback"
-  }
-}
-```
-
 #### GET `/api/onlyoffice/viewer/:id`
 
 Get standalone viewer page for a file.
-
-**Response:** HTML page with OnlyOffice viewer embedded.
 
 #### GET `/api/onlyoffice/file/:id`
 
 Serve file to OnlyOffice server (requires signed token).
 
-**Query Parameters:**
-
-- `token`: Signed JWT token
-
-**Response:** File stream
-
 #### POST `/api/onlyoffice/callback`
 
-OnlyOffice callback endpoint (called by OnlyOffice server).
-
----
+OnlyOffice callback endpoint.
 
 ### Share Links (Public)
-
-These endpoints don't require authentication.
-
-**Audit Logging:** All share link access is logged with `share.access` audit events including IP address, file accessed, and share token.
 
 #### GET `/s/:token`
 
 View shared files/folders.
 
-**Response:** HTML page or JSON depending on Accept header.
-
 #### GET `/s/:token/file/:id`
 
 Download a file from a share link.
 
-**Response:** File stream
-
 #### GET `/s/:token/zip`
 
 Download a folder as ZIP from a share link.
-
-**Response:** ZIP file stream
-
----
 
 ### Version
 
@@ -1196,185 +217,26 @@ Download a folder as ZIP from a share link.
 
 Get currently deployed backend version.
 
-**Headers:** Requires authentication
-
-**Response:**
-
-```json
-{
-  "backend": "X.X.X"
-}
-```
-
-**Response Fields:**
-
-- `backend` (string): Currently deployed backend version
-
-**Status Codes:**
-
-- `200` - Success
-
-**Note:** The frontend version is embedded during the build process and is not returned by this endpoint.
-
 #### GET `/api/version/latest`
 
-Fetch the latest versions from the update feed.
-
-**Headers:** Requires authentication
-
-**Response:**
-
-```json
-{
-  "frontend": "X.X.X",
-  "backend": "X.X.X"
-}
-```
-
-**Response Fields:**
-
-- `frontend` (string): Latest available frontend version
-- `backend` (string): Latest available backend version
-
-**Status Codes:**
-
-- `200` - Success
-- `500` - Failed to fetch latest versions
-- `502` - GitHub returned non-200 status or connection error
-- `504` - Request timeout (10 seconds)
-
-**Error Response:**
-
-```json
-{
-  "error": "Failed to fetch latest versions"
-}
-```
-
----
+Fetch latest versions from update feed.
 
 ### Monitoring
 
 #### GET `/metrics`
 
-Get application health and performance metrics.
-
-**Access Control:** Restricted to IP addresses listed in `METRICS_ALLOWED_IPS` environment variable.
-
-**Response:**
-
-```json
-{
-  "uptime": 3600,
-  "memory": {
-    "rss": 123456789,
-    "heapTotal": 98765432,
-    "heapUsed": 87654321,
-    "external": 1234567
-  },
-  "cpu": {
-    "user": 1234567,
-    "system": 234567
-  }
-}
-```
-
-**Response Fields:**
-
-- `uptime` (number): Application uptime in seconds
-- `memory` (object): Memory usage statistics in bytes
-  - `rss`: Resident Set Size (total memory allocated)
-  - `heapTotal`: Total heap size
-  - `heapUsed`: Heap memory used
-  - `external`: Memory used by C++ objects
-- `cpu` (object): CPU usage in microseconds
-  - `user`: User CPU time
-  - `system`: System CPU time
-
-**Status Codes:**
-
-- `200` - Success
-- `403` - Forbidden (IP not allowed)
-
-**Security Notes:**
-
-- Only accessible from IPs listed in `METRICS_ALLOWED_IPS` environment variable
-- Default allowed IPs: `127.0.0.1` (localhost IPv4) and `::1` (localhost IPv6)
-- Configure allowed IPs via environment: `METRICS_ALLOWED_IPS=127.0.0.1,::1`
-
-**Example:**
-
-```bash
-# Only works from allowed IP
-curl http://localhost:3000/metrics
-```
-
----
-
-## Audit Logging
-
-**Note:** All API endpoints automatically log audit events for critical operations. Audit logging happens asynchronously in the background and does not affect API response times.
-
-**Logged Events:**
-
-- **Authentication**: signup, login, logout, failed login attempts
-- **File Operations**: upload, download, delete, move, copy, rename, star/unstar
-- **Folder Operations**: create
-- **Share Operations**: create, delete, access via share links
-- **Document Operations**: open, save (OnlyOffice)
-- **Settings**: signup toggle
-
-**Audit Log Data:**
-
-Each audit event includes:
-
-- Event type and timestamp
-- User ID (if authenticated)
-- IP address and user agent
-- Resource type and ID (file, folder, share, etc.)
-- Status (success/failure)
-- Detailed metadata (file names, sizes, types, destinations, etc.)
-
-**Accessing Audit Logs:**
-
-Audit logs are stored in the `audit_logs` PostgreSQL table. Access requires direct database queries. See [Audit Documentation](audit.md) for query examples.
-
-**Privacy:**
-
-- Sensitive data (passwords, tokens) is never logged
-- IP addresses are logged for security auditing
-- User agents are logged for troubleshooting
-
----
+Get application health and performance metrics. Restricted to IPs in `METRICS_ALLOWED_IPS`.
 
 ## Error Responses
-
-All endpoints return errors in the following format:
 
 ```json
 {
   "success": false,
   "error": "Error message",
-  "code": "ERROR_CODE" // optional
+  "code": "ERROR_CODE"
 }
 ```
 
-### Common Error Codes
+**Common Error Codes:** `UNAUTHORIZED`, `FORBIDDEN`, `NOT_FOUND`, `VALIDATION_ERROR`, `STORAGE_LIMIT_EXCEEDED`
 
-- `UNAUTHORIZED` - Authentication required
-- `FORBIDDEN` - Insufficient permissions
-- `NOT_FOUND` - Resource not found
-- `VALIDATION_ERROR` - Invalid input
-- `STORAGE_LIMIT_EXCEEDED` - Storage quota exceeded
-- `FILE_NOT_FOUND` - File doesn't exist
-- `DUPLICATE_NAME` - File/folder name already exists
-
-### HTTP Status Codes
-
-- `200` - Success
-- `201` - Created
-- `400` - Bad Request
-- `401` - Unauthorized
-- `403` - Forbidden
-- `404` - Not Found
-- `500` - Internal Server Error
+**HTTP Status Codes:** `200` - Success, `400` - Bad Request, `401` - Unauthorized, `403` - Forbidden, `404` - Not Found, `500` - Server Error
