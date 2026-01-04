@@ -28,6 +28,21 @@ const config: Config = {
     locales: ["en"],
   },
 
+  plugins: [
+    [
+      require.resolve("@easyops-cn/docusaurus-search-local"),
+      {
+        indexBlog: false,
+        indexPages: false,
+        hashed: false,
+        language: ["en"],
+        docsRouteBasePath: "/",
+        searchBarShortcut: true,
+        searchBarShortcutHint: true,
+      },
+    ],
+  ],
+
   presets: [
     [
       "classic",
