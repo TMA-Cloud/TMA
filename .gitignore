@@ -65,3 +65,11 @@ Thumbs.db
 # Misc
 *.tgz
 .next/
+
+# Docusaurus
+wiki/.docusaurus/
+wiki/build/
+wiki/.env.local
+wiki/.env.production.local
+wiki/.env.development.local
+wiki/i18n/

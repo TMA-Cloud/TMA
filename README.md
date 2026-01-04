@@ -53,30 +53,22 @@ npm start
 # Access the application at http://localhost:3000
 ```
 
-For detailed setup instructions, see [docs/setup.md](docs/setup.md)
+For detailed setup instructions, see the [Documentation Wiki](https://tma-cloud.github.io).
 
 ## UI Preview
 
 A quick preview of the TMA Cloud interface.  
-Full gallery: [View All Screenshots](docs/screenshots.md)
+Full gallery available in the [Documentation Wiki](https://tma-cloud.github.io).
 
 ### Dashboard & File Manager
 
-| Dashboard                               | File Manager                                  |
-|-----------------------------------------|-----------------------------------------------|
-| ![Dashboard](docs/images/dashboard.png) | ![File Manager](docs/images/file-manager.png) |
+| Dashboard                                   | File Manager                                       |
+|---------------------------------------------|----------------------------------------------------|
+| ![Dashboard](wiki/static/img/dashboard.png) | ![File Manager](wiki/static/img/file-manager.png)  |
 
 ## Documentation
 
-- [Features](docs/features.md)
-- [Audit Trail](docs/audit.md)
-- [Logging System](docs/logging.md)
-- [Database Schema](docs/database.md)
-- [API Documentation](docs/api.md)
-- [Docker Deployment](docs/docker.md)
-- [Setup & Installation](docs/setup.md)
-- [Architecture Overview](docs/architecture.md)
-- [Environment Variables](docs/environment.md)
+**Full documentation is available in the [Documentation Wiki](https://tma-cloud.github.io)**
 
 ## Contributing
 
