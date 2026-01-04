@@ -1,10 +1,9 @@
 const { getUserById } = require('../../models/user.model');
-const { getActiveSessions, deleteSession } = require('../../models/session.model');
+const { getActiveSessions, deleteSession, deleteOtherUserSessions } = require('../../models/session.model');
 const { sendError, sendSuccess } = require('../../utils/response');
 const { logger } = require('../../config/logger');
 const { logAuditEvent } = require('../../services/auditLogger');
-
-const JWT_SECRET = process.env.JWT_SECRET;
+const { getSessionIdFromRequest } = require('../../utils/tokenExtractor');
 
 /**
  * Get all active sessions for the current user
@@ -21,26 +20,7 @@ async function getSessions(req, res) {
     }
 
     // Get session ID from token to identify current session
-    let currentSessionId = null;
-    try {
-      const jwt = require('jsonwebtoken');
-      let token;
-      if (req.headers.cookie) {
-        const cookies = req.headers.cookie.split(';').map(c => c.trim());
-        const t = cookies.find(c => c.startsWith('token='));
-        if (t) token = t.slice('token='.length);
-      }
-      if (!token && req.headers.authorization) {
-        token = req.headers.authorization.split(' ')[1];
-      }
-      if (token) {
-        const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] });
-        currentSessionId = decoded.sid || null;
-      }
-    } catch (err) {
-      // If token decode fails, continue without current session ID
-      logger.debug({ err }, 'Could not decode token to get current session ID');
-    }
+    const currentSessionId = getSessionIdFromRequest(req);
 
     const currentTokenVersion = user.token_version || 1;
     const sessions = await getActiveSessions(req.userId, currentTokenVersion);
@@ -97,7 +77,52 @@ async function revokeSession(req, res) {
   }
 }
 
+/**
+ * Revoke all other sessions (except current one)
+ */
+async function revokeOtherSessions(req, res) {
+  try {
+    if (!req.userId) {
+      return sendError(res, 401, 'Not authenticated');
+    }
+
+    const user = await getUserById(req.userId);
+    if (!user) {
+      return sendError(res, 404, 'User not found');
+    }
+
+    // Get current session ID from token
+    const currentSessionId = getSessionIdFromRequest(req);
+
+    if (!currentSessionId) {
+      return sendError(res, 400, 'Current session not found');
+    }
+
+    const currentTokenVersion = user.token_version || 1;
+    const deletedCount = await deleteOtherUserSessions(req.userId, currentSessionId, currentTokenVersion);
+
+    // Log the security event
+    await logAuditEvent(
+      'auth.other_sessions_revoked',
+      {
+        status: 'success',
+        resourceType: 'auth',
+        resourceId: req.userId,
+        details: `User revoked ${deletedCount} other session(s)`,
+      },
+      req
+    );
+
+    logger.info({ userId: req.userId, deletedCount, currentSessionId }, 'User revoked other sessions');
+    sendSuccess(res, { message: 'Other sessions revoked successfully', deletedCount });
+  } catch (err) {
+    logger.error({ err, userId: req.userId }, 'Failed to revoke other sessions');
+    sendError(res, 500, 'Failed to revoke other sessions', err);
+  }
+}
+
 module.exports = {
   getSessions,
   revokeSession,
+  revokeOtherSessions,
 };

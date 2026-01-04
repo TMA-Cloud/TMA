@@ -6,6 +6,7 @@ const {
   createUserWithGoogle,
   updateGoogleId,
   getSignupEnabled,
+  getMfaStatus,
 } = require('../../models/user.model');
 const { sendError } = require('../../utils/response');
 const { validateEmail: validateEmailUtil } = require('../../utils/validation');
@@ -13,6 +14,7 @@ const { logger } = require('../../config/logger');
 const { loginSuccess, loginFailure, userSignup } = require('../../services/auditLogger');
 const { handleFirstUserSetup } = require('../../models/user.model');
 const { createSessionAndToken, setAuthCookieAndRespond } = require('../../utils/authSession');
+const { verifyMfaCode } = require('./auth.mfa.controller');
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
@@ -35,7 +37,7 @@ if (!GOOGLE_AUTH_ENABLED) {
  */
 async function login(req, res) {
   try {
-    const { email, password } = req.body;
+    const { email, password, mfaCode } = req.body;
 
     if (!email || !password) {
       return sendError(res, 400, 'Email and password required');
@@ -57,6 +59,22 @@ async function login(req, res) {
     if (!valid) {
       await loginFailure(email, 'invalid_password', req);
       return sendError(res, 401, 'Invalid credentials');
+    }
+
+    // Check if MFA is enabled
+    const mfaStatus = await getMfaStatus(user.id);
+    if (mfaStatus?.enabled) {
+      // MFA is enabled - require MFA code
+      if (!mfaCode || typeof mfaCode !== 'string') {
+        return sendError(res, 400, 'MFA code required');
+      }
+
+      // Verify MFA code
+      const mfaValid = await verifyMfaCode(user.id, mfaCode);
+      if (!mfaValid) {
+        await loginFailure(email, 'invalid_mfa_code', req);
+        return sendError(res, 401, 'Invalid MFA code');
+      }
     }
 
     // Log successful login
@@ -136,6 +154,26 @@ async function googleCallback(req, res) {
     }
 
     logger.info({ userId: user.id, email }, 'User authenticated via Google OAuth');
+
+    // Check if MFA is enabled for Google OAuth users
+    const mfaStatus = await getMfaStatus(user.id);
+    if (mfaStatus?.enabled) {
+      // For Google OAuth, we need to handle MFA differently
+      // Since this is a redirect flow, we'll need to prompt for MFA code
+      // For now, we'll require MFA code as a query parameter or handle it via session
+      // This is a simplified approach - in production, you might want a two-step flow
+      const { mfaCode } = req.query;
+      if (!mfaCode) {
+        // Redirect to MFA prompt page
+        return res.redirect(`/?mfa_required=true&email=${encodeURIComponent(email)}`);
+      }
+
+      // Verify MFA code
+      const mfaValid = await verifyMfaCode(user.id, mfaCode);
+      if (!mfaValid) {
+        return res.redirect('/?error=invalid_mfa_code');
+      }
+    }
 
     // Create session and generate token
     const { token } = await createSessionAndToken(user.id, req);

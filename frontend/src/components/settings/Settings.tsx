@@ -25,6 +25,7 @@ import { UsersModal } from "./modals/UsersModal";
 import { SessionsModal } from "./modals/SessionsModal";
 import { CustomDriveEnableModal } from "./modals/CustomDriveEnableModal";
 import { CustomDriveDisableModal } from "./modals/CustomDriveDisableModal";
+import { MfaModal } from "./modals/MfaModal";
 
 export const Settings: React.FC = () => {
   const { user } = useAuth();
@@ -85,6 +86,7 @@ export const Settings: React.FC = () => {
   const [loadingUsersList, setLoadingUsersList] = useState(false);
   const [usersListError, setUsersListError] = useState<string | null>(null);
   const [sessionsModalOpen, setSessionsModalOpen] = useState(false);
+  const [mfaModalOpen, setMfaModalOpen] = useState(false);
 
   // Data is loaded automatically by hooks on mount
 
@@ -182,6 +184,7 @@ export const Settings: React.FC = () => {
           loggingOutAll={loggingOutAll}
           onShowSessions={handleShowSessions}
           onLogoutAllDevices={handleLogoutAllDevices}
+          onShowMfa={() => setMfaModalOpen(true)}
         />
       </div>
 
@@ -222,6 +225,8 @@ export const Settings: React.FC = () => {
         onCancel={handleCancelConfirmation}
         onProceed={handleProceedDisable}
       />
+
+      <MfaModal isOpen={mfaModalOpen} onClose={() => setMfaModalOpen(false)} />
     </div>
   );
 };

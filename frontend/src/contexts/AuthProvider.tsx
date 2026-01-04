@@ -83,22 +83,43 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     };
   }, [loadProfile]);
 
-  const login = async (email: string, password: string) => {
+  const login = async (email: string, password: string, mfaCode?: string) => {
     try {
       const res = await fetch(`/api/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, mfaCode }),
       });
-      if (!res.ok) return false;
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        const message = errorData.message || "Login failed";
+        // Return error info for MFA requirement detection
+        throw {
+          status: res.status,
+          message,
+          requiresMfa: message === "MFA code required",
+          invalidMfa: message === "Invalid MFA code",
+        };
+      }
       const data = await res.json();
       setUser(data.user);
       // Mark user as authenticated in localStorage
       setAuthState(true);
-      return true;
-    } catch {
-      return false;
+      return { success: true };
+    } catch (err) {
+      const error = err as {
+        requiresMfa?: boolean;
+        invalidMfa?: boolean;
+        message?: string;
+      };
+      if (error.requiresMfa) {
+        return { success: false, requiresMfa: true, message: error.message };
+      }
+      if (error.invalidMfa) {
+        return { success: false, requiresMfa: true, message: error.message };
+      }
+      return { success: false, requiresMfa: false, message: error.message };
     }
   };
 

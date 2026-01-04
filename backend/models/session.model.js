@@ -125,6 +125,32 @@ async function deleteSession(sessionId, userId) {
 }
 
 /**
+ * Delete all sessions for a user except the current one
+ * @param {string} userId - User ID
+ * @param {string} currentSessionId - Current session ID to keep
+ * @param {number} currentTokenVersion - Current token version
+ * @returns {Promise<number>} Number of sessions deleted
+ */
+async function deleteOtherUserSessions(userId, currentSessionId, currentTokenVersion) {
+  const result = await pool.query(
+    `DELETE FROM sessions 
+     WHERE user_id = $1 
+     AND token_version = $2 
+     AND id != $3`,
+    [userId, currentTokenVersion, currentSessionId]
+  );
+
+  const deletedCount = result.rowCount || 0;
+
+  // Invalidate cache
+  await deleteCache(cacheKeys.activeSessions(userId, currentTokenVersion));
+  await deleteCachePattern(`session:${userId}:*`);
+
+  logger.info({ userId, deletedCount, currentSessionId }, 'Other user sessions deleted');
+  return deletedCount;
+}
+
+/**
  * Delete all sessions for a user (used when invalidating all sessions)
  * @param {string} userId - User ID
  * @returns {Promise<void>}
@@ -170,6 +196,7 @@ module.exports = {
   getActiveSessions,
   updateSessionActivity,
   deleteSession,
+  deleteOtherUserSessions,
   deleteAllUserSessions,
   cleanupOldSessions,
 };

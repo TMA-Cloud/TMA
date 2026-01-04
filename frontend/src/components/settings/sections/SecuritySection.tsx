@@ -1,5 +1,5 @@
 import React from "react";
-import { Shield, LogOut } from "lucide-react";
+import { Shield, LogOut, Key } from "lucide-react";
 import { SettingsSection } from "../components/SettingsSection";
 import { SettingsItem } from "../components/SettingsItem";
 
@@ -9,6 +9,7 @@ interface SecuritySectionProps {
   loggingOutAll: boolean;
   onShowSessions: () => void;
   onLogoutAllDevices: () => void;
+  onShowMfa: () => void;
 }
 
 export const SecuritySection: React.FC<SecuritySectionProps> = ({
@@ -17,6 +18,7 @@ export const SecuritySection: React.FC<SecuritySectionProps> = ({
   loggingOutAll,
   onShowSessions,
   onLogoutAllDevices,
+  onShowMfa,
 }) => {
   return (
     <SettingsSection
@@ -24,6 +26,14 @@ export const SecuritySection: React.FC<SecuritySectionProps> = ({
       icon={Shield}
       description="Manage your account security and active sessions."
     >
+      <SettingsItem
+        label="Multi-Factor Authentication"
+        value=""
+        action="Manage MFA"
+        onAction={onShowMfa}
+        actionIcon={Key}
+        description="Add an extra layer of security to your account with two-factor authentication."
+      />
       <SettingsItem
         label="Active Sessions"
         value=""

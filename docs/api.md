@@ -18,30 +18,9 @@ Most endpoints require JWT token sent as httpOnly cookie. Rate limiting: 5 attem
 
 Create new user account. Respects signup enabled/disabled setting.
 
-**Request:**
-
-```json
-{
-  "email": "user@example.com",
-  "password": "securepassword",
-  "name": "User Name"
-}
-```
-
-**Status Codes:** `200` - Success, `400` - Invalid input, `403` - Signup disabled, `409` - Email exists
-
 #### POST `/api/login`
 
-Authenticate user and receive JWT token.
-
-**Request:**
-
-```json
-{
-  "email": "user@example.com",
-  "password": "securepassword"
-}
-```
+Authenticate user and receive JWT token. If MFA is enabled, requires `mfaCode` in request.
 
 #### POST `/api/logout`
 
@@ -59,6 +38,10 @@ Get all active sessions for authenticated user.
 
 Revoke a specific session.
 
+#### POST `/api/sessions/revoke-others`
+
+Revoke all other active sessions except the current one.
+
 #### GET `/api/profile`
 
 Get current user profile.
@@ -74,6 +57,24 @@ Initiate Google OAuth login (redirects to Google).
 #### GET `/api/google/callback`
 
 Google OAuth callback endpoint.
+
+### Multi-Factor Authentication
+
+#### GET `/api/mfa/status`
+
+Get MFA status for current user.
+
+#### POST `/api/mfa/setup`
+
+Generate MFA secret and QR code for setup.
+
+#### POST `/api/mfa/verify`
+
+Verify MFA code and enable MFA.
+
+#### POST `/api/mfa/disable`
+
+Disable MFA. Requires verification code.
 
 ### File Management
 

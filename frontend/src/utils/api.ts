@@ -359,6 +359,68 @@ export async function revokeSession(sessionId: string): Promise<{
   return await apiDelete<{ message: string }>(`/api/sessions/${sessionId}`);
 }
 
+/**
+ * Revoke all other sessions (except current one)
+ */
+export async function revokeOtherSessions(): Promise<{
+  message: string;
+  deletedCount: number;
+}> {
+  return await apiPost<{ message: string; deletedCount: number }>(
+    "/api/sessions/revoke-others",
+  );
+}
+
+/**
+ * MFA (Multi-Factor Authentication) API functions
+ */
+
+/**
+ * Get MFA status for current user
+ */
+export async function getMfaStatus(): Promise<{ enabled: boolean }> {
+  return await apiGet<{ enabled: boolean }>("/api/mfa/status");
+}
+
+/**
+ * Setup MFA - generate secret and QR code
+ */
+export async function setupMfa(): Promise<{
+  secret: string;
+  qrCode: string;
+}> {
+  return await apiPost<{
+    secret: string;
+    qrCode: string;
+  }>("/api/mfa/setup");
+}
+
+/**
+ * Verify and enable MFA
+ */
+export async function verifyAndEnableMfa(code: string): Promise<{
+  message: string;
+  shouldPromptSessions?: boolean;
+}> {
+  return await apiPost<{ message: string; shouldPromptSessions?: boolean }>(
+    "/api/mfa/verify",
+    { code },
+  );
+}
+
+/**
+ * Disable MFA
+ */
+export async function disableMfa(code: string): Promise<{
+  message: string;
+  shouldPromptSessions?: boolean;
+}> {
+  return await apiPost<{ message: string; shouldPromptSessions?: boolean }>(
+    "/api/mfa/disable",
+    { code },
+  );
+}
+
 export interface VersionInfo {
   frontend: string;
   backend: string;

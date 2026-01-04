@@ -8,8 +8,10 @@ export const LoginForm: React.FC<{ onSwitch: () => void }> = ({ onSwitch }) => {
   const { login } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [mfaCode, setMfaCode] = useState("");
   const [error, setError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [requiresMfa, setRequiresMfa] = useState(false);
   const [googleEnabled, setGoogleEnabled] = useState(false);
 
   useEffect(() => {
@@ -24,8 +26,32 @@ export const LoginForm: React.FC<{ onSwitch: () => void }> = ({ onSwitch }) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const ok = await login(email, password);
-    if (!ok) setError("Invalid credentials");
+    setError("");
+
+    if (requiresMfa && !mfaCode) {
+      setError("Please enter your MFA code");
+      return;
+    }
+
+    const result = await login(
+      email,
+      password,
+      requiresMfa ? mfaCode : undefined,
+    );
+
+    if (result.success) {
+      // Login successful
+      return;
+    }
+
+    if (result.requiresMfa) {
+      setRequiresMfa(true);
+      setError(result.message || "MFA code required");
+    } else {
+      setError(result.message || "Invalid credentials");
+      setRequiresMfa(false);
+      setMfaCode("");
+    }
   };
 
   return (
@@ -46,6 +72,27 @@ export const LoginForm: React.FC<{ onSwitch: () => void }> = ({ onSwitch }) => {
           showPassword={showPassword}
           onTogglePassword={() => setShowPassword((v) => !v)}
         />
+        {requiresMfa && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              MFA Code
+            </label>
+            <input
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              maxLength={6}
+              value={mfaCode}
+              onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, ""))}
+              className="border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-3 w-full bg-gray-50/80 dark:bg-gray-800/80 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm transition-all duration-200 text-base text-center text-xl tracking-widest font-mono"
+              placeholder="000000"
+              autoFocus
+            />
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              Enter the 6-digit code from your authenticator app
+            </p>
+          </div>
+        )}
         {error && (
           <p
             className="text-red-500 text-sm font-medium animate-bounceIn"

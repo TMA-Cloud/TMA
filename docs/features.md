@@ -7,6 +7,7 @@ Feature list for TMA Cloud.
 - Email/password authentication with bcrypt
 - JWT token-based sessions (httpOnly cookies)
 - Google OAuth (optional)
+- Multi-factor authentication (MFA) with TOTP
 - Session security: token versioning, session binding, active sessions management
 - Signup control: first user can enable/disable signup
 
@@ -73,6 +74,7 @@ Feature list for TMA Cloud.
 
 - JWT token expiration and httpOnly cookies
 - Secure password hashing (bcrypt)
+- Multi-factor authentication (TOTP-based)
 - Rate limiting (auth: 5/15min, API: 100/15min, upload: 50/hour)
 - Input validation and sanitization
 - SQL injection protection

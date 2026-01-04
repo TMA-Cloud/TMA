@@ -15,6 +15,8 @@ User accounts.
 | `password`   | VARCHAR(255) | Hashed (nullable for OAuth)   |
 | `name`       | VARCHAR(255) | Display name                  |
 | `google_id`  | VARCHAR(255) | Unique (optional)             |
+| `mfa_enabled`| BOOLEAN      | Default false                 |
+| `mfa_secret` | TEXT         | TOTP secret (nullable)        |
 | `created_at` | TIMESTAMPTZ  | Default now()                 |
 | `updated_at` | TIMESTAMPTZ  | Default now()                 |
 
