@@ -1,30 +1,525 @@
 /**
- * Any CSS included here will be global. The classic template
- * bundles Infima by default. Infima is a CSS framework designed to
- * work well for content-centric websites.
+ * Modern TMA Cloud Documentation Styles
+ * A refined, contemporary design system
  */
 
-/* You can override the default Infima variables here. */
+/* ============================================
+   CSS Variables - Professional Color Palette
+   ============================================ */
 :root {
-  --ifm-color-primary: #2e8555;
-  --ifm-color-primary-dark: #29784c;
-  --ifm-color-primary-darker: #277148;
-  --ifm-color-primary-darkest: #205d3b;
-  --ifm-color-primary-light: #33925d;
-  --ifm-color-primary-lighter: #359962;
-  --ifm-color-primary-lightest: #3cad6e;
-  --ifm-code-font-size: 95%;
-  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.1);
+  /* Primary Brand Colors - Professional Slate Blue */
+  --ifm-color-primary: #2563eb;
+  --ifm-color-primary-dark: #1d4ed8;
+  --ifm-color-primary-darker: #1e40af;
+  --ifm-color-primary-darkest: #1e3a8a;
+  --ifm-color-primary-light: #3b82f6;
+  --ifm-color-primary-lighter: #60a5fa;
+  --ifm-color-primary-lightest: #93c5fd;
+
+  /* Background Colors */
+  --ifm-background-color: #ffffff;
+  --ifm-background-surface-color: #f8f9fa;
+
+  /* Text Colors */
+  --ifm-font-color-base: #212529;
+  --ifm-font-color-base-inverse: #ffffff;
+  --ifm-heading-color: #1a1d29;
+
+  /* Code Colors */
+  --ifm-code-font-size: 90%;
+  --ifm-code-background: #f1f3f5;
+  --ifm-code-color: #c92a2a;
+  --ifm-code-border-radius: 6px;
+  --ifm-code-padding-horizontal: 0.4rem;
+  --ifm-code-padding-vertical: 0.2rem;
+
+  /* Spacing & Layout */
+  --ifm-spacing-horizontal: 1.5rem;
+  --ifm-navbar-height: 4.5rem;
+  --ifm-navbar-padding-horizontal: 1.5rem;
+
+  /* Typography */
+  --ifm-font-family-base:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
+    Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+  --ifm-font-family-monospace:
+    "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, "Courier New",
+    monospace;
+  --ifm-font-size-base: 16px;
+  --ifm-line-height-base: 1.7;
+
+  /* Borders & Shadows */
+  --ifm-border-color: #dee2e6;
+  --ifm-border-radius: 8px;
+  --ifm-global-shadow-lw: 0 1px 3px 0 rgba(0, 0, 0, 0.08);
+  --ifm-global-shadow-md: 0 2px 8px 0 rgba(0, 0, 0, 0.1);
+  --ifm-global-shadow-tl: 0 4px 12px 0 rgba(0, 0, 0, 0.12);
+
+  /* Highlighted Code Lines */
+  --docusaurus-highlighted-code-line-bg: rgba(37, 99, 235, 0.08);
+
+  /* Animations */
+  --ifm-transition-fast: 150ms;
+  --ifm-transition-slow: 300ms;
+  --ifm-transition-timing-default: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* For readability concerns, you should choose a lighter palette in dark mode. */
+/* ============================================
+   Dark Mode
+   ============================================ */
 [data-theme="dark"] {
-  --ifm-color-primary: #25c2a0;
-  --ifm-color-primary-dark: #21af90;
-  --ifm-color-primary-darker: #1fa588;
-  --ifm-color-primary-darkest: #1a8870;
-  --ifm-color-primary-light: #29d5b0;
-  --ifm-color-primary-lighter: #32d8b4;
-  --ifm-color-primary-lightest: #4fddbf;
-  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.3);
+  /* Primary Colors - Adjusted for dark mode */
+  --ifm-color-primary: #60a5fa;
+  --ifm-color-primary-dark: #3b82f6;
+  --ifm-color-primary-darker: #2563eb;
+  --ifm-color-primary-darkest: #1d4ed8;
+  --ifm-color-primary-light: #93c5fd;
+  --ifm-color-primary-lighter: #bfdbfe;
+  --ifm-color-primary-lightest: #dbeafe;
+
+  /* Background Colors */
+  --ifm-background-color: #1a1d29;
+  --ifm-background-surface-color: #252936;
+
+  /* Text Colors */
+  --ifm-font-color-base: #e9ecef;
+  --ifm-font-color-base-inverse: #1a1d29;
+  --ifm-heading-color: #ffffff;
+
+  /* Code Colors */
+  --ifm-code-background: #252936;
+  --ifm-code-color: #ff6b9d;
+
+  /* Borders */
+  --ifm-border-color: #3a3f4f;
+
+  /* Shadows - Lighter in dark mode */
+  --ifm-global-shadow-lw: 0 1px 3px 0 rgba(0, 0, 0, 0.4);
+  --ifm-global-shadow-md: 0 2px 8px 0 rgba(0, 0, 0, 0.5);
+  --ifm-global-shadow-tl: 0 4px 12px 0 rgba(0, 0, 0, 0.6);
+
+  /* Highlighted Code Lines */
+  --docusaurus-highlighted-code-line-bg: rgba(96, 165, 250, 0.12);
+}
+
+/* ============================================
+   Global Styles
+   ============================================ */
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-feature-settings:
+    "kern" 1,
+    "liga" 1;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ============================================
+   Navbar Enhancements
+   ============================================ */
+.navbar {
+  box-shadow: var(--ifm-global-shadow-lw);
+  backdrop-filter: blur(10px);
+  background-color: rgba(255, 255, 255, 0.95);
+  border-bottom: 1px solid var(--ifm-border-color);
+  transition: all var(--ifm-transition-fast)
+    var(--ifm-transition-timing-default);
+}
+
+[data-theme="dark"] .navbar {
+  background-color: rgba(15, 23, 42, 0.95);
+}
+
+.navbar__logo {
+  margin-right: 1rem;
+  transition: transform var(--ifm-transition-fast)
+    var(--ifm-transition-timing-default);
+}
+
+.navbar__logo:hover {
+  transform: scale(1.05);
+}
+
+.navbar__item {
+  font-weight: 500;
+}
+
+.navbar__link {
+  transition: color var(--ifm-transition-fast)
+    var(--ifm-transition-timing-default);
+  border-radius: 8px;
+  padding: 0.5rem 1rem;
+}
+
+.navbar__link:hover {
+  color: var(--ifm-color-primary);
+  background-color: rgba(37, 99, 235, 0.08);
+}
+
+[data-theme="dark"] .navbar__link:hover {
+  background-color: rgba(96, 165, 250, 0.1);
+}
+
+.header-github-link:hover {
+  opacity: 0.8;
+}
+
+.header-github-link::before {
+  content: "";
+  width: 24px;
+  height: 24px;
+  display: flex;
+  background: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z'/%3E%3C/svg%3E")
+    no-repeat;
+  background-size: contain;
+}
+
+[data-theme="dark"] .header-github-link::before {
+  filter: brightness(0) invert(1);
+}
+
+/* ============================================
+   Sidebar Enhancements
+   ============================================ */
+.theme-doc-sidebar-container {
+  border-right: 1px solid var(--ifm-border-color);
+  background-color: var(--ifm-background-surface-color);
+}
+
+.menu__link {
+  border-radius: 8px;
+  margin: 0.25rem 0;
+  transition: all var(--ifm-transition-fast)
+    var(--ifm-transition-timing-default);
+  font-weight: 400;
+}
+
+.menu__link:hover {
+  background-color: rgba(37, 99, 235, 0.08);
+  color: var(--ifm-color-primary-dark);
+  transform: translateX(2px);
+}
+
+[data-theme="dark"] .menu__link:hover {
+  background-color: rgba(96, 165, 250, 0.1);
+}
+
+.menu__link--active {
+  background-color: rgba(37, 99, 235, 0.1);
+  color: var(--ifm-color-primary-dark);
+  font-weight: 600;
+  border-left: 3px solid var(--ifm-color-primary);
+}
+
+[data-theme="dark"] .menu__link--active {
+  background-color: rgba(96, 165, 250, 0.15);
+}
+
+.menu__list-item-collapsible:hover {
+  background-color: transparent;
+}
+
+/* ============================================
+   Content Area
+   ============================================ */
+.markdown {
+  max-width: 100%;
+}
+
+.markdown > h1 {
+  font-size: 2.5rem;
+  font-weight: 700;
+  margin-bottom: 1.5rem;
+  line-height: 1.2;
+  color: var(--ifm-heading-color);
+}
+
+.markdown > h2 {
+  font-size: 2rem;
+  font-weight: 600;
+  margin-top: 2.5rem;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid var(--ifm-border-color);
+}
+
+.markdown > h3 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-top: 2rem;
+  margin-bottom: 0.75rem;
+}
+
+.markdown > h4 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-top: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+
+/* ============================================
+   Code Blocks
+   ============================================ */
+.prism-code {
+  border-radius: var(--ifm-border-radius);
+  box-shadow: var(--ifm-global-shadow-md);
+  margin: 1.5rem 0;
+}
+
+code {
+  background-color: var(--ifm-code-background);
+  color: var(--ifm-code-color);
+  border: 1px solid var(--ifm-border-color);
+  padding: var(--ifm-code-padding-vertical) var(--ifm-code-padding-horizontal);
+  border-radius: var(--ifm-code-border-radius);
+  font-weight: 500;
+  font-size: var(--ifm-code-font-size);
+}
+
+/* ============================================
+   Tables
+   ============================================ */
+table {
+  display: table;
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  margin: 1.5rem 0;
+  border-radius: var(--ifm-border-radius);
+  overflow: hidden;
+  box-shadow: var(--ifm-global-shadow-md);
+}
+
+thead {
+  background-color: var(--ifm-color-primary);
+  color: white;
+}
+
+thead th {
+  font-weight: 600;
+  padding: 1rem;
+  text-align: left;
+}
+
+tbody tr {
+  transition: background-color var(--ifm-transition-fast)
+    var(--ifm-transition-timing-default);
+}
+
+tbody tr:hover {
+  background-color: rgba(37, 99, 235, 0.05);
+}
+
+[data-theme="dark"] tbody tr:hover {
+  background-color: rgba(96, 165, 250, 0.08);
+}
+
+tbody td {
+  padding: 0.875rem 1rem;
+  border-top: 1px solid var(--ifm-border-color);
+}
+
+/* ============================================
+   Admonitions
+   ============================================ */
+.admonition {
+  border-radius: var(--ifm-border-radius);
+  box-shadow: var(--ifm-global-shadow-lw);
+  border-left-width: 4px;
+  margin: 1.5rem 0;
+}
+
+.admonition-heading {
+  font-weight: 600;
+}
+
+/* ============================================
+   Footer
+   ============================================ */
+.footer {
+  background-color: var(--ifm-background-surface-color);
+  border-top: 1px solid var(--ifm-border-color);
+  padding: 3rem 0 2rem;
+}
+
+.footer__link-item {
+  transition: color var(--ifm-transition-fast)
+    var(--ifm-transition-timing-default);
+}
+
+.footer__link-item:hover {
+  color: var(--ifm-color-primary);
+}
+
+.footer__title {
+  font-weight: 600;
+  margin-bottom: 1rem;
+  color: var(--ifm-heading-color);
+}
+
+.footer__copyright {
+  color: var(--ifm-font-color-base);
+}
+
+/* ============================================
+   Buttons & Links
+   ============================================ */
+a {
+  color: var(--ifm-color-primary);
+  transition: color var(--ifm-transition-fast)
+    var(--ifm-transition-timing-default);
+  text-decoration: none;
+}
+
+a:hover {
+  color: var(--ifm-color-primary-dark);
+  text-decoration: underline;
+}
+
+.button {
+  border-radius: 8px;
+  font-weight: 500;
+  transition: all var(--ifm-transition-fast)
+    var(--ifm-transition-timing-default);
+  box-shadow: var(--ifm-global-shadow-lw);
+}
+
+.button:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--ifm-global-shadow-md);
+}
+
+.button--primary {
+  background-color: var(--ifm-color-primary);
+  border: none;
+  color: white;
+}
+
+.button--primary:hover {
+  background-color: var(--ifm-color-primary-dark);
+  color: white;
+}
+
+/* ============================================
+   Cards & Containers
+   ============================================ */
+.card {
+  border-radius: var(--ifm-border-radius);
+  box-shadow: var(--ifm-global-shadow-md);
+  transition: all var(--ifm-transition-slow)
+    var(--ifm-transition-timing-default);
+  border: 1px solid var(--ifm-border-color);
+}
+
+.card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--ifm-global-shadow-tl);
+}
+
+/* ============================================
+   Search
+   ============================================ */
+.navbar__search-input {
+  border-radius: 8px;
+  border: 1px solid var(--ifm-border-color);
+  transition: all var(--ifm-transition-fast)
+    var(--ifm-transition-timing-default);
+}
+
+.navbar__search-input:focus {
+  border-color: var(--ifm-color-primary);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+/* ============================================
+   Responsive Design
+   ============================================ */
+@media (max-width: 996px) {
+  .markdown > h1 {
+    font-size: 2rem;
+  }
+
+  .markdown > h2 {
+    font-size: 1.75rem;
+  }
+
+  .navbar__item {
+    font-size: 0.9rem;
+  }
+}
+
+/* ============================================
+   Animations
+   ============================================ */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.hero {
+  animation: fadeIn 0.6s ease-out;
+}
+
+/* ============================================
+   Scrollbar Styling
+   ============================================ */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--ifm-background-surface-color);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--ifm-color-primary-light);
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--ifm-color-primary);
+}
+
+/* ============================================
+   Hero Subtitle - Visibility & Glow
+   ============================================ */
+.hero__subtitle {
+  color: var(--ifm-heading-color);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-shadow:
+    0 0 12px rgba(37, 99, 235, 0.4),
+    0 0 24px rgba(37, 99, 235, 0.25),
+    0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="dark"] .hero__subtitle {
+  color: #ffffff;
+  text-shadow:
+    0 0 10px rgba(255, 255, 255, 0.5),
+    0 0 20px rgba(255, 255, 255, 0.3),
+    0 0 30px rgba(96, 165, 250, 0.4),
+    0 2px 8px rgba(0, 0, 0, 0.8);
+}
+
+/* ============================================
+   Utility Classes
+   ============================================ */
+.gradient-text {
+  color: var(--ifm-color-primary);
+}
+
+.shadow-elevated {
+  box-shadow: var(--ifm-global-shadow-tl);
 }

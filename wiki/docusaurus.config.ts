@@ -3,8 +3,8 @@ import type { Config } from "@docusaurus/types";
 import type * as Preset from "@docusaurus/preset-classic";
 
 const config: Config = {
-  title: "TMA Cloud Documentation",
-  tagline: "Self-hosted cloud storage platform",
+  title: "TMA Cloud",
+  tagline: "Self-hosted Cloud Storage Platform",
 
   future: {
     v4: true,
@@ -62,14 +62,19 @@ const config: Config = {
 
   themeConfig: {
     colorMode: {
-      respectPrefersColorScheme: true,
+      respectPrefersColorScheme: false,
+      defaultMode: "dark",
+      disableSwitch: false,
     },
     navbar: {
       title: "TMA Cloud",
       logo: {
         alt: "TMA Cloud Logo",
         src: "img/logo.svg",
+        width: 32,
+        height: 32,
       },
+      hideOnScroll: true,
       items: [
         {
           type: "docSidebar",
@@ -81,6 +86,7 @@ const config: Config = {
           href: "https://github.com/TMA-Cloud/TMA",
           label: "GitHub",
           position: "right",
+          className: "header-github-link",
         },
       ],
     },
@@ -88,7 +94,7 @@ const config: Config = {
       style: "dark",
       links: [
         {
-          title: "Docs",
+          title: "Documentation",
           items: [
             {
               label: "Getting Started",
@@ -97,6 +103,27 @@ const config: Config = {
             {
               label: "API Reference",
               to: "/api/overview",
+            },
+            {
+              label: "Concepts",
+              to: "/concepts/architecture",
+            },
+          ],
+        },
+        {
+          title: "Guides",
+          items: [
+            {
+              label: "User Guides",
+              to: "/guides/user/upload-files",
+            },
+            {
+              label: "Admin Guides",
+              to: "/guides/admin/user-management",
+            },
+            {
+              label: "Operations",
+              to: "/guides/operations/audit-logs",
             },
           ],
         },
@@ -107,14 +134,23 @@ const config: Config = {
               label: "GitHub",
               href: "https://github.com/TMA-Cloud/TMA",
             },
+            {
+              label: "Debugging",
+              to: "/debugging/overview",
+            },
+            {
+              label: "Reference",
+              to: "/reference/environment-variables",
+            },
           ],
         },
       ],
-      copyright: `Copyright © ${new Date().getFullYear()} TMA Cloud All rights reserved.`,
+      copyright: `© ${new Date().getFullYear()} TMA Cloud, All rights reserved.`,
     },
     prism: {
       theme: prismThemes.github,
       darkTheme: prismThemes.dracula,
+      additionalLanguages: ["bash", "json", "sql"],
     },
   } satisfies Preset.ThemeConfig,
 };

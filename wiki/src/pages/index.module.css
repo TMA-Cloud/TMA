@@ -1,0 +1,357 @@
+/**
+ * Homepage Styles
+ * Modern, responsive design for the documentation homepage
+ */
+
+/* ============================================
+   Hero Section
+   ============================================ */
+.heroBanner {
+  padding: 4rem 0 6rem;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+  background-color: var(--ifm-background-surface-color);
+  border-bottom: 1px solid var(--ifm-border-color);
+}
+
+[data-theme="dark"] .heroBanner {
+  background-color: var(--ifm-background-surface-color);
+}
+
+.heroContent {
+  max-width: 800px;
+  margin: 0 auto;
+  animation: fadeIn 0.8s ease-out;
+}
+
+.hero__title {
+  font-size: 3.5rem;
+  font-weight: 700;
+  margin-bottom: 1rem;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  color: var(--ifm-heading-color);
+}
+
+.hero__subtitle {
+  font-size: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.heroDescription {
+  font-size: 1.125rem;
+  line-height: 1.7;
+  margin-bottom: 2.5rem;
+  color: var(--ifm-font-color-base);
+  opacity: 0.8;
+  max-width: 600px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.buttons {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+/* ============================================
+   Features Section
+   ============================================ */
+.features {
+  padding: 5rem 0;
+  background-color: var(--ifm-background-surface-color);
+}
+
+.featuresHeader {
+  text-align: center;
+  margin-bottom: 3rem;
+}
+
+.sectionTitle {
+  font-size: 2.5rem;
+  font-weight: 700;
+  margin-bottom: 1rem;
+  color: var(--ifm-heading-color);
+}
+
+.sectionDescription {
+  font-size: 1.125rem;
+  color: var(--ifm-font-color-base);
+  opacity: 0.8;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.featuresGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 2rem;
+  margin-top: 3rem;
+}
+
+.featureCard {
+  display: flex;
+  flex-direction: column;
+  padding: 2rem;
+  background: var(--ifm-background-color);
+  border-radius: var(--ifm-border-radius);
+  border: 1px solid var(--ifm-border-color);
+  box-shadow: var(--ifm-global-shadow-md);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  text-decoration: none;
+  color: inherit;
+  height: 100%;
+}
+
+.featureCard:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--ifm-global-shadow-md);
+  border-color: var(--ifm-color-primary);
+  text-decoration: none;
+  color: inherit;
+}
+
+.featureIcon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+  display: block;
+}
+
+.featureContent {
+  flex: 1;
+}
+
+.featureTitle {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+  color: var(--ifm-heading-color);
+}
+
+.featureDescription {
+  color: var(--ifm-font-color-base);
+  opacity: 0.8;
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* ============================================
+   Quick Start Section
+   ============================================ */
+.quickStart {
+  padding: 5rem 0;
+  background-color: var(--ifm-background-color);
+}
+
+.quickStartContent {
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.quickStartText {
+  text-align: center;
+}
+
+.quickStartDescription {
+  font-size: 1.125rem;
+  color: var(--ifm-font-color-base);
+  opacity: 0.8;
+  margin-bottom: 3rem;
+  max-width: 700px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.quickStartSteps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 2rem;
+  margin-bottom: 3rem;
+  text-align: left;
+}
+
+.step {
+  display: flex;
+  gap: 1.5rem;
+  padding: 1.5rem;
+  background: var(--ifm-background-surface-color);
+  border-radius: var(--ifm-border-radius);
+  border: 1px solid var(--ifm-border-color);
+  transition: all 0.3s ease;
+}
+
+.step:hover {
+  border-color: var(--ifm-color-primary);
+  box-shadow: var(--ifm-global-shadow-md);
+}
+
+.stepNumber {
+  flex-shrink: 0;
+  width: 3rem;
+  height: 3rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--ifm-color-primary);
+  color: white;
+  border-radius: 50%;
+  font-weight: 600;
+  font-size: 1.25rem;
+}
+
+.stepContent {
+  flex: 1;
+}
+
+.stepTitle {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  color: var(--ifm-heading-color);
+}
+
+.step p {
+  margin: 0;
+  color: var(--ifm-font-color-base);
+  opacity: 0.8;
+  line-height: 1.6;
+}
+
+/* ============================================
+   Documentation Links Section
+   ============================================ */
+.docsLinks {
+  padding: 5rem 0;
+  background-color: var(--ifm-background-surface-color);
+}
+
+.docsLinks .sectionTitle {
+  text-align: center;
+  margin-bottom: 3rem;
+}
+
+.docsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.5rem;
+}
+
+.docCard {
+  display: flex;
+  flex-direction: column;
+  padding: 2rem;
+  background: var(--ifm-background-color);
+  border-radius: var(--ifm-border-radius);
+  border: 1px solid var(--ifm-border-color);
+  box-shadow: var(--ifm-global-shadow-lw);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  text-decoration: none;
+  color: inherit;
+}
+
+.docCard:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--ifm-global-shadow-md);
+  border-color: var(--ifm-color-primary);
+  text-decoration: none;
+  color: inherit;
+}
+
+.docCardIcon {
+  font-size: 2.5rem;
+  margin-bottom: 1rem;
+}
+
+.docCardTitle {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  color: var(--ifm-heading-color);
+}
+
+.docCardDescription {
+  color: var(--ifm-font-color-base);
+  opacity: 0.8;
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* ============================================
+   Animations
+   ============================================ */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ============================================
+   Responsive Design
+   ============================================ */
+@media (max-width: 996px) {
+  .hero__title {
+    font-size: 2.5rem;
+  }
+
+  .hero__subtitle {
+    font-size: 1.25rem;
+  }
+
+  .heroDescription {
+    font-size: 1rem;
+  }
+
+  .sectionTitle {
+    font-size: 2rem;
+  }
+
+  .featuresGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .quickStartSteps {
+    grid-template-columns: 1fr;
+  }
+
+  .docsGrid {
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .heroBanner {
+    padding: 3rem 0 4rem;
+  }
+
+  .hero__title {
+    font-size: 2rem;
+  }
+
+  .buttons {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .buttons .button {
+    width: 100%;
+  }
+
+  .features,
+  .quickStart,
+  .docsLinks {
+    padding: 3rem 0;
+  }
+
+  .docsGrid {
+    grid-template-columns: 1fr;
+  }
+}
