@@ -72,10 +72,12 @@ File system architecture and organization in TMA Cloud.
 
 ## Search
 
-### Full-Text Search
+### Trigram Similarity Search
 
-- PostgreSQL full-text search
-- Indexed on file names
+- PostgreSQL pg_trgm extension for fuzzy text matching
+- GIN index on file names for fast searches
+- Prefix matching for short queries
+- Similarity-based matching for longer queries
 - Real-time search results
 - User-scoped searches
 

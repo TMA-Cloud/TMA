@@ -8,7 +8,6 @@ Manage multi-factor authentication in TMA Cloud (admin only).
 
 - Time-based One-Time Password
 - QR code setup
-- Backup codes support
 - Optional per-user
 
 ## Admin Capabilities
@@ -31,8 +30,7 @@ Manage multi-factor authentication in TMA Cloud (admin only).
 
 - Users enable MFA themselves
 - QR code generation
-- Verification required
-- Backup codes provided
+- Verification required before enabling
 
 ### MFA Disable
 

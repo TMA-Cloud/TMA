@@ -41,7 +41,7 @@ Structured JSON logs for log aggregation:
 
 Human-readable colored output:
 
-```
+```bash
 [14:20:00.123] INFO  (12345): User logged in
     requestId: "abc123"
     userId: "user_001"

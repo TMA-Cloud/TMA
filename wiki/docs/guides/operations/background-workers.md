@@ -69,13 +69,13 @@ docker compose up -d
 
 ## Monitoring Workers
 
-### Audit Worker
+### Monitoring Audit Worker
 
 - Check logs for processing status
 - Monitor queue size
 - Verify events being written
 
-### Cleanup Services
+### Monitoring Cleanup Services
 
 - Check logs for cleanup operations
 - Monitor disk space

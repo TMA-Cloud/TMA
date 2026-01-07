@@ -25,8 +25,8 @@ Troubleshooting authentication problems.
 
 1. Verify time sync on device (TOTP requires accurate time)
 2. Check MFA secret is correct
-3. Use backup codes if available
-4. Contact admin to reset MFA
+3. Ensure MFA is properly enabled after setup
+4. Contact admin if MFA needs to be reset (admin cannot disable user MFA)
 
 ## Session Issues
 

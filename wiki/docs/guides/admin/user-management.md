@@ -21,12 +21,6 @@ Manage users in TMA Cloud (admin only).
 
 ## Creating Users
 
-### Manual Creation
-
-- Admins can create user accounts
-- Set initial storage limits
-- Configure custom drives (if applicable)
-
 ### Signup Control
 
 - **Enable Signup:** Allow public registration

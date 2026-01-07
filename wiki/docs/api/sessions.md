@@ -4,7 +4,7 @@ Session management endpoints for TMA Cloud.
 
 ## Get Sessions
 
-### GET `/api/sessions`
+### GET `/api/auth/sessions`
 
 Get all active sessions for authenticated user.
 
@@ -12,25 +12,22 @@ Get all active sessions for authenticated user.
 
 ```json
 {
-  "success": true,
-  "data": {
-    "sessions": [
-      {
-        "id": "session_123",
-        "userAgent": "Mozilla/5.0...",
-        "ipAddress": "192.168.1.1",
-        "createdAt": "2024-01-01T00:00:00Z",
-        "lastActivity": "2024-01-01T12:00:00Z",
-        "current": true
-      }
-    ]
-  }
+  "sessions": [
+    {
+      "id": "session_123",
+      "userAgent": "Mozilla/5.0...",
+      "ipAddress": "192.168.1.1",
+      "createdAt": "2024-01-01T00:00:00Z",
+      "lastActivity": "2024-01-01T12:00:00Z",
+      "isCurrent": true
+    }
+  ]
 }
 ```
 
 ## Revoke Session
 
-### DELETE `/api/sessions/:sessionId`
+### DELETE `/api/auth/sessions/:sessionId`
 
 Revoke a specific session.
 
@@ -38,14 +35,13 @@ Revoke a specific session.
 
 ```json
 {
-  "success": true,
-  "message": "Session revoked"
+  "message": "Session revoked successfully"
 }
 ```
 
 ## Revoke Other Sessions
 
-### POST `/api/sessions/revoke-others`
+### POST `/api/auth/sessions/revoke-others`
 
 Revoke all other active sessions except the current one.
 
@@ -53,8 +49,8 @@ Revoke all other active sessions except the current one.
 
 ```json
 {
-  "success": true,
-  "message": "All other sessions revoked"
+  "message": "Other sessions revoked successfully",
+  "deletedCount": 3
 }
 ```
 

@@ -8,17 +8,19 @@ PostgreSQL database schema for TMA Cloud.
 
 User accounts.
 
-| Column        | Type         | Description                 |
-| ------------- | ------------ | --------------------------- |
-| `id`          | VARCHAR(255) | Primary key                 |
-| `email`       | VARCHAR(255) | Unique, not null            |
-| `password`    | VARCHAR(255) | Hashed (nullable for OAuth) |
-| `name`        | VARCHAR(255) | Display name                |
-| `google_id`   | VARCHAR(255) | Unique (optional)           |
-| `mfa_enabled` | BOOLEAN      | Default false               |
-| `mfa_secret`  | TEXT         | TOTP secret (nullable)      |
-| `created_at`  | TIMESTAMPTZ  | Default now()               |
-| `updated_at`  | TIMESTAMPTZ  | Default now()               |
+| Column                    | Type         | Description                  |
+| ------------------------- | ------------ | ---------------------------- |
+| `id`                      | VARCHAR(255) | Primary key                  |
+| `email`                   | VARCHAR(255) | Unique, not null             |
+| `password`                | VARCHAR(255) | Hashed (nullable for OAuth)  |
+| `name`                    | VARCHAR(255) | Display name                 |
+| `google_id`               | VARCHAR(255) | Unique (optional)            |
+| `mfa_enabled`             | BOOLEAN      | Default false                |
+| `mfa_secret`              | TEXT         | TOTP secret (nullable)       |
+| `token_version`           | INTEGER      | Token version for revocation |
+| `last_token_invalidation` | TIMESTAMP    | Last token invalidation time |
+| `created_at`              | TIMESTAMPTZ  | Default now()                |
+| `updated_at`              | TIMESTAMPTZ  | Default now()                |
 
 ### `files`
 
@@ -36,8 +38,7 @@ Files and folders.
 | `path`       | TEXT         | Full path                     |
 | `starred`    | BOOLEAN      | Default false                 |
 | `deleted_at` | TIMESTAMPTZ  | Soft delete timestamp         |
-| `created_at` | TIMESTAMPTZ  | Default now()                 |
-| `updated_at` | TIMESTAMPTZ  | Default now()                 |
+| `modified`   | TIMESTAMPTZ  | Last modification time        |
 
 **Indexes:** `user_id`, `parent_id`, `path`, `deleted_at`, full-text on `name`
 
@@ -148,8 +149,19 @@ ORDER BY type, name;
 ```sql
 SELECT * FROM files
 WHERE user_id = $1 AND deleted_at IS NULL
-  AND to_tsvector('english', name) @@ to_tsquery('english', $2)
-ORDER BY updated_at DESC;
+  AND (
+    lower(name) LIKE lower($2) || '%'
+    OR (lower(name) LIKE '%' || lower($2) || '%'
+        AND similarity(lower(name), lower($2)) > 0.15)
+  )
+ORDER BY
+  CASE
+    WHEN lower(name) = lower($2) THEN 1
+    WHEN lower(name) LIKE lower($2) || '%' THEN 2
+    ELSE 3
+  END ASC,
+  similarity(lower(name), lower($2)) DESC NULLS LAST,
+  modified DESC;
 ```
 
 **Query audit logs:**

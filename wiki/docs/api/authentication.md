@@ -22,13 +22,15 @@ Create new user account. Respects signup enabled/disabled setting.
 
 ```json
 {
-  "success": true,
-  "data": {
-    "user": { ... },
-    "token": "jwt_token"
+  "user": {
+    "id": "user_123",
+    "email": "user@example.com",
+    "name": "User Name"
   }
 }
 ```
+
+**Note:** The JWT token is set as an httpOnly cookie named `token`.
 
 ## Login
 
@@ -50,13 +52,15 @@ Authenticate user and receive JWT token. If MFA is enabled, requires `mfaCode` i
 
 ```json
 {
-  "success": true,
-  "data": {
-    "user": { ... },
-    "token": "jwt_token"
+  "user": {
+    "id": "user_123",
+    "email": "user@example.com",
+    "name": "User Name"
   }
 }
 ```
+
+**Note:** The JWT token is set as an httpOnly cookie named `token`.
 
 ## Logout
 
@@ -96,14 +100,11 @@ Get current user profile.
 
 ```json
 {
-  "success": true,
-  "data": {
-    "id": "user_123",
-    "email": "user@example.com",
-    "name": "User Name",
-    "mfaEnabled": false,
-    "createdAt": "2024-01-01T00:00:00Z"
-  }
+  "id": "user_123",
+  "email": "user@example.com",
+  "name": "User Name",
+  "mfaEnabled": false,
+  "createdAt": "2024-01-01T00:00:00Z"
 }
 ```
 
@@ -117,10 +118,7 @@ Check if Google OAuth is enabled.
 
 ```json
 {
-  "success": true,
-  "data": {
-    "enabled": true
-  }
+  "enabled": true
 }
 ```
 
@@ -142,10 +140,7 @@ Get MFA status for current user.
 
 ```json
 {
-  "success": true,
-  "data": {
-    "enabled": false
-  }
+  "enabled": false
 }
 ```
 
@@ -157,11 +152,8 @@ Generate MFA secret and QR code for setup.
 
 ```json
 {
-  "success": true,
-  "data": {
-    "secret": "MFA_SECRET",
-    "qrCode": "data:image/png;base64,..."
-  }
+  "secret": "MFA_SECRET",
+  "qrCode": "data:image/png;base64,..."
 }
 ```
 

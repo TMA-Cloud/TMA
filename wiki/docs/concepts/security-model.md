@@ -89,7 +89,9 @@ Overall security architecture and practices in TMA Cloud.
 - **CSP:** Content Security Policy
 - **X-Frame-Options:** Prevent clickjacking
 - **X-Content-Type-Options:** MIME type sniffing prevention
-- **Strict-Transport-Security:** HSTS support
+- **X-XSS-Protection:** XSS protection
+- **Referrer-Policy:** Referrer information control
+- **Permissions-Policy:** Feature permissions
 
 ## Best Practices
 

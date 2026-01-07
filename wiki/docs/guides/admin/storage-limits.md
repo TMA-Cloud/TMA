@@ -35,9 +35,9 @@ Configure storage limits for users in TMA Cloud (admin only).
 
 ### User-Level
 
-- View current usage per user
-- See percentage of limit used
+- View current usage per user (used, total, free)
 - Visual indicators
+- Usage can be calculated as percentage (used/total)
 
 ### System-Level
 

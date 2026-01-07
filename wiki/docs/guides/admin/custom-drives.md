@@ -46,7 +46,7 @@ Custom drives allow users to store files on external or mounted storage instead 
 
 ### Docker Format
 
-```
+```bash
 /host/path:/container/path
 ```
 
@@ -82,7 +82,7 @@ Custom drives allow users to store files on external or mounted storage instead 
 - Syncs files to database
 - Handles file changes
 
-### Configuration
+### Scanner Configuration
 
 - Per-user scanner configuration
 - Automatic file detection

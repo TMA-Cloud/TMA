@@ -12,8 +12,7 @@ Get OnlyOffice editor configuration for a file.
 
 ```json
 {
-  "success": true,
-  "data": {
+  "config": {
     "document": {
       "fileType": "docx",
       "key": "file_key",
@@ -24,7 +23,9 @@ Get OnlyOffice editor configuration for a file.
       "mode": "edit",
       "callbackUrl": "https://example.com/api/onlyoffice/callback"
     }
-  }
+  },
+  "token": "signed_jwt_token",
+  "onlyofficeJsUrl": "https://onlyoffice.example.com/web-apps/apps/api/documents/api.js"
 }
 ```
 
@@ -59,9 +60,11 @@ OnlyOffice callback data
 
 ```json
 {
-  "success": true
+  "error": 0
 }
 ```
+
+**Note:** OnlyOffice callback format. `error: 0` indicates success.
 
 ## Related Topics
 

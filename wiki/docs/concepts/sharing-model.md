@@ -40,7 +40,7 @@ Link multiple files to a single share link.
 
 ### Default Format
 
-```
+```bash
 http://your-domain.com/s/{token}
 ```
 
@@ -48,7 +48,7 @@ http://your-domain.com/s/{token}
 
 When `SHARE_BASE_URL` is configured:
 
-```
+```bash
 http://share.your-domain.com/s/{token}
 ```
 

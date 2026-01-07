@@ -23,7 +23,6 @@ TMA Cloud supports multiple authentication methods:
 
 - TOTP-based (Time-based One-Time Password)
 - QR code setup
-- Backup codes support
 - Optional per-user
 
 ## Session Management

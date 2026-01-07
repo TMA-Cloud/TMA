@@ -17,23 +17,18 @@ List files and folders.
 **Response:**
 
 ```json
-{
-  "success": true,
-  "data": {
-    "files": [
-      {
-        "id": "file_123",
-        "name": "document.pdf",
-        "type": "file",
-        "size": 1024,
-        "mimeType": "application/pdf",
-        "parentId": "folder_456",
-        "starred": false,
-        "createdAt": "2024-01-01T00:00:00Z"
-      }
-    ]
+[
+  {
+    "id": "file_123",
+    "name": "document.pdf",
+    "type": "file",
+    "size": 1024,
+    "mimeType": "application/pdf",
+    "parentId": "folder_456",
+    "starred": false,
+    "modified": "2024-01-01T00:00:00Z"
   }
-}
+]
 ```
 
 ## File Statistics
@@ -46,11 +41,10 @@ Get file statistics (total files, total size).
 
 ```json
 {
-  "success": true,
-  "data": {
-    "totalFiles": 100,
-    "totalSize": 1073741824
-  }
+  "totalFiles": 100,
+  "totalFolders": 50,
+  "sharedCount": 10,
+  "starredCount": 25
 }
 ```
 
@@ -68,12 +62,18 @@ Search files.
 **Response:**
 
 ```json
-{
-  "success": true,
-  "data": {
-    "files": [ ... ]
+[
+  {
+    "id": "file_123",
+    "name": "document.pdf",
+    "type": "file",
+    "size": 1024,
+    "mimeType": "application/pdf",
+    "parentId": "folder_456",
+    "starred": false,
+    "modified": "2024-01-01T00:00:00Z"
   }
-}
+]
 ```
 
 ## Create Folder
@@ -95,12 +95,11 @@ Create folder.
 
 ```json
 {
-  "success": true,
-  "data": {
-    "id": "folder_123",
-    "name": "New Folder",
-    "type": "folder"
-  }
+  "id": "folder_123",
+  "name": "New Folder",
+  "type": "folder",
+  "size": null,
+  "modified": "2024-01-01T00:00:00Z"
 }
 ```
 
@@ -120,13 +119,13 @@ Upload file.
 
 ```json
 {
-  "success": true,
-  "data": {
-    "id": "file_123",
-    "name": "uploaded_file.pdf",
-    "size": 1024,
-    "mimeType": "application/pdf"
-  }
+  "id": "file_123",
+  "name": "uploaded_file.pdf",
+  "type": "file",
+  "size": 1024,
+  "mimeType": "application/pdf",
+  "parentId": null,
+  "modified": "2024-01-01T00:00:00Z"
 }
 ```
 
@@ -149,8 +148,7 @@ Move files/folders.
 
 ```json
 {
-  "success": true,
-  "message": "Files moved successfully"
+  "success": true
 }
 ```
 
@@ -173,8 +171,7 @@ Copy files/folders.
 
 ```json
 {
-  "success": true,
-  "message": "Files copied successfully"
+  "success": true
 }
 ```
 
@@ -197,11 +194,10 @@ Rename file/folder.
 
 ```json
 {
-  "success": true,
-  "data": {
-    "id": "file_123",
-    "name": "New Name"
-  }
+  "id": "file_123",
+  "name": "New Name",
+  "type": "file",
+  "modified": "2024-01-01T00:00:00Z"
 }
 ```
 
@@ -224,8 +220,7 @@ Star/unstar files.
 
 ```json
 {
-  "success": true,
-  "message": "Files starred"
+  "success": true
 }
 ```
 
@@ -243,19 +238,25 @@ List starred files.
 **Response:**
 
 ```json
-{
-  "success": true,
-  "data": {
-    "files": [ ... ]
+[
+  {
+    "id": "file_123",
+    "name": "document.pdf",
+    "type": "file",
+    "size": 1024,
+    "mimeType": "application/pdf",
+    "parentId": "folder_456",
+    "starred": false,
+    "modified": "2024-01-01T00:00:00Z"
   }
-}
+]
 ```
 
 ## Share Files
 
 ### POST `/api/files/share`
 
-Share/unshare files.
+Share/unshare files. Creates share links if they don't exist, or removes sharing if `shared: false`.
 
 **Request Body:**
 
@@ -271,8 +272,63 @@ Share/unshare files.
 ```json
 {
   "success": true,
-  "data": {
-    "shareLink": "http://example.com/s/token123"
+  "links": {
+    "file_123": "http://example.com/s/token123",
+    "file_456": "http://example.com/s/token456"
+  }
+}
+```
+
+**Note:** When `shared: false`, the response still includes `success: true` but files are unshared and links are removed.
+
+## Get Share Links
+
+### POST `/api/files/share/links`
+
+Get share links for multiple files without creating new shares.
+
+**Request Body:**
+
+```json
+{
+  "ids": ["file_123", "file_456"]
+}
+```
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "links": {
+    "file_123": "http://example.com/s/token123",
+    "file_456": "http://example.com/s/token456"
+  }
+}
+```
+
+## Link to Parent Share
+
+### POST `/api/files/link-parent-share`
+
+Link files to their parent folder's share link. If the parent folder is shared, the files will be added to that share.
+
+**Request Body:**
+
+```json
+{
+  "ids": ["file_123", "file_456"]
+}
+```
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "links": {
+    "file_123": "http://example.com/s/parent_token",
+    "file_456": "http://example.com/s/parent_token"
   }
 }
 ```
@@ -291,12 +347,18 @@ List files shared by current user.
 **Response:**
 
 ```json
-{
-  "success": true,
-  "data": {
-    "files": [ ... ]
+[
+  {
+    "id": "file_123",
+    "name": "document.pdf",
+    "type": "file",
+    "size": 1024,
+    "mimeType": "application/pdf",
+    "parentId": "folder_456",
+    "starred": false,
+    "modified": "2024-01-01T00:00:00Z"
   }
-}
+]
 ```
 
 ## Delete Files
@@ -317,8 +379,7 @@ Move files to trash.
 
 ```json
 {
-  "success": true,
-  "message": "Files moved to trash"
+  "success": true
 }
 ```
 
@@ -336,12 +397,18 @@ List files in trash.
 **Response:**
 
 ```json
-{
-  "success": true,
-  "data": {
-    "files": [ ... ]
+[
+  {
+    "id": "file_123",
+    "name": "document.pdf",
+    "type": "file",
+    "size": 1024,
+    "mimeType": "application/pdf",
+    "parentId": "folder_456",
+    "starred": false,
+    "modified": "2024-01-01T00:00:00Z"
   }
-}
+]
 ```
 
 ## Restore Files
@@ -363,7 +430,7 @@ Restore files from trash.
 ```json
 {
   "success": true,
-  "message": "Files restored"
+  "message": "Restored 2 file(s) from trash"
 }
 ```
 
@@ -385,10 +452,26 @@ Permanently delete files.
 
 ```json
 {
-  "success": true,
-  "message": "Files permanently deleted"
+  "success": true
 }
 ```
+
+## Empty Trash
+
+### POST `/api/files/trash/empty`
+
+Permanently delete all files in trash.
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "message": "Deleted 5 file(s) from trash"
+}
+```
+
+**Note:** If trash is already empty, returns: `{"success": true, "message": "Trash is already empty"}`
 
 ## Download File
 

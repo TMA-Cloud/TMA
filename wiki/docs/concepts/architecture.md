@@ -8,18 +8,64 @@ TMA Cloud uses **Single-Origin Architecture** - backend serves both API and fron
 
 ### Production Architecture
 
-```
-Browser → Express Backend (/: Static Files, /api/*: API, /s/*: Share Links)
-         ↓
-    PostgreSQL + Redis (Cache)
+```bash
+┌─────────┐
+│ Browser │
+└────┬────┘
+     │
+     │ HTTP Requests
+     │
+┌────▼─────────────────────────────────────────────┐
+│         Express Backend (:3000)                  │
+│  ┌──────────────────────────────────────────┐    │
+│  │ /          → Static Frontend Files       │    │
+│  │ /api/*     → API Endpoints               │    │
+│  │ /s/*       → Share Links                 │    │
+│  │ /health    → Health Check                │    │
+│  │ /metrics   → Prometheus Metrics          │    │
+│  └──────────────────────────────────────────┘    │
+└────┬───────────────────┬─────────────────────────┘
+     │                   │
+     │                   │
+┌────▼─────┐      ┌──────▼──────┐
+│PostgreSQL│      │    Redis    │
+│ Database │      │   (Cache)   │
+└──────────┘      └─────────────┘
 ```
 
 ### Development Architecture
 
-```
-Browser → Vite Dev Server (:5173) → Proxies /api/* and /s/* to Backend (:3000)
-         ↓
-    PostgreSQL + Redis
+```bash
+┌─────────┐
+│ Browser │
+└────┬────┘
+     │
+     │ HTTP Requests
+     │
+┌────▼──────────────────────────────────────┐
+│     Vite Dev Server (:5173)               │
+│  ┌────────────────────────────────────┐   │
+│  │ Frontend Development Server        │   │
+│  │ Proxies /api/* → Backend (:3000)   │   │
+│  │ Proxies /s/*   → Backend (:3000)   │   │
+│  └────────────────────────────────────┘   │
+└────┬──────────────────────────────────────┘
+     │
+     │ Proxy Requests
+     │
+┌────▼─────────────────────────────────────┐
+│      Express Backend (:3000)             │
+│  ┌────────────────────────────────────┐  │
+│  │ API Endpoints                      │  │
+│  │ Share Links                        │  │
+│  └────────────────────────────────────┘  │
+└────┬───────────────────┬─────────────────┘
+     │                   │
+     │                   │
+┌────▼─────┐      ┌──────▼──────┐
+│PostgreSQL│      │    Redis    │
+│ Database │      │   (Cache)   │
+└──────────┘      └─────────────┘
 ```
 
 **Benefits:** No CORS issues, simplified deployment, cookie-based auth, no frontend env vars needed.
@@ -30,7 +76,7 @@ When `SHARE_BASE_URL` is configured, share links can use a dedicated domain. Sha
 
 ## Backend Structure
 
-```
+```bash
 backend/
 ├── config/          # Configuration (database, redis, logger)
 ├── controllers/     # Request handlers
@@ -53,7 +99,7 @@ backend/
 
 ## Frontend Structure
 
-```
+```bash
 frontend/src/
 ├── components/   # React components
 ├── contexts/     # State management
@@ -69,11 +115,57 @@ frontend/src/
 
 ## Data Flow
 
-**Authentication:** Login → JWT token → httpOnly cookie → AuthContext updates
+### Authentication Flow
 
-**File Upload:** FormData → POST /api/files/upload → File saved → Database record → Response
+```bash
+┌─────────┐     POST /api/login       ┌──────────┐
+│ Browser │ ────────────────────────> │ Backend  │
+└─────────┘                           └────┬─────┘
+     │                                     │
+     │                                     │ Validate credentials
+     │                                     │ Create session
+     │                                     │ Generate JWT token
+     │                                     │
+     │<────────────────────────────────────┘
+     │ Set httpOnly cookie
+     │
+┌────▼─────────┐
+│ AuthContext  │
+│   Updated    │
+└──────────────┘
+```
 
-**Share Link:** POST /api/files/share → Share link created → Token generated → Response with URL
+### File Upload Flow
+
+```bash
+┌──────────┐     POST /api/files/upload     ┌──────────┐
+│ Browser  │ ─────────────────────────────> │ Backend  │
+│(FormData)│                                └────┬─────┘
+└──────────┘                                     │
+                                                 │ Validate & save file
+                                                 │ Create database record
+                                                 │ Update cache
+                                                 │
+┌─────────┐     Response with file info          │
+│ Browser │<─────────────────────────────────────┘
+└─────────┘
+```
+
+### Share Link Flow
+
+```bash
+┌─────────┐     POST /api/files/share      ┌──────────┐
+│ Browser │ ─────────────────────────────> │ Backend  │
+└─────────┘                                └────┬─────┘
+                                                │
+                                                │ Create share link
+                                                │ Generate token
+                                                │ Link files
+                                                │
+┌─────────┐     Response with share URL         │
+│ Browser │<────────────────────────────────────┘
+└─────────┘
+```
 
 ## Database Schema
 
