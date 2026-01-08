@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { useToast } from "../../../hooks/useToast";
 import { Modal } from "../../ui/Modal";
+import { useAuth } from "../../../contexts/AuthContext";
 import {
   getMfaStatus,
   setupMfa,
@@ -27,8 +28,49 @@ interface MfaModalProps {
 
 type MfaStep = "status" | "setup" | "verify" | "disable" | "sessionPrompt";
 
+/**
+ * Mask email address for privacy (e.g., useremail****@***.com)
+ */
+function maskEmail(email: string): string {
+  if (!email) return "userema****@***.com";
+  const parts = email.split("@");
+  const localPart = parts[0];
+  const domain = parts[1];
+
+  if (!localPart || !domain) return "userema****@***.com";
+
+  // Keep first 7 characters of local part, mask the rest
+  const maskedLocal =
+    localPart.length > 7
+      ? localPart.substring(0, 7) + "****"
+      : localPart.substring(0, Math.max(1, localPart.length - 4)) + "****";
+
+  // Mask domain (keep only last 3 characters if available)
+  const maskedDomain =
+    domain.length > 3 ? "***" + domain.substring(domain.length - 3) : "***.com";
+
+  return `${maskedLocal}@${maskedDomain}`;
+}
+
+/**
+ * Format backup codes in groups of 5 with numbered brackets
+ */
+function formatBackupCodes(codes: string[]): string {
+  let result = "";
+  for (let i = 0; i < codes.length; i++) {
+    const num = i + 1;
+    const padding = num < 10 ? " " : "";
+    result += `[${padding}${num} ]  ${codes[i]}\n`;
+    if ((i + 1) % 5 === 0 && i < codes.length - 1) {
+      result += "\n";
+    }
+  }
+  return result.trim();
+}
+
 export const MfaModal: React.FC<MfaModalProps> = ({ isOpen, onClose }) => {
   const { showToast } = useToast();
+  const { user } = useAuth();
   const [step, setStep] = useState<MfaStep>("status");
   const [mfaEnabled, setMfaEnabled] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -208,18 +250,67 @@ export const MfaModal: React.FC<MfaModalProps> = ({ isOpen, onClose }) => {
   };
 
   const downloadBackupCodes = (codes: string[]) => {
-    const content =
-      `MFA Backup Codes\n\n` +
-      `Generated: ${new Date().toLocaleString()}\n\n` +
-      `IMPORTANT: Save these codes in a safe place. Each code can only be used once.\n\n` +
-      codes.map((code, index) => `${index + 1}. ${code}`).join("\n") +
-      `\n\nThese backup codes can be used to access your account if you lose your authenticator device.`;
+    const appName = "TMA Cloud";
+    const maskedEmail = user?.email
+      ? maskEmail(user.email)
+      : "userema****@***.com";
+    const now = new Date();
+    const dateTime = now.toLocaleString("en-US", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: true,
+    });
+    const dateStr = now.toISOString().split("T")[0]; // YYYY-MM-DD
+    const fileName = `mfa-backup-codes_TMA-Cloud_${dateStr}.txt`;
+
+    const content = `Multi-Factor Authentication (MFA) Backup Codes
+
+Application: ${appName}
+Account: ${maskedEmail}
+Generated: ${dateTime}
+
+---
+
+IMPORTANT — READ CAREFULLY
+
+• Each backup code can be used ONLY ONCE
+• Store this file in a SECURE LOCATION
+• Anyone with these codes can access your account
+• If this file is lost or exposed, REGENERATE CODES IMMEDIATELY
+
+Generating new backup codes will invalidate this entire list.
+
+---
+
+BACKUP CODES
+
+${formatBackupCodes(codes)}
+
+---
+
+HOW TO USE
+
+If you cannot access your authenticator app:
+
+1. Sign in with your username and password
+2. When prompted for MFA, enter ONE unused backup code
+3. The code will be invalid after successful use
+
+---
+
+Need new backup codes?
+Go to: Account Settings → Security → Multi-Factor Authentication
+`;
 
     const blob = new Blob([content], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `mfa-backup-codes-${new Date().toISOString().split("T")[0]}.txt`;
+    a.download = fileName;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

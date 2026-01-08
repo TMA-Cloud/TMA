@@ -43,7 +43,10 @@ Manage multi-factor authentication in TMA Cloud (admin only).
 ### Backup Codes
 
 - Delivered as a downloadable text file on enable or regenerate
+- File format includes application name, masked account email, generation date, and usage instructions
+- File name: `mfa-backup-codes_TMA-Cloud_YYYY-MM-DD.txt`
 - Each code is single-use; dashes are optional when typing codes
+- Codes formatted in groups of 5 with numbered brackets
 - Regenerate to replace all existing codes
 
 ## Best Practices
