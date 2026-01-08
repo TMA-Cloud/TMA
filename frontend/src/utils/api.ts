@@ -252,6 +252,7 @@ export interface UserSummary {
   name: string;
   email: string;
   createdAt: string;
+  mfaEnabled: boolean;
 }
 
 export async function fetchAllUsers(): Promise<{

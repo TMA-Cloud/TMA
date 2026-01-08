@@ -123,6 +123,7 @@ async function listUsers(req, res) {
       email: user.email,
       name: user.name,
       createdAt: user.created_at,
+      mfaEnabled: user.mfa_enabled || false,
     }));
 
     // Log admin action

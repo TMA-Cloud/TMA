@@ -85,20 +85,26 @@ async function getAllUsersBasic() {
   const cached = await getCache(cacheKey);
 
   if (cached !== null) {
-    // Cache hit - fetch emails separately from database (emails not cached for security)
+    // Cache hit - fetch emails and MFA status separately from database (emails not cached for security)
     // This gives us cache performance while protecting sensitive email data
-    const emailResult = await pool.query('SELECT id, email FROM users ORDER BY created_at ASC');
-    const emailMap = new Map(emailResult.rows.map(row => [row.id, row.email]));
+    const emailResult = await pool.query('SELECT id, email, mfa_enabled FROM users ORDER BY created_at ASC');
+    const emailMap = new Map(
+      emailResult.rows.map(row => [row.id, { email: row.email, mfa_enabled: row.mfa_enabled || false }])
+    );
 
-    // Merge cached data with fresh emails
-    return cached.map(user => ({
-      ...user,
-      email: emailMap.get(user.id) || null,
-    }));
+    // Merge cached data with fresh emails and MFA status
+    return cached.map(user => {
+      const freshData = emailMap.get(user.id);
+      return {
+        ...user,
+        email: freshData?.email || null,
+        mfa_enabled: freshData?.mfa_enabled || false,
+      };
+    });
   }
 
   // Cache miss - query database
-  const result = await pool.query('SELECT id, email, name, created_at FROM users ORDER BY created_at ASC');
+  const result = await pool.query('SELECT id, email, name, created_at, mfa_enabled FROM users ORDER BY created_at ASC');
   const users = result.rows;
 
   // Cache users WITHOUT emails for security (emails are sensitive PII)
@@ -107,6 +113,7 @@ async function getAllUsersBasic() {
     id: user.id,
     name: user.name,
     created_at: user.created_at,
+    mfa_enabled: user.mfa_enabled || false,
   }));
   await setCache(cacheKey, usersWithoutEmails, 120);
 
