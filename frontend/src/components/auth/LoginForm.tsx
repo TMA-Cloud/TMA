@@ -79,17 +79,23 @@ export const LoginForm: React.FC<{ onSwitch: () => void }> = ({ onSwitch }) => {
             </label>
             <input
               type="text"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              maxLength={6}
+              maxLength={9}
               value={mfaCode}
-              onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, ""))}
-              className="border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-3 w-full bg-gray-50/80 dark:bg-gray-800/80 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm transition-all duration-200 text-base text-center text-xl tracking-widest font-mono"
-              placeholder="000000"
+              onChange={(e) => {
+                const value = e.target.value.toUpperCase();
+                // Allow dashes for readability (e.g., ABCD-EFGH) but strip them before storing
+                const filtered = value.replace(/[^A-Z0-9-]/g, "");
+                // Strip dashes before setting state
+                const withoutDashes = filtered.replace(/-/g, "");
+                setMfaCode(withoutDashes);
+              }}
+              className="border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-3 w-full bg-gray-50/80 dark:bg-gray-800/80 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm transition-all duration-200 text-base text-center text-xl tracking-widest font-mono uppercase"
+              placeholder="000000 or ABCD-EFGH"
               autoFocus
             />
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-              Enter the 6-digit code from your authenticator app
+              Enter the 6-digit code from your authenticator app or an
+              8-character backup code
             </p>
           </div>
         )}

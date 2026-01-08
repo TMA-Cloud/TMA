@@ -400,12 +400,14 @@ export async function setupMfa(): Promise<{
  */
 export async function verifyAndEnableMfa(code: string): Promise<{
   message: string;
+  backupCodes?: string[];
   shouldPromptSessions?: boolean;
 }> {
-  return await apiPost<{ message: string; shouldPromptSessions?: boolean }>(
-    "/api/mfa/verify",
-    { code },
-  );
+  return await apiPost<{
+    message: string;
+    backupCodes?: string[];
+    shouldPromptSessions?: boolean;
+  }>("/api/mfa/verify", { code });
 }
 
 /**
@@ -419,6 +421,24 @@ export async function disableMfa(code: string): Promise<{
     "/api/mfa/disable",
     { code },
   );
+}
+
+/**
+ * Regenerate backup codes
+ */
+export async function regenerateBackupCodes(): Promise<{
+  backupCodes: string[];
+}> {
+  return await apiPost<{ backupCodes: string[] }>(
+    "/api/mfa/backup-codes/regenerate",
+  );
+}
+
+/**
+ * Get remaining backup codes count
+ */
+export async function getBackupCodesCount(): Promise<{ count: number }> {
+  return await apiGet<{ count: number }>("/api/mfa/backup-codes/count");
 }
 
 export interface VersionInfo {

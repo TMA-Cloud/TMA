@@ -30,6 +30,25 @@ const authRateLimiter = rateLimit({
 });
 
 /**
+ * Rate limiter for MFA verification endpoints (very strict)
+ * 5 attempts per minute per IP/User to prevent DoS via CPU-intensive bcrypt operations
+ */
+const mfaRateLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 5, // 5 attempts per minute
+  message: { error: 'Too many MFA verification attempts, please try again in a minute' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: req => {
+    const ip = ipKeyGenerator(req.ip || req.socket?.remoteAddress || 'unknown');
+    // Use userId if authenticated, otherwise use IP
+    const userId = req.userId || '';
+    return `mfa:${ip}:${userId}`;
+  },
+  skip: req => req.method === 'OPTIONS',
+});
+
+/**
  * Rate limiter for general API endpoints
  * 100 requests per 15 minutes per IP
  */
@@ -138,6 +157,7 @@ const sseConnectionLimiter = createSSEConnectionLimiter(3); // Max 3 concurrent 
 
 module.exports = {
   authRateLimiter,
+  mfaRateLimiter,
   apiRateLimiter,
   uploadRateLimiter,
   sseConnectionLimiter,

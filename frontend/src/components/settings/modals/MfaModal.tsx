@@ -6,6 +6,7 @@ import {
   Shield,
   ShieldCheck,
   ShieldOff,
+  AlertTriangle,
 } from "lucide-react";
 import { useToast } from "../../../hooks/useToast";
 import { Modal } from "../../ui/Modal";
@@ -15,6 +16,8 @@ import {
   verifyAndEnableMfa,
   disableMfa,
   revokeOtherSessions,
+  regenerateBackupCodes,
+  getBackupCodesCount,
 } from "../../../utils/api";
 
 interface MfaModalProps {
@@ -34,6 +37,11 @@ export const MfaModal: React.FC<MfaModalProps> = ({ isOpen, onClose }) => {
   const [verificationCode, setVerificationCode] = useState("");
   const [copied, setCopied] = useState(false);
   const [revokingSessions, setRevokingSessions] = useState(false);
+  const [remainingCodesCount, setRemainingCodesCount] = useState<number | null>(
+    null,
+  );
+  const [regenerating, setRegenerating] = useState(false);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const mfaInputRef = useRef<HTMLInputElement>(null);
 
   const loadMfaStatus = useCallback(async () => {
@@ -41,6 +49,14 @@ export const MfaModal: React.FC<MfaModalProps> = ({ isOpen, onClose }) => {
       const status = await getMfaStatus();
       setMfaEnabled(status.enabled);
       setStep("status");
+      if (status.enabled) {
+        try {
+          const countResult = await getBackupCodesCount();
+          setRemainingCodesCount(countResult.count);
+        } catch {
+          // Ignore if count fetch fails
+        }
+      }
     } catch {
       showToast("Failed to load MFA status", "error");
     }
@@ -55,6 +71,7 @@ export const MfaModal: React.FC<MfaModalProps> = ({ isOpen, onClose }) => {
       setVerificationCode("");
       setQrCode(null);
       setSecret(null);
+      setRemainingCodesCount(null);
     }
   }, [isOpen, loadMfaStatus]);
 
@@ -86,11 +103,32 @@ export const MfaModal: React.FC<MfaModalProps> = ({ isOpen, onClose }) => {
       setMfaEnabled(true);
       setVerificationCode("");
 
+      // Set remaining codes count if provided
+      if (result.backupCodes && result.backupCodes.length > 0) {
+        setRemainingCodesCount(result.backupCodes.length);
+      }
+
+      // Show session prompt if needed, otherwise go to status
       if (result.shouldPromptSessions) {
         setStep("sessionPrompt");
+        // Download backup codes after setting step (small delay to ensure modal state is updated)
+        if (result.backupCodes && result.backupCodes.length > 0) {
+          setTimeout(() => {
+            downloadBackupCodes(result.backupCodes!);
+          }, 100);
+        }
       } else {
         setStep("status");
-        showToast("MFA enabled successfully", "success");
+        // Download backup codes if provided
+        if (result.backupCodes && result.backupCodes.length > 0) {
+          downloadBackupCodes(result.backupCodes);
+          showToast(
+            "MFA enabled successfully. Backup codes downloaded.",
+            "success",
+          );
+        } else {
+          showToast("MFA enabled successfully", "success");
+        }
       }
     } catch (error) {
       const message =
@@ -102,8 +140,14 @@ export const MfaModal: React.FC<MfaModalProps> = ({ isOpen, onClose }) => {
   };
 
   const handleDisable = async () => {
-    if (!verificationCode || verificationCode.length !== 6) {
-      showToast("Please enter a 6-digit code to disable MFA", "error");
+    if (
+      !verificationCode ||
+      (verificationCode.length !== 6 && verificationCode.length !== 8)
+    ) {
+      showToast(
+        "Please enter a 6-digit TOTP code or 8-character backup code",
+        "error",
+      );
       return;
     }
 
@@ -112,6 +156,7 @@ export const MfaModal: React.FC<MfaModalProps> = ({ isOpen, onClose }) => {
       const result = await disableMfa(verificationCode);
       setMfaEnabled(false);
       setVerificationCode("");
+      setRemainingCodesCount(null);
 
       if (result.shouldPromptSessions) {
         setStep("sessionPrompt");
@@ -162,262 +207,391 @@ export const MfaModal: React.FC<MfaModalProps> = ({ isOpen, onClose }) => {
     }
   };
 
+  const downloadBackupCodes = (codes: string[]) => {
+    const content =
+      `MFA Backup Codes\n\n` +
+      `Generated: ${new Date().toLocaleString()}\n\n` +
+      `IMPORTANT: Save these codes in a safe place. Each code can only be used once.\n\n` +
+      codes.map((code, index) => `${index + 1}. ${code}`).join("\n") +
+      `\n\nThese backup codes can be used to access your account if you lose your authenticator device.`;
+
+    const blob = new Blob([content], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `mfa-backup-codes-${new Date().toISOString().split("T")[0]}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleRegenerateBackupCodes = () => {
+    setShowConfirmDialog(true);
+  };
+
+  const confirmRegenerateBackupCodes = async () => {
+    setShowConfirmDialog(false);
+    setRegenerating(true);
+    try {
+      const result = await regenerateBackupCodes();
+      setRemainingCodesCount(result.backupCodes.length);
+      downloadBackupCodes(result.backupCodes);
+      showToast("Backup codes regenerated and downloaded", "success");
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Failed to regenerate backup codes";
+      showToast(message, "error");
+    } finally {
+      setRegenerating(false);
+    }
+  };
+
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      title="Multi-Factor Authentication"
-      size="md"
-      initialFocusRef={
-        step === "verify" || step === "disable"
-          ? (mfaInputRef as React.RefObject<HTMLElement>)
-          : undefined
-      }
-    >
-      {step === "status" && (
-        <div className="space-y-6">
-          <div className="flex items-center gap-4 p-5 rounded-xl bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border border-blue-200/50 dark:border-blue-800/50">
-            <div
-              className={`p-3 rounded-full ${mfaEnabled ? "bg-green-100 dark:bg-green-900/30" : "bg-gray-100 dark:bg-gray-800"}`}
-            >
+    <>
+      <Modal
+        isOpen={isOpen}
+        onClose={onClose}
+        title="Multi-Factor Authentication"
+        size="md"
+        initialFocusRef={
+          step === "verify" || step === "disable"
+            ? (mfaInputRef as React.RefObject<HTMLElement>)
+            : undefined
+        }
+      >
+        {step === "status" && (
+          <div className="space-y-6">
+            <div className="flex items-center gap-4 p-5 rounded-xl bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border border-blue-200/50 dark:border-blue-800/50">
+              <div
+                className={`p-3 rounded-full ${mfaEnabled ? "bg-green-100 dark:bg-green-900/30" : "bg-gray-100 dark:bg-gray-800"}`}
+              >
+                {mfaEnabled ? (
+                  <ShieldCheck className="w-6 h-6 text-green-600 dark:text-green-400" />
+                ) : (
+                  <ShieldOff className="w-6 h-6 text-gray-600 dark:text-gray-400" />
+                )}
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">
+                  Status
+                </p>
+                <p className="text-xl font-bold text-gray-900 dark:text-gray-100">
+                  {mfaEnabled ? "Enabled" : "Disabled"}
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-3">
               {mfaEnabled ? (
-                <ShieldCheck className="w-6 h-6 text-green-600 dark:text-green-400" />
+                <>
+                  {remainingCodesCount !== null && (
+                    <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50">
+                      <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
+                        Backup Codes: {remainingCodesCount} remaining
+                      </p>
+                      <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                        Save these codes in a safe place. Each code can only be
+                        used once.
+                      </p>
+                    </div>
+                  )}
+                  <button
+                    onClick={handleRegenerateBackupCodes}
+                    disabled={regenerating}
+                    className="w-full px-4 py-3 border-2 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl transition-colors font-medium text-gray-700 dark:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    {regenerating ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Regenerating...
+                      </>
+                    ) : (
+                      "Regenerate Backup Codes"
+                    )}
+                  </button>
+                  <button
+                    onClick={() => setStep("disable")}
+                    className="w-full px-4 py-3 bg-red-500 hover:bg-red-600 text-white rounded-xl transition-all duration-200 font-medium shadow-sm hover:shadow-md flex items-center justify-center gap-2"
+                  >
+                    <ShieldOff className="w-4 h-4" />
+                    Disable MFA
+                  </button>
+                </>
               ) : (
-                <ShieldOff className="w-6 h-6 text-gray-600 dark:text-gray-400" />
+                <button
+                  onClick={handleSetup}
+                  disabled={loading}
+                  className="w-full px-4 py-3 bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white rounded-xl transition-all duration-200 font-medium shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Setting up...
+                    </>
+                  ) : (
+                    <>
+                      <Shield className="w-4 h-4" />
+                      Enable MFA
+                    </>
+                  )}
+                </button>
               )}
             </div>
-            <div className="flex-1">
-              <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">
-                Status
+          </div>
+        )}
+
+        {step === "verify" && (
+          <div className="space-y-6">
+            <div className="text-center space-y-4">
+              <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                Scan this QR code with your authenticator app:
               </p>
-              <p className="text-xl font-bold text-gray-900 dark:text-gray-100">
-                {mfaEnabled ? "Enabled" : "Disabled"}
+              {qrCode && (
+                <div className="flex justify-center p-4 bg-white dark:bg-gray-900 rounded-xl border-2 border-gray-200 dark:border-gray-700">
+                  <img src={qrCode} alt="MFA QR Code" className="w-56 h-56" />
+                </div>
+              )}
+              {secret && (
+                <div className="space-y-2">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">
+                    Or enter this code manually:
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <code className="flex-1 px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-xl text-xs font-mono text-gray-900 dark:text-gray-100 break-all">
+                      {secret}
+                    </code>
+                    <button
+                      onClick={copySecret}
+                      className="p-3 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition-colors border border-gray-300 dark:border-gray-600"
+                      title="Copy secret"
+                    >
+                      {copied ? (
+                        <Check className="w-5 h-5 text-green-500" />
+                      ) : (
+                        <Copy className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Enter verification code:
+              </label>
+              <input
+                ref={mfaInputRef}
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={6}
+                value={verificationCode}
+                onChange={(e) =>
+                  setVerificationCode(e.target.value.replace(/\D/g, ""))
+                }
+                className="w-full px-4 py-4 border-2 border-gray-300 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-center text-3xl tracking-[0.5em] font-mono font-semibold"
+                placeholder="000000"
+                autoFocus
+              />
+              <p className="text-xs text-gray-500 dark:text-gray-400 text-center">
+                Enter the 6-digit code from your authenticator app
               </p>
             </div>
-          </div>
 
-          <div className="space-y-3">
-            {mfaEnabled ? (
+            <div className="flex gap-3 pt-2">
               <button
-                onClick={() => setStep("disable")}
-                className="w-full px-4 py-3 bg-red-500 hover:bg-red-600 text-white rounded-xl transition-all duration-200 font-medium shadow-sm hover:shadow-md flex items-center justify-center gap-2"
+                onClick={() => {
+                  setStep("status");
+                  setVerificationCode("");
+                }}
+                className="flex-1 px-4 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors font-medium text-gray-700 dark:text-gray-300"
               >
-                <ShieldOff className="w-4 h-4" />
-                Disable MFA
+                Cancel
               </button>
-            ) : (
               <button
-                onClick={handleSetup}
-                disabled={loading}
-                className="w-full px-4 py-3 bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white rounded-xl transition-all duration-200 font-medium shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                onClick={handleVerify}
+                disabled={loading || verificationCode.length !== 6}
+                className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white rounded-xl transition-all duration-200 font-medium shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {loading ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    Setting up...
+                    Verifying...
                   </>
                 ) : (
-                  <>
-                    <Shield className="w-4 h-4" />
-                    Enable MFA
-                  </>
+                  "Verify & Enable"
                 )}
               </button>
-            )}
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {step === "verify" && (
-        <div className="space-y-6">
-          <div className="text-center space-y-4">
-            <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-              Scan this QR code with your authenticator app:
-            </p>
-            {qrCode && (
-              <div className="flex justify-center p-4 bg-white dark:bg-gray-900 rounded-xl border-2 border-gray-200 dark:border-gray-700">
-                <img src={qrCode} alt="MFA QR Code" className="w-56 h-56" />
-              </div>
-            )}
-            {secret && (
-              <div className="space-y-2">
-                <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">
-                  Or enter this code manually:
-                </p>
-                <div className="flex items-center gap-2">
-                  <code className="flex-1 px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-xl text-xs font-mono text-gray-900 dark:text-gray-100 break-all">
-                    {secret}
-                  </code>
-                  <button
-                    onClick={copySecret}
-                    className="p-3 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition-colors border border-gray-300 dark:border-gray-600"
-                    title="Copy secret"
-                  >
-                    {copied ? (
-                      <Check className="w-5 h-5 text-green-500" />
-                    ) : (
-                      <Copy className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-                    )}
-                  </button>
+        {step === "disable" && (
+          <div className="space-y-6">
+            <div className="p-4 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50">
+              <p className="text-sm font-medium text-red-800 dark:text-red-300">
+                Enter your verification code to disable MFA
+              </p>
+              <p className="text-xs text-red-600 dark:text-red-400 mt-1">
+                This will remove the extra security layer from your account.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Verification code:
+              </label>
+              <input
+                ref={mfaInputRef}
+                type="text"
+                maxLength={9}
+                value={verificationCode}
+                onChange={(e) => {
+                  const value = e.target.value.toUpperCase();
+                  // Allow dashes for readability (e.g., ABCD-EFGH) but strip them before storing
+                  const filtered = value.replace(/[^A-Z0-9-]/g, "");
+                  // Strip dashes before setting state
+                  const withoutDashes = filtered.replace(/-/g, "");
+                  setVerificationCode(withoutDashes);
+                }}
+                className="w-full px-4 py-4 border-2 border-gray-300 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 text-center text-2xl tracking-[0.3em] font-mono font-semibold uppercase"
+                placeholder="000000 or ABCD-EFGH"
+                autoFocus
+              />
+              <p className="text-xs text-gray-500 dark:text-gray-400 text-center">
+                Enter the 6-digit code from your authenticator app or an
+                8-character backup code (dashes allowed for readability)
+              </p>
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => {
+                  setStep("status");
+                  setVerificationCode("");
+                }}
+                className="flex-1 px-4 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors font-medium text-gray-700 dark:text-gray-300"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDisable}
+                disabled={
+                  loading ||
+                  (verificationCode.length !== 6 &&
+                    verificationCode.length !== 8)
+                }
+                className="flex-1 px-4 py-3 bg-red-500 hover:bg-red-600 text-white rounded-xl transition-all duration-200 font-medium shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Disabling...
+                  </>
+                ) : (
+                  "Disable MFA"
+                )}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {step === "sessionPrompt" && (
+          <div className="space-y-6">
+            <div className="text-center space-y-3">
+              <div className="flex justify-center">
+                <div className="p-4 rounded-full bg-blue-100 dark:bg-blue-900/30">
+                  <Shield className="w-8 h-8 text-blue-600 dark:text-blue-400" />
                 </div>
               </div>
-            )}
-          </div>
-
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-              Enter verification code:
-            </label>
-            <input
-              ref={mfaInputRef}
-              type="text"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              maxLength={6}
-              value={verificationCode}
-              onChange={(e) =>
-                setVerificationCode(e.target.value.replace(/\D/g, ""))
-              }
-              className="w-full px-4 py-4 border-2 border-gray-300 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-center text-3xl tracking-[0.5em] font-mono font-semibold"
-              placeholder="000000"
-              autoFocus
-            />
-            <p className="text-xs text-gray-500 dark:text-gray-400 text-center">
-              Enter the 6-digit code from your authenticator app
-            </p>
-          </div>
-
-          <div className="flex gap-3 pt-2">
-            <button
-              onClick={() => {
-                setStep("status");
-                setVerificationCode("");
-              }}
-              className="flex-1 px-4 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors font-medium text-gray-700 dark:text-gray-300"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleVerify}
-              disabled={loading || verificationCode.length !== 6}
-              className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white rounded-xl transition-all duration-200 font-medium shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Verifying...
-                </>
-              ) : (
-                "Verify & Enable"
-              )}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {step === "disable" && (
-        <div className="space-y-6">
-          <div className="p-4 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50">
-            <p className="text-sm font-medium text-red-800 dark:text-red-300">
-              Enter your verification code to disable MFA
-            </p>
-            <p className="text-xs text-red-600 dark:text-red-400 mt-1">
-              This will remove the extra security layer from your account.
-            </p>
-          </div>
-
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-              Verification code:
-            </label>
-            <input
-              ref={mfaInputRef}
-              type="text"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              maxLength={6}
-              value={verificationCode}
-              onChange={(e) =>
-                setVerificationCode(e.target.value.replace(/\D/g, ""))
-              }
-              className="w-full px-4 py-4 border-2 border-gray-300 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 text-center text-3xl tracking-[0.5em] font-mono font-semibold"
-              placeholder="000000"
-              autoFocus
-            />
-            <p className="text-xs text-gray-500 dark:text-gray-400 text-center">
-              Enter the 6-digit code from your authenticator app
-            </p>
-          </div>
-
-          <div className="flex gap-3 pt-2">
-            <button
-              onClick={() => {
-                setStep("status");
-                setVerificationCode("");
-              }}
-              className="flex-1 px-4 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors font-medium text-gray-700 dark:text-gray-300"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleDisable}
-              disabled={loading || verificationCode.length !== 6}
-              className="flex-1 px-4 py-3 bg-red-500 hover:bg-red-600 text-white rounded-xl transition-all duration-200 font-medium shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Disabling...
-                </>
-              ) : (
-                "Disable MFA"
-              )}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {step === "sessionPrompt" && (
-        <div className="space-y-6">
-          <div className="text-center space-y-3">
-            <div className="flex justify-center">
-              <div className="p-4 rounded-full bg-blue-100 dark:bg-blue-900/30">
-                <Shield className="w-8 h-8 text-blue-600 dark:text-blue-400" />
-              </div>
+              <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100">
+                Sign out of other sessions?
+              </h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                For security, sign out of all other active sessions?
+              </p>
             </div>
-            <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100">
-              Sign out of other sessions?
-            </h3>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              For security, sign out of all other active sessions?
-            </p>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={handleSkipSessions}
+                disabled={revokingSessions}
+                className="flex-1 px-4 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors font-medium text-gray-700 dark:text-gray-300 disabled:opacity-50"
+              >
+                Skip
+              </button>
+              <button
+                onClick={handleRevokeOtherSessions}
+                disabled={revokingSessions}
+                className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white rounded-xl transition-all duration-200 font-medium shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {revokingSessions ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Signing out...
+                  </>
+                ) : (
+                  "Yes"
+                )}
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Confirmation Dialog for Regenerating Backup Codes */}
+      <Modal
+        isOpen={showConfirmDialog}
+        onClose={() => setShowConfirmDialog(false)}
+        title="Regenerate Backup Codes"
+        size="sm"
+      >
+        <div className="space-y-6">
+          <div className="flex items-start gap-4">
+            <div className="flex-shrink-0 p-3 rounded-full bg-amber-100 dark:bg-amber-900/30">
+              <AlertTriangle className="w-6 h-6 text-amber-600 dark:text-amber-400" />
+            </div>
+            <div className="flex-1">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                Are you sure?
+              </h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                This will invalidate all existing backup codes and generate new
+                ones. Make sure you've saved your current backup codes before
+                proceeding.
+              </p>
+            </div>
           </div>
 
           <div className="flex gap-3 pt-2">
             <button
-              onClick={handleSkipSessions}
-              disabled={revokingSessions}
+              onClick={() => setShowConfirmDialog(false)}
+              disabled={regenerating}
               className="flex-1 px-4 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors font-medium text-gray-700 dark:text-gray-300 disabled:opacity-50"
             >
-              Skip
+              Cancel
             </button>
             <button
-              onClick={handleRevokeOtherSessions}
-              disabled={revokingSessions}
-              className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white rounded-xl transition-all duration-200 font-medium shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              onClick={confirmRegenerateBackupCodes}
+              disabled={regenerating}
+              className="flex-1 px-4 py-3 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-xl transition-all duration-200 font-medium shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
-              {revokingSessions ? (
+              {regenerating ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  Signing out...
+                  Regenerating...
                 </>
               ) : (
-                "Yes"
+                "Regenerate"
               )}
             </button>
           </div>
         </div>
-      )}
-    </Modal>
+      </Modal>
+    </>
   );
 };

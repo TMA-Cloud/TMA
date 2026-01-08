@@ -24,6 +24,7 @@ TMA Cloud supports multiple authentication methods:
 - TOTP-based (Time-based One-Time Password)
 - QR code setup
 - Optional per-user
+- Backup codes as fallback (single-use, replaceable)
 
 ## Session Management
 
@@ -44,7 +45,7 @@ TMA Cloud supports multiple authentication methods:
 
 - **Session Binding:** Browser fingerprint prevents token theft
 - **Token Versioning:** Invalidate all tokens on logout-all
-- **Rate Limiting:** 5 login attempts per 15 minutes
+- **Rate Limiting:** 5 login attempts per 15 minutes; MFA verify/disable 5 attempts per minute
 - **Audit Logging:** All authentication events logged
 
 ## First User Privileges

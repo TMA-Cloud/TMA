@@ -7,6 +7,10 @@ const {
   disableMfa,
   getMfaSecret,
   getUserById,
+  generateBackupCodes,
+  verifyAndConsumeBackupCode,
+  getRemainingBackupCodesCount,
+  deleteBackupCodes,
 } = require('../../models/user.model');
 const { sendError, sendSuccess } = require('../../utils/response');
 const { logger } = require('../../config/logger');
@@ -84,8 +88,15 @@ async function verifyAndEnableMfa(req, res) {
     // The secret is already stored, now enable MFA
     await enableMfa(userId);
 
+    // Generate backup codes
+    const backupCodes = await generateBackupCodes(userId, 10);
+
     logger.info({ userId }, 'MFA verified and enabled');
-    sendSuccess(res, { message: 'MFA enabled successfully', shouldPromptSessions: true });
+    sendSuccess(res, {
+      message: 'MFA enabled successfully',
+      backupCodes,
+      shouldPromptSessions: true,
+    });
   } catch (err) {
     logger.error({ err, userId: req.userId }, 'MFA verification failed');
     sendError(res, 500, 'Failed to verify MFA', err);
@@ -118,10 +129,15 @@ async function disableMfaController(req, res) {
       window: 2,
     });
 
+    // Also check backup codes
     if (!verified) {
-      return sendError(res, 400, 'Invalid verification code');
+      const backupCodeValid = await verifyAndConsumeBackupCode(userId, code);
+      if (!backupCodeValid) {
+        return sendError(res, 400, 'Invalid verification code');
+      }
     }
 
+    // disableMfa already deletes backup codes
     await disableMfa(userId);
 
     logger.info({ userId }, 'MFA disabled');
@@ -151,6 +167,7 @@ async function getMfaStatusController(req, res) {
 
 /**
  * Verify MFA code (used during login)
+ * Checks both TOTP codes and backup codes
  */
 async function verifyMfaCode(userId, code) {
   const mfaStatus = await getMfaStatus(userId);
@@ -158,12 +175,66 @@ async function verifyMfaCode(userId, code) {
     return false;
   }
 
-  return speakeasy.totp.verify({
+  // First try TOTP code
+  const totpValid = speakeasy.totp.verify({
     secret: mfaStatus.secret,
     encoding: 'base32',
     token: code,
     window: 2,
   });
+
+  if (totpValid) {
+    return true;
+  }
+
+  // If TOTP fails, try backup code
+  return verifyAndConsumeBackupCode(userId, code);
+}
+
+/**
+ * Regenerate backup codes
+ */
+async function regenerateBackupCodes(req, res) {
+  try {
+    const userId = req.userId;
+    const mfaStatus = await getMfaStatus(userId);
+
+    if (!mfaStatus?.enabled) {
+      return sendError(res, 400, 'MFA is not enabled');
+    }
+
+    // Delete old backup codes
+    await deleteBackupCodes(userId);
+
+    // Generate new backup codes
+    const backupCodes = await generateBackupCodes(userId, 10);
+
+    logger.info({ userId }, 'Backup codes regenerated');
+    sendSuccess(res, { backupCodes });
+  } catch (err) {
+    logger.error({ err, userId: req.userId }, 'Failed to regenerate backup codes');
+    sendError(res, 500, 'Failed to regenerate backup codes', err);
+  }
+}
+
+/**
+ * Get remaining backup codes count
+ */
+async function getBackupCodesCount(req, res) {
+  try {
+    const userId = req.userId;
+    const mfaStatus = await getMfaStatus(userId);
+
+    if (!mfaStatus?.enabled) {
+      return sendError(res, 400, 'MFA is not enabled');
+    }
+
+    const count = await getRemainingBackupCodesCount(userId);
+    sendSuccess(res, { count });
+  } catch (err) {
+    logger.error({ err, userId: req.userId }, 'Failed to get backup codes count');
+    sendError(res, 500, 'Failed to get backup codes count', err);
+  }
 }
 
 module.exports = {
@@ -172,4 +243,6 @@ module.exports = {
   disableMfaController,
   getMfaStatusController,
   verifyMfaCode,
+  regenerateBackupCodes,
+  getBackupCodesCount,
 };

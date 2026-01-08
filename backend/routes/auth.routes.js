@@ -16,9 +16,11 @@ const {
   verifyAndEnableMfa,
   disableMfaController,
   getMfaStatusController,
+  regenerateBackupCodes,
+  getBackupCodesCount,
 } = require('../controllers/auth.controller');
 const authMiddleware = require('../middleware/auth.middleware');
-const { authRateLimiter } = require('../middleware/rateLimit.middleware');
+const { authRateLimiter, mfaRateLimiter } = require('../middleware/rateLimit.middleware');
 
 router.post('/signup', authRateLimiter, signup);
 router.post('/login', authRateLimiter, login);
@@ -39,7 +41,9 @@ router.post('/sessions/revoke-others', authMiddleware, revokeOtherSessions);
 // MFA routes
 router.get('/mfa/status', authMiddleware, getMfaStatusController);
 router.post('/mfa/setup', authMiddleware, setupMfa);
-router.post('/mfa/verify', authMiddleware, verifyAndEnableMfa);
-router.post('/mfa/disable', authMiddleware, disableMfaController);
+router.post('/mfa/verify', authMiddleware, mfaRateLimiter, verifyAndEnableMfa);
+router.post('/mfa/disable', authMiddleware, mfaRateLimiter, disableMfaController);
+router.post('/mfa/backup-codes/regenerate', authMiddleware, regenerateBackupCodes);
+router.get('/mfa/backup-codes/count', authMiddleware, getBackupCodesCount);
 
 module.exports = router;

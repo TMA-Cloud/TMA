@@ -12,6 +12,7 @@ Troubleshooting authentication problems.
 2. Check if account exists
 3. Verify signup is enabled (if creating new account)
 4. Check for rate limiting (5 attempts per 15 minutes)
+5. For MFA: verify/disable limited to 5 attempts per minute
 
 ### MFA Issues
 
@@ -27,6 +28,8 @@ Troubleshooting authentication problems.
 2. Check MFA secret is correct
 3. Ensure MFA is properly enabled after setup
 4. Contact admin if MFA needs to be reset (admin cannot disable user MFA)
+5. If using backup codes, dashes are optional (ABCD-EFGH can be typed as ABCDEFGH)
+6. If rate-limited, wait one minute and retry
 
 ## Session Issues
 

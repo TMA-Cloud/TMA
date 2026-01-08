@@ -174,9 +174,13 @@ Verify MFA code and enable MFA.
 ```json
 {
   "success": true,
-  "message": "MFA enabled successfully"
+  "message": "MFA enabled successfully",
+  "backupCodes": ["ABCD2345", "EFGH6789"], // present on success
+  "shouldPromptSessions": true // prompt to sign out other sessions
 }
 ```
+
+**Rate limiting:** 5 attempts per minute per IP/user (MFA-specific limiter).
 
 ### POST `/api/mfa/disable`
 
@@ -196,6 +200,34 @@ Disable MFA. Requires verification code.
 {
   "success": true,
   "message": "MFA disabled successfully"
+}
+```
+
+**Rate limiting:** 5 attempts per minute per IP/user (MFA-specific limiter).
+
+### POST `/api/mfa/backup-codes/regenerate`
+
+Regenerate MFA backup codes (invalidates existing codes).
+
+**Response:**
+
+```json
+{
+  "backupCodes": ["ABCD2345", "EFGH6789"]
+}
+```
+
+Codes auto-download on the client after regeneration.
+
+### GET `/api/mfa/backup-codes/count`
+
+Get remaining unused backup code count.
+
+**Response:**
+
+```json
+{
+  "count": 7
 }
 ```
 

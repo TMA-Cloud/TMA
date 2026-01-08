@@ -31,12 +31,20 @@ Manage multi-factor authentication in TMA Cloud (admin only).
 - Users enable MFA themselves
 - QR code generation
 - Verification required before enabling
+- Backup codes auto-download after MFA is enabled
+- Backup codes are one-time use; regenerating invalidates prior codes
 
 ### MFA Disable
 
 - Users can disable their own MFA
 - Requires verification code
 - Admin cannot disable user MFA
+
+### Backup Codes
+
+- Delivered as a downloadable text file on enable or regenerate
+- Each code is single-use; dashes are optional when typing codes
+- Regenerate to replace all existing codes
 
 ## Best Practices
 
