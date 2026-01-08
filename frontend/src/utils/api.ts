@@ -72,9 +72,11 @@ export async function apiGet<T = unknown>(
     const errorData = await res
       .json()
       .catch(() => ({ message: res.statusText }));
+    const { message, error, ...rest } = errorData;
     throw new ApiError(
-      errorData.message || errorData.error || res.statusText,
+      message || error || res.statusText,
       res.status,
+      Object.keys(rest).length > 0 ? rest : undefined,
     );
   }
   return res.json();
@@ -97,9 +99,11 @@ export async function apiPost<T = unknown>(
     const errorData = await res
       .json()
       .catch(() => ({ message: res.statusText }));
+    const { message, error, ...rest } = errorData;
     throw new ApiError(
-      errorData.message || errorData.error || res.statusText,
+      message || error || res.statusText,
       res.status,
+      Object.keys(rest).length > 0 ? rest : undefined,
     );
   }
   return res.json();
@@ -146,9 +150,11 @@ export async function apiPostForm<T = unknown>(
     const errorData = await res
       .json()
       .catch(() => ({ message: res.statusText }));
+    const { message, error, ...rest } = errorData;
     throw new ApiError(
-      errorData.message || errorData.error || res.statusText,
+      message || error || res.statusText,
       res.status,
+      Object.keys(rest).length > 0 ? rest : undefined,
     );
   }
   return res.json();

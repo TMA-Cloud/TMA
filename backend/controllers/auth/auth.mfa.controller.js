@@ -11,6 +11,8 @@ const {
   verifyAndConsumeBackupCode,
   getRemainingBackupCodesCount,
   deleteBackupCodes,
+  canRegenerateBackupCodes,
+  updateLastBackupCodeRegeneration,
 } = require('../../models/user.model');
 const { sendError, sendSuccess } = require('../../utils/response');
 const { logger } = require('../../config/logger');
@@ -203,11 +205,29 @@ async function regenerateBackupCodes(req, res) {
       return sendError(res, 400, 'MFA is not enabled');
     }
 
+    // Check cooldown period
+    const cooldownCheck = await canRegenerateBackupCodes(userId);
+    if (!cooldownCheck.allowed) {
+      const remainingSeconds = Math.ceil(cooldownCheck.remainingMs / 1000);
+      const remainingMinutes = Math.floor(remainingSeconds / 60);
+      const remainingSecs = remainingSeconds % 60;
+      const timeMessage =
+        remainingMinutes > 0
+          ? `${remainingMinutes} minute${remainingMinutes > 1 ? 's' : ''} and ${remainingSecs} second${remainingSecs !== 1 ? 's' : ''}`
+          : `${remainingSecs} second${remainingSecs !== 1 ? 's' : ''}`;
+      return sendError(res, 429, `Please wait ${timeMessage} before regenerating backup codes again`, null, {
+        retryAfterMs: cooldownCheck.remainingMs,
+      });
+    }
+
     // Delete old backup codes
     await deleteBackupCodes(userId);
 
     // Generate new backup codes
     const backupCodes = await generateBackupCodes(userId, 10);
+
+    // Update regeneration timestamp
+    await updateLastBackupCodeRegeneration(userId);
 
     logger.info({ userId }, 'Backup codes regenerated');
     sendSuccess(res, { backupCodes });

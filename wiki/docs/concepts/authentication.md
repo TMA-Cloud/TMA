@@ -45,7 +45,7 @@ TMA Cloud supports multiple authentication methods:
 
 - **Session Binding:** Browser fingerprint prevents token theft
 - **Token Versioning:** Invalidate all tokens on logout-all
-- **Rate Limiting:** 5 login attempts per 15 minutes; MFA verify/disable 5 attempts per minute
+- **Rate Limiting:** 5 login attempts per 15 minutes; MFA verify/disable 5 attempts per minute; backup code regeneration 3 attempts per 10 minutes with 5-minute cooldown
 - **Audit Logging:** All authentication events logged
 
 ## First User Privileges

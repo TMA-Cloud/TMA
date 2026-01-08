@@ -49,6 +49,24 @@ const mfaRateLimiter = rateLimit({
 });
 
 /**
+ * Rate limiter for backup code regeneration (moderate)
+ * 3 attempts per 10 minutes per user to prevent abuse
+ */
+const backupCodeRegenerationRateLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000, // 10 minutes
+  max: 3, // 3 attempts per 10 minutes
+  message: { error: 'Too many backup code regeneration attempts, please try again later' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: req => {
+    const ip = ipKeyGenerator(req.ip || req.socket?.remoteAddress || 'unknown');
+    const userId = req.userId || '';
+    return `backup-codes:${ip}:${userId}`;
+  },
+  skip: req => req.method === 'OPTIONS',
+});
+
+/**
  * Rate limiter for general API endpoints
  * 100 requests per 15 minutes per IP
  */
@@ -158,6 +176,7 @@ const sseConnectionLimiter = createSSEConnectionLimiter(3); // Max 3 concurrent 
 module.exports = {
   authRateLimiter,
   mfaRateLimiter,
+  backupCodeRegenerationRateLimiter,
   apiRateLimiter,
   uploadRateLimiter,
   sseConnectionLimiter,

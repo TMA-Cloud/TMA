@@ -20,7 +20,11 @@ const {
   getBackupCodesCount,
 } = require('../controllers/auth.controller');
 const authMiddleware = require('../middleware/auth.middleware');
-const { authRateLimiter, mfaRateLimiter } = require('../middleware/rateLimit.middleware');
+const {
+  authRateLimiter,
+  mfaRateLimiter,
+  backupCodeRegenerationRateLimiter,
+} = require('../middleware/rateLimit.middleware');
 
 router.post('/signup', authRateLimiter, signup);
 router.post('/login', authRateLimiter, login);
@@ -43,7 +47,7 @@ router.get('/mfa/status', authMiddleware, getMfaStatusController);
 router.post('/mfa/setup', authMiddleware, setupMfa);
 router.post('/mfa/verify', authMiddleware, mfaRateLimiter, verifyAndEnableMfa);
 router.post('/mfa/disable', authMiddleware, mfaRateLimiter, disableMfaController);
-router.post('/mfa/backup-codes/regenerate', authMiddleware, regenerateBackupCodes);
+router.post('/mfa/backup-codes/regenerate', authMiddleware, backupCodeRegenerationRateLimiter, regenerateBackupCodes);
 router.get('/mfa/backup-codes/count', authMiddleware, getBackupCodesCount);
 
 module.exports = router;

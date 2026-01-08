@@ -26,6 +26,12 @@ Rate limits are enforced per IP address and endpoint type.
 - **Endpoints:** `/api/files/upload`
 - **Purpose:** Prevent storage abuse
 
+### MFA Endpoints
+
+- **MFA Verify/Disable:** 5 attempts per minute per IP/user
+- **Backup Code Regeneration:** 3 attempts per 10 minutes per user
+- **Purpose:** Prevent abuse of CPU-intensive operations
+
 ## Rate Limit Headers
 
 When rate limited, responses include:
@@ -44,9 +50,16 @@ When rate limit is exceeded:
 
 ```json
 {
-  "success": false,
-  "error": "Rate limit exceeded",
-  "code": "RATE_LIMIT_EXCEEDED"
+  "message": "Rate limit exceeded"
+}
+```
+
+Some endpoints include additional data:
+
+```json
+{
+  "message": "Please wait 3 minutes and 45 seconds before regenerating backup codes again",
+  "retryAfterMs": 225000
 }
 ```
 

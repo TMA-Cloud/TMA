@@ -48,6 +48,8 @@ Manage multi-factor authentication in TMA Cloud (admin only).
 - Each code is single-use; dashes are optional when typing codes
 - Codes formatted in groups of 5 with numbered brackets
 - Regenerate to replace all existing codes
+- Cooldown: 5 minutes between regenerations
+- Rate limit: 3 attempts per 10 minutes
 
 ## Best Practices
 

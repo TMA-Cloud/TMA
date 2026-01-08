@@ -217,6 +217,21 @@ Regenerate MFA backup codes (invalidates existing codes).
 }
 ```
 
+**Error Response (429 Too Many Requests):**
+
+When cooldown is active or rate limit exceeded:
+
+```json
+{
+  "message": "Please wait 3 minutes and 45 seconds before regenerating backup codes again",
+  "retryAfterMs": 225000
+}
+```
+
+**Rate limiting:** 3 attempts per 10 minutes per user.
+
+**Cooldown:** 5 minutes between regenerations per user.
+
 Codes auto-download on the client after regeneration.
 
 ### GET `/api/mfa/backup-codes/count`

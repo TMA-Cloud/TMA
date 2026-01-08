@@ -20,6 +20,7 @@ import {
   regenerateBackupCodes,
   getBackupCodesCount,
 } from "../../../utils/api";
+import { ApiError } from "../../../utils/errorUtils";
 
 interface MfaModalProps {
   isOpen: boolean;
@@ -68,6 +69,20 @@ function formatBackupCodes(codes: string[]): string {
   return result.trim();
 }
 
+/**
+ * Format cooldown time in milliseconds to human-readable string
+ */
+function formatCooldownTime(ms: number): string {
+  const totalSeconds = Math.ceil(ms / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+
+  if (minutes > 0) {
+    return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+  }
+  return `${seconds}s`;
+}
+
 export const MfaModal: React.FC<MfaModalProps> = ({ isOpen, onClose }) => {
   const { showToast } = useToast();
   const { user } = useAuth();
@@ -84,6 +99,9 @@ export const MfaModal: React.FC<MfaModalProps> = ({ isOpen, onClose }) => {
   );
   const [regenerating, setRegenerating] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [cooldownRemaining, setCooldownRemaining] = useState<number | null>(
+    null,
+  );
   const mfaInputRef = useRef<HTMLInputElement>(null);
 
   const loadMfaStatus = useCallback(async () => {
@@ -114,8 +132,28 @@ export const MfaModal: React.FC<MfaModalProps> = ({ isOpen, onClose }) => {
       setQrCode(null);
       setSecret(null);
       setRemainingCodesCount(null);
+      setCooldownRemaining(null);
     }
   }, [isOpen, loadMfaStatus]);
+
+  // Countdown timer for cooldown
+  useEffect(() => {
+    if (cooldownRemaining === null || cooldownRemaining <= 0) {
+      setCooldownRemaining(null);
+      return;
+    }
+
+    const interval = setInterval(() => {
+      setCooldownRemaining((prev) => {
+        if (prev === null || prev <= 0) {
+          return null;
+        }
+        return prev - 1000;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [cooldownRemaining]);
 
   const handleSetup = async () => {
     setLoading(true);
@@ -327,13 +365,20 @@ Go to: Account Settings → Security → Multi-Factor Authentication
     try {
       const result = await regenerateBackupCodes();
       setRemainingCodesCount(result.backupCodes.length);
+      setCooldownRemaining(5 * 60 * 1000); // 5 minutes cooldown
       downloadBackupCodes(result.backupCodes);
       showToast("Backup codes regenerated and downloaded", "success");
-    } catch (error) {
+    } catch (error: unknown) {
       const message =
         error instanceof Error
           ? error.message
           : "Failed to regenerate backup codes";
+
+      // Check if error contains structured cooldown data
+      if (error instanceof ApiError && error.data?.retryAfterMs) {
+        setCooldownRemaining(error.data.retryAfterMs as number);
+      }
+
       showToast(message, "error");
     } finally {
       setRegenerating(false);
@@ -389,20 +434,36 @@ Go to: Account Settings → Security → Multi-Factor Authentication
                       </p>
                     </div>
                   )}
-                  <button
-                    onClick={handleRegenerateBackupCodes}
-                    disabled={regenerating}
-                    className="w-full px-4 py-3 border-2 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl transition-colors font-medium text-gray-700 dark:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                  >
-                    {regenerating ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        Regenerating...
-                      </>
-                    ) : (
-                      "Regenerate Backup Codes"
+                  <div className="space-y-2">
+                    <button
+                      onClick={handleRegenerateBackupCodes}
+                      disabled={
+                        regenerating ||
+                        (cooldownRemaining !== null && cooldownRemaining > 0)
+                      }
+                      className="w-full px-4 py-3 border-2 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl transition-colors font-medium text-gray-700 dark:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                      {regenerating ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Regenerating...
+                        </>
+                      ) : cooldownRemaining !== null &&
+                        cooldownRemaining > 0 ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Cooldown: {formatCooldownTime(cooldownRemaining)}
+                        </>
+                      ) : (
+                        "Regenerate Backup Codes"
+                      )}
+                    </button>
+                    {cooldownRemaining !== null && cooldownRemaining > 0 && (
+                      <p className="text-xs text-amber-600 dark:text-amber-400 text-center">
+                        Please wait before regenerating backup codes again
+                      </p>
                     )}
-                  </button>
+                  </div>
                   <button
                     onClick={() => setStep("disable")}
                     className="w-full px-4 py-3 bg-red-500 hover:bg-red-600 text-white rounded-xl transition-all duration-200 font-medium shadow-sm hover:shadow-md flex items-center justify-center gap-2"
@@ -668,13 +729,21 @@ Go to: Account Settings → Security → Multi-Factor Authentication
             </button>
             <button
               onClick={confirmRegenerateBackupCodes}
-              disabled={regenerating}
+              disabled={
+                regenerating ||
+                (cooldownRemaining !== null && cooldownRemaining > 0)
+              }
               className="flex-1 px-4 py-3 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-xl transition-all duration-200 font-medium shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {regenerating ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
                   Regenerating...
+                </>
+              ) : cooldownRemaining !== null && cooldownRemaining > 0 ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Wait: {formatCooldownTime(cooldownRemaining)}
                 </>
               ) : (
                 "Regenerate"

@@ -3,12 +3,13 @@
  */
 
 /**
- * Custom error class that preserves HTTP status code
+ * Custom error class that preserves HTTP status code and additional error data
  */
 export class ApiError extends Error {
   constructor(
     message: string,
     public status: number,
+    public data?: Record<string, unknown>,
   ) {
     super(message);
     this.name = "ApiError";

@@ -9,12 +9,17 @@ const { logger } = require('../config/logger');
  * @param {number} status - HTTP status code
  * @param {string} message - Error message
  * @param {Error} err - Optional error object for logging
+ * @param {Object} data - Optional additional error data
  */
-function sendError(res, status, message, err = null) {
+function sendError(res, status, message, err = null, data = null) {
   if (err) {
     logger.error({ err }, 'Error in request handler');
   }
-  res.status(status).json({ message });
+  const response = { message };
+  if (data) {
+    Object.assign(response, data);
+  }
+  res.status(status).json(response);
 }
 
 /**

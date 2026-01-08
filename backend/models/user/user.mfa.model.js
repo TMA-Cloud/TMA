@@ -5,6 +5,9 @@ const { logger } = require('../../config/logger');
 const { deleteCache, cacheKeys } = require('../../utils/cache');
 const { generateId } = require('../../utils/id');
 
+// Cooldown period for backup code regeneration (5 minutes in milliseconds)
+const BACKUP_CODE_REGENERATION_COOLDOWN_MS = 5 * 60 * 1000;
+
 /**
  * Get user's MFA status
  * @param {string} userId - User ID
@@ -181,6 +184,47 @@ async function deleteBackupCodes(userId) {
   logger.info({ userId }, 'Backup codes deleted');
 }
 
+/**
+ * Check if backup code regeneration is allowed (cooldown check)
+ * @param {string} userId - User ID
+ * @returns {Promise<{allowed: boolean, remainingMs: number|null}>}
+ */
+async function canRegenerateBackupCodes(userId) {
+  const result = await pool.query('SELECT last_backup_code_regeneration FROM users WHERE id = $1', [userId]);
+
+  if (result.rows.length === 0) {
+    return { allowed: false, remainingMs: null };
+  }
+
+  const lastRegeneration = result.rows[0].last_backup_code_regeneration;
+
+  // If never regenerated, allow it
+  if (!lastRegeneration) {
+    return { allowed: true, remainingMs: 0 };
+  }
+
+  const now = new Date();
+  const timeSinceLastRegeneration = now.getTime() - new Date(lastRegeneration).getTime();
+  const remainingMs = BACKUP_CODE_REGENERATION_COOLDOWN_MS - timeSinceLastRegeneration;
+
+  if (remainingMs > 0) {
+    return { allowed: false, remainingMs };
+  }
+
+  return { allowed: true, remainingMs: 0 };
+}
+
+/**
+ * Update the last backup code regeneration timestamp
+ * @param {string} userId - User ID
+ * @returns {Promise<void>}
+ */
+async function updateLastBackupCodeRegeneration(userId) {
+  await pool.query('UPDATE users SET last_backup_code_regeneration = CURRENT_TIMESTAMP WHERE id = $1', [userId]);
+  // Invalidate user cache
+  await deleteCache(cacheKeys.userById(userId));
+}
+
 module.exports = {
   getMfaStatus,
   setMfaSecret,
@@ -191,4 +235,6 @@ module.exports = {
   verifyAndConsumeBackupCode,
   getRemainingBackupCodesCount,
   deleteBackupCodes,
+  canRegenerateBackupCodes,
+  updateLastBackupCodeRegeneration,
 };
