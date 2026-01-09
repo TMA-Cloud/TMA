@@ -52,11 +52,12 @@ Complete reference for all environment variables in TMA Cloud.
 
 ## File Storage
 
-| Variable        | Required | Default                | Description                          |
-| --------------- | -------- | ---------------------- | ------------------------------------ |
-| `UPLOAD_DIR`    | No       | `./uploads`            | Upload directory path                |
-| `STORAGE_LIMIT` | No       | `107374182400` (100GB) | Per-user storage limit (bytes)       |
-| `STORAGE_PATH`  | No       | Backend directory      | Base path for disk space calculation |
+| Variable              | Required | Default                | Description                          |
+| --------------------- | -------- | ---------------------- | ------------------------------------ |
+| `UPLOAD_DIR`          | No       | `./uploads`            | Upload directory path                |
+| `STORAGE_LIMIT`       | No       | `107374182400` (100GB) | Per-user storage limit (bytes)       |
+| `STORAGE_PATH`        | No       | Backend directory      | Base path for disk space calculation |
+| `FILE_ENCRYPTION_KEY` | No       | Development default    | Encryption key for file encryption   |
 
 **Note:** Custom drive settings override these per-user (configured in Settings).
 

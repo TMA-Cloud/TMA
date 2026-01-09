@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const { validateAndResolveFile } = require('../../utils/fileDownload');
+const { validateAndResolveFile, streamEncryptedFile } = require('../../utils/fileDownload');
 const { validateSingleId } = require('../../utils/controllerHelpers');
 const { logger } = require('../../config/logger');
 const { getOnlyOfficeConfig } = require('./onlyoffice.utils');
@@ -59,7 +59,7 @@ async function serveFile(req, res) {
       logger.error('[ONLYOFFICE] File not found in DB', id);
       return res.status(404).json({ error: 'File not found' });
     }
-    const { success, filePath, error: fileError } = validateAndResolveFile(fileRow);
+    const { success, filePath, isEncrypted, error: fileError } = validateAndResolveFile(fileRow);
     if (!success) {
       logger.error('[ONLYOFFICE] File validation failed', id, fileError);
       return res.status(404).json({ error: fileError || 'File not found' });
@@ -68,6 +68,13 @@ async function serveFile(req, res) {
     // Set appropriate headers
     res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(fileRow.name)}"`);
     res.type(fileRow.mimeType || 'application/octet-stream');
+
+    // If file is encrypted, stream decrypted content
+    if (isEncrypted) {
+      return streamEncryptedFile(res, filePath, fileRow.name, fileRow.mimeType || 'application/octet-stream');
+    }
+
+    // For unencrypted files, send directly
     res.sendFile(filePath, err => {
       if (err) {
         logger.error({ err, fileId: id }, '[ONLYOFFICE] Error sending file');

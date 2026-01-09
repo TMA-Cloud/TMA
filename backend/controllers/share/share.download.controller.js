@@ -1,4 +1,4 @@
-const { validateAndResolveFile } = require('../../utils/fileDownload');
+const { validateAndResolveFile, streamEncryptedFile } = require('../../utils/fileDownload');
 const { sendError } = require('../../utils/response');
 const { createZipArchive } = require('../../utils/zipArchive');
 const { getFileByToken, isFileShared, getSharedTree } = require('../../models/share.model');
@@ -75,11 +75,17 @@ async function downloadSharedItem(req, res) {
     logger.info({ shareToken: token, fileId, fileType: file.type }, 'Share item downloaded');
 
     if (file.type === 'file') {
-      const { success, filePath, error } = validateAndResolveFile(file);
+      const { success, filePath, isEncrypted, error } = validateAndResolveFile(file);
       if (!success) {
         return res.status(400).send(error || 'Invalid file path');
       }
 
+      // If file is encrypted, stream decrypted content
+      if (isEncrypted) {
+        return streamEncryptedFile(res, filePath, file.name, file.mimeType || 'application/octet-stream');
+      }
+
+      // For unencrypted files, download directly
       return res.download(filePath, file.name, err => {
         if (err) logger.error({ err }, 'Error sending file');
       });

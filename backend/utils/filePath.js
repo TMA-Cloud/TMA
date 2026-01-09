@@ -48,7 +48,22 @@ function isValidPath(dbPath) {
   return !dbPath.includes('..') && !dbPath.includes('/') && !dbPath.includes('\\');
 }
 
+/**
+ * Determines if a file path indicates the file is encrypted
+ * Files with relative paths (non-custom-drive) are encrypted
+ * Files with absolute paths (custom-drive) are not encrypted
+ * @param {string} dbPath - Path stored in database
+ * @returns {boolean} True if file is encrypted
+ */
+function isFilePathEncrypted(dbPath) {
+  if (!dbPath) return false;
+  // Relative paths (non-custom-drive files) are encrypted
+  // Absolute paths (custom-drive files) are not encrypted
+  return !path.isAbsolute(dbPath);
+}
+
 module.exports = {
   resolveFilePath,
   isValidPath,
+  isFilePathEncrypted,
 };

@@ -21,6 +21,7 @@ const {
   getUniqueFilename,
   getUniqueFolderPath,
 } = require('./file.utils.model');
+const { encryptFile } = require('../../utils/fileEncryption');
 
 /**
  * Get files in a directory
@@ -220,7 +221,20 @@ async function createFile(name, size, mimeType, tempPath, parentId = null, userI
   const ext = path.extname(name);
   const storageName = id + ext;
   const dest = path.join(UPLOAD_DIR, storageName);
-  await fs.promises.rename(tempPath, dest);
+
+  // Encrypt the file (custom_drive is disabled, so encrypt it)
+  // Move temp file to temp location, then encrypt to final destination
+  const tempDest = dest + '.tmp';
+  await fs.promises.rename(tempPath, tempDest);
+  try {
+    await encryptFile(tempDest, dest);
+  } catch (error) {
+    logger.error('[File] Error encrypting file:', error);
+    // If encryption fails, clean up temp file
+    await fs.promises.unlink(tempDest).catch(() => {});
+    throw new Error('Failed to encrypt file');
+  }
+
   const result = await pool.query(
     'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id, name, type, size, modified, mime_type AS "mimeType", starred, shared',
     [id, name, 'file', size, mimeType, storageName, parentId, userId]

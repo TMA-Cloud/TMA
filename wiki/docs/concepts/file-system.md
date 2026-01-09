@@ -49,6 +49,14 @@ File system architecture and organization in TMA Cloud.
 - Organized by user ID and file ID
 - Original filenames preserved in database
 
+### File Encryption
+
+- Files encrypted with AES-256-GCM when custom drive is disabled
+- Encryption key configured via `FILE_ENCRYPTION_KEY` environment variable
+- Files stored in format: `[IV][ENCRYPTED_DATA][TAG]`
+- Automatic decryption on download
+- Custom drive files are not encrypted
+
 ### Storage Limits
 
 - Per-user storage limits

@@ -1,6 +1,7 @@
 const path = require('path');
 const archiver = require('archiver');
-const { resolveFilePath, isValidPath } = require('./filePath');
+const { resolveFilePath, isValidPath, isFilePathEncrypted } = require('./filePath');
+const { createDecryptStream } = require('./fileEncryption');
 const { logger } = require('../config/logger');
 
 /**
@@ -27,24 +28,44 @@ function createZipArchive(res, archiveName, entries, rootId, baseName) {
   });
   archive.pipe(res);
 
-  const addEntry = (id, base) => {
-    for (const entry of entries.filter(e => e.parent_id === id)) {
-      const relPath = base ? path.join(base, entry.name) : entry.name;
-      if (entry.type === 'file' && isValidPath(entry.path)) {
-        try {
-          const p = resolveFilePath(entry.path);
-          archive.file(p, { name: relPath });
-        } catch (err) {
-          logger.error(`[ZIP] Error adding file to archive: ${entry.name}`, err);
-        }
-      } else if (entry.type === 'folder') {
-        addEntry(entry.id, relPath);
-      }
-    }
-  };
+  (async () => {
+    try {
+      const addEntry = async (id, base) => {
+        const entriesToProcess = entries.filter(e => e.parent_id === id);
+        for (const entry of entriesToProcess) {
+          const relPath = base ? path.join(base, entry.name) : entry.name;
+          if (entry.type === 'file' && isValidPath(entry.path)) {
+            try {
+              const p = resolveFilePath(entry.path);
+              const isEncrypted = isFilePathEncrypted(entry.path);
 
-  addEntry(rootId, baseName);
-  archive.finalize();
+              if (isEncrypted) {
+                // For encrypted files, use decrypt stream
+                const { stream } = await createDecryptStream(p);
+                archive.append(stream, { name: relPath });
+              } else {
+                // For unencrypted files (custom-drive), add directly
+                archive.file(p, { name: relPath });
+              }
+            } catch (err) {
+              logger.error(`[ZIP] Error adding file to archive: ${entry.name}`, err);
+            }
+          } else if (entry.type === 'folder') {
+            await addEntry(entry.id, relPath);
+          }
+        }
+      };
+
+      await addEntry(rootId, baseName);
+      archive.finalize();
+    } catch (err) {
+      logger.error('[ZIP] Error building archive:', err);
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'Failed to create archive' });
+      }
+      archive.abort();
+    }
+  })();
 }
 
 module.exports = { createZipArchive };

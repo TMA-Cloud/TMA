@@ -48,6 +48,14 @@ Overall security architecture and practices in TMA Cloud.
 - **Path Validation:** Prevents directory traversal
 - **Access Control:** Database-level checks
 
+### File Encryption
+
+- **Algorithm:** AES-256-GCM authenticated encryption
+- **Scope:** Files in `UPLOAD_DIR` (custom drive files excluded)
+- **Key Management:** Environment variable configuration
+- **Stream Processing:** Memory-efficient for large files
+- **Automatic:** Encryption on upload, decryption on download
+
 ### Database Security
 
 - **Parameterized Queries:** SQL injection prevention

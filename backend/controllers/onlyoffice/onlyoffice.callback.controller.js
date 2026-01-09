@@ -256,7 +256,25 @@ async function callback(req, res) {
       }
 
       // Save the downloaded file, replacing the existing one
-      await fs.promises.writeFile(filePath, fileBuffer);
+      const { isFilePathEncrypted } = require('../../utils/filePath');
+      const { encryptFile } = require('../../utils/fileEncryption');
+
+      if (isFilePathEncrypted(fileRow.path)) {
+        // For encrypted files, write to temp first, then encrypt to final location
+        const tempPath = filePath + '.tmp';
+        await fs.promises.writeFile(tempPath, fileBuffer);
+        try {
+          await encryptFile(tempPath, filePath);
+        } catch (error) {
+          logger.error('[ONLYOFFICE] Error encrypting file after save:', error);
+          // Clean up temp file if encryption fails
+          await fs.promises.unlink(tempPath).catch(() => {});
+          throw error;
+        }
+      } else {
+        // For unencrypted files (custom-drive), write directly
+        await fs.promises.writeFile(filePath, fileBuffer);
+      }
 
       // Update file size and modified timestamp in database
       const newSize = fileBuffer.length;

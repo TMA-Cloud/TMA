@@ -33,13 +33,29 @@ Storage limits and management in TMA Cloud.
 - Limit enforcement on upload
 - Storage quota exceeded errors
 
+## File Encryption
+
+Files are automatically encrypted when custom drive is disabled. Encryption uses AES-256-GCM with authenticated encryption.
+
+### Behavior
+
+- **Enabled:** Files in `UPLOAD_DIR` are encrypted
+- **Disabled:** Files on custom drives are not encrypted
+- **Transparent:** Encryption and decryption happen automatically
+- **Streaming:** Large files processed in streams to avoid memory issues
+
+### Key Configuration
+
+- Set `FILE_ENCRYPTION_KEY` environment variable
+- Generate key: `openssl rand -base64 32`
+- Key can be base64, hex, or string (derived with PBKDF2)
+- Development fallback key used if not set (not secure for production)
+
 ## Custom Drives
 
-### Overview
+Custom drives allow users to store files on external or mounted storage. Files on custom drives are not encrypted.
 
-Custom drives allow users to store files on external or mounted storage.
-
-### Configuration
+### Drive Configuration
 
 - **Admin-Only:** Configured by administrators
 - **Per-User:** Each user can have custom drive

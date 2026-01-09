@@ -3,11 +3,12 @@ const fs = require('fs');
 const path = require('path');
 const { generateId } = require('../../utils/id');
 const { UPLOAD_DIR } = require('../../config/paths');
-const { resolveFilePath } = require('../../utils/filePath');
+const { resolveFilePath, isFilePathEncrypted } = require('../../utils/filePath');
 const { logger } = require('../../config/logger');
 const { invalidateFileCache, invalidateSearchCache, deleteCache, cacheKeys } = require('../../utils/cache');
 const { getUserCustomDrive } = require('./file.cache.model');
 const { getFolderPath, getUniqueFilename, getUniqueFolderPath } = require('./file.utils.model');
+const { encryptFile, copyEncryptedFile } = require('../../utils/fileEncryption');
 
 /**
  * Move files to a different parent folder
@@ -114,10 +115,31 @@ async function copyEntry(id, parentId, userId, client = null) {
       // Regular copy to UPLOAD_DIR
       const ext = path.extname(file.name);
       storageName = newId + ext;
+      const destPath = path.join(UPLOAD_DIR, storageName);
       try {
-        await fs.promises.copyFile(sourcePath, path.join(UPLOAD_DIR, storageName));
+        const isSourceEncrypted = isFilePathEncrypted(file.path);
+
+        if (isSourceEncrypted) {
+          // Copy encrypted file by decrypting and re-encrypting in a single pipeline
+          // This avoids writing plaintext to disk (more secure and faster)
+          await copyEncryptedFile(sourcePath, destPath);
+        } else {
+          // Source is unencrypted (custom-drive), copy to temp then encrypt
+          const tempPath = destPath + '.tmp';
+          await fs.promises.copyFile(sourcePath, tempPath);
+          await encryptFile(tempPath, destPath);
+        }
       } catch (error) {
         logger.error('Failed to copy file:', error);
+        // Clean up any temporary files
+        try {
+          const tempFiles = [destPath, destPath + '.tmp'];
+          for (const tempFile of tempFiles) {
+            await fs.promises.unlink(tempFile).catch(() => {});
+          }
+        } catch (_cleanupError) {
+          // Ignore cleanup errors
+        }
         throw new Error('File copy operation failed');
       }
       newPath = storageName;
