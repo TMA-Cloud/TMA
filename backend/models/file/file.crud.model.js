@@ -278,13 +278,58 @@ async function getFile(id, userId) {
  * Rename a file or folder
  */
 async function renameFile(id, name, userId) {
-  // Get parent ID before renaming for cache invalidation
-  const fileResult = await pool.query('SELECT parent_id FROM files WHERE id = $1 AND user_id = $2', [id, userId]);
-  const parentId = fileResult.rows[0]?.parent_id || null;
+  // Get file info before renaming (need path and parent_id)
+  const fileResult = await pool.query('SELECT path, parent_id, type FROM files WHERE id = $1 AND user_id = $2', [
+    id,
+    userId,
+  ]);
+  if (fileResult.rows.length === 0) {
+    return null;
+  }
 
+  const oldFile = fileResult.rows[0];
+  const parentId = oldFile.parent_id || null;
+
+  // For custom drive files/folders, also rename on filesystem
+  if (oldFile.path && path.isAbsolute(oldFile.path)) {
+    try {
+      const oldPath = path.resolve(oldFile.path);
+      const newPath = path.join(path.dirname(oldPath), name);
+
+      // Check if target already exists
+      try {
+        await fs.promises.access(newPath);
+        throw new Error('File or folder with this name already exists');
+      } catch (err) {
+        if (err.code === 'ENOENT') {
+          await fs.promises.rename(oldPath, newPath);
+          await pool.query('UPDATE files SET name = $1, path = $2, modified = NOW() WHERE id = $3 AND user_id = $4', [
+            name,
+            path.resolve(newPath),
+            id,
+            userId,
+          ]);
+        } else {
+          throw err;
+        }
+      }
+    } catch (error) {
+      logger.error({ fileId: id, newName: name, error: error.message }, 'Error renaming file on filesystem');
+      // If filesystem rename fails, still update database name
+      await pool.query('UPDATE files SET name = $1, modified = NOW() WHERE id = $2 AND user_id = $3', [
+        name,
+        id,
+        userId,
+      ]);
+    }
+  } else {
+    await pool.query('UPDATE files SET name = $1, modified = NOW() WHERE id = $2 AND user_id = $3', [name, id, userId]);
+  }
+
+  // Get updated file info
   const result = await pool.query(
-    'UPDATE files SET name = $1, modified = NOW() WHERE id = $2 AND user_id = $3 RETURNING id, name, type, size, modified, mime_type AS "mimeType", starred, shared',
-    [name, id, userId]
+    'SELECT id, name, type, size, modified, mime_type AS "mimeType", starred, shared FROM files WHERE id = $1 AND user_id = $2',
+    [id, userId]
   );
 
   // Invalidate cache

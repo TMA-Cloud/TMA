@@ -492,8 +492,10 @@ async function startUserWatcher(userId, customDrivePath) {
     // Note: depth: 99 allows watching deeply nested directories. For very large directories
     // (e.g., 500k+ files), this may consume significant RAM. This is acceptable for
     // self-hosted custom drive usage, but be aware of resource usage.
+    // Only ignore specific system folders, not all folders starting with dots
+    // This allows user-created folders like .FOLDER to be watched
     const watcher = chokidar.watch(normalizedPath, {
-      ignored: [/(^|[/\\])\../, /node_modules/, /\.git/],
+      ignored: [/node_modules/, /\.git$/, /\.git\//, /\.DS_Store$/, /\.vscode$/, /\.idea$/, /Thumbs\.db$/],
       persistent: true,
       ignoreInitial: true,
       awaitWriteFinish: {

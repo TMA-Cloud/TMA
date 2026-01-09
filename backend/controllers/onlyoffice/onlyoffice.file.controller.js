@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const { validateAndResolveFile, streamEncryptedFile } = require('../../utils/fileDownload');
+const { validateAndResolveFile, streamEncryptedFile, streamUnencryptedFile } = require('../../utils/fileDownload');
 const { validateSingleId } = require('../../utils/controllerHelpers');
 const { logger } = require('../../config/logger');
 const { getOnlyOfficeConfig } = require('./onlyoffice.utils');
@@ -59,7 +59,7 @@ async function serveFile(req, res) {
       logger.error('[ONLYOFFICE] File not found in DB', id);
       return res.status(404).json({ error: 'File not found' });
     }
-    const { success, filePath, isEncrypted, error: fileError } = validateAndResolveFile(fileRow);
+    const { success, filePath, isEncrypted, error: fileError } = await validateAndResolveFile(fileRow);
     if (!success) {
       logger.error('[ONLYOFFICE] File validation failed', id, fileError);
       return res.status(404).json({ error: fileError || 'File not found' });
@@ -74,15 +74,9 @@ async function serveFile(req, res) {
       return streamEncryptedFile(res, filePath, fileRow.name, fileRow.mimeType || 'application/octet-stream');
     }
 
-    // For unencrypted files, send directly
-    res.sendFile(filePath, err => {
-      if (err) {
-        logger.error({ err, fileId: id }, '[ONLYOFFICE] Error sending file');
-        if (!res.headersSent) {
-          res.status(500).json({ error: 'Error sending file' });
-        }
-      }
-    });
+    // For unencrypted files (custom drive), use createReadStream instead of sendFile
+    // This handles case-sensitive paths better on Windows
+    return streamUnencryptedFile(res, filePath, fileRow.name, fileRow.mimeType || 'application/octet-stream');
   } catch (err) {
     logger.error({ err }, '[ONLYOFFICE] Error serving file');
     res.status(500).json({ error: 'Server error' });

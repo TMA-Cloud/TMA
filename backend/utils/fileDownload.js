@@ -1,4 +1,5 @@
 const fs = require('fs');
+const path = require('path');
 const { resolveFilePath, isValidPath, isFilePathEncrypted } = require('./filePath');
 const { createDecryptStream } = require('./fileEncryption');
 const { logger } = require('../config/logger');
@@ -6,9 +7,9 @@ const { logger } = require('../config/logger');
 /**
  * Validates and resolves file path for download
  * @param {Object} file - File object from database
- * @returns {Object} { success: boolean, filePath?: string, isEncrypted?: boolean, error?: string }
+ * @returns {Promise<Object>} { success: boolean, filePath?: string, isEncrypted?: boolean, error?: string }
  */
-function validateAndResolveFile(file) {
+async function validateAndResolveFile(file) {
   if (!file) {
     return { success: false, error: 'File not found' };
   }
@@ -27,6 +28,40 @@ function validateAndResolveFile(file) {
   } catch (err) {
     return { success: false, error: err.message || 'Invalid file path' };
   }
+
+  // For custom drive files (absolute paths), resolve actual filesystem path
+  if (path.isAbsolute(file.path)) {
+    try {
+      filePath = fs.realpathSync(filePath);
+    } catch (err) {
+      // On Windows, if realpathSync fails, try case-insensitive directory search
+      if (process.platform === 'win32' && err.code === 'ENOENT') {
+        try {
+          const parts = path
+            .normalize(filePath)
+            .split(path.sep)
+            .filter(p => p);
+          let currentPath = parts[0] + path.sep; // Drive letter (e.g., "C:\")
+
+          for (let i = 1; i < parts.length; i++) {
+            const entries = await fs.promises.readdir(currentPath);
+            const found = entries.find(e => e.toLowerCase() === parts[i].toLowerCase());
+            if (!found) {
+              return { success: false, error: 'File not found on disk' };
+            }
+            currentPath = path.join(currentPath, found);
+          }
+          filePath = currentPath;
+        } catch {
+          return { success: false, error: 'File not found on disk' };
+        }
+      } else {
+        return { success: false, error: 'File not found on disk' };
+      }
+    }
+  }
+
+  filePath = path.resolve(filePath);
 
   if (!fs.existsSync(filePath)) {
     return { success: false, error: 'File not found on disk' };
@@ -125,7 +160,42 @@ async function streamEncryptedFile(res, encryptedPath, filename, mimeType) {
   }
 }
 
+/**
+ * Stream an unencrypted file to response
+ * @param {Object} res - Express response object
+ * @param {string} filePath - Path to file
+ * @param {string} filename - Original filename for Content-Disposition header
+ * @param {string} mimeType - MIME type for Content-Type header
+ * @param {boolean} attachment - If true, use "attachment" disposition (download), else "inline" (view)
+ */
+function streamUnencryptedFile(res, filePath, filename, mimeType, attachment = false) {
+  res.type(mimeType);
+  const encodedFilename = encodeURIComponent(filename);
+  const disposition = attachment ? 'attachment' : 'inline';
+  res.setHeader('Content-Disposition', `${disposition}; filename="${filename}"; filename*=UTF-8''${encodedFilename}`);
+
+  const stream = fs.createReadStream(filePath);
+
+  stream.on('error', error => {
+    logger.error({ error, filePath }, 'Error streaming file');
+    if (!res.headersSent) {
+      res.status(404).json({ error: 'File not found' });
+    } else {
+      res.destroy();
+    }
+  });
+
+  res.on('close', () => {
+    if (!stream.destroyed) {
+      stream.destroy();
+    }
+  });
+
+  stream.pipe(res);
+}
+
 module.exports = {
   validateAndResolveFile,
   streamEncryptedFile,
+  streamUnencryptedFile,
 };

@@ -1,4 +1,4 @@
-const { validateAndResolveFile, streamEncryptedFile } = require('../../utils/fileDownload');
+const { validateAndResolveFile, streamEncryptedFile, streamUnencryptedFile } = require('../../utils/fileDownload');
 const { sendError } = require('../../utils/response');
 const { createZipArchive } = require('../../utils/zipArchive');
 const { getFileByToken, isFileShared, getSharedTree } = require('../../models/share.model');
@@ -75,7 +75,7 @@ async function downloadSharedItem(req, res) {
     logger.info({ shareToken: token, fileId, fileType: file.type }, 'Share item downloaded');
 
     if (file.type === 'file') {
-      const { success, filePath, isEncrypted, error } = validateAndResolveFile(file);
+      const { success, filePath, isEncrypted, error } = await validateAndResolveFile(file);
       if (!success) {
         return res.status(400).send(error || 'Invalid file path');
       }
@@ -85,10 +85,8 @@ async function downloadSharedItem(req, res) {
         return streamEncryptedFile(res, filePath, file.name, file.mimeType || 'application/octet-stream');
       }
 
-      // For unencrypted files, download directly
-      return res.download(filePath, file.name, err => {
-        if (err) logger.error({ err }, 'Error sending file');
-      });
+      // For unencrypted files, use streaming
+      return streamUnencryptedFile(res, filePath, file.name, file.mimeType || 'application/octet-stream', true);
     }
     // folder: create zip of shared contents under this folder
     const entries = await getSharedTree(token, fileId);

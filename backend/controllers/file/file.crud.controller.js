@@ -1,4 +1,4 @@
-const { validateAndResolveFile, streamEncryptedFile } = require('../../utils/fileDownload');
+const { validateAndResolveFile, streamEncryptedFile, streamUnencryptedFile } = require('../../utils/fileDownload');
 const { sendError, sendSuccess } = require('../../utils/response');
 const { createZipArchive } = require('../../utils/zipArchive');
 const { logger } = require('../../config/logger');
@@ -147,7 +147,7 @@ async function downloadFile(req, res) {
   }
 
   // For files, download directly
-  const { success, filePath, isEncrypted, error: fileError } = validateAndResolveFile(file);
+  const { success, filePath, isEncrypted, error: fileError } = await validateAndResolveFile(file);
   if (!success) {
     return sendError(res, filePath ? 400 : 404, fileError);
   }
@@ -169,11 +169,9 @@ async function downloadFile(req, res) {
     return streamEncryptedFile(res, filePath, file.name, file.mimeType);
   }
 
-  // For unencrypted files (custom-drive), send directly
-  res.type(file.mimeType);
-  const encodedFilename = encodeURIComponent(file.name);
-  res.setHeader('Content-Disposition', `attachment; filename="${file.name}"; filename*=UTF-8''${encodedFilename}`);
-  res.sendFile(filePath);
+  // For unencrypted files (custom-drive), use createReadStream instead of sendFile
+  // This handles case-sensitive paths better on Windows
+  return streamUnencryptedFile(res, filePath, file.name, file.mimeType, true);
 }
 
 /**
