@@ -63,6 +63,7 @@ File system architecture and organization in TMA Cloud.
 - Configurable by administrators
 - Real-time usage tracking
 - Custom drive support (per-user)
+- Real-time synchronization for custom drives
 
 ## Trash System
 

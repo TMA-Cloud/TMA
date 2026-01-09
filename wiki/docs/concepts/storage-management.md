@@ -62,6 +62,14 @@ Custom drives allow users to store files on external or mounted storage. Files o
 - **Path Mapping:** Host path to container path (Docker)
 - **Separate Limits:** Custom storage limits per drive
 
+### Real-Time Synchronization
+
+- File system watcher monitors custom drive directories
+- Changes detected automatically (additions, modifications, deletions)
+- Database updated in real-time
+- Frontend receives updates via Server-Sent Events
+- UI updates without manual refresh
+
 ### Use Cases
 
 - External storage devices

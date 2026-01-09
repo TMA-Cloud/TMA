@@ -79,14 +79,33 @@ Custom drives allow users to store files on external or mounted storage instead 
 ### Automatic Scanning
 
 - Background service watches custom drives
-- Syncs files to database
-- Handles file changes
+- Syncs files to database on startup
+- Handles file changes in real-time
 
-### Scanner Configuration
+### Real-Time Synchronization
+
+- File system watcher monitors custom drive directories
+- Detects file additions, changes, and deletions
+- Updates database automatically
+- Publishes events to frontend via Server-Sent Events (SSE)
+- Frontend updates UI without manual refresh
+
+### Scanner Behavior
 
 - Per-user scanner configuration
 - Automatic file detection
 - Metadata extraction
+- Watches up to 99 directory levels deep
+- Debounced processing (500ms) to batch rapid changes
+- Cache invalidation ensures fresh data on refresh
+
+### Watcher Configuration
+
+- Watches all subdirectories recursively
+- Ignores dotfiles, node_modules, and .git directories
+- Waits 1 second after file stops changing before processing
+- Handles permission errors gracefully
+- Supports atomic file writes
 
 ## Best Practices
 

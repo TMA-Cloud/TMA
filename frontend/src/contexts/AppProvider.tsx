@@ -178,7 +178,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         if (sortOrder && sortOrder.trim()) {
           url.searchParams.append("order", sortOrder);
         }
-        const res = await fetch(url.toString(), { credentials: "include" });
+        const res = await fetch(url.toString(), {
+          credentials: "include",
+        });
         const data: FileItemResponse[] = await res.json();
         setFiles(
           data.map((f) => ({
@@ -330,6 +332,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
       id?: string;
       starred?: boolean;
       shared?: boolean;
+      isCustomDrive?: boolean;
     },
   ) => {
     const currentPage = currentPathRef.current[0];
@@ -355,8 +358,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
       );
     }
 
-    // For "My Files" view, check if event's parentId matches current folder
+    // For "My Files" view
     if (currentPage === "My Files") {
+      // Always accept events from custom drive (they're always shown in My Files)
+      if (eventData.isCustomDrive) {
+        return true;
+      }
       // If we're at root (no parentId), only refresh if event is also at root
       if (!currentParentId) {
         return !eventData.parentId;
@@ -414,18 +421,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         // Handle file events
         if (data.type && data.data) {
           const eventData = data.data;
+          const eventType = data.type;
 
           // Filter by relevance - only refresh if event affects current view
           // Uses refs to get current values without causing re-renders
-          if (!isEventRelevant(data.type, eventData)) {
+          // isEventRelevant already handles custom drive events properly
+          const isRelevant = isEventRelevant(eventType, eventData);
+
+          if (!isRelevant) {
             return;
           }
 
           // Debounce/throttle refresh - batch multiple events
           debouncedSSERefresh();
         }
-      } catch {
-        // Silently handle file event parsing errors
+      } catch (error) {
+        // Log parsing errors for debugging
+        console.error("[SSE] Error parsing event:", error, event.data);
       }
     };
 
