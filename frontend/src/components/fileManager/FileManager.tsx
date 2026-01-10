@@ -4,7 +4,11 @@ import { Breadcrumbs } from "./Breadcrumbs";
 import { ContextMenu } from "./ContextMenu";
 import { PasteProgress } from "./PasteProgress";
 import { DownloadProgress } from "./DownloadProgress";
-import { ONLYOFFICE_EXTS, getExt } from "../../utils/fileUtils";
+import {
+  ONLYOFFICE_EXTS,
+  getExt,
+  validateOnlyOfficeMimeType,
+} from "../../utils/fileUtils";
 import { useIsMobile } from "../../hooks/useIsMobile";
 import { useToast } from "../../hooks/useToast";
 import { getErrorMessage } from "../../utils/errorUtils";
@@ -295,6 +299,15 @@ export const FileManager: React.FC = () => {
       if (file.mimeType && file.mimeType.startsWith("image/")) {
         setImageViewerFile(file);
       } else if (ONLYOFFICE_EXTS.has(getExt(file.name))) {
+        // Validate MIME type before opening (prevents unnecessary API calls)
+        if (!validateOnlyOfficeMimeType(file.name, file.mimeType)) {
+          const ext = getExt(file.name);
+          showToast(
+            `Cannot open file: type mismatch (expected .${ext.slice(1)} format)`,
+            "error",
+          );
+          return;
+        }
         // Check if OnlyOffice is configured before opening (using cached value)
         if (!onlyOfficeConfigured) {
           if (canConfigureOnlyOffice) {

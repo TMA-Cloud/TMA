@@ -17,6 +17,7 @@ const { validateFileName, validateSortBy, validateSortOrder, validateFileUpload 
 const { validateParentId, validateSingleId } = require('../../utils/controllerHelpers');
 const { getUserStorageUsage, getUserCustomDriveSettings, getUserStorageLimit } = require('../../models/user.model');
 const { safeUnlink } = require('../../utils/fileCleanup');
+const { validateMimeType } = require('../../utils/mimeTypeDetection');
 
 /**
  * List files in a directory
@@ -84,12 +85,22 @@ async function uploadFile(req, res) {
     return sendError(res, 400, 'Invalid file name');
   }
 
-  // Validate for security concerns (MIME spoofing detection, etc.)
-  // This logs warnings but doesn't block uploads - cloud storage accepts all file types
-  validateFileUpload(req.file.mimetype, req.file.originalname);
+  // Detect and validate actual MIME type from file content (prevents MIME spoofing)
+  const mimeValidation = await validateMimeType(req.file.path, req.file.mimetype, req.file.originalname);
+  if (!mimeValidation.valid) {
+    await safeUnlink(req.file.path);
+    return sendError(res, 400, mimeValidation.error || 'Invalid file type');
+  }
+
+  // Use actual MIME type detected from file content (not the declared one)
+  const actualMimeType = mimeValidation.actualMimeType || req.file.mimetype || 'application/octet-stream';
+
+  // Validate for security concerns (executable files, etc.)
+  validateFileUpload(actualMimeType, req.file.originalname);
 
   const { valid, parentId, error } = validateParentId(req);
   if (!valid) {
+    await safeUnlink(req.file.path);
     return sendError(res, 400, error);
   }
 
@@ -121,7 +132,7 @@ async function uploadFile(req, res) {
   }
 
   const file = await userOperationLock(req.userId, () => {
-    return createFile(req.file.originalname, req.file.size, req.file.mimetype, req.file.path, parentId, req.userId);
+    return createFile(req.file.originalname, req.file.size, actualMimeType, req.file.path, parentId, req.userId);
   });
 
   // Log file upload

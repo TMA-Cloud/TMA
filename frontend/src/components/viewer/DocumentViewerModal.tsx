@@ -4,6 +4,7 @@ import { useApp } from "../../contexts/AppContext";
 import { useAuth } from "../../contexts/AuthContext";
 import { ONLYOFFICE_EXTS, getExt } from "../../utils/fileUtils";
 import { getErrorMessage, isAuthError } from "../../utils/errorUtils";
+import { useToast } from "../../hooks/useToast";
 
 interface DocsAPIEditor {
   destroyEditor?: () => void;
@@ -47,6 +48,7 @@ declare global {
 export const DocumentViewerModal: React.FC = () => {
   const appContext = useApp();
   const { user } = useAuth();
+  const { showToast } = useToast();
   const documentViewerFile = appContext.documentViewerFile ?? null;
   const setDocumentViewerFile = appContext.setDocumentViewerFile;
   const refreshOnlyOfficeConfig = appContext.refreshOnlyOfficeConfig;
@@ -117,6 +119,25 @@ export const DocumentViewerModal: React.FC = () => {
         if (!res.ok) {
           // Don't show error for authentication errors - expected after logout
           if (res.status === 401) {
+            return;
+          }
+
+          if (res.status === 400) {
+            // MIME type validation failed - show toast and close modal
+            try {
+              const errorData = await res.json();
+              showToast(
+                errorData.message ||
+                  "Cannot open file. File type mismatch detected.",
+                "error",
+              );
+            } catch {
+              showToast(
+                "Cannot open file. File type mismatch detected.",
+                "error",
+              );
+            }
+            setDocumentViewerFile?.(null);
             return;
           }
 
@@ -196,7 +217,13 @@ export const DocumentViewerModal: React.FC = () => {
         abortControllerRef.current = null;
       }
     };
-  }, [documentViewerFile, refreshOnlyOfficeConfig, user]);
+  }, [
+    documentViewerFile,
+    refreshOnlyOfficeConfig,
+    user,
+    setDocumentViewerFile,
+    showToast,
+  ]);
 
   // Cancel any in-flight requests when user logs out
   useEffect(() => {

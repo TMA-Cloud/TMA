@@ -1,6 +1,8 @@
 const { getFile } = require('../../models/file.model');
 const { validateSingleId } = require('../../utils/controllerHelpers');
 const { logger } = require('../../config/logger');
+const { validateAndResolveFile } = require('../../utils/fileDownload');
+const { validateOnlyOfficeMimeType } = require('../../utils/mimeTypeDetection');
 const {
   getOnlyOfficeConfig,
   getUserName,
@@ -10,6 +12,7 @@ const {
   buildOnlyofficeConfig,
   signConfigToken,
   getOnlyofficeJsUrl,
+  validateFileForOnlyOffice,
 } = require('./onlyoffice.utils');
 
 /**
@@ -30,7 +33,15 @@ async function getConfig(req, res) {
     const userId = req.userId;
 
     const file = await getFile(fileId, userId);
-    if (!file) return res.status(404).json({ message: 'File not found' });
+    const validation = await validateFileForOnlyOffice(file, validateAndResolveFile, validateOnlyOfficeMimeType);
+
+    if (!validation.valid) {
+      if (!file) {
+        return res.status(404).json({ message: validation.error });
+      }
+      logger.warn({ fileId, fileName: file.name, error: validation.error }, '[ONLYOFFICE] Validation failed');
+      return res.status(400).json({ message: validation.error });
+    }
 
     const userName = await getUserName(userId);
     const token = await buildSignedFileToken(file.id);

@@ -45,7 +45,8 @@ Learn how to upload and manage files in TMA Cloud.
 ### Supported Files
 
 - All file types supported
-- MIME type detection automatic
+- MIME type detected from file content (magic bytes)
+- Actual file type stored regardless of filename extension
 - Preview for images and documents
 
 ### Document Editing

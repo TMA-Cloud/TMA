@@ -16,7 +16,7 @@ File system architecture and organization in TMA Cloud.
 - **Name:** File or folder name
 - **Type:** 'file' or 'folder'
 - **Size:** File size in bytes (folders: 0)
-- **MIME Type:** File MIME type
+- **MIME Type:** Actual MIME type detected from file content (not from extension)
 - **Parent ID:** Parent folder reference
 - **Path:** Full path string
 - **User ID:** Owner reference

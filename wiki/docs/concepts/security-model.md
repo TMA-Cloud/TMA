@@ -39,6 +39,7 @@ Overall security architecture and practices in TMA Cloud.
 - **Type Checking:** Parameter validation
 - **Path Traversal Protection:** Prevent directory traversal
 - **SQL Injection Protection:** Parameterized queries
+- **MIME Type Validation:** File content verified against declared type
 
 ## Data Security
 
@@ -47,6 +48,8 @@ Overall security architecture and practices in TMA Cloud.
 - **User Isolation:** Files stored per-user
 - **Path Validation:** Prevents directory traversal
 - **Access Control:** Database-level checks
+- **MIME Type Detection:** Actual file type detected from content (magic bytes)
+- **MIME Type Validation:** File content must match declared type
 
 ### File Encryption
 

@@ -25,12 +25,29 @@ Troubleshooting OnlyOffice integration problems.
 1. File type is supported (.docx, .xlsx, .pptx, .pdf)
 2. File exists and is accessible
 3. OnlyOffice server is running
+4. File MIME type matches extension
 
 **Solutions:**
 
 1. Verify file type is supported
 2. Check file permissions
 3. Verify OnlyOffice server is accessible
+4. Ensure file content matches extension (e.g., .txt renamed to .docx will fail)
+
+### MIME Type Mismatch
+
+**Error:** "Cannot open file: type mismatch (expected .docx format)"
+
+**Cause:**
+
+- File content does not match extension
+- File was renamed with incorrect extension
+
+**Solutions:**
+
+1. Upload file with correct extension
+2. Do not rename files to different types
+3. File content must match declared type
 
 ## Callback Issues
 

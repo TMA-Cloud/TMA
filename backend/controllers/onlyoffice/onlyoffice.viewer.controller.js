@@ -2,6 +2,8 @@ const { getFile } = require('../../models/file.model');
 const { validateSingleId } = require('../../utils/controllerHelpers');
 const { logger } = require('../../config/logger');
 const { logAuditEvent } = require('../../services/auditLogger');
+const { validateAndResolveFile } = require('../../utils/fileDownload');
+const { validateOnlyOfficeMimeType } = require('../../utils/mimeTypeDetection');
 const {
   getOnlyOfficeConfig,
   getUserName,
@@ -11,6 +13,7 @@ const {
   buildOnlyofficeConfig,
   signConfigToken,
   getOnlyofficeJsUrl,
+  validateFileForOnlyOffice,
 } = require('./onlyoffice.utils');
 
 /**
@@ -31,7 +34,39 @@ async function getViewerPage(req, res) {
     const userId = req.userId;
 
     const file = await getFile(fileId, userId);
-    if (!file) return res.status(404).send('File not found');
+    const validation = await validateFileForOnlyOffice(file, validateAndResolveFile, validateOnlyOfficeMimeType);
+
+    if (!validation.valid) {
+      if (!file) {
+        return res.status(404).send(validation.error);
+      }
+      logger.warn({ fileId, fileName: file.name, error: validation.error }, '[ONLYOFFICE] Validation failed');
+
+      // Check if request is from fetch/XHR (for modal) or direct browser access (new tab)
+      const acceptsJson = req.headers.accept?.includes('application/json');
+      const isXhr = req.headers['x-requested-with'] === 'XMLHttpRequest';
+
+      if (acceptsJson || isXhr) {
+        return res.status(400).json({
+          message: validation.error,
+          error: 'MIME_TYPE_MISMATCH',
+        });
+      }
+
+      // For direct browser access (new tab), return simple HTML error page
+      return res.status(400).send(`
+        <!DOCTYPE html>
+        <html>
+        <head><title>Error</title></head>
+        <body style="font-family: sans-serif; padding: 40px; text-align: center;">
+          <h1 style="color: #dc2626;">Cannot Open File</h1>
+          <p>${file.name.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>
+          <p style="color: #6b7280;">${validation.error.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>
+          <button onclick="window.close()" style="padding: 10px 20px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer;">Close</button>
+        </body>
+        </html>
+      `);
+    }
 
     const userName = await getUserName(userId);
     const token = await buildSignedFileToken(file.id);

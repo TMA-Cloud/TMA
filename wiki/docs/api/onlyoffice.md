@@ -8,6 +8,12 @@ OnlyOffice integration endpoints for TMA Cloud.
 
 Get OnlyOffice editor configuration for a file.
 
+**Validation:**
+
+- File extension must be supported by OnlyOffice
+- Actual MIME type must match expected type for extension
+- Returns 400 if MIME type mismatch detected
+
 **Response:**
 
 ```json
@@ -34,6 +40,12 @@ Get OnlyOffice editor configuration for a file.
 ### GET `/api/onlyoffice/viewer/:id`
 
 Get standalone viewer page for a file.
+
+**Validation:**
+
+- File extension must be supported by OnlyOffice
+- Actual MIME type must match expected type for extension
+- Returns 400 (JSON or HTML) if MIME type mismatch detected
 
 **Response:**
 HTML page with OnlyOffice viewer

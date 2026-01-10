@@ -154,6 +154,35 @@ async function signConfigToken(config) {
   return jwt.sign(config, onlyOfficeConfig.jwtSecret, { algorithm: 'HS256' });
 }
 
+/**
+ * Validates file for ONLYOFFICE access (shared validation logic)
+ * @param {Object} file - File object from database
+ * @param {Function} validateAndResolveFile - Function to validate and resolve file path
+ * @param {Function} validateOnlyOfficeMimeType - Function to validate MIME type
+ * @returns {Promise<Object>} { valid: boolean, filePath?: string, isEncrypted?: boolean, error?: string }
+ */
+async function validateFileForOnlyOffice(file, validateAndResolveFile, validateOnlyOfficeMimeType) {
+  if (!file) {
+    return { valid: false, error: 'File not found' };
+  }
+
+  if (!isOnlyOfficeSupported(file.name)) {
+    return { valid: false, error: 'File type is not supported by ONLYOFFICE' };
+  }
+
+  const { success, filePath, isEncrypted, error: fileError } = await validateAndResolveFile(file);
+  if (!success) {
+    return { valid: false, error: fileError || 'File not found' };
+  }
+
+  const mimeValidation = await validateOnlyOfficeMimeType(filePath, file.name, file.mimeType, isEncrypted);
+  if (!mimeValidation.valid) {
+    return { valid: false, error: mimeValidation.error || 'File type mismatch detected' };
+  }
+
+  return { valid: true, filePath, isEncrypted };
+}
+
 module.exports = {
   BACKEND_URL,
   getOnlyOfficeConfig,
@@ -166,4 +195,5 @@ module.exports = {
   buildOnlyofficeUrls,
   buildOnlyofficeConfig,
   signConfigToken,
+  validateFileForOnlyOffice,
 };

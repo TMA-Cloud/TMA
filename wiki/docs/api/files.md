@@ -115,6 +115,12 @@ Upload file.
 - `parent_id` - Parent folder ID (optional)
 - `path` - Target path (optional)
 
+**MIME Type Validation:**
+
+- Actual MIME type detected from file content (magic bytes)
+- Stored MIME type matches actual file content
+- File extension can differ from actual type
+
 **Response:**
 
 ```json

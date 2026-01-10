@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { format, formatDistanceToNow, isToday, isYesterday } from "date-fns";
 import bytes from "bytes";
+import mime from "mime";
 import { type FileItem } from "../contexts/AppContext";
 
 export const getFileIcon = (file: FileItem) => {
@@ -141,6 +142,39 @@ export function getExt(name?: string) {
 
 export const isOnlyOfficeSupported = (name?: string) =>
   ONLYOFFICE_EXTS.has(getExt(name));
+
+/**
+ * Validates if a file's MIME type matches the expected type for its extension
+ * Uses mime package to get expected MIME types dynamically
+ * @param fileName - File name with extension
+ * @param mimeType - File's MIME type
+ * @returns true if MIME type matches expected type for the extension
+ */
+export const validateOnlyOfficeMimeType = (
+  fileName: string,
+  mimeType?: string | null,
+): boolean => {
+  if (!mimeType) return false;
+
+  const ext = getExt(fileName);
+  const expectedMime = mime.getType(ext);
+  if (!expectedMime) return false;
+
+  const normalizedMime = mimeType.toLowerCase().split(";")[0].trim();
+  const normalizedExpected = expectedMime.toLowerCase();
+
+  // Check primary MIME type
+  if (normalizedMime === normalizedExpected) return true;
+
+  // Special case: CSV can be text/plain or application/csv
+  if (ext === ".csv") {
+    return (
+      normalizedMime === "text/plain" || normalizedMime === "application/csv"
+    );
+  }
+
+  return false;
+};
 
 /**
  * Formats a filename for tooltip display in the format: "filename...extension"
