@@ -53,12 +53,12 @@ npm start
 # Access the application at http://localhost:3000
 ```
 
-For detailed setup instructions, see the [Documentation Wiki](https://tma-cloud.github.io).
+For detailed setup instructions, see the [Documentation Wiki](https://tma-cloud.github.io/TMA).
 
 ## UI Preview
 
 A quick preview of the TMA Cloud interface.  
-Full gallery available in the [Documentation Wiki](https://tma-cloud.github.io).
+Full gallery available in the [Documentation Wiki](https://tma-cloud.github.io/TMA).
 
 ### Dashboard & File Manager
 
@@ -68,7 +68,7 @@ Full gallery available in the [Documentation Wiki](https://tma-cloud.github.io).
 
 ## Documentation
 
-**Full documentation is available in the [Documentation Wiki](https://tma-cloud.github.io)**
+**Full documentation is available in the [Documentation Wiki](https://tma-cloud.github.io/TMA)**
 
 ## Contributing
 
