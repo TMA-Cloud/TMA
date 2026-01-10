@@ -11,10 +11,120 @@ const { publishFileEvent, EventTypes } = require('./fileEvents');
 const { invalidateFileCache } = require('../utils/cache');
 
 /**
+ * Converts a pattern string to a regex
+ * @param {string} pattern - Pattern string (may contain wildcards)
+ * @returns {RegExp|null} Compiled regex or null if invalid
+ */
+function patternToRegex(pattern) {
+  try {
+    // If pattern looks like a regex (starts and ends with /), compile it
+    if (pattern.startsWith('/') && pattern.endsWith('/') && pattern.length > 2) {
+      return new RegExp(pattern.slice(1, -1));
+    }
+
+    const hasWildcard = pattern.includes('*');
+
+    if (hasWildcard) {
+      // Convert * to .* for regex, but escape other special characters
+      const placeholder = '__WILDCARD_PLACEHOLDER__';
+      let processed = pattern.replace(/\*/g, placeholder);
+      processed = processed.replace(/[.+?^${}()|[\]\\]/g, '\\$&');
+      processed = processed.replace(new RegExp(placeholder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), '.*');
+      return new RegExp(processed, 'i');
+    } else {
+      // No wildcard - match exactly as complete path segment
+      const escaped = pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const pathSepEscaped = path.sep === '\\' ? '\\\\' : path.sep;
+      return new RegExp(`(^|${pathSepEscaped})${escaped}($|${pathSepEscaped})`);
+    }
+  } catch (error) {
+    logger.warn(`[Custom Drive] Invalid ignore pattern "${pattern}": ${error.message}`);
+    return null;
+  }
+}
+
+/**
+ * Tests if a regex matches any of the given paths
+ * @param {RegExp} regex - Compiled regex pattern
+ * @param {string} filePath - Full file path
+ * @param {string} relativePath - Relative path from base
+ * @param {string} fileName - Just the filename
+ * @returns {boolean} True if pattern matches
+ */
+function testPattern(regex, filePath, relativePath, fileName) {
+  try {
+    const normalizedPath = filePath.toLowerCase();
+    const normalizedRelative = relativePath.toLowerCase();
+    const normalizedFileName = fileName.toLowerCase();
+
+    return (
+      regex.test(filePath) ||
+      regex.test(relativePath) ||
+      regex.test(normalizedPath) ||
+      regex.test(normalizedRelative) ||
+      regex.test(fileName) ||
+      regex.test(normalizedFileName)
+    );
+  } catch (error) {
+    logger.warn(`[Custom Drive] Error testing ignore pattern: ${error.message}`);
+    return false;
+  }
+}
+
+/**
+ * Builds ignore function from patterns for chokidar
+ * @param {string[]} patterns - Array of ignore patterns
+ * @param {string} basePath - Base path to resolve relative patterns
+ * @returns {Function|null} Ignore function for chokidar or null
+ */
+function buildIgnoreFunction(patterns, basePath) {
+  if (!patterns || patterns.length === 0) {
+    return null;
+  }
+
+  const regexPatterns = patterns.map(patternToRegex).filter(p => p !== null);
+
+  if (regexPatterns.length === 0) {
+    return null;
+  }
+
+  return filePath => {
+    const relativePath = path.relative(basePath, filePath);
+    const fileName = path.basename(filePath);
+    return regexPatterns.some(regex => testPattern(regex, filePath, relativePath, fileName));
+  };
+}
+
+/**
+ * Checks if a path should be ignored
+ * @param {string} filePath - Full file path
+ * @param {string} basePath - Base custom drive path
+ * @param {string[]} ignorePatterns - Array of ignore patterns
+ * @returns {boolean} True if path should be ignored
+ */
+function shouldIgnorePath(filePath, basePath, ignorePatterns) {
+  if (!ignorePatterns || ignorePatterns.length === 0 || !basePath) {
+    return false;
+  }
+
+  const relativePath = path.relative(basePath, filePath);
+  const fileName = path.basename(filePath);
+
+  for (const pattern of ignorePatterns) {
+    const regex = patternToRegex(pattern);
+    if (regex && testPattern(regex, filePath, relativePath, fileName)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
  * Scans a user's custom drive directory and syncs with database
  * Removes database entries for files/folders that no longer exist on disk
  */
-async function scanCustomDrive(customDrivePath, userId) {
+async function scanCustomDrive(customDrivePath, userId, ignorePatterns = []) {
   const normalizedPath = path.resolve(customDrivePath);
 
   try {
@@ -50,7 +160,7 @@ async function scanCustomDrive(customDrivePath, userId) {
     const seenPaths = new Set();
 
     // Scan filesystem
-    await scanDirectory(normalizedPath, null, [userId], seenPaths);
+    await scanDirectory(normalizedPath, null, [userId], seenPaths, ignorePatterns, normalizedPath);
 
     // Remove database entries for files/folders that no longer exist
     const pathsToRemove = Array.from(dbPathToInfo.keys()).filter(path => !seenPaths.has(path));
@@ -102,13 +212,19 @@ async function scanCustomDrive(customDrivePath, userId) {
 /**
  * Recursively scans a directory and inserts files/folders into the database
  */
-async function scanDirectory(dirPath, parentFolderIds, userIds, seenPaths) {
+async function scanDirectory(dirPath, parentFolderIds, userIds, seenPaths, ignorePatterns = [], basePath = null) {
   try {
     const entries = await fs.readdir(dirPath, { withFileTypes: true });
 
     for (const entry of entries) {
       const entryPath = path.join(dirPath, entry.name);
       const normalizedEntryPath = path.resolve(entryPath).toLowerCase();
+
+      // Check if this path should be ignored
+      if (basePath && shouldIgnorePath(entryPath, basePath, ignorePatterns)) {
+        continue;
+      }
+
       seenPaths.add(normalizedEntryPath);
 
       try {
@@ -130,7 +246,7 @@ async function scanDirectory(dirPath, parentFolderIds, userIds, seenPaths) {
             folderIds[userId] = folderIdsMap.get(userId);
           }
 
-          await scanDirectory(entryPath, folderIds, userIds, seenPaths);
+          await scanDirectory(entryPath, folderIds, userIds, seenPaths, ignorePatterns, basePath);
         } else if (entry.isFile()) {
           await batchCreateOrUpdateFiles(
             entry.name,
@@ -477,7 +593,7 @@ async function handleDeletion(filePath, userIds) {
 /**
  * Starts a file watcher for a specific user's custom drive
  */
-async function startUserWatcher(userId, customDrivePath) {
+async function startUserWatcher(userId, customDrivePath, ignorePatterns = []) {
   const normalizedPath = path.resolve(customDrivePath);
 
   try {
@@ -485,17 +601,18 @@ async function startUserWatcher(userId, customDrivePath) {
 
     // Always perform full scan on startup to ensure consistency
     logger.info(`[Custom Drive] User ${userId}: Performing initial scan...`);
-    await scanCustomDrive(customDrivePath, userId);
+    await scanCustomDrive(customDrivePath, userId, ignorePatterns);
     logger.info(`[Custom Drive] User ${userId}: Initial scan complete`);
+
+    // Build ignore function from user-defined patterns
+    const ignoreFunction = buildIgnoreFunction(ignorePatterns, normalizedPath);
 
     // Start file watcher for real-time updates
     // Note: depth: 99 allows watching deeply nested directories. For very large directories
     // (e.g., 500k+ files), this may consume significant RAM. This is acceptable for
     // self-hosted custom drive usage, but be aware of resource usage.
-    // Only ignore specific system folders, not all folders starting with dots
-    // This allows user-created folders like .FOLDER to be watched
-    const watcher = chokidar.watch(normalizedPath, {
-      ignored: [/node_modules/, /\.git$/, /\.git\//, /\.DS_Store$/, /\.vscode$/, /\.idea$/, /Thumbs\.db$/],
+    // Use user-defined ignore patterns (or no ignoring if empty)
+    const watcherOptions = {
       persistent: true,
       ignoreInitial: true,
       awaitWriteFinish: {
@@ -506,7 +623,13 @@ async function startUserWatcher(userId, customDrivePath) {
       usePolling: false,
       ignorePermissionErrors: true,
       atomic: true,
-    });
+    };
+
+    if (ignoreFunction) {
+      watcherOptions.ignored = ignoreFunction;
+    }
+
+    const watcher = chokidar.watch(normalizedPath, watcherOptions);
 
     watcher.on('add', filePath => {
       logger.info(`[Custom Drive] User ${userId}: File added: ${filePath}`);
@@ -558,6 +681,7 @@ async function startUserWatcher(userId, customDrivePath) {
  */
 async function startCustomDriveScanner() {
   try {
+    const { getUserCustomDriveSettings } = require('../models/user.model');
     const users = await getUsersWithCustomDrive();
 
     if (users.length === 0) {
@@ -568,7 +692,12 @@ async function startCustomDriveScanner() {
     logger.info(`[Custom Drive] Starting watchers for ${users.length} user(s)`);
 
     for (const user of users) {
-      await startUserWatcher(user.id, user.custom_drive_path);
+      try {
+        const settings = await getUserCustomDriveSettings(user.id);
+        await startUserWatcher(user.id, user.custom_drive_path, settings.ignorePatterns || []);
+      } catch (error) {
+        logger.error(`[Custom Drive] Failed to start watcher for user ${user.id}:`, error.message);
+      }
     }
 
     logger.info(`[Custom Drive] Started ${watchers.size} watcher(s)`);
@@ -623,11 +752,11 @@ function stopCustomDriveScanner() {
 /**
  * Restart watcher for a specific user
  */
-async function restartUserWatcher(userId, customDrivePath) {
+async function restartUserWatcher(userId, customDrivePath, ignorePatterns = []) {
   stopUserWatcher(userId);
 
   if (customDrivePath) {
-    await startUserWatcher(userId, customDrivePath);
+    await startUserWatcher(userId, customDrivePath, ignorePatterns);
     logger.info(`[Custom Drive] Restarted watcher for user ${userId}`);
   } else {
     logger.info(`[Custom Drive] Stopped watcher for user ${userId}`);

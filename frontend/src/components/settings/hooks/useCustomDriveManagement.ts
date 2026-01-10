@@ -13,8 +13,13 @@ export type UserCustomDriveLocalState = Record<
   {
     enabled: boolean;
     path: string;
+    ignorePatterns: string[];
     expanded: boolean;
+    editingIgnorePatterns?: boolean;
+    newPattern?: string;
     error: string | null;
+    originalPath?: string;
+    originalIgnorePatterns?: string[];
   }
 >;
 
@@ -61,7 +66,9 @@ export function useCustomDriveManagement(canToggleSignup: boolean) {
         initialState[user.id] = {
           enabled: user.customDrive.enabled,
           path: user.customDrive.path || "",
+          ignorePatterns: user.customDrive.ignorePatterns || [],
           expanded: false,
+          editingIgnorePatterns: false,
           error: null,
         };
       });
@@ -107,6 +114,7 @@ export function useCustomDriveManagement(canToggleSignup: boolean) {
     userId: string,
     enabled: boolean,
     path: string | null,
+    ignorePatterns?: string[],
   ): Promise<boolean> => {
     // Prevent concurrent updates to avoid race conditions
     if (updatingUserCustomDrive) return false;
@@ -118,7 +126,7 @@ export function useCustomDriveManagement(canToggleSignup: boolean) {
 
     try {
       setUpdatingUserCustomDrive(userId);
-      await updateCustomDriveSettings(enabled, path, userId);
+      await updateCustomDriveSettings(enabled, path, userId, ignorePatterns);
 
       // Check again after async operation - user might have logged out
       if (!shouldLoadRef.current) {
@@ -137,7 +145,9 @@ export function useCustomDriveManagement(canToggleSignup: boolean) {
         [userId]: {
           enabled,
           path: path || "",
+          ignorePatterns: ignorePatterns || prev[userId]?.ignorePatterns || [],
           expanded: false,
+          editingIgnorePatterns: false,
           error: null,
         },
       }));
@@ -159,7 +169,9 @@ export function useCustomDriveManagement(canToggleSignup: boolean) {
           ...(prev[userId] || {
             enabled: false,
             path: "",
+            ignorePatterns: [],
             expanded: false,
+            editingIgnorePatterns: false,
             error: null,
           }),
           error: errorMessage,
@@ -194,7 +206,9 @@ export function useCustomDriveManagement(canToggleSignup: boolean) {
         [userId!]: {
           enabled: userInfo.customDrive.enabled,
           path: userInfo.customDrive.path || "",
+          ignorePatterns: userInfo.customDrive.ignorePatterns || [],
           expanded: prev[userId!]?.expanded || false,
+          editingIgnorePatterns: false,
           error: null,
         },
       }));
@@ -219,8 +233,20 @@ export function useCustomDriveManagement(canToggleSignup: boolean) {
       [userId!]: {
         enabled: userInfo?.customDrive.enabled || false,
         path: prev[userId!]?.path || "",
+        ignorePatterns:
+          prev[userId!]?.ignorePatterns ||
+          userInfo?.customDrive.ignorePatterns ||
+          [],
         expanded: true,
+        editingIgnorePatterns: false,
+        newPattern: "",
         error: null,
+        originalPath: prev[userId!]?.path || userInfo?.customDrive.path || "",
+        originalIgnorePatterns: [
+          ...(prev[userId!]?.ignorePatterns ||
+            userInfo?.customDrive.ignorePatterns ||
+            []),
+        ],
       },
     }));
   };

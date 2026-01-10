@@ -210,11 +210,16 @@ export async function toggleSignup(
 export async function getCustomDriveSettings(targetUserId?: string): Promise<{
   enabled: boolean;
   path: string | null;
+  ignorePatterns: string[];
 }> {
   const url = targetUserId
     ? `/api/user/custom-drive?targetUserId=${encodeURIComponent(targetUserId)}`
     : "/api/user/custom-drive";
-  return await apiGet<{ enabled: boolean; path: string | null }>(url);
+  return await apiGet<{
+    enabled: boolean;
+    path: string | null;
+    ignorePatterns: string[];
+  }>(url);
 }
 
 /**
@@ -228,6 +233,7 @@ export interface UserCustomDriveInfo {
   customDrive: {
     enabled: boolean;
     path: string | null;
+    ignorePatterns: string[];
   };
 }
 
@@ -246,11 +252,17 @@ export async function updateCustomDriveSettings(
   enabled: boolean,
   path: string | null,
   targetUserId?: string,
-): Promise<{ enabled: boolean; path: string | null }> {
-  return await apiPut<{ enabled: boolean; path: string | null }>(
-    "/api/user/custom-drive",
-    { enabled, path, targetUserId },
-  );
+  ignorePatterns?: string[],
+): Promise<{
+  enabled: boolean;
+  path: string | null;
+  ignorePatterns: string[];
+}> {
+  return await apiPut<{
+    enabled: boolean;
+    path: string | null;
+    ignorePatterns: string[];
+  }>("/api/user/custom-drive", { enabled, path, targetUserId, ignorePatterns });
 }
 
 export interface UserSummary {

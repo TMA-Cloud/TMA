@@ -5,18 +5,25 @@ const { deleteCache, cacheKeys, invalidateFileCache } = require('../../utils/cac
 /**
  * Get user's custom drive settings
  * @param {string} userId - User ID
- * @returns {Promise<{enabled: boolean, path: string|null}>}
+ * @returns {Promise<{enabled: boolean, path: string|null, ignorePatterns: string[]}>}
  */
 async function getUserCustomDriveSettings(userId) {
-  const result = await pool.query('SELECT custom_drive_enabled, custom_drive_path FROM users WHERE id = $1', [userId]);
+  const result = await pool.query(
+    'SELECT custom_drive_enabled, custom_drive_path, custom_drive_ignore_patterns FROM users WHERE id = $1',
+    [userId]
+  );
 
   if (result.rows.length === 0) {
     throw new Error('User not found');
   }
 
+  const ignorePatterns = result.rows[0].custom_drive_ignore_patterns;
+  const parsedPatterns = Array.isArray(ignorePatterns) ? ignorePatterns : [];
+
   return {
     enabled: result.rows[0].custom_drive_enabled || false,
     path: result.rows[0].custom_drive_path || null,
+    ignorePatterns: parsedPatterns,
   };
 }
 
@@ -25,9 +32,10 @@ async function getUserCustomDriveSettings(userId) {
  * @param {string} userId - User ID
  * @param {boolean} enabled - Whether custom drive is enabled
  * @param {string|null} path - Custom drive path (must be absolute)
- * @returns {Promise<{enabled: boolean, path: string|null}>}
+ * @param {string[]|null} ignorePatterns - Array of ignore patterns (optional, defaults to empty array)
+ * @returns {Promise<{enabled: boolean, path: string|null, ignorePatterns: string[]}>}
  */
-async function updateUserCustomDriveSettings(userId, enabled, path) {
+async function updateUserCustomDriveSettings(userId, enabled, path, ignorePatterns = null) {
   // Get current settings to check if path is already set
   const currentSettings = await getUserCustomDriveSettings(userId);
 
@@ -158,17 +166,33 @@ async function updateUserCustomDriveSettings(userId, enabled, path) {
       // Continue anyway - don't fail the enable operation
     }
 
-    // Update with resolved path
+    // Normalize ignore patterns: ensure it's an array, filter out empty strings
+    const normalizedIgnorePatterns =
+      ignorePatterns !== null
+        ? (Array.isArray(ignorePatterns) ? ignorePatterns : []).filter(
+            p => typeof p === 'string' && p.trim().length > 0
+          )
+        : currentSettings.ignorePatterns || [];
+
+    // Update with resolved path and ignore patterns
+    const updateParams = [enabled, resolvedPath, JSON.stringify(normalizedIgnorePatterns), userId];
+
     const result = await pool.query(
-      'UPDATE users SET custom_drive_enabled = $1, custom_drive_path = $2 WHERE id = $3 RETURNING custom_drive_enabled, custom_drive_path',
-      [enabled, resolvedPath, userId]
+      'UPDATE users SET custom_drive_enabled = $1, custom_drive_path = $2, custom_drive_ignore_patterns = $3 WHERE id = $4 RETURNING custom_drive_enabled, custom_drive_path, custom_drive_ignore_patterns',
+      updateParams
     );
 
     if (result.rows.length === 0) {
       throw new Error('User not found');
     }
 
-    logger.info({ userId, enabled, path: resolvedPath }, 'User custom drive settings updated');
+    const resultIgnorePatterns = result.rows[0].custom_drive_ignore_patterns;
+    const parsedResultPatterns = Array.isArray(resultIgnorePatterns) ? resultIgnorePatterns : [];
+
+    logger.info(
+      { userId, enabled, path: resolvedPath, ignorePatternsCount: parsedResultPatterns.length },
+      'User custom drive settings updated'
+    );
 
     // Invalidate custom drive cache
     await deleteCache(cacheKeys.customDrive(userId));
@@ -179,6 +203,7 @@ async function updateUserCustomDriveSettings(userId, enabled, path) {
     return {
       enabled: result.rows[0].custom_drive_enabled,
       path: result.rows[0].custom_drive_path,
+      ignorePatterns: parsedResultPatterns,
     };
   } else {
     // Disable custom drive - cleanup database entries
@@ -207,10 +232,10 @@ async function updateUserCustomDriveSettings(userId, enabled, path) {
 
     logger.info({ userId, deletedCount }, 'Cleaned up custom drive files from database');
 
-    // Update user settings
+    // Update user settings (reset ignore patterns to empty array when disabling)
     const result = await pool.query(
-      'UPDATE users SET custom_drive_enabled = $1, custom_drive_path = NULL WHERE id = $2 RETURNING custom_drive_enabled, custom_drive_path',
-      [false, userId]
+      'UPDATE users SET custom_drive_enabled = $1, custom_drive_path = NULL, custom_drive_ignore_patterns = $2 WHERE id = $3 RETURNING custom_drive_enabled, custom_drive_path, custom_drive_ignore_patterns',
+      [false, JSON.stringify([]), userId]
     );
 
     if (result.rows.length === 0) {
@@ -227,6 +252,7 @@ async function updateUserCustomDriveSettings(userId, enabled, path) {
     return {
       enabled: false,
       path: null,
+      ignorePatterns: [],
     };
   }
 }

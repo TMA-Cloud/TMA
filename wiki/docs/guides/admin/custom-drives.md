@@ -40,7 +40,8 @@ Custom drives allow users to store files on external or mounted storage instead 
 2. Select user
 3. Enable custom drive
 4. Set drive path
-5. Configure storage limit (optional)
+5. Configure ignore patterns (optional)
+6. Configure storage limit (optional)
 
 ## Drive Path Format
 
@@ -102,10 +103,40 @@ Custom drives allow users to store files on external or mounted storage instead 
 ### Watcher Configuration
 
 - Watches all subdirectories recursively
-- Ignores dotfiles, node_modules, and .git directories
 - Waits 1 second after file stops changing before processing
 - Handles permission errors gracefully
 - Supports atomic file writes
+
+### Ignore Patterns
+
+Configure which files and folders to ignore during scanning.
+
+#### Pattern Matching
+
+- Patterns match exactly by default
+- Use `*` for wildcard matching
+- Patterns are case-insensitive
+- Multiple patterns can be configured
+
+#### Examples
+
+- `.git` - Matches only `.git` folder/file
+- `.git*` - Matches `.git`, `.gitignore`, `.gitconfig`, etc.
+- `node_modules` - Matches only `node_modules` folder
+- `*.tmp` - Matches any file ending with `.tmp`
+- `myfold*` - Matches files/folders starting with `myfold`
+
+#### Pattern Configuration
+
+1. Enable custom drive for user
+2. Click **Edit** next to Ignore Patterns
+3. Add patterns one per line
+4. Click **Save** to apply
+
+#### Default Behavior
+
+- No patterns configured: All files are scanned
+- Empty patterns array: All files are scanned
 
 ## Best Practices
 

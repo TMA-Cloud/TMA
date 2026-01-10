@@ -94,7 +94,8 @@ Get custom drive settings.
 ```json
 {
   "enabled": false,
-  "path": null
+  "path": null,
+  "ignorePatterns": []
 }
 ```
 
@@ -114,7 +115,8 @@ Get custom drive settings for all users (admin only).
       "createdAt": "2024-01-01T00:00:00Z",
       "customDrive": {
         "enabled": true,
-        "path": "/custom/path"
+        "path": "/custom/path",
+        "ignorePatterns": [".git", "node_modules", ".env"]
       }
     }
   ]
@@ -131,7 +133,8 @@ Update custom drive settings (admin only).
 {
   "enabled": true,
   "path": "/data/custom_drive",
-  "targetUserId": "user_id"
+  "targetUserId": "user_id",
+  "ignorePatterns": [".git", "node_modules"]
 }
 ```
 
@@ -140,7 +143,8 @@ Update custom drive settings (admin only).
 ```json
 {
   "enabled": true,
-  "path": "/data/custom_drive"
+  "path": "/data/custom_drive",
+  "ignorePatterns": [".git", "node_modules"]
 }
 ```
 

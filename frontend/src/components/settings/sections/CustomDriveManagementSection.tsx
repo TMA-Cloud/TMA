@@ -1,5 +1,12 @@
 import React from "react";
-import { Shield, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
+import {
+  Shield,
+  Loader2,
+  AlertCircle,
+  CheckCircle2,
+  X,
+  Plus,
+} from "lucide-react";
 import { SettingsSection } from "../components/SettingsSection";
 import type { UserCustomDriveInfo } from "../../../utils/api";
 import type { UserCustomDriveLocalState } from "../hooks/useCustomDriveManagement";
@@ -73,9 +80,31 @@ export const CustomDriveManagementSection: React.FC<
               const localState = userCustomDriveLocalState[userInfo.id] || {
                 enabled: userInfo.customDrive.enabled,
                 path: userInfo.customDrive.path || "",
+                ignorePatterns: userInfo.customDrive.ignorePatterns || [],
                 expanded: false,
+                editingIgnorePatterns: false,
+                newPattern: "",
                 error: null,
+                originalPath: userInfo.customDrive.path || "",
+                originalIgnorePatterns: [
+                  ...(userInfo.customDrive.ignorePatterns || []),
+                ],
               };
+
+              // Calculate if there are changes
+              const originalPath =
+                localState.originalPath ?? userInfo.customDrive.path ?? "";
+              const originalIgnorePatterns =
+                localState.originalIgnorePatterns ??
+                userInfo.customDrive.ignorePatterns ??
+                [];
+              const pathChanged =
+                localState.expanded &&
+                localState.path.trim() !== originalPath.trim();
+              const patternsChanged =
+                JSON.stringify([...localState.ignorePatterns].sort()) !==
+                JSON.stringify([...originalIgnorePatterns].sort());
+              const hasChanges = pathChanged || patternsChanged;
 
               return (
                 <div
@@ -131,34 +160,274 @@ export const CustomDriveManagementSection: React.FC<
                     </label>
                   </div>
 
-                  {localState.expanded && (
-                    <div className="space-y-3 pt-3 border-t border-gray-200 dark:border-gray-700 animate-fadeIn">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                          Custom Drive Path
-                        </label>
-                        <input
-                          type="text"
-                          value={localState.path}
-                          onChange={(e) => {
-                            setUserCustomDriveLocalState((prev) => ({
-                              ...prev,
-                              [userInfo.id]: {
-                                enabled: prev[userInfo.id]?.enabled || false,
-                                path: e.target.value,
-                                expanded: prev[userInfo.id]?.expanded || false,
-                                error: null,
-                              },
-                            }));
-                          }}
-                          placeholder="/mnt/external_drive or C:\\MyDrive"
-                          disabled={isUpdating}
-                          className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 dark:bg-gray-700 dark:text-white ${
-                            localState.error
-                              ? "border-red-500 focus:ring-red-500 focus:border-red-500"
-                              : "border-gray-300 focus:ring-blue-500 focus:border-blue-500 dark:border-gray-600"
-                          }`}
-                        />
+                  {/* Show ignore patterns when custom drive is enabled (even if not expanded) */}
+                  {userInfo.customDrive.enabled &&
+                    !localState.expanded &&
+                    !localState.editingIgnorePatterns && (
+                      <div className="space-y-2 pt-3 border-t border-gray-200 dark:border-gray-700">
+                        <div className="flex items-center justify-between">
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                            Ignore Patterns
+                          </label>
+                          <button
+                            onClick={() => {
+                              setUserCustomDriveLocalState((prev) => ({
+                                ...prev,
+                                [userInfo.id]: {
+                                  enabled: userInfo.customDrive.enabled,
+                                  path: userInfo.customDrive.path || "",
+                                  ignorePatterns:
+                                    userInfo.customDrive.ignorePatterns || [],
+                                  expanded: false,
+                                  editingIgnorePatterns: true,
+                                  newPattern: "",
+                                  error: null,
+                                  originalPath: userInfo.customDrive.path || "",
+                                  originalIgnorePatterns: [
+                                    ...(userInfo.customDrive.ignorePatterns ||
+                                      []),
+                                  ],
+                                },
+                              }));
+                            }}
+                            disabled={isUpdating}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-xl transition-all duration-200 border border-blue-500/40 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>Edit</span>
+                          </button>
+                        </div>
+                        {userInfo.customDrive.ignorePatterns &&
+                        userInfo.customDrive.ignorePatterns.length > 0 ? (
+                          <div className="flex flex-wrap gap-2 mt-2">
+                            {userInfo.customDrive.ignorePatterns.map(
+                              (pattern, index) => (
+                                <span
+                                  key={index}
+                                  className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-mono rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700"
+                                >
+                                  {pattern}
+                                </span>
+                              ),
+                            )}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-gray-500 dark:text-gray-400 italic">
+                            No ignore patterns configured
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                  {/* Show ignore patterns editor when editing (even if not in full expanded mode) */}
+                  {(localState.expanded ||
+                    localState.editingIgnorePatterns) && (
+                    <div className="space-y-4 pt-3 border-t border-gray-200 dark:border-gray-700 animate-fadeIn">
+                      {localState.expanded && (
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            Custom Drive Path
+                          </label>
+                          <input
+                            type="text"
+                            value={localState.path}
+                            onChange={(e) => {
+                              setUserCustomDriveLocalState((prev) => ({
+                                ...prev,
+                                [userInfo.id]: {
+                                  enabled: prev[userInfo.id]?.enabled || false,
+                                  path: e.target.value,
+                                  ignorePatterns:
+                                    prev[userInfo.id]?.ignorePatterns || [],
+                                  expanded:
+                                    prev[userInfo.id]?.expanded || false,
+                                  editingIgnorePatterns:
+                                    prev[userInfo.id]?.editingIgnorePatterns ||
+                                    false,
+                                  error: null,
+                                },
+                              }));
+                            }}
+                            placeholder="/mnt/external_drive or C:\\MyDrive"
+                            disabled={isUpdating}
+                            className={`w-full px-4 py-3 border-2 rounded-xl shadow-sm focus:outline-none focus:ring-2 dark:bg-gray-800/80 dark:text-white transition-all duration-200 ${
+                              localState.error
+                                ? "border-red-500 focus:ring-red-500 focus:border-red-500"
+                                : "border-gray-300 dark:border-gray-600 focus:ring-blue-500 focus:border-blue-500"
+                            }`}
+                          />
+                        </div>
+                      )}
+
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                            Ignore Patterns
+                          </label>
+                          <span className="text-xs text-gray-500 dark:text-gray-400">
+                            {localState.ignorePatterns.length} pattern
+                            {localState.ignorePatterns.length !== 1 ? "s" : ""}
+                          </span>
+                        </div>
+
+                        {/* Display existing patterns as removable tags */}
+                        {localState.ignorePatterns.length > 0 && (
+                          <div className="flex flex-wrap gap-2 p-3 rounded-xl bg-gray-50/70 dark:bg-gray-900/60 border border-gray-200 dark:border-gray-700">
+                            {localState.ignorePatterns.map((pattern, index) => (
+                              <span
+                                key={index}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-mono rounded-xl bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 shadow-sm"
+                              >
+                                {pattern}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const newPatterns =
+                                      localState.ignorePatterns.filter(
+                                        (_, i) => i !== index,
+                                      );
+                                    setUserCustomDriveLocalState((prev) => ({
+                                      ...prev,
+                                      [userInfo.id]: {
+                                        enabled:
+                                          prev[userInfo.id]?.enabled || false,
+                                        path: prev[userInfo.id]?.path || "",
+                                        ignorePatterns: newPatterns,
+                                        expanded:
+                                          prev[userInfo.id]?.expanded || false,
+                                        editingIgnorePatterns:
+                                          prev[userInfo.id]
+                                            ?.editingIgnorePatterns || false,
+                                        error: null,
+                                      },
+                                    }));
+                                  }}
+                                  disabled={isUpdating}
+                                  className="ml-1 p-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                  aria-label={`Remove ${pattern}`}
+                                >
+                                  <X className="w-3 h-3 text-gray-500 dark:text-gray-400" />
+                                </button>
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Add new pattern input */}
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={localState.newPattern || ""}
+                            onChange={(e) => {
+                              setUserCustomDriveLocalState((prev) => ({
+                                ...prev,
+                                [userInfo.id]: {
+                                  ...prev[userInfo.id],
+                                  newPattern: e.target.value,
+                                },
+                              }));
+                            }}
+                            onKeyDown={(e) => {
+                              if (
+                                e.key === "Enter" &&
+                                localState.newPattern?.trim()
+                              ) {
+                                e.preventDefault();
+                                const trimmed = localState.newPattern.trim();
+                                if (
+                                  trimmed &&
+                                  !localState.ignorePatterns.includes(trimmed)
+                                ) {
+                                  setUserCustomDriveLocalState((prev) => ({
+                                    ...prev,
+                                    [userInfo.id]: {
+                                      enabled:
+                                        prev[userInfo.id]?.enabled || false,
+                                      path: prev[userInfo.id]?.path || "",
+                                      ignorePatterns: [
+                                        ...(prev[userInfo.id]?.ignorePatterns ||
+                                          []),
+                                        trimmed,
+                                      ],
+                                      expanded:
+                                        prev[userInfo.id]?.expanded || false,
+                                      editingIgnorePatterns:
+                                        prev[userInfo.id]
+                                          ?.editingIgnorePatterns || false,
+                                      newPattern: "",
+                                      error: null,
+                                    },
+                                  }));
+                                }
+                              }
+                            }}
+                            placeholder="Enter pattern (e.g., node_modules, .git)"
+                            disabled={isUpdating}
+                            className="flex-1 px-4 py-2.5 border-2 border-gray-300 dark:border-gray-600 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-800/80 dark:text-white font-mono text-sm transition-all duration-200"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (localState.newPattern?.trim()) {
+                                const trimmed = localState.newPattern.trim();
+                                if (
+                                  !localState.ignorePatterns.includes(trimmed)
+                                ) {
+                                  setUserCustomDriveLocalState((prev) => ({
+                                    ...prev,
+                                    [userInfo.id]: {
+                                      enabled:
+                                        prev[userInfo.id]?.enabled || false,
+                                      path: prev[userInfo.id]?.path || "",
+                                      ignorePatterns: [
+                                        ...(prev[userInfo.id]?.ignorePatterns ||
+                                          []),
+                                        trimmed,
+                                      ],
+                                      expanded:
+                                        prev[userInfo.id]?.expanded || false,
+                                      editingIgnorePatterns:
+                                        prev[userInfo.id]
+                                          ?.editingIgnorePatterns || false,
+                                      newPattern: "",
+                                      error: null,
+                                    },
+                                  }));
+                                }
+                              }
+                            }}
+                            disabled={
+                              isUpdating ||
+                              !localState.newPattern?.trim() ||
+                              localState.ignorePatterns.includes(
+                                localState.newPattern?.trim() || "",
+                              )
+                            }
+                            className="px-4 py-2.5 bg-gradient-to-r from-blue-500 to-indigo-500 text-white rounded-xl shadow-sm hover:from-blue-600 hover:to-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center gap-1.5"
+                          >
+                            <Plus className="w-4 h-4" />
+                            <span className="text-sm font-medium">Add</span>
+                          </button>
+                        </div>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          Patterns match exactly by default. Use{" "}
+                          <code className="px-1 py-0.5 bg-gray-200 dark:bg-gray-700 rounded">
+                            *
+                          </code>{" "}
+                          for wildcards (e.g.,{" "}
+                          <code className="px-1 py-0.5 bg-gray-200 dark:bg-gray-700 rounded">
+                            .git*
+                          </code>{" "}
+                          matches{" "}
+                          <code className="px-1 py-0.5 bg-gray-200 dark:bg-gray-700 rounded">
+                            .git
+                          </code>
+                          ,{" "}
+                          <code className="px-1 py-0.5 bg-gray-200 dark:bg-gray-700 rounded">
+                            .gitignore
+                          </code>
+                          ). Press Enter or click Add to add a pattern.
+                        </p>
                       </div>
 
                       {localState.error && (
@@ -175,15 +444,59 @@ export const CustomDriveManagementSection: React.FC<
                       <div className="flex items-center gap-3">
                         <button
                           onClick={async () => {
+                            // If editing only ignore patterns (not in full expanded mode), don't require path
+                            if (
+                              localState.editingIgnorePatterns &&
+                              !localState.expanded
+                            ) {
+                              // Just update ignore patterns, keep enabled and path as is
+                              const success = await onUpdateUserCustomDrive(
+                                userInfo.id,
+                                userInfo.customDrive.enabled,
+                                userInfo.customDrive.path,
+                                localState.ignorePatterns,
+                              );
+                              if (success) {
+                                setUserCustomDriveLocalState((prev) => ({
+                                  ...prev,
+                                  [userInfo.id]: {
+                                    enabled: userInfo.customDrive.enabled,
+                                    path: userInfo.customDrive.path || "",
+                                    ignorePatterns: localState.ignorePatterns,
+                                    expanded: false,
+                                    editingIgnorePatterns: false,
+                                    newPattern: "",
+                                    error: null,
+                                    originalPath:
+                                      userInfo.customDrive.path || "",
+                                    originalIgnorePatterns: [
+                                      ...localState.ignorePatterns,
+                                    ],
+                                  },
+                                }));
+                              }
+                              return;
+                            }
+
+                            // Full form validation (when expanded)
                             if (!localState.path.trim()) {
                               setUserCustomDriveLocalState((prev) => ({
                                 ...prev,
                                 [userInfo.id]: {
                                   enabled: prev[userInfo.id]?.enabled || false,
                                   path: prev[userInfo.id]?.path || "",
+                                  ignorePatterns:
+                                    prev[userInfo.id]?.ignorePatterns || [],
                                   expanded:
                                     prev[userInfo.id]?.expanded || false,
+                                  editingIgnorePatterns:
+                                    prev[userInfo.id]?.editingIgnorePatterns ||
+                                    false,
+                                  newPattern: "",
                                   error: "Path is required",
+                                  originalPath: prev[userInfo.id]?.originalPath,
+                                  originalIgnorePatterns:
+                                    prev[userInfo.id]?.originalIgnorePatterns,
                                 },
                               }));
                               return;
@@ -192,6 +505,7 @@ export const CustomDriveManagementSection: React.FC<
                               userInfo.id,
                               true,
                               localState.path.trim(),
+                              localState.ignorePatterns,
                             );
                             // Only update local state on success
                             if (success) {
@@ -200,14 +514,25 @@ export const CustomDriveManagementSection: React.FC<
                                 [userInfo.id]: {
                                   enabled: true,
                                   path: localState.path.trim(),
+                                  ignorePatterns: localState.ignorePatterns,
                                   expanded: false,
+                                  editingIgnorePatterns: false,
+                                  newPattern: "",
                                   error: null,
+                                  originalPath: localState.path.trim(),
+                                  originalIgnorePatterns: [
+                                    ...localState.ignorePatterns,
+                                  ],
                                 },
                               }));
                             }
                           }}
-                          disabled={isUpdating || !localState.path.trim()}
-                          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-colors"
+                          disabled={
+                            isUpdating ||
+                            !hasChanges ||
+                            (localState.expanded && !localState.path.trim())
+                          }
+                          className="px-4 py-2.5 bg-gradient-to-r from-blue-500 to-indigo-500 text-white rounded-xl shadow-sm hover:from-blue-600 hover:to-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 font-medium flex items-center gap-2"
                         >
                           {isUpdating ? (
                             <>
@@ -228,13 +553,19 @@ export const CustomDriveManagementSection: React.FC<
                               [userInfo.id]: {
                                 enabled: userInfo.customDrive.enabled,
                                 path: userInfo.customDrive.path || "",
+                                ignorePatterns:
+                                  userInfo.customDrive.ignorePatterns || [],
                                 expanded: false,
+                                editingIgnorePatterns: false,
+                                newPattern: "",
                                 error: null,
+                                originalPath: undefined,
+                                originalIgnorePatterns: undefined,
                               },
                             }));
                           }}
                           disabled={isUpdating}
-                          className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                          className="px-4 py-2.5 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-xl hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 font-medium"
                         >
                           Cancel
                         </button>

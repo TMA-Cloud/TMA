@@ -80,6 +80,7 @@ async function getAllUsersCustomDriveSettings(req, res) {
             customDrive: {
               enabled: settings.enabled,
               path: settings.path,
+              ignorePatterns: settings.ignorePatterns || [],
             },
           };
         } catch (err) {
@@ -92,6 +93,7 @@ async function getAllUsersCustomDriveSettings(req, res) {
             customDrive: {
               enabled: false,
               path: null,
+              ignorePatterns: [],
             },
           };
         }
@@ -128,7 +130,7 @@ async function updateCustomDriveSettings(req, res) {
       return sendError(res, 403, 'Only the admin can manage custom drive settings');
     }
 
-    const { enabled, path, targetUserId } = req.body;
+    const { enabled, path, targetUserId, ignorePatterns } = req.body;
 
     // Determine which user's settings to update (default to admin's own settings)
     const targetUserIdFinal = targetUserId || req.userId;
@@ -136,6 +138,19 @@ async function updateCustomDriveSettings(req, res) {
     // Validate enabled is boolean
     if (enabled !== undefined && typeof enabled !== 'boolean') {
       return sendError(res, 400, 'enabled must be a boolean');
+    }
+
+    // Validate ignorePatterns if provided
+    if (ignorePatterns !== undefined) {
+      if (!Array.isArray(ignorePatterns)) {
+        return sendError(res, 400, 'ignorePatterns must be an array');
+      }
+      // Validate each pattern is a string
+      for (const pattern of ignorePatterns) {
+        if (typeof pattern !== 'string') {
+          return sendError(res, 400, 'All ignore patterns must be strings');
+        }
+      }
     }
 
     // Basic validation before acquiring lock
@@ -224,10 +239,13 @@ async function updateCustomDriveSettings(req, res) {
         }
       }
 
+      // Process ignore patterns
+      const finalIgnorePatterns = ignorePatterns !== undefined ? ignorePatterns : currentSettings.ignorePatterns || [];
+
       // Update settings
       let result;
       try {
-        result = await updateUserCustomDriveSettings(targetUserIdFinal, finalEnabled, finalPath);
+        result = await updateUserCustomDriveSettings(targetUserIdFinal, finalEnabled, finalPath, finalIgnorePatterns);
       } catch (err) {
         // Handle database unique constraint violation (one path = one owner)
         if (err.code === '23505' || err.constraint === 'idx_users_custom_drive_path_unique') {
@@ -247,7 +265,7 @@ async function updateCustomDriveSettings(req, res) {
       if (finalEnabled && finalPath) {
         const { restartUserWatcher } = require('../../services/customDriveScanner');
         try {
-          await restartUserWatcher(targetUserIdFinal, finalPath);
+          await restartUserWatcher(targetUserIdFinal, finalPath, result.ignorePatterns || []);
         } catch (error) {
           logger.error(`[Custom Drive] Failed to restart watcher for user ${targetUserIdFinal}:`, error.message);
           // Don't fail the request, just log the error
@@ -256,7 +274,7 @@ async function updateCustomDriveSettings(req, res) {
         // Stop watcher if disabled
         const { restartUserWatcher } = require('../../services/customDriveScanner');
         try {
-          await restartUserWatcher(targetUserIdFinal, null);
+          await restartUserWatcher(targetUserIdFinal, null, []);
         } catch (error) {
           logger.error(`[Custom Drive] Failed to stop watcher for user ${targetUserIdFinal}:`, error.message);
         }
@@ -277,6 +295,7 @@ async function updateCustomDriveSettings(req, res) {
           targetUserId: targetUserIdFinal,
           enabled: updated.finalEnabled,
           path: updated.finalPath ? '***' : null, // Don't log full path for security
+          ignorePatternsCount: updated.result.ignorePatterns?.length || 0,
         },
       },
       req
