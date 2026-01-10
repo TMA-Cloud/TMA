@@ -11,7 +11,7 @@ const config: Config = {
   },
 
   url: "https://tma-cloud.github.io",
-  baseUrl: "/",
+  baseUrl: "/TMA/",
 
   organizationName: "TMA-Cloud",
   projectName: "TMA",
