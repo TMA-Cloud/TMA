@@ -3,8 +3,6 @@ name: Wiki CI
 on:
   pull_request:
     paths: ['wiki/**']
-  push:
-    paths: ['wiki/**']
 
 jobs:
   build:
