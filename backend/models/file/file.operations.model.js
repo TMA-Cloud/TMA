@@ -1,6 +1,7 @@
 const pool = require('../../config/db');
 const fs = require('fs');
 const path = require('path');
+const { safeUnlink } = require('../../utils/fileCleanup');
 const { generateId } = require('../../utils/id');
 const { UPLOAD_DIR } = require('../../config/paths');
 const { resolveFilePath, isFilePathEncrypted } = require('../../utils/filePath');
@@ -94,18 +95,10 @@ async function copyEntry(id, parentId, userId, client = null) {
       } catch (error) {
         // If custom drive copy fails, clean up orphaned file on disk
         logger.error('[File] Error copying file to custom drive:', error);
-        try {
-          // Clean up the file that was copied to disk but not in database
-          if (newPath && path.isAbsolute(newPath)) {
-            await fs.promises.unlink(newPath).catch(() => {
-              // Ignore cleanup errors (file might not exist or already deleted)
-            });
-          }
-        } catch (cleanupError) {
-          logger.warn(
-            { newPath, error: cleanupError.message },
-            'Failed to clean up orphaned custom drive file during copy'
-          );
+        // Clean up the file that was copied to disk but not in database
+        if (newPath && path.isAbsolute(newPath)) {
+          const { safeUnlink } = require('../../utils/fileCleanup');
+          await safeUnlink(newPath, { logErrors: true });
         }
         // Re-throw the error instead of falling back to avoid violating custom drive invariant
         // Custom drive users must have all files in their custom drive path
@@ -135,7 +128,7 @@ async function copyEntry(id, parentId, userId, client = null) {
         try {
           const tempFiles = [destPath, destPath + '.tmp'];
           for (const tempFile of tempFiles) {
-            await fs.promises.unlink(tempFile).catch(() => {});
+            await safeUnlink(tempFile);
           }
         } catch (_cleanupError) {
           // Ignore cleanup errors
@@ -232,6 +225,7 @@ async function copyFiles(ids, parentId = null, userId) {
     await invalidateFileCache(userId, parentId);
     await invalidateSearchCache(userId);
     await deleteCache(cacheKeys.fileStats(userId));
+    await deleteCache(cacheKeys.userStorage(userId)); // Invalidate storage usage cache
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;

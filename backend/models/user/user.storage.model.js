@@ -10,8 +10,10 @@ async function getUserStorageUsage(userId) {
   }
 
   // Cache miss - query database
+  // Include files in trash (deleted_at IS NOT NULL) as they still consume storage
+  // Only permanently deleted files are excluded (they're removed from database entirely)
   const res = await pool.query(
-    "SELECT COALESCE(SUM(size), 0) AS used FROM files WHERE user_id = $1 AND type = 'file' AND deleted_at IS NULL",
+    "SELECT COALESCE(SUM(size), 0) AS used FROM files WHERE user_id = $1 AND type = 'file'",
     [userId]
   );
   const usage = Number(res.rows[0].used) || 0;

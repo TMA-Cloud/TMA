@@ -22,12 +22,12 @@ export class ApiError extends Error {
  * @param fallback - Fallback message if error message cannot be extracted
  * @returns Error message string
  */
-export function getErrorMessage(
+export function extractErrorMessage(
   error: unknown,
-  fallback: string = "Unknown error",
+  fallback = "An error occurred",
 ): string {
   if (error instanceof Error) {
-    return error.message || fallback;
+    return error.message;
   }
   if (typeof error === "string") {
     return error;
@@ -36,30 +36,69 @@ export function getErrorMessage(
 }
 
 /**
- * Check if an error is an authentication error (401 Unauthorized)
- * @param error - Error of unknown type
- * @returns true if the error appears to be a 401 authentication error
+ * Extract error message from XMLHttpRequest response
+ * @param xhr - XMLHttpRequest object
+ * @returns Error message string
  */
-export function isAuthError(error: unknown): boolean {
-  // Check if it's an ApiError with status 401
-  if (error instanceof ApiError && error.status === 401) {
-    return true;
+export function extractXhrErrorMessage(xhr: XMLHttpRequest): string {
+  let errorMessage = `Upload failed: ${xhr.statusText}`;
+
+  try {
+    const responseText = xhr.responseText;
+    if (responseText && responseText.trim().length > 0) {
+      try {
+        const errorData = JSON.parse(responseText);
+        // Try multiple possible error message fields
+        errorMessage =
+          errorData.message || errorData.error || errorData.msg || errorMessage;
+      } catch {
+        // If JSON parsing fails, use responseText if it's short enough
+        if (responseText.length < 500) {
+          errorMessage = responseText;
+        }
+      }
+    }
+  } catch {
+    // If all parsing fails, use status-specific defaults
+    if (xhr.status === 413) {
+      errorMessage = "File too large or storage limit exceeded";
+    } else if (xhr.status === 400) {
+      errorMessage = "Invalid file or request";
+    } else if (xhr.status >= 500) {
+      errorMessage = "Server error. Please try again later.";
+    }
   }
 
-  // Check error message patterns
-  const errorMessage = getErrorMessage(error, "").toLowerCase();
-  return (
-    errorMessage.includes("401") ||
-    errorMessage.includes("unauthorized") ||
-    errorMessage.includes("not authenticated") ||
-    errorMessage.includes("authentication required") ||
-    errorMessage.includes("invalid token") ||
-    errorMessage.includes("token expired") ||
-    errorMessage.includes("session expired") ||
-    errorMessage.includes("session has been revoked") ||
-    errorMessage.includes("session invalid") ||
-    errorMessage.includes("please login again") ||
-    errorMessage.includes("no token provided") ||
-    errorMessage.includes("session revoked")
-  );
+  return errorMessage;
+}
+
+/**
+ * Get error message from unknown error type (alias for extractErrorMessage for backward compatibility)
+ * @param error - Error of unknown type
+ * @param fallback - Fallback message if error message cannot be extracted
+ * @returns Error message string
+ */
+export function getErrorMessage(
+  error: unknown,
+  fallback = "An error occurred",
+): string {
+  return extractErrorMessage(error, fallback);
+}
+
+/**
+ * Check if error is an authentication error (401)
+ * @param error - Error to check
+ * @returns True if error is an authentication error
+ */
+export function isAuthError(error: unknown): boolean {
+  if (error instanceof ApiError) {
+    return error.status === 401;
+  }
+  if (error instanceof Error) {
+    return (
+      error.message.includes("401") ||
+      error.message.toLowerCase().includes("unauthorized")
+    );
+  }
+  return false;
 }

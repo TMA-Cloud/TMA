@@ -1,6 +1,7 @@
 const pool = require('../../config/db');
 const fs = require('fs');
 const path = require('path');
+const { safeUnlink } = require('../../utils/fileCleanup');
 const { generateId } = require('../../utils/id');
 const { UPLOAD_DIR } = require('../../config/paths');
 const { logger } = require('../../config/logger');
@@ -98,6 +99,7 @@ async function createFolder(name, parentId = null, userId) {
       await invalidateFileCache(userId, parentId);
       await invalidateSearchCache(userId);
       await deleteCache(cacheKeys.fileStats(userId));
+      await deleteCache(cacheKeys.userStorage(userId)); // Invalidate storage usage cache
 
       return result.rows[0];
     } catch (error) {
@@ -183,34 +185,21 @@ async function createFile(name, size, mimeType, tempPath, parentId = null, userI
       await invalidateFileCache(userId, parentId);
       await invalidateSearchCache(userId);
       await deleteCache(cacheKeys.fileStats(userId));
+      await deleteCache(cacheKeys.userStorage(userId)); // Invalidate storage usage cache
 
       return result.rows[0];
     } catch (error) {
       // If custom drive save fails, log and throw (don't fall back since file is already in custom drive)
       logger.error('[File] Error saving to custom drive:', error);
       // Clean up the orphaned file based on whether rename succeeded
-      try {
-        if (renameSucceeded && finalPath) {
-          // Rename succeeded, so file is at finalPath - delete it
-          await fs.promises.unlink(finalPath);
-        } else if (finalPath) {
-          // Rename failed or didn't happen, but finalPath was set
-          // Try finalPath first (in case rename partially succeeded), then tempPath
-          try {
-            await fs.promises.unlink(finalPath);
-          } catch {
-            // finalPath doesn't exist, try tempPath
-            await fs.promises.unlink(tempPath);
-          }
-        } else {
-          // finalPath wasn't set, file is still at tempPath
-          await fs.promises.unlink(tempPath);
-        }
-      } catch (cleanupError) {
-        logger.warn(
-          { finalPath, tempPath, renameSucceeded, error: cleanupError.message },
-          'Failed to clean up orphaned custom drive file'
-        );
+      if (renameSucceeded && finalPath) {
+        await safeUnlink(finalPath, { logErrors: true });
+      } else if (finalPath) {
+        // Try finalPath first, then tempPath
+        await safeUnlink(finalPath);
+        await safeUnlink(tempPath);
+      } else {
+        await safeUnlink(tempPath, { logErrors: true });
       }
       throw error;
     }
@@ -231,7 +220,7 @@ async function createFile(name, size, mimeType, tempPath, parentId = null, userI
   } catch (error) {
     logger.error('[File] Error encrypting file:', error);
     // If encryption fails, clean up temp file
-    await fs.promises.unlink(tempDest).catch(() => {});
+    await safeUnlink(tempDest);
     throw new Error('Failed to encrypt file');
   }
 
@@ -244,6 +233,7 @@ async function createFile(name, size, mimeType, tempPath, parentId = null, userI
   await invalidateFileCache(userId, parentId);
   await invalidateSearchCache(userId);
   await deleteCache(cacheKeys.fileStats(userId));
+  await deleteCache(cacheKeys.userStorage(userId)); // Invalidate storage usage cache
 
   return result.rows[0];
 }

@@ -37,6 +37,7 @@ async function deleteFiles(ids, userId) {
   }
   await invalidateSearchCache(userId);
   await deleteCache(cacheKeys.fileStats(userId));
+  await deleteCache(cacheKeys.userStorage(userId)); // Invalidate storage usage cache
   // Invalidate starred, shared, and trash caches
   await deleteCachePattern(`files:${userId}:starred:*`);
   await deleteCachePattern(`files:${userId}:shared:*`);
@@ -176,6 +177,7 @@ async function restoreFiles(ids, userId) {
     await invalidateFileCache(userId);
     await invalidateSearchCache(userId);
     await deleteCache(cacheKeys.fileStats(userId));
+    await deleteCache(cacheKeys.userStorage(userId)); // Invalidate storage usage cache
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;
@@ -245,6 +247,7 @@ async function permanentlyDeleteFiles(ids, userId) {
   await invalidateFileCache(userId);
   await invalidateSearchCache(userId);
   await deleteCache(cacheKeys.fileStats(userId));
+  await deleteCache(cacheKeys.userStorage(userId)); // Invalidate storage usage cache
 }
 
 module.exports = {

@@ -31,7 +31,8 @@ Troubleshooting file upload problems.
 1. Free up storage space
 2. Delete old files
 3. Empty trash permanently
-4. Request limit increase (admin)
+4. Admin: Increase storage limit (if custom limit set)
+5. Check actual disk space available
 
 ### "Upload failed"
 

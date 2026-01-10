@@ -66,12 +66,15 @@ export const getFileIcon = (file: FileItem) => {
 
 /**
  * Format file size using bytes package for consistent formatting
- * @param size - File size in bytes
+ * @param size - File size in bytes (number or string)
  * @returns Formatted size string (e.g., "1.5 MB")
  */
-export const formatFileSize = (size?: number): string => {
-  if (!size) return "";
-  return bytes(size, { decimalPlaces: 1 });
+export const formatFileSize = (size?: number | string | null): string => {
+  if (!size || size === null || size === undefined) return "";
+  // Convert to number if it's a string
+  const numSize = typeof size === "string" ? Number(size) : size;
+  if (isNaN(numSize) || numSize <= 0) return "";
+  return bytes(numSize, { decimalPlaces: 1 });
 };
 
 /**

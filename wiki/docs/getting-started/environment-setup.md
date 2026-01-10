@@ -52,13 +52,11 @@ Environment variable reference for TMA Cloud.
 
 ## File Storage
 
-| Variable        | Required | Default                | Description                          |
-| --------------- | -------- | ---------------------- | ------------------------------------ |
-| `UPLOAD_DIR`    | No       | `./uploads`            | Upload directory path                |
-| `STORAGE_LIMIT` | No       | `107374182400` (100GB) | Per-user storage limit (bytes)       |
-| `STORAGE_PATH`  | No       | Backend directory      | Base path for disk space calculation |
+| Variable     | Required | Default     | Description           |
+| ------------ | -------- | ----------- | --------------------- |
+| `UPLOAD_DIR` | No       | `./uploads` | Upload directory path |
 
-**Note:** Custom drive settings override these per-user (configured in Settings).
+**Note:** Storage limits are configured per-user in Settings (admin only). Default limit uses actual available disk space. Custom drive settings override per-user (configured in Settings).
 
 ## Custom Drive (Docker Only)
 

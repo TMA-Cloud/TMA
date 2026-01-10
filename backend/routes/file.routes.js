@@ -26,6 +26,7 @@ const auth = require('../middleware/auth.middleware');
 const upload = require('../utils/multer');
 const { apiRateLimiter, uploadRateLimiter, sseConnectionLimiter } = require('../middleware/rateLimit.middleware');
 const { attachCustomDrivePath } = require('../middleware/customDrive.middleware');
+const { checkStorageLimit } = require('../middleware/storageLimit.middleware');
 const router = express.Router();
 
 router.use(auth);
@@ -37,7 +38,7 @@ router.get('/', listFiles);
 router.get('/stats', getFileStats);
 router.get('/search', searchFiles);
 router.post('/folder', addFolder);
-router.post('/upload', uploadRateLimiter, attachCustomDrivePath, upload.single('file'), uploadFile);
+router.post('/upload', uploadRateLimiter, attachCustomDrivePath, checkStorageLimit, upload.single('file'), uploadFile);
 router.post('/move', moveFiles);
 router.post('/copy', copyFiles);
 router.post('/rename', renameFile);

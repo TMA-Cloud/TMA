@@ -21,7 +21,12 @@ List all users (admin only).
         "id": "user_123",
         "email": "user@example.com",
         "name": "User Name",
-        "createdAt": "2024-01-01T00:00:00Z"
+        "createdAt": "2024-01-01T00:00:00Z",
+        "mfaEnabled": false,
+        "storageUsed": 1073741824,
+        "storageLimit": 107374182400,
+        "storageTotal": 107374182400,
+        "actualDiskSize": 1099511627776
       }
     ]
   }
@@ -41,6 +46,27 @@ Get storage usage information.
   "used": 1073741824,
   "total": 107374182400,
   "free": 106300440576
+}
+```
+
+### PUT `/api/user/storage-limit`
+
+Update user storage limit (admin only).
+
+**Request Body:**
+
+```json
+{
+  "targetUserId": "user_123",
+  "storageLimit": 107374182400
+}
+```
+
+**Response:**
+
+```json
+{
+  "storageLimit": 107374182400
 }
 ```
 

@@ -15,6 +15,8 @@ const {
 const { userOperationLock } = require('../../utils/mutex');
 const { validateFileName, validateSortBy, validateSortOrder, validateFileUpload } = require('../../utils/validation');
 const { validateParentId, validateSingleId } = require('../../utils/controllerHelpers');
+const { getUserStorageUsage, getUserCustomDriveSettings, getUserStorageLimit } = require('../../models/user.model');
+const { safeUnlink } = require('../../utils/fileCleanup');
 
 /**
  * List files in a directory
@@ -89,6 +91,33 @@ async function uploadFile(req, res) {
   const { valid, parentId, error } = validateParentId(req);
   if (!valid) {
     return sendError(res, 400, error);
+  }
+
+  // Final safeguard: Check storage limit with actual file size
+  // (Middleware checks using Content-Length estimate, this uses actual size for accuracy)
+  try {
+    const customDrive = await getUserCustomDriveSettings(req.userId);
+    const used = await getUserStorageUsage(req.userId);
+    const basePath = process.env.UPLOAD_DIR || __dirname;
+    const userStorageLimit = await getUserStorageLimit(req.userId);
+    const { checkStorageLimitExceeded } = require('../../utils/storageUtils');
+
+    const checkResult = await checkStorageLimitExceeded({
+      fileSize: req.file.size,
+      customDrive,
+      used,
+      userStorageLimit,
+      defaultBasePath: basePath,
+    });
+
+    if (checkResult.exceeded) {
+      await safeUnlink(req.file.path);
+      return sendError(res, 413, checkResult.message);
+    }
+  } catch (storageError) {
+    logger.error({ err: storageError, userId: req.userId }, 'Error checking storage limit');
+    await safeUnlink(req.file.path);
+    return sendError(res, 500, 'Unable to verify storage limit. Please try again.');
   }
 
   const file = await userOperationLock(req.userId, () => {

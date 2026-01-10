@@ -7,10 +7,20 @@ import {
   getSignupStatus,
   hasAuthState,
 } from "../utils/api";
+import { useToast } from "../hooks/useToast";
+import { checkStorageLimitExceeded } from "../utils/storageUtils";
+import { extractXhrErrorMessage } from "../utils/errorUtils";
+import {
+  removeUploadProgress,
+  updateUploadProgress,
+  createAutoDismissTimeout,
+  type UploadProgressItem,
+} from "../utils/uploadUtils";
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
+  const { showToast } = useToast();
   const [currentPath, setCurrentPathState] = useState<string[]>(["My Files"]);
   const [folderStack, setFolderStack] = useState<(string | null)[]>([null]);
   const [folderSharedStack, setFolderSharedStack] = useState<boolean[]>([
@@ -41,15 +51,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [isSearching, setIsSearching] = useState<boolean>(false);
   const [isDownloading, setIsDownloading] = useState<boolean>(false);
-  const [uploadProgress, setUploadProgress] = useState<
-    Array<{
-      id: string;
-      fileName: string;
-      fileSize: number;
-      progress: number;
-      status: "uploading" | "completed" | "error";
-    }>
-  >([]);
+  const [uploadProgress, setUploadProgress] = useState<UploadProgressItem[]>(
+    [],
+  );
   const [isUploadProgressInteracting, setIsUploadProgressInteracting] =
     useState(false);
   const [onlyOfficeConfigured, setOnlyOfficeConfigured] = useState(false);
@@ -512,6 +516,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
     onProgress?: (progress: number) => void,
   ) => {
     return operationQueue.add(async () => {
+      // Pre-upload check: Verify storage limits before starting upload
+      try {
+        const storageRes = await fetch(`/api/user/storage`, {
+          credentials: "include",
+        });
+        if (storageRes.ok) {
+          const storageData = await storageRes.json();
+          const { used, total } = storageData;
+          const errorMessage = checkStorageLimitExceeded(
+            used,
+            total,
+            file.size,
+          );
+          if (errorMessage) {
+            showToast(errorMessage, "error");
+            throw new Error(errorMessage);
+          }
+        }
+      } catch (error) {
+        // If it's our storage limit error, re-throw it
+        if (
+          error instanceof Error &&
+          error.message.includes("Storage limit exceeded")
+        ) {
+          throw error;
+        }
+        // If storage check fails, log but continue (backend will catch it)
+        console.warn("Failed to check storage limits before upload:", error);
+      }
+
       return new Promise<void>((resolve, reject) => {
         const uploadId = `${Date.now()}-${Math.random()}`;
         const xhr = new XMLHttpRequest();
@@ -536,9 +570,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
           if (e.lengthComputable) {
             const progress = Math.round((e.loaded / e.total) * 100);
             setUploadProgress((prev) =>
-              prev.map((item) =>
-                item.id === uploadId ? { ...item, progress } : item,
-              ),
+              updateUploadProgress(prev, uploadId, { progress }),
             );
             if (onProgress) {
               onProgress(progress);
@@ -549,102 +581,69 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         xhr.addEventListener("load", async () => {
           if (xhr.status >= 200 && xhr.status < 300) {
             setUploadProgress((prev) =>
-              prev.map((item) =>
-                item.id === uploadId
-                  ? { ...item, progress: 100, status: "completed" }
-                  : item,
-              ),
+              updateUploadProgress(prev, uploadId, {
+                progress: 100,
+                status: "completed",
+              }),
             );
             await refreshFiles();
-            // Auto-dismiss after 3 seconds, but only if user is not interacting
-            const dismissTimeout = setTimeout(() => {
-              // Check current interaction state using ref (always up-to-date)
-              if (!isUploadProgressInteractingRef.current) {
-                setUploadProgress((prev) =>
-                  prev.filter((item) => item.id !== uploadId),
-                );
-                uploadDismissTimeoutsRef.current.delete(uploadId);
-              } else {
-                // If user is interacting, schedule a retry
-                const retryTimeout = setTimeout(() => {
-                  // Check again if user stopped interacting
-                  if (!isUploadProgressInteractingRef.current) {
-                    setUploadProgress((prev) =>
-                      prev.filter((item) => item.id !== uploadId),
-                    );
-                  }
-                  uploadDismissTimeoutsRef.current.delete(uploadId);
-                }, 2000);
-                uploadDismissTimeoutsRef.current.set(uploadId, retryTimeout);
-              }
-            }, 3000);
+            // Auto-dismiss after 3 seconds
+            const dismissTimeout = createAutoDismissTimeout(
+              uploadId,
+              isUploadProgressInteractingRef,
+              setUploadProgress,
+              uploadDismissTimeoutsRef,
+              3000,
+              2000,
+            );
             uploadDismissTimeoutsRef.current.set(uploadId, dismissTimeout);
             resolve();
           } else {
+            // Abort the upload immediately on error
+            xhr.abort();
             setUploadProgress((prev) =>
-              prev.map((item) =>
-                item.id === uploadId ? { ...item, status: "error" } : item,
-              ),
+              updateUploadProgress(prev, uploadId, { status: "error" }),
             );
-            // Auto-dismiss failed uploads after 10 seconds if user is not interacting
-            const errorDismissTimeout = setTimeout(() => {
-              if (!isUploadProgressInteractingRef.current) {
-                setUploadProgress((prev) =>
-                  prev.filter((item) => item.id !== uploadId),
-                );
-                uploadDismissTimeoutsRef.current.delete(uploadId);
-              } else {
-                // If user is interacting, retry after 5 more seconds
-                const retryTimeout = setTimeout(() => {
-                  if (!isUploadProgressInteractingRef.current) {
-                    setUploadProgress((prev) =>
-                      prev.filter((item) => item.id !== uploadId),
-                    );
-                  }
-                  uploadDismissTimeoutsRef.current.delete(uploadId);
-                }, 5000);
-                uploadDismissTimeoutsRef.current.set(uploadId, retryTimeout);
-              }
-            }, 10000); // 10 seconds for failed uploads
+
+            // Extract and show error message
+            const errorMessage = extractXhrErrorMessage(xhr);
+            showToast(errorMessage, "error");
+
+            // Auto-dismiss failed uploads after 10 seconds
+            const errorDismissTimeout = createAutoDismissTimeout(
+              uploadId,
+              isUploadProgressInteractingRef,
+              setUploadProgress,
+              uploadDismissTimeoutsRef,
+            );
             uploadDismissTimeoutsRef.current.set(uploadId, errorDismissTimeout);
-            reject(new Error(`Upload failed: ${xhr.statusText}`));
+            reject(new Error(errorMessage));
           }
         });
 
         xhr.addEventListener("error", () => {
+          xhr.abort();
           setUploadProgress((prev) =>
-            prev.map((item) =>
-              item.id === uploadId ? { ...item, status: "error" } : item,
-            ),
+            updateUploadProgress(prev, uploadId, { status: "error" }),
           );
-          // Auto-dismiss failed uploads after 10 seconds if user is not interacting
-          const errorDismissTimeout = setTimeout(() => {
-            if (!isUploadProgressInteractingRef.current) {
-              setUploadProgress((prev) =>
-                prev.filter((item) => item.id !== uploadId),
-              );
-              uploadDismissTimeoutsRef.current.delete(uploadId);
-            } else {
-              // If user is interacting, retry after 5 more seconds
-              const retryTimeout = setTimeout(() => {
-                if (!isUploadProgressInteractingRef.current) {
-                  setUploadProgress((prev) =>
-                    prev.filter((item) => item.id !== uploadId),
-                  );
-                }
-                uploadDismissTimeoutsRef.current.delete(uploadId);
-              }, 5000);
-              uploadDismissTimeoutsRef.current.set(uploadId, retryTimeout);
-            }
-          }, 10000); // 10 seconds for failed uploads
+
+          const errorMessage =
+            extractXhrErrorMessage(xhr) ||
+            "Upload failed. Please check your connection and try again.";
+          showToast(errorMessage, "error");
+
+          const errorDismissTimeout = createAutoDismissTimeout(
+            uploadId,
+            isUploadProgressInteractingRef,
+            setUploadProgress,
+            uploadDismissTimeoutsRef,
+          );
           uploadDismissTimeoutsRef.current.set(uploadId, errorDismissTimeout);
-          reject(new Error("Upload failed"));
+          reject(new Error(errorMessage));
         });
 
         xhr.addEventListener("abort", () => {
-          setUploadProgress((prev) =>
-            prev.filter((item) => item.id !== uploadId),
-          );
+          setUploadProgress((prev) => removeUploadProgress(prev, uploadId));
           reject(new Error("Upload cancelled"));
         });
 

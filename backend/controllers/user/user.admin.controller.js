@@ -6,6 +6,9 @@ const {
   getAllUsersBasic,
   getOnlyOfficeSettings,
   setOnlyOfficeSettings,
+  setUserStorageLimit,
+  getUserStorageUsage,
+  getUserStorageLimit,
 } = require('../../models/user.model');
 const { sendError, sendSuccess } = require('../../utils/response');
 const { logger } = require('../../config/logger');
@@ -118,13 +121,49 @@ async function listUsers(req, res) {
       return sendError(res, 403, 'Only the first user can view all users');
     }
 
-    const users = (await getAllUsersBasic()).map(user => ({
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      createdAt: user.created_at,
-      mfaEnabled: user.mfa_enabled || false,
-    }));
+    const usersBasic = await getAllUsersBasic();
+    const checkDiskSpace = require('check-disk-space').default;
+    const { getUserCustomDriveSettings } = require('../../models/user.model');
+    const basePath = process.env.UPLOAD_DIR || __dirname;
+    const { size: defaultActualDiskSize } = await checkDiskSpace(basePath);
+
+    // Fetch storage info for all users
+    const users = await Promise.all(
+      usersBasic.map(async user => {
+        const used = await getUserStorageUsage(user.id);
+        const storageLimit = await getUserStorageLimit(user.id);
+
+        // Get actual disk size for this user (check custom drive if enabled)
+        let actualDiskSize = defaultActualDiskSize;
+        try {
+          const customDrive = await getUserCustomDriveSettings(user.id);
+          if (customDrive.enabled && customDrive.path) {
+            // Only run expensive disk check if user has a custom drive
+            const { getActualDiskSize } = require('../../utils/storageUtils');
+            actualDiskSize = await getActualDiskSize(customDrive, basePath);
+          }
+          // Otherwise use defaultActualDiskSize already calculated outside the loop
+        } catch (err) {
+          // If custom drive check fails, use default
+          logger.warn({ userId: user.id, err }, 'Failed to get custom drive disk size, using default');
+        }
+
+        // If no custom limit is set, use the actual available disk space
+        const effectiveLimit = storageLimit !== null ? storageLimit : actualDiskSize;
+
+        return {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          createdAt: user.created_at,
+          mfaEnabled: user.mfa_enabled || false,
+          storageUsed: used,
+          storageLimit, // getUserStorageLimit already handles type conversion
+          storageTotal: effectiveLimit,
+          actualDiskSize, // Add actual disk size for validation
+        };
+      })
+    );
 
     // Log admin action
     await logAuditEvent(
@@ -301,6 +340,105 @@ async function updateOnlyOfficeConfig(req, res) {
   }
 }
 
+/**
+ * Update user storage limit (admin only)
+ */
+async function updateUserStorageLimit(req, res) {
+  try {
+    // Verify user is first user before proceeding
+    const userIsFirst = await isFirstUser(req.userId);
+    if (!userIsFirst) {
+      await logAuditEvent(
+        'admin.user.update',
+        {
+          status: 'failure',
+          resourceType: 'user',
+          metadata: { action: 'update_storage_limit', reason: 'unauthorized' },
+        },
+        req
+      );
+      logger.warn({ userId: req.userId }, 'Unauthorized storage limit update attempt');
+      return sendError(res, 403, 'Only the first user can set storage limits');
+    }
+
+    const { targetUserId, storageLimit } = req.body;
+
+    // Validate targetUserId: must be non-empty string, no special characters that could be dangerous
+    if (!targetUserId || typeof targetUserId !== 'string' || targetUserId.trim().length === 0) {
+      return sendError(res, 400, 'targetUserId is required and must be a non-empty string');
+    }
+
+    // Sanitize targetUserId: only allow alphanumeric, underscore, and hyphen (typical user ID format)
+    if (!/^[a-zA-Z0-9_-]+$/.test(targetUserId)) {
+      return sendError(res, 400, 'Invalid targetUserId format');
+    }
+
+    // Validate storage limit (must be positive integer or null)
+    if (storageLimit !== null && storageLimit !== undefined) {
+      // Ensure it's a number type
+      if (typeof storageLimit !== 'number' && typeof storageLimit !== 'string') {
+        return sendError(res, 400, 'Storage limit must be a number or null');
+      }
+
+      const limit = Number(storageLimit);
+
+      // Validate: must be a finite integer, positive, and within safe range
+      if (!Number.isFinite(limit) || !Number.isInteger(limit) || limit <= 0) {
+        return sendError(res, 400, 'Storage limit must be a positive integer or null');
+      }
+
+      // Prevent extremely large values that could cause issues (max 1 PB = 1024^5 bytes)
+      const MAX_STORAGE_LIMIT = 1024 * 1024 * 1024 * 1024 * 1024; // 1 Petabyte
+      if (limit > MAX_STORAGE_LIMIT) {
+        return sendError(res, 400, 'Storage limit cannot exceed 1 Petabyte (1125899906842624 bytes)');
+      }
+
+      // Ensure it's within JavaScript safe integer range
+      if (limit > Number.MAX_SAFE_INTEGER) {
+        return sendError(res, 400, 'Storage limit exceeds maximum safe value');
+      }
+    }
+
+    // setUserStorageLimit will do additional security checks internally
+    await setUserStorageLimit(req.userId, targetUserId, storageLimit === undefined ? null : storageLimit);
+
+    // Log admin action
+    await logAuditEvent(
+      'admin.user.update',
+      {
+        status: 'success',
+        resourceType: 'user',
+        metadata: {
+          action: 'update_storage_limit',
+          targetUserId,
+          storageLimit: storageLimit === undefined ? null : storageLimit,
+        },
+      },
+      req
+    );
+    logger.info({ userId: req.userId, targetUserId, storageLimit }, 'User storage limit updated');
+
+    sendSuccess(res, { storageLimit: storageLimit === undefined ? null : storageLimit });
+  } catch (err) {
+    if (err.message === 'Only the first user can set storage limits') {
+      await logAuditEvent(
+        'admin.user.update',
+        {
+          status: 'failure',
+          resourceType: 'user',
+          errorMessage: err.message,
+          metadata: { action: 'update_storage_limit' },
+        },
+        req
+      );
+      logger.warn({ userId: req.userId }, 'Unauthorized storage limit update attempt');
+      return sendError(res, 403, err.message);
+    }
+    logger.error({ err }, 'Failed to update user storage limit');
+    sendError(res, 500, 'Server error', err);
+  }
+}
+
 module.exports = {
   getSignupStatus,
   toggleSignup,
@@ -308,4 +446,5 @@ module.exports = {
   checkOnlyOfficeConfigured,
   getOnlyOfficeConfig,
   updateOnlyOfficeConfig,
+  updateUserStorageLimit,
 };

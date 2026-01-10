@@ -331,6 +331,116 @@ async function handleFirstUserSetup(userId) {
   }
 }
 
+async function getUserStorageLimit(userId) {
+  const result = await pool.query('SELECT storage_limit FROM users WHERE id = $1', [userId]);
+  if (result.rows.length === 0) {
+    return null;
+  }
+  const limit = result.rows[0].storage_limit;
+  // PostgreSQL BIGINT can be returned as string for very large numbers
+  // Convert to number if it's a valid number string, otherwise return as-is (null or number)
+  if (limit === null || limit === undefined) {
+    return null;
+  }
+  // If it's already a number, return it
+  if (typeof limit === 'number') {
+    return limit;
+  }
+  // If it's a string representation of a number, convert it
+  if (typeof limit === 'string') {
+    const numLimit = Number(limit);
+    return Number.isFinite(numLimit) ? numLimit : null;
+  }
+  return limit;
+}
+
+async function setUserStorageLimit(userId, targetUserId, storageLimit) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Verify requesting user is first user
+    const settingsResult = await client.query('SELECT first_user_id FROM app_settings WHERE id = $1', ['app_settings']);
+    if (settingsResult.rows.length === 0) {
+      throw new Error('App settings not found');
+    }
+
+    const storedFirstUserId = settingsResult.rows[0].first_user_id;
+    if (!storedFirstUserId || storedFirstUserId !== userId) {
+      await client.query('ROLLBACK');
+      throw new Error('Only the first user can set storage limits');
+    }
+
+    // Validate storage limit (must be positive integer or null)
+    if (storageLimit !== null) {
+      const limit = Number(storageLimit);
+
+      // Validate: must be a finite integer, positive, and within safe range
+      if (!Number.isFinite(limit) || !Number.isInteger(limit) || limit <= 0) {
+        await client.query('ROLLBACK');
+        throw new Error('Storage limit must be a positive integer or null');
+      }
+
+      // Prevent extremely large values (max 1 PB)
+      const MAX_STORAGE_LIMIT = 1024 * 1024 * 1024 * 1024 * 1024; // 1 Petabyte
+      if (limit > MAX_STORAGE_LIMIT) {
+        await client.query('ROLLBACK');
+        throw new Error('Storage limit cannot exceed 1 Petabyte');
+      }
+
+      // Ensure it's within JavaScript safe integer range
+      if (limit > Number.MAX_SAFE_INTEGER) {
+        await client.query('ROLLBACK');
+        throw new Error('Storage limit exceeds maximum safe value');
+      }
+
+      // Validate against actual disk space
+      const customDriveResult = await client.query(
+        'SELECT custom_drive_enabled, custom_drive_path FROM users WHERE id = $1',
+        [targetUserId]
+      );
+
+      const { getActualDiskSize } = require('../../utils/storageUtils');
+      const customDrive = {
+        enabled: customDriveResult.rows.length > 0 && customDriveResult.rows[0].custom_drive_enabled,
+        path: customDriveResult.rows.length > 0 ? customDriveResult.rows[0].custom_drive_path : null,
+      };
+      const basePath = process.env.UPLOAD_DIR || __dirname;
+      const actualDiskSize = await getActualDiskSize(customDrive, basePath);
+
+      // Storage limit cannot exceed actual available disk space
+      if (limit > actualDiskSize) {
+        const { formatFileSize } = require('../../utils/storageUtils');
+        const limitFormatted = formatFileSize(limit);
+        const actualFormatted = formatFileSize(actualDiskSize);
+        await client.query('ROLLBACK');
+        throw new Error(`Storage limit (${limitFormatted}) cannot exceed actual disk space (${actualFormatted})`);
+      }
+    }
+
+    // Validate targetUserId format (additional safety check)
+    if (!targetUserId || typeof targetUserId !== 'string' || !/^[a-zA-Z0-9_-]+$/.test(targetUserId)) {
+      await client.query('ROLLBACK');
+      throw new Error('Invalid targetUserId format');
+    }
+
+    // Update user storage limit using parameterized query (prevents SQL injection)
+    await client.query('UPDATE users SET storage_limit = $1 WHERE id = $2', [storageLimit, targetUserId]);
+
+    await client.query('COMMIT');
+
+    // Invalidate user cache
+    await deleteCache(cacheKeys.allUsers());
+
+    logger.info({ userId, targetUserId, storageLimit }, 'User storage limit updated');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 module.exports = {
   isFirstUser,
   getSignupEnabled,
@@ -340,4 +450,6 @@ module.exports = {
   getOnlyOfficeSettings,
   setOnlyOfficeSettings,
   handleFirstUserSetup,
+  getUserStorageLimit,
+  setUserStorageLimit,
 };

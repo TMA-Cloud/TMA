@@ -11,6 +11,7 @@ const {
   checkOnlyOfficeConfigured,
   getOnlyOfficeConfig,
   updateOnlyOfficeConfig,
+  updateUserStorageLimit,
 } = require('../controllers/user.controller');
 
 const router = express.Router();
@@ -27,5 +28,6 @@ router.put('/custom-drive', updateCustomDriveSettings);
 router.get('/onlyoffice-configured', checkOnlyOfficeConfigured);
 router.get('/onlyoffice-config', getOnlyOfficeConfig);
 router.put('/onlyoffice-config', updateOnlyOfficeConfig);
+router.put('/storage-limit', updateUserStorageLimit);
 
 module.exports = router;

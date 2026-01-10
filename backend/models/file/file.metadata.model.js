@@ -18,6 +18,7 @@ async function setStarred(ids, starred, userId) {
   // Invalidate cache (starred status affects file listings and stats)
   await invalidateFileCache(userId);
   await deleteCache(cacheKeys.fileStats(userId));
+  await deleteCache(cacheKeys.userStorage(userId)); // Invalidate storage usage cache
   // Invalidate starred files cache
   await deleteCachePattern(`files:${userId}:starred:*`);
 }
@@ -68,6 +69,7 @@ async function setShared(ids, shared, userId) {
   // Invalidate cache (shared status affects file listings and stats)
   await invalidateFileCache(userId);
   await deleteCache(cacheKeys.fileStats(userId));
+  await deleteCache(cacheKeys.userStorage(userId)); // Invalidate storage usage cache
   // Invalidate shared files cache
   await deleteCachePattern(`files:${userId}:shared:*`);
 

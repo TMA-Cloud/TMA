@@ -18,6 +18,14 @@ const errorHandler = (err, req, res, _next) => {
     });
   }
 
+  // Storage limit errors (from our middleware or fileFilter)
+  if (err.message && (err.message.includes('Storage limit exceeded') || err.message.includes('storage limit'))) {
+    return res.status(413).json({
+      message: err.message,
+      error: 'STORAGE_LIMIT_EXCEEDED',
+    });
+  }
+
   // Database errors
   if (err.code === '23505') {
     // PostgreSQL unique violation

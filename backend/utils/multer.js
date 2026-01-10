@@ -49,6 +49,25 @@ const storage = multer.diskStorage({
   },
 });
 
-const upload = multer({ storage });
+/**
+ * FileFilter - simplified since middleware already handles storage limit checks
+ * This is kept as a safety net but middleware should catch issues first
+ */
+function fileFilter(req, file, cb) {
+  // If response was already sent by middleware (storage limit exceeded), reject
+  if (req.res && (req.res.headersSent || req.res.finished)) {
+    return cb(new Error('Upload rejected - storage limit exceeded'), false);
+  }
+  // Allow file through - middleware and controller will handle validation
+  cb(null, true);
+}
+
+const upload = multer({
+  storage,
+  fileFilter,
+  limits: {
+    fileSize: 10 * 1024 * 1024 * 1024, // 10GB max file size (safety limit)
+  },
+});
 
 module.exports = upload;

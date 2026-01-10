@@ -271,12 +271,32 @@ export interface UserSummary {
   email: string;
   createdAt: string;
   mfaEnabled: boolean;
+  storageUsed?: number;
+  storageLimit?: number | null;
+  storageTotal?: number;
+  actualDiskSize?: number; // Actual disk space available (for validation)
 }
 
 export async function fetchAllUsers(): Promise<{
   users: UserSummary[];
 }> {
   return await apiGet<{ users: UserSummary[] }>("/api/user/all");
+}
+
+/**
+ * Update user storage limit (admin only)
+ */
+export async function updateUserStorageLimit(
+  targetUserId: string,
+  storageLimit: number | null,
+): Promise<{ storageLimit: number | null }> {
+  return await apiPut<{ storageLimit: number | null }>(
+    "/api/user/storage-limit",
+    {
+      targetUserId,
+      storageLimit,
+    },
+  );
 }
 
 /**

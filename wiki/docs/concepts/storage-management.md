@@ -7,9 +7,10 @@ Storage limits and management in TMA Cloud.
 ### Per-User Limits
 
 - Configurable storage limits per user
-- Default: 100GB (107374182400 bytes)
+- Default: Uses actual available disk space
 - Set by administrators
 - Real-time usage tracking
+- Limits validated against physical disk capacity
 
 ### Storage Calculation
 
@@ -96,9 +97,11 @@ Custom drives allow users to store files on external or mounted storage. Files o
 
 ### Upload Limits
 
-- Enforced at upload time
-- Prevents exceeding limits
-- Clear error messages
+- Pre-upload validation (Content-Length check)
+- Final safeguard check (actual file size)
+- Prevents file upload if limit exceeded
+- Clear error messages with usage details
+- Files cleaned up if validation fails
 
 ### Cleanup
 

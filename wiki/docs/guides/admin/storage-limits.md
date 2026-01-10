@@ -4,17 +4,19 @@ Configure storage limits for users in TMA Cloud (admin only).
 
 ## Storage Limit Overview
 
-### Default Limits
+### Default Behavior
 
-- Default: 100GB (107374182400 bytes)
+- Default: Uses actual available disk space
+- No hardcoded limits
 - Configurable per user
 - Set via Settings → Users
 
 ### Per-User Limits
 
-- Override default for specific users
-- Set custom limits as needed
+- Set custom limits for specific users
+- Limits cannot exceed actual disk space
 - Monitor usage in real-time
+- Limits validated against physical disk capacity
 
 ## Setting Storage Limits
 
@@ -22,14 +24,15 @@ Configure storage limits for users in TMA Cloud (admin only).
 
 1. Navigate to **Settings** → **Users**
 2. Select user
-3. Set storage limit
+3. Set storage limit (MB, GB, or TB)
 4. Save changes
 
-### Default Limit
+### Limit Validation
 
-- Set in environment variable: `STORAGE_LIMIT`
-- Applies to new users
-- Can be overridden per-user
+- Limits validated against actual disk space
+- Cannot set limit greater than available disk
+- For custom drives, validated against custom drive disk space
+- Frontend and backend validation
 
 ## Storage Usage Monitoring
 
@@ -66,6 +69,8 @@ Configure storage limits for users in TMA Cloud (admin only).
 - Files count toward limit
 - Trash counts until permanently deleted
 - Custom drives counted separately
+- Usage tracked in database
+- Cache invalidated on file operations
 
 ## Best Practices
 

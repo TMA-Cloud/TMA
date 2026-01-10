@@ -268,7 +268,8 @@ async function callback(req, res) {
         } catch (error) {
           logger.error('[ONLYOFFICE] Error encrypting file after save:', error);
           // Clean up temp file if encryption fails
-          await fs.promises.unlink(tempPath).catch(() => {});
+          const { safeUnlink } = require('../../utils/fileCleanup');
+          await safeUnlink(tempPath);
           throw error;
         }
       } else {
@@ -292,6 +293,7 @@ async function callback(req, res) {
 
       // Invalidate file stats cache (size changed)
       await deleteCache(cacheKeys.fileStats(userId));
+      await deleteCache(cacheKeys.userStorage(userId)); // Invalidate storage usage cache
 
       // Invalidate search cache (modified date changed, affects search results)
       await invalidateSearchCache(userId);
