@@ -377,6 +377,13 @@ export async function checkAgentStatus(): Promise<{ isOnline: boolean }> {
 }
 
 /**
+ * Check agent status for current user (non-admin endpoint)
+ */
+export async function checkMyAgentStatus(): Promise<{ isOnline: boolean }> {
+  return await apiGet<{ isOnline: boolean }>("/api/user/my-agent-status");
+}
+
+/**
  * Refresh agent connection (admin only)
  */
 export async function refreshAgentConnection(): Promise<{ isOnline: boolean }> {

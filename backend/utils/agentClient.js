@@ -25,16 +25,63 @@ async function checkAgentStatus() {
 
       const req = requestModule.get(healthUrl, { timeout: 5000 }, res => {
         if (resolved) return;
-        resolved = true;
-        const isOnline = res.statusCode === 200;
-        resolve(isOnline);
+
+        // Only consider online if status code is exactly 200
+        // Any other status code means agent is not properly online
+        const statusCode = res.statusCode;
+
+        if (!statusCode || statusCode !== 200) {
+          // Not 200 or undefined - agent is offline
+          resolved = true;
+          logger.debug({ healthUrl, statusCode }, 'Agent health check returned non-200 status');
+          // Consume response to prevent connection issues
+          res.on('data', () => {});
+          res.on('end', () => {});
+          resolve(false);
+          return;
+        }
+
+        // Status is 200 - consume response and verify it completes successfully
+        let responseData = '';
+        let dataReceived = false;
+
+        res.on('data', chunk => {
+          if (chunk) {
+            dataReceived = true;
+            responseData += chunk.toString();
+          }
+        });
+
+        res.on('end', () => {
+          if (resolved) return;
+          resolved = true;
+          // Only resolve true if we got a 200 and response completed successfully
+          // Log for debugging
+          logger.debug(
+            {
+              healthUrl,
+              statusCode: 200,
+              dataLength: responseData.length,
+              dataReceived,
+            },
+            'Agent health check successful'
+          );
+          resolve(true);
+        });
+
+        res.on('error', err => {
+          if (resolved) return;
+          resolved = true;
+          logger.debug({ err, healthUrl }, 'Agent health check response error');
+          resolve(false);
+        });
       });
 
       req.on('error', err => {
         if (resolved) return;
         resolved = true;
         // Log for debugging but don't spam
-        logger.debug({ err, healthUrl }, 'Agent health check failed');
+        logger.debug({ err, healthUrl }, 'Agent health check request failed');
         resolve(false);
       });
 

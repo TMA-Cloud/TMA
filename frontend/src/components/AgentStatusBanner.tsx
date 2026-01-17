@@ -1,8 +1,8 @@
 import React from "react";
 import { AlertCircle, RefreshCw, X } from "lucide-react";
-import { checkAgentStatus, refreshAgentConnection } from "../utils/api";
+import { checkMyAgentStatus, refreshAgentConnection } from "../utils/api";
 import { useToast } from "../hooks/useToast";
-import { getErrorMessage } from "../utils/errorUtils";
+import { getErrorMessage, ApiError } from "../utils/errorUtils";
 import { useApp } from "../contexts/AppContext";
 
 interface AgentStatusBannerProps {
@@ -19,9 +19,14 @@ export const AgentStatusBanner: React.FC<AgentStatusBannerProps> = ({
 
   const checkStatus = React.useCallback(async () => {
     try {
-      const response = await checkAgentStatus();
-      onStatusChange(response.isOnline);
+      // Use non-admin endpoint that works for all users
+      const response = await checkMyAgentStatus();
+      // CRITICAL: Only set to true if explicitly true, otherwise set to false
+      // This prevents false positives where backend might return incorrect status
+      const isOnline = response.isOnline === true;
+      onStatusChange(isOnline);
     } catch {
+      // On error, assume offline to be safe
       onStatusChange(false);
     }
   }, [onStatusChange]);
@@ -29,13 +34,59 @@ export const AgentStatusBanner: React.FC<AgentStatusBannerProps> = ({
   const handleRefresh = async () => {
     try {
       setIsRefreshing(true);
-      const response = await refreshAgentConnection();
-      onStatusChange(response.isOnline);
-      if (response.isOnline) {
-        showToast("Agent connection restored", "success");
-        setDismissed(false); // Re-enable banner if it comes back online then goes offline again
-      } else {
-        showToast("Agent is still offline", "error");
+      // Store previous status to detect if it actually changed
+      const previousStatus = agentOnline;
+
+      // Try admin refresh endpoint first (if user is admin)
+      try {
+        const response = await refreshAgentConnection();
+        const newStatus = response.isOnline;
+        onStatusChange(newStatus);
+
+        // Only show success if status actually changed from offline to online
+        if (newStatus && previousStatus === false) {
+          showToast("Agent connection restored", "success");
+          setDismissed(false);
+        } else if (!newStatus) {
+          showToast("Agent is still offline", "error");
+        }
+        // If already online, no message needed
+      } catch (adminError: unknown) {
+        // If admin endpoint fails (403 for non-admin), just re-check status
+        const isForbidden =
+          adminError instanceof ApiError && adminError.status === 403;
+        if (isForbidden) {
+          // For non-admin users, we can only check status, not actually refresh
+          // Check the current agent status and provide accurate feedback
+          try {
+            const response = await checkMyAgentStatus();
+            // CRITICAL: Only treat as online if explicitly true
+            const newStatus = response.isOnline === true;
+
+            // Update the status
+            onStatusChange(newStatus);
+
+            // Provide accurate feedback based on actual status
+            if (newStatus) {
+              // Agent is online - show appropriate message only if status changed
+              if (previousStatus === false) {
+                // Status changed from offline to online
+                showToast("Agent is online", "success");
+                setDismissed(false);
+              }
+              // If already online, no message needed
+            } else {
+              // Agent is still offline - always show error
+              showToast("Agent is still offline", "error");
+            }
+          } catch {
+            // If status check fails, assume still offline
+            onStatusChange(false);
+            showToast("Agent is still offline", "error");
+          }
+        } else {
+          throw adminError;
+        }
       }
     } catch (error) {
       showToast(getErrorMessage(error, "Failed to refresh agent"), "error");

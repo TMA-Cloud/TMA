@@ -95,22 +95,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   }, [agentOnline, customDriveEnabled]);
 
   // Helper to handle agent status from API response
-  const handleAgentStatusFromResponse = useCallback(
-    async (res: Response) => {
-      if (!res.ok) {
-        const errorMessage = await extractResponseError(res);
-        if (isAgentOfflineResponse(res.status, errorMessage)) {
-          setAgentOnline(false);
-        }
-        throw new Error(errorMessage || "Operation failed");
+  // IMPORTANT: Only update agent status based on explicit agent errors, not on operation success
+  // Operations on regular files can succeed even when agent is offline
+  const handleAgentStatusFromResponse = useCallback(async (res: Response) => {
+    if (!res.ok) {
+      const errorMessage = await extractResponseError(res);
+      if (isAgentOfflineResponse(res.status, errorMessage)) {
+        setAgentOnline(false);
       }
-      // Operation succeeded - agent must be online
-      if (agentOnline !== true) {
-        setAgentOnline(true);
-      }
-    },
-    [agentOnline],
-  );
+      throw new Error(errorMessage || "Operation failed");
+    }
+    // Don't set agentOnline to true just because an operation succeeded
+    // Only the explicit agent status check should set it to true
+    // This prevents false positives where regular file operations succeed while agent is offline
+  }, []);
 
   // Helper to handle agent status from error
   const handleAgentStatusFromError = useCallback((error: unknown) => {
@@ -645,8 +643,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
                 status: "completed",
               }),
             );
-            // Operation succeeded - agent must be online
-            setAgentOnline(true);
+            // Don't set agentOnline here - only explicit status checks should update it
+            // Regular file operations can succeed even when agent is offline
 
             await refreshFiles();
             // Auto-dismiss after 3 seconds
@@ -832,9 +830,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         }
         throw new Error(errorMessage || "Failed to share files");
       }
-      if (agentOnline !== true) {
-        setAgentOnline(true);
-      }
+      // Don't set agentOnline here - only explicit status checks should update it
       const data = await res.json();
       const links = buildShareUrlMap(data);
       await refreshFiles();
@@ -886,9 +882,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         }
         throw new Error(errorMessage || "Failed to update star status");
       }
-      if (agentOnline !== true) {
-        setAgentOnline(true);
-      }
+      // Don't set agentOnline here - only explicit status checks should update it
       await refreshFiles();
     } catch (error) {
       handleAgentStatusFromError(error);
@@ -930,7 +924,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         }
         throw new Error(errorMessage);
       }
-      setAgentOnline(true);
+      // Don't set agentOnline here - only explicit status checks should update it
       await refreshFiles();
       return data;
     } catch (error) {
@@ -972,7 +966,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         }
         throw new Error(errorMessage);
       }
-      setAgentOnline(true);
+      // Don't set agentOnline here - only explicit status checks should update it
       await refreshFiles();
       return data;
     } catch (error) {
@@ -1027,9 +1021,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
           );
         }
 
-        if (agentOnline === false) {
-          setAgentOnline(true);
-        }
+        // Don't set agentOnline here - only explicit status checks should update it
 
         setPasteProgress(100);
         await refreshFiles();
@@ -1109,10 +1101,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         }
       }
 
-      // Operation succeeded - if we were offline before, agent is back online
-      if (agentOnline !== true) {
-        setAgentOnline(true);
-      }
+      // Don't set agentOnline here - only explicit status checks should update it
+      // Regular file operations can succeed even when agent is offline
     } catch (error) {
       // Check if it's an agent offline error
       const errorMessage =

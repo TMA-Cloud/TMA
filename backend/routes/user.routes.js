@@ -15,6 +15,7 @@ const {
   updateAgentConfig,
   getAgentPaths,
   checkAgentStatus,
+  checkMyAgentStatus,
   resetAgentStatus,
   updateUserStorageLimit,
 } = require('../controllers/user.controller');
@@ -37,6 +38,7 @@ router.get('/agent-config', getAgentConfig);
 router.put('/agent-config', updateAgentConfig);
 router.get('/agent-paths', getAgentPaths);
 router.get('/agent-status', checkAgentStatus);
+router.get('/my-agent-status', checkMyAgentStatus);
 router.post('/agent-refresh', resetAgentStatus);
 router.put('/storage-limit', updateUserStorageLimit);
 

@@ -7,6 +7,7 @@ const {
 const { sendError, sendSuccess } = require('../../utils/response');
 const { logger } = require('../../config/logger');
 const { logAuditEvent } = require('../../services/auditLogger');
+const { checkAgentForUser } = require('../../utils/agentCheck');
 
 /**
  * Get custom drive settings for a user
@@ -387,8 +388,38 @@ async function updateCustomDriveSettings(req, res) {
   }
 }
 
+/**
+ * Check agent status for current user (non-admin endpoint)
+ * Returns agent online status based on user's custom drive configuration
+ * For users with custom drive enabled, returns the actual agent online status
+ * For users without custom drive, returns true (agent not needed)
+ */
+async function checkMyAgentStatus(req, res) {
+  try {
+    const agentCheck = await checkAgentForUser(req.userId);
+    // If agent is not required (user doesn't have custom drive), agent is "online" from their perspective
+    if (!agentCheck.required) {
+      return sendSuccess(res, { isOnline: true });
+    }
+    // If agent is required, return the actual online status
+    // CRITICAL: Only return true if agent is explicitly confirmed online
+    // This ensures users with custom drive get accurate agent status
+    const isOnline = agentCheck.online === true;
+    logger.debug(
+      { userId: req.userId, required: agentCheck.required, online: agentCheck.online, isOnline },
+      'Agent status check for user'
+    );
+    sendSuccess(res, { isOnline });
+  } catch (err) {
+    logger.error({ err, userId: req.userId }, 'Failed to check agent status for user');
+    // On error, assume offline to be safe
+    sendSuccess(res, { isOnline: false });
+  }
+}
+
 module.exports = {
   getCustomDriveSettings,
   getAllUsersCustomDriveSettings,
   updateCustomDriveSettings,
+  checkMyAgentStatus,
 };

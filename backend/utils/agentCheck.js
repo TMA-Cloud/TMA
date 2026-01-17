@@ -1,5 +1,5 @@
 const { checkAgentStatus } = require('./agentClient');
-const { getUserCustomDrive } = require('../models/user.model');
+const { getUserCustomDrive } = require('../models/file/file.cache.model');
 
 /**
  * Check if agent is required and online for a user's operation
@@ -21,6 +21,10 @@ async function checkAgentForUser(userId) {
     // The backend should NEVER access custom drive paths directly - only through agent
     try {
       const isOnline = await checkAgentStatus();
+      // CRITICAL: Only return true if explicitly confirmed online (strict check)
+      // This prevents false positives when agent health check might succeed incorrectly
+      const { logger } = require('../config/logger');
+      logger.debug({ userId, isOnline, required: true }, 'Agent status check for user with custom drive');
       return {
         required: true,
         online: isOnline === true, // Only true if explicitly confirmed online
@@ -29,11 +33,14 @@ async function checkAgentForUser(userId) {
       // If health check fails (timeout, error), assume offline to be safe
       // This ensures we don't allow operations when agent status is unknown
       const { logger } = require('../config/logger');
-      logger.warn({ err: checkError }, 'Agent health check failed, blocking operations');
+      logger.warn({ err: checkError, userId }, 'Agent health check failed, blocking operations');
       return { required: true, online: false };
     }
-  } catch (_err) {
-    // On error getting user settings, assume agent not required
+  } catch (err) {
+    // On error getting user settings, log it and assume agent not required
+    // This is safe because if we can't determine custom drive status, we assume it's disabled
+    const { logger } = require('../config/logger');
+    logger.debug({ err, userId }, 'Error getting custom drive settings, assuming agent not required');
     return { required: false, online: true };
   }
 }
