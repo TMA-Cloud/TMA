@@ -67,7 +67,7 @@ chown -R 1001:1001 uploads  # Container runs as UID 1001
 
 ### Custom Drive with Docker
 
-Custom drives require the agent running on the host system.
+Custom drives require the agent running on the host system. **Note:** The agent is required for custom drives in both bare metal and Docker setups.
 
 See [Agent Setup](agent-setup.md) for installation and configuration.
 
