@@ -7,7 +7,7 @@ export type UploadProgressItem = {
   fileName: string;
   fileSize: number;
   progress: number;
-  status: string;
+  status: "uploading" | "completed" | "error";
 };
 
 /**

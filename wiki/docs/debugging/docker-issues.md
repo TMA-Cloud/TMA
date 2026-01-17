@@ -17,7 +17,7 @@ Troubleshooting Docker deployment problems.
 
 1. Check logs for specific errors
 2. Verify `.env` file exists and is correct
-3. Check volume permissions
+3. Check upload directory permissions: `chown -R 1001:1001 uploads/`
 4. Verify ports are available
 
 ### Health Check Failing
@@ -35,23 +35,22 @@ docker inspect --format='{{.State.Health.Status}}' tma-cloud-app
 3. Check Redis connection (if enabled)
 4. Review health check configuration
 
-## Volume Issues
+## Agent Issues
 
-### Permission Denied
-
-**Solutions:**
-
-1. Set correct ownership: `chown -R 1001:1001 uploads/`
-2. Check volume mount paths
-3. Verify Docker has access to host paths
-
-### Files Not Persisting
+### Agent Connection Failed
 
 **Check:**
 
-1. Volume mounts in `docker-compose.yml`
-2. Volume paths match `.env` configuration
-3. Files written to correct location
+1. Agent is running on host
+2. Agent URL and token configured in Settings
+3. Network connectivity from container to host
+
+**Solutions:**
+
+1. Verify agent is running: `tma-agent start`
+2. Check agent health: `curl http://host.docker.internal:8080/health`
+3. Verify `docker-compose.yml` has `extra_hosts` for Linux
+4. Check agent token matches in Settings
 
 ## Network Issues
 

@@ -45,6 +45,14 @@ Files are automatically encrypted when custom drive is disabled. Encryption uses
 - **Transparent:** Encryption and decryption happen automatically
 - **Streaming:** Large files processed in streams to avoid memory issues
 
+### File Operations
+
+- **Read/Write:** All file operations use streaming
+- **Upload:** Files streamed from client to storage
+- **Download:** Files streamed from storage to client
+- **Rename:** OS-level rename for instant operation (custom drives)
+- **Copy:** Files streamed from source to destination
+
 ### Key Configuration
 
 - Set `FILE_ENCRYPTION_KEY` environment variable
@@ -62,6 +70,7 @@ Custom drives allow users to store files on external or mounted storage. Files o
 - **Per-User:** Each user can have custom drive
 - **Path Mapping:** Host path to container path (Docker)
 - **Separate Limits:** Custom storage limits per drive
+- **Agent Required:** Docker environments require standalone agent
 
 ### Real-Time Synchronization
 

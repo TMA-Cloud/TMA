@@ -228,6 +228,81 @@ Update OnlyOffice configuration (admin only).
 
 **Note:** Both `jwtSecret` and `url` must be provided together, or both must be empty/null to disable OnlyOffice integration.
 
+## Agent Configuration
+
+### GET `/api/user/agent-config`
+
+Get agent configuration (first user only).
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "tokenSet": true,
+    "url": "http://host.docker.internal:8080"
+  }
+}
+```
+
+### PUT `/api/user/agent-config`
+
+Update agent configuration (first user only).
+
+**Request Body:**
+
+```json
+{
+  "url": "http://host.docker.internal:8080",
+  "token": "agent_token_here"
+}
+```
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "tokenSet": true,
+    "url": "http://host.docker.internal:8080"
+  }
+}
+```
+
+**Note:** Both `url` and `token` can be set to `null` to clear configuration.
+
+### GET `/api/user/agent-paths`
+
+Get agent paths (first user only).
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "paths": ["/mnt/storage", "/data/drive"]
+  }
+}
+```
+
+### GET `/api/user/agent-status`
+
+Check agent status (first user only).
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "isOnline": true
+  }
+}
+```
+
 ## Related Topics
 
 - [Admin Guides](/guides/admin/user-management) - User management

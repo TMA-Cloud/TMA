@@ -22,7 +22,13 @@ async function cleanupExpiredTrash() {
       if (f.type === 'file') {
         // Resolve file path (handles both relative and absolute paths)
         const filePath = resolveFilePath(f.path);
-        await fs.promises.unlink(filePath);
+        // Use agent API for custom drive files (absolute paths)
+        if (path.isAbsolute(f.path)) {
+          const { agentDeletePath } = require('../../utils/agentFileOperations');
+          await agentDeletePath(filePath);
+        } else {
+          await fs.promises.unlink(filePath);
+        }
       } else if (f.type === 'folder') {
         // For folders, collect them for deletion after files
         if (path.isAbsolute(f.path)) {
@@ -35,13 +41,14 @@ async function cleanupExpiredTrash() {
     }
   }
 
-  // Delete folders (in reverse order)
+  // Delete folders (in reverse order) via agent
   foldersToDelete.sort((a, b) => b.length - a.length);
   for (const folderPath of foldersToDelete) {
     try {
-      const contents = await fs.promises.readdir(folderPath);
+      const { agentListDirectory, agentDeletePath } = require('../../utils/agentFileOperations');
+      const contents = await agentListDirectory(folderPath);
       if (contents.length === 0) {
-        await fs.promises.rmdir(folderPath);
+        await agentDeletePath(folderPath);
       }
     } catch (error) {
       logger.error(`[Trash] Error deleting folder ${folderPath}:`, error.message);

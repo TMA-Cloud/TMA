@@ -3,8 +3,12 @@ import { Modal } from "../ui/Modal";
 import { useApp } from "../../contexts/AppContext";
 
 export const CreateFolderModal: React.FC = () => {
-  const { createFolderModalOpen, setCreateFolderModalOpen, createFolder } =
-    useApp();
+  const {
+    createFolderModalOpen,
+    setCreateFolderModalOpen,
+    createFolder,
+    agentOnline,
+  } = useApp();
   const [name, setName] = useState("");
   const [error, setError] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -20,12 +24,21 @@ export const CreateFolderModal: React.FC = () => {
       setError("Folder name cannot be empty");
       return;
     }
+    if (agentOnline === false) {
+      setError(
+        "Agent is offline. Please refresh agent connection in Settings.",
+      );
+      return;
+    }
     try {
       await createFolder(name.trim());
       handleClose();
-    } catch {
-      // Error handled by error state
-      setError("Failed to create folder. Please try again.");
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : "Failed to create folder. Please try again.";
+      setError(errorMessage);
     }
   };
 

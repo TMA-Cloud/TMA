@@ -27,31 +27,7 @@ async function validateCustomDrivePath(customDrivePath, userId, pool) {
     return { valid: false, error: 'Invalid path: path traversal not allowed' };
   }
 
-  // 3. Reject Docker Compose placeholder paths (only when running in Docker)
-  // These are default placeholder paths from docker-compose.yml that should never be used
-  // Check if running in Docker by checking for /.dockerenv file or DOCKER environment variable
-  try {
-    const fs = require('fs');
-    const isDocker = fs.existsSync('/.dockerenv') || process.env.DOCKER_CONTAINER === 'true';
-
-    if (isDocker) {
-      // Check if path matches placeholder pattern from docker-compose.yml
-      if (
-        normalizedPath.includes('docker_unused_placeholder') ||
-        normalizedPath.startsWith('/docker_unused_placeholder')
-      ) {
-        return {
-          valid: false,
-          error:
-            'Cannot use Docker placeholder path. Set a real path in .env (CUSTOM_DRIVE_MOUNT_N=/host/path:/container/path).',
-        };
-      }
-    }
-  } catch (_error) {
-    // If Docker detection fails, continue with validation (non-Docker environments)
-  }
-
-  // 4. Prevent risky system paths
+  // 3. Prevent risky system paths
   const riskyPaths = getRiskyPaths();
   for (const riskyPath of riskyPaths) {
     if (normalizedPath.startsWith(riskyPath.toLowerCase())) {
@@ -62,7 +38,7 @@ async function validateCustomDrivePath(customDrivePath, userId, pool) {
     }
   }
 
-  // 5. Prevent mounting other users' custom drive paths
+  // 4. Prevent using other users' custom drive paths
   // Get current user's existing path (if any) to allow them to keep the same path
   const currentUserResult = await pool.query('SELECT custom_drive_path FROM users WHERE id = $1', [userId]);
   const currentUserPath = currentUserResult.rows[0]?.custom_drive_path
@@ -95,7 +71,7 @@ async function validateCustomDrivePath(customDrivePath, userId, pool) {
       ) {
         return {
           valid: false,
-          error: "Cannot mount a directory inside another user's custom drive path.",
+          error: "Cannot use a directory inside another user's custom drive path.",
         };
       }
 
@@ -107,13 +83,13 @@ async function validateCustomDrivePath(customDrivePath, userId, pool) {
       ) {
         return {
           valid: false,
-          error: "Cannot mount a directory that contains another user's custom drive path.",
+          error: "Cannot use a directory that contains another user's custom drive path.",
         };
       }
     }
   }
 
-  // 6. Prevent mounting UPLOAD_DIR (where regular files are stored)
+  // 5. Prevent using UPLOAD_DIR (where regular files are stored)
   const { UPLOAD_DIR } = require('../config/paths');
   const uploadDirNormalized = pathModule.resolve(UPLOAD_DIR).toLowerCase();
   if (normalizedPath === uploadDirNormalized || normalizedPath.startsWith(uploadDirNormalized + pathModule.sep)) {

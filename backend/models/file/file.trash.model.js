@@ -200,6 +200,7 @@ async function permanentlyDeleteFiles(ids, userId) {
   const fs = require('fs');
   const { resolveFilePath } = require('../../utils/filePath');
   const { logger } = require('../../config/logger');
+  const { agentDeletePath, agentListDirectory } = require('../../utils/agentFileOperations');
 
   // Delete files first, then folders
   const foldersToDelete = [];
@@ -211,7 +212,14 @@ async function permanentlyDeleteFiles(ids, userId) {
       if (f.type === 'file') {
         // Resolve file path (handles both relative and absolute paths)
         const filePath = resolveFilePath(f.path);
-        await fs.promises.unlink(filePath);
+
+        // Use agent API for custom drive files (absolute paths)
+        if (path.isAbsolute(f.path)) {
+          await agentDeletePath(filePath);
+        } else {
+          // Regular file - use direct filesystem access
+          await fs.promises.unlink(filePath);
+        }
       } else if (f.type === 'folder') {
         // For folders, we'll delete them after files are deleted
         // Only delete custom drive folders (those with absolute paths)
@@ -230,10 +238,10 @@ async function permanentlyDeleteFiles(ids, userId) {
   foldersToDelete.sort((a, b) => b.length - a.length);
   for (const folderPath of foldersToDelete) {
     try {
-      // Check if folder is empty before deleting
-      const contents = await fs.promises.readdir(folderPath);
+      // Check if folder is empty via agent before deleting
+      const contents = await agentListDirectory(folderPath);
       if (contents.length === 0) {
-        await fs.promises.rmdir(folderPath);
+        await agentDeletePath(folderPath);
       }
     } catch (error) {
       // Folder might not be empty or already deleted, skip

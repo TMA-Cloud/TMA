@@ -17,24 +17,29 @@
 # Custom drive is now configured per-user in the web application settings.
 # Users can enable/disable and set their own custom drive path from Settings.
 #
-# IMPORTANT: All custom drive paths MUST be mounted as volumes in Docker.
-# The backend will NOT create directories - they must already exist as mounted volumes.
+# IMPORTANT: The drive-agent runs on the host (not in Docker) to avoid bind mounts.
+# The backend communicates with the agent via HTTP API to access custom drive files.
+# No bind mounts are required in any Docker container.
 #
-# To mount host directories for users to use as custom drive:
-#   Set CUSTOM_DRIVE_MOUNT_1 through CUSTOM_DRIVE_MOUNT_10 in your .env file
-#   Format: CUSTOM_DRIVE_MOUNT_N=/host/path:/container/path
+# The agent accepts any absolute path that already exists on the host system.
+# Custom drives are configured per-user in the Settings page with their absolute paths.
+# The agent simply validates and exposes these paths via HTTP API.
 #
-# Example .env for Linux:
-#   CUSTOM_DRIVE_MOUNT_1=/mnt/nas_drive:/data/custom_drive
-#   CUSTOM_DRIVE_MOUNT_2=/mnt/data_col:/data_col
-#   CUSTOM_DRIVE_MOUNT_3=/mnt/backup:/data/backup
+# To run the agent on the host:
+#   1. Build: cd agent && go build -o tma-agent main.go
+#   2. Add paths: tma-agent add --path /mnt/nas_drive
+#   3. Start: tma-agent start (or tma-agent start -port 9090 -token your-token)
 #
-# Example .env for Windows (with Docker Desktop):
-#   CUSTOM_DRIVE_MOUNT_1=C:/Users/username/my_drive:/data/custom_drive
-#   CUSTOM_DRIVE_MOUNT_2=C:/Users/username/data_col:/data_col
+# DOCKER NETWORKING: When app runs in Docker, configure agent URL in Settings:
+#   - All platforms: http://host.docker.internal:8080 (extra_hosts configured below)
+#   - Linux fallback: http://172.17.0.1:8080 (if host.docker.internal doesn't work)
+#   - Local development (no Docker): http://localhost:8080
 #
-# Note: Each user can configure their own custom drive path in the Settings page.
-# All paths must be mounted volumes - the backend will only validate they exist and are accessible.
+# IMPORTANT: The agent must bind to 0.0.0.0 (all interfaces) to accept connections from Docker.
+# The agent already does this by default. Make sure the agent is running on the host before
+# starting the Docker containers.
+#
+# The agent is a standalone CLI tool with no environment variables needed.
 # =============================================================================
 
 services:
@@ -56,18 +61,12 @@ services:
     volumes:
       # Mount uploads directory (persists data outside container)
       - ./uploads:/app/uploads
-      # Custom drive mounts - configured via environment variables in .env
-      # Set CUSTOM_DRIVE_MOUNT_1, CUSTOM_DRIVE_MOUNT_2, etc. in your .env file
-      # Format: CUSTOM_DRIVE_MOUNT_N=/host/path:/container/path (REQUIRED - must include colon)
-      # Add more mount lines below if you need additional mounts (uncomment and add CUSTOM_DRIVE_MOUNT_3, etc.)
-      # Leave empty if not using that mount slot (will use placeholder that won't consume storage)
-      # Backend will reject placeholder paths if users try to use them
-      - ${CUSTOM_DRIVE_MOUNT_1:-/docker_unused_placeholder_1:/docker_unused_placeholder_1}
-      - ${CUSTOM_DRIVE_MOUNT_2:-/docker_unused_placeholder_2:/docker_unused_placeholder_2}
-      # Uncomment and add more mounts as needed:
-      # - ${CUSTOM_DRIVE_MOUNT_3:-/docker_unused_placeholder_3:/docker_unused_placeholder_3}
-      # - ${CUSTOM_DRIVE_MOUNT_4:-/docker_unused_placeholder_4:/docker_unused_placeholder_4}
-      # - ${CUSTOM_DRIVE_MOUNT_5:-/docker_unused_placeholder_5:/docker_unused_placeholder_5}
+      # Note: Custom drives are now handled by the drive-agent service
+      # No bind mounts needed here - the app communicates with the agent via API
+    extra_hosts:
+      # Map host.docker.internal to host gateway for agent communication
+      # This allows containers to reach services running on the host
+      - "host.docker.internal:host-gateway"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
       interval: 30s
@@ -115,22 +114,20 @@ services:
     volumes:
       # Mount same volumes as app service for consistency
       - ./uploads:/app/uploads
-      # Custom drive mounts: Set CUSTOM_DRIVE_MOUNT_1, CUSTOM_DRIVE_MOUNT_2, etc. in .env
-      # Format: CUSTOM_DRIVE_MOUNT_N=/host/path:/container/path (REQUIRED - must include colon)
-      # Add more mount lines below if you need additional mounts (uncomment and add CUSTOM_DRIVE_MOUNT_3, etc.)
-      # Leave empty if not using that mount slot (will use placeholder that won't consume storage)
-      # Backend will reject placeholder paths if users try to use them
-      - ${CUSTOM_DRIVE_MOUNT_1:-/docker_unused_placeholder_1:/docker_unused_placeholder_1}
-      - ${CUSTOM_DRIVE_MOUNT_2:-/docker_unused_placeholder_2:/docker_unused_placeholder_2}
-      # Uncomment and add more mounts as needed:
-      # - ${CUSTOM_DRIVE_MOUNT_3:-/docker_unused_placeholder_3:/docker_unused_placeholder_3}
-      # - ${CUSTOM_DRIVE_MOUNT_4:-/docker_unused_placeholder_4:/docker_unused_placeholder_4}
-      # - ${CUSTOM_DRIVE_MOUNT_5:-/docker_unused_placeholder_5:/docker_unused_placeholder_5}
+      # Note: Custom drives are now handled by the drive-agent service
+    extra_hosts:
+      # Map host.docker.internal to host gateway for agent communication
+      - "host.docker.internal:host-gateway"
     command: node backend/audit-worker.js
     depends_on:
       - app
     networks:
       - tma-cloud-network
+
+  # Note: Drive Agent runs on the host (not in Docker)
+  # The agent is a standalone Go binary that should be run on the host system
+  # It provides HTTP API access to custom drive paths without requiring bind mounts
+  # See agent/README.md for setup instructions
 
 volumes:
   redis-data:

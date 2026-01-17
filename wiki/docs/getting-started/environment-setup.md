@@ -58,15 +58,37 @@ Environment variable reference for TMA Cloud.
 
 **Note:** Storage limits are configured per-user in Settings (admin only). Default limit uses actual available disk space. Custom drive settings override per-user (configured in Settings).
 
-## Custom Drive (Docker Only)
+**File Operations:**
 
-| Variable               | Required | Description                                            |
-| ---------------------- | -------- | ------------------------------------------------------ |
-| `CUSTOM_DRIVE_MOUNT_N` | No       | Host:Container path mapping (e.g., `/host:/container`) |
+- All file operations use streaming for large files
+- No memory limits for file size
+- Custom drives use agent API in Docker environments
 
-**Format:** `/host/path:/container/path` (must include colon)
+## Custom Drive Agent (Docker Only)
 
-**Note:** Custom drive is configured per-user in Settings page (admin-only).
+| Variable              | Required | Description                                          |
+| --------------------- | -------- | ---------------------------------------------------- |
+| `AGENT_WEBHOOK_TOKEN` | No       | Token for agent webhook authentication (recommended) |
+
+**Agent Configuration:**
+
+Agent settings (URL and token) are configured in Settings → Custom Drive Management (first user only), not via environment variables.
+
+**Setup Steps:**
+
+1. Install and configure agent on Docker host:
+
+   ```bash
+   tma-agent add --path /mnt/storage
+   tma-agent token --generate
+   tma-agent start
+   ```
+
+2. Configure agent URL and token in Settings → Custom Drive Management
+
+3. Set `AGENT_WEBHOOK_TOKEN` in `.env` to secure webhook endpoint (optional but recommended)
+
+**Note:** Custom drive paths are configured per-user in Settings → Users (admin-only).
 
 ## Logging Configuration
 

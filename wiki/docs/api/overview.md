@@ -57,6 +57,7 @@ Most endpoints require JWT token sent as httpOnly cookie. Rate limiting: 5 attem
 - `403` - Forbidden
 - `404` - Not Found
 - `500` - Server Error
+- `503` - Service Unavailable (agent offline)
 
 ## Related Topics
 

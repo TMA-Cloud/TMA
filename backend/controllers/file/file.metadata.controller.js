@@ -21,11 +21,19 @@ const { validateSortBy, validateSortOrder, validateBoolean } = require('../../ut
 const { buildShareLink } = require('../../utils/shareLink');
 const { publishFileEventsBatch, EventTypes } = require('../../services/fileEvents');
 const { validateFileIds } = require('../../utils/controllerHelpers');
+const { checkAgentForUser } = require('../../utils/agentCheck');
+const { AGENT_OFFLINE_MESSAGE, AGENT_OFFLINE_STATUS } = require('../../utils/agentConstants');
 
 /**
  * Star or unstar files/folders
  */
 async function starFilesController(req, res) {
+  // Check if agent is required - STRICT: block if agent is not confirmed online
+  const agentCheck = await checkAgentForUser(req.userId);
+  if (agentCheck.required && !agentCheck.online) {
+    return sendError(res, AGENT_OFFLINE_STATUS, AGENT_OFFLINE_MESSAGE);
+  }
+
   const { starred } = req.body;
   const { valid, ids: validatedIds, error } = validateFileIds(req);
   if (!valid) {
@@ -94,6 +102,12 @@ async function listStarred(req, res) {
  * Share or unshare files/folders
  */
 async function shareFilesController(req, res) {
+  // Check if agent is required - STRICT: block if agent is not confirmed online
+  const agentCheck = await checkAgentForUser(req.userId);
+  if (agentCheck.required && !agentCheck.online) {
+    return sendError(res, AGENT_OFFLINE_STATUS, AGENT_OFFLINE_MESSAGE);
+  }
+
   const { shared } = req.body;
   const { valid, ids: validatedIds, error } = validateFileIds(req);
   if (!valid) {

@@ -1,4 +1,6 @@
 const { validateAndResolveFile, streamEncryptedFile, streamUnencryptedFile } = require('../../utils/fileDownload');
+const { isAgentOfflineError } = require('../../utils/agentErrorDetection');
+const { AGENT_OFFLINE_MESSAGE, AGENT_OFFLINE_STATUS } = require('../../utils/agentConstants');
 const { sendError } = require('../../utils/response');
 const { createZipArchive } = require('../../utils/zipArchive');
 const { getFileByToken, isFileShared, getSharedTree } = require('../../models/share.model');
@@ -34,7 +36,15 @@ async function downloadFolderZip(req, res) {
     logger.info({ shareToken: token, folderId: file.id }, 'Share folder downloaded as ZIP');
 
     const entries = await getSharedTree(token, file.id);
-    createZipArchive(res, file.name, entries, file.id, file.name);
+    try {
+      await createZipArchive(res, file.name, entries, file.id, file.name);
+    } catch (err) {
+      // Check if error is agent-related
+      if (isAgentOfflineError(err)) {
+        return sendError(res, AGENT_OFFLINE_STATUS, AGENT_OFFLINE_MESSAGE);
+      }
+      throw err;
+    }
   } catch (err) {
     sendError(res, 500, 'Server error', err);
   }
@@ -90,7 +100,15 @@ async function downloadSharedItem(req, res) {
     }
     // folder: create zip of shared contents under this folder
     const entries = await getSharedTree(token, fileId);
-    createZipArchive(res, file.name, entries, file.id, file.name);
+    try {
+      await createZipArchive(res, file.name, entries, file.id, file.name);
+    } catch (err) {
+      // Check if error is agent-related
+      if (isAgentOfflineError(err)) {
+        return sendError(res, AGENT_OFFLINE_STATUS, AGENT_OFFLINE_MESSAGE);
+      }
+      throw err;
+    }
   } catch (err) {
     sendError(res, 500, 'Server error', err);
   }

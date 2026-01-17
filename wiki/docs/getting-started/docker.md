@@ -67,24 +67,9 @@ chown -R 1001:1001 uploads  # Container runs as UID 1001
 
 ### Custom Drive with Docker
 
-1. Add `CUSTOM_DRIVE_MOUNT_N` to `.env`:
+Custom drives require the agent running on the host system.
 
-   ```bash
-   CUSTOM_DRIVE_MOUNT_1=/host/path:/container/path
-   CUSTOM_DRIVE_MOUNT_2=/mnt/data:/data/storage
-   ```
-
-2. Uncomment/add mount lines in `docker-compose.yml` if needed.
-
-3. Configure per-user in Settings page (admin-only).
-
-**Format:** `/host/path:/container/path` (must include colon)
-
-**Permissions:**
-
-```bash
-chown -R 1001:1001 /host/path
-```
+See [Agent Setup](agent-setup.md) for installation and configuration.
 
 ## Building Images
 

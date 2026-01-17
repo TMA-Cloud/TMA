@@ -5,6 +5,10 @@ import { useAuth } from "../../contexts/AuthContext";
 import { ONLYOFFICE_EXTS, getExt } from "../../utils/fileUtils";
 import { getErrorMessage, isAuthError } from "../../utils/errorUtils";
 import { useToast } from "../../hooks/useToast";
+import {
+  isAgentOfflineError,
+  isAgentOfflineResponse,
+} from "../../utils/agentErrorHandler";
 
 interface DocsAPIEditor {
   destroyEditor?: () => void;
@@ -52,6 +56,7 @@ export const DocumentViewerModal: React.FC = () => {
   const documentViewerFile = appContext.documentViewerFile ?? null;
   const setDocumentViewerFile = appContext.setDocumentViewerFile;
   const refreshOnlyOfficeConfig = appContext.refreshOnlyOfficeConfig;
+  const setAgentOnline = appContext.setAgentOnline;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -123,19 +128,42 @@ export const DocumentViewerModal: React.FC = () => {
           }
 
           if (res.status === 400) {
-            // MIME type validation failed - show toast and close modal
+            // Check if it's an agent offline error
             try {
               const errorData = await res.json();
-              showToast(
+              const errorMessage =
                 errorData.message ||
-                  "Cannot open file. File type mismatch detected.",
-                "error",
-              );
+                errorData.error ||
+                "Cannot open file. File type mismatch detected.";
+
+              // Check if this is an agent offline error
+              if (isAgentOfflineResponse(res.status, errorMessage)) {
+                setAgentOnline(false);
+                showToast(
+                  "Agent is offline. Please refresh agent connection in Settings.",
+                  "error",
+                );
+              } else {
+                // MIME type validation failed - show toast and close modal
+                showToast(errorMessage, "error");
+              }
             } catch {
-              showToast(
-                "Cannot open file. File type mismatch detected.",
-                "error",
-              );
+              // If JSON parsing fails, check status text
+              const errorMessage =
+                res.statusText ||
+                "Cannot open file. File type mismatch detected.";
+              if (isAgentOfflineResponse(res.status, errorMessage)) {
+                setAgentOnline(false);
+                showToast(
+                  "Agent is offline. Please refresh agent connection in Settings.",
+                  "error",
+                );
+              } else {
+                showToast(
+                  "Cannot open file. File type mismatch detected.",
+                  "error",
+                );
+              }
             }
             setDocumentViewerFile?.(null);
             return;
@@ -194,7 +222,18 @@ export const DocumentViewerModal: React.FC = () => {
           return;
         }
 
+        // Check if it's an agent offline error
         const errorMessage = getErrorMessage(e, "Failed to open document");
+        if (isAgentOfflineError(e) || isAgentOfflineResponse(0, errorMessage)) {
+          setAgentOnline(false);
+          showToast(
+            "Agent is offline. Please refresh agent connection in Settings.",
+            "error",
+          );
+          setDocumentViewerFile?.(null);
+          return;
+        }
+
         setError(errorMessage);
       } finally {
         // Only update loading state if this request wasn't aborted
@@ -223,6 +262,7 @@ export const DocumentViewerModal: React.FC = () => {
     user,
     setDocumentViewerFile,
     showToast,
+    setAgentOnline,
   ]);
 
   // Cancel any in-flight requests when user logs out

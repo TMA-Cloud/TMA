@@ -96,6 +96,7 @@ backend/
 - **Services:** Background processes (cleanup, scanning, audit logging)
 - **Caching:** Redis-based caching with automatic invalidation
 - **Real-Time Events:** Redis pub/sub + SSE for file event broadcasting
+- **Agent Integration:** Standalone Go agent for custom drive operations (Docker)
 
 ## Frontend Structure
 
@@ -143,8 +144,26 @@ frontend/src/
 │(FormData)│                                └────┬─────┘
 └──────────┘                                     │
                                                  │ Validate & save file
+                                                 │ Stream to storage
                                                  │ Create database record
                                                  │ Update cache
+                                                 │
+┌─────────┐     Response with file info          │
+│ Browser │<─────────────────────────────────────┘
+└─────────┘
+```
+
+**Custom Drive Flow (Docker):**
+
+```bash
+┌──────────┐     POST /api/files/upload     ┌──────────┐     Stream     ┌──────────┐
+│ Browser  │ ─────────────────────────────> │ Backend  │ ────────────>  │  Agent   │
+│(FormData)│                                └────┬─────┘                └──────────┘
+└──────────┘                                     │                            │
+                                                 │                            │ Write to disk
+                                                 │                            │
+                                                 │<───────────────────────────┘
+                                                 │ Response
                                                  │
 ┌─────────┐     Response with file info          │
 │ Browser │<─────────────────────────────────────┘

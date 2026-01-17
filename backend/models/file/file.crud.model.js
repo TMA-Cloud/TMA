@@ -23,6 +23,13 @@ const {
   getUniqueFolderPath,
 } = require('./file.utils.model');
 const { encryptFile } = require('../../utils/fileEncryption');
+const {
+  agentWriteFileStream,
+  agentMkdir,
+  agentPathExists,
+  agentDeletePath,
+  agentRenamePath,
+} = require('../../utils/agentFileOperations');
 
 /**
  * Get files in a directory
@@ -79,11 +86,11 @@ async function createFolder(name, parentId = null, userId) {
       // Build the new folder path
       const folderPath = parentPath ? path.join(parentPath, name) : path.join(customDrive.path, name);
 
-      // Handle duplicate folder names using utility function
-      finalPath = await getUniqueFolderPath(folderPath);
+      // Handle duplicate folder names using utility function (via agent)
+      finalPath = await getUniqueFolderPath(folderPath, true); // Use agent API
 
-      // Create the folder on disk
-      await fs.promises.mkdir(finalPath, { recursive: true });
+      // Create the folder via agent
+      await agentMkdir(finalPath);
 
       // Get the actual folder name (in case it was changed due to duplicates)
       const actualName = path.basename(finalPath);
@@ -103,17 +110,20 @@ async function createFolder(name, parentId = null, userId) {
 
       return result.rows[0];
     } catch (error) {
-      // If custom drive creation fails, clean up orphaned folder on disk
+      // If custom drive creation fails, clean up orphaned folder via agent
       logger.error('[File] Error creating folder in custom drive:', error);
       try {
-        // Clean up the folder that was created on disk but not in database
+        // Clean up the folder that was created via agent but not in database
         if (finalPath) {
-          await fs.promises.rmdir(finalPath).catch(() => {
+          await agentDeletePath(finalPath).catch(() => {
             // Ignore cleanup errors (folder might not be empty or already deleted)
           });
         }
       } catch (cleanupError) {
-        logger.warn({ finalPath, error: cleanupError.message }, 'Failed to clean up orphaned custom drive folder');
+        logger.warn(
+          { finalPath, error: cleanupError.message },
+          'Failed to clean up orphaned custom drive folder via agent'
+        );
       }
       // Re-throw the error instead of falling back to avoid duplicate key errors
       throw error;
@@ -152,24 +162,26 @@ async function createFile(name, size, mimeType, tempPath, parentId = null, userI
       // Get the target folder path
       const folderPath = await getFolderPath(parentId, userId);
 
-      // Ensure the target folder exists
+      // Ensure the target folder exists via agent
       const targetDir = folderPath || customDrive.path;
-      try {
-        await fs.promises.access(targetDir);
-      } catch {
-        // Folder doesn't exist, create it
-        await fs.promises.mkdir(targetDir, { recursive: true });
+      const dirExists = await agentPathExists(targetDir);
+      if (!dirExists) {
+        // Folder doesn't exist, create it via agent
+        await agentMkdir(targetDir);
       }
 
       // Build the destination path with original filename
       const destPath = path.join(targetDir, name);
 
-      // Handle duplicate filenames
-      finalPath = await getUniqueFilename(destPath, targetDir);
+      // Handle duplicate filenames (check via agent)
+      finalPath = await getUniqueFilename(destPath, targetDir, true); // Use agent API
 
-      // Rename temp file to final location (same filesystem since multer uploaded directly to custom drive)
-      await fs.promises.rename(tempPath, finalPath);
-      renameSucceeded = true; // Mark that rename succeeded
+      // Stream temp file to final location via agent (memory efficient for large files)
+      const readStream = fs.createReadStream(tempPath);
+      await agentWriteFileStream(finalPath, readStream);
+      // Clean up temp file
+      await fs.promises.unlink(tempPath);
+      renameSucceeded = true; // Mark that write succeeded
 
       // Get the actual filename (in case it was changed due to duplicates)
       const actualName = path.basename(finalPath);
@@ -191,14 +203,16 @@ async function createFile(name, size, mimeType, tempPath, parentId = null, userI
     } catch (error) {
       // If custom drive save fails, log and throw (don't fall back since file is already in custom drive)
       logger.error('[File] Error saving to custom drive:', error);
-      // Clean up the orphaned file based on whether rename succeeded
+      // Clean up the orphaned file based on whether write succeeded
       if (renameSucceeded && finalPath) {
-        await safeUnlink(finalPath, { logErrors: true });
-      } else if (finalPath) {
-        // Try finalPath first, then tempPath
-        await safeUnlink(finalPath);
-        await safeUnlink(tempPath);
+        // Delete via agent
+        try {
+          await agentDeletePath(finalPath);
+        } catch (cleanupError) {
+          logger.warn({ finalPath, error: cleanupError.message }, 'Failed to clean up orphaned file via agent');
+        }
       } else {
+        // Clean up temp file
         await safeUnlink(tempPath, { logErrors: true });
       }
       throw error;
@@ -282,36 +296,34 @@ async function renameFile(id, name, userId) {
 
   // For custom drive files/folders, also rename on filesystem
   if (oldFile.path && path.isAbsolute(oldFile.path)) {
-    try {
-      const oldPath = path.resolve(oldFile.path);
-      const newPath = path.join(path.dirname(oldPath), name);
+    const oldPath = path.resolve(oldFile.path);
+    const newPath = path.join(path.dirname(oldPath), name);
 
-      // Check if target already exists
-      try {
-        await fs.promises.access(newPath);
-        throw new Error('File or folder with this name already exists');
-      } catch (err) {
-        if (err.code === 'ENOENT') {
-          await fs.promises.rename(oldPath, newPath);
-          await pool.query('UPDATE files SET name = $1, path = $2, modified = NOW() WHERE id = $3 AND user_id = $4', [
-            name,
-            path.resolve(newPath),
-            id,
-            userId,
-          ]);
-        } else {
-          throw err;
-        }
-      }
-    } catch (error) {
-      logger.error({ fileId: id, newName: name, error: error.message }, 'Error renaming file on filesystem');
-      // If filesystem rename fails, still update database name
-      await pool.query('UPDATE files SET name = $1, modified = NOW() WHERE id = $2 AND user_id = $3', [
-        name,
-        id,
-        userId,
-      ]);
+    // Check if target already exists via agent
+    const { agentPathExists, agentStatPath } = require('../../utils/agentFileOperations');
+    const targetExists = await agentPathExists(newPath);
+    if (targetExists) {
+      throw new Error('File or folder with this name already exists');
     }
+
+    // Rename via agent using OS-level rename (instant, even for large files)
+    // STRICT: If agent operation fails, do NOT update database
+    const stat = await agentStatPath(oldPath);
+    if (stat.isDir) {
+      // For folders, use rename endpoint (OS-level rename works for directories too)
+      await agentRenamePath(oldPath, newPath);
+    } else {
+      // For files: use OS-level rename (instant, no copy needed)
+      await agentRenamePath(oldPath, newPath);
+    }
+
+    // Only update database if agent operations succeeded
+    await pool.query('UPDATE files SET name = $1, path = $2, modified = NOW() WHERE id = $3 AND user_id = $4', [
+      name,
+      path.resolve(newPath),
+      id,
+      userId,
+    ]);
   } else {
     await pool.query('UPDATE files SET name = $1, modified = NOW() WHERE id = $2 AND user_id = $3', [name, id, userId]);
   }

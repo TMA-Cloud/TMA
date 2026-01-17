@@ -6,6 +6,8 @@ const {
   getAllUsersBasic,
   getOnlyOfficeSettings,
   setOnlyOfficeSettings,
+  getAgentSettings,
+  setAgentSettings,
   setUserStorageLimit,
   getUserStorageUsage,
   getUserStorageLimit,
@@ -14,6 +16,7 @@ const { sendError, sendSuccess } = require('../../utils/response');
 const { logger } = require('../../config/logger');
 const { logAuditEvent } = require('../../services/auditLogger');
 const { invalidateOnlyOfficeOriginCache } = require('../../utils/onlyofficeOriginCache');
+const { getAgentPaths: fetchAgentPaths, checkAgentStatus, resetAgentStatus } = require('../../utils/agentClient');
 
 /**
  * Get signup status and admin information
@@ -341,6 +344,126 @@ async function updateOnlyOfficeConfig(req, res) {
 }
 
 /**
+ * Get agent settings (admin only)
+ */
+async function getAgentConfig(req, res) {
+  try {
+    // Verify user is first user before proceeding
+    const userIsFirst = await isFirstUser(req.userId);
+    if (!userIsFirst) {
+      await logAuditEvent(
+        'admin.settings.read',
+        {
+          status: 'failure',
+          resourceType: 'settings',
+          metadata: { action: 'get_agent_config', reason: 'unauthorized' },
+        },
+        req
+      );
+      logger.warn({ userId: req.userId }, 'Unauthorized agent config read attempt');
+      return sendError(res, 403, 'Only the first user can view agent settings');
+    }
+
+    const settings = await getAgentSettings();
+
+    sendSuccess(res, {
+      tokenSet: settings.token !== null && settings.token !== undefined,
+      url: settings.url,
+    });
+  } catch (err) {
+    logger.error({ err }, 'Failed to get agent settings');
+    sendError(res, 500, 'Server error', err);
+  }
+}
+
+/**
+ * Update agent settings (admin only)
+ */
+async function updateAgentConfig(req, res) {
+  try {
+    // Verify user is first user before proceeding
+    const userIsFirst = await isFirstUser(req.userId);
+    if (!userIsFirst) {
+      await logAuditEvent(
+        'admin.settings.update',
+        {
+          status: 'failure',
+          resourceType: 'settings',
+          metadata: { action: 'update_agent_config', reason: 'unauthorized' },
+        },
+        req
+      );
+      logger.warn({ userId: req.userId }, 'Unauthorized agent config update attempt');
+      return sendError(res, 403, 'Only the first user can configure agent settings');
+    }
+
+    const { token, url } = req.body;
+
+    // Normalize undefined to null for consistent validation
+    const normalizedToken = token !== undefined ? token : null;
+    const normalizedUrl = url !== undefined ? url : null;
+
+    // Validate inputs (allow null to clear settings)
+    if (normalizedToken !== null && (typeof normalizedToken !== 'string' || normalizedToken.trim().length === 0)) {
+      return sendError(res, 400, 'Agent token must be a non-empty string or null');
+    }
+
+    if (normalizedUrl !== null && (typeof normalizedUrl !== 'string' || normalizedUrl.trim().length === 0)) {
+      return sendError(res, 400, 'Agent URL must be a non-empty string or null');
+    }
+
+    // Validate URL format if provided
+    if (normalizedUrl !== null) {
+      try {
+        new URL(normalizedUrl);
+      } catch {
+        return sendError(res, 400, 'Invalid URL format');
+      }
+    }
+
+    // setAgentSettings will do additional security checks internally and invalidate cache
+    await setAgentSettings(normalizedUrl, normalizedToken, req.userId);
+
+    // Log admin action
+    await logAuditEvent(
+      'admin.settings.update',
+      {
+        status: 'success',
+        resourceType: 'settings',
+        metadata: {
+          setting: 'agent_config',
+          hasToken: normalizedToken !== null && normalizedToken !== undefined,
+          url: normalizedUrl || null,
+        },
+      },
+      req
+    );
+    logger.info({ userId: req.userId, hasToken: !!normalizedToken, url: normalizedUrl }, 'Agent settings updated');
+
+    const updatedSettings = await getAgentSettings();
+    sendSuccess(res, {
+      tokenSet: updatedSettings.token !== null && updatedSettings.token !== undefined,
+      url: updatedSettings.url,
+    });
+  } catch (err) {
+    if (err.message === 'Only the first user can configure agent settings') {
+      await logAuditEvent(
+        'admin.settings.update',
+        {
+          status: 'failure',
+          resourceType: 'settings',
+          metadata: { action: 'update_agent_config', reason: 'unauthorized' },
+        },
+        req
+      );
+      return sendError(res, 403, err.message);
+    }
+    logger.error({ err }, 'Failed to update agent settings');
+    sendError(res, 500, 'Server error', err);
+  }
+}
+
+/**
  * Update user storage limit (admin only)
  */
 async function updateUserStorageLimit(req, res) {
@@ -439,6 +562,73 @@ async function updateUserStorageLimit(req, res) {
   }
 }
 
+/**
+ * Check agent status (admin only)
+ */
+async function checkAgentStatusEndpoint(req, res) {
+  try {
+    const userIsFirst = await isFirstUser(req.userId);
+    if (!userIsFirst) {
+      return sendError(res, 403, 'Only the first user can check agent status');
+    }
+
+    const isOnline = await checkAgentStatus();
+    sendSuccess(res, { isOnline });
+  } catch (_err) {
+    sendSuccess(res, { isOnline: false });
+  }
+}
+
+/**
+ * Reset agent status cache (admin only) - called when user clicks refresh
+ */
+async function resetAgentStatusEndpoint(req, res) {
+  try {
+    const userIsFirst = await isFirstUser(req.userId);
+    if (!userIsFirst) {
+      return sendError(res, 403, 'Only the first user can reset agent status');
+    }
+
+    resetAgentStatus();
+    const isOnline = await checkAgentStatus();
+    sendSuccess(res, { isOnline });
+  } catch (_err) {
+    sendSuccess(res, { isOnline: false });
+  }
+}
+
+/**
+ * Get agent paths (admin only)
+ */
+async function getAgentPaths(req, res) {
+  try {
+    // Verify user is first user before proceeding
+    const userIsFirst = await isFirstUser(req.userId);
+    if (!userIsFirst) {
+      await logAuditEvent(
+        'admin.settings.read',
+        {
+          status: 'failure',
+          resourceType: 'settings',
+          metadata: { action: 'get_agent_paths', reason: 'unauthorized' },
+        },
+        req
+      );
+      logger.warn({ userId: req.userId }, 'Unauthorized agent paths read attempt');
+      return sendError(res, 403, 'Only the first user can view agent paths');
+    }
+
+    const paths = await fetchAgentPaths();
+    sendSuccess(res, { paths });
+  } catch (err) {
+    if (err.message === 'Agent URL not configured') {
+      return sendSuccess(res, { paths: [] });
+    }
+    // Don't log errors - just return empty paths
+    sendSuccess(res, { paths: [] });
+  }
+}
+
 module.exports = {
   getSignupStatus,
   toggleSignup,
@@ -446,5 +636,10 @@ module.exports = {
   checkOnlyOfficeConfigured,
   getOnlyOfficeConfig,
   updateOnlyOfficeConfig,
+  getAgentConfig,
+  updateAgentConfig,
+  getAgentPaths,
+  checkAgentStatus: checkAgentStatusEndpoint,
+  resetAgentStatus: resetAgentStatusEndpoint,
   updateUserStorageLimit,
 };

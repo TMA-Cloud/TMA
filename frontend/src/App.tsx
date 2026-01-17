@@ -21,6 +21,7 @@ import { ShareLinkModal } from "./components/fileManager/ShareLinkModal";
 import { LoginForm } from "./components/auth/LoginForm";
 import { SignupForm } from "./components/auth/SignupForm";
 import { MobileAppContent } from "./components/mobile/MobileAppContent";
+import { AgentStatusBanner } from "./components/AgentStatusBanner";
 
 const AppContent: React.FC = () => {
   const {
@@ -29,6 +30,7 @@ const AppContent: React.FC = () => {
     uploadProgress,
     setUploadProgress,
     setIsUploadProgressInteracting,
+    setAgentOnline,
   } = useApp();
   const isMobile = useIsMobile();
 
@@ -74,6 +76,7 @@ const AppContent: React.FC = () => {
         className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 ${!sidebarOpen ? "lg:ml-0" : ""}`}
       >
         <Header />
+        <AgentStatusBanner onStatusChange={setAgentOnline} />
 
         <main className="flex-1 overflow-y-auto">{renderContent()}</main>
       </div>

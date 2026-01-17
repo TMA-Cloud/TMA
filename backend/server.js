@@ -93,6 +93,45 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Agent webhook endpoint (before auth, called by agent for file change notifications)
+app.post('/api/agent/webhook', async (req, res) => {
+  try {
+    const { event, path: filePath, isDir, size, modTime } = req.body;
+
+    if (!event || !filePath) {
+      return res.status(400).json({ error: 'Missing required fields: event, path' });
+    }
+
+    // Verify webhook token if configured
+    const authHeader = req.headers.authorization;
+    const webhookToken = process.env.AGENT_WEBHOOK_TOKEN;
+    if (webhookToken) {
+      const expectedAuth = `Bearer ${webhookToken}`;
+      if (!authHeader || authHeader !== expectedAuth) {
+        logger.warn('Unauthorized webhook request');
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+    }
+
+    // Process file change notification (fire and forget - don't block response)
+    const { handleAgentFileChange } = require('./services/customDriveScanner');
+    handleAgentFileChange({
+      event,
+      path: filePath,
+      isDir: isDir || false,
+      size: size || 0,
+      modTime: modTime ? new Date(modTime) : new Date(),
+    }).catch(err => {
+      logger.error('Error processing agent webhook (async):', err);
+    });
+
+    res.json({ status: 'ok' });
+  } catch (error) {
+    logger.error('Error processing agent webhook:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Metrics endpoint (protected by IP whitelist in production)
 app.get(
   '/metrics',

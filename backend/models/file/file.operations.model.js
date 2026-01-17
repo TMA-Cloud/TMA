@@ -62,16 +62,24 @@ async function copyEntry(id, parentId, userId, client = null) {
         const folderPath = await getFolderPath(parentId, userId);
         const destDir = folderPath || customDrive.path;
 
-        // Ensure destination directory exists
-        try {
-          await fs.promises.access(destDir);
-        } catch {
-          await fs.promises.mkdir(destDir, { recursive: true });
+        // Ensure destination directory exists via agent
+        const {
+          agentPathExists,
+          agentMkdir,
+          agentReadFileStream,
+          agentWriteFileStream,
+        } = require('../../utils/agentFileOperations');
+        const dirExists = await agentPathExists(destDir);
+        if (!dirExists) {
+          await agentMkdir(destDir);
         }
 
-        // Handle duplicate filenames using utility function
-        const destPath = await getUniqueFilename(path.join(destDir, file.name), destDir);
-        await fs.promises.copyFile(sourcePath, destPath);
+        // Handle duplicate filenames using utility function (via agent)
+        const destPath = await getUniqueFilename(path.join(destDir, file.name), destDir, true); // Use agent API
+
+        // Stream source file to destination via agent (memory efficient for large files)
+        const sourceStream = agentReadFileStream(sourcePath);
+        await agentWriteFileStream(destPath, sourceStream);
         newPath = path.resolve(destPath);
 
         // Get the actual filename (in case it was changed due to duplicates)
@@ -93,12 +101,16 @@ async function copyEntry(id, parentId, userId, client = null) {
           ]
         );
       } catch (error) {
-        // If custom drive copy fails, clean up orphaned file on disk
+        // If custom drive copy fails, clean up orphaned file via agent
         logger.error('[File] Error copying file to custom drive:', error);
-        // Clean up the file that was copied to disk but not in database
+        // Clean up the file that was copied via agent but not in database
         if (newPath && path.isAbsolute(newPath)) {
-          const { safeUnlink } = require('../../utils/fileCleanup');
-          await safeUnlink(newPath, { logErrors: true });
+          const { agentDeletePath } = require('../../utils/agentFileOperations');
+          try {
+            await agentDeletePath(newPath);
+          } catch (cleanupError) {
+            logger.warn({ newPath, error: cleanupError.message }, 'Failed to clean up orphaned file via agent');
+          }
         }
         // Re-throw the error instead of falling back to avoid violating custom drive invariant
         // Custom drive users must have all files in their custom drive path
@@ -152,9 +164,10 @@ async function copyEntry(id, parentId, userId, client = null) {
         const parentPath = await getFolderPath(parentId, userId);
         const folderPath = parentPath ? path.join(parentPath, file.name) : path.join(customDrive.path, file.name);
 
-        // Handle duplicate folder names using utility function
-        finalPath = await getUniqueFolderPath(folderPath);
-        await fs.promises.mkdir(finalPath, { recursive: true });
+        // Handle duplicate folder names using utility function (via agent)
+        finalPath = await getUniqueFolderPath(folderPath, true); // Use agent API
+        const { agentMkdir } = require('../../utils/agentFileOperations');
+        await agentMkdir(finalPath);
         const actualName = path.basename(finalPath);
         newPath = path.resolve(finalPath);
 
@@ -174,19 +187,20 @@ async function copyEntry(id, parentId, userId, client = null) {
           ]
         );
       } catch (error) {
-        // If custom drive folder creation fails, clean up orphaned folder on disk
+        // If custom drive folder creation fails, clean up orphaned folder via agent
         logger.error('[File] Error creating folder in custom drive during copy:', error);
         try {
-          // Clean up the folder that was created on disk but not in database
+          // Clean up the folder that was created via agent but not in database
           if (finalPath) {
-            await fs.promises.rmdir(finalPath).catch(() => {
+            const { agentDeletePath } = require('../../utils/agentFileOperations');
+            await agentDeletePath(finalPath).catch(() => {
               // Ignore cleanup errors (folder might not be empty or already deleted)
             });
           }
         } catch (cleanupError) {
           logger.warn(
             { finalPath, error: cleanupError.message },
-            'Failed to clean up orphaned custom drive folder during copy'
+            'Failed to clean up orphaned custom drive folder during copy via agent'
           );
         }
         // Re-throw the error instead of falling back to avoid duplicate key errors

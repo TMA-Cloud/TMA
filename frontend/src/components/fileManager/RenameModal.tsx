@@ -1,9 +1,11 @@
 import React, { useRef } from "react";
 import { Modal } from "../ui/Modal";
 import { useApp } from "../../contexts/AppContext";
+import { useToast } from "../../hooks/useToast";
 
 export const RenameModal: React.FC = () => {
-  const { renameTarget, setRenameTarget, renameFile } = useApp();
+  const { renameTarget, setRenameTarget, renameFile, agentOnline } = useApp();
+  const { showToast } = useToast();
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleClose = () => {
@@ -14,13 +16,21 @@ export const RenameModal: React.FC = () => {
     if (!renameTarget) return;
     const value = inputRef.current?.value ?? "";
     if (!value.trim()) return;
+    if (agentOnline === false) {
+      showToast(
+        "Agent is offline. Please refresh agent connection in Settings.",
+        "error",
+      );
+      handleClose();
+      return;
+    }
     try {
       await renameFile(renameTarget.id, value.trim());
       handleClose();
     } catch {
-      // Error handled by API function
-      // Error is handled by the API function, but we should still show user feedback
-      // The error will be thrown and can be caught by the caller if needed
+      // Error already handled by renameFileApi (toast shown)
+      // Close modal on any error
+      handleClose();
     }
   };
 

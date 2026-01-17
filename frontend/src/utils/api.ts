@@ -337,6 +337,53 @@ export async function updateOnlyOfficeConfig(
 }
 
 /**
+ * Get agent configuration (admin only)
+ */
+export async function getAgentConfig(signal?: AbortSignal): Promise<{
+  tokenSet: boolean;
+  url: string | null;
+}> {
+  return await apiGet<{ tokenSet: boolean; url: string | null }>(
+    "/api/user/agent-config",
+    { signal },
+  );
+}
+
+/**
+ * Update agent configuration (admin only)
+ */
+export async function updateAgentConfig(
+  token: string | null,
+  url: string | null,
+): Promise<{ tokenSet: boolean; url: string | null }> {
+  return await apiPut<{ tokenSet: boolean; url: string | null }>(
+    "/api/user/agent-config",
+    { token, url },
+  );
+}
+
+/**
+ * Get agent paths (admin only)
+ */
+export async function getAgentPaths(): Promise<{ paths: string[] }> {
+  return await apiGet<{ paths: string[] }>("/api/user/agent-paths");
+}
+
+/**
+ * Check agent status (admin only)
+ */
+export async function checkAgentStatus(): Promise<{ isOnline: boolean }> {
+  return await apiGet<{ isOnline: boolean }>("/api/user/agent-status");
+}
+
+/**
+ * Refresh agent connection (admin only)
+ */
+export async function refreshAgentConnection(): Promise<{ isOnline: boolean }> {
+  return await apiPost<{ isOnline: boolean }>("/api/user/agent-refresh");
+}
+
+/**
  * Logout from all devices by invalidating all tokens
  * This will log out the user from every device/browser
  */
@@ -530,7 +577,20 @@ export async function downloadFile(
   });
 
   if (!response.ok) {
-    throw new Error(`Download failed: ${response.statusText}`);
+    // Extract error message from response
+    let errorMessage = response.statusText;
+    try {
+      const data = await response.json();
+      errorMessage = data.message || data.error || response.statusText;
+    } catch {
+      // If JSON parsing fails, use statusText
+    }
+    const error = new Error(
+      errorMessage || `Download failed: ${response.statusText}`,
+    );
+    // Attach status code to error for agent detection
+    (error as { status?: number }).status = response.status;
+    throw error;
   }
 
   // Get the filename from Content-Disposition header or use fallback

@@ -1,4 +1,5 @@
 import { createContext, useContext } from "react";
+import type { UploadProgressItem } from "../utils/uploadUtils";
 
 export interface FileItem {
   id: string;
@@ -91,22 +92,8 @@ export interface AppContextType {
   searchFiles: (query: string) => Promise<void>;
   isDownloading: boolean;
   downloadFiles: (ids: string[]) => Promise<void>;
-  uploadProgress: Array<{
-    id: string;
-    fileName: string;
-    fileSize: number;
-    progress: number;
-    status: "uploading" | "completed" | "error";
-  }>;
-  setUploadProgress: (
-    progress: Array<{
-      id: string;
-      fileName: string;
-      fileSize: number;
-      progress: number;
-      status: "uploading" | "completed" | "error";
-    }>,
-  ) => void;
+  uploadProgress: UploadProgressItem[];
+  setUploadProgress: (progress: UploadProgressItem[]) => void;
   uploadFileWithProgress: (
     file: File,
     onProgress?: (progress: number) => void,
@@ -115,6 +102,8 @@ export interface AppContextType {
   onlyOfficeConfigured: boolean;
   canConfigureOnlyOffice: boolean;
   refreshOnlyOfficeConfig: () => Promise<void>;
+  agentOnline: boolean | null;
+  setAgentOnline: (online: boolean | null) => void;
 }
 
 export const AppContext = createContext<AppContextType | undefined>(undefined);

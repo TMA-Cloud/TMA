@@ -35,6 +35,20 @@ File system architecture and organization in TMA Cloud.
 - **Star:** Mark as favorite
 - **Share:** Create share links
 
+### Large File Handling
+
+- **Streaming:** Files streamed without loading into memory
+- **Upload:** Temp files streamed directly to destination
+- **Download:** Files streamed from storage to client
+- **ZIP Archives:** Files streamed into archive without buffering
+- **Rename:** OS-level rename for instant operation (custom drives)
+
+### Performance
+
+- Streaming prevents memory exhaustion for large files (>1GB)
+- Rename operations use OS-level rename when available
+- No file size limits imposed by memory constraints
+
 ### Path Management
 
 - Paths stored as full strings

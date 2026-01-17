@@ -74,12 +74,14 @@ Junction table linking share links to files.
 
 Application-wide settings.
 
-| Column           | Type        | Description                         |
-| ---------------- | ----------- | ----------------------------------- |
-| `id`             | TEXT        | Primary key (always 'app_settings') |
-| `signup_enabled` | BOOLEAN     | Default true                        |
-| `first_user_id`  | TEXT        | FK → users.id (immutable)           |
-| `updated_at`     | TIMESTAMPTZ | Default now()                       |
+| Column           | Type        | Description                           |
+| ---------------- | ----------- | ------------------------------------- |
+| `id`             | TEXT        | Primary key (always 'app_settings')   |
+| `signup_enabled` | BOOLEAN     | Default true                          |
+| `first_user_id`  | TEXT        | FK → users.id (immutable)             |
+| `agent_url`      | TEXT        | Agent API URL (nullable)              |
+| `agent_token`    | TEXT        | Agent authentication token (nullable) |
+| `updated_at`     | TIMESTAMPTZ | Default now()                         |
 
 ### `sessions`
 

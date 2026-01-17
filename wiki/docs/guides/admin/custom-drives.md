@@ -17,22 +17,9 @@ Custom drives allow users to store files on external or mounted storage instead 
 
 ## Configuration
 
-### Docker Setup
+### Custom Drive Setup
 
-1. Add `CUSTOM_DRIVE_MOUNT_N` to `.env`:
-
-   ```bash
-   CUSTOM_DRIVE_MOUNT_1=/host/path:/container/path
-   CUSTOM_DRIVE_MOUNT_2=/mnt/data:/data/storage
-   ```
-
-2. Add volume mounts to `docker-compose.yml` if needed
-
-3. Set permissions:
-
-   ```bash
-   chown -R 1001:1001 /host/path
-   ```
+See [Agent Setup](/getting-started/agent-setup) for agent installation and configuration.
 
 ### Per-User Configuration
 
@@ -45,21 +32,12 @@ Custom drives allow users to store files on external or mounted storage instead 
 
 ## Drive Path Format
 
-### Docker Format
+### Path Requirements
 
-```bash
-/host/path:/container/path
-```
-
-- Host path: Path on Docker host
-- Container path: Path inside container
-- Must include colon separator
-
-### Path Validation
-
-- Paths validated before saving
 - Must be absolute paths
-- Must exist and be accessible
+- Must exist and be accessible on the host system
+- Must be within agent-configured paths
+- Paths validated before saving
 
 ## Storage Limits
 
@@ -85,9 +63,18 @@ Custom drives allow users to store files on external or mounted storage instead 
 
 ### Real-Time Synchronization
 
+**Local Environment:**
+
 - File system watcher monitors custom drive directories
 - Detects file additions, changes, and deletions
 - Updates database automatically
+
+**Docker Environment:**
+
+- Agent watches file system on host
+- Sends webhook notifications to backend
+- Backend processes changes and updates database
+
 - Publishes events to frontend via Server-Sent Events (SSE)
 - Frontend updates UI without manual refresh
 
@@ -102,10 +89,18 @@ Custom drives allow users to store files on external or mounted storage instead 
 
 ### Watcher Configuration
 
+**Local Environment:**
+
 - Watches all subdirectories recursively
 - Waits 1 second after file stops changing before processing
 - Handles permission errors gracefully
 - Supports atomic file writes
+
+**Docker Environment:**
+
+- Agent handles file system watching on host
+- Webhook notifications sent to backend
+- No direct file system access from container
 
 ### Ignore Patterns
 

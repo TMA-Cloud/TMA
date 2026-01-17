@@ -6,11 +6,20 @@ const pool = require('../../config/db');
 const { userOperationLock } = require('../../utils/mutex');
 const { publishFileEventsBatch, EventTypes } = require('../../services/fileEvents');
 const { validateFileIds, validateParentId } = require('../../utils/controllerHelpers');
+const { checkAgentForUser } = require('../../utils/agentCheck');
+const { AGENT_OFFLINE_MESSAGE, AGENT_OFFLINE_STATUS } = require('../../utils/agentConstants');
+const { isAgentOfflineError } = require('../../utils/agentErrorDetection');
 
 /**
  * Move files or folders to a different location
  */
 async function moveFilesController(req, res) {
+  // Check if agent is required - STRICT: block if agent is not confirmed online
+  const agentCheck = await checkAgentForUser(req.userId);
+  if (agentCheck.required && !agentCheck.online) {
+    return sendError(res, AGENT_OFFLINE_STATUS, AGENT_OFFLINE_MESSAGE);
+  }
+
   const { valid: idsValid, ids: validatedIds, error: idsError } = validateFileIds(req);
   if (!idsValid) {
     return sendError(res, 400, idsError);
@@ -73,6 +82,11 @@ async function moveFilesController(req, res) {
  * Copy files or folders to a different location
  */
 async function copyFilesController(req, res) {
+  // Check if agent is required - STRICT: block if agent is not confirmed online
+  const agentCheck = await checkAgentForUser(req.userId);
+  if (agentCheck.required && !agentCheck.online) {
+    return sendError(res, AGENT_OFFLINE_STATUS, AGENT_OFFLINE_MESSAGE);
+  }
   const { valid: idsValid, ids: validatedIds, error: idsError } = validateFileIds(req);
   if (!idsValid) {
     return sendError(res, 400, idsError);
@@ -89,9 +103,18 @@ async function copyFilesController(req, res) {
 
   const targetFolderName = await getTargetFolderName(validatedParentId, req.userId);
 
-  await userOperationLock(req.userId, async () => {
-    await copyFiles(validatedIds, validatedParentId, req.userId);
-  });
+  try {
+    await userOperationLock(req.userId, async () => {
+      await copyFiles(validatedIds, validatedParentId, req.userId);
+    });
+  } catch (error) {
+    // Check if error is agent-related
+    if (isAgentOfflineError(error)) {
+      return sendError(res, AGENT_OFFLINE_STATUS, AGENT_OFFLINE_MESSAGE);
+    }
+    // Re-throw other errors to be handled by error middleware
+    throw error;
+  }
 
   // Log file copy with details
   await logAuditEvent(

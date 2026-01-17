@@ -123,15 +123,32 @@ function shouldIgnorePath(filePath, basePath, ignorePatterns) {
 /**
  * Scans a user's custom drive directory and syncs with database
  * Removes database entries for files/folders that no longer exist on disk
+ * IMPORTANT: Uses agent API for Docker compatibility (paths exist on host, not in container)
  */
 async function scanCustomDrive(customDrivePath, userId, ignorePatterns = []) {
   const normalizedPath = path.resolve(customDrivePath);
 
+  // Check if agent is configured - if so, use agent API for all operations
+  const { getAgentSettings } = require('../models/user.model');
+  const agentSettings = await getAgentSettings();
+  const useAgent = agentSettings && agentSettings.url;
+
   try {
-    const stat = await fs.stat(normalizedPath);
-    if (!stat.isDirectory()) {
-      logger.error(`[Custom Drive] Path is not a directory: ${normalizedPath} (user: ${userId})`);
-      return;
+    if (useAgent) {
+      // Use agent API to check if path exists and is a directory
+      const { agentStatPath } = require('../utils/agentFileOperations');
+      const stat = await agentStatPath(normalizedPath);
+      if (!stat.isDir) {
+        logger.error(`[Custom Drive] Path is not a directory: ${normalizedPath} (user: ${userId})`);
+        return;
+      }
+    } else {
+      // Direct filesystem access (non-Docker setup)
+      const stat = await fs.stat(normalizedPath);
+      if (!stat.isDirectory()) {
+        logger.error(`[Custom Drive] Path is not a directory: ${normalizedPath} (user: ${userId})`);
+        return;
+      }
     }
   } catch (error) {
     logger.error(`[Custom Drive] Cannot access directory: ${normalizedPath} (user: ${userId})`, error.message);
@@ -159,8 +176,8 @@ async function scanCustomDrive(customDrivePath, userId, ignorePatterns = []) {
     // Track paths seen during scan
     const seenPaths = new Set();
 
-    // Scan filesystem
-    await scanDirectory(normalizedPath, null, [userId], seenPaths, ignorePatterns, normalizedPath);
+    // Scan filesystem (via agent if configured, otherwise direct access)
+    await scanDirectory(normalizedPath, null, [userId], seenPaths, ignorePatterns, normalizedPath, useAgent);
 
     // Remove database entries for files/folders that no longer exist
     const pathsToRemove = Array.from(dbPathToInfo.keys()).filter(path => !seenPaths.has(path));
@@ -211,10 +228,36 @@ async function scanCustomDrive(customDrivePath, userId, ignorePatterns = []) {
 
 /**
  * Recursively scans a directory and inserts files/folders into the database
+ * @param {boolean} useAgent - If true, use agent API; if false, use direct filesystem access
  */
-async function scanDirectory(dirPath, parentFolderIds, userIds, seenPaths, ignorePatterns = [], basePath = null) {
+async function scanDirectory(
+  dirPath,
+  parentFolderIds,
+  userIds,
+  seenPaths,
+  ignorePatterns = [],
+  basePath = null,
+  useAgent = false
+) {
   try {
-    const entries = await fs.readdir(dirPath, { withFileTypes: true });
+    let entries = [];
+
+    if (useAgent) {
+      // Use agent API to list directory
+      const { agentListDirectory } = require('../utils/agentFileOperations');
+      const listing = await agentListDirectory(dirPath);
+      entries = listing.map(item => ({
+        name: item.Name || item.name,
+        isDirectory: () => item.IsDir || item.isDir || false,
+        isFile: () => !(item.IsDir || item.isDir),
+        path: item.Path || item.path,
+        size: item.Size || item.size || 0,
+        modTime: item.ModTime || item.modTime || item.modified,
+      }));
+    } else {
+      // Direct filesystem access
+      entries = await fs.readdir(dirPath, { withFileTypes: true });
+    }
 
     for (const entry of entries) {
       const entryPath = path.join(dirPath, entry.name);
@@ -228,17 +271,30 @@ async function scanDirectory(dirPath, parentFolderIds, userIds, seenPaths, ignor
       seenPaths.add(normalizedEntryPath);
 
       try {
-        const stats = await fs.stat(entryPath);
+        let stats;
+        let mtime;
+
+        if (useAgent) {
+          // For agent, we already have the info from the listing
+          // Use entry data directly (from agentListDirectory response)
+          const isDir = entry.isDirectory();
+          stats = {
+            isDirectory: () => isDir,
+            isFile: () => !isDir,
+            size: entry.size || 0,
+            mtime: entry.modTime ? new Date(entry.modTime) : new Date(),
+          };
+          mtime = stats.mtime;
+        } else {
+          // Direct filesystem access
+          stats = await fs.stat(entryPath);
+          mtime = stats.mtime;
+        }
+
         const parentIdMap = parentFolderIds || {};
 
-        if (entry.isDirectory()) {
-          const { folderIdsMap } = await batchCreateOrUpdateFolders(
-            entry.name,
-            parentIdMap,
-            userIds,
-            entryPath,
-            stats.mtime
-          );
+        if (stats.isDirectory()) {
+          const { folderIdsMap } = await batchCreateOrUpdateFolders(entry.name, parentIdMap, userIds, entryPath, mtime);
 
           // Convert Map to object for recursive call
           const folderIds = {};
@@ -246,8 +302,8 @@ async function scanDirectory(dirPath, parentFolderIds, userIds, seenPaths, ignor
             folderIds[userId] = folderIdsMap.get(userId);
           }
 
-          await scanDirectory(entryPath, folderIds, userIds, seenPaths, ignorePatterns, basePath);
-        } else if (entry.isFile()) {
+          await scanDirectory(entryPath, folderIds, userIds, seenPaths, ignorePatterns, basePath, useAgent);
+        } else if (stats.isFile()) {
           await batchCreateOrUpdateFiles(
             entry.name,
             stats.size,
@@ -255,7 +311,7 @@ async function scanDirectory(dirPath, parentFolderIds, userIds, seenPaths, ignor
             entryPath,
             parentIdMap,
             userIds,
-            stats.mtime
+            mtime
           );
         }
       } catch (error) {
@@ -457,11 +513,69 @@ function processChange(filePath, userId) {
 }
 
 /**
- * Handles a single file/folder change
+ * Handles file change notification from agent webhook
  */
-async function handleFileChange(filePath, userIds) {
+async function handleAgentFileChange(changeData) {
+  const { event, path: filePath, isDir, size, modTime } = changeData;
+
   try {
-    const stats = await fs.stat(filePath).catch(() => null);
+    const normalizedPath = path.resolve(filePath).toLowerCase();
+
+    // Optimized query: find users whose custom drive path is a prefix of the changed file path
+    const usersResult = await pool.query(
+      `SELECT id, custom_drive_path 
+       FROM users 
+       WHERE custom_drive_enabled = true 
+       AND custom_drive_path IS NOT NULL
+       AND $1 LIKE LOWER(custom_drive_path) || '%'`,
+      [normalizedPath]
+    );
+
+    const userIds = [];
+    for (const user of usersResult.rows) {
+      const userDrivePath = path.resolve(user.custom_drive_path).toLowerCase();
+      const rel = path.relative(userDrivePath, normalizedPath);
+      // Ensure file is within user's drive (not parent directory)
+      if (!rel.startsWith('..') && rel !== normalizedPath) {
+        userIds.push(user.id);
+      }
+    }
+
+    if (userIds.length === 0) {
+      return; // No users watching this path
+    }
+
+    // Use provided stats directly (no need to check agent again)
+    if (event === 'remove') {
+      await handleDeletion(filePath, userIds);
+    } else {
+      await handleFileChange(filePath, userIds, { isDir, size, modTime });
+    }
+  } catch (error) {
+    logger.error(`[Custom Drive] Error handling agent file change ${filePath}:`, error.message);
+  }
+}
+
+/**
+ * Handles a single file/folder change
+ * @param {Object} fileStats - Optional file stats (from agent webhook or direct filesystem)
+ */
+async function handleFileChange(filePath, userIds, fileStats = null) {
+  try {
+    let stats = null;
+
+    // Use provided stats if available (from agent webhook - no need to check agent again)
+    if (fileStats) {
+      stats = {
+        isDirectory: () => fileStats.isDir,
+        isFile: () => !fileStats.isDir,
+        size: fileStats.size || 0,
+        mtime: fileStats.modTime || new Date(),
+      };
+    } else {
+      // Fallback: get stats from filesystem (for non-agent scenarios)
+      stats = await fs.stat(filePath).catch(() => null);
+    }
 
     if (!stats) {
       await handleDeletion(filePath, userIds);
@@ -592,17 +706,50 @@ async function handleDeletion(filePath, userIds) {
 
 /**
  * Starts a file watcher for a specific user's custom drive
+ * IMPORTANT: File watcher (chokidar) won't work in Docker - it requires direct filesystem access
+ * The initial scan will work via agent API, but real-time watching is disabled in Docker
  */
 async function startUserWatcher(userId, customDrivePath, ignorePatterns = []) {
   const normalizedPath = path.resolve(customDrivePath);
 
+  // Check if agent is configured
+  const { getAgentSettings } = require('../models/user.model');
+  const agentSettings = await getAgentSettings();
+  const useAgent = agentSettings && agentSettings.url;
+
   try {
-    await fs.stat(normalizedPath);
+    if (useAgent) {
+      // Validate path via agent
+      const { agentStatPath } = require('../utils/agentFileOperations');
+      await agentStatPath(normalizedPath);
+    } else {
+      // Validate path via direct filesystem access
+      await fs.stat(normalizedPath);
+    }
 
     // Always perform full scan on startup to ensure consistency
     logger.info(`[Custom Drive] User ${userId}: Performing initial scan...`);
     await scanCustomDrive(customDrivePath, userId, ignorePatterns);
     logger.info(`[Custom Drive] User ${userId}: Initial scan complete`);
+
+    // In Docker (when agent is used), use agent-based file watching
+    if (useAgent) {
+      try {
+        // Construct webhook URL for agent notifications
+        const backendUrl =
+          process.env.BACKEND_URL || process.env.API_URL || `http://localhost:${process.env.PORT || 3000}`;
+        const webhookUrl = `${backendUrl}/api/agent/webhook`;
+        const webhookToken = process.env.AGENT_WEBHOOK_TOKEN || null;
+
+        // Register path with agent for file watching
+        const { agentWatchPath } = require('../utils/agentFileOperations');
+        await agentWatchPath(normalizedPath, webhookUrl, webhookToken);
+        logger.info(`[Custom Drive] User ${userId}: Registered path with agent for file watching: ${normalizedPath}`);
+      } catch (error) {
+        logger.error(`[Custom Drive] User ${userId}: Failed to register path with agent: ${error.message}`);
+      }
+      return; // Agent handles watching, no need for chokidar
+    }
 
     // Build ignore function from user-defined patterns
     const ignoreFunction = buildIgnoreFunction(ignorePatterns, normalizedPath);
@@ -709,11 +856,30 @@ async function startCustomDriveScanner() {
 /**
  * Stops a specific user's file system watcher
  */
-function stopUserWatcher(userId) {
+async function stopUserWatcher(userId) {
   const watcher = watchers.get(userId);
   if (watcher) {
     watcher.close();
     watchers.delete(userId);
+  }
+
+  // Unwatch from agent if configured
+  try {
+    const { getAgentSettings } = require('../models/user.model');
+    const { getUserCustomDriveSettings } = require('../models/user.model');
+    const agentSettings = await getAgentSettings();
+    const useAgent = agentSettings && agentSettings.url;
+
+    if (useAgent) {
+      const settings = await getUserCustomDriveSettings(userId);
+      if (settings && settings.path) {
+        const { agentUnwatchPath } = require('../utils/agentFileOperations');
+        await agentUnwatchPath(path.resolve(settings.path));
+        logger.info(`[Custom Drive] User ${userId}: Unregistered path from agent: ${settings.path}`);
+      }
+    }
+  } catch (error) {
+    logger.error(`[Custom Drive] Error unwatching from agent for user ${userId}:`, error.message);
   }
 
   const debounced = debouncedProcessors.get(userId);
@@ -753,7 +919,7 @@ function stopCustomDriveScanner() {
  * Restart watcher for a specific user
  */
 async function restartUserWatcher(userId, customDrivePath, ignorePatterns = []) {
-  stopUserWatcher(userId);
+  await stopUserWatcher(userId);
 
   if (customDrivePath) {
     await startUserWatcher(userId, customDrivePath, ignorePatterns);
@@ -768,4 +934,5 @@ module.exports = {
   startCustomDriveScanner,
   stopCustomDriveScanner,
   restartUserWatcher,
+  handleAgentFileChange,
 };

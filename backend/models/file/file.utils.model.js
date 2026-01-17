@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { getCache, setCache, cacheKeys, DEFAULT_TTL } = require('../../utils/cache');
 const { getUserCustomDrive } = require('./file.cache.model');
+const { agentPathExists } = require('../../utils/agentFileOperations');
 
 const SORT_FIELDS = {
   name: 'name',
@@ -161,12 +162,13 @@ function generateUniqueName(baseName, ext, counter) {
 }
 
 /**
- * Generates a unique filename if the file already exists (filesystem check)
+ * Generates a unique filename if the file already exists
  * @param {string} filePath - Full file path to check
  * @param {string} _folderPath - Unused parameter (kept for backward compatibility)
+ * @param {boolean} useAgent - If true, use agent API instead of direct filesystem access
  * @returns {Promise<string>} Unique file path
  */
-async function getUniqueFilename(filePath, _folderPath) {
+async function getUniqueFilename(filePath, _folderPath, useAgent = false) {
   const dir = path.dirname(filePath);
   const ext = path.extname(filePath);
   const baseName = path.basename(filePath, ext);
@@ -174,12 +176,23 @@ async function getUniqueFilename(filePath, _folderPath) {
   let finalPath = filePath;
   let counter = 1;
 
-  while (
-    await fs.promises
-      .access(finalPath)
-      .then(() => true)
-      .catch(() => false)
-  ) {
+  while (true) {
+    let exists = false;
+    if (useAgent) {
+      // Use agent API to check if path exists
+      exists = await agentPathExists(finalPath);
+    } else {
+      // Use direct filesystem access
+      exists = await fs.promises
+        .access(finalPath)
+        .then(() => true)
+        .catch(() => false);
+    }
+
+    if (!exists) {
+      break; // Path is available
+    }
+
     const newName = generateUniqueName(baseName, ext, counter);
     finalPath = path.join(dir, newName);
     counter++;
@@ -194,23 +207,35 @@ async function getUniqueFilename(filePath, _folderPath) {
 }
 
 /**
- * Generates a unique folder name if the folder already exists (filesystem check)
+ * Generates a unique folder name if the folder already exists
  * @param {string} folderPath - Full folder path to check
+ * @param {boolean} useAgent - If true, use agent API instead of direct filesystem access
  * @returns {Promise<string>} Unique folder path
  */
-async function getUniqueFolderPath(folderPath) {
+async function getUniqueFolderPath(folderPath, useAgent = false) {
   const dir = path.dirname(folderPath);
   const baseName = path.basename(folderPath);
 
   let finalPath = folderPath;
   let counter = 1;
 
-  while (
-    await fs.promises
-      .access(finalPath)
-      .then(() => true)
-      .catch(() => false)
-  ) {
+  while (true) {
+    let exists = false;
+    if (useAgent) {
+      // Use agent API to check if path exists
+      exists = await agentPathExists(finalPath);
+    } else {
+      // Use direct filesystem access
+      exists = await fs.promises
+        .access(finalPath)
+        .then(() => true)
+        .catch(() => false);
+    }
+
+    if (!exists) {
+      break; // Path is available
+    }
+
     const newName = generateUniqueName(baseName, '', counter);
     finalPath = path.join(dir, newName);
     counter++;

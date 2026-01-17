@@ -203,38 +203,96 @@ async function updateCustomDriveSettings(req, res) {
       const finalPath = finalEnabled ? processedPath : null;
 
       // Validate path if enabling (inside lock to prevent race conditions)
+      // IMPORTANT: Custom drive paths are validated via agent API, not direct filesystem access
+      // This allows paths on the host to be validated even when the app runs in Docker
       if (finalEnabled && finalPath) {
-        const fs = require('fs').promises;
+        // Check if agent is configured (has URL) - if so, always use agent for validation
+        // This ensures Docker setups always use agent, even when user doesn't have custom drive enabled yet
+        const { getAgentSettings } = require('../../models/user.model');
+        const agentSettings = await getAgentSettings();
+        const agentConfigured = agentSettings && agentSettings.url;
 
-        try {
-          // Check if path exists and is accessible
-          const stats = await fs.stat(finalPath);
-          if (!stats.isDirectory()) {
-            throw new Error('Custom drive path must be a directory');
+        if (agentConfigured) {
+          // Agent is configured - validate via agent API (required for Docker)
+          const { checkAgentStatus } = require('../../utils/agentClient');
+          const isOnline = await checkAgentStatus();
+          if (!isOnline) {
+            throw new Error('Agent is offline. Please ensure the agent is running and configured in Settings.');
           }
-          // Path exists and is a directory - verify we have read/write access
+
           try {
-            await fs.access(finalPath, fs.constants.R_OK | fs.constants.W_OK);
-          } catch (_accessError) {
-            throw new Error(
-              `No permission to access custom drive path: ${finalPath}. In Docker, ensure the volume is mounted with correct permissions (read/write access for the container user).`
-            );
+            const { agentStatPath } = require('../../utils/agentFileOperations');
+            const { getAgentPaths } = require('../../utils/agentClient');
+
+            // First, check if the path is in the agent's configured paths
+            let agentPaths = [];
+            try {
+              agentPaths = await getAgentPaths();
+            } catch {
+              // If we can't get paths, continue with stat check
+            }
+
+            // Check if path exists via agent
+            const stat = await agentStatPath(finalPath);
+
+            if (!stat.isDir) {
+              throw new Error('Custom drive path must be a directory');
+            }
+
+            // Verify the path is within one of the agent's configured paths
+            if (agentPaths.length > 0) {
+              const pathMatches = agentPaths.some(agentPath => {
+                const normalizedAgentPath = require('path').resolve(agentPath);
+                const normalizedFinalPath = require('path').resolve(finalPath);
+                return (
+                  normalizedFinalPath.startsWith(normalizedAgentPath + require('path').sep) ||
+                  normalizedFinalPath === normalizedAgentPath
+                );
+              });
+
+              if (!pathMatches) {
+                throw new Error(
+                  `Custom drive path ${finalPath} is not within any agent-configured path. ` +
+                    `Add the path to the agent first using: tma-agent add --path <parent_path>`
+                );
+              }
+            }
+          } catch (error) {
+            const { isAgentOfflineError } = require('../../utils/agentErrorDetection');
+            if (isAgentOfflineError(error)) {
+              throw new Error('Agent is offline. Please ensure the agent is running and configured in Settings.');
+            }
+            const errorMessage = error?.message || '';
+            if (errorMessage.includes('not within any agent-configured path')) {
+              throw error;
+            } else if (errorMessage.includes('No such file or directory') || errorMessage.includes('does not exist')) {
+              throw new Error(
+                `Custom drive path does not exist: ${finalPath}. ` +
+                  `Ensure the path exists on the host and add it to the agent using: tma-agent add --path ${finalPath}`
+              );
+            } else {
+              throw new Error(`Cannot validate custom drive path via agent: ${errorMessage || 'Unknown error'}`);
+            }
           }
-        } catch (error) {
-          if (error.code === 'ENOENT') {
-            throw new Error(
-              `Custom drive path does not exist: ${finalPath}. In Docker, ensure the path is mounted as a volume in docker-compose.yml.`
-            );
-          } else if (error.code === 'EACCES') {
-            throw new Error(
-              `No permission to access custom drive path: ${finalPath}. In Docker, ensure the volume is mounted with correct permissions (read/write access for the container user).`
-            );
-          } else if (!error.code) {
-            // Re-throw our custom error messages (custom errors don't have a code property)
-            throw error;
-          } else {
-            // Unexpected filesystem error with a code property
-            throw new Error(`Cannot access custom drive path: ${error.message || error.code}`);
+        } else {
+          // Agent not configured - validate path directly (for non-Docker setups without agent)
+          const fs = require('fs').promises;
+          try {
+            const stats = await fs.stat(finalPath);
+            if (!stats.isDirectory()) {
+              throw new Error('Custom drive path must be a directory');
+            }
+            await fs.access(finalPath, fs.constants.R_OK | fs.constants.W_OK);
+          } catch (error) {
+            if (error.code === 'ENOENT') {
+              throw new Error(`Custom drive path does not exist: ${finalPath}`);
+            } else if (error.code === 'EACCES') {
+              throw new Error(`No permission to access custom drive path: ${finalPath}`);
+            } else if (!error.code) {
+              throw error;
+            } else {
+              throw new Error(`Cannot access custom drive path: ${error.message || error.code}`);
+            }
           }
         }
       }

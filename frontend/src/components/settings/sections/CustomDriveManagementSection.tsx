@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   Shield,
   Loader2,
@@ -6,10 +6,21 @@ import {
   CheckCircle2,
   X,
   Plus,
+  Server,
+  RefreshCw,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { SettingsSection } from "../components/SettingsSection";
 import type { UserCustomDriveInfo } from "../../../utils/api";
+import {
+  getAgentConfig,
+  updateAgentConfig,
+  getAgentPaths,
+} from "../../../utils/api";
 import type { UserCustomDriveLocalState } from "../hooks/useCustomDriveManagement";
+import { useToast } from "../../../hooks/useToast";
+import { getErrorMessage } from "../../../utils/errorUtils";
 
 interface CustomDriveManagementSectionProps {
   allUsersCustomDrive: UserCustomDriveInfo[];
@@ -42,6 +53,103 @@ export const CustomDriveManagementSection: React.FC<
   onUpdateUserCustomDrive,
   currentUserId,
 }) => {
+  const { showToast } = useToast();
+  const [agentUrl, setAgentUrl] = useState("");
+  const [agentToken, setAgentToken] = useState("");
+  const [agentTokenSet, setAgentTokenSet] = useState(false);
+  const [agentPaths, setAgentPaths] = useState<string[]>([]);
+  const [loadingAgentPaths, setLoadingAgentPaths] = useState(false);
+  const [loadingAgentConfig, setLoadingAgentConfig] = useState(true);
+  const [savingAgentConfig, setSavingAgentConfig] = useState(false);
+  const [showAgentToken, setShowAgentToken] = useState(false);
+  const [agentConnected, setAgentConnected] = useState<boolean | null>(null);
+  const [lastErrorTime, setLastErrorTime] = useState<number>(0);
+
+  // Load agent config
+  useEffect(() => {
+    const loadAgentConfig = async () => {
+      try {
+        setLoadingAgentConfig(true);
+        const config = await getAgentConfig();
+        setAgentUrl(config.url || "");
+        setAgentTokenSet(config.tokenSet);
+        setAgentToken("");
+      } catch {
+        showToast("Failed to load agent configuration", "error");
+      } finally {
+        setLoadingAgentConfig(false);
+      }
+    };
+    loadAgentConfig();
+  }, [showToast]);
+
+  // Load agent paths when URL is configured
+  const loadAgentPaths = useCallback(
+    async (showError = true) => {
+      if (!agentUrl) {
+        setAgentPaths([]);
+        setAgentConnected(null);
+        return;
+      }
+
+      // Prevent spam: only show error if last error was more than 5 seconds ago
+      const now = Date.now();
+      const shouldShowError = showError && now - lastErrorTime > 5000;
+
+      try {
+        setLoadingAgentPaths(true);
+        const response = await getAgentPaths();
+        setAgentPaths(response.paths || []);
+        setAgentConnected(true);
+        setLastErrorTime(0); // Reset error time on success
+      } catch (error) {
+        setAgentConnected(false);
+        setLastErrorTime(now);
+        setAgentPaths([]);
+        // Only show error toast if enough time has passed
+        if (shouldShowError) {
+          showToast(
+            getErrorMessage(error, "Failed to connect to agent"),
+            "error",
+          );
+        }
+      } finally {
+        setLoadingAgentPaths(false);
+      }
+    },
+    [agentUrl, showToast, lastErrorTime],
+  );
+
+  // Load paths only when user explicitly saves config or clicks refresh
+  // No auto-loading to prevent spam
+
+  const handleSaveAgentConfig = async () => {
+    try {
+      setSavingAgentConfig(true);
+      const response = await updateAgentConfig(
+        agentToken || null,
+        agentUrl || null,
+      );
+      setAgentTokenSet(response.tokenSet);
+      setAgentToken("");
+      if (response.tokenSet && response.url) {
+        showToast("Agent configuration saved", "success");
+        await loadAgentPaths(true);
+      } else {
+        showToast("Agent configuration cleared", "success");
+        setAgentPaths([]);
+        setAgentConnected(null);
+      }
+    } catch (error) {
+      showToast(
+        getErrorMessage(error, "Failed to save agent configuration"),
+        "error",
+      );
+    } finally {
+      setSavingAgentConfig(false);
+    }
+  };
+
   // Sort users: current user first, then others
   const sortedUsers = React.useMemo(() => {
     if (!currentUserId) return allUsersCustomDrive;
@@ -60,6 +168,121 @@ export const CustomDriveManagementSection: React.FC<
       icon={Shield}
       description="Manage custom drive settings for all users (Admin only)."
     >
+      {/* Agent Configuration */}
+      <div className="mb-6 p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-700">
+        <div className="flex items-center gap-2 mb-4">
+          <Server className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+            Drive Agent Configuration
+          </h3>
+        </div>
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+          Configure the agent URL and token. Paths must be added via the agent
+          CLI first.
+        </p>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Agent URL
+            </label>
+            <input
+              type="text"
+              value={agentUrl}
+              onChange={(e) => setAgentUrl(e.target.value)}
+              placeholder="http://host.docker.internal:8080"
+              disabled={loadingAgentConfig || savingAgentConfig}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
+            />
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              For Docker: Use http://host.docker.internal:8080 (Windows/Mac) or
+              http://172.17.0.1:8080 (Linux). For local development:
+              http://localhost:8080
+            </p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Agent Token
+            </label>
+            <div className="relative">
+              <input
+                type={showAgentToken ? "text" : "password"}
+                value={agentToken}
+                onChange={(e) => setAgentToken(e.target.value)}
+                placeholder={
+                  agentTokenSet
+                    ? "Leave empty to keep current token"
+                    : "Enter token"
+                }
+                disabled={loadingAgentConfig || savingAgentConfig}
+                className="w-full px-3 py-2 pr-10 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
+              />
+              <button
+                type="button"
+                onClick={() => setShowAgentToken(!showAgentToken)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+              >
+                {showAgentToken ? (
+                  <EyeOff className="h-5 w-5" />
+                ) : (
+                  <Eye className="h-5 w-5" />
+                )}
+              </button>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleSaveAgentConfig}
+              disabled={loadingAgentConfig || savingAgentConfig}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {savingAgentConfig ? "Saving..." : "Save Agent Config"}
+            </button>
+            {agentUrl && agentTokenSet && (
+              <button
+                onClick={() => loadAgentPaths(true)}
+                disabled={loadingAgentPaths}
+                className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 flex items-center gap-2"
+              >
+                <RefreshCw
+                  className={`w-4 h-4 ${loadingAgentPaths ? "animate-spin" : ""}`}
+                />
+                Refresh Paths
+              </button>
+            )}
+          </div>
+          {agentUrl && agentTokenSet && (
+            <div className="mt-2 flex items-center gap-2 text-sm">
+              {agentConnected === true && (
+                <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Agent connected</span>
+                  {agentPaths.length > 0 && (
+                    <span>• {agentPaths.length} path(s) available</span>
+                  )}
+                </div>
+              )}
+              {agentConnected === false && (
+                <div className="flex items-center gap-2 text-red-600 dark:text-red-400">
+                  <AlertCircle className="w-4 h-4" />
+                  <span>Agent offline or unreachable</span>
+                </div>
+              )}
+              {agentConnected === null && loadingAgentPaths && (
+                <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Checking agent connection...</span>
+                </div>
+              )}
+            </div>
+          )}
+          {!agentUrl && (
+            <div className="mt-2 text-sm text-yellow-600 dark:text-yellow-400">
+              Configure agent URL and token to see available paths
+            </div>
+          )}
+        </div>
+      </div>
+
       <div className="space-y-4">
         {loadingAllUsersCustomDrive ? (
           <div className="flex items-center justify-center py-8">
@@ -228,34 +451,83 @@ export const CustomDriveManagementSection: React.FC<
                           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                             Custom Drive Path
                           </label>
-                          <input
-                            type="text"
-                            value={localState.path}
-                            onChange={(e) => {
-                              setUserCustomDriveLocalState((prev) => ({
-                                ...prev,
-                                [userInfo.id]: {
-                                  enabled: prev[userInfo.id]?.enabled || false,
-                                  path: e.target.value,
-                                  ignorePatterns:
-                                    prev[userInfo.id]?.ignorePatterns || [],
-                                  expanded:
-                                    prev[userInfo.id]?.expanded || false,
-                                  editingIgnorePatterns:
-                                    prev[userInfo.id]?.editingIgnorePatterns ||
-                                    false,
-                                  error: null,
-                                },
-                              }));
-                            }}
-                            placeholder="/mnt/external_drive or C:\\MyDrive"
-                            disabled={isUpdating}
-                            className={`w-full px-4 py-3 border-2 rounded-xl shadow-sm focus:outline-none focus:ring-2 dark:bg-gray-800/80 dark:text-white transition-all duration-200 ${
-                              localState.error
-                                ? "border-red-500 focus:ring-red-500 focus:border-red-500"
-                                : "border-gray-300 dark:border-gray-600 focus:ring-blue-500 focus:border-blue-500"
-                            }`}
-                          />
+                          {agentPaths.length > 0 ? (
+                            <select
+                              value={localState.path}
+                              onChange={(e) => {
+                                setUserCustomDriveLocalState((prev) => ({
+                                  ...prev,
+                                  [userInfo.id]: {
+                                    enabled:
+                                      prev[userInfo.id]?.enabled || false,
+                                    path: e.target.value,
+                                    ignorePatterns:
+                                      prev[userInfo.id]?.ignorePatterns || [],
+                                    expanded:
+                                      prev[userInfo.id]?.expanded || false,
+                                    editingIgnorePatterns:
+                                      prev[userInfo.id]
+                                        ?.editingIgnorePatterns || false,
+                                    error: null,
+                                  },
+                                }));
+                              }}
+                              disabled={isUpdating || loadingAgentPaths}
+                              className={`w-full px-4 py-3 border-2 rounded-xl shadow-sm focus:outline-none focus:ring-2 dark:bg-gray-800/80 dark:text-white transition-all duration-200 ${
+                                localState.error
+                                  ? "border-red-500 focus:ring-red-500 focus:border-red-500"
+                                  : "border-gray-300 dark:border-gray-600 focus:ring-blue-500 focus:border-blue-500"
+                              }`}
+                            >
+                              <option value="">
+                                Select a path from agent...
+                              </option>
+                              {agentPaths.map((path) => (
+                                <option key={path} value={path}>
+                                  {path}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <div className="space-y-2">
+                              <input
+                                type="text"
+                                value={localState.path}
+                                onChange={(e) => {
+                                  setUserCustomDriveLocalState((prev) => ({
+                                    ...prev,
+                                    [userInfo.id]: {
+                                      enabled:
+                                        prev[userInfo.id]?.enabled || false,
+                                      path: e.target.value,
+                                      ignorePatterns:
+                                        prev[userInfo.id]?.ignorePatterns || [],
+                                      expanded:
+                                        prev[userInfo.id]?.expanded || false,
+                                      editingIgnorePatterns:
+                                        prev[userInfo.id]
+                                          ?.editingIgnorePatterns || false,
+                                      error: null,
+                                    },
+                                  }));
+                                }}
+                                placeholder="No paths available from agent. Add paths via: tma-agent add --path <path>"
+                                disabled={isUpdating}
+                                className={`w-full px-4 py-3 border-2 rounded-xl shadow-sm focus:outline-none focus:ring-2 dark:bg-gray-800/80 dark:text-white transition-all duration-200 ${
+                                  localState.error
+                                    ? "border-red-500 focus:ring-red-500 focus:border-red-500"
+                                    : "border-gray-300 dark:border-gray-600 focus:ring-blue-500 focus:border-blue-500"
+                                }`}
+                              />
+                              <p className="text-xs text-gray-500 dark:text-gray-400">
+                                Configure agent URL and token above, or add
+                                paths via CLI:{" "}
+                                <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">
+                                  tma-agent add --path &lt;path&gt;
+                                </code>
+                              </p>
+                            </div>
+                          )}
                         </div>
                       )}
 

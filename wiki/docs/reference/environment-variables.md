@@ -57,15 +57,15 @@ Complete reference for all environment variables in TMA Cloud.
 | `UPLOAD_DIR`          | No       | `./uploads`         | Upload directory path              |
 | `FILE_ENCRYPTION_KEY` | No       | Development default | Encryption key for file encryption |
 
-## Custom Drive (Docker Only)
+**Note:** All file operations use streaming for large files. No memory limits for file size.
 
-| Variable               | Required | Description                                            |
-| ---------------------- | -------- | ------------------------------------------------------ |
-| `CUSTOM_DRIVE_MOUNT_N` | No       | Host:Container path mapping (e.g., `/host:/container`) |
+## Custom Drive Agent (Docker Only)
 
-**Format:** `/host/path:/container/path` (must include colon)
+| Variable              | Required | Description                                          |
+| --------------------- | -------- | ---------------------------------------------------- |
+| `AGENT_WEBHOOK_TOKEN` | No       | Token for agent webhook authentication (recommended) |
 
-**Note:** Custom drive is configured per-user in Settings page (admin-only).
+**Note:** Custom drive paths are configured per-user in Settings → Users (admin-only).
 
 ## Logging Configuration
 

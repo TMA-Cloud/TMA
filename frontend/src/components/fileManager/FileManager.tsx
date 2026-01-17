@@ -424,17 +424,29 @@ export const FileManager: React.FC = () => {
     selectedItems.length > 0 && selectedItems.every((f) => f.starred);
 
   const handleShare = async () => {
-    const links = await shareFiles(selectedFiles, !allShared);
-    if (!allShared) {
-      const list = Object.values(links);
-      setShareLinkModalOpen(true, list);
+    try {
+      const links = await shareFiles(selectedFiles, !allShared);
+      if (!allShared) {
+        const list = Object.values(links);
+        setShareLinkModalOpen(true, list);
+      }
+      closeMultiSelectIfMobile();
+    } catch {
+      // Error already handled by shareFilesApi (toast shown)
+      // Just prevent uncaught promise error
+      closeMultiSelectIfMobile();
     }
-    closeMultiSelectIfMobile();
   };
 
-  const handleStar = () => {
-    starFiles(selectedFiles, !allStarred);
-    closeMultiSelectIfMobile();
+  const handleStar = async () => {
+    try {
+      await starFiles(selectedFiles, !allStarred);
+      closeMultiSelectIfMobile();
+    } catch {
+      // Error already handled by starFilesApi (toast shown)
+      // Just prevent uncaught promise error
+      closeMultiSelectIfMobile();
+    }
   };
 
   const handleRename = () => {
@@ -493,8 +505,14 @@ export const FileManager: React.FC = () => {
           onShare={handleShare}
           onStar={handleStar}
           onDownload={async () => {
-            await downloadFiles(selectedFiles);
-            closeMultiSelectIfMobile();
+            try {
+              await downloadFiles(selectedFiles);
+              closeMultiSelectIfMobile();
+            } catch {
+              // Error already handled by downloadFiles (toast shown)
+              // Just prevent uncaught promise error
+              closeMultiSelectIfMobile();
+            }
           }}
           onRename={handleRename}
           onDelete={() => setDeleteModalOpen(true)}
