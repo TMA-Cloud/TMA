@@ -77,6 +77,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     isDownloading,
     clearSelection,
     agentOnline,
+    customDriveEnabled,
   } = useApp();
   const { showToast } = useToast();
 
@@ -182,7 +183,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
         {
           icon: RotateCcw,
           label: "Restore",
-          disabled: agentOnline === false,
+          disabled: customDriveEnabled && agentOnline === false,
           action: () => {
             handleRestore();
             onClose();
@@ -191,7 +192,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
         {
           icon: Trash2,
           label: "Delete Forever",
-          disabled: agentOnline === false,
+          disabled: customDriveEnabled && agentOnline === false,
           action: () => {
             setPendingAction({ type: "deleteForever", files: selectedFiles });
             setConfirmModalOpen(true);
@@ -245,7 +246,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
       {
         icon: Share2,
         label: allShared ? "Remove from Shared" : "Add to Shared",
-        disabled: agentOnline === false,
+        disabled: customDriveEnabled && agentOnline === false,
         action: async () => {
           try {
             const links = await shareFiles(selectedFiles, !allShared);
@@ -265,7 +266,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
             {
               icon: Link2,
               label: "Copy Link",
-              disabled: agentOnline === false,
+              disabled: customDriveEnabled && agentOnline === false,
               action: async () => {
                 try {
                   const sharedIds = selectedItems
@@ -320,12 +321,14 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
           }
         },
         disabled:
-          isDownloading || selectedFiles.length === 0 || agentOnline === false,
+          isDownloading ||
+          selectedFiles.length === 0 ||
+          (customDriveEnabled && agentOnline === false),
       },
       {
         icon: Star,
         label: allStarred ? "Remove from Starred" : "Add to Starred",
-        disabled: agentOnline === false,
+        disabled: customDriveEnabled && agentOnline === false,
         action: async () => {
           try {
             await starFiles(selectedFiles, !allStarred);
@@ -339,7 +342,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
       {
         icon: Copy,
         label: "Copy",
-        disabled: agentOnline === false,
+        disabled: customDriveEnabled && agentOnline === false,
         action: () => {
           setClipboard({ ids: selectedFiles, action: "copy" });
           onActionComplete?.();
@@ -348,7 +351,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
       {
         icon: Scissors,
         label: "Cut",
-        disabled: agentOnline === false,
+        disabled: customDriveEnabled && agentOnline === false,
         action: () => {
           setClipboard({ ids: selectedFiles, action: "cut" });
           onActionComplete?.();
@@ -359,7 +362,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
             {
               icon: ClipboardPaste,
               label: "Paste",
-              disabled: agentOnline === false,
+              disabled: customDriveEnabled && agentOnline === false,
               action: async () => {
                 try {
                   await pasteClipboard(
@@ -381,7 +384,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
       {
         icon: Edit3,
         label: "Rename",
-        disabled: agentOnline === false,
+        disabled: customDriveEnabled && agentOnline === false,
         action: () => {
           const id = targetId ?? selectedFiles[0];
           const file = files.find((f) => f.id === id);
@@ -392,7 +395,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
       {
         icon: Trash2,
         label: "Delete",
-        disabled: agentOnline === false,
+        disabled: customDriveEnabled && agentOnline === false,
         action: () => {
           setPendingAction({ type: "delete", files: selectedFiles });
           setConfirmModalOpen(true);
@@ -432,6 +435,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     handleRestore,
     onActionComplete,
     agentOnline,
+    customDriveEnabled,
   ]);
 
   // Calculate adjusted position immediately (before render) to prevent "flying" effect

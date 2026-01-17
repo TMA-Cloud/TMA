@@ -39,6 +39,7 @@ interface FileManagerToolbarProps {
   onDeleteForever: () => void;
   onEmptyTrash: () => void;
   agentOnline: boolean | null;
+  customDriveEnabled: boolean;
 }
 
 export const FileManagerToolbar: React.FC<FileManagerToolbarProps> = ({
@@ -67,6 +68,7 @@ export const FileManagerToolbar: React.FC<FileManagerToolbarProps> = ({
   onDeleteForever,
   onEmptyTrash,
   agentOnline,
+  customDriveEnabled,
 }) => {
   return (
     <div
@@ -80,21 +82,21 @@ export const FileManagerToolbar: React.FC<FileManagerToolbarProps> = ({
             <Tooltip text={allShared ? "Remove from Shared" : "Add to Share"}>
               <button
                 className={`p-2.5 rounded-xl transition-all duration-200 ${
-                  agentOnline === false
+                  customDriveEnabled && agentOnline === false
                     ? "opacity-50 cursor-not-allowed text-gray-400 dark:text-gray-500 pointer-events-none"
                     : allShared
                       ? "text-green-600 dark:text-green-400 bg-green-50/80 dark:bg-green-900/30 shadow-md shadow-green-500/40 dark:shadow-green-400/30 ring-1 ring-green-500/20 dark:ring-green-400/20 hover-lift"
                       : "text-gray-500/80 dark:text-gray-400/80 hover:text-green-600 dark:hover:text-green-400 hover:bg-green-50/50 dark:hover:bg-green-900/20 shadow-lg shadow-green-500/30 dark:shadow-green-400/20 ring-1 ring-green-500/20 dark:ring-green-400/20 hover-lift"
                 }`}
                 onClick={(e) => {
-                  if (agentOnline === false) {
+                  if (customDriveEnabled && agentOnline === false) {
                     e.preventDefault();
                     e.stopPropagation();
                     return;
                   }
                   onShare();
                 }}
-                disabled={agentOnline === false}
+                disabled={customDriveEnabled && agentOnline === false}
                 aria-label={allShared ? "Remove from Shared" : "Add to Share"}
               >
                 <Share2
@@ -115,21 +117,21 @@ export const FileManagerToolbar: React.FC<FileManagerToolbarProps> = ({
             >
               <button
                 className={`p-2.5 rounded-xl transition-all duration-200 ${
-                  agentOnline === false
+                  customDriveEnabled && agentOnline === false
                     ? "opacity-50 cursor-not-allowed text-gray-400 dark:text-gray-500 pointer-events-none"
                     : allStarred
                       ? "text-yellow-600 dark:text-yellow-400 bg-yellow-50/80 dark:bg-yellow-900/30 shadow-md shadow-yellow-500/40 dark:shadow-yellow-400/30 ring-1 ring-yellow-500/20 dark:ring-yellow-400/20 hover-lift"
                       : "text-gray-500/80 dark:text-gray-400/80 hover:text-yellow-600 dark:hover:text-yellow-400 hover:bg-yellow-50/50 dark:hover:bg-yellow-900/20 shadow-lg shadow-yellow-500/30 dark:shadow-yellow-400/20 ring-1 ring-yellow-500/20 dark:ring-yellow-400/20 hover-lift"
                 }`}
                 onClick={(e) => {
-                  if (agentOnline === false) {
+                  if (customDriveEnabled && agentOnline === false) {
                     e.preventDefault();
                     e.stopPropagation();
                     return;
                   }
                   onStar();
                 }}
-                disabled={agentOnline === false}
+                disabled={customDriveEnabled && agentOnline === false}
                 aria-label={
                   allStarred ? "Remove from Starred" : "Add to Starred"
                 }
@@ -148,7 +150,7 @@ export const FileManagerToolbar: React.FC<FileManagerToolbarProps> = ({
           <Tooltip text="Download">
             <button
               className={`p-2.5 rounded-xl transition-all duration-200 ${
-                agentOnline === false ||
+                (customDriveEnabled && agentOnline === false) ||
                 isDownloading ||
                 selectedFiles.length === 0
                   ? "opacity-50 cursor-not-allowed text-gray-400 dark:text-gray-500 pointer-events-none"
@@ -156,7 +158,7 @@ export const FileManagerToolbar: React.FC<FileManagerToolbarProps> = ({
               }`}
               onClick={(e) => {
                 if (
-                  agentOnline === false ||
+                  (customDriveEnabled && agentOnline === false) ||
                   isDownloading ||
                   selectedFiles.length === 0
                 ) {
@@ -169,7 +171,7 @@ export const FileManagerToolbar: React.FC<FileManagerToolbarProps> = ({
               disabled={
                 isDownloading ||
                 selectedFiles.length === 0 ||
-                agentOnline === false
+                (customDriveEnabled && agentOnline === false)
               }
               aria-label="Download"
             >
@@ -180,19 +182,26 @@ export const FileManagerToolbar: React.FC<FileManagerToolbarProps> = ({
           <Tooltip text="Rename">
             <button
               className={`p-2.5 rounded-xl transition-all duration-200 ${
-                agentOnline === false || selectedFiles.length !== 1
+                (customDriveEnabled && agentOnline === false) ||
+                selectedFiles.length !== 1
                   ? "opacity-50 cursor-not-allowed text-gray-400 dark:text-gray-500 pointer-events-none"
                   : "text-gray-500/80 hover:text-purple-600 dark:text-gray-400/80 dark:hover:text-purple-400 hover-lift hover:bg-purple-50/50 dark:hover:bg-purple-900/20 shadow-lg shadow-purple-500/30 dark:shadow-purple-400/20 ring-1 ring-purple-500/20 dark:ring-purple-400/20"
               }`}
               onClick={(e) => {
-                if (agentOnline === false || selectedFiles.length !== 1) {
+                if (
+                  (customDriveEnabled && agentOnline === false) ||
+                  selectedFiles.length !== 1
+                ) {
                   e.preventDefault();
                   e.stopPropagation();
                   return;
                 }
                 onRename();
               }}
-              disabled={selectedFiles.length !== 1 || agentOnline === false}
+              disabled={
+                selectedFiles.length !== 1 ||
+                (customDriveEnabled && agentOnline === false)
+              }
               aria-label="Rename"
             >
               <Edit3 className="w-5 h-5 transition-all duration-200 icon-muted" />
@@ -202,19 +211,19 @@ export const FileManagerToolbar: React.FC<FileManagerToolbarProps> = ({
           <Tooltip text="Delete">
             <button
               className={`p-2.5 rounded-xl transition-all duration-200 ${
-                agentOnline === false
+                customDriveEnabled && agentOnline === false
                   ? "opacity-50 cursor-not-allowed text-gray-400 dark:text-gray-500 pointer-events-none"
                   : "text-gray-500/80 hover:text-red-600 dark:text-gray-400/80 dark:hover:text-red-400 hover-lift hover:bg-red-50/50 dark:hover:bg-red-900/20 shadow-lg shadow-red-500/30 dark:shadow-red-400/20 ring-1 ring-red-500/20 dark:ring-red-400/20"
               }`}
               onClick={(e) => {
-                if (agentOnline === false) {
+                if (customDriveEnabled && agentOnline === false) {
                   e.preventDefault();
                   e.stopPropagation();
                   return;
                 }
                 onDelete();
               }}
-              disabled={agentOnline === false}
+              disabled={customDriveEnabled && agentOnline === false}
               aria-label="Delete"
             >
               <Trash2 className="w-5 h-5 transition-all duration-200 icon-muted" />
@@ -230,19 +239,19 @@ export const FileManagerToolbar: React.FC<FileManagerToolbarProps> = ({
               <Tooltip text="Restore">
                 <button
                   className={`p-2.5 rounded-xl transition-all duration-200 ${
-                    agentOnline === false
+                    customDriveEnabled && agentOnline === false
                       ? "opacity-50 cursor-not-allowed text-gray-400 dark:text-gray-500 pointer-events-none"
                       : "text-gray-500/80 hover:text-green-600 dark:text-gray-400/80 dark:hover:text-green-400 hover-lift hover:bg-green-50/50 dark:hover:bg-green-900/20 shadow-lg shadow-green-500/20 dark:shadow-green-400/10"
                   }`}
                   onClick={(e) => {
-                    if (agentOnline === false) {
+                    if (customDriveEnabled && agentOnline === false) {
                       e.preventDefault();
                       e.stopPropagation();
                       return;
                     }
                     onRestore();
                   }}
-                  disabled={agentOnline === false}
+                  disabled={customDriveEnabled && agentOnline === false}
                   aria-label="Restore"
                 >
                   <RotateCcw className="w-5 h-5 transition-transform duration-200" />
@@ -251,19 +260,19 @@ export const FileManagerToolbar: React.FC<FileManagerToolbarProps> = ({
               <Tooltip text="Delete Forever">
                 <button
                   className={`p-2.5 rounded-xl transition-all duration-200 ${
-                    agentOnline === false
+                    customDriveEnabled && agentOnline === false
                       ? "opacity-50 cursor-not-allowed text-gray-400 dark:text-gray-500 pointer-events-none"
                       : "text-gray-500/80 hover:text-red-600 dark:text-gray-400/80 dark:hover:text-red-400 hover-lift hover:bg-red-50/50 dark:hover:bg-red-900/20 shadow-lg shadow-red-500/30 dark:shadow-red-400/20 ring-1 ring-red-500/20 dark:ring-red-400/20"
                   }`}
                   onClick={(e) => {
-                    if (agentOnline === false) {
+                    if (customDriveEnabled && agentOnline === false) {
                       e.preventDefault();
                       e.stopPropagation();
                       return;
                     }
                     onDeleteForever();
                   }}
-                  disabled={agentOnline === false}
+                  disabled={customDriveEnabled && agentOnline === false}
                   aria-label="Delete Forever"
                 >
                   <Trash2 className="w-5 h-5 transition-transform duration-200" />
@@ -275,19 +284,19 @@ export const FileManagerToolbar: React.FC<FileManagerToolbarProps> = ({
             <Tooltip text="Empty Trash">
               <button
                 className={`p-2.5 rounded-xl transition-all duration-200 ${
-                  agentOnline === false
+                  customDriveEnabled && agentOnline === false
                     ? "opacity-50 cursor-not-allowed text-gray-400 dark:text-gray-500 pointer-events-none"
                     : "text-gray-500/80 hover:text-red-600 dark:text-gray-400/80 dark:hover:text-red-400 hover-lift hover:bg-red-50/50 dark:hover:bg-red-900/20"
                 }`}
                 onClick={(e) => {
-                  if (agentOnline === false) {
+                  if (customDriveEnabled && agentOnline === false) {
                     e.preventDefault();
                     e.stopPropagation();
                     return;
                   }
                   onEmptyTrash();
                 }}
-                disabled={agentOnline === false}
+                disabled={customDriveEnabled && agentOnline === false}
                 aria-label="Empty Trash"
               >
                 <Trash2 className="w-5 h-5 transition-transform duration-300" />
@@ -336,19 +345,19 @@ export const FileManagerToolbar: React.FC<FileManagerToolbarProps> = ({
             <Tooltip text="Create folder">
               <button
                 className={`p-2.5 rounded-xl transition-all duration-200 ${
-                  agentOnline === false
+                  customDriveEnabled && agentOnline === false
                     ? "opacity-50 cursor-not-allowed text-gray-400 dark:text-gray-500 pointer-events-none"
                     : "text-gray-500/80 hover:text-green-600 dark:text-gray-400/80 dark:hover:text-green-400 hover-lift hover:bg-green-50/50 dark:hover:bg-green-900/20"
                 }`}
                 onClick={(e) => {
-                  if (agentOnline === false) {
+                  if (customDriveEnabled && agentOnline === false) {
                     e.preventDefault();
                     e.stopPropagation();
                     return;
                   }
                   onCreateFolder();
                 }}
-                disabled={agentOnline === false}
+                disabled={customDriveEnabled && agentOnline === false}
                 aria-label="Create folder"
               >
                 <FolderPlus className="w-5 h-5 transition-transform duration-200" />

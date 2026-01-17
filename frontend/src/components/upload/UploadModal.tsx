@@ -20,6 +20,7 @@ export const UploadModal: React.FC = () => {
     uploadFileWithProgress,
     uploadProgress,
     agentOnline,
+    customDriveEnabled,
   } = useApp();
   const { showToast } = useToast();
   const [uploadFiles, setUploadFiles] = useState<UploadFile[]>([]);
@@ -80,7 +81,7 @@ export const UploadModal: React.FC = () => {
   const startUpload = async () => {
     if (uploadFiles.length === 0) return;
 
-    if (agentOnline === false) {
+    if (customDriveEnabled && agentOnline === false) {
       showToast(
         "Agent is offline. Please refresh agent connection in Settings.",
         "error",

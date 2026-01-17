@@ -6,6 +6,7 @@ import {
   checkOnlyOfficeConfigured,
   getSignupStatus,
   hasAuthState,
+  getCustomDriveSettings,
 } from "../utils/api";
 import { useToast } from "../hooks/useToast";
 import { checkStorageLimitExceeded } from "../utils/storageUtils";
@@ -64,6 +65,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   const [onlyOfficeConfigured, setOnlyOfficeConfigured] = useState(false);
   const [agentOnline, setAgentOnline] = useState<boolean | null>(null);
   const [canConfigureOnlyOffice, setCanConfigureOnlyOffice] = useState(false);
+  const [customDriveEnabled, setCustomDriveEnabled] = useState(false);
   const isUploadProgressInteractingRef = useRef(false);
   const uploadDismissTimeoutsRef = useRef<Map<string, number>>(new Map());
   const searchQueryRef = useRef<string>(""); // Track current search query to ignore stale results
@@ -79,13 +81,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   const operationQueue = usePromiseQueue();
 
   // Helper to check agent status and throw if offline
+  // Only blocks if custom drive is enabled AND agent is offline
   const ensureAgentOnline = useCallback(() => {
-    if (agentOnline === false || agentOnline === null) {
+    if (customDriveEnabled && (agentOnline === false || agentOnline === null)) {
       throw new Error(
         "Agent is offline. Please refresh agent connection in Settings.",
       );
     }
-  }, [agentOnline]);
+  }, [agentOnline, customDriveEnabled]);
 
   // Helper to handle agent status from API response
   const handleAgentStatusFromResponse = useCallback(
@@ -801,7 +804,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
     ids: string[],
     shared: boolean,
   ): Promise<Record<string, string>> => {
-    if (agentOnline === false) {
+    if (customDriveEnabled && agentOnline === false) {
       const errorMsg =
         "Agent is offline. Please refresh agent connection in Settings.";
       showToast(errorMsg, "error");
@@ -855,7 +858,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   const starFilesApi = async (ids: string[], starred: boolean) => {
-    if (agentOnline === false) {
+    if (customDriveEnabled && agentOnline === false) {
       const errorMsg =
         "Agent is offline. Please refresh agent connection in Settings.";
       showToast(errorMsg, "error");
@@ -1079,8 +1082,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
     ensureAgentOnline();
     if (isDownloading || ids.length === 0) return;
 
-    // Pre-check: block if agent is offline
-    if (agentOnline === false) {
+    // Pre-check: block if custom drive is enabled AND agent is offline
+    if (customDriveEnabled && agentOnline === false) {
       showToast(
         "Agent is offline. Please refresh agent connection in Settings.",
         "error",
@@ -1151,7 +1154,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, []);
 
-  // Load admin status and OnlyOffice config status on mount
+  // Load admin status, OnlyOffice config status, and custom drive settings on mount
   useEffect(() => {
     const loadAdminStatus = async () => {
       try {
@@ -1162,8 +1165,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         setCanConfigureOnlyOffice(false);
       }
     };
+    const loadCustomDriveSettings = async () => {
+      try {
+        const settings = await getCustomDriveSettings();
+        setCustomDriveEnabled(settings.enabled);
+      } catch {
+        // Error handled silently - assume custom drive is disabled
+        setCustomDriveEnabled(false);
+      }
+    };
     void loadAdminStatus();
     void refreshOnlyOfficeConfig();
+    void loadCustomDriveSettings();
   }, [refreshOnlyOfficeConfig]);
 
   return (
@@ -1237,6 +1250,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         refreshOnlyOfficeConfig,
         agentOnline,
         setAgentOnline,
+        customDriveEnabled,
       }}
     >
       {children}

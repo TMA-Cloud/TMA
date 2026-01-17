@@ -8,6 +8,7 @@ export const CreateFolderModal: React.FC = () => {
     setCreateFolderModalOpen,
     createFolder,
     agentOnline,
+    customDriveEnabled,
   } = useApp();
   const [name, setName] = useState("");
   const [error, setError] = useState("");
@@ -24,7 +25,7 @@ export const CreateFolderModal: React.FC = () => {
       setError("Folder name cannot be empty");
       return;
     }
-    if (agentOnline === false) {
+    if (customDriveEnabled && agentOnline === false) {
       setError(
         "Agent is offline. Please refresh agent connection in Settings.",
       );

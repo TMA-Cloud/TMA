@@ -13,7 +13,7 @@ export const AgentStatusBanner: React.FC<AgentStatusBannerProps> = ({
   onStatusChange,
 }) => {
   const { showToast } = useToast();
-  const { agentOnline } = useApp();
+  const { agentOnline, customDriveEnabled } = useApp();
   const [isRefreshing, setIsRefreshing] = React.useState(false);
   const [dismissed, setDismissed] = React.useState(false);
 
@@ -51,8 +51,8 @@ export const AgentStatusBanner: React.FC<AgentStatusBannerProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Only on mount
 
-  // Don't show if online, unknown, or dismissed
-  if (agentOnline !== false || dismissed) {
+  // Don't show if custom drive is not enabled, agent is online, unknown, or dismissed
+  if (!customDriveEnabled || agentOnline !== false || dismissed) {
     return null;
   }
 
