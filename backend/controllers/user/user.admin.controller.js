@@ -16,7 +16,12 @@ const { sendError, sendSuccess } = require('../../utils/response');
 const { logger } = require('../../config/logger');
 const { logAuditEvent } = require('../../services/auditLogger');
 const { invalidateOnlyOfficeOriginCache } = require('../../utils/onlyofficeOriginCache');
-const { getAgentPaths: fetchAgentPaths, checkAgentStatus, resetAgentStatus } = require('../../utils/agentClient');
+const {
+  getAgentPaths: fetchAgentPaths,
+  checkAgentStatus,
+  resetAgentStatus,
+  testAgentConnection,
+} = require('../../utils/agentClient');
 
 /**
  * Get signup status and admin information
@@ -421,7 +426,24 @@ async function updateAgentConfig(req, res) {
       }
     }
 
-    // setAgentSettings will do additional security checks internally and invalidate cache
+    // If both URL and token are provided, validate agent connection before saving
+    if (normalizedUrl !== null && normalizedToken !== null) {
+      const connectionTest = await testAgentConnection(normalizedUrl, normalizedToken);
+      if (!connectionTest.online) {
+        return sendError(res, 503, 'Agent unreachable. Check URL and ensure agent is running.');
+      }
+      if (!connectionTest.tokenValid) {
+        return sendError(res, 401, 'Invalid token. Please verify the token is correct.');
+      }
+    } else if (normalizedUrl !== null && normalizedToken === null) {
+      // If only URL is provided (no token), just check if agent is reachable
+      const connectionTest = await testAgentConnection(normalizedUrl, null);
+      if (!connectionTest.online) {
+        return sendError(res, 503, 'Agent unreachable. Check URL and ensure agent is running.');
+      }
+    }
+
+    // All validations passed - save settings
     await setAgentSettings(normalizedUrl, normalizedToken, req.userId);
 
     // Log admin action
@@ -624,8 +646,9 @@ async function getAgentPaths(req, res) {
     if (err.message === 'Agent URL not configured') {
       return sendSuccess(res, { paths: [] });
     }
-    // Don't log errors - just return empty paths
-    sendSuccess(res, { paths: [] });
+    // Return error when agent is unreachable - don't hide connection failures
+    logger.warn({ err: err.message }, 'Failed to get agent paths');
+    return sendError(res, 503, `Agent unreachable: ${err.message}`);
   }
 }
 

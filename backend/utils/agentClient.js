@@ -115,6 +115,102 @@ async function getAgentPaths() {
 }
 
 /**
+ * Test agent connection with provided URL and token (without reading from DB)
+ * @param {string} url - Agent URL to test
+ * @param {string|null} token - Agent token to test (optional)
+ * @returns {Promise<{online: boolean, tokenValid: boolean, error?: string}>}
+ */
+async function testAgentConnection(url, token = null) {
+  try {
+    if (!url) {
+      return { online: false, tokenValid: false, error: 'URL not provided' };
+    }
+
+    const urlObj = new URL(url);
+    const healthUrl = `${urlObj.origin}/health`;
+    const pathsUrl = `${urlObj.origin}/api/paths`;
+
+    const requestModule = urlObj.protocol === 'https:' ? https : http;
+
+    // First check health endpoint
+    const isOnline = await new Promise(resolve => {
+      let resolved = false;
+      const req = requestModule.get(healthUrl, { timeout: 5000 }, res => {
+        if (resolved) return;
+        resolved = true;
+        resolve(res.statusCode === 200);
+      });
+
+      req.on('error', () => {
+        if (resolved) return;
+        resolved = true;
+        resolve(false);
+      });
+
+      req.setTimeout(5000, () => {
+        if (resolved) return;
+        resolved = true;
+        req.destroy();
+        resolve(false);
+      });
+    });
+
+    if (!isOnline) {
+      return { online: false, tokenValid: false, error: 'Connection failed' };
+    }
+
+    // If token provided, test it by getting paths
+    if (token) {
+      const tokenValid = await new Promise(resolve => {
+        let resolved = false;
+        const options = {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          timeout: 5000,
+        };
+
+        const req = requestModule.get(pathsUrl, options, res => {
+          if (resolved) return;
+          resolved = true;
+          if (res.statusCode === 401 || res.statusCode === 403) {
+            resolve(false);
+          } else if (res.statusCode >= 200 && res.statusCode < 300) {
+            resolve(true);
+          } else {
+            resolve(false);
+          }
+        });
+
+        req.on('error', () => {
+          if (resolved) return;
+          resolved = true;
+          resolve(false);
+        });
+
+        req.setTimeout(5000, () => {
+          if (resolved) return;
+          resolved = true;
+          req.destroy();
+          resolve(false);
+        });
+      });
+
+      if (!tokenValid) {
+        return { online: true, tokenValid: false, error: 'Invalid token' };
+      }
+    }
+
+    return { online: true, tokenValid: token !== null };
+  } catch (err) {
+    logger.debug({ err, url }, 'Agent connection test error');
+    return { online: false, tokenValid: false, error: 'Connection failed' };
+  }
+}
+
+/**
  * Reset agent status (no-op, kept for API compatibility)
  */
 function resetAgentStatus() {
@@ -125,4 +221,5 @@ module.exports = {
   getAgentPaths,
   checkAgentStatus,
   resetAgentStatus,
+  testAgentConnection,
 };

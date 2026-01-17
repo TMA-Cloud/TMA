@@ -85,11 +85,12 @@ export const CustomDriveManagementSection: React.FC<
 
   // Load agent paths when URL is configured
   const loadAgentPaths = useCallback(
-    async (showError = true) => {
-      if (!agentUrl) {
+    async (showError = true, urlOverride?: string): Promise<boolean> => {
+      const urlToUse = urlOverride || agentUrl;
+      if (!urlToUse) {
         setAgentPaths([]);
         setAgentConnected(null);
-        return;
+        return false;
       }
 
       // Prevent spam: only show error if last error was more than 5 seconds ago
@@ -102,17 +103,16 @@ export const CustomDriveManagementSection: React.FC<
         setAgentPaths(response.paths || []);
         setAgentConnected(true);
         setLastErrorTime(0); // Reset error time on success
+        return true;
       } catch (error) {
         setAgentConnected(false);
         setLastErrorTime(now);
         setAgentPaths([]);
         // Only show error toast if enough time has passed
         if (shouldShowError) {
-          showToast(
-            getErrorMessage(error, "Failed to connect to agent"),
-            "error",
-          );
+          showToast(getErrorMessage(error, "Agent connection failed"), "error");
         }
+        return false;
       } finally {
         setLoadingAgentPaths(false);
       }
@@ -126,25 +126,47 @@ export const CustomDriveManagementSection: React.FC<
   const handleSaveAgentConfig = async () => {
     try {
       setSavingAgentConfig(true);
+      // Reset connection status before saving
+      setAgentConnected(null);
+      setAgentPaths([]);
+
       const response = await updateAgentConfig(
         agentToken || null,
         agentUrl || null,
       );
       setAgentTokenSet(response.tokenSet);
       setAgentToken("");
-      if (response.tokenSet && response.url) {
-        showToast("Agent configuration saved", "success");
-        await loadAgentPaths(true);
+      // Update URL from response to ensure consistency
+      if (response.url !== null && response.url !== undefined) {
+        setAgentUrl(response.url);
       } else {
-        showToast("Agent configuration cleared", "success");
+        setAgentUrl("");
+      }
+
+      if (response.tokenSet && response.url) {
+        // Configuration saved successfully - now verify connection using the saved URL
+        const isConnected = await loadAgentPaths(false, response.url); // Don't show error toast here, we'll show our own
+        if (isConnected) {
+          showToast("Agent connected", "success");
+        } else {
+          // Backend validated but connection check failed (shouldn't happen, but handle it)
+          showToast("Saved but connection unverified", "info");
+        }
+      } else {
+        // Settings cleared
+        showToast("Configuration cleared", "success");
         setAgentPaths([]);
         setAgentConnected(null);
       }
     } catch (error) {
-      showToast(
-        getErrorMessage(error, "Failed to save agent configuration"),
-        "error",
+      // Backend validation failed - don't save, show error
+      const errorMessage = getErrorMessage(
+        error,
+        "Failed to save configuration",
       );
+      showToast(errorMessage, "error");
+      setAgentConnected(false);
+      setAgentPaths([]);
     } finally {
       setSavingAgentConfig(false);
     }
@@ -180,107 +202,173 @@ export const CustomDriveManagementSection: React.FC<
           Configure the agent URL and token. Paths must be added via the agent
           CLI first.
         </p>
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Agent URL
-            </label>
-            <input
-              type="text"
-              value={agentUrl}
-              onChange={(e) => setAgentUrl(e.target.value)}
-              placeholder="http://host.docker.internal:8080"
-              disabled={loadingAgentConfig || savingAgentConfig}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
-            />
-            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              For Docker: Use http://host.docker.internal:8080 (Windows/Mac) or
-              http://172.17.0.1:8080 (Linux). For local development:
-              http://localhost:8080
-            </p>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Agent Token
-            </label>
-            <div className="relative">
+        <form autoComplete="off" onSubmit={(e) => e.preventDefault()}>
+          {/* Hidden dummy fields to distract password managers */}
+          <input
+            type="text"
+            name="username"
+            autoComplete="username"
+            style={{
+              position: "absolute",
+              left: "-9999px",
+              opacity: 0,
+              pointerEvents: "none",
+            }}
+            tabIndex={-1}
+            readOnly
+          />
+          <input
+            type="password"
+            name="password"
+            autoComplete="current-password"
+            style={{
+              position: "absolute",
+              left: "-9999px",
+              opacity: 0,
+              pointerEvents: "none",
+            }}
+            tabIndex={-1}
+            readOnly
+          />
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Agent URL
+              </label>
               <input
-                type={showAgentToken ? "text" : "password"}
-                value={agentToken}
-                onChange={(e) => setAgentToken(e.target.value)}
-                placeholder={
-                  agentTokenSet
-                    ? "Leave empty to keep current token"
-                    : "Enter token"
-                }
+                type="text"
+                name="x-agent-url-config"
+                value={agentUrl}
+                onChange={(e) => setAgentUrl(e.target.value)}
+                placeholder="http://host.docker.internal:8080"
                 disabled={loadingAgentConfig || savingAgentConfig}
-                className="w-full px-3 py-2 pr-10 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
+                autoComplete="off"
+                data-lpignore="true"
+                data-1p-ignore="true"
+                data-bwignore="true"
+                data-form-type="other"
+                role="textbox"
+                inputMode="text"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
               />
-              <button
-                type="button"
-                onClick={() => setShowAgentToken(!showAgentToken)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-              >
-                {showAgentToken ? (
-                  <EyeOff className="h-5 w-5" />
-                ) : (
-                  <Eye className="h-5 w-5" />
-                )}
-              </button>
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                For Docker: Use http://host.docker.internal:8080 (Windows/Mac)
+                or http://172.17.0.1:8080 (Linux). For local development:
+                http://localhost:8080
+              </p>
             </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={handleSaveAgentConfig}
-              disabled={loadingAgentConfig || savingAgentConfig}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {savingAgentConfig ? "Saving..." : "Save Agent Config"}
-            </button>
-            {agentUrl && agentTokenSet && (
-              <button
-                onClick={() => loadAgentPaths(true)}
-                disabled={loadingAgentPaths}
-                className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 flex items-center gap-2"
-              >
-                <RefreshCw
-                  className={`w-4 h-4 ${loadingAgentPaths ? "animate-spin" : ""}`}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Agent Token
+              </label>
+              <div className="relative">
+                <input
+                  type="text"
+                  name="x-agent-token-config"
+                  value={
+                    showAgentToken
+                      ? agentToken
+                      : "•".repeat(agentToken.length || 0)
+                  }
+                  onChange={(e) => {
+                    if (showAgentToken) {
+                      setAgentToken(e.target.value);
+                    } else {
+                      // When masked, show on first input
+                      setShowAgentToken(true);
+                      setAgentToken(e.target.value.replace(/•/g, ""));
+                    }
+                  }}
+                  onFocus={() => {
+                    if (!showAgentToken && agentToken) {
+                      setShowAgentToken(true);
+                    }
+                  }}
+                  placeholder={
+                    agentTokenSet
+                      ? "Leave empty to keep current token"
+                      : "Enter token"
+                  }
+                  disabled={loadingAgentConfig || savingAgentConfig}
+                  autoComplete="off"
+                  data-lpignore="true"
+                  data-1p-ignore="true"
+                  data-bwignore="true"
+                  data-form-type="other"
+                  role="textbox"
+                  inputMode="text"
+                  className="w-full px-3 py-2 pr-10 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 font-mono"
                 />
-                Refresh Paths
+                <button
+                  type="button"
+                  onClick={() => setShowAgentToken(!showAgentToken)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                  tabIndex={-1}
+                  aria-label={
+                    showAgentToken ? "Hide agent token" : "Show agent token"
+                  }
+                >
+                  {showAgentToken ? (
+                    <EyeOff className="h-5 w-5" />
+                  ) : (
+                    <Eye className="h-5 w-5" />
+                  )}
+                </button>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleSaveAgentConfig}
+                disabled={loadingAgentConfig || savingAgentConfig}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {savingAgentConfig ? "Saving..." : "Save Agent Config"}
               </button>
+              {agentUrl && agentTokenSet && (
+                <button
+                  onClick={() => loadAgentPaths(true)}
+                  disabled={loadingAgentPaths}
+                  className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 flex items-center gap-2"
+                >
+                  <RefreshCw
+                    className={`w-4 h-4 ${loadingAgentPaths ? "animate-spin" : ""}`}
+                  />
+                  Refresh Paths
+                </button>
+              )}
+            </div>
+            {agentUrl && agentTokenSet && (
+              <div className="mt-2 flex items-center gap-2 text-sm">
+                {agentConnected === true && (
+                  <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>Agent connected</span>
+                    {agentPaths.length > 0 && (
+                      <span>• {agentPaths.length} path(s) available</span>
+                    )}
+                  </div>
+                )}
+                {agentConnected === false && (
+                  <div className="flex items-center gap-2 text-red-600 dark:text-red-400">
+                    <AlertCircle className="w-4 h-4" />
+                    <span>Agent offline</span>
+                  </div>
+                )}
+                {agentConnected === null && loadingAgentPaths && (
+                  <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Checking agent connection...</span>
+                  </div>
+                )}
+              </div>
+            )}
+            {!agentUrl && (
+              <div className="mt-2 text-sm text-yellow-600 dark:text-yellow-400">
+                Configure agent URL and token to see available paths
+              </div>
             )}
           </div>
-          {agentUrl && agentTokenSet && (
-            <div className="mt-2 flex items-center gap-2 text-sm">
-              {agentConnected === true && (
-                <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
-                  <CheckCircle2 className="w-4 h-4" />
-                  <span>Agent connected</span>
-                  {agentPaths.length > 0 && (
-                    <span>• {agentPaths.length} path(s) available</span>
-                  )}
-                </div>
-              )}
-              {agentConnected === false && (
-                <div className="flex items-center gap-2 text-red-600 dark:text-red-400">
-                  <AlertCircle className="w-4 h-4" />
-                  <span>Agent offline or unreachable</span>
-                </div>
-              )}
-              {agentConnected === null && loadingAgentPaths && (
-                <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Checking agent connection...</span>
-                </div>
-              )}
-            </div>
-          )}
-          {!agentUrl && (
-            <div className="mt-2 text-sm text-yellow-600 dark:text-yellow-400">
-              Configure agent URL and token to see available paths
-            </div>
-          )}
-        </div>
+        </form>
       </div>
 
       <div className="space-y-4">
