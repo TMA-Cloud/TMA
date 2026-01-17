@@ -2,6 +2,25 @@
 .claude/*
 .kiro/*
 .codex/*
+.cursor/*
+.agent/
+agent_data/
+agent_cache/
+agent_logs/
+
+# Go Agent
+agent/agent
+agent/tma-agent
+agent/*.json
+agent/*.exe
+agent/*.dll
+agent/*.so
+agent/*.dylib
+agent/coverage.out
+agent/coverage.html
+agent/go.work
+agent/go.work.sum
+agent/vendor/
 
 # Dependencies
 node_modules/
@@ -17,16 +36,21 @@ logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
-yarn-error.log*
 pnpm-debug.log*
-lerna-debug.log*
 
 # Build output
 dist/
-dist-ssr/
 build/
 coverage/
 out/
+*.tsbuildinfo
+
+# Frontend
+frontend/dist/
+frontend/.vite/
+
+# Backend
+backend/dist/
 
 # Runtime data
 pids/
@@ -34,14 +58,14 @@ pids/
 *.seed
 *.pid.lock
 
-# Testing
-.nyc_output/
-
 # Temporary files
 tmp/
 temp/
 .cache/
 *.local
+*.swp
+*.swo
+*~
 
 # Uploads
 uploads/
@@ -49,8 +73,7 @@ uploads/
 # OS files
 .DS_Store
 Thumbs.db
-*.suo
-*.sw?
+Desktop.ini
 
 # IDE files
 .vscode/*
@@ -58,18 +81,16 @@ Thumbs.db
 .idea/
 *.sublime-workspace
 *.sublime-project
-*.ntvs*
-*.njsproj
-*.sln
 
-# Misc
-*.tgz
-.next/
-
-# Docusaurus
+# Docusaurus (Wiki)
 wiki/.docusaurus/
 wiki/build/
 wiki/.env.local
 wiki/.env.production.local
 wiki/.env.development.local
 wiki/i18n/
+
+# Misc
+*.tgz
+.next/
+.eslintcache
