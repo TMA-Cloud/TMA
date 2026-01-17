@@ -32,11 +32,15 @@ export const Toast: React.FC<ToastProps> = ({
 
   // Swipe-to-dismiss handlers
   const handleTouchStart = (e: React.TouchEvent) => {
-    setTouchStartX(e.touches[0].clientX);
+    const touch = e.touches[0];
+    if (!touch) return;
+    setTouchStartX(touch.clientX);
   };
   const handleTouchMove = (e: React.TouchEvent) => {
     if (touchStartX !== null) {
-      setTouchDeltaX(e.touches[0].clientX - touchStartX);
+      const touch = e.touches[0];
+      if (!touch) return;
+      setTouchDeltaX(touch.clientX - touchStartX);
     }
   };
   const handleTouchEnd = () => {

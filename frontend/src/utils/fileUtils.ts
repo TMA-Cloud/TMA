@@ -75,7 +75,7 @@ export const formatFileSize = (size?: number | string | null): string => {
   // Convert to number if it's a string
   const numSize = typeof size === "string" ? Number(size) : size;
   if (isNaN(numSize) || numSize <= 0) return "";
-  return bytes(numSize, { decimalPlaces: 1 });
+  return bytes(numSize, { decimalPlaces: 1 }) ?? "";
 };
 
 /**
@@ -160,7 +160,9 @@ export const validateOnlyOfficeMimeType = (
   const expectedMime = mime.getType(ext);
   if (!expectedMime) return false;
 
-  const normalizedMime = mimeType.toLowerCase().split(";")[0].trim();
+  const mimePart = mimeType.toLowerCase().split(";")[0];
+  if (!mimePart) return false;
+  const normalizedMime = mimePart.trim();
   const normalizedExpected = expectedMime.toLowerCase();
 
   // Check primary MIME type

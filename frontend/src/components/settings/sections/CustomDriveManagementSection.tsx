@@ -36,6 +36,7 @@ interface CustomDriveManagementSectionProps {
     userId: string,
     enabled: boolean,
     path: string | null,
+    ignorePatterns?: string[],
   ) => Promise<boolean>;
   currentUserId?: string;
 }
@@ -679,13 +680,26 @@ export const CustomDriveManagementSection: React.FC<
                             type="text"
                             value={localState.newPattern || ""}
                             onChange={(e) => {
-                              setUserCustomDriveLocalState((prev) => ({
-                                ...prev,
-                                [userInfo.id]: {
-                                  ...prev[userInfo.id],
-                                  newPattern: e.target.value,
-                                },
-                              }));
+                              setUserCustomDriveLocalState((prev) => {
+                                const current = prev[userInfo.id];
+                                if (!current) return prev;
+                                return {
+                                  ...prev,
+                                  [userInfo.id]: {
+                                    enabled: current.enabled,
+                                    path: current.path,
+                                    ignorePatterns: current.ignorePatterns,
+                                    expanded: current.expanded,
+                                    editingIgnorePatterns:
+                                      current.editingIgnorePatterns,
+                                    newPattern: e.target.value,
+                                    error: current.error,
+                                    originalPath: current.originalPath,
+                                    originalIgnorePatterns:
+                                      current.originalIgnorePatterns,
+                                  },
+                                };
+                              });
                             }}
                             onKeyDown={(e) => {
                               if (

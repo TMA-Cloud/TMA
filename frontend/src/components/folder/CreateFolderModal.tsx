@@ -53,7 +53,7 @@ export const CreateFolderModal: React.FC = () => {
       isOpen={createFolderModalOpen}
       onClose={handleClose}
       title="New Folder"
-      initialFocusRef={inputRef}
+      initialFocusRef={inputRef as React.RefObject<HTMLElement>}
     >
       <div className="space-y-4 animate-bounceIn">
         <div>

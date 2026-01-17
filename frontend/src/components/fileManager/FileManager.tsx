@@ -411,11 +411,24 @@ export const FileManager: React.FC = () => {
     if (dragSelectingRef.current || draggingIds.length === 0) return;
     setDragOverFolder(null);
     removeDragPreview();
-    await animateFlyToFolder(draggingIds, folderId);
-    await moveFiles(draggingIds, folderId);
-    setDraggingIds([]);
-    document.body.classList.remove("is-dragging");
-    closeMultiSelectIfMobile();
+    try {
+      await animateFlyToFolder(draggingIds, folderId);
+      await moveFiles(draggingIds, folderId);
+      setDraggingIds([]);
+      document.body.classList.remove("is-dragging");
+      closeMultiSelectIfMobile();
+    } catch (error) {
+      // Show error toast if not already shown by moveFiles
+      const errorMessage = getErrorMessage(
+        error,
+        "Failed to move files. Please try again.",
+      );
+      showToast(errorMessage, "error");
+      // Reset drag state on error
+      setDraggingIds([]);
+      document.body.classList.remove("is-dragging");
+      closeMultiSelectIfMobile();
+    }
   };
 
   // Calculate shared/starred status for selected files
@@ -500,7 +513,7 @@ export const FileManager: React.FC = () => {
           isDownloading={isDownloading}
           onViewModeChange={setViewMode}
           onSortChange={(by, order) => {
-            setSortBy(by);
+            setSortBy(by as "name" | "size" | "modified" | "deletedAt");
             setSortOrder(order);
           }}
           onCreateFolder={() => setCreateFolderModalOpen(true)}

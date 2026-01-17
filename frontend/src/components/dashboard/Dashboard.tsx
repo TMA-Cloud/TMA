@@ -38,7 +38,7 @@ export const Dashboard: React.FC = () => {
     fetchStats();
 
     // Refresh stats periodically, but pause when tab is hidden to save resources
-    let interval: NodeJS.Timeout | null = null;
+    let interval: ReturnType<typeof setInterval> | null = null;
 
     const startPolling = () => {
       // Only poll if tab is visible
@@ -126,12 +126,13 @@ export const Dashboard: React.FC = () => {
 
   const [animatedStats, setAnimatedStats] = useState([0, 0, 0, 0]);
   useEffect(() => {
-    const durations = [600, 700, 800, 900];
+    const durations = [600, 700, 800, 900] as const;
     const values = [fileCount, folderCount, sharedCount, starredCount];
-    values.forEach((val, i) => {
+    durations.forEach((duration, i) => {
+      const val = values[i];
+      if (val === undefined) return;
       let start = 0;
       const end = val;
-      const duration = durations[i];
       const step = Math.ceil(end / (duration / 16));
       const animate = () => {
         start += step;

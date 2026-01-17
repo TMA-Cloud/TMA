@@ -67,6 +67,7 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
     longPressTriggeredRef.current = false;
 
     const touch = e.touches[0];
+    if (!touch) return;
     const clientX = touch.clientX;
     const clientY = touch.clientY;
 

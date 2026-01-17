@@ -141,9 +141,9 @@ export const MobileImageViewer: React.FC<MobileImageViewerProps> = ({
 
   const navigateToImage = (direction: "next" | "prev") => {
     if (direction === "next" && hasNext) {
-      setImageViewerFile(imageFiles[currentIndex + 1]);
+      setImageViewerFile(imageFiles[currentIndex + 1] ?? null);
     } else if (direction === "prev" && hasPrev) {
-      setImageViewerFile(imageFiles[currentIndex - 1]);
+      setImageViewerFile(imageFiles[currentIndex - 1] ?? null);
     }
   };
 
@@ -190,7 +190,6 @@ export const MobileImageViewer: React.FC<MobileImageViewerProps> = ({
   const handlePointerDown = (e: React.PointerEvent) => {
     if (e.pointerType === "touch") return; // Let touch handlers take over
     e.preventDefault();
-    setDragging(true);
     dragOrigin.current = { x: e.clientX, y: e.clientY };
     window.addEventListener("pointermove", handlePointerMove);
     window.addEventListener("pointerup", handlePointerUp);
@@ -218,18 +217,24 @@ export const MobileImageViewer: React.FC<MobileImageViewerProps> = ({
   };
 
   // Touch handlers for pinch-to-zoom and swipe
-  const getTouchDistance = (touches: TouchList) => {
+  const getTouchDistance = (touches: React.TouchList) => {
     if (touches.length < 2) return null;
-    const dx = touches[0].clientX - touches[1].clientX;
-    const dy = touches[0].clientY - touches[1].clientY;
+    const touch1 = touches[0];
+    const touch2 = touches[1];
+    if (!touch1 || !touch2) return null;
+    const dx = touch1.clientX - touch2.clientX;
+    const dy = touch1.clientY - touch2.clientY;
     return Math.sqrt(dx * dx + dy * dy);
   };
 
-  const getTouchCenter = (touches: TouchList) => {
+  const getTouchCenter = (touches: React.TouchList) => {
     if (touches.length < 2) return null;
+    const touch1 = touches[0];
+    const touch2 = touches[1];
+    if (!touch1 || !touch2) return null;
     return {
-      x: (touches[0].clientX + touches[1].clientX) / 2,
-      y: (touches[0].clientY + touches[1].clientY) / 2,
+      x: (touch1.clientX + touch2.clientX) / 2,
+      y: (touch1.clientY + touch2.clientY) / 2,
     };
   };
 
@@ -249,6 +254,7 @@ export const MobileImageViewer: React.FC<MobileImageViewerProps> = ({
     } else if (e.touches.length === 1 && zoom === 1) {
       // Single touch - prepare for swipe or pan
       const touch = e.touches[0];
+      if (!touch) return;
       swipeStart.current = {
         x: touch.clientX,
         y: touch.clientY,
@@ -258,6 +264,7 @@ export const MobileImageViewer: React.FC<MobileImageViewerProps> = ({
     } else if (e.touches.length === 1 && zoom > 1) {
       // Pan when zoomed
       const touch = e.touches[0];
+      if (!touch) return;
       dragOrigin.current = { x: touch.clientX, y: touch.clientY };
     }
   };
@@ -297,6 +304,7 @@ export const MobileImageViewer: React.FC<MobileImageViewerProps> = ({
     } else if (e.touches.length === 1 && dragOrigin.current) {
       // Single touch pan or swipe
       const touch = e.touches[0];
+      if (!touch) return;
       const dx = touch.clientX - dragOrigin.current.x;
       const dy = touch.clientY - dragOrigin.current.y;
 
@@ -318,6 +326,7 @@ export const MobileImageViewer: React.FC<MobileImageViewerProps> = ({
     // Handle swipe gestures (only when zoomed out)
     if (swipeStart.current && zoom === 1 && e.changedTouches.length === 1) {
       const touch = e.changedTouches[0];
+      if (!touch) return;
       const dx = touch.clientX - swipeStart.current.x;
       const dy = touch.clientY - swipeStart.current.y;
       const dt = Date.now() - swipeStart.current.time;

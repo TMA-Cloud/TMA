@@ -2,6 +2,8 @@
  * Upload utility functions
  */
 
+import type React from "react";
+
 export type UploadProgressItem = {
   id: string;
   fileName: string;
@@ -45,12 +47,14 @@ export function updateUploadProgress(
  */
 export function createAutoDismissTimeout(
   uploadId: string,
-  isInteractingRef: React.MutableRefObject<boolean>,
+  isInteractingRef: { current: boolean },
   setUploadProgress: React.Dispatch<React.SetStateAction<UploadProgressItem[]>>,
-  uploadDismissTimeoutsRef: React.MutableRefObject<Map<string, NodeJS.Timeout>>,
+  uploadDismissTimeoutsRef: {
+    current: Map<string, ReturnType<typeof setTimeout>>;
+  },
   delay: number = 10000,
   retryDelay: number = 5000,
-): NodeJS.Timeout {
+): ReturnType<typeof setTimeout> {
   return setTimeout(() => {
     if (!isInteractingRef.current) {
       setUploadProgress((prev) => removeUploadProgress(prev, uploadId));

@@ -67,11 +67,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   const [canConfigureOnlyOffice, setCanConfigureOnlyOffice] = useState(false);
   const [customDriveEnabled, setCustomDriveEnabled] = useState(false);
   const isUploadProgressInteractingRef = useRef(false);
-  const uploadDismissTimeoutsRef = useRef<Map<string, number>>(new Map());
+  const uploadDismissTimeoutsRef = useRef<
+    Map<string, ReturnType<typeof setTimeout>>
+  >(new Map());
   const searchQueryRef = useRef<string>(""); // Track current search query to ignore stale results
   const abortControllerRef = useRef<AbortController | null>(null); // For cancelling fetch requests
   const eventSourceRef = useRef<EventSource | null>(null); // For SSE connection
-  const sseRefreshTimeoutRef = useRef<number | null>(null); // For debouncing SSE refresh
+  const sseRefreshTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  ); // For debouncing SSE refresh
   const currentPathRef = useRef<string[]>(currentPath); // Track current path for SSE relevance check
   const folderStackRef = useRef<(string | null)[]>(folderStack); // Track folder stack for SSE relevance check
   const refreshFilesRef = useRef<

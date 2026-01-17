@@ -366,7 +366,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
               action: async () => {
                 try {
                   await pasteClipboard(
-                    targetId ?? folderStack[folderStack.length - 1],
+                    targetId ?? folderStack[folderStack.length - 1] ?? null,
                   );
                   onActionComplete?.();
                 } catch (error) {
@@ -512,7 +512,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
       } else if (event.key === "Enter" && focusedIndex !== null) {
         event.preventDefault();
         const item = menuItems[focusedIndex];
-        if (!item.disabled) {
+        if (item && !item.disabled) {
           item.action();
           onClose();
         }
