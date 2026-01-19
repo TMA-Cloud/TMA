@@ -25,9 +25,10 @@ Before you begin, ensure you have:
 ## Quick Installation
 
 1. **[Installation Guide](installation.md)** - Step-by-step installation instructions
-2. **[Docker Setup](docker.md)** - Deploy using Docker
-3. **[Environment Setup](environment-setup.md)** - Configure environment variables
-4. **[First Login](first-login.md)** - Create your first account
+2. **[Docker Setup](docker.md)** - Deploy using Docker with prebuilt images from `ghcr.io/tma-cloud/tma`
+3. **[Agent Setup](agent-setup.md)** - Download tma-agent from [GitHub Releases](https://github.com/TMA-Cloud/TMA/releases) for custom drives
+4. **[Environment Setup](environment-setup.md)** - Configure environment variables
+5. **[First Login](first-login.md)** - Create your first account
 
 ## Next Steps
 

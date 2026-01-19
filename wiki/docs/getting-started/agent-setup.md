@@ -8,13 +8,33 @@ The agent is a standalone Go binary that provides file system access for custom 
 
 ## Installation
 
-1. Build or download the agent binary (`tma-agent`)
+### Download Prebuilt Binary (Recommended)
 
-2. Make it executable:
+Prebuilt `tma-agent` binaries are automatically built and attached to each [GitHub Release](https://github.com/TMA-Cloud/TMA/releases). Download the appropriate binary for your platform:
+
+- **Linux (amd64):** `tma-agent-linux-amd64`
+- **Windows (amd64):** `tma-agent-windows-amd64.exe`
+- **macOS (amd64):** `tma-agent-darwin-amd64`
+
+**Steps:**
+
+1. Go to the [GitHub Releases](https://github.com/TMA-Cloud/TMA/releases) page
+2. Download the binary for your platform from the latest release
+3. Rename the downloaded file to `tma-agent` (or `tma-agent.exe` on Windows)
+4. Make it executable (Linux/macOS):
 
    ```bash
    chmod +x tma-agent
    ```
+
+### Build from Source
+
+Alternatively, you can build the agent from source:
+
+```bash
+cd agent
+go build -o tma-agent main.go
+```
 
 ## Configuration
 
@@ -152,4 +172,6 @@ curl http://localhost:8080/health
 ## Related Topics
 
 - [Custom Drives](/guides/admin/custom-drives) - Custom drive configuration
-- [Docker Setup](docker.md) - Docker deployment
+- [Docker Setup](docker.md) - Docker deployment with prebuilt images
+- [GitHub Releases](https://github.com/TMA-Cloud/TMA/releases) - Download prebuilt agent binaries
+- [tma-agent Repository](https://github.com/TMA-Cloud/TMA/tree/main/agent) - Agent source code

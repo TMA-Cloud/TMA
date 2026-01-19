@@ -71,5 +71,6 @@ docker inspect --format='{{.State.Health.Status}}' tma-cloud-app
 
 ## Related Topics
 
-- [Docker Setup](/getting-started/docker) - Docker guide
+- [Docker Setup](/getting-started/docker) - Docker guide with prebuilt images from `ghcr.io/tma-cloud/tma`
+- [Agent Setup](/getting-started/agent-setup) - Install tma-agent from [GitHub Releases](https://github.com/TMA-Cloud/TMA/releases)
 - [Environment Setup](/getting-started/environment-setup) - Configuration

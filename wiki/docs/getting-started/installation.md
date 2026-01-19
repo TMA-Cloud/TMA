@@ -2,6 +2,15 @@
 
 Step-by-step installation guide for TMA Cloud.
 
+## Installation Options
+
+TMA Cloud can be installed in two ways:
+
+1. **[Docker Deployment](docker.md)** (Recommended) - Use prebuilt Docker images from `ghcr.io/tma-cloud/tma` for the easiest setup
+2. **Manual Installation** - Build and run from source (see below)
+
+For Docker deployment with prebuilt images, see the [Docker Setup Guide](docker.md).
+
 ## Prerequisites
 
 - Node.js (v25+)
@@ -123,7 +132,7 @@ Access at `http://localhost:5173`
 
 **Audit Worker:** Must run `npm run worker` in production. See [Audit Logs Documentation](/guides/operations/audit-logs).
 
-**Custom Drives:** The agent is required for custom drive functionality. See [Agent Setup](agent-setup.md) for installation and configuration. The agent is needed for both bare metal and Docker setups.
+**Custom Drives:** The agent is required for custom drive functionality. See [Agent Setup](agent-setup.md) for installation and configuration. The agent is needed for both bare metal and Docker setups. Prebuilt `tma-agent` binaries are available in [GitHub Releases](https://github.com/TMA-Cloud/TMA/releases).
 
 ## Next Steps
 

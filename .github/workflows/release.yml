@@ -11,7 +11,67 @@ on:
         required: true
 
 jobs:
+  build-agent:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        include:
+          - os: ubuntu-latest
+            goos: linux
+            goarch: amd64
+            ext: ''
+            name: linux-amd64
+          - os: windows-latest
+            goos: windows
+            goarch: amd64
+            ext: '.exe'
+            name: windows-amd64
+          - os: macos-latest
+            goos: darwin
+            goarch: amd64
+            ext: ''
+            name: darwin-amd64
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ github.event.inputs.tag }}"
+          else
+            TAG="${GITHUB_REF#refs/tags/}"
+          fi
+          VERSION="${TAG#v}"
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: agent/go.mod
+
+      - name: Build agent binary
+        working-directory: agent
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          go build -ldflags="-s -w" -o tma-agent${{ matrix.ext }} main.go
+
+      - name: Upload agent artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tma-agent-${{ matrix.name }}
+          path: agent/tma-agent${{ matrix.ext }}
+          retention-days: 30
+
   release:
+    needs: build-agent
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -45,6 +105,28 @@ jobs:
             echo "Warning: Package version ($PKG_VERSION) doesn't match tag version (${{ steps.version.outputs.version }})"
           fi
 
+      - name: Download agent artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: agent-binaries
+
+      - name: Prepare agent binaries for release
+        run: |
+          # Flatten the directory structure and rename files with platform names
+          mkdir -p release-binaries
+          for dir in agent-binaries/*/; do
+            if [ -d "$dir" ]; then
+              platform=$(basename "$dir")
+              for file in "$dir"*; do
+                if [ -f "$file" ]; then
+                  # Copy and rename to include platform in filename
+                  cp "$file" "release-binaries/$platform"
+                fi
+              done
+            fi
+          done
+          ls -lh release-binaries/
+
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
@@ -59,8 +141,16 @@ jobs:
             docker pull ${{ env.REGISTRY }}/${{ github.repository }}:latest
             ```
 
+            ### tma-agent Binaries
+            Prebuilt binaries for the tma-agent are available for download:
+            - `tma-agent-linux-amd64` - Linux (amd64)
+            - `tma-agent-windows-amd64.exe` - Windows (amd64)
+            - `tma-agent-darwin-amd64` - macOS (amd64)
+
             ### Changes
             See [CHANGELOG](https://github.com/${{ github.repository }}/compare/${{ steps.version.outputs.tag }}^...${{ steps.version.outputs.tag }}) for details.
+          files: |
+            release-binaries/*
           draft: false
           prerelease: ${{ contains(steps.version.outputs.tag, '-') }}
         env:

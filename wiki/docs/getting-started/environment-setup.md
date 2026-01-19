@@ -70,25 +70,7 @@ Environment variable reference for TMA Cloud.
 | --------------------- | -------- | ---------------------------------------------------- |
 | `AGENT_WEBHOOK_TOKEN` | No       | Token for agent webhook authentication (recommended) |
 
-**Agent Configuration:**
-
-Agent settings (URL and token) are configured in Settings → Custom Drive Management (first user only), not via environment variables.
-
-**Setup Steps:**
-
-1. Install and configure agent on Docker host:
-
-   ```bash
-   tma-agent add --path /mnt/storage
-   tma-agent token --generate
-   tma-agent start
-   ```
-
-2. Configure agent URL and token in Settings → Custom Drive Management
-
-3. Set `AGENT_WEBHOOK_TOKEN` in `.env` to secure webhook endpoint (optional but recommended)
-
-**Note:** Custom drive paths are configured per-user in Settings → Users (admin-only).
+**Note:** Set to secure webhook endpoint (optional but recommended).
 
 ## Logging Configuration
 

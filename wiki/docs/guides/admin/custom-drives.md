@@ -19,7 +19,7 @@ Custom drives allow users to store files on external or mounted storage instead 
 
 ### Custom Drive Setup
 
-See [Agent Setup](/getting-started/agent-setup) for agent installation and configuration.
+See [Agent Setup](/getting-started/agent-setup) for agent installation and configuration. Prebuilt `tma-agent` binaries are available in [GitHub Releases](https://github.com/TMA-Cloud/TMA/releases) for Linux, Windows, and macOS.
 
 ### Per-User Configuration
 

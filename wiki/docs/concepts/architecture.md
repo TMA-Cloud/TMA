@@ -96,7 +96,7 @@ backend/
 - **Services:** Background processes (cleanup, scanning, audit logging)
 - **Caching:** Redis-based caching with automatic invalidation
 - **Real-Time Events:** Redis pub/sub + SSE for file event broadcasting
-- **Agent Integration:** Standalone Go agent for custom drive operations (Docker)
+- **Agent Integration:** Standalone Go [tma-agent](https://github.com/TMA-Cloud/TMA/tree/main/agent) for custom drive operations (Docker)
 
 ## Frontend Structure
 

@@ -66,7 +66,16 @@ Check code formatting without making changes.
 
 ## Docker Commands
 
-### Build Image
+### Using Prebuilt Images (Recommended)
+
+Prebuilt Docker images are available on GitHub Container Registry:
+
+```bash
+docker pull ghcr.io/tma-cloud/tma:latest
+docker pull ghcr.io/tma-cloud/tma:2.0.4
+```
+
+### Build Image from Source
 
 ```bash
 make build
@@ -135,4 +144,5 @@ Migrations run automatically on application startup.
 ## Related Topics
 
 - [Installation](/getting-started/installation) - Setup guide
-- [Docker Setup](/getting-started/docker) - Docker guide
+- [Docker Setup](/getting-started/docker) - Docker guide with prebuilt images
+- [Agent Setup](/getting-started/agent-setup) - Install tma-agent from [GitHub Releases](https://github.com/TMA-Cloud/TMA/releases)

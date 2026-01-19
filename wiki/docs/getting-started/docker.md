@@ -6,11 +6,27 @@ Docker deployment guide for TMA Cloud.
 
 - Docker (v20.10+)
 - Docker Compose (v2.0+)
-- Node.js (v25+) - For version extraction during build
+- Node.js (v25+) - For version extraction during build (only if building from source)
 
 ## Quick Start
 
-### 1. Build Docker Image
+### Option 1: Use Prebuilt Docker Images (Recommended)
+
+Prebuilt Docker images are available on GitHub Container Registry. This is the easiest way to get started:
+
+```bash
+# Pull the latest image
+docker pull ghcr.io/tma-cloud/tma:latest
+
+# Or pull a specific version
+docker pull ghcr.io/tma-cloud/tma:2.0.0
+```
+
+Then update your `docker-compose.yml` to use the prebuilt image instead of building locally.
+
+### Option 2: Build Docker Image from Source
+
+If you prefer to build from source:
 
 ```bash
 make build
@@ -69,7 +85,7 @@ chown -R 1001:1001 uploads  # Container runs as UID 1001
 
 Custom drives require the agent running on the host system. **Note:** The agent is required for custom drives in both bare metal and Docker setups.
 
-See [Agent Setup](agent-setup.md) for installation and configuration.
+See [Agent Setup](agent-setup.md) for installation and configuration. Prebuilt `tma-agent` binaries are available in [GitHub Releases](https://github.com/TMA-Cloud/TMA/releases) for Linux, Windows, and macOS.
 
 ## Building Images
 
