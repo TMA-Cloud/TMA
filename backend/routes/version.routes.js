@@ -4,6 +4,7 @@ const path = require('path');
 const https = require('https');
 const auth = require('../middleware/auth.middleware');
 const { isFirstUser } = require('../models/user.model');
+const { getAgentVersion } = require('../utils/agentClient');
 const { sendError } = require('../utils/response');
 const { logger } = require('../config/logger');
 
@@ -44,9 +45,11 @@ function readPackageVersion(packagePath) {
 // Backend version - read once at startup
 const backendVersion = readPackageVersion(path.join(__dirname, '..', 'package.json'));
 
-router.get('/', (_req, res) => {
+router.get('/', async (_req, res) => {
+  const agentVersion = await getAgentVersion();
   res.json({
     backend: backendVersion,
+    agent: agentVersion,
   });
 });
 

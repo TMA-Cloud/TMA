@@ -258,6 +258,87 @@ async function testAgentConnection(url, token = null) {
 }
 
 /**
+ * Get agent version from the agent API
+ * @returns {Promise<string>} Agent version or 'unknown' if unavailable
+ */
+async function getAgentVersion() {
+  try {
+    const settings = await getAgentSettings();
+
+    if (!settings.url) {
+      return 'unknown';
+    }
+
+    const url = new URL(settings.url);
+    const versionUrl = `${url.origin}/version`;
+    const requestModule = url.protocol === 'https:' ? https : http;
+
+    return new Promise(resolve => {
+      let resolved = false;
+      const options = {
+        timeout: 5000,
+      };
+
+      // Add token if configured
+      if (settings.token) {
+        options.headers = {
+          Authorization: `Bearer ${settings.token}`,
+        };
+      }
+
+      const req = requestModule.get(versionUrl, options, res => {
+        if (resolved) return;
+
+        if (res.statusCode !== 200) {
+          resolved = true;
+          resolve('unknown');
+          return;
+        }
+
+        let data = '';
+        res.on('data', chunk => {
+          data += chunk;
+        });
+
+        res.on('end', () => {
+          if (resolved) return;
+          resolved = true;
+
+          try {
+            const parsed = JSON.parse(data);
+            resolve(parsed.agent || 'unknown');
+          } catch {
+            resolve('unknown');
+          }
+        });
+
+        res.on('error', () => {
+          if (resolved) return;
+          resolved = true;
+          resolve('unknown');
+        });
+      });
+
+      req.on('error', () => {
+        if (resolved) return;
+        resolved = true;
+        resolve('unknown');
+      });
+
+      req.setTimeout(5000, () => {
+        if (resolved) return;
+        resolved = true;
+        req.destroy();
+        resolve('unknown');
+      });
+    });
+  } catch (err) {
+    logger.debug({ err }, 'Failed to fetch agent version');
+    return 'unknown';
+  }
+}
+
+/**
  * Reset agent status (no-op, kept for API compatibility)
  */
 function resetAgentStatus() {
@@ -269,4 +350,5 @@ module.exports = {
   checkAgentStatus,
   resetAgentStatus,
   testAgentConnection,
+  getAgentVersion,
 };

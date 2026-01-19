@@ -167,7 +167,22 @@ tma-agent list
 
 # Check agent health
 curl http://localhost:8080/health
+
+# Check agent version
+curl http://localhost:8080/version
 ```
+
+**Version Endpoint:**
+
+The agent exposes a `/version` endpoint that returns the agent version:
+
+```json
+{
+  "agent": "1.0.0"
+}
+```
+
+This version is used by the backend for version checking and update notifications.
 
 ## Related Topics
 

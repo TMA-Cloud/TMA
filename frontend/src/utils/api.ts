@@ -537,14 +537,17 @@ export async function getBackupCodesCount(): Promise<{ count: number }> {
 export interface VersionInfo {
   frontend: string;
   backend: string;
+  agent: string;
 }
 
 /**
- * Get currently deployed versions for frontend and backend
- * Backend version comes from server, frontend version is embedded at build time
+ * Get currently deployed versions for frontend, backend, and agent
+ * Backend and agent versions come from server, frontend version is embedded at build time
  */
 export async function getCurrentVersions(): Promise<VersionInfo> {
-  const backendVersions = await apiGet<{ backend: string }>("/api/version");
+  const backendVersions = await apiGet<{ backend: string; agent: string }>(
+    "/api/version",
+  );
 
   // Frontend version is embedded at build time, so use it directly
   const frontendVersion =
@@ -555,6 +558,7 @@ export async function getCurrentVersions(): Promise<VersionInfo> {
   return {
     backend: backendVersions.backend,
     frontend: frontendVersion,
+    agent: backendVersions.agent || "unknown",
   };
 }
 

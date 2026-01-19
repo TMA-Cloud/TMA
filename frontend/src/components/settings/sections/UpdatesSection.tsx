@@ -36,6 +36,11 @@ export const UpdatesSection: React.FC<UpdatesSectionProps> = ({
         description={versionDescription("backend")}
       />
       <SettingsItem
+        label="Agent"
+        value={versionStatusText("agent")}
+        description={versionDescription("agent")}
+      />
+      <SettingsItem
         label="Check for Updates"
         value=""
         action={checkingVersions ? "Checking..." : "Check now"}

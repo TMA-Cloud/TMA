@@ -24,6 +24,7 @@ const (
 	defaultPort   = "8080"
 	maxUploadSize = 10 << 30 // 10GB
 	configFile    = "tma-agent.json"
+	version       = "1.0.0" // Agent version
 )
 
 type Config struct {
@@ -344,6 +345,7 @@ func handleStart() {
 
 	// Setup routes
 	http.HandleFunc("/health", healthHandler)
+	http.HandleFunc("/version", versionHandler)
 	http.HandleFunc("/api/paths", authMiddleware(pathsHandler))
 	http.HandleFunc("/api/list", authMiddleware(listHandler))
 	http.HandleFunc("/api/read", authMiddleware(readHandler))
@@ -375,6 +377,11 @@ func handleStart() {
 func healthHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+}
+
+func versionHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"agent": version})
 }
 
 func pathsHandler(w http.ResponseWriter, r *http.Request) {
