@@ -1,4 +1,4 @@
-const FileType = require('file-type');
+const { fileTypeFromFile } = require('file-type');
 const mime = require('mime-types');
 const path = require('path');
 const { logger } = require('../config/logger');
@@ -18,7 +18,7 @@ function normalizeMime(mimeType) {
  */
 async function detectMimeTypeFromContent(filePath) {
   try {
-    const fileType = await FileType.fromFile(filePath);
+    const fileType = await fileTypeFromFile(filePath);
     return fileType ? fileType.mime : null;
   } catch (error) {
     logger.warn({ error: error.message, filePath }, 'Failed to detect MIME type from file content');
