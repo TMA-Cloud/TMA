@@ -332,45 +332,78 @@ async function batchCreateOrUpdateFolders(name, parentIds, userIds, absolutePath
     await client.query('BEGIN');
     const folderIdsMap = new Map();
     const createdMap = new Map();
-    const normalizedPath = path.resolve(absolutePath).toLowerCase();
     const originalCasePath = path.resolve(absolutePath);
 
     for (const userId of userIds) {
       const parentId = parentIds[userId] || null;
-      const existing = await client.query(
-        'SELECT id, name, parent_id, modified FROM files WHERE LOWER(path) = $1 AND user_id = $2 AND type = $3 AND deleted_at IS NULL',
-        [normalizedPath, userId, 'folder']
-      );
+      const id = generateId(16);
 
-      if (existing.rows.length > 0) {
-        const row = existing.rows[0];
-        const nameChanged = row.name !== name;
-        const parentChanged = row.parent_id !== parentId;
-        const modifiedChanged =
-          modifiedTime && (!row.modified || new Date(modifiedTime).valueOf() !== new Date(row.modified).valueOf());
+      // CTE Upsert query using ON CONFLICT: matches the unique index (path, user_id, type) WHERE path IS NOT NULL
+      // First check if row exists, then upsert and return whether it was existing
+      const upsertQuery = modifiedTime
+        ? `
+          WITH existing_check AS (
+            SELECT id FROM files 
+            WHERE path = $6 AND user_id = $5 AND type = $3 AND deleted_at IS NULL
+          ),
+          upserted AS (
+            INSERT INTO files(id, name, type, parent_id, user_id, path, modified)
+            VALUES($1, $2, $3, $4, $5, $6, $7)
+            ON CONFLICT (path, user_id, type) WHERE path IS NOT NULL
+            DO UPDATE SET
+              name = EXCLUDED.name,
+              parent_id = EXCLUDED.parent_id,
+              modified = EXCLUDED.modified
+            WHERE files.name IS DISTINCT FROM EXCLUDED.name
+               OR files.parent_id IS DISTINCT FROM EXCLUDED.parent_id
+               OR files.modified IS DISTINCT FROM EXCLUDED.modified
+            RETURNING id
+          )
+          SELECT 
+            COALESCE((SELECT id FROM upserted), (SELECT id FROM existing_check)) AS id,
+            EXISTS(SELECT 1 FROM existing_check) AS was_existing
+        `
+        : `
+          WITH existing_check AS (
+            SELECT id FROM files 
+            WHERE path = $6 AND user_id = $5 AND type = $3 AND deleted_at IS NULL
+          ),
+          upserted AS (
+            INSERT INTO files(id, name, type, parent_id, user_id, path)
+            VALUES($1, $2, $3, $4, $5, $6)
+            ON CONFLICT (path, user_id, type) WHERE path IS NOT NULL
+            DO UPDATE SET
+              name = EXCLUDED.name,
+              parent_id = EXCLUDED.parent_id
+            WHERE files.name IS DISTINCT FROM EXCLUDED.name
+               OR files.parent_id IS DISTINCT FROM EXCLUDED.parent_id
+            RETURNING id
+          )
+          SELECT 
+            COALESCE((SELECT id FROM upserted), (SELECT id FROM existing_check)) AS id,
+            EXISTS(SELECT 1 FROM existing_check) AS was_existing
+        `;
 
-        if (nameChanged || parentChanged || modifiedChanged) {
-          const updateFields = modifiedChanged
-            ? [
-                'UPDATE files SET name = $1, parent_id = $2, modified = $3 WHERE id = $4',
-                [name, parentId, modifiedTime, row.id],
-              ]
-            : ['UPDATE files SET name = $1, parent_id = $2 WHERE id = $3', [name, parentId, row.id]];
-          await client.query(updateFields[0], updateFields[1]);
-        }
+      const upsertParams = modifiedTime
+        ? [id, name, 'folder', parentId, userId, originalCasePath, modifiedTime]
+        : [id, name, 'folder', parentId, userId, originalCasePath];
+
+      const result = await client.query(upsertQuery, upsertParams);
+      const row = result.rows[0];
+
+      if (row && row.id) {
         folderIdsMap.set(userId, row.id);
-        createdMap.set(userId, false);
+        createdMap.set(userId, !row.was_existing);
       } else {
-        const id = generateId(16);
-        const insertQuery = modifiedTime
-          ? 'INSERT INTO files(id, name, type, parent_id, user_id, path, modified) VALUES($1, $2, $3, $4, $5, $6, $7)'
-          : 'INSERT INTO files(id, name, type, parent_id, user_id, path) VALUES($1, $2, $3, $4, $5, $6)';
-        const insertParams = modifiedTime
-          ? [id, name, 'folder', parentId, userId, originalCasePath, modifiedTime]
-          : [id, name, 'folder', parentId, userId, originalCasePath];
-        await client.query(insertQuery, insertParams);
-        folderIdsMap.set(userId, id);
-        createdMap.set(userId, true);
+        // Fallback: query to get the id if upsert didn't return it
+        const fallbackResult = await client.query(
+          'SELECT id FROM files WHERE path = $1 AND user_id = $2 AND type = $3 AND deleted_at IS NULL',
+          [originalCasePath, userId, 'folder']
+        );
+        if (fallbackResult.rows[0]) {
+          folderIdsMap.set(userId, fallbackResult.rows[0].id);
+          createdMap.set(userId, false);
+        }
       }
     }
 
@@ -394,47 +427,86 @@ async function batchCreateOrUpdateFiles(name, size, mimeType, absolutePath, pare
     await client.query('BEGIN');
     const fileIdsMap = new Map();
     const createdMap = new Map();
-    const normalizedPath = path.resolve(absolutePath).toLowerCase();
     const originalCasePath = path.resolve(absolutePath);
 
     for (const userId of userIds) {
       const parentId = parentIds[userId] || null;
-      const existing = await client.query(
-        'SELECT id, name, size, mime_type, parent_id, modified FROM files WHERE LOWER(path) = $1 AND user_id = $2 AND type = $3 AND deleted_at IS NULL',
-        [normalizedPath, userId, 'file']
-      );
+      const id = generateId(16);
 
-      if (existing.rows.length > 0) {
-        const row = existing.rows[0];
-        const nameChanged = row.name !== name;
-        const sizeChanged = row.size !== size;
-        const mimeChanged = row.mime_type !== mimeType;
-        const parentChanged = row.parent_id !== parentId;
-        const modifiedChanged =
-          modifiedTime && (!row.modified || new Date(modifiedTime).valueOf() !== new Date(row.modified).valueOf());
+      // CTE Upsert query using ON CONFLICT: matches the unique index (path, user_id, type) WHERE path IS NOT NULL
+      // First check if row exists, then upsert and return whether it was existing
+      const upsertQuery = modifiedTime
+        ? `
+          WITH existing_check AS (
+            SELECT id FROM files 
+            WHERE path = $6 AND user_id = $8 AND type = $3 AND deleted_at IS NULL
+          ),
+          upserted AS (
+            INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id, modified)
+            VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            ON CONFLICT (path, user_id, type) WHERE path IS NOT NULL
+            DO UPDATE SET
+              name = EXCLUDED.name,
+              size = EXCLUDED.size,
+              mime_type = EXCLUDED.mime_type,
+              parent_id = EXCLUDED.parent_id,
+              modified = EXCLUDED.modified
+            WHERE files.name IS DISTINCT FROM EXCLUDED.name
+               OR files.size IS DISTINCT FROM EXCLUDED.size
+               OR files.mime_type IS DISTINCT FROM EXCLUDED.mime_type
+               OR files.parent_id IS DISTINCT FROM EXCLUDED.parent_id
+               OR files.modified IS DISTINCT FROM EXCLUDED.modified
+            RETURNING id
+          )
+          SELECT 
+            COALESCE((SELECT id FROM upserted), (SELECT id FROM existing_check)) AS id,
+            EXISTS(SELECT 1 FROM existing_check) AS was_existing
+        `
+        : `
+          WITH existing_check AS (
+            SELECT id FROM files 
+            WHERE path = $6 AND user_id = $8 AND type = $3 AND deleted_at IS NULL
+          ),
+          upserted AS (
+            INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id)
+            VALUES($1, $2, $3, $4, $5, $6, $7, $8)
+            ON CONFLICT (path, user_id, type) WHERE path IS NOT NULL
+            DO UPDATE SET
+              name = EXCLUDED.name,
+              size = EXCLUDED.size,
+              mime_type = EXCLUDED.mime_type,
+              parent_id = EXCLUDED.parent_id
+            WHERE files.name IS DISTINCT FROM EXCLUDED.name
+               OR files.size IS DISTINCT FROM EXCLUDED.size
+               OR files.mime_type IS DISTINCT FROM EXCLUDED.mime_type
+               OR files.parent_id IS DISTINCT FROM EXCLUDED.parent_id
+            RETURNING id
+          )
+          SELECT 
+            COALESCE((SELECT id FROM upserted), (SELECT id FROM existing_check)) AS id,
+            EXISTS(SELECT 1 FROM existing_check) AS was_existing
+        `;
 
-        if (nameChanged || sizeChanged || mimeChanged || parentChanged || modifiedChanged) {
-          const updateQuery = modifiedChanged
-            ? 'UPDATE files SET name = $1, size = $2, mime_type = $3, parent_id = $4, modified = $5 WHERE id = $6'
-            : 'UPDATE files SET name = $1, size = $2, mime_type = $3, parent_id = $4 WHERE id = $5';
-          const updateParams = modifiedChanged
-            ? [name, size, mimeType, parentId, modifiedTime, row.id]
-            : [name, size, mimeType, parentId, row.id];
-          await client.query(updateQuery, updateParams);
-        }
+      const upsertParams = modifiedTime
+        ? [id, name, 'file', size, mimeType, originalCasePath, parentId, userId, modifiedTime]
+        : [id, name, 'file', size, mimeType, originalCasePath, parentId, userId];
+
+      const result = await client.query(upsertQuery, upsertParams);
+      const row = result.rows[0];
+
+      if (row && row.id) {
         fileIdsMap.set(userId, { id: row.id });
-        createdMap.set(userId, false);
+        createdMap.set(userId, !row.was_existing);
       } else {
-        const id = generateId(16);
-        const insertQuery = modifiedTime
-          ? 'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id, modified) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9)'
-          : 'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id) VALUES($1, $2, $3, $4, $5, $6, $7, $8)';
-        const insertParams = modifiedTime
-          ? [id, name, 'file', size, mimeType, originalCasePath, parentId, userId, modifiedTime]
-          : [id, name, 'file', size, mimeType, originalCasePath, parentId, userId];
-        await client.query(insertQuery, insertParams);
-        fileIdsMap.set(userId, { id });
-        createdMap.set(userId, true);
+        // Fallback: query to get the id if upsert didn't return it
+        const fallbackResult = await client.query(
+          'SELECT id FROM files WHERE path = $1 AND user_id = $2 AND type = $3 AND deleted_at IS NULL',
+          [originalCasePath, userId, 'file']
+        );
+        if (fallbackResult.rows[0]) {
+          fileIdsMap.set(userId, { id: fallbackResult.rows[0].id });
+          createdMap.set(userId, false);
+        }
       }
     }
 
