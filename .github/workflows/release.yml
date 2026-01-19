@@ -54,6 +54,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: agent/go.mod
+          cache-dependency-path: agent/go.sum
 
       - name: Build agent binary
         working-directory: agent
