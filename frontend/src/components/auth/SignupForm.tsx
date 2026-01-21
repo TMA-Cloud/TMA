@@ -46,6 +46,7 @@ export const SignupForm: React.FC<{ onSwitch: () => void }> = ({
             value={name}
             onChange={(e) => setName(e.target.value)}
             autoComplete="name"
+            maxLength={100}
           />
         </div>
         <div>
@@ -55,12 +56,14 @@ export const SignupForm: React.FC<{ onSwitch: () => void }> = ({
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             autoComplete="email"
+            maxLength={254}
           />
         </div>
         <PasswordInput
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           autoComplete="new-password"
+          maxLength={128}
           showPassword={showPassword}
           onTogglePassword={() => setShowPassword((v) => !v)}
         />

@@ -64,11 +64,13 @@ export const LoginForm: React.FC<{ onSwitch: () => void }> = ({ onSwitch }) => {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             autoComplete="email"
+            maxLength={254}
           />
         </div>
         <PasswordInput
           value={password}
           onChange={(e) => setPassword(e.target.value)}
+          maxLength={128}
           showPassword={showPassword}
           onTogglePassword={() => setShowPassword((v) => !v)}
         />

@@ -6,6 +6,7 @@ interface PasswordInputProps {
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   placeholder?: string;
   autoComplete?: string;
+  maxLength?: number;
   showPassword: boolean;
   onTogglePassword: () => void;
 }
@@ -15,6 +16,7 @@ export const PasswordInput: React.FC<PasswordInputProps> = ({
   onChange,
   placeholder = "Password",
   autoComplete = "current-password",
+  maxLength = 128,
   showPassword,
   onTogglePassword,
 }) => {
@@ -27,6 +29,7 @@ export const PasswordInput: React.FC<PasswordInputProps> = ({
         value={value}
         onChange={onChange}
         autoComplete={autoComplete}
+        maxLength={maxLength}
       />
       <button
         type="button"
