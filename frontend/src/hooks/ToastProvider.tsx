@@ -2,6 +2,8 @@ import React, { useState } from "react";
 import { ToastContext, type Toast } from "./useToast";
 import { ToastContainer } from "../components/ui/Toast";
 
+const MAX_VISIBLE_TOASTS = 3;
+
 export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
@@ -13,7 +15,11 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({
   ) => {
     const id = Date.now().toString();
     const newToast = { id, message, type };
-    setToasts((prev) => [...prev, newToast]);
+
+    setToasts((prev) => {
+      const updatedToasts = [...prev, newToast];
+      return updatedToasts.slice(-MAX_VISIBLE_TOASTS);
+    });
   };
 
   const removeToast = (id: string) => {
