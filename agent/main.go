@@ -12,20 +12,43 @@ import (
 	mathrand "math/rand"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+	"github.com/kardianos/service"
 )
 
 const (
 	defaultPort   = "8080"
 	maxUploadSize = 10 << 30 // 10GB
 	configFile    = "tma-agent.json"
-	version       = "1.0.0" // Agent version
+	version       = "1.0.1" // Agent version
 )
+
+type program struct {
+	exit chan struct{}
+}
+
+func (p *program) Start(s service.Service) error {
+	p.exit = make(chan struct{})
+	go func() {
+		handleStart()
+		close(p.exit)
+	}()
+	return nil
+}
+
+func (p *program) Stop(s service.Service) error {
+	if p.exit != nil {
+		close(p.exit)
+	}
+	return nil
+}
 
 type Config struct {
 	Port         string   `json:"port"`
@@ -66,6 +89,19 @@ type WatcherManager struct {
 var watcherManager *WatcherManager
 
 func main() {
+	svcConfig := &service.Config{
+		Name:        "tma-agent",
+		DisplayName: "TMA Drive Agent",
+		Description: "Agent for passing mounted drives to the TMA app.",
+		Arguments:   []string{"start"},
+	}
+
+	prg := &program{}
+	s, err := service.New(prg, svcConfig)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	if len(os.Args) < 2 {
 		printUsage()
 		os.Exit(1)
@@ -74,10 +110,53 @@ func main() {
 	command := os.Args[1]
 
 	switch command {
+	case "install":
+		if err := handleUniversalInstall(s, svcConfig); err != nil {
+			fmt.Printf("Installation failed: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println("Service installed successfully!")
+		return
+
+	case "uninstall":
+		s.Stop()
+		if err := s.Uninstall(); err != nil {
+			fmt.Printf("Failed to uninstall service: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println("Service uninstalled successfully!")
+
+		if err := handleUniversalUninstall(); err != nil {
+			fmt.Printf("Warning during file cleanup: %v\n", err)
+		}
+		return
+
+	case "service-start":
+		err = s.Start()
+		if err != nil {
+			fmt.Printf("Failed to start service: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println("Service started!")
+		return
+
+	case "service-stop":
+		err = s.Stop()
+		if err != nil {
+			fmt.Printf("Failed to stop service: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println("Service stopped!")
+		return
+	}
+
+	switch command {
 	case "add":
 		handleAdd()
 	case "start":
-		handleStart()
+		if err := s.Run(); err != nil {
+			log.Fatal(err)
+		}
 	case "list":
 		handleList()
 	case "remove":
@@ -91,32 +170,225 @@ func main() {
 	}
 }
 
+// --- Installation Logic (Windows, Mac, Linux) ---
+func getInstallPaths() (string, string) {
+	if runtime.GOOS == "windows" {
+		progFiles := os.Getenv("ProgramFiles")
+		if progFiles == "" {
+			progFiles = "C:\\Program Files"
+		}
+		installDir := filepath.Join(progFiles, "TMA Drive Agent")
+		return filepath.Join(installDir, "tma-agent.exe"), installDir
+	}
+	return "/usr/local/bin/tma-agent", "/usr/local/bin"
+}
+
+func handleUniversalInstall(s service.Service, svcConfig *service.Config) error {
+	targetExePath, targetConfigDir := getInstallPaths()
+
+	currentExe, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("failed to get executable path: %v", err)
+	}
+	currentExe, _ = filepath.EvalSymlinks(currentExe)
+
+	if currentExe == targetExePath {
+		return s.Install()
+	}
+
+	fmt.Printf("Installing agent to safe location: %s\n", targetExePath)
+
+	if err := os.MkdirAll(targetConfigDir, 0755); err != nil {
+		return fmt.Errorf("failed to create install directory: %v", err)
+	}
+
+	_ = s.Stop()
+
+	if runtime.GOOS == "windows" {
+		oldPath := targetExePath + ".old"
+		os.Remove(oldPath)
+		os.Rename(targetExePath, oldPath)
+	} else {
+		os.Remove(targetExePath)
+	}
+
+	if err := copyFile(currentExe, targetExePath); err != nil {
+		return fmt.Errorf("failed to copy binary: %v", err)
+	}
+
+	if runtime.GOOS != "windows" {
+		if err := os.Chmod(targetExePath, 0755); err != nil {
+			return fmt.Errorf("failed to set permissions: %v", err)
+		}
+	}
+
+	currentConfigPath := filepath.Join(filepath.Dir(currentExe), configFile)
+	targetConfigPath := filepath.Join(targetConfigDir, configFile)
+
+	if _, err := os.Stat(currentConfigPath); err == nil {
+		fmt.Printf("Copying config file to: %s\n", targetConfigPath)
+		if err := copyFile(currentConfigPath, targetConfigPath); err != nil {
+			return fmt.Errorf("failed to copy config: %v", err)
+		}
+		os.Remove(currentConfigPath)
+	} else if _, err := os.Stat(targetConfigPath); os.IsNotExist(err) {
+		fmt.Println("No existing config found. A new one will be created when the service starts.")
+	}
+
+	// Windows PATH addition
+	if runtime.GOOS == "windows" {
+		fmt.Println("Adding installation directory to System PATH...")
+		addToWindowsPath(targetConfigDir)
+	}
+
+	// Cleanup Source
+	if runtime.GOOS == "windows" {
+		fmt.Println("NOTE: Installation complete. You can delete the installer file.")
+	} else {
+		os.Remove(currentExe)
+		fmt.Println("Cleaned up source binary.")
+	}
+
+	svcConfig.Executable = targetExePath
+	svcConfig.WorkingDirectory = targetConfigDir
+
+	newS, err := service.New(&program{}, svcConfig)
+	if err != nil {
+		return err
+	}
+
+	return newS.Install()
+}
+
+func handleUniversalUninstall() error {
+	targetExePath, targetConfigDir := getInstallPaths()
+
+	if runtime.GOOS == "windows" {
+		fmt.Println("Removing installation directory from System PATH...")
+		removeFromWindowsPath(targetConfigDir)
+	}
+
+	targetConfigPath := filepath.Join(targetConfigDir, configFile)
+	if err := os.Remove(targetConfigPath); err == nil {
+		fmt.Printf("Removed config: %s\n", targetConfigPath)
+	}
+
+	if runtime.GOOS == "windows" {
+		trashPath := targetExePath + ".old"
+
+		_ = os.Remove(trashPath)
+
+		if err := os.Rename(targetExePath, trashPath); err != nil {
+			fmt.Printf("Warning: Could not rename binary: %v\n", err)
+			fmt.Println("Please manually delete the folder: " + targetConfigDir)
+		} else {
+			fmt.Println("Binary marked for deletion.")
+
+			psCommand := fmt.Sprintf(`
+				Start-Sleep -Seconds 2;
+				for($i=0; $i -lt 20; $i++) {
+					try {
+						Remove-Item -LiteralPath '%s' -Force -ErrorAction Stop;
+						Remove-Item -LiteralPath '%s' -Force -Recurse -ErrorAction SilentlyContinue;
+						break;
+					} catch {
+						Start-Sleep -Seconds 1;
+					}
+				}
+			`, trashPath, targetConfigDir)
+
+			exec.Command("powershell", "-Command", psCommand).Start()
+
+			fmt.Println("Uninstall complete. Cleanup running in background...")
+			os.Exit(0)
+		}
+	} else {
+		if err := os.Remove(targetExePath); err == nil {
+			fmt.Printf("Removed binary: %s\n", targetExePath)
+		}
+		os.Remove(targetConfigDir)
+	}
+
+	return nil
+}
+
+// Windows Path Helpers
+func addToWindowsPath(pathToAdd string) {
+	cmd := fmt.Sprintf(
+		`$path = [System.Environment]::GetEnvironmentVariable('Path', 'Machine'); `+
+			`if ($path -notlike '*%s*') { `+
+			`[System.Environment]::SetEnvironmentVariable('Path', $path + ';%s', 'Machine') `+
+			`}`, pathToAdd, pathToAdd)
+	exec.Command("powershell", "-Command", cmd).Run()
+}
+
+func removeFromWindowsPath(pathToRemove string) {
+	cmd := fmt.Sprintf(
+		`$path = [System.Environment]::GetEnvironmentVariable('Path', 'Machine'); `+
+			`$newPath = $path.Replace(';%s', ''); `+
+			`[System.Environment]::SetEnvironmentVariable('Path', $newPath, 'Machine')`,
+		pathToRemove)
+	exec.Command("powershell", "-Command", cmd).Run()
+}
+
+func copyFile(src, dst string) error {
+	sourceFile, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer sourceFile.Close()
+
+	destFile, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer destFile.Close()
+
+	_, err = io.Copy(destFile, sourceFile)
+	return err
+}
+
 func printUsage() {
 	fmt.Println("TMA Drive Agent - Standalone agent for passing mounted drives to the app")
 	fmt.Println()
-	fmt.Println("Usage:")
-	fmt.Println("  tma-agent add --path <absolute_path>    Add a drive path")
-	fmt.Println("  tma-agent start                          Start the agent server")
-	fmt.Println("  tma-agent list                           List all added paths")
-	fmt.Println("  tma-agent remove --path <absolute_path>   Remove a drive path")
-	fmt.Println("  tma-agent token                          Generate or show token")
+	fmt.Println("Management Commands:")
+	fmt.Println("  tma-agent add --path <path>      Add a drive path")
+	fmt.Println("  tma-agent remove --path <path>   Remove a drive path")
+	fmt.Println("  tma-agent list                   List all added paths")
+	fmt.Println("  tma-agent token                  Generate or show token")
 	fmt.Println()
-	fmt.Println("Examples:")
-	fmt.Println("  tma-agent add --path /mnt/nas_drive")
-	fmt.Println("  tma-agent add --path C:/Users/username/my_drive")
-	fmt.Println("  tma-agent token")
-	fmt.Println("  tma-agent start -token <your-token>")
+	fmt.Println("Service Commands (Run as Admin/Root):")
+	fmt.Println("  tma-agent install                Install to system safe location")
+	fmt.Println("  tma-agent uninstall              Remove service and files")
+	fmt.Println("  tma-agent service-start          Start the background service")
+	fmt.Println("  tma-agent service-stop           Stop the background service")
+	fmt.Println()
+	fmt.Println("Manual Run:")
+	fmt.Println("  tma-agent start                  Run interactively (ctrl+c to stop)")
+}
+
+func getExecutableDir() string {
+	ex, err := os.Executable()
+	if err != nil {
+		return "."
+	}
+	resolved, err := filepath.EvalSymlinks(ex)
+	if err != nil {
+		return filepath.Dir(ex)
+	}
+	return filepath.Dir(resolved)
 }
 
 func loadConfig() *Config {
+	configPath := filepath.Join(getExecutableDir(), configFile)
+
 	config := &Config{
 		Port:  defaultPort,
 		Token: "",
 		Paths: []string{},
 	}
 
-	// Try to load from config file
-	if data, err := os.ReadFile(configFile); err == nil {
+	if data, err := os.ReadFile(configPath); err == nil {
 		json.Unmarshal(data, config)
 	}
 
@@ -124,11 +396,12 @@ func loadConfig() *Config {
 }
 
 func saveConfig(config *Config) error {
+	configPath := filepath.Join(getExecutableDir(), configFile)
 	data, err := json.MarshalIndent(config, "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(configFile, data, 0644)
+	return os.WriteFile(configPath, data, 0644)
 }
 
 func handleAdd() {

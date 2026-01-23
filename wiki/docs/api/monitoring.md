@@ -45,7 +45,7 @@ Get currently deployed backend and agent versions.
 ```json
 {
   "backend": "2.0.5",
-  "agent": "1.0.0"
+  "agent": "1.0.1"
 }
 ```
 
@@ -64,7 +64,7 @@ The response format depends on the external update feed. Example:
 {
   "frontend": "2.0.5",
   "backend": "2.0.5",
-  "agent": "1.0.0"
+  "agent": "1.0.1"
 }
 ```
 

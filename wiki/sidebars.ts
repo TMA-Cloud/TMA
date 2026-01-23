@@ -73,6 +73,7 @@ const sidebars: SidebarsConfig = {
         "api/users",
         "api/onlyoffice",
         "api/monitoring",
+        "api/agent",
         "api/errors",
         "api/examples",
       ],
