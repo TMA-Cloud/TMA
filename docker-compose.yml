@@ -73,8 +73,38 @@ services:
       timeout: 3s
       retries: 3
       start_period: 40s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - tma-cloud-network
+
+  # PostgreSQL - Primary database
+  # When using this Docker PostgreSQL service, update DB_HOST in .env to "postgres"
+  # (the service name) instead of an external IP address
+  postgres:
+    image: postgres:18-alpine
+    container_name: tma-cloud-postgres
+    restart: unless-stopped
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    environment:
+      - POSTGRES_USER=${DB_USER:-postgres}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-postgres}
+      - POSTGRES_DB=${DB_NAME:-tma_storage}
+      - POSTGRES_INITDB_ARGS=--encoding=UTF8 --locale=C
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    networks:
+      - tma-cloud-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   # Redis - Caching layer for improved performance
   # Optional but highly recommended for production
@@ -120,7 +150,12 @@ services:
       - "host.docker.internal:host-gateway"
     command: node backend/audit-worker.js
     depends_on:
-      - app
+      app:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - tma-cloud-network
 
@@ -130,6 +165,8 @@ services:
   # See agent/README.md for setup instructions
 
 volumes:
+  postgres-data:
+    driver: local
   redis-data:
     driver: local
 
