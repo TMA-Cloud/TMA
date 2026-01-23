@@ -46,13 +46,15 @@ http://your-domain.com/s/{token}
 
 ### Custom Share Domain
 
-When `SHARE_BASE_URL` is configured:
+Configure a custom share base URL in Settings → Share Base URL (admin only).
+
+When configured:
 
 ```bash
 http://share.your-domain.com/s/{token}
 ```
 
-Share domain middleware blocks all routes except share links.
+Share domain middleware blocks all routes except `/s/*`, `/health`, and `/metrics`.
 
 ## Share Management
 

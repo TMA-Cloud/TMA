@@ -72,7 +72,7 @@ TMA Cloud uses **Single-Origin Architecture** - backend serves both API and fron
 
 ### Custom Share Domain (Optional)
 
-When `SHARE_BASE_URL` is configured, share links can use a dedicated domain. Share domain middleware blocks all routes except `/s/*`, `/health`, and `/metrics`.
+Configure custom share base URL in Settings → Share Base URL (admin only). When configured, share links use the custom domain. Share domain middleware blocks all routes except `/s/*`, `/health`, and `/metrics`.
 
 ## Backend Structure
 

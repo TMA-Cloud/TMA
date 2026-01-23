@@ -122,7 +122,7 @@ async function shareFilesController(req, res) {
   try {
     await client.query('BEGIN');
 
-    // New contract: links[id] = full URL (respecting SHARE_BASE_URL / proxy headers)
+    // New contract: links[id] = full URL (respecting share base URL from database / proxy headers)
     const links = {};
 
     if (validatedShared) {
@@ -136,7 +136,7 @@ async function shareFilesController(req, res) {
           await addFilesToShare(token, treeIds);
         }
 
-        links[id] = buildShareLink(token, req);
+        links[id] = await buildShareLink(token, req);
 
         // Log audit event for share creation
         if (isNewShare) {
@@ -251,7 +251,7 @@ async function getShareLinksController(req, res) {
   for (const id of validatedIds) {
     const token = await getShareLink(id, req.userId);
     if (token) {
-      links[id] = buildShareLink(token, req);
+      links[id] = await buildShareLink(token, req);
     }
   }
 

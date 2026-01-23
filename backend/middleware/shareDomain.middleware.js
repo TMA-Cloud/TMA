@@ -3,13 +3,15 @@ const { getRequestHost, getShareBaseHost } = require('../utils/shareLink');
 
 /**
  * Middleware to block access to the main app on the share domain.
- * If SHARE_BASE_URL is configured and the request host matches it,
+ * If share base URL is configured in database and the request host matches it,
  * only allow /s/* routes. Block all other routes (including /, /api/*, etc.)
+ *
+ * Uses Redis cache directly for multi-instance support (no in-memory cache dependency)
  */
-function blockMainAppOnShareDomain(req, res, next) {
-  const shareBaseHost = getShareBaseHost();
+async function blockMainAppOnShareDomain(req, res, next) {
+  const shareBaseHost = await getShareBaseHost();
 
-  // If SHARE_BASE_URL is not configured, allow all requests
+  // If share base URL is not configured, allow all requests
   if (!shareBaseHost) {
     return next();
   }

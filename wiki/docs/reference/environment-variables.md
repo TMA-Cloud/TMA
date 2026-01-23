@@ -4,12 +4,11 @@ Complete reference for all environment variables in TMA Cloud.
 
 ## Application Configuration
 
-| Variable         | Required         | Default        | Description              |
-| ---------------- | ---------------- | -------------- | ------------------------ |
-| `NODE_ENV`       | No               | `development`  | Environment mode         |
-| `BPORT`          | No               | `3000`         | Backend server port      |
-| `BACKEND_URL`    | Yes (OnlyOffice) | -              | Public backend URL       |
-| `SHARE_BASE_URL` | No               | Request origin | Base URL for share links |
+| Variable      | Required         | Default       | Description         |
+| ------------- | ---------------- | ------------- | ------------------- |
+| `NODE_ENV`    | No               | `development` | Environment mode    |
+| `BPORT`       | No               | `3000`        | Backend server port |
+| `BACKEND_URL` | Yes (OnlyOffice) | -             | Public backend URL  |
 
 ## Database Configuration
 

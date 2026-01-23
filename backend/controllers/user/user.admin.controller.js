@@ -8,6 +8,8 @@ const {
   setOnlyOfficeSettings,
   getAgentSettings,
   setAgentSettings,
+  getShareBaseUrlSettings,
+  setShareBaseUrlSettings,
   setUserStorageLimit,
   getUserStorageUsage,
   getUserStorageLimit,
@@ -486,6 +488,121 @@ async function updateAgentConfig(req, res) {
 }
 
 /**
+ * Get share base URL settings (admin only)
+ */
+async function getShareBaseUrlConfig(req, res) {
+  try {
+    // Verify user is first user before proceeding
+    const userIsFirst = await isFirstUser(req.userId);
+    if (!userIsFirst) {
+      await logAuditEvent(
+        'admin.settings.read',
+        {
+          status: 'failure',
+          resourceType: 'settings',
+          metadata: { action: 'get_share_base_url_config', reason: 'unauthorized' },
+        },
+        req
+      );
+      logger.warn({ userId: req.userId }, 'Unauthorized share base URL config read attempt');
+      return sendError(res, 403, 'Only the first user can view share base URL settings');
+    }
+
+    const settings = await getShareBaseUrlSettings();
+
+    sendSuccess(res, {
+      url: settings.url,
+    });
+  } catch (err) {
+    logger.error({ err }, 'Failed to get share base URL settings');
+    sendError(res, 500, 'Server error', err);
+  }
+}
+
+/**
+ * Update share base URL settings (admin only)
+ */
+async function updateShareBaseUrlConfig(req, res) {
+  try {
+    // Verify user is first user before proceeding
+    const userIsFirst = await isFirstUser(req.userId);
+    if (!userIsFirst) {
+      await logAuditEvent(
+        'admin.settings.update',
+        {
+          status: 'failure',
+          resourceType: 'settings',
+          metadata: { action: 'update_share_base_url_config', reason: 'unauthorized' },
+        },
+        req
+      );
+      logger.warn({ userId: req.userId }, 'Unauthorized share base URL config update attempt');
+      return sendError(res, 403, 'Only the first user can configure share base URL');
+    }
+
+    const { url } = req.body;
+
+    // Normalize undefined to null for consistent validation
+    const normalizedUrl = url !== undefined ? url : null;
+
+    // Validate inputs (allow null to clear settings)
+    if (normalizedUrl !== null && (typeof normalizedUrl !== 'string' || normalizedUrl.trim().length === 0)) {
+      return sendError(res, 400, 'Share base URL must be a non-empty string or null');
+    }
+
+    // Validate URL format if provided
+    if (normalizedUrl !== null) {
+      try {
+        new URL(normalizedUrl.trim());
+      } catch {
+        return sendError(res, 400, 'Invalid URL format');
+      }
+    }
+
+    // setShareBaseUrlSettings will do additional security checks internally and invalidate Redis cache
+    // All instances will automatically get the new value from Redis on next request
+    await setShareBaseUrlSettings(normalizedUrl, req.userId);
+
+    // Log admin action
+    await logAuditEvent(
+      'admin.settings.update',
+      {
+        status: 'success',
+        resourceType: 'settings',
+        metadata: {
+          setting: 'share_base_url_config',
+          url: normalizedUrl || null,
+        },
+      },
+      req
+    );
+    logger.info({ userId: req.userId, url: normalizedUrl }, 'Share base URL settings updated');
+
+    const updatedSettings = await getShareBaseUrlSettings();
+    sendSuccess(res, {
+      url: updatedSettings.url,
+    });
+  } catch (err) {
+    if (err.message === 'Only the first user can configure share base URL') {
+      await logAuditEvent(
+        'admin.settings.update',
+        {
+          status: 'failure',
+          resourceType: 'settings',
+          errorMessage: err.message,
+          metadata: { action: 'update_share_base_url_config' },
+        },
+        req
+      );
+      logger.warn({ userId: req.userId }, 'Unauthorized share base URL config update attempt');
+      return sendError(res, 403, err.message);
+    }
+    logger.error({ err }, 'Failed to update share base URL settings');
+    sendError(res, 500, 'Server error', err);
+  }
+}
+
+/**
  * Update user storage limit (admin only)
  */
 async function updateUserStorageLimit(req, res) {
@@ -661,6 +778,8 @@ module.exports = {
   updateOnlyOfficeConfig,
   getAgentConfig,
   updateAgentConfig,
+  getShareBaseUrlConfig,
+  updateShareBaseUrlConfig,
   getAgentPaths,
   checkAgentStatus: checkAgentStatusEndpoint,
   resetAgentStatus: resetAgentStatusEndpoint,

@@ -48,6 +48,7 @@ const sidebars: SidebarsConfig = {
         "guides/admin/signup-control",
         "guides/admin/mfa-management",
         "guides/admin/custom-drives",
+        "guides/admin/share-base-url",
       ],
     },
     {

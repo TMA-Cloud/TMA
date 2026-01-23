@@ -13,6 +13,8 @@ const {
   updateOnlyOfficeConfig,
   getAgentConfig,
   updateAgentConfig,
+  getShareBaseUrlConfig,
+  updateShareBaseUrlConfig,
   getAgentPaths,
   checkAgentStatus,
   checkMyAgentStatus,
@@ -36,6 +38,8 @@ router.get('/onlyoffice-config', getOnlyOfficeConfig);
 router.put('/onlyoffice-config', updateOnlyOfficeConfig);
 router.get('/agent-config', getAgentConfig);
 router.put('/agent-config', updateAgentConfig);
+router.get('/share-base-url-config', getShareBaseUrlConfig);
+router.put('/share-base-url-config', updateShareBaseUrlConfig);
 router.get('/agent-paths', getAgentPaths);
 router.get('/agent-status', checkAgentStatus);
 router.get('/my-agent-status', checkMyAgentStatus);

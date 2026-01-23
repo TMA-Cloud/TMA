@@ -62,7 +62,7 @@ Create shareable links for files and folders in TMA Cloud.
 
 - Optional custom share domain
 - Isolated from main application
-- Configured by administrators
+- Configure in Settings → Share Base URL (admin only)
 
 ## Accessing Shared Files
 

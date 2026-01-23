@@ -273,6 +273,48 @@ Update agent configuration (first user only).
 
 **Note:** Both `url` and `token` can be set to `null` to clear configuration.
 
+## Share Base URL Configuration
+
+### GET `/api/user/share-base-url-config`
+
+Get share base URL configuration (first user only).
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "url": "https://share.example.com"
+  }
+}
+```
+
+### PUT `/api/user/share-base-url-config`
+
+Update share base URL configuration (first user only).
+
+**Request Body:**
+
+```json
+{
+  "url": "https://share.example.com"
+}
+```
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "url": "https://share.example.com"
+  }
+}
+```
+
+**Note:** Set `url` to `null` to clear configuration and use request origin.
+
 ### GET `/api/user/agent-paths`
 
 Get agent paths (first user only).

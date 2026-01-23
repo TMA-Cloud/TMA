@@ -1,19 +1,17 @@
 const { logger } = require('../config/logger');
+const { getShareBaseUrlOrigin } = require('../services/shareBaseUrl.service');
 
-// Resolve and normalize the configured share base URL (if provided).
-// We cache the parsed origin at module load time to avoid repeated parsing.
-let configuredShareOrigin = null;
-const rawShareBaseUrl = process.env.SHARE_BASE_URL ? process.env.SHARE_BASE_URL.trim() : '';
-
-if (rawShareBaseUrl) {
+/**
+ * Get share base URL origin from service
+ * Service uses Redis cache (shared across instances) for performance
+ * No local caching to avoid multi-instance desynchronization
+ */
+async function getConfiguredShareOrigin() {
   try {
-    configuredShareOrigin = new URL(rawShareBaseUrl).origin;
+    return await getShareBaseUrlOrigin();
   } catch (error) {
-    // Keep running with fallback while warning about the bad config.
-    logger.warn(
-      { err: error, shareBaseUrl: rawShareBaseUrl },
-      'Invalid SHARE_BASE_URL, falling back to request origin'
-    );
+    logger.warn({ err: error }, 'Failed to load share base URL origin');
+    return null;
   }
 }
 
@@ -50,8 +48,10 @@ function getRequestOrigin(req) {
   return `${protocol}://${host}`;
 }
 
-function getShareBaseUrl(req) {
-  let base = configuredShareOrigin || getRequestOrigin(req);
+async function getShareBaseUrl(req) {
+  // Get configured origin (async, but uses cache for performance)
+  const configuredOrigin = await getConfiguredShareOrigin();
+  let base = configuredOrigin || getRequestOrigin(req);
 
   // If we still don't have a usable origin (very rare edge case - no host header and no proxy headers),
   // fall back to localhost. This should only happen in unusual configurations.
@@ -59,7 +59,7 @@ function getShareBaseUrl(req) {
     base = 'http://localhost';
     logger.warn(
       {},
-      'Unable to determine share link base URL from request or SHARE_BASE_URL; falling back to http://localhost.'
+      'Unable to determine share link base URL from request or database setting; falling back to http://localhost.'
     );
   }
 
@@ -67,8 +67,8 @@ function getShareBaseUrl(req) {
   return base.endsWith('/') ? base.slice(0, -1) : base;
 }
 
-function buildShareLink(token, req) {
-  const baseUrl = getShareBaseUrl(req);
+async function buildShareLink(token, req) {
+  const baseUrl = await getShareBaseUrl(req);
   // Ensure token is URL-safe in path segment
   const encodedToken = encodeURIComponent(token);
   return `${baseUrl}/s/${encodedToken}`;
@@ -81,14 +81,11 @@ function getRequestHost(req) {
   return rawHost ? rawHost.split(',')[0].trim() : rawHost;
 }
 
-// Get the host from SHARE_BASE_URL if configured
-function getShareBaseHost() {
-  if (!configuredShareOrigin) return null;
-  try {
-    return new URL(configuredShareOrigin).host;
-  } catch {
-    return null;
-  }
+// Get the host from share base URL if configured (async for middleware)
+// For multi-instance support, this checks Redis cache directly via service
+async function getShareBaseHost() {
+  const { getShareBaseHost: getHostFromService } = require('../services/shareBaseUrl.service');
+  return getHostFromService();
 }
 
 module.exports = {

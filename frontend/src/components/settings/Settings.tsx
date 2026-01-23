@@ -17,6 +17,7 @@ import { StorageSection } from "./sections/StorageSection";
 import { CustomDriveManagementSection } from "./sections/CustomDriveManagementSection";
 import { AdministrationSection } from "./sections/AdministrationSection";
 import { OnlyOfficeSection } from "./sections/OnlyOfficeSection";
+import { ShareBaseUrlSection } from "./sections/ShareBaseUrlSection";
 import { UpdatesSection } from "./sections/UpdatesSection";
 import { SecuritySection } from "./sections/SecuritySection";
 
@@ -166,6 +167,10 @@ export const Settings: React.FC = () => {
 
         {canToggleSignup && (
           <OnlyOfficeSection canConfigure={canToggleSignup} />
+        )}
+
+        {canToggleSignup && (
+          <ShareBaseUrlSection canConfigure={canToggleSignup} />
         )}
 
         {canToggleSignup && (

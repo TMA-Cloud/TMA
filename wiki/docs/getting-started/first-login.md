@@ -27,6 +27,7 @@ The first user to sign up automatically becomes the **administrator** with the f
 - **MFA Management** - Manage multi-factor authentication settings
 - **Custom Drives** - Configure custom drive paths for users
 - **OnlyOffice Settings** - Configure OnlyOffice integration
+- **Share Base URL** - Configure custom domain for share links
 - **System Settings** - Access to all administrative features
 
 ## Signup Control

@@ -363,6 +363,30 @@ export async function updateAgentConfig(
 }
 
 /**
+ * Get share base URL configuration (admin only)
+ */
+export async function getShareBaseUrlConfig(signal?: AbortSignal): Promise<{
+  url: string | null;
+}> {
+  return await apiGet<{ url: string | null }>(
+    "/api/user/share-base-url-config",
+    { signal },
+  );
+}
+
+/**
+ * Update share base URL configuration (admin only)
+ */
+export async function updateShareBaseUrlConfig(
+  url: string | null,
+): Promise<{ url: string | null }> {
+  return await apiPut<{ url: string | null }>(
+    "/api/user/share-base-url-config",
+    { url },
+  );
+}
+
+/**
  * Get agent paths (admin only)
  */
 export async function getAgentPaths(): Promise<{ paths: string[] }> {
