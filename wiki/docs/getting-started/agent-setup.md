@@ -72,11 +72,12 @@ tma-agent list
 
 # Check agent health
 curl http://localhost:8080/health
+```
 
 ## Related Topics
 
+- [Agent Architecture](/concepts/architecture#agent-architecture) - Architecture and token flow
 - [Custom Drives](/guides/admin/custom-drives) - Custom drive configuration
 - [Docker Setup](docker.md) - Docker deployment with prebuilt images
 - [GitHub Releases](https://github.com/TMA-Cloud/TMA/releases) - Download prebuilt agent binaries
 - [tma-agent Repository](https://github.com/TMA-Cloud/TMA/tree/main/agent) - Agent source code
-```

@@ -64,7 +64,7 @@ Complete reference for all environment variables in TMA Cloud.
 | --------------------- | -------- | ---------------------------------------------------- |
 | `AGENT_WEBHOOK_TOKEN` | No       | Token for agent webhook authentication (recommended) |
 
-**Note:** Custom drive paths are configured per-user in Settings → Users (admin-only).
+**Note:** Custom drive paths are configured per-user in Settings → Users (admin-only). See [Agent Architecture](/concepts/architecture#agent-architecture) for token flow details.
 
 ## Logging Configuration
 
