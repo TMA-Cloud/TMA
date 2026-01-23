@@ -44,10 +44,8 @@
 
 services:
   app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: tma-cloud:latest
+    # Pre-built image from GitHub Container Registry (https://github.com/TMA-Cloud/TMA)
+    image: ghcr.io/tma-cloud/tma:latest
     container_name: tma-cloud-app
     restart: unless-stopped
     ports:
@@ -131,10 +129,8 @@ services:
   # Audit Worker - Required for processing audit events
   # Without this worker, audit events are queued but not written to the database
   worker:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: tma-cloud:latest
+    # Use same pre-built image as app service (https://github.com/TMA-Cloud/TMA)
+    image: ghcr.io/tma-cloud/tma:latest
     container_name: tma-cloud-worker
     restart: unless-stopped
     env_file:
