@@ -808,8 +808,7 @@ async function startUserWatcher(userId, customDrivePath, ignorePatterns = []) {
     if (useAgent) {
       try {
         // Construct webhook URL for agent notifications
-        const backendUrl =
-          process.env.BACKEND_URL || process.env.API_URL || `http://localhost:${process.env.PORT || 3000}`;
+        const backendUrl = process.env.BACKEND_URL || `http://localhost:${process.env.BPORT || 3000}`;
         const webhookUrl = `${backendUrl}/api/agent/webhook`;
         const webhookToken = process.env.AGENT_WEBHOOK_TOKEN || null;
 

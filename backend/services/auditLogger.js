@@ -35,7 +35,7 @@ async function initializeAuditQueue() {
     const pool = new Pool({
       host: process.env.DB_HOST || 'localhost',
       port: parseInt(process.env.DB_PORT || '5432'),
-      database: process.env.DB_NAME || 'cloud_store',
+      database: process.env.DB_NAME || 'tma_cloud_storage',
       user: process.env.DB_USER || 'postgres',
       password: process.env.DB_PASSWORD || 'postgres',
     });
@@ -45,7 +45,7 @@ async function initializeAuditQueue() {
     boss = new PgBoss({
       host: process.env.DB_HOST || 'localhost',
       port: parseInt(process.env.DB_PORT || '5432'),
-      database: process.env.DB_NAME || 'cloud_store',
+      database: process.env.DB_NAME || 'tma_cloud_storage',
       user: process.env.DB_USER || 'postgres',
       password: process.env.DB_PASSWORD || 'postgres',
       schema,
