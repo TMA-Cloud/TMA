@@ -40,20 +40,38 @@ The agent is a small Go binary that gives TMA Cloud access to custom drive paths
    tma-agent add --path /mnt/storage
    ```
 
-4. **Generate a token**
+   To remove a path later:
 
    ```bash
+   tma-agent remove --path /mnt/storage
+   ```
+
+4. **Get or Generate a token**
+
+   ```bash
+   # Get existing token
+   tma-agent token
+
+   # Generate a new token
    tma-agent token --generate
    ```
 
 5. **Start the agent**
 
    ```bash
+   # Linux/macOS (as a service)
+   sudo tma-agent service-start
+
+   # Windows (PowerShell, as a service)
+   Start-Service tma-agent
+
+   # Manual/Interactive run (all platforms)
    tma-agent start
    ```
 
    - Default port: `8080`.
    - If no token is set, `start` generates one and saves it to `tma-agent.json`.
+   - Use `tma-agent start` for manual/interactive testing (press Ctrl+C to stop).
 
 6. **Configure custom drives in the app**
    - In **Settings → Custom Drive Management**:
@@ -67,12 +85,45 @@ The agent is a small Go binary that gives TMA Cloud access to custom drive paths
 Run these from the host where the agent is running:
 
 ```bash
-# List configured paths
+# List configured drives
 tma-agent list
 
 # Check agent health
 curl http://localhost:8080/health
 ```
+
+## Service Management
+
+### Check Service Status
+
+```bash
+# Windows (PowerShell)
+Get-Service tma-agent
+
+# Linux
+systemctl status tma-agent
+
+# macOS
+sudo launchctl list | grep tma-agent
+```
+
+### Stop Service
+
+```bash
+# Linux/macOS
+sudo tma-agent service-stop
+
+# Windows (PowerShell)
+Stop-Service tma-agent
+```
+
+### Uninstall Agent
+
+```bash
+tma-agent uninstall
+```
+
+**Note:** Requires admin/root rights.
 
 ## Related Topics
 

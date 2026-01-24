@@ -47,7 +47,9 @@ docker inspect --format='{{.State.Health.Status}}' tma-cloud-app
 
 **Solutions:**
 
-1. Verify agent is running: `tma-agent start`
+1. Verify agent is running:
+   - Linux/macOS: `sudo tma-agent service-start`
+   - Windows: `Start-Service tma-agent`
 2. Check agent health: `curl http://host.docker.internal:8080/health`
 3. Verify `docker-compose.yml` has `extra_hosts` for Linux
 4. Check agent token matches in Settings
