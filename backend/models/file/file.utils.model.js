@@ -49,7 +49,10 @@ async function calculateFolderSize(id, userId) {
      SELECT COALESCE(SUM(size), 0) AS size FROM sub WHERE type = 'file'`,
     [id, userId]
   );
-  const size = parseInt(res.rows[0].size, 10) || 0;
+  // PostgreSQL BIGINT can be returned as string for very large numbers
+  // Convert to number if it's a valid number string, otherwise default to 0
+  const sizeValue = res.rows[0].size;
+  const size = typeof sizeValue === 'string' ? Number(sizeValue) || 0 : sizeValue || 0;
 
   // Cache the result (5 minutes TTL - folder sizes change less frequently)
   await setCache(cacheKey, size, DEFAULT_TTL);
