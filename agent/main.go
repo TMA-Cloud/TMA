@@ -70,6 +70,12 @@ type FileInfo struct {
 	ModTime time.Time `json:"modTime"`
 }
 
+type DiskUsage struct {
+	Total uint64 `json:"total"`
+	Free  uint64 `json:"free"` // Available to unprivileged users
+	Used  uint64 `json:"used"`
+}
+
 type ListResponse struct {
 	Files []FileInfo `json:"files"`
 	Path  string     `json:"path"`
@@ -627,6 +633,7 @@ func handleStart() {
 	http.HandleFunc("/api/delete", authMiddleware(deleteHandler))
 	http.HandleFunc("/api/stat", authMiddleware(statHandler))
 	http.HandleFunc("/api/mkdir", authMiddleware(mkdirHandler))
+	http.HandleFunc("/api/usage", authMiddleware(usageHandler))
 	http.HandleFunc("/api/watch", authMiddleware(watchHandler))
 	http.HandleFunc("/api/unwatch", authMiddleware(unwatchHandler))
 
@@ -1372,4 +1379,32 @@ func unwatchHandler(w http.ResponseWriter, r *http.Request) {
 		"status": "unwatched",
 		"path":   fullPath,
 	})
+}
+
+func usageHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		sendError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
+	path := r.URL.Query().Get("path")
+	if path == "" {
+		sendError(w, http.StatusBadRequest, "path parameter is required")
+		return
+	}
+
+	fullPath, err := validateAndResolvePath(path)
+	if err != nil {
+		sendError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	usage, err := getDiskUsage(fullPath)
+	if err != nil {
+		sendError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to get disk usage: %v", err))
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(usage)
 }

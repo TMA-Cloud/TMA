@@ -52,6 +52,12 @@ See [Agent Setup](/getting-started/agent-setup) for agent installation and confi
 - Track usage per drive
 - Monitor storage consumption
 - Enforce limits
+- Disk space queried via agent API
+
+### Disk Space Reporting
+
+- Agent API returns filesystem statistics for the mounted volume
+- In Docker environments, reports actual custom drive space, not Docker host space
 
 ## Custom Drive Scanner
 

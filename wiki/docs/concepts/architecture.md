@@ -186,6 +186,7 @@ The TMA Cloud agent (`tma-agent`) is a standalone Go binary that enables custom 
 │  │  - /api/list        → List directory contents        │  │
 │  │  - /api/read        → Read file                      │  │
 │  │  - /api/write       → Write file                     │  │
+│  │  - /api/usage       → Get disk usage statistics      │  │
 │  │  - /api/watch       → Register path for watching     │  │
 │  │  - /api/unwatch     → Unregister path                │  │
 │  └──────────────────────────────────────────────────────┘  │

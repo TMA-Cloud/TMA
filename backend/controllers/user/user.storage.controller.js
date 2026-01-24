@@ -1,6 +1,7 @@
 const { getUserStorageUsage, getUserCustomDriveSettings, getUserStorageLimit } = require('../../models/user.model');
 const checkDiskSpace = require('check-disk-space').default;
 const { sendSuccess } = require('../../utils/response');
+const { agentGetDiskUsage } = require('../../utils/agentFileOperations');
 
 /**
  * Get storage usage information for the current user
@@ -10,8 +11,9 @@ async function storageUsage(req, res) {
   const customDrive = await getUserCustomDriveSettings(req.userId);
 
   if (customDrive.enabled && customDrive.path) {
-    // Get disk space information for the user's custom drive path
-    const { size, free: diskFree } = await checkDiskSpace(customDrive.path);
+    // For custom drives, use agent API to get actual disk space from the mounted volume
+    // This ensures we get the real size of the custom drive, not the Docker host's size
+    const { total: size, free: diskFree } = await agentGetDiskUsage(customDrive.path);
 
     // Get per-user storage limit (null means use actual disk size as limit)
     const userStorageLimit = await getUserStorageLimit(req.userId);

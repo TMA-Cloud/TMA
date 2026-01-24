@@ -196,6 +196,17 @@ async function agentUnwatchPath(watchPath) {
 }
 
 /**
+ * Get disk usage for a path via agent
+ * Returns {total, free, used} in bytes
+ */
+async function agentGetDiskUsage(diskPath) {
+  const encodedPath = encodeURIComponent(diskPath);
+  return makeAgentRequest('GET', `/api/usage?path=${encodedPath}`, {
+    responseType: 'json',
+  });
+}
+
+/**
  * Rename a file or directory via agent (OS-level rename, instant even for large files)
  */
 async function agentRenamePath(oldPath, newPath) {
@@ -376,4 +387,5 @@ module.exports = {
   agentRenamePath,
   agentWatchPath,
   agentUnwatchPath,
+  agentGetDiskUsage,
 };

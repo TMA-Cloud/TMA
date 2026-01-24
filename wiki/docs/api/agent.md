@@ -189,6 +189,32 @@ Get basic metadata for a file or directory.
 }
 ```
 
+## Disk Usage
+
+### GET `/api/usage`
+
+Get filesystem disk usage statistics for a path. Returns the actual disk space of the mounted volume, not the Docker host's space.
+
+**Query Parameters:**
+
+- `path` (required) — Absolute path inside one of the configured drive paths
+
+**Response:**
+
+```json
+{
+  "total": 107374182400,
+  "free": 53687091200,
+  "used": 53687091200
+}
+```
+
+- `total` — Total disk space in bytes
+- `free` — Available disk space in bytes (available to unprivileged users)
+- `used` — Used disk space in bytes
+
+In Docker environments, this endpoint returns the filesystem statistics for the specific mounted volume, ensuring accurate disk space reporting for custom drives.
+
 ## Make Directory
 
 ### POST `/api/mkdir`

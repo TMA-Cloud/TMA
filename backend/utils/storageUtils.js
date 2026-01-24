@@ -25,7 +25,10 @@ async function getActualDiskSize(customDrive, defaultBasePath) {
   const checkDiskSpace = require('check-disk-space').default;
 
   if (customDrive.enabled && customDrive.path) {
-    const { size } = await checkDiskSpace(customDrive.path);
+    // For custom drives, use agent API to get actual disk size from the mounted volume
+    // This ensures we get the real size of the custom drive, not the Docker host's size
+    const { agentGetDiskUsage } = require('./agentFileOperations');
+    const { total: size } = await agentGetDiskUsage(customDrive.path);
     return size;
   }
 
@@ -57,8 +60,10 @@ async function checkStorageLimitExceeded({ fileSize, customDrive, used, userStor
   const checkDiskSpace = require('check-disk-space').default;
 
   if (customDrive.enabled && customDrive.path) {
-    // For custom drives, check actual free disk space
-    const { free: diskFree } = await checkDiskSpace(customDrive.path);
+    // For custom drives, use agent API to check actual free disk space from the mounted volume
+    // This ensures we get the real free space of the custom drive, not the Docker host's space
+    const { agentGetDiskUsage } = require('./agentFileOperations');
+    const { free: diskFree } = await agentGetDiskUsage(customDrive.path);
     if (fileSize > diskFree) {
       return { exceeded: true, message: 'Storage limit exceeded. Not enough space on custom drive.' };
     }

@@ -76,7 +76,7 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0
         run: |
-          go build -ldflags="-s -w" -o tma-agent-v${{ steps.agent_version.outputs.version }}-${{ matrix.name }}${{ matrix.ext }} main.go
+          go build -ldflags="-s -w" -o tma-agent-v${{ steps.agent_version.outputs.version }}-${{ matrix.name }}${{ matrix.ext }} .
 
       - name: Upload agent artifact
         uses: actions/upload-artifact@v4
