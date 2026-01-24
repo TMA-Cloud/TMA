@@ -51,7 +51,8 @@ services:
     ports:
       # Map host port to container port
       # Uses BPORT from .env file, defaults to 3000
-      - "${BPORT:-3000}:3000"
+      # Both host and container ports use BPORT to ensure they match
+      - "${BPORT:-3000}:${BPORT:-3000}"
     env_file:
       - .env
     environment:
@@ -66,7 +67,8 @@ services:
       # This allows containers to reach services running on the host
       - "host.docker.internal:host-gateway"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      # Healthcheck uses BPORT (defaults to 3000) to match the app's listening port
+      test: ["CMD-SHELL", "curl -f http://localhost:${BPORT:-3000}/health || exit 1"]
       interval: 30s
       timeout: 3s
       retries: 3
@@ -86,8 +88,10 @@ services:
     image: postgres:18-alpine
     container_name: tma-cloud-postgres
     restart: unless-stopped
-    ports:
-      - "${DB_PORT:-5432}:5432"
+    # Port mapping removed - containers access via service name "postgres" on internal network
+    # Uncomment below if you need external access (e.g., for database tools):
+    # ports:
+    #   - "${DB_PORT:-5432}:5432"
     environment:
       - POSTGRES_USER=${DB_USER:-postgres}
       - POSTGRES_PASSWORD=${DB_PASSWORD:-postgres}
@@ -110,8 +114,10 @@ services:
     image: redis:latest
     container_name: tma-cloud-redis
     restart: unless-stopped
-    ports:
-      - "${REDIS_PORT:-6379}:6379"
+    # Port mapping removed - containers access via service name "redis" on internal network
+    # Uncomment below if you need external access (e.g., for Redis tools):
+    # ports:
+    #   - "${REDIS_PORT:-6379}:6379"
     command: >
       redis-server
       ${REDIS_PASSWORD:+--requirepass ${REDIS_PASSWORD}}
@@ -121,7 +127,8 @@ services:
     networks:
       - tma-cloud-network
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      # Healthcheck includes password authentication if REDIS_PASSWORD is set
+      test: ["CMD-SHELL", "if [ -n \"$REDIS_PASSWORD\" ]; then redis-cli -a \"$REDIS_PASSWORD\" ping; else redis-cli ping; fi | grep -q PONG || exit 1"]
       interval: 10s
       timeout: 3s
       retries: 3
