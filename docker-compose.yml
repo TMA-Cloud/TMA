@@ -1,73 +1,24 @@
-# =============================================================================
 # Docker Compose Configuration for TMA Cloud
-# =============================================================================
-# This file is for running the application using Docker Compose.
-# It requires a .env file with all necessary environment variables.
-#
-# Usage:
-#   docker-compose up -d        # Start in background
-#   docker-compose logs -f      # View logs
-#   docker-compose down          # Stop and remove
-#
-# Note: Make sure to create a .env file from .env.example before starting.
-#
-# =============================================================================
-# CUSTOM DRIVE MODE (Docker - Per-User Settings)
-# =============================================================================
-# Custom drive is now configured per-user in the web application settings.
-# Users can enable/disable and set their own custom drive path from Settings.
-#
-# IMPORTANT: The drive-agent runs on the host (not in Docker) to avoid bind mounts.
-# The backend communicates with the agent via HTTP API to access custom drive files.
-# No bind mounts are required in any Docker container.
-#
-# The agent accepts any absolute path that already exists on the host system.
-# Custom drives are configured per-user in the Settings page with their absolute paths.
-# The agent simply validates and exposes these paths via HTTP API.
-#
-# To run the agent on the host:
-#   1. Build: cd agent && go build -o tma-agent main.go
-#   2. Add paths: tma-agent add --path /mnt/nas_drive
-#   3. Start: tma-agent start (or tma-agent start -port 9090 -token your-token)
-#
-# DOCKER NETWORKING: When app runs in Docker, configure agent URL in Settings:
-#   - All platforms: http://host.docker.internal:8080 (extra_hosts configured below)
-#   - Linux fallback: http://172.17.0.1:8080 (if host.docker.internal doesn't work)
-#   - Local development (no Docker): http://localhost:8080
-#
-# IMPORTANT: The agent must bind to 0.0.0.0 (all interfaces) to accept connections from Docker.
-# The agent already does this by default. Make sure the agent is running on the host before
-# starting the Docker containers.
-#
-# The agent is a standalone CLI tool with no environment variables needed.
-# =============================================================================
+# Requires .env file with environment variables
 
 services:
+  # TMA Cloud App
   app:
-    # Pre-built image from GitHub Container Registry (https://github.com/TMA-Cloud/TMA)
     image: ghcr.io/tma-cloud/tma:latest
     container_name: tma-cloud-app
     restart: unless-stopped
     ports:
-      # Map host port to container port
-      # Uses BPORT from .env file, defaults to 3000
-      # Both host and container ports use BPORT to ensure they match
       - "${BPORT:-3000}:${BPORT:-3000}"
     env_file:
       - .env
     environment:
       - LOG_FORMAT=json
     volumes:
-      # Mount uploads directory (persists data outside container)
       - ./uploads:/app/uploads
-      # Note: Custom drives are now handled by the drive-agent service
-      # No bind mounts needed here - the app communicates with the agent via API
     extra_hosts:
-      # Map host.docker.internal to host gateway for agent communication
-      # This allows containers to reach services running on the host
+      # Allow access to host services (e.g., tma-agent)
       - "host.docker.internal:host-gateway"
     healthcheck:
-      # Healthcheck uses BPORT (defaults to 3000) to match the app's listening port
       test: ["CMD-SHELL", "curl -f http://localhost:${BPORT:-3000}/health || exit 1"]
       interval: 30s
       timeout: 3s
@@ -81,17 +32,11 @@ services:
     networks:
       - tma-cloud-network
 
-  # PostgreSQL - Primary database
-  # When using this Docker PostgreSQL service, update DB_HOST in .env to "postgres"
-  # (the service name) instead of an external IP address
+  # PostgreSQL database
   postgres:
     image: postgres:18-alpine
     container_name: tma-cloud-postgres
     restart: unless-stopped
-    # Port mapping removed - containers access via service name "postgres" on internal network
-    # Uncomment below if you need external access (e.g., for database tools):
-    # ports:
-    #   - "${DB_PORT:-5432}:5432"
     environment:
       - POSTGRES_USER=${DB_USER:-postgres}
       - POSTGRES_PASSWORD=${DB_PASSWORD:-postgres}
@@ -114,16 +59,11 @@ services:
       retries: 5
       start_period: 10s
 
-  # Redis - Caching layer for improved performance
-  # Optional but highly recommended for production
+  # Redis Cache
   redis:
     image: redis:latest
     container_name: tma-cloud-redis
     restart: unless-stopped
-    # Port mapping removed - containers access via service name "redis" on internal network
-    # Uncomment below if you need external access (e.g., for Redis tools):
-    # ports:
-    #   - "${REDIS_PORT:-6379}:6379"
     command: >
       redis-server
       ${REDIS_PASSWORD:+--requirepass ${REDIS_PASSWORD}}
@@ -135,16 +75,13 @@ services:
     networks:
       - tma-cloud-network
     healthcheck:
-      # Healthcheck includes password authentication if REDIS_PASSWORD is set
       test: ["CMD-SHELL", "if [ -n \"$REDIS_PASSWORD\" ]; then redis-cli -a \"$REDIS_PASSWORD\" ping; else redis-cli ping; fi | grep -q PONG || exit 1"]
       interval: 10s
       timeout: 3s
       retries: 3
 
-  # Audit Worker - Required for processing audit events
-  # Without this worker, audit events are queued but not written to the database
+  # TMA Cloud Audit Worker
   worker:
-    # Use same pre-built image as app service (https://github.com/TMA-Cloud/TMA)
     image: ghcr.io/tma-cloud/tma:latest
     container_name: tma-cloud-worker
     restart: unless-stopped
@@ -153,11 +90,8 @@ services:
     environment:
       - LOG_FORMAT=json
     volumes:
-      # Mount same volumes as app service for consistency
       - ./uploads:/app/uploads
-      # Note: Custom drives are now handled by the drive-agent service
     extra_hosts:
-      # Map host.docker.internal to host gateway for agent communication
       - "host.docker.internal:host-gateway"
     command: node backend/audit-worker.js
     depends_on:
@@ -169,11 +103,6 @@ services:
         condition: service_healthy
     networks:
       - tma-cloud-network
-
-  # Note: Drive Agent runs on the host (not in Docker)
-  # The agent is a standalone Go binary that should be run on the host system
-  # It provides HTTP API access to custom drive paths without requiring bind mounts
-  # See agent/README.md for setup instructions
 
 volumes:
   postgres-data:
