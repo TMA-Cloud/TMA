@@ -124,6 +124,14 @@ func main() {
 		fmt.Println("Service installed successfully!")
 		return
 
+	case "update":
+		if err := handleUniversalUpdate(s); err != nil {
+			fmt.Printf("Update failed: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println("Service updated and restarted successfully!")
+		return
+
 	case "uninstall":
 		s.Stop()
 		if err := s.Uninstall(); err != nil {
@@ -176,7 +184,7 @@ func main() {
 	}
 }
 
-// --- Installation Logic (Windows, Mac, Linux) ---
+// --- Installation & Update Logic (Windows, Mac, Linux) ---
 func getInstallPaths() (string, string) {
 	if runtime.GOOS == "windows" {
 		progFiles := os.Getenv("ProgramFiles")
@@ -190,6 +198,11 @@ func getInstallPaths() (string, string) {
 }
 
 func handleUniversalInstall(s service.Service, svcConfig *service.Config) error {
+	// Stop immediately if service exists
+	if _, err := s.Status(); err == nil {
+		return fmt.Errorf("service is already installed.\n  - Use 'tma-agent update' to upgrade.\n  - Use 'tma-agent uninstall' to remove it first")
+	}
+
 	targetExePath, targetConfigDir := getInstallPaths()
 
 	currentExe, err := os.Executable()
@@ -264,6 +277,74 @@ func handleUniversalInstall(s service.Service, svcConfig *service.Config) error 
 	}
 
 	return newS.Install()
+}
+
+func handleUniversalUpdate(s service.Service) error {
+	targetExePath, targetConfigDir := getInstallPaths()
+
+	currentExe, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("failed to get executable path: %v", err)
+	}
+	currentExe, _ = filepath.EvalSymlinks(currentExe)
+
+	if currentExe == targetExePath {
+		return fmt.Errorf("cannot update from the installed location.\nPlease download the new version to a different folder and run 'tma-agent update' from there")
+	}
+
+	fmt.Println("Initiating update...")
+	fmt.Printf("Target location: %s\n", targetExePath)
+
+	fmt.Println("Stopping service...")
+	if err := s.Stop(); err != nil {
+		fmt.Printf("Warning during stop (might not be running): %v\n", err)
+	}
+	time.Sleep(1 * time.Second)
+
+	// Backup/Prepare old binary
+	if runtime.GOOS == "windows" {
+		oldPath := targetExePath + ".old"
+		os.Remove(oldPath) // Remove previous backup if exists
+		if err := os.Rename(targetExePath, oldPath); err != nil {
+			return fmt.Errorf("failed to move old binary (is the service stopped?): %v", err)
+		}
+	} else {
+		if err := os.Remove(targetExePath); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("failed to remove old binary: %v", err)
+		}
+	}
+
+	fmt.Println("Copying new version...")
+	if err := copyFile(currentExe, targetExePath); err != nil {
+		// Attempt rollback (rename .old back)
+		if runtime.GOOS == "windows" {
+			os.Rename(targetExePath+".old", targetExePath)
+		}
+		return fmt.Errorf("failed to copy new binary: %v", err)
+	}
+
+	if runtime.GOOS != "windows" {
+		if err := os.Chmod(targetExePath, 0755); err != nil {
+			return fmt.Errorf("failed to set permissions: %v", err)
+		}
+	}
+
+	// DO NOT touch the config file here to preserve user settings.
+	fmt.Printf("Existing configuration at %s preserved.\n", filepath.Join(targetConfigDir, configFile))
+
+	fmt.Println("Restarting service...")
+	if err := s.Start(); err != nil {
+		return fmt.Errorf("failed to restart service: %v", err)
+	}
+
+	if runtime.GOOS == "windows" {
+		fmt.Println("Update complete. You can delete this updater file.")
+	} else {
+		os.Remove(currentExe)
+		fmt.Println("Update complete. Cleaned up source binary.")
+	}
+
+	return nil
 }
 
 func handleUniversalUninstall() error {
@@ -365,6 +446,7 @@ func printUsage() {
 	fmt.Println()
 	fmt.Println("Service Commands (Run as Admin/Root):")
 	fmt.Println("  tma-agent install                Install to system safe location")
+	fmt.Println("  tma-agent update                 Update installed agent with this binary")
 	fmt.Println("  tma-agent uninstall              Remove service and files")
 	fmt.Println("  tma-agent service-start          Start the background service")
 	fmt.Println("  tma-agent service-stop           Stop the background service")

@@ -117,6 +117,20 @@ sudo tma-agent service-stop
 Stop-Service tma-agent
 ```
 
+### Update Agent
+
+To update an installed agent:
+
+```bash
+# Download the new binary to a different folder
+# Then run from that folder:
+tma-agent update
+```
+
+- Requires admin/root rights.
+- Auto stops the service, replaces the binary, and restarts the service.
+- Preserves existing configuration.
+
 ### Uninstall Agent
 
 ```bash
