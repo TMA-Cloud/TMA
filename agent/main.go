@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/kardianos/service"
@@ -126,7 +127,18 @@ func handleStart() {
 		}
 	}
 
+	// Set globalConfig with mutex protection
+	configMu.Lock()
 	globalConfig = config
+	lastConfigLoad = time.Now()
+	configMu.Unlock()
+
+	// Start config file watcher to auto-reload on changes
+	if err := startConfigWatcher(); err != nil {
+		log.Printf("WARNING: Failed to start config watcher: %v (config changes will require manual reload)", err)
+	} else {
+		log.Println("Config file watcher started - configuration will auto-reload on changes")
+	}
 
 	// Initialize file watcher manager
 	watcher, err := fsnotify.NewWatcher()

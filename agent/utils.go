@@ -62,9 +62,11 @@ func validateAndResolvePath(path string) (string, error) {
 	}
 
 	// Check if path is within any of the configured drive paths
-	if globalConfig != nil && len(globalConfig.Paths) > 0 {
+	// Config is auto-updated by config watcher, just get current config
+	config := getConfig()
+	if config != nil && len(config.Paths) > 0 {
 		allowed := false
-		for _, drivePath := range globalConfig.Paths {
+		for _, drivePath := range config.Paths {
 			// Check if resolved path is within this drive path
 			rel, err := filepath.Rel(drivePath, resolvedPath)
 			if err == nil && !strings.HasPrefix(rel, "..") {

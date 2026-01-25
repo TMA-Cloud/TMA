@@ -22,15 +22,21 @@ func pathsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Config is auto-updated by config watcher, just get current config
+	config := getConfig()
+
 	sendJSON(w, http.StatusOK, map[string]interface{}{
-		"paths": globalConfig.Paths,
+		"paths": config.Paths,
 	})
 }
 
 func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Config is auto-updated by config watcher, just get current config
+		config := getConfig()
+
 		// If no token, allow all requests
-		if globalConfig.Token == "" {
+		if config.Token == "" {
 			next(w, r)
 			return
 		}
@@ -46,7 +52,7 @@ func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		requestToken := strings.TrimSpace(authHeader)
 		requestToken = strings.TrimPrefix(requestToken, "Bearer ")
 
-		if requestToken != globalConfig.Token {
+		if requestToken != config.Token {
 			sendError(w, http.StatusUnauthorized, "Invalid token")
 			return
 		}

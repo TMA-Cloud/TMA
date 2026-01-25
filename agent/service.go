@@ -21,6 +21,8 @@ func (p *program) Start(s service.Service) error {
 }
 
 func (p *program) Stop(s service.Service) error {
+	// Stop config watcher when service stops
+	stopConfigWatcher()
 	if p.exit != nil {
 		close(p.exit)
 	}
