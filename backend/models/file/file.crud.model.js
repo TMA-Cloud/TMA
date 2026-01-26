@@ -242,7 +242,7 @@ async function getFile(id, userId) {
 
   // Cache miss - query database
   const result = await pool.query(
-    'SELECT id, name, type, mime_type AS "mimeType", path FROM files WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL',
+    'SELECT id, name, type, mime_type AS "mimeType", path, parent_id AS "parentId" FROM files WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL',
     [id, userId]
   );
   const file = result.rows[0];
@@ -253,6 +253,57 @@ async function getFile(id, userId) {
   }
 
   return file;
+}
+
+/**
+ * Get multiple files by IDs (bulk operation)
+ * @param {string[]} ids - Array of file IDs
+ * @param {string} userId - User ID
+ * @returns {Promise<Array>} Array of file objects with id, name, type, mimeType, path, parentId
+ */
+async function getFilesByIds(ids, userId) {
+  if (!ids || ids.length === 0) return [];
+
+  // Try to get from cache first for all files (parallel)
+  const cachePromises = ids.map(async id => {
+    const cacheKey = cacheKeys.file(id, userId);
+    const cached = await getCache(cacheKey);
+    return { id, cached };
+  });
+
+  const cacheResultsArray = await Promise.all(cachePromises);
+  const cacheResults = {};
+  const uncachedIds = [];
+
+  for (const { id, cached } of cacheResultsArray) {
+    if (cached !== null) {
+      cacheResults[id] = cached;
+    } else {
+      uncachedIds.push(id);
+    }
+  }
+
+  // If all were cached, return immediately
+  if (uncachedIds.length === 0) {
+    return ids.map(id => cacheResults[id]).filter(Boolean);
+  }
+
+  // Query database for uncached items
+  const result = await pool.query(
+    'SELECT id, name, type, mime_type AS "mimeType", path, parent_id AS "parentId" FROM files WHERE id = ANY($1::text[]) AND user_id = $2 AND deleted_at IS NULL',
+    [uncachedIds, userId]
+  );
+
+  // Cache all results in parallel
+  const cacheSetPromises = result.rows.map(async file => {
+    const cacheKey = cacheKeys.file(file.id, userId);
+    await setCache(cacheKey, file, DEFAULT_TTL);
+    cacheResults[file.id] = file;
+  });
+  await Promise.all(cacheSetPromises);
+
+  // Return files in the same order as requested IDs
+  return ids.map(id => cacheResults[id]).filter(Boolean);
 }
 
 /**
@@ -329,5 +380,6 @@ module.exports = {
   createFolder,
   createFile,
   getFile,
+  getFilesByIds,
   renameFile,
 };

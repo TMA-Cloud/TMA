@@ -3,9 +3,11 @@ const {
   listFiles,
   addFolder,
   uploadFile,
+  uploadFilesBulk,
   moveFiles,
   copyFiles,
   downloadFile,
+  downloadFilesBulk,
   renameFile,
   starFiles,
   listStarred,
@@ -39,6 +41,14 @@ router.get('/stats', getFileStats);
 router.get('/search', searchFiles);
 router.post('/folder', addFolder);
 router.post('/upload', uploadRateLimiter, attachCustomDrivePath, checkStorageLimit, upload.single('file'), uploadFile);
+router.post(
+  '/upload/bulk',
+  uploadRateLimiter,
+  attachCustomDrivePath,
+  checkStorageLimit,
+  upload.array('files'),
+  uploadFilesBulk
+);
 router.post('/move', moveFiles);
 router.post('/copy', copyFiles);
 router.post('/rename', renameFile);
@@ -53,6 +63,7 @@ router.get('/trash', listTrash);
 router.post('/trash/restore', restoreFiles);
 router.post('/trash/delete', deleteForever);
 router.post('/trash/empty', emptyTrash);
+router.post('/download/bulk', downloadFilesBulk);
 router.get('/:id/download', downloadFile);
 
 module.exports = router;

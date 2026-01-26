@@ -18,6 +18,7 @@ export const UploadModal: React.FC = () => {
     uploadModalOpen,
     setUploadModalOpen,
     uploadFileWithProgress,
+    uploadFilesBulk,
     uploadProgress,
     agentOnline,
     customDriveEnabled,
@@ -94,16 +95,28 @@ export const UploadModal: React.FC = () => {
 
     setIsUploading(true);
     try {
-      // Start all pending uploads
-      const uploadPromises = uploadFiles
+      // Get all pending files
+      const pendingFiles = uploadFiles
         .filter((f) => f.status === "pending" || f.status === "error")
-        .map((uploadFileItem) =>
-          uploadFileWithProgress(uploadFileItem.file).catch(() => {
-            // Error handled by upload progress UI
-          }),
-        );
+        .map((f) => f.file);
 
-      await Promise.all(uploadPromises);
+      if (pendingFiles.length === 0) {
+        return;
+      }
+
+      // Use bulk upload for multiple files, single upload for one file
+      if (pendingFiles.length > 1) {
+        await uploadFilesBulk(pendingFiles).catch(() => {
+          // Error handled by upload progress UI
+        });
+      } else {
+        // TypeScript guard: pendingFiles[0] is guaranteed to exist after length check
+        const firstFile = pendingFiles[0]!;
+        await uploadFileWithProgress(firstFile).catch(() => {
+          // Error handled by upload progress UI
+        });
+      }
+
       // Clear files that were successfully started (they're now in global uploadProgress)
       // Keep files with errors so user can retry
       setUploadFiles((prev) => prev.filter((f) => f.status === "error"));

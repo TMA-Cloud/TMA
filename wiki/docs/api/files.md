@@ -2,6 +2,8 @@
 
 File management endpoints for TMA Cloud.
 
+**Note:** All endpoints that accept `ids` arrays process multiple files in bulk operations. This includes move, copy, star, share, delete, restore, and download operations.
+
 ## List Files
 
 ### GET `/api/files`
@@ -483,10 +485,29 @@ Permanently delete all files in trash.
 
 ### GET `/api/files/:id/download`
 
-Download file or folder (folders return ZIP).
+Download single file or folder (folders return ZIP).
 
 **Response:**
 File download or ZIP archive
+
+## Bulk Download Files
+
+### POST `/api/files/download/bulk`
+
+Download multiple files/folders as a single ZIP archive.
+
+**Request Body:**
+
+```json
+{
+  "ids": ["file_123", "file_456", "folder_789"]
+}
+```
+
+**Response:**
+ZIP archive containing all selected files and folders
+
+**Note:** For single file downloads, use the GET endpoint. This endpoint is optimized for multiple files.
 
 ## File Events
 

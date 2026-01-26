@@ -1,6 +1,6 @@
 const { validateAndResolveFile, streamEncryptedFile, streamUnencryptedFile } = require('../../utils/fileDownload');
 const { sendError, sendSuccess } = require('../../utils/response');
-const { createZipArchive } = require('../../utils/zipArchive');
+const { createZipArchive, createBulkZipArchive } = require('../../utils/zipArchive');
 const { logger } = require('../../config/logger');
 const { logAuditEvent, fileUploaded, fileDownloaded } = require('../../services/auditLogger');
 const { publishFileEvent, EventTypes } = require('../../services/fileEvents');
@@ -9,13 +9,15 @@ const {
   createFolder,
   createFile,
   getFile,
+  getFilesByIds,
   renameFile: renameFileModel,
   getFolderTree,
 } = require('../../models/file.model');
 const { userOperationLock } = require('../../utils/mutex');
 const { validateFileName, validateSortBy, validateSortOrder, validateFileUpload } = require('../../utils/validation');
-const { validateParentId, validateSingleId } = require('../../utils/controllerHelpers');
-const { getUserStorageUsage, getUserCustomDriveSettings, getUserStorageLimit } = require('../../models/user.model');
+const { validateParentId, validateSingleId, validateFileIds } = require('../../utils/controllerHelpers');
+const { getUserStorageUsage, getUserStorageLimit } = require('../../models/user.model');
+const { getUserCustomDrive } = require('../../models/file/file.cache.model');
 const { safeUnlink } = require('../../utils/fileCleanup');
 const { validateMimeType } = require('../../utils/mimeTypeDetection');
 const { checkAgentForUser } = require('../../utils/agentCheck');
@@ -145,7 +147,8 @@ async function uploadFile(req, res) {
   // Final safeguard: Check storage limit with actual file size
   // (Middleware checks using Content-Length estimate, this uses actual size for accuracy)
   try {
-    const customDrive = await getUserCustomDriveSettings(req.userId);
+    // Use cached version for efficiency (O(1) with cache hit)
+    const customDrive = await getUserCustomDrive(req.userId);
     const used = await getUserStorageUsage(req.userId);
     const basePath = process.env.UPLOAD_DIR || __dirname;
     const userStorageLimit = await getUserStorageLimit(req.userId);
@@ -210,6 +213,197 @@ async function uploadFile(req, res) {
   });
 
   sendSuccess(res, file);
+}
+
+/**
+ * Bulk upload multiple files
+ */
+async function uploadFilesBulk(req, res) {
+  if (!req.files || req.files.length === 0) {
+    return sendError(res, 400, 'No files uploaded');
+  }
+
+  // Validate all filenames
+  for (const file of req.files) {
+    if (!validateFileName(file.originalname)) {
+      // Clean up all uploaded files
+      for (const f of req.files) {
+        if (f.path && !f.customDriveFinalPath) {
+          await safeUnlink(f.path);
+        } else if (f.customDriveFinalPath) {
+          const { agentDeletePath } = require('../../utils/agentFileOperations');
+          await agentDeletePath(f.customDriveFinalPath).catch(() => {});
+        }
+      }
+      return sendError(res, 400, `Invalid file name: ${file.originalname}`);
+    }
+  }
+
+  // Validate parentId (same for all files)
+  const { valid, parentId, error } = validateParentId(req);
+  if (!valid) {
+    // Clean up all uploaded files
+    for (const file of req.files) {
+      if (file.path && !file.customDriveFinalPath) {
+        await safeUnlink(file.path);
+      } else if (file.customDriveFinalPath) {
+        const { agentDeletePath } = require('../../utils/agentFileOperations');
+        await agentDeletePath(file.customDriveFinalPath).catch(() => {});
+      }
+    }
+    return sendError(res, 400, error);
+  }
+
+  // Check if agent is required - STRICT: block if agent is not confirmed online
+  const agentResult = await requireAgentOnline(req);
+  if (agentResult.error) {
+    // Clean up all uploaded files
+    for (const file of req.files) {
+      if (file.path && !file.customDriveFinalPath) {
+        await safeUnlink(file.path);
+      } else if (file.customDriveFinalPath) {
+        const { agentDeletePath } = require('../../utils/agentFileOperations');
+        await agentDeletePath(file.customDriveFinalPath).catch(() => {});
+      }
+    }
+    return sendError(res, agentResult.status, agentResult.message);
+  }
+
+  // Calculate total size and check storage limit
+  const totalSize = req.files.reduce((sum, file) => sum + file.size, 0);
+  try {
+    // Use cached version for efficiency (O(1) with cache hit)
+    const customDrive = await getUserCustomDrive(req.userId);
+    const used = await getUserStorageUsage(req.userId);
+    const basePath = process.env.UPLOAD_DIR || __dirname;
+    const userStorageLimit = await getUserStorageLimit(req.userId);
+    const { checkStorageLimitExceeded } = require('../../utils/storageUtils');
+
+    const checkResult = await checkStorageLimitExceeded({
+      fileSize: totalSize,
+      customDrive,
+      used,
+      userStorageLimit,
+      defaultBasePath: basePath,
+    });
+
+    if (checkResult.exceeded) {
+      // Clean up all uploaded files
+      for (const file of req.files) {
+        if (file.path && !file.customDriveFinalPath) {
+          await safeUnlink(file.path);
+        } else if (file.customDriveFinalPath) {
+          const { agentDeletePath } = require('../../utils/agentFileOperations');
+          await agentDeletePath(file.customDriveFinalPath).catch(() => {});
+        }
+      }
+      return sendError(res, 413, checkResult.message);
+    }
+  } catch (storageError) {
+    logger.error({ err: storageError, userId: req.userId }, 'Error checking storage limit');
+    // Clean up all uploaded files
+    for (const file of req.files) {
+      if (file.path && !file.customDriveFinalPath) {
+        await safeUnlink(file.path);
+      } else if (file.customDriveFinalPath) {
+        const { agentDeletePath } = require('../../utils/agentFileOperations');
+        await agentDeletePath(file.customDriveFinalPath).catch(() => {});
+      }
+    }
+    return sendError(res, 500, 'Unable to verify storage limit. Please try again.');
+  }
+
+  // Process all files in parallel
+  const uploadPromises = req.files.map(async file => {
+    // Detect and validate actual MIME type from file content
+    let actualMimeType = file.mimetype || 'application/octet-stream';
+
+    // Only validate MIME type if file is in UPLOAD_DIR (not already in custom drive)
+    if (file.path && !file.customDriveFinalPath) {
+      const mimeValidation = await validateMimeType(file.path, file.mimetype, file.originalname);
+      if (!mimeValidation.valid) {
+        await safeUnlink(file.path);
+        throw new Error(`Invalid file type: ${file.originalname}`);
+      }
+      actualMimeType = mimeValidation.actualMimeType || file.mimetype || 'application/octet-stream';
+    }
+
+    // Validate for security concerns (executable files, etc.)
+    validateFileUpload(actualMimeType, file.originalname);
+
+    try {
+      const createdFile = await userOperationLock(req.userId, () => {
+        return createFile(
+          file.originalname,
+          file.size,
+          actualMimeType,
+          file.path,
+          parentId,
+          req.userId,
+          file.customDriveFinalPath
+        );
+      });
+
+      // Log file upload
+      await fileUploaded(createdFile.id, createdFile.name, createdFile.size, req);
+      logger.info({ fileId: createdFile.id, fileName: createdFile.name, fileSize: createdFile.size }, 'File uploaded');
+
+      // Publish file uploaded event
+      await publishFileEvent(EventTypes.FILE_UPLOADED, {
+        id: createdFile.id,
+        name: createdFile.name,
+        type: createdFile.type,
+        size: createdFile.size,
+        mimeType: createdFile.mimeType,
+        parentId,
+        userId: req.userId,
+      });
+
+      return createdFile;
+    } catch (error) {
+      // Clean up file on error
+      if (file.path && !file.customDriveFinalPath) {
+        await safeUnlink(file.path);
+      } else if (file.customDriveFinalPath) {
+        const { agentDeletePath } = require('../../utils/agentFileOperations');
+        await agentDeletePath(file.customDriveFinalPath).catch(() => {});
+      }
+      throw error;
+    }
+  });
+
+  // Wait for all uploads to complete
+  const results = await Promise.allSettled(uploadPromises);
+
+  // Separate successful and failed uploads
+  const successful = [];
+  const failed = [];
+
+  for (let i = 0; i < results.length; i++) {
+    const result = results[i];
+    if (result.status === 'fulfilled') {
+      successful.push(result.value);
+    } else {
+      failed.push({
+        fileName: req.files[i].originalname,
+        error: result.reason?.message || 'Upload failed',
+      });
+    }
+  }
+
+  // If all failed, return error
+  if (successful.length === 0) {
+    return sendError(res, 400, failed.length > 0 ? failed[0].error : 'All uploads failed');
+  }
+
+  // Return results with success/failure info
+  sendSuccess(res, {
+    files: successful,
+    failed: failed.length > 0 ? failed : undefined,
+    total: req.files.length,
+    successful: successful.length,
+    failedCount: failed.length,
+  });
 }
 
 /**
@@ -375,10 +569,114 @@ async function renameFile(req, res) {
   }
 }
 
+/**
+ * Bulk download multiple files/folders as a single ZIP archive
+ */
+async function downloadFilesBulk(req, res) {
+  // Check if agent is required - STRICT: block if agent is not confirmed online
+  const agentResult = await requireAgentOnline(req);
+  if (agentResult.error) {
+    return sendError(res, agentResult.status, agentResult.message);
+  }
+  const agentCheck = agentResult.agentCheck;
+
+  const { valid, ids: validatedIds, error } = validateFileIds(req);
+  if (!valid) {
+    return sendError(res, 400, error);
+  }
+
+  if (validatedIds.length === 0) {
+    return sendError(res, 400, 'No files selected for download');
+  }
+
+  // Additional check: if agent is required, block bulk downloads entirely
+  // Bulk downloads require reading all files, which needs agent access
+  if (agentCheck.required && !agentCheck.online) {
+    return sendError(res, AGENT_OFFLINE_STATUS, AGENT_OFFLINE_MESSAGE);
+  }
+
+  try {
+    return await userOperationLock(req.userId, async () => {
+      // Get all files/folders to download in a single query (bulk operation)
+      const filesToDownload = await getFilesByIds(validatedIds, req.userId);
+
+      if (filesToDownload.length === 0) {
+        return sendError(res, 404, 'No files found to download');
+      }
+
+      // Get folder trees for all folders
+      const allEntries = [];
+      const rootIds = [];
+      const fileNames = [];
+
+      for (const file of filesToDownload) {
+        fileNames.push(file.name);
+        rootIds.push(file.id);
+
+        if (file.type === 'folder') {
+          const entries = await getFolderTree(file.id, req.userId);
+          allEntries.push(...entries);
+        } else {
+          // Add the file itself to entries
+          allEntries.push({
+            id: file.id,
+            name: file.name,
+            type: file.type,
+            path: file.path,
+            parent_id: file.parentId || null,
+          });
+        }
+      }
+
+      // Create archive name from first file/folder name, or use "download" if multiple
+      const archiveName = filesToDownload.length === 1 ? filesToDownload[0].name : `download_${Date.now()}`;
+
+      // Create zip archive - this will handle errors internally
+      await createBulkZipArchive(res, archiveName, allEntries, rootIds, async () => {
+        // Log success only after zip is successfully created
+        await logAuditEvent(
+          'file.download.bulk',
+          {
+            status: 'success',
+            resourceType: 'file',
+            resourceId: validatedIds[0],
+            metadata: {
+              fileCount: validatedIds.length,
+              fileIds: validatedIds,
+              fileNames,
+            },
+          },
+          req
+        );
+        logger.info({ fileIds: validatedIds, fileNames, count: validatedIds.length }, 'Files downloaded (bulk zip)');
+      });
+    });
+  } catch (error) {
+    // Check if error is agent-related
+    if (isAgentOfflineError(error)) {
+      if (!res.headersSent) {
+        return sendError(res, AGENT_OFFLINE_STATUS, AGENT_OFFLINE_MESSAGE);
+      }
+      logger.error(
+        { fileIds: validatedIds, error: error.message },
+        'Agent error during bulk download (headers already sent)'
+      );
+      return;
+    }
+    // Re-throw other errors only if headers haven't been sent
+    if (!res.headersSent) {
+      throw error;
+    }
+    logger.error({ fileIds: validatedIds, error: error.message }, 'Error during bulk download (headers already sent)');
+  }
+}
+
 module.exports = {
   listFiles,
   addFolder,
   uploadFile,
+  uploadFilesBulk,
   downloadFile,
+  downloadFilesBulk,
   renameFile,
 };

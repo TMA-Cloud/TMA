@@ -18,7 +18,7 @@ Create shareable links for files and folders in TMA Cloud.
 3. Click **"Create Share Link"**
 4. All folder contents accessible via link
 
-### Multiple Files Share
+### Bulk Share
 
 1. Select multiple files/folders
 2. Click **"Share"** button

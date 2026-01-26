@@ -33,7 +33,8 @@ Learn how to upload and manage files in TMA Cloud.
 
 ### File Operations
 
-- **Download:** Click to download files
+- **Download:** Click to download single file
+- **Bulk Download:** Select multiple files → Download (creates ZIP archive)
 - **Rename:** Right-click → Rename
 - **Move:** Drag and drop or use Move option
 - **Copy:** Right-click → Copy

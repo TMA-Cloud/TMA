@@ -245,6 +245,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
     [folderStack, currentPath, sortBy, sortOrder, searchQuery],
   );
 
+  // Debounced refresh for uploads - batches multiple upload completions into a single refresh
+  const [debouncedRefreshFiles] = useDebouncedCallback(
+    (...args: unknown[]) => {
+      const skipSearchCheck = (args[0] as boolean | undefined) ?? false;
+      void refreshFiles(skipSearchCheck);
+    },
+    500, // 500ms delay - batches upload completions that happen close together
+  );
+
   // Keep refreshFiles ref in sync (after refreshFiles is declared)
   useEffect(() => {
     refreshFilesRef.current = refreshFiles;
@@ -567,6 +576,218 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
     });
   };
 
+  const uploadFilesBulk = async (files: File[]) => {
+    ensureAgentOnline();
+    if (files.length === 0) return;
+
+    return operationQueue.add(async () => {
+      // Pre-upload check: Verify storage limits before starting upload
+      const totalSize = files.reduce((sum, file) => sum + file.size, 0);
+      try {
+        const storageRes = await fetch(`/api/user/storage`, {
+          credentials: "include",
+        });
+        if (storageRes.ok) {
+          const storageData = await storageRes.json();
+          const { used, total } = storageData;
+          const errorMessage = checkStorageLimitExceeded(
+            used,
+            total,
+            totalSize,
+          );
+          if (errorMessage) {
+            showToast(errorMessage, "error");
+            throw new Error(errorMessage);
+          }
+        }
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          error.message.includes("Storage limit exceeded")
+        ) {
+          throw error;
+        }
+        console.warn("Failed to check storage limits before upload:", error);
+      }
+
+      return new Promise<void>((resolve, reject) => {
+        const uploadId = `bulk-${Date.now()}-${Math.random()}`;
+        const xhr = new XMLHttpRequest();
+        const data = new FormData();
+
+        // Append all files with the same field name 'files'
+        files.forEach((file) => {
+          data.append("files", file);
+        });
+
+        const parentId = folderStack[folderStack.length - 1];
+        if (parentId) data.append("parentId", parentId);
+
+        // Add all files to progress list
+        const fileProgressItems = files.map((file) => ({
+          id: `${uploadId}-${file.name}`,
+          fileName: file.name,
+          fileSize: file.size,
+          progress: 0,
+          status: "uploading" as const,
+        }));
+
+        setUploadProgress((prev) => [...prev, ...fileProgressItems]);
+
+        xhr.upload.addEventListener("progress", (e) => {
+          if (e.lengthComputable) {
+            const progress = Math.round((e.loaded / e.total) * 100);
+            // Update progress for all files proportionally
+            fileProgressItems.forEach((item) => {
+              setUploadProgress((prev) =>
+                updateUploadProgress(prev, item.id, { progress }),
+              );
+            });
+          }
+        });
+
+        xhr.addEventListener("load", async () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+              const response = JSON.parse(xhr.responseText);
+              const { files: uploadedFiles, failed } = response;
+
+              // Mark successful uploads as completed
+              uploadedFiles.forEach((file: { name: string }) => {
+                const item = fileProgressItems.find(
+                  (i) => i.fileName === file.name,
+                );
+                if (item) {
+                  setUploadProgress((prev) =>
+                    updateUploadProgress(prev, item.id, {
+                      progress: 100,
+                      status: "completed",
+                    }),
+                  );
+                }
+              });
+
+              // Mark failed uploads as error
+              if (failed && failed.length > 0) {
+                failed.forEach(
+                  (failedFile: { fileName: string; error: string }) => {
+                    const item = fileProgressItems.find(
+                      (i) => i.fileName === failedFile.fileName,
+                    );
+                    if (item) {
+                      setUploadProgress((prev) =>
+                        updateUploadProgress(prev, item.id, {
+                          status: "error",
+                        }),
+                      );
+                      showToast(
+                        `Failed to upload ${failedFile.fileName}: ${failedFile.error}`,
+                        "error",
+                      );
+                    }
+                  },
+                );
+              }
+
+              // Use debounced refresh to batch multiple upload completions
+              debouncedRefreshFiles(false);
+
+              // Auto-dismiss successful uploads after 3 seconds
+              fileProgressItems.forEach((item) => {
+                const dismissTimeout = createAutoDismissTimeout(
+                  item.id,
+                  isUploadProgressInteractingRef,
+                  setUploadProgress,
+                  uploadDismissTimeoutsRef,
+                  3000,
+                  2000,
+                );
+                uploadDismissTimeoutsRef.current.set(item.id, dismissTimeout);
+              });
+
+              if (failed && failed.length > 0) {
+                // Some files failed, but don't reject the promise
+                resolve();
+              } else {
+                resolve();
+              }
+            } catch {
+              // If response parsing fails, mark all as completed (backend might have succeeded)
+              fileProgressItems.forEach((item) => {
+                setUploadProgress((prev) =>
+                  updateUploadProgress(prev, item.id, {
+                    progress: 100,
+                    status: "completed",
+                  }),
+                );
+              });
+              debouncedRefreshFiles(false);
+              resolve();
+            }
+          } else {
+            // Mark all as error
+            fileProgressItems.forEach((item) => {
+              setUploadProgress((prev) =>
+                updateUploadProgress(prev, item.id, { status: "error" }),
+              );
+            });
+
+            const errorMessage = extractXhrErrorMessage(xhr);
+
+            if (xhr.status === 503) {
+              const lowerMessage = errorMessage.toLowerCase();
+              if (
+                lowerMessage.includes("agent") &&
+                lowerMessage.includes("offline")
+              ) {
+                setAgentOnline(false);
+              }
+            }
+
+            showToast(errorMessage || "Bulk upload failed", "error");
+            reject(new Error(errorMessage || "Bulk upload failed"));
+          }
+        });
+
+        xhr.addEventListener("error", () => {
+          fileProgressItems.forEach((item) => {
+            setUploadProgress((prev) =>
+              updateUploadProgress(prev, item.id, { status: "error" }),
+            );
+          });
+
+          const errorMessage =
+            extractXhrErrorMessage(xhr) ||
+            "Upload failed. Please check your connection and try again.";
+
+          if (xhr.status === 503) {
+            const lowerMessage = errorMessage.toLowerCase();
+            if (
+              lowerMessage.includes("agent") &&
+              lowerMessage.includes("offline")
+            ) {
+              setAgentOnline(false);
+            }
+          }
+
+          showToast(errorMessage, "error");
+          reject(new Error(errorMessage));
+        });
+
+        xhr.addEventListener("abort", () => {
+          fileProgressItems.forEach((item) => {
+            setUploadProgress((prev) => removeUploadProgress(prev, item.id));
+          });
+          reject(new Error("Upload cancelled"));
+        });
+
+        xhr.open("POST", `/api/files/upload/bulk`);
+        xhr.withCredentials = true;
+        xhr.send(data);
+      });
+    });
+  };
+
   const uploadFileWithProgress = async (
     file: File,
     onProgress?: (progress: number) => void,
@@ -646,7 +867,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
             // Don't set agentOnline here - only explicit status checks should update it
             // Regular file operations can succeed even when agent is offline
 
-            await refreshFiles();
+            // Use debounced refresh to batch multiple upload completions
+            debouncedRefreshFiles(false);
             // Auto-dismiss after 3 seconds
             const dismissTimeout = createAutoDismissTimeout(
               uploadId,
@@ -1089,15 +1311,87 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
 
     setIsDownloading(true);
     try {
-      // Download files sequentially to avoid overwhelming the server
-      for (const id of ids) {
-        const file = files.find((f) => f.id === id);
+      // Use bulk download endpoint for multiple files (creates a single ZIP)
+      if (ids.length > 1) {
+        const res = await fetch(`/api/files/download/bulk`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ ids }),
+        });
+
+        if (!res.ok) {
+          const errorMessage = await extractResponseError(res);
+          const isAgentError = isAgentOfflineResponse(res.status, errorMessage);
+
+          if (isAgentError) {
+            setAgentOnline(false);
+            showToast(
+              "Agent is offline. Please refresh agent connection in Settings.",
+              "error",
+            );
+          } else {
+            showToast(errorMessage || "Failed to download files", "error");
+          }
+          throw new Error(errorMessage || "Failed to download files");
+        }
+
+        // Get the filename from Content-Disposition header
+        const contentDisposition = res.headers.get("Content-Disposition");
+        let filename = `download_${Date.now()}.zip`;
+
+        if (contentDisposition) {
+          const rfc5987Match = contentDisposition.match(
+            /filename\*=UTF-8''([^;,\s]+)/i,
+          );
+          if (rfc5987Match && rfc5987Match[1]) {
+            try {
+              filename = decodeURIComponent(rfc5987Match[1]);
+            } catch {
+              filename = rfc5987Match[1];
+            }
+          } else {
+            const quotedMatch = contentDisposition.match(/filename="([^"]+)"/);
+            if (quotedMatch && quotedMatch[1]) {
+              filename = quotedMatch[1];
+            } else {
+              const unquotedMatch =
+                contentDisposition.match(/filename=([^;,\s]+)/);
+              if (unquotedMatch && unquotedMatch[1]) {
+                filename = unquotedMatch[1];
+              }
+            }
+          }
+        }
+
+        // Create blob and trigger download
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+      } else {
+        // Single file download - use existing endpoint
+        const firstId = ids[0];
+        // Type guard: ensure ID exists (even though we check ids.length === 0 at the top)
+        if (!firstId) {
+          return;
+        }
+
+        const file = files.find((f) => f.id === firstId);
         if (file) {
           // For folders, the backend will add .zip extension
           // For files, use the actual filename with extension
+          const fileName =
+            file.name || (file.type === "folder" ? "folder" : "file");
           const filename =
-            file.type === "folder" ? `${file.name}.zip` : file.name;
-          await downloadFileApi(id, filename);
+            file.type === "folder" ? `${fileName}.zip` : fileName;
+          // firstId is guaranteed to be string here due to the type guard above
+          await downloadFileApi(firstId, filename);
         }
       }
 
@@ -1238,6 +1532,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         uploadProgress,
         setUploadProgress,
         uploadFileWithProgress,
+        uploadFilesBulk,
         setIsUploadProgressInteracting,
         onlyOfficeConfigured,
         canConfigureOnlyOffice,

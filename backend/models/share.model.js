@@ -42,6 +42,62 @@ async function getShareLink(fileId, userId) {
   return shareId;
 }
 
+/**
+ * Get share links for multiple files (bulk operation)
+ * Returns a map: { fileId: shareId | null }
+ */
+async function getShareLinks(fileIds, userId) {
+  if (!fileIds || fileIds.length === 0) return {};
+
+  // Try to get from cache first for all files (parallel)
+  const cachePromises = fileIds.map(async fileId => {
+    const cacheKey = cacheKeys.shareLink(fileId, userId);
+    const cached = await getCache(cacheKey);
+    return { fileId, cached };
+  });
+
+  const cacheResultsArray = await Promise.all(cachePromises);
+  const cacheResults = {};
+  const uncachedIds = [];
+
+  for (const { fileId, cached } of cacheResultsArray) {
+    if (cached !== null) {
+      cacheResults[fileId] = cached;
+    } else {
+      uncachedIds.push(fileId);
+    }
+  }
+
+  // If all were cached, return immediately
+  if (uncachedIds.length === 0) {
+    return cacheResults;
+  }
+
+  // Query database for uncached items
+  const res = await pool.query('SELECT file_id, id FROM share_links WHERE file_id = ANY($1::text[]) AND user_id = $2', [
+    uncachedIds,
+    userId,
+  ]);
+
+  // Build result map from database results
+  const dbResults = {};
+  for (const row of res.rows) {
+    dbResults[row.file_id] = row.id;
+  }
+
+  // Cache all results (including nulls for files without share links) in parallel
+  const cacheSetPromises = uncachedIds.map(async fileId => {
+    const shareId = dbResults[fileId] || null;
+    const cacheKey = cacheKeys.shareLink(fileId, userId);
+    await setCache(cacheKey, shareId, DEFAULT_TTL);
+    dbResults[fileId] = shareId;
+  });
+  await Promise.all(cacheSetPromises);
+
+  // Merge cached and database results
+  return { ...cacheResults, ...dbResults };
+}
+
 async function addFilesToShare(shareId, fileIds) {
   if (!fileIds || fileIds.length === 0) return;
   await pool.query(
@@ -78,6 +134,38 @@ async function deleteShareLink(fileId, userId) {
     await invalidateShareCache(shareId, userId);
   }
   await deleteCache(cacheKeys.shareLink(fileId, userId));
+}
+
+/**
+ * Delete share links for multiple files (bulk operation)
+ */
+async function deleteShareLinks(fileIds, userId) {
+  if (!fileIds || fileIds.length === 0) return;
+
+  // Get share IDs before deleting for cache invalidation
+  const shareResult = await pool.query(
+    'SELECT id, file_id FROM share_links WHERE file_id = ANY($1::text[]) AND user_id = $2',
+    [fileIds, userId]
+  );
+
+  const shareIds = shareResult.rows.map(r => r.id);
+  const fileIdToShareId = {};
+  for (const row of shareResult.rows) {
+    fileIdToShareId[row.file_id] = row.id;
+  }
+
+  // Delete all share links in one query
+  await pool.query('DELETE FROM share_links WHERE file_id = ANY($1::text[]) AND user_id = $2', [fileIds, userId]);
+
+  // Invalidate share cache for all affected shares
+  for (const shareId of shareIds) {
+    await invalidateShareCache(shareId, userId);
+  }
+
+  // Delete cache for all files
+  for (const fileId of fileIds) {
+    await deleteCache(cacheKeys.shareLink(fileId, userId));
+  }
 }
 
 async function getFileByToken(token) {
@@ -196,9 +284,11 @@ async function getSharedTree(token, rootId) {
 module.exports = {
   createShareLink,
   getShareLink,
+  getShareLinks,
   addFilesToShare,
   removeFilesFromShares,
   deleteShareLink,
+  deleteShareLinks,
   getFileByToken,
   getFolderContents,
   getFolderContentsByShare,

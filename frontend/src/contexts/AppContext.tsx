@@ -104,6 +104,7 @@ export interface AppContextType {
     file: File,
     onProgress?: (progress: number) => void,
   ) => Promise<void>;
+  uploadFilesBulk: (files: File[]) => Promise<void>;
   setIsUploadProgressInteracting: (isInteracting: boolean) => void;
   onlyOfficeConfigured: boolean;
   canConfigureOnlyOffice: boolean;

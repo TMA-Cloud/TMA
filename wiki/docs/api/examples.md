@@ -87,6 +87,28 @@ a.download = "file.pdf";
 a.click();
 ```
 
+### Bulk Download Files
+
+```javascript
+const response = await fetch("/api/files/download/bulk", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({
+    ids: ["file_123", "file_456", "folder_789"],
+  }),
+  credentials: "include",
+});
+
+const blob = await response.blob();
+const url = window.URL.createObjectURL(blob);
+const a = document.createElement("a");
+a.href = url;
+a.download = "download.zip";
+a.click();
+```
+
 ## Share Links
 
 ### Create Share Link

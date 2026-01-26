@@ -11,8 +11,8 @@ const {
 } = require('../../models/file.model');
 const {
   createShareLink,
-  getShareLink,
-  deleteShareLink,
+  getShareLinks,
+  deleteShareLinks,
   addFilesToShare,
   removeFilesFromShares,
 } = require('../../models/share.model');
@@ -126,20 +126,18 @@ async function shareFilesController(req, res) {
     const links = {};
 
     if (validatedShared) {
-      for (const id of validatedIds) {
+      // Bulk operation: Get all existing share links at once
+      const existingShareLinks = await getShareLinks(validatedIds, req.userId);
+
+      // Process each file to create/update share links
+      const sharePromises = validatedIds.map(async id => {
         const treeIds = await getRecursiveIds([id], req.userId);
-        let token = await getShareLink(id, req.userId);
-        const isNewShare = !token;
+        let token = existingShareLinks[id];
+
         if (!token) {
           token = await createShareLink(id, req.userId, treeIds);
-        } else {
-          await addFilesToShare(token, treeIds);
-        }
 
-        links[id] = await buildShareLink(token, req);
-
-        // Log audit event for share creation
-        if (isNewShare) {
+          // Log audit event for share creation
           await logAuditEvent(
             'share.create',
             {
@@ -154,8 +152,15 @@ async function shareFilesController(req, res) {
             req
           );
           logger.info({ fileId: id, shareToken: token, fileCount: treeIds.length }, 'Share link created');
+        } else {
+          await addFilesToShare(token, treeIds);
         }
-      }
+
+        links[id] = await buildShareLink(token, req);
+      });
+
+      // Wait for all share operations to complete
+      await Promise.all(sharePromises);
       await setShared(validatedIds, true, req.userId);
 
       // Get file info for event publishing
@@ -182,24 +187,25 @@ async function shareFilesController(req, res) {
       // Get file info for event publishing
       const fileInfo = await getFileInfo(validatedIds, req.userId);
 
-      for (const id of validatedIds) {
-        await deleteShareLink(id, req.userId);
+      // Bulk delete all share links at once
+      await deleteShareLinks(validatedIds, req.userId);
 
-        // Log audit event for share deletion
-        await logAuditEvent(
-          'share.delete',
-          {
-            status: 'success',
-            resourceType: 'share',
-            resourceId: id,
-            metadata: {
-              fileId: id,
-            },
+      // Log audit events for share deletions (bulk)
+      await logAuditEvent(
+        'share.delete',
+        {
+          status: 'success',
+          resourceType: 'share',
+          resourceId: validatedIds[0] || null,
+          metadata: {
+            fileCount: validatedIds.length,
+            fileIds: validatedIds,
           },
-          req
-        );
-        logger.info({ fileId: id }, 'Share link deleted');
-      }
+        },
+        req
+      );
+      logger.info({ fileIds: validatedIds, fileCount: validatedIds.length }, 'Share links deleted');
+
       await setShared(validatedIds, false, req.userId);
 
       // Publish file unshared events in batch (optimized)
@@ -247,9 +253,13 @@ async function getShareLinksController(req, res) {
     return sendError(res, 400, error);
   }
 
+  // Bulk operation: Get all share links at once
+  const shareLinksMap = await getShareLinks(validatedIds, req.userId);
+
+  // Build links object with full URLs
   const links = {};
   for (const id of validatedIds) {
-    const token = await getShareLink(id, req.userId);
+    const token = shareLinksMap[id];
     if (token) {
       links[id] = await buildShareLink(token, req);
     }
@@ -266,37 +276,89 @@ async function linkParentShareController(req, res) {
   if (!valid) {
     return sendError(res, 400, error);
   }
-  const links = {};
-  for (const id of validatedIds) {
-    const parentRes = await pool.query('SELECT parent_id FROM files WHERE id = $1 AND user_id = $2', [id, req.userId]);
-    const parentId = parentRes.rows[0]?.parent_id;
-    if (!parentId) continue;
-    const shareId = await getShareLink(parentId, req.userId);
-    if (!shareId) continue;
-    const treeIds = await getRecursiveIds([id], req.userId);
-    await addFilesToShare(shareId, treeIds);
-    await setShared([id], true, req.userId);
-    links[id] = buildShareLink(shareId, req);
 
-    // Get file info for event publishing
-    const fileInfo = await getFileInfo([id], req.userId);
-    if (fileInfo.length > 0) {
-      const file = fileInfo[0];
-      await publishFileEventsBatch([
-        {
-          eventType: EventTypes.FILE_SHARED,
-          eventData: {
-            id: file.id,
-            name: file.name,
-            type: file.type,
-            parentId: file.parentId || null,
-            shared: true,
-            userId: req.userId,
-          },
-        },
-      ]);
+  // Bulk operation: Get all parent IDs at once
+  const parentRes = await pool.query('SELECT id, parent_id FROM files WHERE id = ANY($1::text[]) AND user_id = $2', [
+    validatedIds,
+    req.userId,
+  ]);
+
+  // Build map of fileId -> parentId
+  const fileToParent = {};
+  const parentIds = [];
+  for (const row of parentRes.rows) {
+    if (row.parent_id) {
+      fileToParent[row.id] = row.parent_id;
+      parentIds.push(row.parent_id);
     }
   }
+
+  if (parentIds.length === 0) {
+    return sendSuccess(res, { success: true, links: {} });
+  }
+
+  // Bulk operation: Get all parent share links at once
+  const uniqueParentIds = [...new Set(parentIds)];
+  const parentShareLinks = await getShareLinks(uniqueParentIds, req.userId);
+
+  // Group files by their parent's share link
+  const shareIdToFileIds = new Map();
+  for (const id of validatedIds) {
+    const parentId = fileToParent[id];
+    if (!parentId) continue;
+    const shareId = parentShareLinks[parentId];
+    if (!shareId) continue;
+
+    if (!shareIdToFileIds.has(shareId)) {
+      shareIdToFileIds.set(shareId, []);
+    }
+    shareIdToFileIds.get(shareId).push(id);
+  }
+
+  // Process each share link group
+  const links = {};
+  const allTreeIds = [];
+  const allFileIdsToShare = [];
+
+  for (const [shareId, fileIds] of shareIdToFileIds.entries()) {
+    // Get recursive IDs for all files in this group
+    const treeIds = await getRecursiveIds(fileIds, req.userId);
+    allTreeIds.push(...treeIds);
+    allFileIdsToShare.push(...fileIds);
+
+    // Add all files to the share in one operation
+    await addFilesToShare(shareId, treeIds);
+
+    // Build share link URL
+    const shareUrl = buildShareLink(shareId, req);
+    for (const fileId of fileIds) {
+      links[fileId] = shareUrl;
+    }
+  }
+
+  // Bulk update shared status for all files
+  if (allFileIdsToShare.length > 0) {
+    await setShared(allFileIdsToShare, true, req.userId);
+  }
+
+  // Get file info for event publishing (bulk)
+  const fileInfo = await getFileInfo(allFileIdsToShare, req.userId);
+
+  // Publish file shared events in batch (optimized)
+  await publishFileEventsBatch(
+    fileInfo.map(file => ({
+      eventType: EventTypes.FILE_SHARED,
+      eventData: {
+        id: file.id,
+        name: file.name,
+        type: file.type,
+        parentId: file.parentId || null,
+        shared: true,
+        userId: req.userId,
+      },
+    }))
+  );
+
   sendSuccess(res, { success: true, links });
 }
 
