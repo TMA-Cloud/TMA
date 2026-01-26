@@ -169,9 +169,10 @@ function generateUniqueName(baseName, ext, counter) {
  * @param {string} filePath - Full file path to check
  * @param {string} _folderPath - Unused parameter (kept for backward compatibility)
  * @param {boolean} useAgent - If true, use agent API instead of direct filesystem access
+ * @param {string} userId - Optional user ID to check database for existing files
  * @returns {Promise<string>} Unique file path
  */
-async function getUniqueFilename(filePath, _folderPath, useAgent = false) {
+async function getUniqueFilename(filePath, _folderPath, useAgent = false, userId = null) {
   const dir = path.dirname(filePath);
   const ext = path.extname(filePath);
   const baseName = path.basename(filePath, ext);
@@ -181,6 +182,8 @@ async function getUniqueFilename(filePath, _folderPath, useAgent = false) {
 
   while (true) {
     let exists = false;
+
+    // Check filesystem
     if (useAgent) {
       // Use agent API to check if path exists
       exists = await agentPathExists(finalPath);
@@ -190,6 +193,16 @@ async function getUniqueFilename(filePath, _folderPath, useAgent = false) {
         .access(finalPath)
         .then(() => true)
         .catch(() => false);
+    }
+
+    // Also check database if userId is provided
+    if (!exists && userId) {
+      const absolutePath = path.resolve(finalPath);
+      const dbCheck = await pool.query(
+        'SELECT id FROM files WHERE path = $1 AND user_id = $2 AND type = $3 AND deleted_at IS NULL',
+        [absolutePath, userId, 'file']
+      );
+      exists = dbCheck.rows.length > 0;
     }
 
     if (!exists) {

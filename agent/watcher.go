@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -72,6 +73,18 @@ func (wm *WatcherManager) handleFileEvent(event fsnotify.Event) {
 			wm.mu.Unlock()
 		}
 	case event.Op&fsnotify.Write != 0:
+		// For Write events, use file locking to detect if write is complete
+		// Only send webhook if we can acquire exclusive lock (write is complete)
+		if !isDir {
+			// Try to acquire exclusive lock - if successful, file is not being written
+			if wm.isFileWriteComplete(event.Name) {
+				// File write is complete, send webhook with latest stats
+				go wm.sendWebhookWithLatestStats(webhookURL, webhookToken, "write", event.Name)
+			}
+			// If file is still locked (being written), skip this event
+			// Will get another Write event when more data is written, or file closes
+			return
+		}
 		eventType = "write"
 	case event.Op&fsnotify.Remove != 0:
 		eventType = "remove"
@@ -89,6 +102,84 @@ func (wm *WatcherManager) handleFileEvent(event fsnotify.Event) {
 
 	// Send webhook notification asynchronously (non-blocking)
 	go wm.sendWebhook(webhookURL, webhookToken, eventType, event.Name, isDir, size, modTime)
+}
+
+// isFileWriteComplete attempts to acquire an exclusive lock on the file
+// Returns true if lock succeeds (file is not being written), false if locked (still being written)
+// Uses OS-specific locking: flock on Linux/Unix, file stability check on Windows
+func (wm *WatcherManager) isFileWriteComplete(filePath string) bool {
+	if runtime.GOOS == "windows" {
+		// Windows: Use file stability check (size-based heuristic)
+		// Windows file locking is complex and requires syscalls
+		return wm.isFileStable(filePath)
+	}
+
+	// Linux/Unix: Use flock for reliable detection (OS-level lock)
+	file, err := os.OpenFile(filePath, os.O_RDWR, 0)
+	if err != nil {
+		// Can't open file - might be deleted or permission issue, assume write complete
+		return true
+	}
+	defer file.Close()
+
+	// Try to acquire exclusive lock (non-blocking)
+	fd := int(file.Fd())
+	err = wm.flockExclusiveUnix(fd)
+	if err != nil {
+		// Lock failed - file is still being written by another process
+		return false
+	}
+
+	// Lock succeeded - file is not being written, release lock immediately
+	wm.flockUnlockUnix(fd)
+	return true
+}
+
+// flockExclusiveUnix and flockUnlockUnix are implemented in platform-specific files:
+// - watcher_unix.go for Linux/Unix (uses unix.Flock)
+// - watcher_windows.go for Windows (uses windows.LockFileEx)
+
+// isFileStable checks if file size is stable (fallback method)
+// Checks file size twice with a small delay - if unchanged, assume write complete
+// This is less ideal than file locking but works cross-platform
+func (wm *WatcherManager) isFileStable(filePath string) bool {
+	info1, err := os.Stat(filePath)
+	if err != nil {
+		return true // File might be deleted, assume stable
+	}
+	size1 := info1.Size()
+
+	// Small delay to check if size changes
+	time.Sleep(100 * time.Millisecond)
+
+	info2, err := os.Stat(filePath)
+	if err != nil {
+		return true // File might be deleted, assume stable
+	}
+	size2 := info2.Size()
+
+	// If size hasn't changed, file is likely stable (write complete)
+	return size1 == size2
+}
+
+// sendWebhookWithLatestStats sends webhook with latest file stats
+func (wm *WatcherManager) sendWebhookWithLatestStats(webhookURL, webhookToken, eventType, filePath string) {
+	// Get latest file stats
+	info, err := os.Stat(filePath)
+	var size int64
+	var modTime time.Time
+	var isDir bool
+	if err == nil {
+		isDir = info.IsDir()
+		size = info.Size()
+		modTime = info.ModTime()
+	} else {
+		// File might have been deleted, use defaults
+		modTime = time.Now()
+	}
+
+	// Send webhook with latest file info
+	wm.sendWebhook(webhookURL, webhookToken, eventType, filePath, isDir, size, modTime)
 }
 
 func (wm *WatcherManager) sendWebhook(webhookURL, webhookToken, eventType, filePath string, isDir bool, size int64, modTime time.Time) {

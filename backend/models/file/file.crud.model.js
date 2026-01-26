@@ -15,21 +15,9 @@ const {
   DEFAULT_TTL,
 } = require('../../utils/cache');
 const { getUserCustomDrive } = require('./file.cache.model');
-const {
-  buildOrderClause,
-  fillFolderSizes,
-  getFolderPath,
-  getUniqueFilename,
-  getUniqueFolderPath,
-} = require('./file.utils.model');
+const { buildOrderClause, fillFolderSizes, getFolderPath, getUniqueFolderPath } = require('./file.utils.model');
 const { encryptFile } = require('../../utils/fileEncryption');
-const {
-  agentWriteFileStream,
-  agentMkdir,
-  agentPathExists,
-  agentDeletePath,
-  agentRenamePath,
-} = require('../../utils/agentFileOperations');
+const { agentMkdir, agentDeletePath, agentRenamePath } = require('../../utils/agentFileOperations');
 
 /**
  * Get files in a directory
@@ -147,76 +135,65 @@ async function createFolder(name, parentId = null, userId) {
 /**
  * Create a new file
  */
-async function createFile(name, size, mimeType, tempPath, parentId = null, userId) {
+async function createFile(name, size, mimeType, tempPath, parentId = null, userId, isAlreadyInFinalLocation = false) {
   const id = generateId(16);
 
   // Check if user has custom drive enabled
   const customDrive = await getUserCustomDrive(userId);
 
-  // If custom drive is enabled, file is already uploaded directly to custom drive path
-  // Just rename it to the final location with proper name (same filesystem, so rename works)
-  if (customDrive.enabled && customDrive.path) {
-    let finalPath = null;
-    let renameSucceeded = false; // Track whether rename actually succeeded
-    try {
-      // Get the target folder path
-      const folderPath = await getFolderPath(parentId, userId);
+  // If custom drive is enabled, check if file is already in final location
+  if (customDrive.enabled && customDrive.path && isAlreadyInFinalLocation && tempPath) {
+    // File was streamed directly to final location by multer storage and handled duplicate names
+    // Just update the database
+    const finalPath = path.resolve(tempPath);
+    const actualName = path.basename(finalPath);
 
-      // Ensure the target folder exists via agent
-      const targetDir = folderPath || customDrive.path;
-      const dirExists = await agentPathExists(targetDir);
-      if (!dirExists) {
-        // Folder doesn't exist, create it via agent
-        await agentMkdir(targetDir);
-      }
+    // Store absolute path in database
+    // Use ON CONFLICT to handle case where file already exists in database
+    const absolutePath = path.resolve(finalPath);
+    const result = await pool.query(
+      `INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id)
+       VALUES($1,$2,$3,$4,$5,$6,$7,$8)
+       ON CONFLICT (path, user_id, type) WHERE path IS NOT NULL
+       DO UPDATE SET
+         name = EXCLUDED.name,
+         size = EXCLUDED.size,
+         mime_type = EXCLUDED.mime_type,
+         parent_id = EXCLUDED.parent_id,
+         modified = NOW()
+       RETURNING id, name, type, size, modified, mime_type AS "mimeType", starred, shared`,
+      [id, actualName, 'file', size, mimeType, absolutePath, parentId, userId]
+    );
 
-      // Build the destination path with original filename
-      const destPath = path.join(targetDir, name);
+    // Invalidate cache
+    await invalidateFileCache(userId, parentId);
+    await invalidateSearchCache(userId);
+    await deleteCache(cacheKeys.fileStats(userId));
+    await deleteCache(cacheKeys.userStorage(userId));
 
-      // Handle duplicate filenames (check via agent)
-      finalPath = await getUniqueFilename(destPath, targetDir, true); // Use agent API
+    return result.rows[0];
+  }
 
-      // Stream temp file to final location via agent (memory efficient for large files)
-      const readStream = fs.createReadStream(tempPath);
-      await agentWriteFileStream(finalPath, readStream);
-      // Clean up temp file
-      await fs.promises.unlink(tempPath);
-      renameSucceeded = true; // Mark that write succeeded
+  // UNEXPECTED: Custom drive is enabled but file ended up in UPLOAD_DIR
+  // This should NEVER happen with strict multer - multer fails hard instead of falling back
+  // If this executes, something is wrong (bypass, race condition, or legacy code)
+  if (customDrive.enabled && customDrive.path && !isAlreadyInFinalLocation) {
+    logger.error(
+      {
+        userId,
+        tempPath,
+        name,
+        customDrivePath: customDrive.path,
+      },
+      '[UNEXPECTED] Custom drive enabled but file in UPLOAD_DIR - this should not happen!'
+    );
 
-      // Get the actual filename (in case it was changed due to duplicates)
-      const actualName = path.basename(finalPath);
-
-      // Store absolute path in database
-      const absolutePath = path.resolve(finalPath);
-      const result = await pool.query(
-        'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id, name, type, size, modified, mime_type AS "mimeType", starred, shared',
-        [id, actualName, 'file', size, mimeType, absolutePath, parentId, userId]
-      );
-
-      // Invalidate cache
-      await invalidateFileCache(userId, parentId);
-      await invalidateSearchCache(userId);
-      await deleteCache(cacheKeys.fileStats(userId));
-      await deleteCache(cacheKeys.userStorage(userId)); // Invalidate storage usage cache
-
-      return result.rows[0];
-    } catch (error) {
-      // If custom drive save fails, log and throw (don't fall back since file is already in custom drive)
-      logger.error('[File] Error saving to custom drive:', error);
-      // Clean up the orphaned file based on whether write succeeded
-      if (renameSucceeded && finalPath) {
-        // Delete via agent
-        try {
-          await agentDeletePath(finalPath);
-        } catch (cleanupError) {
-          logger.warn({ finalPath, error: cleanupError.message }, 'Failed to clean up orphaned file via agent');
-        }
-      } else {
-        // Clean up temp file
-        await safeUnlink(tempPath, { logErrors: true });
-      }
-      throw error;
-    }
+    // Fail immediately - don't try to recover
+    // This prevents custom drive files from ever being in UPLOAD_DIR
+    await safeUnlink(tempPath, { logErrors: true });
+    throw new Error(
+      'Upload failed: Custom drive is enabled but file ended up in temporary storage. This should not happen.'
+    );
   }
 
   // Regular upload behavior (when custom drive is disabled)

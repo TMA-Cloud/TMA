@@ -101,28 +101,44 @@ async function uploadFile(req, res) {
   }
 
   // Detect and validate actual MIME type from file content (prevents MIME spoofing)
-  const mimeValidation = await validateMimeType(req.file.path, req.file.mimetype, req.file.originalname);
-  if (!mimeValidation.valid) {
-    await safeUnlink(req.file.path);
-    return sendError(res, 400, mimeValidation.error || 'Invalid file type');
-  }
+  // For custom drive files streamed directly, MIME type is already detected from stream
+  let actualMimeType = req.file.mimetype || 'application/octet-stream';
 
-  // Use actual MIME type detected from file content (not the declared one)
-  const actualMimeType = mimeValidation.actualMimeType || req.file.mimetype || 'application/octet-stream';
+  // Only validate MIME type if file is in UPLOAD_DIR (not already in custom drive)
+  if (req.file.path && !req.file.customDriveFinalPath) {
+    const mimeValidation = await validateMimeType(req.file.path, req.file.mimetype, req.file.originalname);
+    if (!mimeValidation.valid) {
+      await safeUnlink(req.file.path);
+      return sendError(res, 400, mimeValidation.error || 'Invalid file type');
+    }
+    actualMimeType = mimeValidation.actualMimeType || req.file.mimetype || 'application/octet-stream';
+  }
 
   // Validate for security concerns (executable files, etc.)
   validateFileUpload(actualMimeType, req.file.originalname);
 
   const { valid, parentId, error } = validateParentId(req);
   if (!valid) {
-    await safeUnlink(req.file.path);
+    if (req.file.path && !req.file.customDriveFinalPath) {
+      await safeUnlink(req.file.path);
+    } else if (req.file.customDriveFinalPath) {
+      // File is in custom drive, delete via agent
+      const { agentDeletePath } = require('../../utils/agentFileOperations');
+      await agentDeletePath(req.file.customDriveFinalPath).catch(() => {});
+    }
     return sendError(res, 400, error);
   }
 
   // Check if agent is required - STRICT: block if agent is not confirmed online
   const agentResult = await requireAgentOnline(req);
   if (agentResult.error) {
-    await safeUnlink(req.file.path);
+    if (req.file.path && !req.file.customDriveFinalPath) {
+      await safeUnlink(req.file.path);
+    } else if (req.file.customDriveFinalPath) {
+      // File is in custom drive, delete via agent
+      const { agentDeletePath } = require('../../utils/agentFileOperations');
+      await agentDeletePath(req.file.customDriveFinalPath).catch(() => {});
+    }
     return sendError(res, agentResult.status, agentResult.message);
   }
 
@@ -144,17 +160,38 @@ async function uploadFile(req, res) {
     });
 
     if (checkResult.exceeded) {
-      await safeUnlink(req.file.path);
+      if (req.file.path && !req.file.customDriveFinalPath) {
+        await safeUnlink(req.file.path);
+      } else if (req.file.customDriveFinalPath) {
+        // File is in custom drive, delete via agent
+        const { agentDeletePath } = require('../../utils/agentFileOperations');
+        await agentDeletePath(req.file.customDriveFinalPath).catch(() => {});
+      }
       return sendError(res, 413, checkResult.message);
     }
   } catch (storageError) {
     logger.error({ err: storageError, userId: req.userId }, 'Error checking storage limit');
-    await safeUnlink(req.file.path);
+    if (req.file.path && !req.file.customDriveFinalPath) {
+      await safeUnlink(req.file.path);
+    } else if (req.file.customDriveFinalPath) {
+      // File is in custom drive, delete via agent
+      const { agentDeletePath } = require('../../utils/agentFileOperations');
+      await agentDeletePath(req.file.customDriveFinalPath).catch(() => {});
+    }
     return sendError(res, 500, 'Unable to verify storage limit. Please try again.');
   }
 
   const file = await userOperationLock(req.userId, () => {
-    return createFile(req.file.originalname, req.file.size, actualMimeType, req.file.path, parentId, req.userId);
+    // Pass customDriveFinalPath flag to indicate file is already in final location
+    return createFile(
+      req.file.originalname,
+      req.file.size,
+      actualMimeType,
+      req.file.path,
+      parentId,
+      req.userId,
+      req.file.customDriveFinalPath
+    );
   });
 
   // Log file upload

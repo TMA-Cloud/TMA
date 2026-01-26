@@ -99,6 +99,7 @@ app.post('/api/agent/webhook', async (req, res) => {
     const { event, path: filePath, isDir, size, modTime } = req.body;
 
     if (!event || !filePath) {
+      logger.warn({ body: req.body }, 'Agent webhook: Missing required fields (event, path)');
       return res.status(400).json({ error: 'Missing required fields: event, path' });
     }
 
