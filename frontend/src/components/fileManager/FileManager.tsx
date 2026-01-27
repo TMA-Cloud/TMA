@@ -616,3 +616,5 @@ export const FileManager: React.FC = () => {
     </div>
   );
 };
+
+export default FileManager;

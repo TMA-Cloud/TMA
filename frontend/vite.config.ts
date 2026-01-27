@@ -24,6 +24,30 @@ export default defineConfig({
   optimizeDeps: {
     exclude: ["lucide-react"],
   },
+  build: {
+    rollupOptions: {
+      output: {
+        // Split vendor code for better caching (vendor changes less than app code)
+        // Lazy loading handles app code splitting, this handles dependencies
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return;
+
+          // React is large and used everywhere - separate it for better caching
+          if (
+            id.includes("react") ||
+            id.includes("react-dom") ||
+            id.includes("scheduler")
+          ) {
+            return "react-vendor";
+          }
+
+          // Everything else in one vendor chunk (Vite will auto-split if too large)
+          return "vendor";
+        },
+      },
+    },
+    chunkSizeWarningLimit: 600,
+  },
   server: {
     proxy: {
       // Proxy API requests to the backend

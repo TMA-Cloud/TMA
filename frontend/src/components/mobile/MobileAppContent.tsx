@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useApp } from "../../contexts/AppContext";
 import { useAuth } from "../../contexts/AuthContext";
-import { FileManager } from "../fileManager/FileManager";
-import { Dashboard } from "../dashboard/Dashboard";
-import { Settings } from "../settings/Settings";
+import FileManager from "../fileManager/FileManager";
+import Dashboard from "../dashboard/Dashboard";
+import Settings from "../settings/Settings";
 import { UploadModal } from "../upload/UploadModal";
 import { UploadProgress } from "../upload/UploadProgress";
 import { CreateFolderModal } from "../folder/CreateFolderModal";
@@ -230,3 +230,5 @@ export const MobileAppContent: React.FC = () => {
     </div>
   );
 };
+
+export default MobileAppContent;

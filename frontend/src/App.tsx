@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, Suspense, lazy } from "react";
 import { ThemeProvider } from "./contexts/ThemeProvider";
 import { AppProvider } from "./contexts/AppProvider";
 import { useApp } from "./contexts/AppContext";
@@ -8,20 +8,74 @@ import { ToastProvider } from "./hooks/ToastProvider";
 import { useIsMobile } from "./hooks/useIsMobile";
 import { Sidebar } from "./components/layout/Sidebar";
 import { Header } from "./components/layout/Header";
-import { Dashboard } from "./components/dashboard/Dashboard";
-import { FileManager } from "./components/fileManager/FileManager";
-import { Settings } from "./components/settings/Settings";
-import { UploadModal } from "./components/upload/UploadModal";
-import { UploadProgress } from "./components/upload/UploadProgress";
-import { CreateFolderModal } from "./components/folder/CreateFolderModal";
-import { ImageViewerModal } from "./components/viewer/ImageViewerModal";
-import { DocumentViewerModal } from "./components/viewer/DocumentViewerModal";
-import { RenameModal } from "./components/fileManager/RenameModal";
-import { ShareLinkModal } from "./components/fileManager/ShareLinkModal";
-import { LoginForm } from "./components/auth/LoginForm";
-import { SignupForm } from "./components/auth/SignupForm";
-import { MobileAppContent } from "./components/mobile/MobileAppContent";
 import { AgentStatusBanner } from "./components/AgentStatusBanner";
+
+// Lazy load main page components (using default exports for cleaner syntax)
+const Dashboard = lazy(() => import("./components/dashboard/Dashboard"));
+const FileManager = lazy(() => import("./components/fileManager/FileManager"));
+const Settings = lazy(() => import("./components/settings/Settings"));
+const MobileAppContent = lazy(
+  () => import("./components/mobile/MobileAppContent"),
+);
+
+// Lazy load modals (conditionally rendered)
+const UploadModal = lazy(() =>
+  import("./components/upload/UploadModal").then((mod) => ({
+    default: mod.UploadModal,
+  })),
+);
+const UploadProgress = lazy(() =>
+  import("./components/upload/UploadProgress").then((mod) => ({
+    default: mod.UploadProgress,
+  })),
+);
+const CreateFolderModal = lazy(() =>
+  import("./components/folder/CreateFolderModal").then((mod) => ({
+    default: mod.CreateFolderModal,
+  })),
+);
+const ImageViewerModal = lazy(() =>
+  import("./components/viewer/ImageViewerModal").then((mod) => ({
+    default: mod.ImageViewerModal,
+  })),
+);
+const DocumentViewerModal = lazy(() =>
+  import("./components/viewer/DocumentViewerModal").then((mod) => ({
+    default: mod.DocumentViewerModal,
+  })),
+);
+const RenameModal = lazy(() =>
+  import("./components/fileManager/RenameModal").then((mod) => ({
+    default: mod.RenameModal,
+  })),
+);
+const ShareLinkModal = lazy(() =>
+  import("./components/fileManager/ShareLinkModal").then((mod) => ({
+    default: mod.ShareLinkModal,
+  })),
+);
+
+// Lazy load auth components
+const LoginForm = lazy(() =>
+  import("./components/auth/LoginForm").then((mod) => ({
+    default: mod.LoginForm,
+  })),
+);
+const SignupForm = lazy(() =>
+  import("./components/auth/SignupForm").then((mod) => ({
+    default: mod.SignupForm,
+  })),
+);
+
+// Loading fallback component
+const PageLoadingFallback: React.FC = () => (
+  <div className="flex items-center justify-center h-full min-h-[400px]">
+    <div className="text-center">
+      <div className="w-12 h-12 mx-auto mb-4 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+      <p className="text-sm text-gray-600 dark:text-gray-400">Loading...</p>
+    </div>
+  </div>
+);
 
 const AppContent: React.FC = () => {
   const {
@@ -41,13 +95,17 @@ const AppContent: React.FC = () => {
       case "Dashboard":
         return (
           <div className="animate-fadeIn">
-            <Dashboard />
+            <Suspense fallback={<PageLoadingFallback />}>
+              <Dashboard />
+            </Suspense>
           </div>
         );
       case "Settings":
         return (
           <div className="animate-fadeIn">
-            <Settings />
+            <Suspense fallback={<PageLoadingFallback />}>
+              <Settings />
+            </Suspense>
           </div>
         );
       case "My Files":
@@ -57,7 +115,9 @@ const AppContent: React.FC = () => {
       default:
         return (
           <div className="animate-fadeIn">
-            <FileManager />
+            <Suspense fallback={<PageLoadingFallback />}>
+              <FileManager />
+            </Suspense>
           </div>
         );
     }
@@ -65,7 +125,11 @@ const AppContent: React.FC = () => {
 
   if (isMobile) {
     // Dedicated mobile layout / UX
-    return <MobileAppContent />;
+    return (
+      <Suspense fallback={<PageLoadingFallback />}>
+        <MobileAppContent />
+      </Suspense>
+    );
   }
 
   return (
@@ -81,19 +145,21 @@ const AppContent: React.FC = () => {
         <main className="flex-1 overflow-y-auto">{renderContent()}</main>
       </div>
 
-      <UploadModal />
-      <CreateFolderModal />
-      <ImageViewerModal />
-      <DocumentViewerModal />
-      <RenameModal />
-      <ShareLinkModal />
-      <UploadProgress
-        uploads={uploadProgress}
-        onDismiss={(id) => {
-          setUploadProgress((prev) => prev.filter((item) => item.id !== id));
-        }}
-        onInteractionChange={setIsUploadProgressInteracting}
-      />
+      <Suspense fallback={null}>
+        <UploadModal />
+        <CreateFolderModal />
+        <ImageViewerModal />
+        <DocumentViewerModal />
+        <RenameModal />
+        <ShareLinkModal />
+        <UploadProgress
+          uploads={uploadProgress}
+          onDismiss={(id: string) => {
+            setUploadProgress((prev) => prev.filter((item) => item.id !== id));
+          }}
+          onInteractionChange={setIsUploadProgressInteracting}
+        />
+      </Suspense>
     </div>
   );
 };
@@ -136,21 +202,23 @@ const AuthGate: React.FC = () => {
             {error}
           </div>
         )}
-        {view === "login" ? (
-          <LoginForm
-            onSwitch={() => {
-              setView("signup");
-              setError(null);
-            }}
-          />
-        ) : (
-          <SignupForm
-            onSwitch={() => {
-              setView("login");
-              setError(null);
-            }}
-          />
-        )}
+        <Suspense fallback={<PageLoadingFallback />}>
+          {view === "login" ? (
+            <LoginForm
+              onSwitch={() => {
+                setView("signup");
+                setError(null);
+              }}
+            />
+          ) : (
+            <SignupForm
+              onSwitch={() => {
+                setView("login");
+                setError(null);
+              }}
+            />
+          )}
+        </Suspense>
       </div>
     );
   }
