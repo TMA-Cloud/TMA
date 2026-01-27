@@ -22,7 +22,7 @@ async function moveFiles(ids, parentId = null, userId) {
   );
   const oldParentIds = oldParentsResult.rows.map(r => r.parent_id);
 
-  await pool.query('UPDATE files SET parent_id = $1, modified = NOW() WHERE id = ANY($2::text[]) AND user_id = $3', [
+  await pool.query('UPDATE files SET parent_id = $1 WHERE id = ANY($2::text[]) AND user_id = $3', [
     parentId,
     ids,
     userId,
@@ -87,7 +87,7 @@ async function copyEntry(id, parentId, userId, client = null, customDrive = null
         const actualName = path.basename(destPath);
 
         await dbClient.query(
-          'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id, starred, shared) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',
+          'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id, starred, shared, modified) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)',
           [
             newId,
             actualName,
@@ -99,6 +99,7 @@ async function copyEntry(id, parentId, userId, client = null, customDrive = null
             userId,
             file.starred,
             file.shared,
+            file.modified,
           ]
         );
       } catch (error) {
@@ -151,8 +152,20 @@ async function copyEntry(id, parentId, userId, client = null, customDrive = null
       newPath = storageName;
 
       await dbClient.query(
-        'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id, starred, shared) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',
-        [newId, file.name, file.type, file.size, file.mime_type, newPath, parentId, userId, file.starred, file.shared]
+        'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id, starred, shared, modified) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)',
+        [
+          newId,
+          file.name,
+          file.type,
+          file.size,
+          file.mime_type,
+          newPath,
+          parentId,
+          userId,
+          file.starred,
+          file.shared,
+          file.modified,
+        ]
       );
     }
   } else if (file.type === 'folder') {
@@ -171,7 +184,7 @@ async function copyEntry(id, parentId, userId, client = null, customDrive = null
         newPath = path.resolve(finalPath);
 
         await dbClient.query(
-          'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id, starred, shared) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',
+          'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id, starred, shared, modified) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)',
           [
             newId,
             actualName,
@@ -183,6 +196,7 @@ async function copyEntry(id, parentId, userId, client = null, customDrive = null
             userId,
             file.starred,
             file.shared,
+            file.modified,
           ]
         );
       } catch (error) {
@@ -208,8 +222,20 @@ async function copyEntry(id, parentId, userId, client = null, customDrive = null
     } else {
       // Regular folder (no path stored)
       await dbClient.query(
-        'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id, starred, shared) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',
-        [newId, file.name, file.type, file.size, file.mime_type, null, parentId, userId, file.starred, file.shared]
+        'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id, starred, shared, modified) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)',
+        [
+          newId,
+          file.name,
+          file.type,
+          file.size,
+          file.mime_type,
+          null,
+          parentId,
+          userId,
+          file.starred,
+          file.shared,
+          file.modified,
+        ]
       );
     }
 
@@ -305,7 +331,7 @@ async function copyEntryWithFile(file, parentId, userId, client, customDrive) {
         const actualName = path.basename(destPath);
 
         await client.query(
-          'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id, starred, shared) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',
+          'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id, starred, shared, modified) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)',
           [
             newId,
             actualName,
@@ -317,6 +343,7 @@ async function copyEntryWithFile(file, parentId, userId, client, customDrive) {
             userId,
             file.starred,
             file.shared,
+            file.modified,
           ]
         );
       } catch (error) {
@@ -369,8 +396,20 @@ async function copyEntryWithFile(file, parentId, userId, client, customDrive) {
       newPath = storageName;
 
       await client.query(
-        'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id, starred, shared) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',
-        [newId, file.name, file.type, file.size, file.mime_type, newPath, parentId, userId, file.starred, file.shared]
+        'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id, starred, shared, modified) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)',
+        [
+          newId,
+          file.name,
+          file.type,
+          file.size,
+          file.mime_type,
+          newPath,
+          parentId,
+          userId,
+          file.starred,
+          file.shared,
+          file.modified,
+        ]
       );
     }
   } else if (file.type === 'folder') {
@@ -389,7 +428,7 @@ async function copyEntryWithFile(file, parentId, userId, client, customDrive) {
         newPath = path.resolve(finalPath);
 
         await client.query(
-          'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id, starred, shared) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',
+          'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id, starred, shared, modified) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)',
           [
             newId,
             actualName,
@@ -401,6 +440,7 @@ async function copyEntryWithFile(file, parentId, userId, client, customDrive) {
             userId,
             file.starred,
             file.shared,
+            file.modified,
           ]
         );
       } catch (error) {
@@ -426,8 +466,20 @@ async function copyEntryWithFile(file, parentId, userId, client, customDrive) {
     } else {
       // Regular folder (no path stored)
       await client.query(
-        'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id, starred, shared) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',
-        [newId, file.name, file.type, file.size, file.mime_type, null, parentId, userId, file.starred, file.shared]
+        'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id, starred, shared, modified) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)',
+        [
+          newId,
+          file.name,
+          file.type,
+          file.size,
+          file.mime_type,
+          null,
+          parentId,
+          userId,
+          file.starred,
+          file.shared,
+          file.modified,
+        ]
       );
     }
 
