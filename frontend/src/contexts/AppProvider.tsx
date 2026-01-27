@@ -559,9 +559,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
     return operationQueue.add(async () => {
       try {
         const data = new FormData();
-        data.append("file", file);
         const parentId = folderStack[folderStack.length - 1];
         if (parentId) data.append("parentId", parentId);
+        data.append("file", file);
         const res = await fetch(`/api/files/upload`, {
           method: "POST",
           credentials: "include",
@@ -614,14 +614,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         const uploadId = `bulk-${Date.now()}-${Math.random()}`;
         const xhr = new XMLHttpRequest();
         const data = new FormData();
+        const parentId = folderStack[folderStack.length - 1];
+        if (parentId) data.append("parentId", parentId);
 
         // Append all files with the same field name 'files'
         files.forEach((file) => {
           data.append("files", file);
         });
-
-        const parentId = folderStack[folderStack.length - 1];
-        if (parentId) data.append("parentId", parentId);
 
         // Add all files to progress list
         const fileProgressItems = files.map((file) => ({
@@ -828,9 +827,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         const uploadId = `${Date.now()}-${Math.random()}`;
         const xhr = new XMLHttpRequest();
         const data = new FormData();
-        data.append("file", file);
         const parentId = folderStack[folderStack.length - 1];
         if (parentId) data.append("parentId", parentId);
+        data.append("file", file);
 
         // Add upload to progress list
         setUploadProgress((prev) => [
