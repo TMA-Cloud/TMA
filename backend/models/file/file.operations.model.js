@@ -15,27 +15,122 @@ const { encryptFile, copyEncryptedFile } = require('../../utils/fileEncryption')
  * Move files to a different parent folder
  */
 async function moveFiles(ids, parentId = null, userId) {
-  // Get old parent IDs before moving
-  const oldParentsResult = await pool.query(
-    'SELECT DISTINCT parent_id FROM files WHERE id = ANY($1::text[]) AND user_id = $2',
-    [ids, userId]
-  );
-  const oldParentIds = oldParentsResult.rows.map(r => r.parent_id);
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
 
-  await pool.query('UPDATE files SET parent_id = $1 WHERE id = ANY($2::text[]) AND user_id = $3', [
-    parentId,
-    ids,
-    userId,
-  ]);
+    // Get old parent IDs and file info before moving
+    const filesResult = await client.query(
+      'SELECT id, parent_id, path, type, name FROM files WHERE id = ANY($1::text[]) AND user_id = $2',
+      [ids, userId]
+    );
+    const filesToMove = filesResult.rows;
+    const oldParentIds = [...new Set(filesToMove.map(r => r.parent_id))];
 
-  // Invalidate cache for both old and new parent folders
-  await invalidateFileCache(userId, parentId);
-  for (const oldParentId of oldParentIds) {
-    if (oldParentId !== parentId) {
-      await invalidateFileCache(userId, oldParentId);
+    // Check if user has custom drive enabled (needed for filesystem moves)
+    const customDrive = await getUserCustomDrive(userId);
+
+    // Track new paths for entries that are moved on disk (custom-drive absolute paths)
+    const movedIds = [];
+    const movedNewPaths = [];
+
+    // If custom drive is enabled, move absolute-path entries on disk as well
+    // so the custom-drive scanner won't "undo" the move on restart.
+    if (customDrive.enabled && customDrive.path && filesToMove.length > 0) {
+      const { agentRenamePath, agentPathExists, agentMkdir } = require('../../utils/agentFileOperations');
+
+      // Resolve target parent folder path once (may be null if regular folder hierarchy)
+      const targetParentPath = await getFolderPath(parentId, userId);
+      const targetBaseDir = targetParentPath || customDrive.path;
+
+      // Ensure destination directory exists
+      const destExists = await agentPathExists(targetBaseDir);
+      if (!destExists) {
+        await agentMkdir(targetBaseDir);
+      }
+
+      for (const file of filesToMove) {
+        if (!file.path || !path.isAbsolute(file.path)) {
+          // Regular (non-custom-drive) entry: DB-only move is fine
+          continue;
+        }
+
+        const oldPath = path.resolve(file.path);
+        let destPath = path.join(targetBaseDir, file.name);
+
+        try {
+          if (file.type === 'folder') {
+            // For folders, ensure unique destination folder name
+            destPath = await getUniqueFolderPath(destPath, true); // useAgent = true
+          } else {
+            // For files, ensure unique filename at destination
+            destPath = await getUniqueFilename(destPath, targetBaseDir, true); // useAgent = true
+          }
+
+          // Move on filesystem via agent (OS-level rename is instant, even for large folders)
+          await agentRenamePath(oldPath, destPath);
+
+          const absoluteNewPath = path.resolve(destPath);
+          movedIds.push(file.id);
+          movedNewPaths.push(absoluteNewPath);
+        } catch (error) {
+          // If filesystem move fails, log and rethrow so the operation fails cleanly.
+          // IMPORTANT: we do NOT update the DB for this file unless the agent move succeeded.
+          logger.error(
+            {
+              fileId: file.id,
+              oldPath,
+              attemptedDestPath: destPath,
+              userId,
+              err: error.message,
+            },
+            '[File] Error moving custom-drive entry on disk during moveFiles'
+          );
+          throw error;
+        }
+      }
     }
+
+    // Bulk update all files in a single statement.
+    // For custom-drive entries, also update their path; for others, keep existing path.
+    const allIds = ids;
+    const allNewPaths = allIds.map(id => {
+      const idx = movedIds.indexOf(id);
+      return idx === -1 ? null : movedNewPaths[idx];
+    });
+
+    // Use a VALUES table to join ids to new_path values; this keeps updates in one query.
+    await client.query(
+      `
+      UPDATE files f
+      SET
+        parent_id = $1,
+        path = COALESCE(v.new_path, f.path),
+        modified = NOW()
+      FROM (
+        SELECT unnest($2::text[]) AS id, unnest($3::text[]) AS new_path
+      ) AS v
+      WHERE f.id = v.id AND f.user_id = $4
+      `,
+      [parentId, allIds, allNewPaths, userId]
+    );
+
+    await client.query('COMMIT');
+
+    // Invalidate cache for both old and new parent folders
+    await invalidateFileCache(userId, parentId);
+    for (const oldParentId of oldParentIds) {
+      if (oldParentId !== parentId) {
+        await invalidateFileCache(userId, oldParentId);
+      }
+    }
+    await invalidateSearchCache(userId);
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
   }
-  await invalidateSearchCache(userId);
 }
 
 /**
