@@ -13,6 +13,8 @@ import (
 )
 
 func main() {
+	initLogging()
+
 	svcConfig := &service.Config{
 		Name:        "tma-agent",
 		DisplayName: "TMA Drive Agent",

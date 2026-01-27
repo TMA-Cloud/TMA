@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -44,6 +45,7 @@ func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		// Check Authorization header
 		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" {
+			log.Printf("Unauthorized request (missing auth header) from=%s method=%s path=%s", r.RemoteAddr, r.Method, r.URL.Path)
 			sendError(w, http.StatusUnauthorized, "Missing Authorization header")
 			return
 		}
@@ -53,6 +55,7 @@ func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		requestToken = strings.TrimPrefix(requestToken, "Bearer ")
 
 		if requestToken != config.Token {
+			log.Printf("Unauthorized request (invalid token) from=%s method=%s path=%s", r.RemoteAddr, r.Method, r.URL.Path)
 			sendError(w, http.StatusUnauthorized, "Invalid token")
 			return
 		}
@@ -185,6 +188,7 @@ func writeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	log.Printf("Wrote file: %s bytes=%d from=%s", fullPath, written, r.RemoteAddr)
 	sendJSON(w, http.StatusOK, map[string]interface{}{
 		"status": "written",
 		"path":   fullPath,
@@ -276,6 +280,11 @@ func deleteHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if info.IsDir() {
+		log.Printf("Deleted directory: %s from=%s", fullPath, r.RemoteAddr)
+	} else {
+		log.Printf("Deleted file: %s from=%s", fullPath, r.RemoteAddr)
+	}
 	sendJSON(w, http.StatusOK, map[string]string{
 		"status": "deleted",
 		"path":   fullPath,

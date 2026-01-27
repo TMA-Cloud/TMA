@@ -315,6 +315,7 @@ func watchHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	log.Printf("Started watching path: %s", fullPath)
 	sendJSON(w, http.StatusOK, map[string]string{
 		"status": "watching",
 		"path":   fullPath,
@@ -352,6 +353,7 @@ func unwatchHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	log.Printf("Stopped watching path: %s", fullPath)
 	sendJSON(w, http.StatusOK, map[string]string{
 		"status": "unwatched",
 		"path":   fullPath,

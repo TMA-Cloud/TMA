@@ -92,6 +92,15 @@ tma-agent list
 curl http://localhost:8080/health
 ```
 
+## Agent Logs
+
+The agent writes a log file next to the installed binary and `tma-agent.json`:
+
+- Linux/macOS (default install): `/usr/local/bin/tma-agent.log`
+- Windows (default install): `C:\Program Files\TMA Drive Agent\tma-agent.log`
+
+For manual runs, the log file is created in the same directory as the binary you execute. Use this log when debugging token issues, path configuration problems, or file operations performed by the agent.
+
 ## Service Management
 
 ### Check Service Status
