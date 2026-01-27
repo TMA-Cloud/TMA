@@ -47,6 +47,18 @@ async function listFiles(req, res) {
   const sortBy = validateSortBy(req.query.sortBy) || 'modified';
   const order = validateSortOrder(req.query.order) || 'DESC';
   const files = await getFiles(req.userId, parentId, sortBy, order);
+
+  // IMPORTANT: Disable HTTP-level caching for dynamic file listings.
+  // We already use Redis for caching and handle invalidation explicitly
+  // (e.g. on rename, move, delete). Allowing the browser to cache this
+  // response can lead to stale directory views where a renamed file
+  // still appears under its old name until the tab or app is fully
+  // reloaded. By turning off browser caching here, the client will
+  // always get the latest view from our own cache/DB.
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+
   sendSuccess(res, files);
 }
 

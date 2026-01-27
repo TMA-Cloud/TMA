@@ -33,7 +33,7 @@ async function getFiles(userId, parentId = null, sortBy = 'modified', order = 'D
   // Cache miss - query database
   const orderClause = sortBy === 'size' ? '' : buildOrderClause(sortBy, order);
   const result = await pool.query(
-    `SELECT id, name, type, size, modified, mime_type AS "mimeType", starred, shared
+    `SELECT id, name, type, size, modified, mime_type AS "mimeType", starred, shared, path
      FROM files
      WHERE user_id = $1
        AND deleted_at IS NULL
@@ -41,7 +41,47 @@ async function getFiles(userId, parentId = null, sortBy = 'modified', order = 'D
      ${orderClause}`,
     parentId ? [userId, parentId] : [userId]
   );
-  const files = result.rows;
+  let files = result.rows;
+
+  // SAFETY: For custom-drive users, filter out any "ghost" entries whose paths
+  // no longer exist on disk (for example, if an earlier sync or rename left
+  // behind a stale DB row). This ensures the UI never shows a file that
+  // physically does not exist in the custom drive directory, even if the
+  // scanner or a previous bug produced an inconsistent record.
+  try {
+    const customDrive = await getUserCustomDrive(userId);
+    if (customDrive.enabled && customDrive.path) {
+      const { agentPathExists } = require('../../utils/agentFileOperations');
+
+      const checks = await Promise.all(
+        files.map(async file => {
+          if (file.path && path.isAbsolute(file.path)) {
+            const exists = await agentPathExists(file.path);
+            return { file, exists };
+          }
+          return { file, exists: true };
+        })
+      );
+
+      const beforeCount = files.length;
+      files = checks.filter(entry => entry.exists).map(entry => entry.file);
+
+      if (files.length !== beforeCount) {
+        logger.warn(
+          {
+            userId,
+            removedCount: beforeCount - files.length,
+          },
+          '[File] Filtered out ghost custom-drive entries with missing paths in getFiles'
+        );
+      }
+    }
+  } catch (error) {
+    // If agent/custom-drive checks fail, fall back to returning the raw DB rows
+    // rather than breaking listing entirely.
+    logger.warn({ userId, err: error }, '[File] Error while verifying custom-drive file paths in getFiles');
+  }
+
   if (sortBy === 'size') {
     await fillFolderSizes(files, userId);
     files.sort((a, b) => {
