@@ -21,10 +21,12 @@ const {
   resetAgentStatus,
   updateUserStorageLimit,
 } = require('../controllers/user.controller');
+const { apiRateLimiter } = require('../middleware/rateLimit.middleware');
 
 const router = express.Router();
 
 router.use(auth);
+router.use(apiRateLimiter);
 
 router.get('/storage', storageUsage);
 router.get('/signup-status', getSignupStatus);

@@ -75,9 +75,7 @@ Overall security architecture and practices in TMA Cloud.
 
 ### Rate Limiting
 
-- **Auth Endpoints:** 5 attempts per 15 minutes
-- **API Endpoints:** 100 requests per 15 minutes
-- **Upload Endpoints:** 50 uploads per hour
+The API employs rate limiting to prevent abuse and ensure service stability. Different limits are applied to authentication, file uploads, and general API endpoints. For detailed information, see the [Rate Limits](/reference/rate-limits) reference.
 
 ## Audit & Logging
 

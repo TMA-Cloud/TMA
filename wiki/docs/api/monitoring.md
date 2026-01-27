@@ -40,6 +40,8 @@ http_request_duration_seconds{method="GET"} 0.05
 
 Get currently deployed backend and agent versions.
 
+**Rate limiting:** 100 requests per 15 minutes.
+
 **Response:**
 
 ```json
@@ -55,6 +57,8 @@ Get currently deployed backend and agent versions.
 ### GET `/api/version/latest`
 
 Fetch latest versions from update feed. Admin only (first user).
+
+**Rate limiting:** 100 requests per 15 minutes.
 
 **Response:**
 

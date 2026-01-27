@@ -7,10 +7,12 @@ const { isFirstUser } = require('../models/user.model');
 const { getAgentVersion } = require('../utils/agentClient');
 const { sendError } = require('../utils/response');
 const { logger } = require('../config/logger');
+const { apiRateLimiter } = require('../middleware/rateLimit.middleware');
 
 const router = express.Router();
 
 router.use(auth);
+router.use(apiRateLimiter);
 
 // Middleware to check if user is admin (first user)
 async function requireAdmin(req, res, next) {

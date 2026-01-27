@@ -8,6 +8,8 @@ OnlyOffice integration endpoints for TMA Cloud.
 
 Get OnlyOffice editor configuration for a file.
 
+**Rate limiting:** 100 requests per 15 minutes.
+
 **Validation:**
 
 - File extension must be supported by OnlyOffice
@@ -41,6 +43,8 @@ Get OnlyOffice editor configuration for a file.
 
 Get standalone viewer page for a file.
 
+**Rate limiting:** 100 requests per 15 minutes.
+
 **Validation:**
 
 - File extension must be supported by OnlyOffice
@@ -55,6 +59,8 @@ HTML page with OnlyOffice viewer
 ### GET `/api/onlyoffice/file/:id`
 
 Serve file to OnlyOffice server (requires signed token).
+
+**Rate limiting:** 100 requests per 15 minutes.
 
 **Response:**
 File content

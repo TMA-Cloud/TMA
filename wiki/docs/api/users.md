@@ -2,7 +2,7 @@
 
 User management endpoints for TMA Cloud (admin only).
 
-**Note:** Most endpoints require admin privileges (first user). Some endpoints are available to all authenticated users.
+**Note:** All endpoints in this section are rate-limited to 100 requests per 15 minutes per IP address. Most also require admin privileges (first user).
 
 ## List Users
 

@@ -32,6 +32,8 @@ Create new user account. Respects signup enabled/disabled setting.
 
 **Note:** The JWT token is set as an httpOnly cookie named `token`.
 
+**Rate limiting:** 5 attempts per 15 minutes.
+
 ## Login
 
 ### POST `/api/login`
@@ -62,6 +64,8 @@ Authenticate user and receive JWT token. If MFA is enabled, requires `mfaCode` i
 
 **Note:** The JWT token is set as an httpOnly cookie named `token`.
 
+**Rate limiting:** 5 attempts per 15 minutes.
+
 ## Logout
 
 ### POST `/api/logout`
@@ -77,6 +81,8 @@ Log out current user (clears token cookie).
 }
 ```
 
+**Rate limiting:** 100 requests per 15 minutes.
+
 ### POST `/api/logout-all`
 
 Log out from all devices by invalidating all tokens.
@@ -89,6 +95,8 @@ Log out from all devices by invalidating all tokens.
   "message": "Logged out from all devices"
 }
 ```
+
+**Rate limiting:** 100 requests per 15 minutes.
 
 ## Profile
 
@@ -107,6 +115,8 @@ Get current user profile.
   "createdAt": "2024-01-01T00:00:00Z"
 }
 ```
+
+**Rate limiting:** 100 requests per 15 minutes.
 
 ## Google OAuth
 
@@ -130,6 +140,8 @@ Initiate Google OAuth login (redirects to Google).
 
 Google OAuth callback endpoint.
 
+**Rate limiting:** 5 attempts per 15 minutes.
+
 ## Multi-Factor Authentication
 
 ### GET `/api/mfa/status`
@@ -144,6 +156,8 @@ Get MFA status for current user.
 }
 ```
 
+**Rate limiting:** 100 requests per 15 minutes.
+
 ### POST `/api/mfa/setup`
 
 Generate MFA secret and QR code for setup.
@@ -156,6 +170,8 @@ Generate MFA secret and QR code for setup.
   "qrCode": "data:image/png;base64,..."
 }
 ```
+
+**Rate limiting:** 100 requests per 15 minutes.
 
 ### POST `/api/mfa/verify`
 
@@ -245,6 +261,8 @@ Get remaining unused backup code count.
   "count": 7
 }
 ```
+
+**Rate limiting:** 100 requests per 15 minutes.
 
 ## Related Topics
 
