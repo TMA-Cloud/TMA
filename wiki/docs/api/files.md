@@ -18,6 +18,8 @@ List files and folders.
 
 **Response:**
 
+An array of file and folder objects.
+
 ```json
 [
   {
@@ -63,6 +65,8 @@ Search files.
 
 **Response:**
 
+An array of file and folder objects matching the search query.
+
 ```json
 [
   {
@@ -82,7 +86,7 @@ Search files.
 
 ### POST `/api/files/folder`
 
-Create folder.
+Create a new folder.
 
 **Request Body:**
 
@@ -93,7 +97,14 @@ Create folder.
 }
 ```
 
+**Validation:**
+
+- `name`: Required. Must not be empty and must contain only valid file name characters (`a-zA-Z0-9_.-`). Max length 100.
+- `parentId`: Optional. Must be a string.
+
 **Response:**
+
+The created folder object.
 
 ```json
 {
@@ -109,7 +120,7 @@ Create folder.
 
 ### POST `/api/files/upload`
 
-Upload file.
+Upload a file.
 
 **Form Data:**
 
@@ -119,11 +130,12 @@ Upload file.
 
 **MIME Type Validation:**
 
-- Actual MIME type detected from file content (magic bytes)
-- Stored MIME type matches actual file content
-- File extension can differ from actual type
+- The actual MIME type is detected from the file's content (magic bytes).
+- The stored MIME type will always match the actual file content, even if the file extension is different.
 
 **Response:**
+
+The uploaded file object.
 
 ```json
 {
@@ -141,7 +153,7 @@ Upload file.
 
 ### POST `/api/files/move`
 
-Move files/folders.
+Move files and/or folders to a different location.
 
 **Request Body:**
 
@@ -152,11 +164,16 @@ Move files/folders.
 }
 ```
 
+**Validation:**
+
+- `ids`: Required. Must be a non-empty array of strings.
+- `parentId`: Optional. Must be a string.
+
 **Response:**
 
 ```json
 {
-  "success": true
+  "message": "Files moved successfully."
 }
 ```
 
@@ -164,7 +181,7 @@ Move files/folders.
 
 ### POST `/api/files/copy`
 
-Copy files/folders.
+Copy files and/or folders to a different location.
 
 **Request Body:**
 
@@ -175,11 +192,16 @@ Copy files/folders.
 }
 ```
 
+**Validation:**
+
+- `ids`: Required. Must be a non-empty array of strings.
+- `parentId`: Optional. Must be a string.
+
 **Response:**
 
 ```json
 {
-  "success": true
+  "message": "Files copied successfully."
 }
 ```
 
@@ -187,7 +209,7 @@ Copy files/folders.
 
 ### POST `/api/files/rename`
 
-Rename file/folder.
+Rename a file or folder.
 
 **Request Body:**
 
@@ -198,7 +220,14 @@ Rename file/folder.
 }
 ```
 
+**Validation:**
+
+- `id`: Required. Must be a string.
+- `name`: Required. Must not be empty and must contain only valid file name characters (`a-zA-Z0-9_.-`). Max length 100.
+
 **Response:**
+
+The updated file or folder object.
 
 ```json
 {
@@ -213,7 +242,7 @@ Rename file/folder.
 
 ### POST `/api/files/star`
 
-Star/unstar files.
+Star or unstar one or more files/folders.
 
 **Request Body:**
 
@@ -224,11 +253,16 @@ Star/unstar files.
 }
 ```
 
+**Validation:**
+
+- `ids`: Required. Must be a non-empty array of strings.
+- `starred`: Required. Must be a boolean.
+
 **Response:**
 
 ```json
 {
-  "success": true
+  "message": "File starred status updated."
 }
 ```
 
@@ -236,7 +270,7 @@ Star/unstar files.
 
 ### GET `/api/files/starred`
 
-List starred files.
+List all starred files and folders.
 
 **Query Parameters:**
 
@@ -244,6 +278,8 @@ List starred files.
 - `order` - Sort order (optional)
 
 **Response:**
+
+An array of file and folder objects.
 
 ```json
 [
@@ -254,7 +290,7 @@ List starred files.
     "size": 1024,
     "mimeType": "application/pdf",
     "parentId": "folder_456",
-    "starred": false,
+    "starred": true,
     "modified": "2024-01-01T00:00:00Z"
   }
 ]
@@ -264,7 +300,7 @@ List starred files.
 
 ### POST `/api/files/share`
 
-Share/unshare files. Creates share links if they don't exist, or removes sharing if `shared: false`.
+Share or unshare files. Creates share links if they don't exist, or removes sharing if `shared: false`.
 
 **Request Body:**
 
@@ -275,11 +311,15 @@ Share/unshare files. Creates share links if they don't exist, or removes sharing
 }
 ```
 
-**Response:**
+**Validation:**
+
+- `ids`: Required. Must be a non-empty array of strings.
+- `shared`: Required. Must be a boolean.
+
+**Response (when sharing):**
 
 ```json
 {
-  "success": true,
   "links": {
     "file_123": "http://example.com/s/token123",
     "file_456": "http://example.com/s/token456"
@@ -287,13 +327,19 @@ Share/unshare files. Creates share links if they don't exist, or removes sharing
 }
 ```
 
-**Note:** When `shared: false`, the response still includes `success: true` but files are unshared and links are removed.
+**Response (when unsharing):**
+
+```json
+{
+  "message": "Files unshared successfully."
+}
+```
 
 ## Get Share Links
 
 ### POST `/api/files/share/links`
 
-Get share links for multiple files without creating new shares.
+Get existing share links for multiple files without creating new ones.
 
 **Request Body:**
 
@@ -303,14 +349,16 @@ Get share links for multiple files without creating new shares.
 }
 ```
 
+**Validation:**
+
+- `ids`: Required. Must be a non-empty array of strings.
+
 **Response:**
 
 ```json
 {
-  "success": true,
   "links": {
-    "file_123": "http://example.com/s/token123",
-    "file_456": "http://example.com/s/token456"
+    "file_123": "http://example.com/s/token123"
   }
 }
 ```
@@ -329,14 +377,16 @@ Link files to their parent folder's share link. If the parent folder is shared, 
 }
 ```
 
+**Validation:**
+
+- `ids`: Required. Must be a non-empty array of strings.
+
 **Response:**
 
 ```json
 {
-  "success": true,
   "links": {
-    "file_123": "http://example.com/s/parent_token",
-    "file_456": "http://example.com/s/parent_token"
+    "file_123": "http://example.com/s/parent_token"
   }
 }
 ```
@@ -345,7 +395,7 @@ Link files to their parent folder's share link. If the parent folder is shared, 
 
 ### GET `/api/files/shared`
 
-List files shared by current user.
+List files and folders shared by the current user.
 
 **Query Parameters:**
 
@@ -353,6 +403,8 @@ List files shared by current user.
 - `order` - Sort order (optional)
 
 **Response:**
+
+An array of shared file and folder objects.
 
 ```json
 [
@@ -373,7 +425,7 @@ List files shared by current user.
 
 ### POST `/api/files/delete`
 
-Move files to trash.
+Move one or more files/folders to the trash.
 
 **Request Body:**
 
@@ -383,11 +435,15 @@ Move files to trash.
 }
 ```
 
+**Validation:**
+
+- `ids`: Required. Must be a non-empty array of strings.
+
 **Response:**
 
 ```json
 {
-  "success": true
+  "message": "Files moved to trash."
 }
 ```
 
@@ -395,7 +451,7 @@ Move files to trash.
 
 ### GET `/api/files/trash`
 
-List files in trash.
+List all files and folders currently in the trash.
 
 **Query Parameters:**
 
@@ -403,6 +459,8 @@ List files in trash.
 - `order` - Sort order (optional)
 
 **Response:**
+
+An array of trashed file and folder objects.
 
 ```json
 [
@@ -423,7 +481,7 @@ List files in trash.
 
 ### POST `/api/files/trash/restore`
 
-Restore files from trash.
+Restore one or more files/folders from the trash.
 
 **Request Body:**
 
@@ -433,11 +491,14 @@ Restore files from trash.
 }
 ```
 
+**Validation:**
+
+- `ids`: Required. Must be a non-empty array of strings.
+
 **Response:**
 
 ```json
 {
-  "success": true,
   "message": "Restored 2 file(s) from trash"
 }
 ```
@@ -446,7 +507,7 @@ Restore files from trash.
 
 ### POST `/api/files/trash/delete`
 
-Permanently delete files.
+Permanently delete one or more files/folders from the trash. This action is irreversible.
 
 **Request Body:**
 
@@ -456,11 +517,15 @@ Permanently delete files.
 }
 ```
 
+**Validation:**
+
+- `ids`: Required. Must be a non-empty array of strings.
+
 **Response:**
 
 ```json
 {
-  "success": true
+  "message": "Files permanently deleted."
 }
 ```
 
@@ -468,33 +533,36 @@ Permanently delete files.
 
 ### POST `/api/files/trash/empty`
 
-Permanently delete all files in trash.
+Permanently delete all files and folders in the trash.
 
 **Response:**
 
 ```json
 {
-  "success": true,
   "message": "Deleted 5 file(s) from trash"
 }
 ```
 
-**Note:** If trash is already empty, returns: `{"success": true, "message": "Trash is already empty"}`
+**Note:** If trash is already empty, returns: `{"message": "Trash is already empty"}`
 
 ## Download File
 
 ### GET `/api/files/:id/download`
 
-Download single file or folder (folders return ZIP).
+Download a single file or a folder (folders are returned as a ZIP archive).
+
+**Validation:**
+
+- `id`: Required. Must be a string.
 
 **Response:**
-File download or ZIP archive
+The raw file content or a ZIP archive.
 
 ## Bulk Download Files
 
 ### POST `/api/files/download/bulk`
 
-Download multiple files/folders as a single ZIP archive.
+Download multiple files and/or folders as a single ZIP archive.
 
 **Request Body:**
 
@@ -504,19 +572,23 @@ Download multiple files/folders as a single ZIP archive.
 }
 ```
 
-**Response:**
-ZIP archive containing all selected files and folders
+**Validation:**
 
-**Note:** For single file downloads, use the GET endpoint. This endpoint is optimized for multiple files.
+- `ids`: Required. Must be a non-empty array of strings.
+
+**Response:**
+A ZIP archive containing all selected files and folders.
+
+**Note:** For single file downloads, use the GET endpoint. This endpoint is optimized for downloading multiple items at once.
 
 ## File Events
 
 ### GET `/api/files/events`
 
-Real-time file events stream (Server-Sent Events). Requires Redis.
+Establish a real-time event stream (Server-Sent Events) for file system changes. Requires Redis to be configured.
 
 **Response:**
-Server-Sent Events stream
+A Server-Sent Events stream.
 
 ## Related Topics
 

@@ -17,10 +17,9 @@ const {
   removeFilesFromShares,
 } = require('../../models/share.model');
 const pool = require('../../config/db');
-const { validateSortBy, validateSortOrder, validateBoolean } = require('../../utils/validation');
+const { validateSortBy, validateSortOrder } = require('../../utils/validation');
 const { buildShareLink } = require('../../utils/shareLink');
 const { publishFileEventsBatch, EventTypes } = require('../../services/fileEvents');
-const { validateFileIds } = require('../../utils/controllerHelpers');
 const { checkAgentForUser } = require('../../utils/agentCheck');
 const { AGENT_OFFLINE_MESSAGE, AGENT_OFFLINE_STATUS } = require('../../utils/agentConstants');
 
@@ -34,41 +33,33 @@ async function starFilesController(req, res) {
     return sendError(res, AGENT_OFFLINE_STATUS, AGENT_OFFLINE_MESSAGE);
   }
 
-  const { starred } = req.body;
-  const { valid, ids: validatedIds, error } = validateFileIds(req);
-  if (!valid) {
-    return sendError(res, 400, error);
-  }
-  const validatedStarred = validateBoolean(starred);
-  if (validatedStarred === null) {
-    return sendError(res, 400, 'starred must be a boolean');
-  }
+  const { ids, starred } = req.body;
 
   // Get file info for audit logging and events
-  const fileInfo = await getFileInfo(validatedIds, req.userId);
+  const fileInfo = await getFileInfo(ids, req.userId);
   const fileNames = fileInfo.map(f => f.name);
   const fileTypes = fileInfo.map(f => f.type);
 
-  await setStarred(validatedIds, validatedStarred, req.userId);
+  await setStarred(ids, starred, req.userId);
 
   // Log star/unstar with file details
   await logAuditEvent(
-    validatedStarred ? 'file.star' : 'file.unstar',
+    starred ? 'file.star' : 'file.unstar',
     {
       status: 'success',
       resourceType: fileTypes[0] || 'file', // Use actual type (file/folder)
-      resourceId: validatedIds[0], // First file ID
+      resourceId: ids[0], // First file ID
       metadata: {
-        fileCount: validatedIds.length,
-        fileIds: validatedIds,
+        fileCount: ids.length,
+        fileIds: ids,
         fileNames,
         fileTypes,
-        starred: validatedStarred,
+        starred,
       },
     },
     req
   );
-  logger.debug({ fileIds: validatedIds, fileNames, starred: validatedStarred }, 'Files starred status changed');
+  logger.debug({ fileIds: ids, fileNames, starred }, 'Files starred status changed');
 
   // Publish file starred events in batch (optimized)
   await publishFileEventsBatch(
@@ -79,13 +70,13 @@ async function starFilesController(req, res) {
         name: file.name,
         type: file.type,
         parentId: file.parentId || null,
-        starred: validatedStarred,
+        starred,
         userId: req.userId,
       },
     }))
   );
 
-  sendSuccess(res, { success: true });
+  sendSuccess(res, { message: 'File starred status updated.' });
 }
 
 /**
@@ -108,15 +99,7 @@ async function shareFilesController(req, res) {
     return sendError(res, AGENT_OFFLINE_STATUS, AGENT_OFFLINE_MESSAGE);
   }
 
-  const { shared } = req.body;
-  const { valid, ids: validatedIds, error } = validateFileIds(req);
-  if (!valid) {
-    return sendError(res, 400, error);
-  }
-  const validatedShared = validateBoolean(shared);
-  if (validatedShared === null) {
-    return sendError(res, 400, 'shared must be a boolean');
-  }
+  const { ids, shared } = req.body;
 
   const client = await pool.connect();
   try {
@@ -125,12 +108,12 @@ async function shareFilesController(req, res) {
     // New contract: links[id] = full URL (respecting share base URL from database / proxy headers)
     const links = {};
 
-    if (validatedShared) {
+    if (shared) {
       // Bulk operation: Get all existing share links at once
-      const existingShareLinks = await getShareLinks(validatedIds, req.userId);
+      const existingShareLinks = await getShareLinks(ids, req.userId);
 
       // Process each file to create/update share links
-      const sharePromises = validatedIds.map(async id => {
+      const sharePromises = ids.map(async id => {
         const treeIds = await getRecursiveIds([id], req.userId);
         let token = existingShareLinks[id];
 
@@ -161,10 +144,10 @@ async function shareFilesController(req, res) {
 
       // Wait for all share operations to complete
       await Promise.all(sharePromises);
-      await setShared(validatedIds, true, req.userId);
+      await setShared(ids, true, req.userId);
 
       // Get file info for event publishing
-      const fileInfo = await getFileInfo(validatedIds, req.userId);
+      const fileInfo = await getFileInfo(ids, req.userId);
 
       // Publish file shared events in batch (optimized)
       await publishFileEventsBatch(
@@ -181,14 +164,14 @@ async function shareFilesController(req, res) {
         }))
       );
     } else {
-      const treeIds = await getRecursiveIds(validatedIds, req.userId);
+      const treeIds = await getRecursiveIds(ids, req.userId);
       await removeFilesFromShares(treeIds, req.userId);
 
       // Get file info for event publishing
-      const fileInfo = await getFileInfo(validatedIds, req.userId);
+      const fileInfo = await getFileInfo(ids, req.userId);
 
       // Bulk delete all share links at once
-      await deleteShareLinks(validatedIds, req.userId);
+      await deleteShareLinks(ids, req.userId);
 
       // Log audit events for share deletions (bulk)
       await logAuditEvent(
@@ -196,17 +179,17 @@ async function shareFilesController(req, res) {
         {
           status: 'success',
           resourceType: 'share',
-          resourceId: validatedIds[0] || null,
+          resourceId: ids[0] || null,
           metadata: {
-            fileCount: validatedIds.length,
-            fileIds: validatedIds,
+            fileCount: ids.length,
+            fileIds: ids,
           },
         },
         req
       );
-      logger.info({ fileIds: validatedIds, fileCount: validatedIds.length }, 'Share links deleted');
+      logger.info({ fileIds: ids, fileCount: ids.length }, 'Share links deleted');
 
-      await setShared(validatedIds, false, req.userId);
+      await setShared(ids, false, req.userId);
 
       // Publish file unshared events in batch (optimized)
       await publishFileEventsBatch(
@@ -225,7 +208,11 @@ async function shareFilesController(req, res) {
     }
 
     await client.query('COMMIT');
-    sendSuccess(res, { success: true, links });
+    if (shared) {
+      sendSuccess(res, { links });
+    } else {
+      sendSuccess(res, { message: 'Files unshared successfully.' });
+    }
   } catch (err) {
     await client.query('ROLLBACK');
     sendError(res, 500, 'Server error', err);
@@ -248,38 +235,31 @@ async function listShared(req, res) {
  * Get share links for files
  */
 async function getShareLinksController(req, res) {
-  const { valid, ids: validatedIds, error } = validateFileIds(req);
-  if (!valid) {
-    return sendError(res, 400, error);
-  }
+  const { ids } = req.body;
 
   // Bulk operation: Get all share links at once
-  const shareLinksMap = await getShareLinks(validatedIds, req.userId);
+  const shareLinksMap = await getShareLinks(ids, req.userId);
 
   // Build links object with full URLs
   const links = {};
-  for (const id of validatedIds) {
+  for (const id of ids) {
     const token = shareLinksMap[id];
     if (token) {
       links[id] = await buildShareLink(token, req);
     }
   }
-
-  sendSuccess(res, { success: true, links });
+  sendSuccess(res, { links });
 }
 
 /**
  * Link files to parent's share link
  */
 async function linkParentShareController(req, res) {
-  const { valid, ids: validatedIds, error } = validateFileIds(req);
-  if (!valid) {
-    return sendError(res, 400, error);
-  }
+  const { ids } = req.body;
 
   // Bulk operation: Get all parent IDs at once
   const parentRes = await pool.query('SELECT id, parent_id FROM files WHERE id = ANY($1::text[]) AND user_id = $2', [
-    validatedIds,
+    ids,
     req.userId,
   ]);
 
@@ -294,7 +274,7 @@ async function linkParentShareController(req, res) {
   }
 
   if (parentIds.length === 0) {
-    return sendSuccess(res, { success: true, links: {} });
+    return sendSuccess(res, { links: {} });
   }
 
   // Bulk operation: Get all parent share links at once
@@ -303,7 +283,7 @@ async function linkParentShareController(req, res) {
 
   // Group files by their parent's share link
   const shareIdToFileIds = new Map();
-  for (const id of validatedIds) {
+  for (const id of ids) {
     const parentId = fileToParent[id];
     if (!parentId) continue;
     const shareId = parentShareLinks[parentId];
@@ -359,7 +339,7 @@ async function linkParentShareController(req, res) {
     }))
   );
 
-  sendSuccess(res, { success: true, links });
+  sendSuccess(res, { links });
 }
 
 module.exports = {

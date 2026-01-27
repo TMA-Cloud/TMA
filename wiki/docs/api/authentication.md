@@ -6,7 +6,7 @@ Authentication endpoints for TMA Cloud.
 
 ### POST `/api/signup`
 
-Create new user account. Respects signup enabled/disabled setting.
+Create a new user account. This endpoint respects the server's signup enabled/disabled setting.
 
 **Request Body:**
 
@@ -18,7 +18,15 @@ Create new user account. Respects signup enabled/disabled setting.
 }
 ```
 
+**Validation:**
+
+- `email`: Must be a valid email format and not exceed 254 characters.
+- `password`: Must be between 6 and 128 characters.
+- `name`: Optional. Must not exceed 100 characters.
+
 **Response:**
+
+The user object for the created account.
 
 ```json
 {
@@ -38,7 +46,7 @@ Create new user account. Respects signup enabled/disabled setting.
 
 ### POST `/api/login`
 
-Authenticate user and receive JWT token. If MFA is enabled, requires `mfaCode` in request.
+Authenticate a user and receive a JWT token. If MFA is enabled for the user, `mfaCode` is required.
 
 **Request Body:**
 
@@ -50,7 +58,14 @@ Authenticate user and receive JWT token. If MFA is enabled, requires `mfaCode` i
 }
 ```
 
+**Validation:**
+
+- `email`: Must be a valid email format.
+- `password`: Cannot be empty.
+
 **Response:**
+
+The authenticated user's object.
 
 ```json
 {
@@ -70,14 +85,13 @@ Authenticate user and receive JWT token. If MFA is enabled, requires `mfaCode` i
 
 ### POST `/api/logout`
 
-Log out current user (clears token cookie).
+Log out the current user by clearing the authentication token cookie.
 
 **Response:**
 
 ```json
 {
-  "success": true,
-  "message": "Logged out successfully"
+  "message": "Logged out"
 }
 ```
 
@@ -85,14 +99,14 @@ Log out current user (clears token cookie).
 
 ### POST `/api/logout-all`
 
-Log out from all devices by invalidating all tokens.
+Log out from all devices by invalidating all of the user's active sessions and tokens.
 
 **Response:**
 
 ```json
 {
-  "success": true,
-  "message": "Logged out from all devices"
+  "message": "Successfully logged out from all devices",
+  "sessionsInvalidated": true
 }
 ```
 
@@ -102,7 +116,7 @@ Log out from all devices by invalidating all tokens.
 
 ### GET `/api/profile`
 
-Get current user profile.
+Get the current authenticated user's profile.
 
 **Response:**
 
@@ -122,7 +136,7 @@ Get current user profile.
 
 ### GET `/api/google/enabled`
 
-Check if Google OAuth is enabled.
+Check if Google OAuth is configured and enabled on the server.
 
 **Response:**
 
@@ -134,11 +148,11 @@ Check if Google OAuth is enabled.
 
 ### GET `/api/google/login`
 
-Initiate Google OAuth login (redirects to Google).
+Initiate the Google OAuth login flow. This will redirect the user to Google's authentication page.
 
 ### GET `/api/google/callback`
 
-Google OAuth callback endpoint.
+The callback endpoint for Google to redirect to after successful authentication.
 
 **Rate limiting:** 5 attempts per 15 minutes.
 
@@ -146,7 +160,7 @@ Google OAuth callback endpoint.
 
 ### GET `/api/mfa/status`
 
-Get MFA status for current user.
+Get the MFA status for the current authenticated user.
 
 **Response:**
 
@@ -160,13 +174,13 @@ Get MFA status for current user.
 
 ### POST `/api/mfa/setup`
 
-Generate MFA secret and QR code for setup.
+Generate an MFA secret and a corresponding QR code for setup in an authenticator app.
 
 **Response:**
 
 ```json
 {
-  "secret": "MFA_SECRET",
+  "secret": "MFA_SECRET_IN_BASE32",
   "qrCode": "data:image/png;base64,..."
 }
 ```
@@ -175,7 +189,7 @@ Generate MFA secret and QR code for setup.
 
 ### POST `/api/mfa/verify`
 
-Verify MFA code and enable MFA.
+Verify an MFA code (TOTP) and enable MFA for the user's account.
 
 **Request Body:**
 
@@ -185,22 +199,27 @@ Verify MFA code and enable MFA.
 }
 ```
 
+**Validation:**
+
+- `code`: Required. Must be a 6-digit string.
+
 **Response:**
+
+Returns a success message, a new set of backup codes, and a flag to prompt the user to sign out other sessions.
 
 ```json
 {
-  "success": true,
   "message": "MFA enabled successfully",
-  "backupCodes": ["ABCD2345", "EFGH6789"], // present on success
-  "shouldPromptSessions": true // prompt to sign out other sessions
+  "backupCodes": ["ABCD-EFGH", "IJKL-MNOP"],
+  "shouldPromptSessions": true
 }
 ```
 
-**Rate limiting:** 5 attempts per minute per IP/user (MFA-specific limiter).
+**Rate limiting:** 5 attempts per minute per IP/user.
 
 ### POST `/api/mfa/disable`
 
-Disable MFA. Requires verification code.
+Disable MFA for the user's account. Requires a valid MFA code (either TOTP or a backup code).
 
 **Request Body:**
 
@@ -210,32 +229,36 @@ Disable MFA. Requires verification code.
 }
 ```
 
+**Validation:**
+
+- `code`: Required. Must be a 6-digit (TOTP) or 8-character (backup code) string.
+
 **Response:**
 
 ```json
 {
-  "success": true,
-  "message": "MFA disabled successfully"
+  "message": "MFA disabled successfully",
+  "shouldPromptSessions": true
 }
 ```
 
-**Rate limiting:** 5 attempts per minute per IP/user (MFA-specific limiter).
+**Rate limiting:** 5 attempts per minute per IP/user.
 
 ### POST `/api/mfa/backup-codes/regenerate`
 
-Regenerate MFA backup codes (invalidates existing codes).
+Regenerate MFA backup codes, which invalidates all existing backup codes.
 
 **Response:**
 
 ```json
 {
-  "backupCodes": ["ABCD2345", "EFGH6789"]
+  "backupCodes": ["ABCD-EFGH", "IJKL-MNOP"]
 }
 ```
 
 **Error Response (429 Too Many Requests):**
 
-When cooldown is active or rate limit exceeded:
+When the cooldown is active or the rate limit is exceeded:
 
 ```json
 {
@@ -246,13 +269,13 @@ When cooldown is active or rate limit exceeded:
 
 **Rate limiting:** 3 attempts per 10 minutes per user.
 
-**Cooldown:** 5 minutes between regenerations per user.
+**Cooldown:** A 5-minute cooldown period is enforced between regeneration attempts.
 
-Codes auto-download on the client after regeneration.
+**Note:** Backup codes are automatically downloaded on the client after regeneration.
 
 ### GET `/api/mfa/backup-codes/count`
 
-Get remaining unused backup code count.
+Get the number of remaining unused backup codes for the user.
 
 **Response:**
 

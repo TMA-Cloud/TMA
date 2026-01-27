@@ -5,8 +5,6 @@ const { sendError } = require('../../utils/response');
 const { createZipArchive } = require('../../utils/zipArchive');
 const { getFileByToken, isFileShared, getSharedTree } = require('../../models/share.model');
 const pool = require('../../config/db');
-const { validateToken } = require('../../utils/validation');
-const { validateSingleId } = require('../../utils/controllerHelpers');
 const { logger } = require('../../config/logger');
 const { logAuditEvent } = require('../../services/auditLogger');
 
@@ -15,10 +13,7 @@ const { logAuditEvent } = require('../../services/auditLogger');
  */
 async function downloadFolderZip(req, res) {
   try {
-    const token = validateToken(req.params.token);
-    if (!token) {
-      return res.status(400).send('Invalid share token');
-    }
+    const { token } = req.params;
     const file = await getFileByToken(token);
     if (!file || file.type !== 'folder') return res.status(404).send('Not found');
 
@@ -55,14 +50,7 @@ async function downloadFolderZip(req, res) {
  */
 async function downloadSharedItem(req, res) {
   try {
-    const token = validateToken(req.params.token);
-    if (!token) {
-      return res.status(400).send('Invalid share token');
-    }
-    const { valid, id: fileId, error } = validateSingleId(req);
-    if (!valid) {
-      return res.status(400).send(error);
-    }
+    const { token, id: fileId } = req.params;
     const allowed = await isFileShared(token, fileId);
     if (!allowed) return res.status(404).send('Not found');
     const res2 = await pool.query('SELECT id, name, type, mime_type AS "mimeType", path FROM files WHERE id = $1', [

@@ -9,16 +9,11 @@ const {
   getMfaStatus,
 } = require('../../models/user.model');
 const { sendError } = require('../../utils/response');
-const { validateEmail: validateEmailUtil } = require('../../utils/validation');
 const { logger } = require('../../config/logger');
 const { loginSuccess, loginFailure, userSignup } = require('../../services/auditLogger');
 const { handleFirstUserSetup } = require('../../models/user.model');
 const { createSessionAndToken, setAuthCookieAndRespond } = require('../../utils/authSession');
 const { verifyMfaCode } = require('./auth.mfa.controller');
-
-// Align with frontend input limits
-const MAX_EMAIL_LENGTH = 254;
-const MAX_PASSWORD_LENGTH = 128;
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
@@ -42,31 +37,6 @@ if (!GOOGLE_AUTH_ENABLED) {
 async function login(req, res) {
   try {
     const { email, password, mfaCode } = req.body;
-
-    if (!email || !password) {
-      return sendError(res, 400, 'Email and password required');
-    }
-
-    // Basic type and length validation to guard against abuse
-    if (typeof email !== 'string' || typeof password !== 'string') {
-      return sendError(res, 400, 'Invalid credentials');
-    }
-
-    if (email.length > MAX_EMAIL_LENGTH) {
-      await loginFailure(email, 'email_too_long', req);
-      return sendError(res, 400, 'Email too long');
-    }
-
-    if (password.length > MAX_PASSWORD_LENGTH) {
-      await loginFailure(email, 'password_too_long', req);
-      return sendError(res, 400, 'Password too long');
-    }
-
-    // Validate email (validateEmailUtil already checks format and length)
-    if (!validateEmailUtil(email)) {
-      await loginFailure(email, 'invalid_email', req);
-      return sendError(res, 400, 'Invalid email format');
-    }
 
     const user = await getUserByEmail(email);
     if (!user) {

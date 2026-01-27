@@ -1,7 +1,6 @@
 const { validateAndResolveFile, streamEncryptedFile, streamUnencryptedFile } = require('../../utils/fileDownload');
 const { sendError } = require('../../utils/response');
 const { getFileByToken, getFolderContentsByShare } = require('../../models/share.model');
-const { validateToken } = require('../../utils/validation');
 const { logger } = require('../../config/logger');
 const { shareAccessed } = require('../../services/auditLogger');
 const { escapeHtml } = require('./share.utils');
@@ -13,10 +12,7 @@ const { escapeHtml } = require('./share.utils');
  */
 async function handleShared(req, res) {
   try {
-    const token = validateToken(req.params.token);
-    if (!token) {
-      return res.status(400).send('Invalid share token');
-    }
+    const { token } = req.params;
     const file = await getFileByToken(token);
     if (!file) return res.status(404).send('Not found');
 

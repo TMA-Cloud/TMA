@@ -30,6 +30,22 @@ const { apiRateLimiter, uploadRateLimiter, sseConnectionLimiter } = require('../
 const { attachCustomDrivePath } = require('../middleware/customDrive.middleware');
 const { checkStorageLimit } = require('../middleware/storageLimit.middleware');
 const router = express.Router();
+const { validate } = require('../middleware/validation.middleware');
+const {
+  addFolderSchema,
+  renameFileSchema,
+  downloadFileSchema,
+  downloadFilesBulkSchema,
+  moveFilesSchema,
+  copyFilesSchema,
+  starFilesSchema,
+  shareFilesSchema,
+  getShareLinksSchema,
+  linkParentShareSchema,
+  deleteFilesSchema,
+  restoreFilesSchema,
+  deleteForeverSchema,
+} = require('../utils/validationSchemas');
 
 router.use(auth);
 router.use(apiRateLimiter);
@@ -39,7 +55,7 @@ router.get('/events', sseConnectionLimiter, streamFileEvents);
 router.get('/', listFiles);
 router.get('/stats', getFileStats);
 router.get('/search', searchFiles);
-router.post('/folder', addFolder);
+router.post('/folder', addFolderSchema, validate, addFolder);
 router.post('/upload', uploadRateLimiter, attachCustomDrivePath, checkStorageLimit, upload.single('file'), uploadFile);
 router.post(
   '/upload/bulk',
@@ -49,21 +65,21 @@ router.post(
   upload.array('files'),
   uploadFilesBulk
 );
-router.post('/move', moveFiles);
-router.post('/copy', copyFiles);
-router.post('/rename', renameFile);
-router.post('/star', starFiles);
+router.post('/move', moveFilesSchema, validate, moveFiles);
+router.post('/copy', copyFilesSchema, validate, copyFiles);
+router.post('/rename', renameFileSchema, validate, renameFile);
+router.post('/star', starFilesSchema, validate, starFiles);
 router.get('/starred', listStarred);
-router.post('/share', shareFiles);
-router.post('/share/links', getShareLinks);
+router.post('/share', shareFilesSchema, validate, shareFiles);
+router.post('/share/links', getShareLinksSchema, validate, getShareLinks);
 router.get('/shared', listShared);
-router.post('/link-parent-share', linkParentShare);
-router.post('/delete', deleteFiles);
+router.post('/link-parent-share', linkParentShareSchema, validate, linkParentShare);
+router.post('/delete', deleteFilesSchema, validate, deleteFiles);
 router.get('/trash', listTrash);
-router.post('/trash/restore', restoreFiles);
-router.post('/trash/delete', deleteForever);
+router.post('/trash/restore', restoreFilesSchema, validate, restoreFiles);
+router.post('/trash/delete', deleteForeverSchema, validate, deleteForever);
 router.post('/trash/empty', emptyTrash);
-router.post('/download/bulk', downloadFilesBulk);
-router.get('/:id/download', downloadFile);
+router.post('/download/bulk', downloadFilesBulkSchema, validate, downloadFilesBulk);
+router.get('/:id/download', downloadFileSchema, validate, downloadFile);
 
 module.exports = router;

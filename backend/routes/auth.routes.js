@@ -26,9 +26,11 @@ const {
   backupCodeRegenerationRateLimiter,
   apiRateLimiter,
 } = require('../middleware/rateLimit.middleware');
+const { validate } = require('../middleware/validation.middleware');
+const { signupSchema, loginSchema } = require('../utils/validationSchemas');
 
-router.post('/signup', authRateLimiter, signup);
-router.post('/login', authRateLimiter, login);
+router.post('/signup', authRateLimiter, signupSchema, validate, signup);
+router.post('/login', authRateLimiter, loginSchema, validate, login);
 router.get('/google/enabled', (req, res) => {
   res.json({ enabled: googleAuthEnabled });
 });

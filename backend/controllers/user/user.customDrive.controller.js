@@ -136,32 +136,6 @@ async function updateCustomDriveSettings(req, res) {
     // Determine which user's settings to update (default to admin's own settings)
     const targetUserIdFinal = targetUserId || req.userId;
 
-    // Validate enabled is boolean
-    if (enabled !== undefined && typeof enabled !== 'boolean') {
-      return sendError(res, 400, 'enabled must be a boolean');
-    }
-
-    // Validate ignorePatterns if provided
-    if (ignorePatterns !== undefined) {
-      if (!Array.isArray(ignorePatterns)) {
-        return sendError(res, 400, 'ignorePatterns must be an array');
-      }
-      // Validate each pattern is a string
-      for (const pattern of ignorePatterns) {
-        if (typeof pattern !== 'string') {
-          return sendError(res, 400, 'All ignore patterns must be strings');
-        }
-      }
-    }
-
-    // Basic validation before acquiring lock
-    // If enabling, path is required
-    if (enabled === true) {
-      if (!path || typeof path !== 'string' || path.trim().length === 0) {
-        return sendError(res, 400, 'path is required when enabling custom drive');
-      }
-    }
-
     // Acquire user operation lock to prevent race conditions with concurrent updates
     // This ensures that concurrent updates to the same user are serialized
     const { userOperationLock } = require('../../utils/mutex');

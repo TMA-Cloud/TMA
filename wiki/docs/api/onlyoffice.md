@@ -12,9 +12,10 @@ Get OnlyOffice editor configuration for a file.
 
 **Validation:**
 
-- File extension must be supported by OnlyOffice
-- Actual MIME type must match expected type for extension
-- Returns 400 if MIME type mismatch detected
+- The file `id` from the URL is required.
+- The file's extension must be one supported by OnlyOffice.
+- The file's actual MIME type must match the expected type for its extension.
+- The server will return a `400 Bad Request` if a MIME type mismatch is detected.
 
 **Response:**
 
@@ -47,9 +48,10 @@ Get standalone viewer page for a file.
 
 **Validation:**
 
-- File extension must be supported by OnlyOffice
-- Actual MIME type must match expected type for extension
-- Returns 400 (JSON or HTML) if MIME type mismatch detected
+- The file `id` from the URL is required.
+- The file's extension must be one supported by OnlyOffice.
+- The file's actual MIME type must match the expected type for its extension.
+- The server will return a `400 Bad Request` (as JSON or HTML) if a MIME type mismatch is detected.
 
 **Response:**
 HTML page with OnlyOffice viewer

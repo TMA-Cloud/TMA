@@ -10,6 +10,10 @@ Share link endpoints for TMA Cloud.
 
 View shared files/folders.
 
+**Validation:**
+
+- `token`: Required. Must be a non-empty string.
+
 **Response:**
 HTML page with shared files
 
@@ -17,12 +21,21 @@ HTML page with shared files
 
 Download a file from a share link.
 
+**Validation:**
+
+- `token`: Required. Must be a non-empty string.
+- `id`: Required. Must be a non-empty string.
+
 **Response:**
 File download
 
 ### GET `/s/:token/zip`
 
 Download a folder as ZIP from a share link.
+
+**Validation:**
+
+- `token`: Required. Must be a non-empty string.
 
 **Response:**
 ZIP archive download

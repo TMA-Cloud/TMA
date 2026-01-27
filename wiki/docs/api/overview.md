@@ -29,22 +29,22 @@ The API employs rate limiting to prevent abuse and ensure service stability. Dif
 
 ## Response Format
 
-### Success Response
-
-```json
-{
-  "success": true,
-  "data": { ... }
-}
-```
+Success responses return the requested data directly as a JSON object or array.
 
 ### Error Response
 
 ```json
 {
-  "success": false,
-  "error": "Error message",
-  "code": "ERROR_CODE"
+  "message": "Error message"
+}
+```
+
+For validation errors, the response includes a `details` field:
+
+```json
+{
+  "message": "Validation failed",
+  "details": [{ "field_name": "Specific error message" }]
 }
 ```
 
@@ -55,6 +55,7 @@ The API employs rate limiting to prevent abuse and ensure service stability. Dif
 - `401` - Unauthorized
 - `403` - Forbidden
 - `404` - Not Found
+- `422` - Unprocessable Entity (Validation Error)
 - `500` - Server Error
 - `503` - Service Unavailable (agent offline)
 

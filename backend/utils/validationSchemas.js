@@ -1,0 +1,204 @@
+const { body, param, query } = require('express-validator');
+
+const MAX_EMAIL_LENGTH = 254;
+const MAX_PASSWORD_LENGTH = 128;
+const MAX_NAME_LENGTH = 100;
+const FILE_NAME_REGEX = /^[a-zA-Z0-9_.-]+$/;
+
+const signupSchema = [
+  body('email')
+    .isEmail()
+    .withMessage('Invalid email format')
+    .isLength({ max: MAX_EMAIL_LENGTH })
+    .withMessage(`Email must not exceed ${MAX_EMAIL_LENGTH} characters`)
+    .normalizeEmail(),
+  body('password')
+    .isLength({ min: 6, max: MAX_PASSWORD_LENGTH })
+    .withMessage(`Password must be between 6 and ${MAX_PASSWORD_LENGTH} characters`),
+  body('name')
+    .optional()
+    .isString()
+    .withMessage('Name must be a string')
+    .isLength({ max: MAX_NAME_LENGTH })
+    .withMessage(`Name must not exceed ${MAX_NAME_LENGTH} characters`)
+    .trim()
+    .escape(),
+];
+
+const loginSchema = [
+  body('email')
+    .isEmail()
+    .withMessage('Invalid email format')
+    .isLength({ max: MAX_EMAIL_LENGTH })
+    .withMessage(`Email must not exceed ${MAX_EMAIL_LENGTH} characters`)
+    .normalizeEmail(),
+  body('password')
+    .isLength({ max: MAX_PASSWORD_LENGTH })
+    .withMessage(`Password must not exceed ${MAX_PASSWORD_LENGTH} characters`),
+];
+
+const addFolderSchema = [
+  body('name')
+    .notEmpty()
+    .withMessage('Folder name is required')
+    .matches(FILE_NAME_REGEX)
+    .withMessage('Invalid folder name')
+    .isLength({ max: MAX_NAME_LENGTH })
+    .withMessage(`Folder name must not exceed ${MAX_NAME_LENGTH} characters`),
+  body('parentId').optional({ nullable: true }).isString().withMessage('Parent ID must be a string'),
+];
+
+const renameFileSchema = [
+  body('id').notEmpty().withMessage('File ID is required').isString().withMessage('File ID must be a string'),
+  body('name')
+    .notEmpty()
+    .withMessage('New name is required')
+    .matches(FILE_NAME_REGEX)
+    .withMessage('Invalid file name')
+    .isLength({ max: MAX_NAME_LENGTH })
+    .withMessage(`File name must not exceed ${MAX_NAME_LENGTH} characters`),
+];
+
+const downloadFileSchema = [
+  param('id').notEmpty().withMessage('File ID is required').isString().withMessage('File ID must be a string'),
+];
+
+const downloadFilesBulkSchema = [
+  body('ids').isArray({ min: 1 }).withMessage('File IDs must be an array with at least one ID'),
+  body('ids.*').isString().withMessage('All file IDs must be strings'),
+];
+
+const moveFilesSchema = [
+  body('ids').isArray({ min: 1 }).withMessage('File IDs must be an array with at least one ID'),
+  body('ids.*').isString().withMessage('All file IDs must be strings'),
+  body('parentId').optional({ nullable: true }).isString().withMessage('Parent ID must be a string'),
+];
+
+const copyFilesSchema = [
+  body('ids').isArray({ min: 1 }).withMessage('File IDs must be an array with at least one ID'),
+  body('ids.*').isString().withMessage('All file IDs must be strings'),
+  body('parentId').optional({ nullable: true }).isString().withMessage('Parent ID must be a string'),
+];
+
+const starFilesSchema = [
+  body('ids').isArray({ min: 1 }).withMessage('File IDs must be an array with at least one ID'),
+  body('ids.*').isString().withMessage('All file IDs must be strings'),
+  body('starred').isBoolean().withMessage('Starred must be a boolean'),
+];
+
+const shareFilesSchema = [
+  body('ids').isArray({ min: 1 }).withMessage('File IDs must be an array with at least one ID'),
+  body('ids.*').isString().withMessage('All file IDs must be strings'),
+  body('shared').isBoolean().withMessage('Shared must be a boolean'),
+];
+
+const getShareLinksSchema = [
+  body('ids').isArray({ min: 1 }).withMessage('File IDs must be an array with at least one ID'),
+  body('ids.*').isString().withMessage('All file IDs must be strings'),
+];
+
+const linkParentShareSchema = [
+  body('ids').isArray({ min: 1 }).withMessage('File IDs must be an array with at least one ID'),
+  body('ids.*').isString().withMessage('All file IDs must be strings'),
+];
+
+const deleteFilesSchema = [
+  body('ids').isArray({ min: 1 }).withMessage('File IDs must be an array with at least one ID'),
+  body('ids.*').isString().withMessage('All file IDs must be strings'),
+];
+
+const restoreFilesSchema = [
+  body('ids').isArray({ min: 1 }).withMessage('File IDs must be an array with at least one ID'),
+  body('ids.*').isString().withMessage('All file IDs must be strings'),
+];
+
+const deleteForeverSchema = [
+  body('ids').isArray({ min: 1 }).withMessage('File IDs must be an array with at least one ID'),
+  body('ids.*').isString().withMessage('All file IDs must be strings'),
+];
+
+const toggleSignupSchema = [body('enabled').isBoolean().withMessage('Enabled must be a boolean')];
+
+const updateOnlyOfficeConfigSchema = [
+  body('jwtSecret').optional({ nullable: true }).isString().withMessage('JWT secret must be a string'),
+  body('url').optional({ nullable: true }).isURL().withMessage('Invalid URL format'),
+];
+
+const updateAgentConfigSchema = [
+  body('token').optional({ nullable: true }).isString().withMessage('Agent token must be a string'),
+  body('url').optional({ nullable: true }).isURL().withMessage('Invalid URL format'),
+];
+
+const updateShareBaseUrlConfigSchema = [
+  body('url').optional({ nullable: true }).isURL().withMessage('Invalid URL format'),
+];
+
+const updateUserStorageLimitSchema = [
+  body('targetUserId')
+    .notEmpty()
+    .withMessage('Target user ID is required')
+    .isString()
+    .withMessage('Target user ID must be a string'),
+  body('storageLimit')
+    .optional({ nullable: true })
+    .isInt({ min: 1, max: Number.MAX_SAFE_INTEGER })
+    .withMessage('Storage limit must be a positive integer or null'),
+];
+
+const getCustomDriveSettingsSchema = [
+  query('targetUserId').optional().isString().withMessage('Target user ID must be a string'),
+];
+
+const updateCustomDriveSettingsSchema = [
+  body('enabled').optional().isBoolean().withMessage('Enabled must be a boolean'),
+  body('path').optional({ nullable: true }).isString().withMessage('Path must be a string'),
+  body('targetUserId').optional().isString().withMessage('Target user ID must be a string'),
+  body('ignorePatterns').optional().isArray().withMessage('Ignore patterns must be an array'),
+  body('ignorePatterns.*').isString().withMessage('All ignore patterns must be strings'),
+];
+
+const getOnlyOfficeConfigSchema = [
+  param('id').notEmpty().withMessage('File ID is required').isString().withMessage('File ID must be a string'),
+];
+
+const handleSharedSchema = [
+  param('token').notEmpty().withMessage('Token is required').isString().withMessage('Token must be a string'),
+];
+
+const downloadFolderZipSchema = [
+  param('token').notEmpty().withMessage('Token is required').isString().withMessage('Token must be a string'),
+];
+
+const downloadSharedItemSchema = [
+  param('token').notEmpty().withMessage('Token is required').isString().withMessage('Token must be a string'),
+  param('id').notEmpty().withMessage('File ID is required').isString().withMessage('File ID must be a string'),
+];
+
+module.exports = {
+  signupSchema,
+  loginSchema,
+  addFolderSchema,
+  renameFileSchema,
+  downloadFileSchema,
+  downloadFilesBulkSchema,
+  moveFilesSchema,
+  copyFilesSchema,
+  starFilesSchema,
+  shareFilesSchema,
+  getShareLinksSchema,
+  linkParentShareSchema,
+  deleteFilesSchema,
+  restoreFilesSchema,
+  deleteForeverSchema,
+  toggleSignupSchema,
+  updateOnlyOfficeConfigSchema,
+  updateAgentConfigSchema,
+  updateShareBaseUrlConfigSchema,
+  updateUserStorageLimitSchema,
+  getCustomDriveSettingsSchema,
+  updateCustomDriveSettingsSchema,
+  getOnlyOfficeConfigSchema,
+  handleSharedSchema,
+  downloadFolderZipSchema,
+  downloadSharedItemSchema,
+};

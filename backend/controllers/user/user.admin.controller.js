@@ -71,9 +71,6 @@ async function toggleSignup(req, res) {
     }
 
     const { enabled } = req.body;
-    if (typeof enabled !== 'boolean') {
-      return sendError(res, 400, 'enabled must be a boolean');
-    }
 
     // setSignupEnabled will do additional security checks internally
     await setSignupEnabled(enabled, req.userId);
@@ -268,40 +265,13 @@ async function updateOnlyOfficeConfig(req, res) {
 
     const { jwtSecret, url } = req.body;
 
-    // Normalize undefined to null for consistent validation
-    const normalizedJwtSecret = jwtSecret !== undefined ? jwtSecret : null;
-    const normalizedUrl = url !== undefined ? url : null;
-
     // Enforce "both or none" - both fields must be provided together or both must be null
-    const hasJwtSecret = normalizedJwtSecret !== null;
-    const hasUrl = normalizedUrl !== null;
-    if (hasJwtSecret !== hasUrl) {
+    if ((jwtSecret && !url) || (!jwtSecret && url)) {
       return sendError(res, 400, 'Both URL and JWT Secret must be provided together, or both must be empty');
     }
 
-    // Validate inputs (allow null to clear settings)
-    if (
-      normalizedJwtSecret !== null &&
-      (typeof normalizedJwtSecret !== 'string' || normalizedJwtSecret.trim().length === 0)
-    ) {
-      return sendError(res, 400, 'JWT secret must be a non-empty string or null');
-    }
-
-    if (normalizedUrl !== null && (typeof normalizedUrl !== 'string' || normalizedUrl.trim().length === 0)) {
-      return sendError(res, 400, 'OnlyOffice URL must be a non-empty string or null');
-    }
-
-    // Validate URL format if provided
-    if (normalizedUrl !== null) {
-      try {
-        new URL(normalizedUrl);
-      } catch {
-        return sendError(res, 400, 'Invalid URL format');
-      }
-    }
-
     // setOnlyOfficeSettings will do additional security checks internally and invalidate cache
-    await setOnlyOfficeSettings(normalizedJwtSecret, normalizedUrl, req.userId);
+    await setOnlyOfficeSettings(jwtSecret, url, req.userId);
 
     // Invalidate in-memory CSP cache so new origin is used immediately
     invalidateOnlyOfficeOriginCache();
@@ -320,10 +290,7 @@ async function updateOnlyOfficeConfig(req, res) {
       },
       req
     );
-    logger.info(
-      { userId: req.userId, hasJwtSecret: !!normalizedJwtSecret, url: normalizedUrl },
-      'OnlyOffice settings updated'
-    );
+    logger.info({ userId: req.userId, hasJwtSecret: !!jwtSecret, url }, 'OnlyOffice settings updated');
 
     const updatedSettings = await getOnlyOfficeSettings();
     sendSuccess(res, {
@@ -406,47 +373,25 @@ async function updateAgentConfig(req, res) {
 
     const { token, url } = req.body;
 
-    // Normalize undefined to null for consistent validation
-    const normalizedToken = token !== undefined ? token : null;
-    const normalizedUrl = url !== undefined ? url : null;
-
-    // Validate inputs (allow null to clear settings)
-    if (normalizedToken !== null && (typeof normalizedToken !== 'string' || normalizedToken.trim().length === 0)) {
-      return sendError(res, 400, 'Agent token must be a non-empty string or null');
-    }
-
-    if (normalizedUrl !== null && (typeof normalizedUrl !== 'string' || normalizedUrl.trim().length === 0)) {
-      return sendError(res, 400, 'Agent URL must be a non-empty string or null');
-    }
-
-    // Validate URL format if provided
-    if (normalizedUrl !== null) {
-      try {
-        new URL(normalizedUrl);
-      } catch {
-        return sendError(res, 400, 'Invalid URL format');
-      }
-    }
-
     // If both URL and token are provided, validate agent connection before saving
-    if (normalizedUrl !== null && normalizedToken !== null) {
-      const connectionTest = await testAgentConnection(normalizedUrl, normalizedToken);
+    if (url && token) {
+      const connectionTest = await testAgentConnection(url, token);
       if (!connectionTest.online) {
         return sendError(res, 503, 'Agent unreachable. Check URL and ensure agent is running.');
       }
       if (!connectionTest.tokenValid) {
         return sendError(res, 401, 'Invalid token. Please verify the token is correct.');
       }
-    } else if (normalizedUrl !== null && normalizedToken === null) {
+    } else if (url && !token) {
       // If only URL is provided (no token), just check if agent is reachable
-      const connectionTest = await testAgentConnection(normalizedUrl, null);
+      const connectionTest = await testAgentConnection(url, null);
       if (!connectionTest.online) {
         return sendError(res, 503, 'Agent unreachable. Check URL and ensure agent is running.');
       }
     }
 
     // All validations passed - save settings
-    await setAgentSettings(normalizedUrl, normalizedToken, req.userId);
+    await setAgentSettings(url, token, req.userId);
 
     // Log admin action
     await logAuditEvent(
@@ -456,13 +401,13 @@ async function updateAgentConfig(req, res) {
         resourceType: 'settings',
         metadata: {
           setting: 'agent_config',
-          hasToken: normalizedToken !== null && normalizedToken !== undefined,
-          url: normalizedUrl || null,
+          hasToken: token !== null && token !== undefined,
+          url: url || null,
         },
       },
       req
     );
-    logger.info({ userId: req.userId, hasToken: !!normalizedToken, url: normalizedUrl }, 'Agent settings updated');
+    logger.info({ userId: req.userId, hasToken: !!token, url }, 'Agent settings updated');
 
     const updatedSettings = await getAgentSettings();
     sendSuccess(res, {
@@ -542,26 +487,9 @@ async function updateShareBaseUrlConfig(req, res) {
 
     const { url } = req.body;
 
-    // Normalize undefined to null for consistent validation
-    const normalizedUrl = url !== undefined ? url : null;
-
-    // Validate inputs (allow null to clear settings)
-    if (normalizedUrl !== null && (typeof normalizedUrl !== 'string' || normalizedUrl.trim().length === 0)) {
-      return sendError(res, 400, 'Share base URL must be a non-empty string or null');
-    }
-
-    // Validate URL format if provided
-    if (normalizedUrl !== null) {
-      try {
-        new URL(normalizedUrl.trim());
-      } catch {
-        return sendError(res, 400, 'Invalid URL format');
-      }
-    }
-
     // setShareBaseUrlSettings will do additional security checks internally and invalidate Redis cache
     // All instances will automatically get the new value from Redis on next request
-    await setShareBaseUrlSettings(normalizedUrl, req.userId);
+    await setShareBaseUrlSettings(url, req.userId);
 
     // Log admin action
     await logAuditEvent(
@@ -571,12 +499,12 @@ async function updateShareBaseUrlConfig(req, res) {
         resourceType: 'settings',
         metadata: {
           setting: 'share_base_url_config',
-          url: normalizedUrl || null,
+          url: url || null,
         },
       },
       req
     );
-    logger.info({ userId: req.userId, url: normalizedUrl }, 'Share base URL settings updated');
+    logger.info({ userId: req.userId, url }, 'Share base URL settings updated');
 
     const updatedSettings = await getShareBaseUrlSettings();
     sendSuccess(res, {
@@ -625,44 +553,8 @@ async function updateUserStorageLimit(req, res) {
 
     const { targetUserId, storageLimit } = req.body;
 
-    // Validate targetUserId: must be non-empty string, no special characters that could be dangerous
-    if (!targetUserId || typeof targetUserId !== 'string' || targetUserId.trim().length === 0) {
-      return sendError(res, 400, 'targetUserId is required and must be a non-empty string');
-    }
-
-    // Sanitize targetUserId: only allow alphanumeric, underscore, and hyphen (typical user ID format)
-    if (!/^[a-zA-Z0-9_-]+$/.test(targetUserId)) {
-      return sendError(res, 400, 'Invalid targetUserId format');
-    }
-
-    // Validate storage limit (must be positive integer or null)
-    if (storageLimit !== null && storageLimit !== undefined) {
-      // Ensure it's a number type
-      if (typeof storageLimit !== 'number' && typeof storageLimit !== 'string') {
-        return sendError(res, 400, 'Storage limit must be a number or null');
-      }
-
-      const limit = Number(storageLimit);
-
-      // Validate: must be a finite integer, positive, and within safe range
-      if (!Number.isFinite(limit) || !Number.isInteger(limit) || limit <= 0) {
-        return sendError(res, 400, 'Storage limit must be a positive integer or null');
-      }
-
-      // Prevent extremely large values that could cause issues (max 1 PB = 1024^5 bytes)
-      const MAX_STORAGE_LIMIT = 1024 * 1024 * 1024 * 1024 * 1024; // 1 Petabyte
-      if (limit > MAX_STORAGE_LIMIT) {
-        return sendError(res, 400, 'Storage limit cannot exceed 1 Petabyte (1125899906842624 bytes)');
-      }
-
-      // Ensure it's within JavaScript safe integer range
-      if (limit > Number.MAX_SAFE_INTEGER) {
-        return sendError(res, 400, 'Storage limit exceeds maximum safe value');
-      }
-    }
-
     // setUserStorageLimit will do additional security checks internally
-    await setUserStorageLimit(req.userId, targetUserId, storageLimit === undefined ? null : storageLimit);
+    await setUserStorageLimit(req.userId, targetUserId, storageLimit);
 
     // Log admin action
     await logAuditEvent(
@@ -673,14 +565,14 @@ async function updateUserStorageLimit(req, res) {
         metadata: {
           action: 'update_storage_limit',
           targetUserId,
-          storageLimit: storageLimit === undefined ? null : storageLimit,
+          storageLimit,
         },
       },
       req
     );
     logger.info({ userId: req.userId, targetUserId, storageLimit }, 'User storage limit updated');
 
-    sendSuccess(res, { storageLimit: storageLimit === undefined ? null : storageLimit });
+    sendSuccess(res, { storageLimit });
   } catch (err) {
     if (err.message === 'Only the first user can set storage limits') {
       await logAuditEvent(

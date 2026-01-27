@@ -5,7 +5,6 @@ const { moveFiles, copyFiles, getFileInfo, getTargetFolderName } = require('../.
 const pool = require('../../config/db');
 const { userOperationLock } = require('../../utils/mutex');
 const { publishFileEventsBatch, EventTypes } = require('../../services/fileEvents');
-const { validateFileIds, validateParentId } = require('../../utils/controllerHelpers');
 const { checkAgentForUser } = require('../../utils/agentCheck');
 const { AGENT_OFFLINE_MESSAGE, AGENT_OFFLINE_STATUS } = require('../../utils/agentConstants');
 const { isAgentOfflineError } = require('../../utils/agentErrorDetection');
@@ -20,24 +19,17 @@ async function moveFilesController(req, res) {
     return sendError(res, AGENT_OFFLINE_STATUS, AGENT_OFFLINE_MESSAGE);
   }
 
-  const { valid: idsValid, ids: validatedIds, error: idsError } = validateFileIds(req);
-  if (!idsValid) {
-    return sendError(res, 400, idsError);
-  }
-  const { valid, parentId: validatedParentId, error } = validateParentId(req);
-  if (!valid) {
-    return sendError(res, 400, error);
-  }
+  const { ids, parentId } = req.body;
 
   // Get file info for audit logging
-  const fileInfo = await getFileInfo(validatedIds, req.userId);
+  const fileInfo = await getFileInfo(ids, req.userId);
   const fileNames = fileInfo.map(f => f.name);
   const fileTypes = fileInfo.map(f => f.type);
 
-  const targetFolderName = await getTargetFolderName(validatedParentId, req.userId);
+  const targetFolderName = await getTargetFolderName(parentId, req.userId);
 
   await userOperationLock(req.userId, async () => {
-    await moveFiles(validatedIds, validatedParentId, req.userId);
+    await moveFiles(ids, parentId, req.userId);
   });
 
   // Log file move with details
@@ -46,19 +38,19 @@ async function moveFilesController(req, res) {
     {
       status: 'success',
       resourceType: fileTypes[0] || 'file', // Use actual type (file/folder)
-      resourceId: validatedIds[0],
+      resourceId: ids[0],
       metadata: {
-        fileCount: validatedIds.length,
-        fileIds: validatedIds,
+        fileCount: ids.length,
+        fileIds: ids,
         fileNames,
         fileTypes,
-        targetParentId: validatedParentId,
+        targetParentId: parentId,
         targetFolderName,
       },
     },
     req
   );
-  logger.info({ fileIds: validatedIds, fileNames, targetFolderName }, 'Files moved');
+  logger.info({ fileIds: ids, fileNames, targetFolderName }, 'Files moved');
 
   // Publish file moved events in batch (optimized)
   await publishFileEventsBatch(
@@ -68,14 +60,14 @@ async function moveFilesController(req, res) {
         id: file.id,
         name: file.name,
         type: file.type,
-        parentId: validatedParentId,
+        parentId,
         targetFolderName,
         userId: req.userId,
       },
     }))
   );
 
-  sendSuccess(res, { success: true });
+  sendSuccess(res, { message: 'Files moved successfully.' });
 }
 
 /**
@@ -87,25 +79,18 @@ async function copyFilesController(req, res) {
   if (agentCheck.required && !agentCheck.online) {
     return sendError(res, AGENT_OFFLINE_STATUS, AGENT_OFFLINE_MESSAGE);
   }
-  const { valid: idsValid, ids: validatedIds, error: idsError } = validateFileIds(req);
-  if (!idsValid) {
-    return sendError(res, 400, idsError);
-  }
-  const { valid, parentId: validatedParentId, error } = validateParentId(req);
-  if (!valid) {
-    return sendError(res, 400, error);
-  }
+  const { ids, parentId } = req.body;
 
   // Get file info for audit logging
-  const fileInfo = await getFileInfo(validatedIds, req.userId);
+  const fileInfo = await getFileInfo(ids, req.userId);
   const fileNames = fileInfo.map(f => f.name);
   const fileTypes = fileInfo.map(f => f.type);
 
-  const targetFolderName = await getTargetFolderName(validatedParentId, req.userId);
+  const targetFolderName = await getTargetFolderName(parentId, req.userId);
 
   try {
     await userOperationLock(req.userId, async () => {
-      await copyFiles(validatedIds, validatedParentId, req.userId);
+      await copyFiles(ids, parentId, req.userId);
     });
   } catch (error) {
     // Check if error is agent-related
@@ -122,25 +107,25 @@ async function copyFilesController(req, res) {
     {
       status: 'success',
       resourceType: fileTypes[0] || 'file', // Use actual type (file/folder)
-      resourceId: validatedIds[0],
+      resourceId: ids[0],
       metadata: {
-        fileCount: validatedIds.length,
-        fileIds: validatedIds,
+        fileCount: ids.length,
+        fileIds: ids,
         fileNames,
         fileTypes,
-        targetParentId: validatedParentId,
+        targetParentId: parentId,
         targetFolderName,
       },
     },
     req
   );
-  logger.info({ fileIds: validatedIds, fileNames, targetFolderName }, 'Files copied');
+  logger.info({ fileIds: ids, fileNames, targetFolderName }, 'Files copied');
 
   // Query for newly created files (copies) to get their IDs
   // We find them by matching name, type, and parentId, and created after the copy operation
   const newFilesResult = await pool.query(
     'SELECT id, name, type FROM files WHERE name = ANY($1) AND type = ANY($2) AND parent_id = $3 AND user_id = $4 ORDER BY modified DESC LIMIT $5',
-    [fileNames, fileTypes, validatedParentId, req.userId, validatedIds.length]
+    [fileNames, fileTypes, parentId, req.userId, ids.length]
   );
 
   // Publish file copied events in batch (optimized)
@@ -151,14 +136,14 @@ async function copyFilesController(req, res) {
         id: file.id,
         name: file.name,
         type: file.type,
-        parentId: validatedParentId,
+        parentId,
         targetFolderName,
         userId: req.userId,
       },
     }))
   );
 
-  sendSuccess(res, { success: true });
+  sendSuccess(res, { message: 'Files copied successfully.' });
 }
 
 module.exports = {

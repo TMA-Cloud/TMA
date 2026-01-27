@@ -127,33 +127,42 @@ const response = await fetch("/api/files/share", {
 });
 
 const data = await response.json();
-const shareUrl = data.data.shareLink;
+const shareUrl = data.links["file_123"];
 ```
 
 ## Error Handling
 
 ```javascript
 try {
-  const response = await fetch("/api/files", {
+  const response = await fetch("/api/files/some_file_id", {
     credentials: "include",
   });
 
-  const data = await response.json();
-
-  if (!data.success) {
-    switch (data.code) {
-      case "UNAUTHORIZED":
-        // Redirect to login
+  if (!response.ok) {
+    const errorData = await response.json();
+    // Handle specific HTTP status codes
+    switch (response.status) {
+      case 401:
+        // Unauthorized: Redirect to login
         break;
-      case "STORAGE_LIMIT_EXCEEDED":
-        // Show storage limit error
+      case 403:
+        // Forbidden: Show permission error
+        break;
+      case 422:
+        // Validation error: Show specific field errors
+        console.error("Validation failed:", errorData.details);
         break;
       default:
-      // Show generic error
+        // Show generic error from the 'message' field
+        console.error(errorData.message);
     }
+  } else {
+    const data = await response.json();
+    // Process successful response
   }
 } catch (error) {
-  // Handle network errors
+  // Handle network errors (e.g., failed to fetch)
+  console.error("Network error:", error);
 }
 ```
 

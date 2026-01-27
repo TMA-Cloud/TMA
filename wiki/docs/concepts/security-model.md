@@ -35,11 +35,18 @@ Overall security architecture and practices in TMA Cloud.
 
 ### Input Validation
 
-- **Sanitization:** All user input sanitized
-- **Type Checking:** Parameter validation
-- **Path Traversal Protection:** Prevent directory traversal
-- **SQL Injection Protection:** Parameterized queries
-- **MIME Type Validation:** File content verified against declared type
+All incoming data from clients is strictly validated and sanitized on the backend to protect against a wide range of attacks.
+
+- **Schema-Based Validation:** The application uses `express-validator` to enforce strict, declarative validation rules for all API endpoints.
+- **Centralized Schemas:** Validation schemas are centrally managed, ensuring consistency and making the rules easy to audit and maintain.
+- **Sanitization:** In addition to validation, all user-provided input is sanitized to neutralize potentially malicious content (e.g., stripping HTML tags, normalizing email addresses).
+- **Strong Typing:** Rules include strict type checks, length limits, and format validation (e.g., for emails, URLs, and file names).
+- **Protection Measures:** This approach provides a strong defense against common vulnerabilities such as:
+  - SQL Injection (in combination with parameterized queries)
+  - Cross-Site Scripting (XSS)
+  - Path Traversal
+  - Insecure Deserialization
+- **MIME Type Validation:** For file uploads, the actual file content (magic bytes) is verified to match its declared MIME type, preventing content spoofing attacks.
 
 ## Data Security
 

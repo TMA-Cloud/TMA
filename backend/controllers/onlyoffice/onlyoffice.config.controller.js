@@ -1,5 +1,4 @@
 const { getFile } = require('../../models/file.model');
-const { validateSingleId } = require('../../utils/controllerHelpers');
 const { logger } = require('../../config/logger');
 const { validateAndResolveFile } = require('../../utils/fileDownload');
 const { validateOnlyOfficeMimeType } = require('../../utils/mimeTypeDetection');
@@ -26,10 +25,7 @@ async function getConfig(req, res) {
       return res.status(424).json({ message: 'OnlyOffice integration not configured. Configure it in Settings.' });
     }
 
-    const { valid, id: fileId, error } = validateSingleId(req);
-    if (!valid) {
-      return res.status(400).json({ message: error });
-    }
+    const { id: fileId } = req.params;
     const userId = req.userId;
 
     const file = await getFile(fileId, userId);

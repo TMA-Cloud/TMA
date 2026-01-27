@@ -1,6 +1,6 @@
 # Users API
 
-User management endpoints for TMA Cloud (admin only).
+User management endpoints for TMA Cloud.
 
 **Note:** All endpoints in this section are rate-limited to 100 requests per 15 minutes per IP address. Most also require admin privileges (first user).
 
@@ -12,24 +12,23 @@ List all users (admin only).
 
 **Response:**
 
+An object containing an array of all user objects.
+
 ```json
 {
-  "success": true,
-  "data": {
-    "users": [
-      {
-        "id": "user_123",
-        "email": "user@example.com",
-        "name": "User Name",
-        "createdAt": "2024-01-01T00:00:00Z",
-        "mfaEnabled": false,
-        "storageUsed": 1073741824,
-        "storageLimit": 107374182400,
-        "storageTotal": 107374182400,
-        "actualDiskSize": 1099511627776
-      }
-    ]
-  }
+  "users": [
+    {
+      "id": "user_123",
+      "email": "user@example.com",
+      "name": "User Name",
+      "createdAt": "2024-01-01T00:00:00Z",
+      "mfaEnabled": false,
+      "storageUsed": 1073741824,
+      "storageLimit": 107374182400,
+      "storageTotal": 107374182400,
+      "actualDiskSize": 1099511627776
+    }
+  ]
 }
 ```
 
@@ -37,7 +36,7 @@ List all users (admin only).
 
 ### GET `/api/user/storage`
 
-Get storage usage information.
+Get storage usage information for the authenticated user.
 
 **Response:**
 
@@ -51,7 +50,7 @@ Get storage usage information.
 
 ### PUT `/api/user/storage-limit`
 
-Update user storage limit (admin only).
+Update a user's storage limit (admin only).
 
 **Request Body:**
 
@@ -61,6 +60,11 @@ Update user storage limit (admin only).
   "storageLimit": 107374182400
 }
 ```
+
+**Validation:**
+
+- `targetUserId`: Required. Must be a string.
+- `storageLimit`: Optional. Must be a positive integer or `null` to reset to the default limit.
 
 **Response:**
 
@@ -74,7 +78,7 @@ Update user storage limit (admin only).
 
 ### GET `/api/user/signup-status`
 
-Get signup status and whether current user can toggle it.
+Get the current user signup status and whether the current user is allowed to toggle it.
 
 **Response:**
 
@@ -87,7 +91,7 @@ Get signup status and whether current user can toggle it.
 
 ### POST `/api/user/signup-toggle`
 
-Enable/disable user signup (first user only).
+Enable or disable public user signup (admin only).
 
 **Request Body:**
 
@@ -96,6 +100,10 @@ Enable/disable user signup (first user only).
   "enabled": true
 }
 ```
+
+**Validation:**
+
+- `enabled`: Required. Must be a boolean.
 
 **Response:**
 
@@ -109,11 +117,15 @@ Enable/disable user signup (first user only).
 
 ### GET `/api/user/custom-drive`
 
-Get custom drive settings.
+Get custom drive settings for a user.
 
 **Query Parameters:**
 
-- `targetUserId` - Target user ID (optional, admin only)
+- `targetUserId` - Target user ID (optional, admin only). If not provided, returns settings for the current user.
+
+**Validation:**
+
+- `targetUserId`: Optional. Must be a string.
 
 **Response:**
 
@@ -151,7 +163,7 @@ Get custom drive settings for all users (admin only).
 
 ### PUT `/api/user/custom-drive`
 
-Update custom drive settings (admin only).
+Update custom drive settings for a user (admin only).
 
 **Request Body:**
 
@@ -164,7 +176,16 @@ Update custom drive settings (admin only).
 }
 ```
 
+**Validation:**
+
+- `enabled`: Optional. Must be a boolean.
+- `path`: Optional. Must be a string representing a valid path.
+- `targetUserId`: Optional. Must be a string.
+- `ignorePatterns`: Optional. Must be an array of strings.
+
 **Response:**
+
+The updated custom drive settings for the target user.
 
 ```json
 {
@@ -178,7 +199,7 @@ Update custom drive settings (admin only).
 
 ### GET `/api/user/onlyoffice-configured`
 
-Check if OnlyOffice is configured (all authenticated users). Returns only whether it's configured, not the actual secrets.
+Check if OnlyOffice is configured on the server. This endpoint is accessible to all authenticated users and only indicates if the integration is active.
 
 **Response:**
 
@@ -190,32 +211,7 @@ Check if OnlyOffice is configured (all authenticated users). Returns only whethe
 
 ### GET `/api/user/onlyoffice-config`
 
-Get OnlyOffice configuration (admin only). Returns configuration details without exposing sensitive secrets.
-
-**Response:**
-
-```json
-{
-  "success": true,
-  "data": {
-    "jwtSecretSet": true,
-    "url": "https://onlyoffice.example.com"
-  }
-}
-```
-
-### PUT `/api/user/onlyoffice-config`
-
-Update OnlyOffice configuration (admin only).
-
-**Request Body:**
-
-```json
-{
-  "jwtSecret": "your_jwt_secret",
-  "url": "https://onlyoffice.example.com"
-}
-```
+Get the current OnlyOffice configuration (admin only). This does not expose the JWT secret.
 
 **Response:**
 
@@ -226,29 +222,55 @@ Update OnlyOffice configuration (admin only).
 }
 ```
 
-**Note:** Both `jwtSecret` and `url` must be provided together, or both must be empty/null to disable OnlyOffice integration.
+### PUT `/api/user/onlyoffice-config`
+
+Update the OnlyOffice configuration (admin only).
+
+**Request Body:**
+
+```json
+{
+  "jwtSecret": "your_jwt_secret",
+  "url": "https://onlyoffice.example.com"
+}
+```
+
+**Validation:**
+
+- `jwtSecret`: Optional. Must be a string.
+- `url`: Optional. Must be a valid URL.
+
+**Note:** Both `jwtSecret` and `url` must be provided together, or both must be empty/null to disable the integration.
+
+**Response:**
+
+The updated OnlyOffice configuration status.
+
+```json
+{
+  "jwtSecretSet": true,
+  "url": "https://onlyoffice.example.com"
+}
+```
 
 ## Agent Configuration
 
 ### GET `/api/user/agent-config`
 
-Get agent configuration (first user only).
+Get the agent configuration (admin only).
 
 **Response:**
 
 ```json
 {
-  "success": true,
-  "data": {
-    "tokenSet": true,
-    "url": "http://host.docker.internal:8080"
-  }
+  "tokenSet": true,
+  "url": "http://host.docker.internal:8080"
 }
 ```
 
 ### PUT `/api/user/agent-config`
 
-Update agent configuration (first user only).
+Update the agent configuration (admin only).
 
 **Request Body:**
 
@@ -259,40 +281,41 @@ Update agent configuration (first user only).
 }
 ```
 
+**Validation:**
+
+- `token`: Optional. Must be a string.
+- `url`: Optional. Must be a valid URL.
+
+**Note:** Both `url` and `token` can be set to `null` to clear the configuration.
+
 **Response:**
+
+The updated agent configuration status.
 
 ```json
 {
-  "success": true,
-  "data": {
-    "tokenSet": true,
-    "url": "http://host.docker.internal:8080"
-  }
+  "tokenSet": true,
+  "url": "http://host.docker.internal:8080"
 }
 ```
-
-**Note:** Both `url` and `token` can be set to `null` to clear configuration.
 
 ## Share Base URL Configuration
 
 ### GET `/api/user/share-base-url-config`
 
-Get share base URL configuration (first user only).
+Get the share base URL configuration (admin only).
 
 **Response:**
 
 ```json
 {
-  "success": true,
-  "data": {
-    "url": "https://share.example.com"
-  }
+  "url": "https://share.example.com"
 }
 ```
 
 ### PUT `/api/user/share-base-url-config`
 
-Update share base URL configuration (first user only).
+Update the share base URL configuration (admin only).
 
 **Request Body:**
 
@@ -302,46 +325,43 @@ Update share base URL configuration (first user only).
 }
 ```
 
+**Validation:**
+
+- `url`: Optional. Must be a valid URL.
+
+**Note:** Set `url` to `null` to clear the configuration and use the request origin instead.
+
 **Response:**
+
+The updated share base URL configuration.
 
 ```json
 {
-  "success": true,
-  "data": {
-    "url": "https://share.example.com"
-  }
+  "url": "https://share.example.com"
 }
 ```
 
-**Note:** Set `url` to `null` to clear configuration and use request origin.
-
 ### GET `/api/user/agent-paths`
 
-Get agent paths (first user only).
+Get configured paths from the agent (admin only).
 
 **Response:**
 
 ```json
 {
-  "success": true,
-  "data": {
-    "paths": ["/mnt/storage", "/data/drive"]
-  }
+  "paths": ["/mnt/storage", "/data/drive"]
 }
 ```
 
 ### GET `/api/user/agent-status`
 
-Check agent status (first user only).
+Check the agent's connection status (admin only).
 
 **Response:**
 
 ```json
 {
-  "success": true,
-  "data": {
-    "isOnline": true
-  }
+  "isOnline": true
 }
 ```
 

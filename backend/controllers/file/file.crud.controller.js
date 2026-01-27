@@ -14,8 +14,8 @@ const {
   getFolderTree,
 } = require('../../models/file.model');
 const { userOperationLock } = require('../../utils/mutex');
-const { validateFileName, validateSortBy, validateSortOrder, validateFileUpload } = require('../../utils/validation');
-const { validateParentId, validateSingleId, validateFileIds } = require('../../utils/controllerHelpers');
+const { validateSortBy, validateSortOrder, validateFileUpload, validateFileName } = require('../../utils/validation');
+const { validateParentId } = require('../../utils/controllerHelpers');
 const { getUserStorageUsage, getUserStorageLimit } = require('../../models/user.model');
 const { getUserCustomDrive } = require('../../models/file/file.cache.model');
 const { safeUnlink } = require('../../utils/fileCleanup');
@@ -66,15 +66,8 @@ async function listFiles(req, res) {
  * Create a new folder
  */
 async function addFolder(req, res) {
-  const { name } = req.body;
-  if (!name || !validateFileName(name)) {
-    return sendError(res, 400, 'Invalid folder name');
-  }
-  const { valid, parentId: validatedParentId, error } = validateParentId(req);
-  if (!valid) {
-    return sendError(res, 400, error);
-  }
-  const folder = await createFolder(name, validatedParentId, req.userId);
+  const { name, parentId } = req.body;
+  const folder = await createFolder(name, parentId, req.userId);
 
   // Log folder creation
   await logAuditEvent(
@@ -83,7 +76,7 @@ async function addFolder(req, res) {
       status: 'success',
       resourceType: 'folder',
       resourceId: folder.id,
-      metadata: { folderName: name, parentId: validatedParentId },
+      metadata: { folderName: name, parentId },
     },
     req
   );
@@ -94,7 +87,7 @@ async function addFolder(req, res) {
     id: folder.id,
     name: folder.name,
     type: folder.type,
-    parentId: validatedParentId,
+    parentId,
     userId: req.userId,
   });
 
@@ -422,10 +415,7 @@ async function uploadFilesBulk(req, res) {
  * Download a file or folder
  */
 async function downloadFile(req, res) {
-  const { valid, id: fileId, error } = validateSingleId(req);
-  if (!valid) {
-    return sendError(res, 400, error);
-  }
+  const { id: fileId } = req.params;
 
   // Check if agent is required - STRICT: block if agent is not confirmed online
   const agentResult = await requireAgentOnline(req);
@@ -531,17 +521,10 @@ async function renameFile(req, res) {
   if (agentResult.error) {
     return sendError(res, agentResult.status, agentResult.message);
   }
-  const { name } = req.body;
-  const { valid, id: validatedId, error } = validateSingleId(req, 'id', 'body');
-  if (!valid) {
-    return sendError(res, 400, error);
-  }
-  if (!name || !validateFileName(name)) {
-    return sendError(res, 400, 'Invalid file name');
-  }
+  const { name, id } = req.body;
 
   try {
-    const file = await renameFileModel(validatedId, name, req.userId);
+    const file = await renameFileModel(id, name, req.userId);
     if (!file) {
       return sendError(res, 404, 'Not found');
     }
@@ -552,16 +535,16 @@ async function renameFile(req, res) {
       {
         status: 'success',
         resourceType: file.type,
-        resourceId: validatedId,
+        resourceId: id,
         metadata: { newName: name, oldName: file.name },
       },
       req
     );
-    logger.info({ fileId: validatedId, newName: name }, 'File renamed');
+    logger.info({ fileId: id, newName: name }, 'File renamed');
 
     // Publish file renamed event
     await publishFileEvent(EventTypes.FILE_RENAMED, {
-      id: validatedId,
+      id,
       name,
       oldName: file.name,
       type: file.type,
@@ -573,7 +556,7 @@ async function renameFile(req, res) {
   } catch (err) {
     // Check if error is agent-related
     if (isAgentOfflineError(err)) {
-      logger.error({ fileId: validatedId, newName: name, error: err.message }, 'Agent error during rename');
+      logger.error({ fileId: id, newName: name, error: err.message }, 'Agent error during rename');
       return sendError(res, AGENT_OFFLINE_STATUS, AGENT_OFFLINE_MESSAGE);
     }
     // Re-throw other errors
@@ -592,14 +575,7 @@ async function downloadFilesBulk(req, res) {
   }
   const agentCheck = agentResult.agentCheck;
 
-  const { valid, ids: validatedIds, error } = validateFileIds(req);
-  if (!valid) {
-    return sendError(res, 400, error);
-  }
-
-  if (validatedIds.length === 0) {
-    return sendError(res, 400, 'No files selected for download');
-  }
+  const { ids } = req.body;
 
   // Additional check: if agent is required, block bulk downloads entirely
   // Bulk downloads require reading all files, which needs agent access
@@ -610,7 +586,7 @@ async function downloadFilesBulk(req, res) {
   try {
     return await userOperationLock(req.userId, async () => {
       // Get all files/folders to download in a single query (bulk operation)
-      const filesToDownload = await getFilesByIds(validatedIds, req.userId);
+      const filesToDownload = await getFilesByIds(ids, req.userId);
 
       if (filesToDownload.length === 0) {
         return sendError(res, 404, 'No files found to download');
@@ -651,16 +627,16 @@ async function downloadFilesBulk(req, res) {
           {
             status: 'success',
             resourceType: 'file',
-            resourceId: validatedIds[0],
+            resourceId: ids[0],
             metadata: {
-              fileCount: validatedIds.length,
-              fileIds: validatedIds,
+              fileCount: ids.length,
+              fileIds: ids,
               fileNames,
             },
           },
           req
         );
-        logger.info({ fileIds: validatedIds, fileNames, count: validatedIds.length }, 'Files downloaded (bulk zip)');
+        logger.info({ fileIds: ids, fileNames, count: ids.length }, 'Files downloaded (bulk zip)');
       });
     });
   } catch (error) {
@@ -669,17 +645,14 @@ async function downloadFilesBulk(req, res) {
       if (!res.headersSent) {
         return sendError(res, AGENT_OFFLINE_STATUS, AGENT_OFFLINE_MESSAGE);
       }
-      logger.error(
-        { fileIds: validatedIds, error: error.message },
-        'Agent error during bulk download (headers already sent)'
-      );
+      logger.error({ fileIds: ids, error: error.message }, 'Agent error during bulk download (headers already sent)');
       return;
     }
     // Re-throw other errors only if headers haven't been sent
     if (!res.headersSent) {
       throw error;
     }
-    logger.error({ fileIds: validatedIds, error: error.message }, 'Error during bulk download (headers already sent)');
+    logger.error({ fileIds: ids, error: error.message }, 'Error during bulk download (headers already sent)');
   }
 }
 

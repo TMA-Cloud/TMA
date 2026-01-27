@@ -3,9 +3,11 @@ const router = express.Router();
 const auth = require('../middleware/auth.middleware');
 const { getConfig, serveFile, callback, getViewerPage } = require('../controllers/onlyoffice.controller');
 const { apiRateLimiter } = require('../middleware/rateLimit.middleware');
+const { validate } = require('../middleware/validation.middleware');
+const { getOnlyOfficeConfigSchema } = require('../utils/validationSchemas');
 
 // Authenticated: get editor config for a file
-router.get('/config/:id', auth, apiRateLimiter, getConfig);
+router.get('/config/:id', auth, apiRateLimiter, getOnlyOfficeConfigSchema, validate, getConfig);
 
 // Authenticated: get standalone viewer HTML page
 router.get('/viewer/:id', auth, apiRateLimiter, getViewerPage);

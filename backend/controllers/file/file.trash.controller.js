@@ -10,7 +10,6 @@ const {
 } = require('../../models/file.model');
 const { validateSortBy, validateSortOrder } = require('../../utils/validation');
 const { publishFileEventsBatch, EventTypes } = require('../../services/fileEvents');
-const { validateFileIds } = require('../../utils/controllerHelpers');
 const { checkAgentForUser } = require('../../utils/agentCheck');
 const { AGENT_OFFLINE_MESSAGE, AGENT_OFFLINE_STATUS } = require('../../utils/agentConstants');
 
@@ -23,17 +22,14 @@ async function deleteFilesController(req, res) {
   if (agentCheck.required && !agentCheck.online) {
     return sendError(res, AGENT_OFFLINE_STATUS, AGENT_OFFLINE_MESSAGE);
   }
-  const { valid, ids: validatedIds, error } = validateFileIds(req);
-  if (!valid) {
-    return sendError(res, 400, error);
-  }
+  const { ids } = req.body;
 
   // Get file info for audit logging and events
-  const fileInfo = await getFileInfo(validatedIds, req.userId);
+  const fileInfo = await getFileInfo(ids, req.userId);
   const fileNames = fileInfo.map(f => f.name);
   const fileTypes = fileInfo.map(f => f.type);
 
-  await deleteFiles(validatedIds, req.userId);
+  await deleteFiles(ids, req.userId);
 
   // Log file deletion (soft delete to trash) with details
   await logAuditEvent(
@@ -41,10 +37,10 @@ async function deleteFilesController(req, res) {
     {
       status: 'success',
       resourceType: fileTypes[0] || 'file', // Use actual type (file/folder)
-      resourceId: validatedIds[0],
+      resourceId: ids[0],
       metadata: {
-        fileCount: validatedIds.length,
-        fileIds: validatedIds,
+        fileCount: ids.length,
+        fileIds: ids,
         fileNames,
         fileTypes,
         permanent: false,
@@ -52,24 +48,7 @@ async function deleteFilesController(req, res) {
     },
     req
   );
-  logger.info({ fileIds: validatedIds, fileNames }, 'Files moved to trash');
-
-  // Publish file deleted events in batch (optimized)
-  await publishFileEventsBatch(
-    fileInfo.map(file => ({
-      eventType: EventTypes.FILE_DELETED,
-      eventData: {
-        id: file.id,
-        name: file.name,
-        type: file.type,
-        parentId: file.parentId || null,
-        userId: req.userId,
-        permanent: false,
-      },
-    }))
-  );
-
-  sendSuccess(res, { success: true });
+  sendSuccess(res, { message: 'Files moved to trash.' });
 }
 
 /**
@@ -86,13 +65,10 @@ async function listTrash(req, res) {
  * Restore files from trash
  */
 async function restoreFilesController(req, res) {
-  const { valid, ids: validatedIds, error } = validateFileIds(req);
-  if (!valid) {
-    return sendError(res, 400, error);
-  }
+  const { ids } = req.body;
 
   // Get file info for audit logging and events (from trash)
-  const fileInfo = await getFileInfo(validatedIds, req.userId, true);
+  const fileInfo = await getFileInfo(ids, req.userId, true);
   const fileNames = fileInfo.map(f => f.name);
   const fileTypes = fileInfo.map(f => f.type);
 
@@ -100,7 +76,7 @@ async function restoreFilesController(req, res) {
     return sendError(res, 404, 'No files found in trash to restore');
   }
 
-  await restoreFiles(validatedIds, req.userId);
+  await restoreFiles(ids, req.userId);
 
   // Log file restore with details
   await logAuditEvent(
@@ -108,17 +84,17 @@ async function restoreFilesController(req, res) {
     {
       status: 'success',
       resourceType: fileTypes[0] || 'file', // Use actual type (file/folder)
-      resourceId: validatedIds[0],
+      resourceId: ids[0],
       metadata: {
-        fileCount: validatedIds.length,
-        fileIds: validatedIds,
+        fileCount: ids.length,
+        fileIds: ids,
         fileNames,
         fileTypes,
       },
     },
     req
   );
-  logger.info({ fileIds: validatedIds, fileNames }, 'Files restored from trash');
+  logger.info({ fileIds: ids, fileNames }, 'Files restored from trash');
 
   // Publish file restored events in batch (optimized)
   await publishFileEventsBatch(
@@ -134,24 +110,21 @@ async function restoreFilesController(req, res) {
     }))
   );
 
-  sendSuccess(res, { success: true, message: `Restored ${fileInfo.length} file(s) from trash` });
+  sendSuccess(res, { message: `Restored ${fileInfo.length} file(s) from trash` });
 }
 
 /**
  * Permanently delete files from trash
  */
 async function deleteForeverController(req, res) {
-  const { valid, ids: validatedIds, error } = validateFileIds(req);
-  if (!valid) {
-    return sendError(res, 400, error);
-  }
+  const { ids } = req.body;
 
   // Get file info for audit logging and events (from trash)
-  const fileInfo = await getFileInfo(validatedIds, req.userId, true);
+  const fileInfo = await getFileInfo(ids, req.userId, true);
   const fileNames = fileInfo.map(f => f.name);
   const fileTypes = fileInfo.map(f => f.type);
 
-  await permanentlyDeleteFiles(validatedIds, req.userId);
+  await permanentlyDeleteFiles(ids, req.userId);
 
   // Log permanent deletion with details
   await logAuditEvent(
@@ -159,10 +132,10 @@ async function deleteForeverController(req, res) {
     {
       status: 'success',
       resourceType: fileTypes[0] || 'file', // Use actual type (file/folder)
-      resourceId: validatedIds[0],
+      resourceId: ids[0],
       metadata: {
-        fileCount: validatedIds.length,
-        fileIds: validatedIds,
+        fileCount: ids.length,
+        fileIds: ids,
         fileNames,
         fileTypes,
         permanent: true,
@@ -170,7 +143,7 @@ async function deleteForeverController(req, res) {
     },
     req
   );
-  logger.info({ fileIds: validatedIds, fileNames }, 'Files permanently deleted');
+  logger.info({ fileIds: ids, fileNames }, 'Files permanently deleted');
 
   // Publish file permanently deleted events in batch (optimized)
   await publishFileEventsBatch(
@@ -187,7 +160,7 @@ async function deleteForeverController(req, res) {
     }))
   );
 
-  sendSuccess(res, { success: true });
+  sendSuccess(res, { message: 'Files permanently deleted.' });
 }
 
 /**
@@ -204,7 +177,7 @@ async function emptyTrashController(req, res) {
   const trashFiles = await getTrashFiles(req.userId);
 
   if (trashFiles.length === 0) {
-    return sendSuccess(res, { success: true, message: 'Trash is already empty' });
+    sendSuccess(res, { message: 'Trash is already empty' });
   }
 
   const allIds = trashFiles.map(f => f.id);
@@ -249,7 +222,7 @@ async function emptyTrashController(req, res) {
     }))
   );
 
-  sendSuccess(res, { success: true, message: `Deleted ${allIds.length} file(s) from trash` });
+  sendSuccess(res, { message: `Deleted ${allIds.length} file(s) from trash` });
 }
 
 module.exports = {
