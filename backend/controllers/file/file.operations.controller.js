@@ -1,7 +1,13 @@
 const { sendError, sendSuccess } = require('../../utils/response');
 const { logger } = require('../../config/logger');
 const { logAuditEvent } = require('../../services/auditLogger');
-const { moveFiles, copyFiles, getFileInfo, getTargetFolderName } = require('../../models/file.model');
+const {
+  moveFiles,
+  copyFiles,
+  getFileInfo,
+  getTargetFolderName,
+  resolveTargetFolderId,
+} = require('../../models/file.model');
 const pool = require('../../config/db');
 const { userOperationLock } = require('../../utils/mutex');
 const { publishFileEventsBatch, EventTypes } = require('../../services/fileEvents');
@@ -19,17 +25,20 @@ async function moveFilesController(req, res) {
     return sendError(res, AGENT_OFFLINE_STATUS, AGENT_OFFLINE_MESSAGE);
   }
 
-  const { ids, parentId } = req.body;
+  const { ids, parentId: requestedParentId } = req.body;
+
+  // Resolve the actual parent folder ID for the paste operation
+  const actualParentId = await resolveTargetFolderId(requestedParentId, req.userId);
 
   // Get file info for audit logging
   const fileInfo = await getFileInfo(ids, req.userId);
   const fileNames = fileInfo.map(f => f.name);
   const fileTypes = fileInfo.map(f => f.type);
 
-  const targetFolderName = await getTargetFolderName(parentId, req.userId);
+  const targetFolderName = await getTargetFolderName(actualParentId, req.userId);
 
   await userOperationLock(req.userId, async () => {
-    await moveFiles(ids, parentId, req.userId);
+    await moveFiles(ids, actualParentId, req.userId);
   });
 
   // Log file move with details
@@ -44,7 +53,7 @@ async function moveFilesController(req, res) {
         fileIds: ids,
         fileNames,
         fileTypes,
-        targetParentId: parentId,
+        targetParentId: actualParentId,
         targetFolderName,
       },
     },
@@ -60,7 +69,7 @@ async function moveFilesController(req, res) {
         id: file.id,
         name: file.name,
         type: file.type,
-        parentId,
+        parentId: actualParentId,
         targetFolderName,
         userId: req.userId,
       },
@@ -79,18 +88,21 @@ async function copyFilesController(req, res) {
   if (agentCheck.required && !agentCheck.online) {
     return sendError(res, AGENT_OFFLINE_STATUS, AGENT_OFFLINE_MESSAGE);
   }
-  const { ids, parentId } = req.body;
+  const { ids, parentId: requestedParentId } = req.body;
+
+  // Resolve the actual parent folder ID for the paste operation
+  const actualParentId = await resolveTargetFolderId(requestedParentId, req.userId);
 
   // Get file info for audit logging
   const fileInfo = await getFileInfo(ids, req.userId);
   const fileNames = fileInfo.map(f => f.name);
   const fileTypes = fileInfo.map(f => f.type);
 
-  const targetFolderName = await getTargetFolderName(parentId, req.userId);
+  const targetFolderName = await getTargetFolderName(actualParentId, req.userId);
 
   try {
     await userOperationLock(req.userId, async () => {
-      await copyFiles(ids, parentId, req.userId);
+      await copyFiles(ids, actualParentId, req.userId);
     });
   } catch (error) {
     // Check if error is agent-related
@@ -113,7 +125,7 @@ async function copyFilesController(req, res) {
         fileIds: ids,
         fileNames,
         fileTypes,
-        targetParentId: parentId,
+        targetParentId: actualParentId,
         targetFolderName,
       },
     },
@@ -125,7 +137,7 @@ async function copyFilesController(req, res) {
   // We find them by matching name, type, and parentId, and created after the copy operation
   const newFilesResult = await pool.query(
     'SELECT id, name, type FROM files WHERE name = ANY($1) AND type = ANY($2) AND parent_id = $3 AND user_id = $4 ORDER BY modified DESC LIMIT $5',
-    [fileNames, fileTypes, parentId, req.userId, ids.length]
+    [fileNames, fileTypes, actualParentId, req.userId, ids.length]
   );
 
   // Publish file copied events in batch (optimized)
@@ -136,7 +148,7 @@ async function copyFilesController(req, res) {
         id: file.id,
         name: file.name,
         type: file.type,
-        parentId,
+        parentId: actualParentId,
         targetFolderName,
         userId: req.userId,
       },

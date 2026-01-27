@@ -8,7 +8,7 @@ const { resolveFilePath, isFilePathEncrypted } = require('../../utils/filePath')
 const { logger } = require('../../config/logger');
 const { invalidateFileCache, invalidateSearchCache, deleteCache, cacheKeys } = require('../../utils/cache');
 const { getUserCustomDrive } = require('./file.cache.model');
-const { getFolderPath, getUniqueFilename, getUniqueFolderPath } = require('./file.utils.model');
+const { getFolderPath, getUniqueFilename, getUniqueFolderPath, getUniqueDbFileName } = require('./file.utils.model');
 const { encryptFile, copyEncryptedFile } = require('../../utils/fileEncryption');
 
 /**
@@ -490,11 +490,14 @@ async function copyEntryWithFile(file, parentId, userId, client, customDrive) {
       }
       newPath = storageName;
 
+      // Get a unique display name for the file in the database
+      const uniqueDisplayName = await getUniqueDbFileName(file.name, parentId, userId);
+
       await client.query(
         'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id, starred, shared, modified) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)',
         [
           newId,
-          file.name,
+          uniqueDisplayName,
           file.type,
           file.size,
           file.mime_type,

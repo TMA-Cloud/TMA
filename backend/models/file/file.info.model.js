@@ -43,7 +43,40 @@ async function getTargetFolderName(folderId, userId) {
   return result.rows[0]?.name || 'Root';
 }
 
+/**
+ * Resolves the target folder ID for a paste operation.
+ * If the targetId refers to a file, it returns the file's parent_id.
+ * If the targetId refers to a folder, it returns the targetId itself.
+ * If targetId is null, it returns null (representing the root).
+ * @param {string|null} targetId - The ID of the item the user intends to paste into/onto.
+ * @param {string} userId - The user ID.
+ * @returns {Promise<string|null>} The ID of the actual parent folder for the paste operation.
+ */
+async function resolveTargetFolderId(targetId, userId) {
+  if (!targetId) {
+    return null; // Root folder
+  }
+
+  const result = await pool.query('SELECT type, parent_id FROM files WHERE id = $1 AND user_id = $2', [
+    targetId,
+    userId,
+  ]);
+
+  if (result.rows.length === 0) {
+    return null; // Target not found, default to root or handle as error? For now, root.
+  }
+
+  const targetEntry = result.rows[0];
+
+  if (targetEntry.type === 'file') {
+    return targetEntry.parent_id; // Return the parent of the file
+  } else {
+    return targetId; // It's a folder, return its own ID
+  }
+}
+
 module.exports = {
   getFileInfo,
   getTargetFolderName,
+  resolveTargetFolderId,
 };

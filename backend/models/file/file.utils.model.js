@@ -85,17 +85,31 @@ async function getFolderPath(parentId, userId) {
     return customDrive.enabled && customDrive.path ? customDrive.path : null;
   }
 
-  const result = await pool.query('SELECT path, type FROM files WHERE id = $1 AND user_id = $2', [parentId, userId]);
+  const result = await pool.query('SELECT path, type, parent_id FROM files WHERE id = $1 AND user_id = $2', [
+    parentId,
+    userId,
+  ]);
 
   if (result.rows.length === 0) {
     return customDrive.enabled && customDrive.path ? customDrive.path : null;
   }
 
-  const folder = result.rows[0];
+  const targetEntry = result.rows[0];
+
+  // If the target is a file, we want its parent folder's path
+  if (targetEntry.type === 'file') {
+    if (targetEntry.path && path.isAbsolute(targetEntry.path)) {
+      // If it's a custom drive file, return the directory name of its path
+      return path.dirname(targetEntry.path);
+    } else {
+      // For regular files, recursively get the path of its database parent_id
+      return getFolderPath(targetEntry.parent_id, userId);
+    }
+  }
 
   // If it's a custom drive folder (has absolute path), use it
-  if (folder.path && path.isAbsolute(folder.path)) {
-    return folder.path;
+  if (targetEntry.path && path.isAbsolute(targetEntry.path)) {
+    return targetEntry.path;
   }
 
   // If custom drive is enabled but folder doesn't have path, use custom drive root
@@ -265,6 +279,41 @@ async function getUniqueFolderPath(folderPath, useAgent = false) {
   return finalPath;
 }
 
+/**
+ * Generates a unique filename in the database if a file with the same name
+ * already exists in the target parent folder for the given user.
+ * @param {string} desiredName - The desired file name.
+ * @param {string} parentId - The parent folder ID.
+ * @param {string} userId - The user ID.
+ * @returns {Promise<string>} A unique file name.
+ */
+async function getUniqueDbFileName(desiredName, parentId, userId) {
+  const ext = path.extname(desiredName);
+  const baseName = path.basename(desiredName, ext);
+
+  let uniqueName = desiredName;
+  let counter = 1;
+
+  while (true) {
+    const res = await pool.query(
+      'SELECT id FROM files WHERE name = $1 AND parent_id = $2 AND user_id = $3 AND type = $4 AND deleted_at IS NULL',
+      [uniqueName, parentId, userId, 'file']
+    );
+
+    if (res.rows.length === 0) {
+      break; // Name is unique
+    }
+
+    uniqueName = generateUniqueName(baseName, ext, counter);
+    counter++;
+
+    if (counter > 10000) {
+      throw new Error('Too many duplicate names in database');
+    }
+  }
+  return uniqueName;
+}
+
 module.exports = {
   SORT_FIELDS,
   buildOrderClause,
@@ -275,4 +324,5 @@ module.exports = {
   getUniqueFilename,
   getUniqueFolderPath,
   generateUniqueName,
+  getUniqueDbFileName,
 };
