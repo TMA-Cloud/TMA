@@ -98,4 +98,4 @@ Some endpoints provide a more specific message and additional data:
 ## Related Topics
 
 - [API Overview](/api/overview) - API reference
-- [Error Codes](errors.md) - Error reference
+- [Error Codes](error-codes.md) - Error reference
