@@ -105,8 +105,7 @@ async function moveFiles(ids, parentId = null, userId) {
       UPDATE files f
       SET
         parent_id = $1,
-        path = COALESCE(v.new_path, f.path),
-        modified = NOW()
+        path = COALESCE(v.new_path, f.path)
       FROM (
         SELECT unnest($2::text[]) AS id, unnest($3::text[]) AS new_path
       ) AS v
@@ -181,8 +180,8 @@ async function copyEntry(id, parentId, userId, client = null, customDrive = null
         // Get the actual filename (in case it was changed due to duplicates)
         const actualName = path.basename(destPath);
 
-        await dbClient.query(
-          'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id, starred, shared, modified) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)',
+        const insertResult = await dbClient.query(
+          'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id, starred, shared, modified) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING modified',
           [
             newId,
             actualName,
@@ -197,6 +196,23 @@ async function copyEntry(id, parentId, userId, client = null, customDrive = null
             file.modified,
           ]
         );
+
+        // Explicitly compare and update modified timestamp if the database overrode it (e.g., via trigger)
+        const insertedModified = insertResult.rows[0].modified;
+        const originalModified = new Date(file.modified);
+        const actualModified = new Date(insertedModified);
+
+        if (Math.abs(originalModified.getTime() - actualModified.getTime()) > 1000) {
+          logger.warn(
+            {
+              fileId: newId,
+              originalModified: originalModified.toISOString(),
+              actualModified: actualModified.toISOString(),
+            },
+            'Modified timestamp was updated by DB on copy, explicitly setting to original (custom drive file in copyEntry)'
+          );
+          await dbClient.query('UPDATE files SET modified = $1 WHERE id = $2', [originalModified, newId]);
+        }
       } catch (error) {
         // If custom drive copy fails, clean up orphaned file via agent
         logger.error('[File] Error copying file to custom drive:', error);
@@ -246,8 +262,8 @@ async function copyEntry(id, parentId, userId, client = null, customDrive = null
       }
       newPath = storageName;
 
-      await dbClient.query(
-        'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id, starred, shared, modified) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)',
+      const insertResult = await dbClient.query(
+        'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id, starred, shared, modified) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING modified',
         [
           newId,
           file.name,
@@ -262,6 +278,23 @@ async function copyEntry(id, parentId, userId, client = null, customDrive = null
           file.modified,
         ]
       );
+
+      // Explicitly compare and update modified timestamp if the database overrode it (e.g., via trigger)
+      const insertedModified = insertResult.rows[0].modified;
+      const originalModified = new Date(file.modified);
+      const actualModified = new Date(insertedModified);
+
+      if (Math.abs(originalModified.getTime() - actualModified.getTime()) > 1000) {
+        logger.warn(
+          {
+            fileId: newId,
+            originalModified: originalModified.toISOString(),
+            actualModified: actualModified.toISOString(),
+          },
+          'Modified timestamp was updated by DB on copy, explicitly setting to original (non-custom drive file in copyEntry)'
+        );
+        await dbClient.query('UPDATE files SET modified = $1 WHERE id = $2', [originalModified, newId]);
+      }
     }
   } else if (file.type === 'folder') {
     // For folders created in custom drive, we need to create them on disk
@@ -278,8 +311,8 @@ async function copyEntry(id, parentId, userId, client = null, customDrive = null
         const actualName = path.basename(finalPath);
         newPath = path.resolve(finalPath);
 
-        await dbClient.query(
-          'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id, starred, shared, modified) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)',
+        const insertResult = await dbClient.query(
+          'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id, starred, shared, modified) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING modified',
           [
             newId,
             actualName,
@@ -294,6 +327,23 @@ async function copyEntry(id, parentId, userId, client = null, customDrive = null
             file.modified,
           ]
         );
+
+        // Explicitly compare and update modified timestamp if the database overrode it (e.g., via trigger)
+        const insertedModified = insertResult.rows[0].modified;
+        const originalModified = new Date(file.modified);
+        const actualModified = new Date(insertedModified);
+
+        if (Math.abs(originalModified.getTime() - actualModified.getTime()) > 1000) {
+          logger.warn(
+            {
+              fileId: newId,
+              originalModified: originalModified.toISOString(),
+              actualModified: actualModified.toISOString(),
+            },
+            'Modified timestamp was updated by DB on copy, explicitly setting to original (custom drive folder in copyEntry)'
+          );
+          await dbClient.query('UPDATE files SET modified = $1 WHERE id = $2', [originalModified, newId]);
+        }
       } catch (error) {
         // If custom drive folder creation fails, clean up orphaned folder via agent
         logger.error('[File] Error creating folder in custom drive during copy:', error);
@@ -316,8 +366,8 @@ async function copyEntry(id, parentId, userId, client = null, customDrive = null
       }
     } else {
       // Regular folder (no path stored)
-      await dbClient.query(
-        'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id, starred, shared, modified) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)',
+      const insertResult = await dbClient.query(
+        'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id, starred, shared, modified) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING modified',
         [
           newId,
           file.name,
@@ -332,6 +382,23 @@ async function copyEntry(id, parentId, userId, client = null, customDrive = null
           file.modified,
         ]
       );
+
+      // Explicitly compare and update modified timestamp if the database overrode it (e.g., via trigger)
+      const insertedModified = insertResult.rows[0].modified;
+      const originalModified = new Date(file.modified);
+      const actualModified = new Date(insertedModified);
+
+      if (Math.abs(originalModified.getTime() - actualModified.getTime()) > 1000) {
+        logger.warn(
+          {
+            fileId: newId,
+            originalModified: originalModified.toISOString(),
+            actualModified: actualModified.toISOString(),
+          },
+          'Modified timestamp was updated by DB on copy, explicitly setting to original (non-custom drive folder)'
+        );
+        await dbClient.query('UPDATE files SET modified = $1 WHERE id = $2', [originalModified, newId]);
+      }
     }
 
     // Recursively copy folder contents (pass driveSettings to avoid redundant queries)
@@ -425,8 +492,8 @@ async function copyEntryWithFile(file, parentId, userId, client, customDrive) {
         // Get the actual filename (in case it was changed due to duplicates)
         const actualName = path.basename(destPath);
 
-        await client.query(
-          'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id, starred, shared, modified) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)',
+        const insertResult = await client.query(
+          'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id, starred, shared, modified) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING modified',
           [
             newId,
             actualName,
@@ -441,6 +508,26 @@ async function copyEntryWithFile(file, parentId, userId, client, customDrive) {
             file.modified,
           ]
         );
+
+        // Explicitly compare and update modified timestamp if the database overrode it (e.g., via trigger)
+        const insertedModified = insertResult.rows[0].modified;
+        // Convert both to Date objects for accurate comparison, or assume they are already Date objects
+        const originalModified = new Date(file.modified);
+        const actualModified = new Date(insertedModified);
+
+        // Compare timestamps with a small tolerance for potential floating point differences
+        // For accurate comparison, truncate to seconds or milliseconds before comparing
+        if (Math.abs(originalModified.getTime() - actualModified.getTime()) > 1000) {
+          logger.warn(
+            {
+              fileId: newId,
+              originalModified: originalModified.toISOString(),
+              actualModified: actualModified.toISOString(),
+            },
+            'Modified timestamp was updated by DB on copy, explicitly setting to original'
+          );
+          await client.query('UPDATE files SET modified = $1 WHERE id = $2', [originalModified, newId]);
+        }
       } catch (error) {
         // If custom drive copy fails, clean up orphaned file via agent
         logger.error('[File] Error copying file to custom drive:', error);
@@ -493,8 +580,8 @@ async function copyEntryWithFile(file, parentId, userId, client, customDrive) {
       // Get a unique display name for the file in the database
       const uniqueDisplayName = await getUniqueDbFileName(file.name, parentId, userId);
 
-      await client.query(
-        'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id, starred, shared, modified) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)',
+      const insertResult = await client.query(
+        'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id, starred, shared, modified) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING modified',
         [
           newId,
           uniqueDisplayName,
@@ -509,6 +596,23 @@ async function copyEntryWithFile(file, parentId, userId, client, customDrive) {
           file.modified,
         ]
       );
+
+      // Explicitly compare and update modified timestamp if the database overrode it (e.g., via trigger)
+      const insertedModified = insertResult.rows[0].modified;
+      const originalModified = new Date(file.modified);
+      const actualModified = new Date(insertedModified);
+
+      if (Math.abs(originalModified.getTime() - actualModified.getTime()) > 1000) {
+        logger.warn(
+          {
+            fileId: newId,
+            originalModified: originalModified.toISOString(),
+            actualModified: actualModified.toISOString(),
+          },
+          'Modified timestamp was updated by DB on copy, explicitly setting to original (non-custom drive file)'
+        );
+        await client.query('UPDATE files SET modified = $1 WHERE id = $2', [originalModified, newId]);
+      }
     }
   } else if (file.type === 'folder') {
     // For folders created in custom drive, we need to create them on disk
@@ -525,8 +629,8 @@ async function copyEntryWithFile(file, parentId, userId, client, customDrive) {
         const actualName = path.basename(finalPath);
         newPath = path.resolve(finalPath);
 
-        await client.query(
-          'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id, starred, shared, modified) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)',
+        const insertResult = await client.query(
+          'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id, starred, shared, modified) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING modified',
           [
             newId,
             actualName,
@@ -541,6 +645,23 @@ async function copyEntryWithFile(file, parentId, userId, client, customDrive) {
             file.modified,
           ]
         );
+
+        // Explicitly compare and update modified timestamp if the database overrode it (e.g., via trigger)
+        const insertedModified = insertResult.rows[0].modified;
+        const originalModified = new Date(file.modified);
+        const actualModified = new Date(insertedModified);
+
+        if (Math.abs(originalModified.getTime() - actualModified.getTime()) > 1000) {
+          logger.warn(
+            {
+              fileId: newId,
+              originalModified: originalModified.toISOString(),
+              actualModified: actualModified.toISOString(),
+            },
+            'Modified timestamp was updated by DB on copy, explicitly setting to original (custom drive folder)'
+          );
+          await client.query('UPDATE files SET modified = $1 WHERE id = $2', [originalModified, newId]);
+        }
       } catch (error) {
         // If custom drive folder creation fails, clean up orphaned folder via agent
         logger.error('[File] Error creating folder in custom drive during copy:', error);

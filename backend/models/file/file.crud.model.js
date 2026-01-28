@@ -386,14 +386,14 @@ async function renameFile(id, name, userId) {
     }
 
     // Only update database if agent operations succeeded
-    await pool.query('UPDATE files SET name = $1, path = $2, modified = NOW() WHERE id = $3 AND user_id = $4', [
+    await pool.query('UPDATE files SET name = $1, path = $2 WHERE id = $3 AND user_id = $4', [
       name,
       path.resolve(newPath),
       id,
       userId,
     ]);
   } else {
-    await pool.query('UPDATE files SET name = $1, modified = NOW() WHERE id = $2 AND user_id = $3', [name, id, userId]);
+    await pool.query('UPDATE files SET name = $1 WHERE id = $2 AND user_id = $3', [name, id, userId]);
   }
 
   // Get updated file info
