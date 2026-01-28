@@ -50,11 +50,11 @@ jobs:
           echo "tag=$TAG" >> $GITHUB_OUTPUT
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           
-      - name: Get agent version from main.go
+      - name: Get agent version from constants.go
         id: agent_version
         shell: bash
         run: |
-          VERSION_MATCH=$(grep 'version.*=' agent/main.go | head -1)
+          VERSION_MATCH=$(grep 'version.*=' agent/constants.go | head -1)
           AGENT_VERSION=$(echo "$VERSION_MATCH" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
           if [ -z "$AGENT_VERSION" ]; then
             echo "Error: Could not extract version from: $VERSION_MATCH"
@@ -114,11 +114,11 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Tag: $TAG, Version: $VERSION"
 
-      - name: Get agent version from main.go
+      - name: Get agent version from constants.go
         id: agent_version
         shell: bash
         run: |
-          VERSION_MATCH=$(grep 'version.*=' agent/main.go | head -1)
+          VERSION_MATCH=$(grep 'version.*=' agent/constants.go | head -1)
           AGENT_VERSION=$(echo "$VERSION_MATCH" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
           if [ -z "$AGENT_VERSION" ]; then
             echo "Error: Could not extract version from: $VERSION_MATCH"
