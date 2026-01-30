@@ -31,7 +31,6 @@ Configure storage limits for users in TMA Cloud (admin only).
 
 - Limits validated against actual disk space
 - Cannot set limit greater than available disk
-- For custom drives, validated against custom drive disk space
 - Frontend and backend validation
 
 ## Storage Usage Monitoring
@@ -48,14 +47,6 @@ Configure storage limits for users in TMA Cloud (admin only).
 - Per-user breakdown
 - Storage trends
 
-## Custom Drive Limits
-
-### Separate Limits
-
-- Custom drives can have separate limits
-- Configured per user
-- Independent from main storage
-
 ## Limit Enforcement
 
 ### Upload Restrictions
@@ -68,7 +59,6 @@ Configure storage limits for users in TMA Cloud (admin only).
 
 - Files count toward limit
 - Trash counts until permanently deleted
-- Custom drives counted separately
 - Usage tracked in database
 - Cache invalidated on file operations
 
@@ -77,10 +67,8 @@ Configure storage limits for users in TMA Cloud (admin only).
 - Set appropriate limits based on use case
 - Monitor usage regularly
 - Adjust limits as needed
-- Consider custom drives for power users
 
 ## Related Topics
 
 - [User Management](user-management.md) - Manage users
-- [Custom Drives](custom-drives.md) - Configure custom storage
 - [Storage Management](/concepts/storage-management) - Storage concepts

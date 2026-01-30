@@ -109,9 +109,6 @@ export interface AppContextType {
   onlyOfficeConfigured: boolean;
   canConfigureOnlyOffice: boolean;
   refreshOnlyOfficeConfig: () => Promise<void>;
-  agentOnline: boolean | null;
-  setAgentOnline: (online: boolean | null) => void;
-  customDriveEnabled: boolean;
 }
 
 export const AppContext = createContext<AppContextType | undefined>(undefined);

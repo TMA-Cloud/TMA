@@ -20,36 +20,22 @@ async function cleanupExpiredTrash() {
 
     try {
       if (f.type === 'file') {
-        // Resolve file path (handles both relative and absolute paths)
         const filePath = resolveFilePath(f.path);
-        // Use agent API for custom drive files (absolute paths)
-        if (path.isAbsolute(f.path)) {
-          const { agentDeletePath } = require('../../utils/agentFileOperations');
-          await agentDeletePath(filePath);
-        } else {
-          await fs.promises.unlink(filePath);
-        }
+        await fs.promises.unlink(filePath);
       } else if (f.type === 'folder') {
-        // For folders, collect them for deletion after files
         if (path.isAbsolute(f.path)) {
           foldersToDelete.push(f.path);
         }
       }
     } catch (error) {
-      // Log error but continue
       logger.error(`[Trash] Error cleaning up ${f.type} ${f.path}:`, error.message);
     }
   }
 
-  // Delete folders (in reverse order) via agent
   foldersToDelete.sort((a, b) => b.length - a.length);
   for (const folderPath of foldersToDelete) {
     try {
-      const { agentListDirectory, agentDeletePath } = require('../../utils/agentFileOperations');
-      const contents = await agentListDirectory(folderPath);
-      if (contents.length === 0) {
-        await agentDeletePath(folderPath);
-      }
+      await fs.promises.rm(folderPath, { recursive: true, force: true });
     } catch (error) {
       logger.error(`[Trash] Error deleting folder ${folderPath}:`, error.message);
     }
@@ -71,13 +57,12 @@ async function cleanupOrphanFiles() {
   }
   const diskSet = new Set(diskFiles);
 
-  // Only check files in UPLOAD_DIR, not custom drive files (which have absolute paths)
+  // Only check files in UPLOAD_DIR (relative paths)
   const dbRes = await pool.query("SELECT id, path FROM files WHERE type = 'file' AND path IS NOT NULL");
   const dbSet = new Set();
   for (const row of dbRes.rows) {
     if (!row.path) continue;
-
-    // Skip custom drive files (they have absolute paths, not relative to UPLOAD_DIR)
+    // Skip absolute paths (legacy; all current paths are relative to UPLOAD_DIR)
     if (path.isAbsolute(row.path)) {
       continue;
     }

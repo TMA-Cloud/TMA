@@ -4,8 +4,6 @@ import { Modal } from "../ui/Modal";
 import { useApp } from "../../contexts/AppContext";
 import { formatFileSize } from "../../utils/fileUtils";
 import { useIsMobile } from "../../hooks/useIsMobile";
-import { useToast } from "../../hooks/useToast";
-
 interface UploadFile {
   id: string;
   file: File;
@@ -20,10 +18,7 @@ export const UploadModal: React.FC = () => {
     uploadFileWithProgress,
     uploadFilesBulk,
     uploadProgress,
-    agentOnline,
-    customDriveEnabled,
   } = useApp();
-  const { showToast } = useToast();
   const [uploadFiles, setUploadFiles] = useState<UploadFile[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -81,14 +76,6 @@ export const UploadModal: React.FC = () => {
 
   const startUpload = async () => {
     if (uploadFiles.length === 0) return;
-
-    if (customDriveEnabled && agentOnline === false) {
-      showToast(
-        "Agent is offline. Please refresh agent connection in Settings.",
-        "error",
-      );
-      return;
-    }
 
     // Close the modal immediately when upload starts
     setUploadModalOpen(false);

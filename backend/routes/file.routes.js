@@ -2,6 +2,7 @@ const express = require('express');
 const {
   listFiles,
   addFolder,
+  checkUploadStorage,
   uploadFile,
   uploadFilesBulk,
   moveFiles,
@@ -27,7 +28,6 @@ const { streamFileEvents } = require('../controllers/file/file.events.controller
 const auth = require('../middleware/auth.middleware');
 const upload = require('../utils/multer');
 const { apiRateLimiter, uploadRateLimiter, sseConnectionLimiter } = require('../middleware/rateLimit.middleware');
-const { attachCustomDrivePath } = require('../middleware/customDrive.middleware');
 const { checkStorageLimit } = require('../middleware/storageLimit.middleware');
 const router = express.Router();
 const { validate } = require('../middleware/validation.middleware');
@@ -45,6 +45,7 @@ const {
   deleteFilesSchema,
   restoreFilesSchema,
   deleteForeverSchema,
+  checkUploadStorageSchema,
 } = require('../utils/validationSchemas');
 
 router.use(auth);
@@ -56,15 +57,9 @@ router.get('/', listFiles);
 router.get('/stats', getFileStats);
 router.get('/search', searchFiles);
 router.post('/folder', addFolderSchema, validate, addFolder);
-router.post('/upload', uploadRateLimiter, attachCustomDrivePath, checkStorageLimit, upload.single('file'), uploadFile);
-router.post(
-  '/upload/bulk',
-  uploadRateLimiter,
-  attachCustomDrivePath,
-  checkStorageLimit,
-  upload.array('files'),
-  uploadFilesBulk
-);
+router.post('/upload/check', uploadRateLimiter, checkUploadStorageSchema, validate, checkUploadStorage);
+router.post('/upload', uploadRateLimiter, checkStorageLimit, upload.single('file'), uploadFile);
+router.post('/upload/bulk', uploadRateLimiter, checkStorageLimit, upload.array('files'), uploadFilesBulk);
 router.post('/move', moveFilesSchema, validate, moveFiles);
 router.post('/copy', copyFilesSchema, validate, copyFiles);
 router.post('/rename', renameFileSchema, validate, renameFile);

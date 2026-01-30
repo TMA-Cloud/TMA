@@ -1,7 +1,6 @@
 /**
  * Storage utility functions
  */
-import { formatFileSize } from "./fileUtils";
 
 /**
  * Storage unit type
@@ -79,45 +78,4 @@ export function numberAndUnitToBytes(
   }
 
   return Math.floor(result);
-}
-
-/**
- * Check if file size would exceed storage limit
- * @param used - Currently used storage in bytes
- * @param total - Total storage limit in bytes
- * @param fileSize - File size in bytes
- * @returns Error message if limit exceeded, null otherwise
- */
-export function checkStorageLimitExceeded(
-  used: number,
-  total: number,
-  fileSize: number,
-): string | null {
-  const newTotal = used + fileSize;
-  if (newTotal > total) {
-    const usedFormatted = formatFileSize(used) || "0 B";
-    const totalFormatted = formatFileSize(total) || "0 B";
-    const availableFormatted =
-      formatFileSize(Math.max(0, total - used)) || "0 B";
-    return `Storage limit exceeded. You have used ${usedFormatted} of ${totalFormatted}. ${availableFormatted} available.`;
-  }
-  return null;
-}
-
-/**
- * Validate storage limit against actual disk space
- * @param limitBytes - Storage limit in bytes
- * @param actualDiskSize - Actual disk size in bytes
- * @returns Error message if limit exceeds disk space, null otherwise
- */
-export function validateStorageLimitAgainstDisk(
-  limitBytes: number,
-  actualDiskSize: number,
-): string | null {
-  if (limitBytes > actualDiskSize) {
-    const limitFormatted = formatFileSize(limitBytes);
-    const actualFormatted = formatFileSize(actualDiskSize);
-    return `Storage limit (${limitFormatted}) cannot exceed actual disk space (${actualFormatted})`;
-  }
-  return null;
 }

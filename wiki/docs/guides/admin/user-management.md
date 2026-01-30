@@ -35,12 +35,6 @@ Manage users in TMA Cloud (admin only).
 - Override default limits
 - Monitor usage
 
-### Custom Drives
-
-- Configure custom drive paths per user
-- Set separate storage limits
-- Enable/disable custom drives
-
 ### MFA Management
 
 - View MFA status per user
@@ -73,4 +67,3 @@ Manage users in TMA Cloud (admin only).
 - [Storage Limits](storage-limits.md) - Configure storage
 - [Signup Control](signup-control.md) - Manage registration
 - [MFA Management](mfa-management.md) - Multi-factor authentication
-- [Custom Drives](custom-drives.md) - Configure custom storage

@@ -1,17 +1,9 @@
 import React, { useRef } from "react";
 import { Modal } from "../ui/Modal";
 import { useApp } from "../../contexts/AppContext";
-import { useToast } from "../../hooks/useToast";
 
 export const RenameModal: React.FC = () => {
-  const {
-    renameTarget,
-    setRenameTarget,
-    renameFile,
-    agentOnline,
-    customDriveEnabled,
-  } = useApp();
-  const { showToast } = useToast();
+  const { renameTarget, setRenameTarget, renameFile } = useApp();
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleClose = () => {
@@ -22,14 +14,6 @@ export const RenameModal: React.FC = () => {
     if (!renameTarget) return;
     const value = inputRef.current?.value ?? "";
     if (!value.trim()) return;
-    if (customDriveEnabled && agentOnline === false) {
-      showToast(
-        "Agent is offline. Please refresh agent connection in Settings.",
-        "error",
-      );
-      handleClose();
-      return;
-    }
     try {
       await renameFile(renameTarget.id, value.trim());
       handleClose();

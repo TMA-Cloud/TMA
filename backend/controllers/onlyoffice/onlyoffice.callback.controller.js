@@ -1,4 +1,3 @@
-const path = require('path');
 const fs = require('fs');
 const http = require('http');
 const https = require('https');
@@ -184,67 +183,13 @@ async function callback(req, res) {
 
       const fileRow = fileResult.rows[0];
 
-      // Determine the file path
-      // - Custom drive files have absolute paths stored directly
-      // - Uploaded files have relative paths that need to be resolved
-      let filePath;
+      // Resolve file path (relative to UPLOAD_DIR)
       if (!fileRow.path) {
         logger.error('[ONLYOFFICE] File has no path:', fileId);
         return res.status(200).json({ error: 0 });
       }
 
-      if (path.isAbsolute(fileRow.path)) {
-        // Custom drive file - normalize absolute path for security
-        filePath = path.resolve(fileRow.path);
-
-        // Security check: verify the file is within the user's configured custom drive path
-        // This prevents unauthorized writes to arbitrary system files
-        const { getUserCustomDriveSettings } = require('../../models/user.model');
-        const customDrive = await getUserCustomDriveSettings(fileRow.user_id);
-
-        if (!customDrive.enabled || !customDrive.path) {
-          logger.error(
-            '[ONLYOFFICE] Cannot save to custom drive file - user does not have custom drive enabled:',
-            fileId
-          );
-          return res.status(200).json({ error: 0 });
-        }
-
-        // Use fs.realpathSync to resolve symlinks and get the actual target path
-        // This prevents symlink attacks where a symlink inside custom drive points outside
-        let realFilePath;
-        let realCustomDrivePath;
-        try {
-          realFilePath = fs.realpathSync(filePath);
-          realCustomDrivePath = fs.realpathSync(customDrive.path);
-        } catch (err) {
-          logger.error('[ONLYOFFICE] Cannot resolve real path:', { fileId, error: err.message });
-          return res.status(200).json({ error: 0 });
-        }
-
-        // Check if real file path starts with real custom drive path (case-insensitive on Windows)
-        const isWithinCustomDrive =
-          process.platform === 'win32'
-            ? realFilePath.toLowerCase().startsWith(realCustomDrivePath.toLowerCase() + path.sep) ||
-              realFilePath.toLowerCase() === realCustomDrivePath.toLowerCase()
-            : realFilePath.startsWith(realCustomDrivePath + path.sep) || realFilePath === realCustomDrivePath;
-
-        if (!isWithinCustomDrive) {
-          logger.error('[ONLYOFFICE] Security violation - file path outside user custom drive:', {
-            fileId,
-            filePath: realFilePath,
-            customDrivePath: realCustomDrivePath,
-            userId: fileRow.user_id,
-          });
-          return res.status(200).json({ error: 0 });
-        }
-
-        // Use the real path for writing to ensure we write to the actual file
-        filePath = realFilePath;
-      } else {
-        // Uploaded file - resolve relative path
-        filePath = resolveFilePath(fileRow.path);
-      }
+      const filePath = resolveFilePath(fileRow.path);
 
       // Download the updated document from OnlyOffice
       let fileBuffer;
@@ -272,9 +217,6 @@ async function callback(req, res) {
           await safeUnlink(tempPath);
           throw error;
         }
-      } else {
-        // For unencrypted files (custom-drive), write directly
-        await fs.promises.writeFile(filePath, fileBuffer);
       }
 
       // Update file size and modified timestamp in database

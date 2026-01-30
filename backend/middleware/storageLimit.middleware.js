@@ -1,4 +1,4 @@
-const { getUserStorageUsage, getUserCustomDriveSettings, getUserStorageLimit } = require('../models/user.model');
+const { getUserStorageUsage, getUserStorageLimit } = require('../models/user.model');
 const { checkStorageLimitExceeded } = require('../utils/storageUtils');
 const { logger } = require('../config/logger');
 
@@ -16,8 +16,6 @@ async function checkStorageLimit(req, res, next) {
       return next();
     }
 
-    const customDrive = await getUserCustomDriveSettings(req.userId);
-
     // For multipart/form-data, Content-Length includes boundaries and headers
     // Estimate actual file size by subtracting multipart overhead (~500 bytes)
     const estimatedFileSize = Math.max(0, contentLength - 500);
@@ -28,7 +26,6 @@ async function checkStorageLimit(req, res, next) {
 
     const checkResult = await checkStorageLimitExceeded({
       fileSize: estimatedFileSize,
-      customDrive,
       used,
       userStorageLimit,
       defaultBasePath: basePath,

@@ -17,7 +17,6 @@ Storage limits and management in TMA Cloud.
 - **Files:** Sum of all file sizes
 - **Folders:** Counted as 0 bytes
 - **Trash:** Counted until permanently deleted
-- **Custom Drives:** Separate limits per drive
 
 ## Storage Usage
 
@@ -36,12 +35,11 @@ Storage limits and management in TMA Cloud.
 
 ## File Encryption
 
-Files are automatically encrypted when custom drive is disabled. Encryption uses AES-256-GCM with authenticated encryption.
+Files are automatically encrypted. Encryption uses AES-256-GCM with authenticated encryption.
 
 ### Behavior
 
-- **Enabled:** Files in `UPLOAD_DIR` are encrypted
-- **Disabled:** Files on custom drives are not encrypted
+- **Scope:** Files in `UPLOAD_DIR` are encrypted
 - **Transparent:** Encryption and decryption happen automatically
 - **Streaming:** Large files processed in streams to avoid memory issues
 
@@ -50,7 +48,6 @@ Files are automatically encrypted when custom drive is disabled. Encryption uses
 - **Read/Write:** All file operations use streaming
 - **Upload:** Files streamed from client to storage
 - **Download:** Files streamed from storage to client
-- **Rename:** OS-level rename for instant operation (custom drives)
 - **Copy:** Files streamed from source to destination
 
 ### Key Configuration
@@ -59,33 +56,6 @@ Files are automatically encrypted when custom drive is disabled. Encryption uses
 - Generate key: `openssl rand -base64 32`
 - Key can be base64, hex, or string (derived with PBKDF2)
 - Development fallback key used if not set (not secure for production)
-
-## Custom Drives
-
-Custom drives allow users to store files on external or mounted storage. Files on custom drives are not encrypted.
-
-### Drive Configuration
-
-- **Admin-Only:** Configured by administrators
-- **Per-User:** Each user can have custom drive
-- **Path Mapping:** Host path to container path (Docker)
-- **Separate Limits:** Custom storage limits per drive
-- **Agent Required:** Docker environments require standalone agent
-
-### Real-Time Synchronization
-
-- File system watcher monitors custom drive directories
-- Changes detected automatically (additions, modifications, deletions)
-- Database updated in real-time
-- Frontend receives updates via Server-Sent Events
-- UI updates without manual refresh
-
-### Use Cases
-
-- External storage devices
-- Network-attached storage (NAS)
-- Mounted volumes
-- Separate storage pools
 
 ## Disk Space Monitoring
 
@@ -122,4 +92,3 @@ Custom drives allow users to store files on external or mounted storage. Files o
 
 - [File System](file-system.md) - How files are stored
 - [Admin Guide: Storage Limits](/guides/admin/storage-limits) - Configure limits
-- [Admin Guide: Custom Drives](/guides/admin/custom-drives) - Setup custom drives

@@ -3,13 +3,8 @@ import { Modal } from "../ui/Modal";
 import { useApp } from "../../contexts/AppContext";
 
 export const CreateFolderModal: React.FC = () => {
-  const {
-    createFolderModalOpen,
-    setCreateFolderModalOpen,
-    createFolder,
-    agentOnline,
-    customDriveEnabled,
-  } = useApp();
+  const { createFolderModalOpen, setCreateFolderModalOpen, createFolder } =
+    useApp();
   const [name, setName] = useState("");
   const [error, setError] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -23,12 +18,6 @@ export const CreateFolderModal: React.FC = () => {
   const handleCreate = async () => {
     if (!name.trim()) {
       setError("Folder name cannot be empty");
-      return;
-    }
-    if (customDriveEnabled && agentOnline === false) {
-      setError(
-        "Agent is offline. Please refresh agent connection in Settings.",
-      );
       return;
     }
     try {

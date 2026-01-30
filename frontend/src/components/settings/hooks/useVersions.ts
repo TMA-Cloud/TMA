@@ -47,8 +47,7 @@ export function useVersions() {
 
       const allUpToDate =
         current.frontend === latest.frontend &&
-        current.backend === latest.backend &&
-        current.agent === latest.agent;
+        current.backend === latest.backend;
 
       showToast(
         allUpToDate ? "All components are up to date" : "Updates are available",

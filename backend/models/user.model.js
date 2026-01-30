@@ -7,7 +7,6 @@
  * - user.auth.model.js - Authentication/session operations (getUserTokenVersion, invalidateAllSessions)
  * - user.storage.model.js - Storage operations (getUserStorageUsage)
  * - user.admin.model.js - Admin operations (isFirstUser, getSignupEnabled, setSignupEnabled, getTotalUserCount, getAllUsersBasic, handleFirstUserSetup)
- * - user.customDrive.model.js - Custom drive operations (getUserCustomDriveSettings, updateUserCustomDriveSettings, getUsersWithCustomDrive)
  * - user.mfa.model.js - MFA operations (getMfaStatus, enableMfa, disableMfa, getMfaSecret)
  */
 
@@ -15,7 +14,6 @@ const crudModels = require('./user/user.crud.model');
 const authModels = require('./user/user.auth.model');
 const storageModels = require('./user/user.storage.model');
 const adminModels = require('./user/user.admin.model');
-const customDriveModels = require('./user/user.customDrive.model');
 const mfaModels = require('./user/user.mfa.model');
 
 module.exports = {
@@ -23,6 +21,5 @@ module.exports = {
   ...authModels,
   ...storageModels,
   ...adminModels,
-  ...customDriveModels,
   ...mfaModels,
 };

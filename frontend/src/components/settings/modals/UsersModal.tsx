@@ -16,17 +16,18 @@ import { formatFileSize } from "../../../utils/fileUtils";
 import {
   bytesToNumberAndUnit,
   numberAndUnitToBytes,
-  validateStorageLimitAgainstDisk,
   type StorageUnit,
 } from "../../../utils/storageUtils";
 
-interface UsersModalProps {
+export interface UsersModalProps {
   isOpen: boolean;
   onClose: () => void;
   usersList: UserSummary[];
   loadingUsersList: boolean;
   usersListError: string | null;
   onRefresh: () => void;
+  onStorageUpdated?: () => void;
+  currentUserId?: string;
 }
 
 /**
@@ -53,6 +54,8 @@ export const UsersModal: React.FC<UsersModalProps> = ({
   loadingUsersList,
   usersListError,
   onRefresh,
+  onStorageUpdated,
+  currentUserId,
 }) => {
   const { showToast } = useToast();
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
@@ -120,6 +123,7 @@ export const UsersModal: React.FC<UsersModalProps> = ({
         setEditValue("");
         setEditUnit("GB");
         onRefresh();
+        if (userId === currentUserId) onStorageUpdated?.();
         return;
       }
 
@@ -144,29 +148,13 @@ export const UsersModal: React.FC<UsersModalProps> = ({
         return;
       }
 
-      // Validate against actual disk space
-      const user = usersList.find((u) => u.id === userId);
-      if (user) {
-        const maxAllowedSize = user.actualDiskSize ?? user.storageTotal;
-        if (maxAllowedSize) {
-          const errorMessage = validateStorageLimitAgainstDisk(
-            bytes,
-            maxAllowedSize,
-          );
-          if (errorMessage) {
-            showToast(errorMessage, "error");
-            setUpdating(null);
-            return;
-          }
-        }
-      }
-
       await updateUserStorageLimit(userId, bytes);
       showToast("Storage limit updated successfully", "success");
       setEditingUserId(null);
       setEditValue("");
       setEditUnit("GB");
       onRefresh();
+      if (userId === currentUserId) onStorageUpdated?.();
     } catch (error) {
       showToast(
         error instanceof Error

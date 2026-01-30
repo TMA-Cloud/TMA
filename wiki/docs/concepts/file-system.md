@@ -41,7 +41,7 @@ File system architecture and organization in TMA Cloud.
 - **Upload:** Temp files streamed directly to destination
 - **Download:** Files streamed from storage to client
 - **ZIP Archives:** Files streamed into archive without buffering
-- **Rename:** OS-level rename for instant operation (custom drives)
+- **Rename:** Change file/folder names
 
 ### Performance
 
@@ -65,19 +65,16 @@ File system architecture and organization in TMA Cloud.
 
 ### File Encryption
 
-- Files encrypted with AES-256-GCM when custom drive is disabled
+- Files encrypted with AES-256-GCM
 - Encryption key configured via `FILE_ENCRYPTION_KEY` environment variable
 - Files stored in format: `[IV][ENCRYPTED_DATA][TAG]`
 - Automatic decryption on download
-- Custom drive files are not encrypted
 
 ### Storage Limits
 
 - Per-user storage limits
 - Configurable by administrators
 - Real-time usage tracking
-- Custom drive support (per-user)
-- Real-time synchronization for custom drives
 
 ## Trash System
 
@@ -106,6 +103,6 @@ File system architecture and organization in TMA Cloud.
 
 ## Related Topics
 
-- [Storage Management](storage-management.md) - Storage limits and custom drives
+- [Storage Management](storage-management.md) - Storage limits
 - [Sharing Model](sharing-model.md) - How files are shared
 - [User Guide: Upload Files](/guides/user/upload-files) - How to use the file system

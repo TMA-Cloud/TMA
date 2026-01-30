@@ -15,12 +15,11 @@ Troubleshooting guide for TMA Cloud.
 ## Debugging Steps
 
 1. Check application logs
-2. Check `tma-agent` logs on the host for custom drive issues
-3. Verify environment variables
-4. Check database connection
-5. Verify Redis connection (if enabled)
-6. Review error messages
-7. Check system resources
+2. Verify environment variables
+3. Check database connection
+4. Verify Redis connection (if enabled)
+5. Review error messages
+6. Check system resources
 
 ## Getting Help
 

@@ -19,7 +19,6 @@ Most endpoints require JWT token sent as httpOnly cookie. Rate limiting: 5 attem
 - **[Users](users.md)** - User management
 - **[OnlyOffice](onlyoffice.md)** - Document editing
 - **[Monitoring](monitoring.md)** - Health and metrics
-- **[Agent](agent.md)** - Agent HTTP endpoints for custom drives
 - **[Errors](errors.md)** - Error handling
 - **[Examples](examples.md)** - Code examples
 
@@ -57,7 +56,7 @@ For validation errors, the response includes a `details` field:
 - `404` - Not Found
 - `422` - Unprocessable Entity (Validation Error)
 - `500` - Server Error
-- `503` - Service Unavailable (agent offline)
+- `503` - Service Unavailable
 
 ## Related Topics
 

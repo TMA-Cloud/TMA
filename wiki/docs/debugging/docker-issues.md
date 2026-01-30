@@ -35,25 +35,6 @@ docker inspect --format='{{.State.Health.Status}}' tma-cloud-app
 3. Check Redis connection (if enabled)
 4. Review health check configuration
 
-## Agent Issues
-
-### Agent Connection Failed
-
-**Check:**
-
-1. Agent is running on host
-2. Agent URL and token configured in Settings
-3. Network connectivity from container to host
-
-**Solutions:**
-
-1. Verify agent is running:
-   - Linux/macOS: `sudo tma-agent service-start`
-   - Windows: `Start-Service tma-agent`
-2. Check agent health: `curl http://host.docker.internal:8080/health`
-3. Verify `docker-compose.yml` has `extra_hosts` for Linux
-4. Check agent token matches in Settings
-
 ## Network Issues
 
 ### Cannot Access Application
@@ -74,5 +55,4 @@ docker inspect --format='{{.State.Health.Status}}' tma-cloud-app
 ## Related Topics
 
 - [Docker Setup](/getting-started/docker) - Docker guide with prebuilt images from `ghcr.io/tma-cloud/tma`
-- [Agent Setup](/getting-started/agent-setup) - Install tma-agent from [GitHub Releases](https://github.com/TMA-Cloud/TMA/releases)
 - [Environment Setup](/getting-started/environment-setup) - Configuration

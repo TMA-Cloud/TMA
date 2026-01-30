@@ -4,7 +4,6 @@ const path = require('path');
 const https = require('https');
 const auth = require('../middleware/auth.middleware');
 const { isFirstUser } = require('../models/user.model');
-const { getAgentVersion } = require('../utils/agentClient');
 const { sendError } = require('../utils/response');
 const { logger } = require('../config/logger');
 const { apiRateLimiter } = require('../middleware/rateLimit.middleware');
@@ -47,12 +46,8 @@ function readPackageVersion(packagePath) {
 // Backend version - read once at startup
 const backendVersion = readPackageVersion(path.join(__dirname, '..', 'package.json'));
 
-router.get('/', async (_req, res) => {
-  const agentVersion = await getAgentVersion();
-  res.json({
-    backend: backendVersion,
-    agent: agentVersion,
-  });
+router.get('/', (_req, res) => {
+  res.json({ backend: backendVersion });
 });
 
 // Proxy endpoint to fetch latest versions from GitHub (avoids CORS issues)
@@ -93,7 +88,10 @@ router.get('/latest', requireAdmin, (req, res) => {
       try {
         const versions = JSON.parse(data);
         responseSent = true;
-        res.json(versions);
+        res.json({
+          frontend: versions.frontend ?? 'unknown',
+          backend: versions.backend ?? 'unknown',
+        });
       } catch (error) {
         console.error('Error parsing versions JSON:', error);
         sendLocalError(500, 'Failed to parse versions data');

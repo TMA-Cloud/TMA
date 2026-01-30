@@ -1,4 +1,4 @@
-const { body, param, query } = require('express-validator');
+const { body, param } = require('express-validator');
 
 const MAX_EMAIL_LENGTH = 254;
 const MAX_PASSWORD_LENGTH = 128;
@@ -124,11 +124,6 @@ const updateOnlyOfficeConfigSchema = [
   body('url').optional({ nullable: true }).isURL().withMessage('Invalid URL format'),
 ];
 
-const updateAgentConfigSchema = [
-  body('token').optional({ nullable: true }).isString().withMessage('Agent token must be a string'),
-  body('url').optional({ nullable: true }).isURL().withMessage('Invalid URL format'),
-];
-
 const updateShareBaseUrlConfigSchema = [
   body('url').optional({ nullable: true }).isURL().withMessage('Invalid URL format'),
 ];
@@ -143,18 +138,6 @@ const updateUserStorageLimitSchema = [
     .optional({ nullable: true })
     .isInt({ min: 1, max: Number.MAX_SAFE_INTEGER })
     .withMessage('Storage limit must be a positive integer or null'),
-];
-
-const getCustomDriveSettingsSchema = [
-  query('targetUserId').optional().isString().withMessage('Target user ID must be a string'),
-];
-
-const updateCustomDriveSettingsSchema = [
-  body('enabled').optional().isBoolean().withMessage('Enabled must be a boolean'),
-  body('path').optional({ nullable: true }).isString().withMessage('Path must be a string'),
-  body('targetUserId').optional().isString().withMessage('Target user ID must be a string'),
-  body('ignorePatterns').optional().isArray().withMessage('Ignore patterns must be an array'),
-  body('ignorePatterns.*').isString().withMessage('All ignore patterns must be strings'),
 ];
 
 const getOnlyOfficeConfigSchema = [
@@ -172,6 +155,11 @@ const downloadFolderZipSchema = [
 const downloadSharedItemSchema = [
   param('token').notEmpty().withMessage('Token is required').isString().withMessage('Token must be a string'),
   param('id').notEmpty().withMessage('File ID is required').isString().withMessage('File ID must be a string'),
+];
+
+/** Check storage before upload (fileSize in bytes) */
+const checkUploadStorageSchema = [
+  body('fileSize').isInt({ min: 0 }).withMessage('fileSize must be a non-negative integer').toInt(),
 ];
 
 module.exports = {
@@ -192,13 +180,11 @@ module.exports = {
   deleteForeverSchema,
   toggleSignupSchema,
   updateOnlyOfficeConfigSchema,
-  updateAgentConfigSchema,
   updateShareBaseUrlConfigSchema,
   updateUserStorageLimitSchema,
-  getCustomDriveSettingsSchema,
-  updateCustomDriveSettingsSchema,
   getOnlyOfficeConfigSchema,
   handleSharedSchema,
   downloadFolderZipSchema,
   downloadSharedItemSchema,
+  checkUploadStorageSchema,
 };

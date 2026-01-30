@@ -81,12 +81,6 @@ mkdir -p uploads
 chown -R 1001:1001 uploads  # Container runs as UID 1001
 ```
 
-### Custom Drive with Docker
-
-Custom drives require the agent running on the host system. **Note:** The agent is required for custom drives in both bare metal and Docker setups.
-
-See [Agent Setup](agent-setup.md) for installation and configuration. Prebuilt `tma-agent` binaries are available in [GitHub Releases](https://github.com/TMA-Cloud/TMA/releases) for Linux, Windows, and macOS.
-
 ## Building Images
 
 ```bash

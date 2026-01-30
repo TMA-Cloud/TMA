@@ -58,14 +58,6 @@ Complete reference for all environment variables in TMA Cloud.
 
 **Note:** All file operations use streaming for large files. No memory limits for file size.
 
-## Custom Drive Agent (Docker Only)
-
-| Variable              | Required | Description                                          |
-| --------------------- | -------- | ---------------------------------------------------- |
-| `AGENT_WEBHOOK_TOKEN` | No       | Token for agent webhook authentication (recommended) |
-
-**Note:** Custom drive paths are configured per-user in Settings → Users (admin-only). See [Agent Architecture](/concepts/architecture#agent-architecture) for token flow details.
-
 ## Logging Configuration
 
 | Variable              | Required | Default                       | Description                                        |

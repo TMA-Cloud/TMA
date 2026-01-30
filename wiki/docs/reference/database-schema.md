@@ -8,23 +8,20 @@ PostgreSQL database schema for TMA Cloud.
 
 User accounts.
 
-| Column                         | Type         | Description                            |
-| ------------------------------ | ------------ | -------------------------------------- |
-| `id`                           | VARCHAR(255) | Primary key                            |
-| `email`                        | VARCHAR(255) | Unique, not null                       |
-| `password`                     | VARCHAR(255) | Hashed (nullable for OAuth)            |
-| `name`                         | VARCHAR(255) | Display name                           |
-| `google_id`                    | VARCHAR(255) | Unique (optional)                      |
-| `mfa_enabled`                  | BOOLEAN      | Default false                          |
-| `mfa_secret`                   | TEXT         | TOTP secret (nullable)                 |
-| `token_version`                | INTEGER      | Token version for revocation           |
-| `last_token_invalidation`      | TIMESTAMP    | Last token invalidation time           |
-| `storage_limit`                | BIGINT       | Custom storage limit (nullable, bytes) |
-| `custom_drive_enabled`         | BOOLEAN      | Custom drive enabled                   |
-| `custom_drive_path`            | TEXT         | Custom drive path (nullable)           |
-| `custom_drive_ignore_patterns` | JSONB        | Ignore patterns (nullable)             |
-| `created_at`                   | TIMESTAMPTZ  | Default now()                          |
-| `updated_at`                   | TIMESTAMPTZ  | Default now()                          |
+| Column                    | Type         | Description                     |
+| ------------------------- | ------------ | ------------------------------- |
+| `id`                      | VARCHAR(255) | Primary key                     |
+| `email`                   | VARCHAR(255) | Unique, not null                |
+| `password`                | VARCHAR(255) | Hashed (nullable for OAuth)     |
+| `name`                    | VARCHAR(255) | Display name                    |
+| `google_id`               | VARCHAR(255) | Unique (optional)               |
+| `mfa_enabled`             | BOOLEAN      | Default false                   |
+| `mfa_secret`              | TEXT         | TOTP secret (nullable)          |
+| `token_version`           | INTEGER      | Token version for revocation    |
+| `last_token_invalidation` | TIMESTAMP    | Last token invalidation time    |
+| `storage_limit`           | BIGINT       | Storage limit (nullable, bytes) |
+| `created_at`              | TIMESTAMPTZ  | Default now()                   |
+| `updated_at`              | TIMESTAMPTZ  | Default now()                   |
 
 ### `files`
 
@@ -74,14 +71,12 @@ Junction table linking share links to files.
 
 Application-wide settings.
 
-| Column           | Type        | Description                           |
-| ---------------- | ----------- | ------------------------------------- |
-| `id`             | TEXT        | Primary key (always 'app_settings')   |
-| `signup_enabled` | BOOLEAN     | Default true                          |
-| `first_user_id`  | TEXT        | FK → users.id (immutable)             |
-| `agent_url`      | TEXT        | Agent API URL (nullable)              |
-| `agent_token`    | TEXT        | Agent authentication token (nullable) |
-| `updated_at`     | TIMESTAMPTZ | Default now()                         |
+| Column           | Type        | Description                         |
+| ---------------- | ----------- | ----------------------------------- |
+| `id`             | TEXT        | Primary key (always 'app_settings') |
+| `signup_enabled` | BOOLEAN     | Default true                        |
+| `first_user_id`  | TEXT        | FK → users.id (immutable)           |
+| `updated_at`     | TIMESTAMPTZ | Default now()                       |
 
 ### `sessions`
 

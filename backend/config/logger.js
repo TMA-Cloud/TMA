@@ -363,8 +363,7 @@ const httpLogger = pinoHttp({
     responseTime: 'duration',
   },
 
-  // Don't log health checks and agent webhooks to reduce noise
-  // Agent webhooks fire frequently during file uploads (every write event)
+  // Don't log health checks to reduce noise
   // Note: ignore() only receives req, not res, so we can't check status codes here
   // Errors are still logged explicitly in the webhook handler (server.js)
   autoLogging: {
@@ -373,11 +372,7 @@ const httpLogger = pinoHttp({
       if (req.url === '/health') {
         return true;
       }
-      // Ignore all webhook requests to reduce log spam
-      // The webhook handler (server.js) has explicit error logging for failures
-      if (req.url === '/api/agent/webhook') {
-        return true;
-      }
+
       return false;
     },
   },

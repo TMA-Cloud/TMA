@@ -90,7 +90,7 @@ function FeaturesSection() {
           />
           <FeatureCard
             title="Admin Controls"
-            description="User management, signup control, storage limits, and custom drive configuration"
+            description="User management, signup control, storage limits"
             icon="⚙️"
             to="/guides/admin/user-management"
           />

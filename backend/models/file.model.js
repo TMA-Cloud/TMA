@@ -3,7 +3,6 @@
  *
  * This file re-exports all file models for backward compatibility.
  * The models have been split into smaller, more maintainable modules:
- * - file.cache.model.js - Cache-related functions
  * - file.utils.model.js - Utility functions (sorting, folder size, path building)
  * - file.crud.model.js - Basic CRUD operations
  * - file.operations.model.js - File operations (move, copy)
@@ -14,7 +13,6 @@
  * - file.info.model.js - File info query utilities
  */
 
-const cacheModels = require('./file/file.cache.model');
 const crudModels = require('./file/file.crud.model');
 const operationsModels = require('./file/file.operations.model');
 const metadataModels = require('./file/file.metadata.model');
@@ -24,7 +22,6 @@ const searchModels = require('./file/file.search.model');
 const infoModels = require('./file/file.info.model');
 
 module.exports = {
-  ...cacheModels,
   ...crudModels,
   ...operationsModels,
   ...metadataModels,

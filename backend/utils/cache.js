@@ -135,7 +135,6 @@ async function invalidateUserCache(userId) {
     `storage:${userId}:*`,
     `search:${userId}:*`,
     `share:${userId}:*`,
-    `custom_drive:${userId}:*`,
   ];
 
   let totalDeleted = 0;
@@ -242,9 +241,6 @@ const cacheKeys = {
   // File stats cache keys
   fileStats: userId => `files:${userId}:stats`,
 
-  // Custom drive cache keys
-  customDrive: userId => `custom_drive:${userId}`,
-
   // Starred files cache keys
   starredFiles: (userId, sortBy = 'modified', order = 'DESC') => {
     return `files:${userId}:starred:${sortBy}:${order}`;
@@ -278,7 +274,6 @@ const cacheKeys = {
   userCount: () => `app:user_count`,
   allUsers: () => `app:all_users`,
   onlyOfficeSettings: () => `app:onlyoffice_settings`,
-  agentSettings: () => `app:agent_settings`,
   shareBaseUrlSettings: () => `app:share_base_url_settings`,
 
   // Google OAuth cache keys

@@ -6,16 +6,14 @@ import {
   checkOnlyOfficeConfigured,
   getSignupStatus,
   hasAuthState,
-  getCustomDriveSettings,
+  checkUploadStorage,
 } from "../utils/api";
 import { useToast } from "../hooks/useToast";
-import { checkStorageLimitExceeded } from "../utils/storageUtils";
-import { extractXhrErrorMessage } from "../utils/errorUtils";
 import {
-  isAgentOfflineError,
-  isAgentOfflineResponse,
+  extractXhrErrorMessage,
   extractResponseError,
-} from "../utils/agentErrorHandler";
+  ApiError,
+} from "../utils/errorUtils";
 import {
   removeUploadProgress,
   updateUploadProgress,
@@ -63,9 +61,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   const [isUploadProgressInteracting, setIsUploadProgressInteracting] =
     useState(false);
   const [onlyOfficeConfigured, setOnlyOfficeConfigured] = useState(false);
-  const [agentOnline, setAgentOnline] = useState<boolean | null>(null);
   const [canConfigureOnlyOffice, setCanConfigureOnlyOffice] = useState(false);
-  const [customDriveEnabled, setCustomDriveEnabled] = useState(false);
   const isUploadProgressInteractingRef = useRef(false);
   const uploadDismissTimeoutsRef = useRef<
     Map<string, ReturnType<typeof setTimeout>>
@@ -83,39 +79,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   >(null); // Track refreshFiles function for SSE
 
   const operationQueue = usePromiseQueue();
-
-  // Helper to check agent status and throw if offline
-  // Only blocks if custom drive is enabled AND agent is offline
-  const ensureAgentOnline = useCallback(() => {
-    if (customDriveEnabled && (agentOnline === false || agentOnline === null)) {
-      throw new Error(
-        "Agent is offline. Please refresh agent connection in Settings.",
-      );
-    }
-  }, [agentOnline, customDriveEnabled]);
-
-  // Helper to handle agent status from API response
-  // IMPORTANT: Only update agent status based on explicit agent errors, not on operation success
-  // Operations on regular files can succeed even when agent is offline
-  const handleAgentStatusFromResponse = useCallback(async (res: Response) => {
-    if (!res.ok) {
-      const errorMessage = await extractResponseError(res);
-      if (isAgentOfflineResponse(res.status, errorMessage)) {
-        setAgentOnline(false);
-      }
-      throw new Error(errorMessage || "Operation failed");
-    }
-    // Don't set agentOnline to true just because an operation succeeded
-    // Only the explicit agent status check should set it to true
-    // This prevents false positives where regular file operations succeed while agent is offline
-  }, []);
-
-  // Helper to handle agent status from error
-  const handleAgentStatusFromError = useCallback((error: unknown) => {
-    if (isAgentOfflineError(error)) {
-      setAgentOnline(false);
-    }
-  }, []);
 
   // Keep ref in sync with state
   useEffect(() => {
@@ -390,7 +353,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
       id?: string;
       starred?: boolean;
       shared?: boolean;
-      isCustomDrive?: boolean;
     },
   ) => {
     const currentPage = currentPathRef.current[0];
@@ -418,10 +380,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
 
     // For "My Files" view
     if (currentPage === "My Files") {
-      // Always accept events from custom drive (they're always shown in My Files)
-      if (eventData.isCustomDrive) {
-        return true;
-      }
       // If we're at root (no parentId), only refresh if event is also at root
       if (!currentParentId) {
         return !eventData.parentId;
@@ -483,7 +441,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
 
           // Filter by relevance - only refresh if event affects current view
           // Uses refs to get current values without causing re-renders
-          // isEventRelevant already handles custom drive events properly
+          // isEventRelevant determines if the event affects the current view
           const isRelevant = isEventRelevant(eventType, eventData);
 
           if (!isRelevant) {
@@ -535,79 +493,55 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   }, [folderStack, currentPath, sortBy, sortOrder, searchQuery, refreshFiles]);
 
   const createFolder = async (name: string) => {
-    ensureAgentOnline();
-    try {
-      const res = await fetch(`/api/files/folder`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          name,
-          parentId: folderStack[folderStack.length - 1],
-        }),
-      });
-      await handleAgentStatusFromResponse(res);
-      await refreshFiles();
-    } catch (error) {
-      handleAgentStatusFromError(error);
-      throw error;
-    }
+    const res = await fetch(`/api/files/folder`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        name,
+        parentId: folderStack[folderStack.length - 1],
+      }),
+    });
+    if (!res.ok) throw new Error(await extractResponseError(res));
+    await refreshFiles();
   };
 
   const uploadFile = async (file: File) => {
-    ensureAgentOnline();
     return operationQueue.add(async () => {
       try {
-        const data = new FormData();
-        const parentId = folderStack[folderStack.length - 1];
-        if (parentId) data.append("parentId", parentId);
-        data.append("file", file);
-        const res = await fetch(`/api/files/upload`, {
-          method: "POST",
-          credentials: "include",
-          body: data,
-        });
-        await handleAgentStatusFromResponse(res);
-        await refreshFiles();
-      } catch (error) {
-        handleAgentStatusFromError(error);
-        throw error;
+        await checkUploadStorage(file.size);
+      } catch (e) {
+        const msg =
+          e instanceof ApiError ? e.message : "Storage limit exceeded.";
+        showToast(msg, "error");
+        throw e;
       }
+      const data = new FormData();
+      const parentId = folderStack[folderStack.length - 1];
+      if (parentId) data.append("parentId", parentId);
+      data.append("file", file);
+      const res = await fetch(`/api/files/upload`, {
+        method: "POST",
+        credentials: "include",
+        body: data,
+      });
+      if (!res.ok) throw new Error(await extractResponseError(res));
+      await refreshFiles();
     });
   };
 
   const uploadFilesBulk = async (files: File[]) => {
-    ensureAgentOnline();
     if (files.length === 0) return;
 
     return operationQueue.add(async () => {
-      // Pre-upload check: Verify storage limits before starting upload
-      const totalSize = files.reduce((sum, file) => sum + file.size, 0);
+      const totalSize = files.reduce((sum, f) => sum + f.size, 0);
       try {
-        const storageRes = await fetch(`/api/user/storage`, {
-          credentials: "include",
-        });
-        if (storageRes.ok) {
-          const storageData = await storageRes.json();
-          const { used, total } = storageData;
-          const errorMessage = checkStorageLimitExceeded(
-            used,
-            total,
-            totalSize,
-          );
-          if (errorMessage) {
-            showToast(errorMessage, "error");
-            throw new Error(errorMessage);
-          }
-        }
-      } catch (error) {
-        if (
-          error instanceof Error &&
-          error.message.includes("Storage limit exceeded")
-        ) {
-          throw error;
-        }
-        console.warn("Failed to check storage limits before upload:", error);
+        await checkUploadStorage(totalSize);
+      } catch (e) {
+        const msg =
+          e instanceof ApiError ? e.message : "Storage limit exceeded.";
+        showToast(msg, "error");
+        throw e;
       }
 
       return new Promise<void>((resolve, reject) => {
@@ -732,17 +666,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
             });
 
             const errorMessage = extractXhrErrorMessage(xhr);
-
-            if (xhr.status === 503) {
-              const lowerMessage = errorMessage.toLowerCase();
-              if (
-                lowerMessage.includes("agent") &&
-                lowerMessage.includes("offline")
-              ) {
-                setAgentOnline(false);
-              }
-            }
-
             showToast(errorMessage || "Bulk upload failed", "error");
             reject(new Error(errorMessage || "Bulk upload failed"));
           }
@@ -758,17 +681,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
           const errorMessage =
             extractXhrErrorMessage(xhr) ||
             "Upload failed. Please check your connection and try again.";
-
-          if (xhr.status === 503) {
-            const lowerMessage = errorMessage.toLowerCase();
-            if (
-              lowerMessage.includes("agent") &&
-              lowerMessage.includes("offline")
-            ) {
-              setAgentOnline(false);
-            }
-          }
-
           showToast(errorMessage, "error");
           reject(new Error(errorMessage));
         });
@@ -791,36 +703,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
     file: File,
     onProgress?: (progress: number) => void,
   ) => {
-    ensureAgentOnline();
     return operationQueue.add(async () => {
-      // Pre-upload check: Verify storage limits before starting upload
       try {
-        const storageRes = await fetch(`/api/user/storage`, {
-          credentials: "include",
-        });
-        if (storageRes.ok) {
-          const storageData = await storageRes.json();
-          const { used, total } = storageData;
-          const errorMessage = checkStorageLimitExceeded(
-            used,
-            total,
-            file.size,
-          );
-          if (errorMessage) {
-            showToast(errorMessage, "error");
-            throw new Error(errorMessage);
-          }
-        }
-      } catch (error) {
-        // If it's our storage limit error, re-throw it
-        if (
-          error instanceof Error &&
-          error.message.includes("Storage limit exceeded")
-        ) {
-          throw error;
-        }
-        // If storage check fails, log but continue (backend will catch it)
-        console.warn("Failed to check storage limits before upload:", error);
+        await checkUploadStorage(file.size);
+      } catch (e) {
+        const msg =
+          e instanceof ApiError ? e.message : "Storage limit exceeded.";
+        showToast(msg, "error");
+        throw e;
       }
 
       return new Promise<void>((resolve, reject) => {
@@ -863,9 +753,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
                 status: "completed",
               }),
             );
-            // Don't set agentOnline here - only explicit status checks should update it
-            // Regular file operations can succeed even when agent is offline
-
             // Use debounced refresh to batch multiple upload completions
             debouncedRefreshFiles(false);
             // Auto-dismiss after 3 seconds
@@ -888,18 +775,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
 
             // Extract and show error message
             const errorMessage = extractXhrErrorMessage(xhr);
-
-            // Check if agent is offline - only set to false if it's actually a 503 agent error
-            if (xhr.status === 503) {
-              const lowerMessage = errorMessage.toLowerCase();
-              if (
-                lowerMessage.includes("agent") &&
-                lowerMessage.includes("offline")
-              ) {
-                setAgentOnline(false);
-              }
-            }
-
             showToast(errorMessage, "error");
 
             // Auto-dismiss failed uploads after 10 seconds
@@ -923,18 +798,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
           const errorMessage =
             extractXhrErrorMessage(xhr) ||
             "Upload failed. Please check your connection and try again.";
-
-          // Check if agent is offline - only for 503 agent errors
-          if (xhr.status === 503) {
-            const lowerMessage = errorMessage.toLowerCase();
-            if (
-              lowerMessage.includes("agent") &&
-              lowerMessage.includes("offline")
-            ) {
-              setAgentOnline(false);
-            }
-          }
-
           showToast(errorMessage, "error");
 
           const errorDismissTimeout = createAutoDismissTimeout(
@@ -960,58 +823,40 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   const moveFiles = async (ids: string[], parentId: string | null) => {
-    ensureAgentOnline();
     return operationQueue.add(async () => {
-      try {
-        const res = await fetch(`/api/files/move`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ ids, parentId }),
-        });
-        await handleAgentStatusFromResponse(res);
-        await refreshFiles();
-      } catch (error) {
-        handleAgentStatusFromError(error);
-        throw error;
-      }
+      const res = await fetch(`/api/files/move`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ ids, parentId }),
+      });
+      if (!res.ok) throw new Error(await extractResponseError(res));
+      await refreshFiles();
     });
   };
 
   const copyFilesApi = async (ids: string[], parentId: string | null) => {
-    ensureAgentOnline();
     return operationQueue.add(async () => {
-      try {
-        const res = await fetch(`/api/files/copy`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ ids, parentId }),
-        });
-        await handleAgentStatusFromResponse(res);
-        await refreshFiles();
-      } catch (error) {
-        handleAgentStatusFromError(error);
-        throw error;
-      }
+      const res = await fetch(`/api/files/copy`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ ids, parentId }),
+      });
+      if (!res.ok) throw new Error(await extractResponseError(res));
+      await refreshFiles();
     });
   };
 
   const renameFileApi = async (id: string, name: string) => {
-    ensureAgentOnline();
-    try {
-      const res = await fetch(`/api/files/rename`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ id, name }),
-      });
-      await handleAgentStatusFromResponse(res);
-      await refreshFiles();
-    } catch (error) {
-      handleAgentStatusFromError(error);
-      throw error;
-    }
+    const res = await fetch(`/api/files/rename`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ id, name }),
+    });
+    if (!res.ok) throw new Error(await extractResponseError(res));
+    await refreshFiles();
   };
 
   const setShareLinkModalOpen = (open: boolean, links: string[] = []) => {
@@ -1027,39 +872,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
     ids: string[],
     shared: boolean,
   ): Promise<Record<string, string>> => {
-    if (customDriveEnabled && agentOnline === false) {
-      const errorMsg =
-        "Agent is offline. Please refresh agent connection in Settings.";
-      showToast(errorMsg, "error");
-      throw new Error(errorMsg);
+    const res = await fetch(`/api/files/share`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ ids, shared }),
+    });
+    if (!res.ok) {
+      const errorMessage = await extractResponseError(res);
+      throw new Error(errorMessage || "Failed to share files");
     }
-    try {
-      const res = await fetch(`/api/files/share`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ ids, shared }),
-      });
-      if (!res.ok) {
-        const errorMessage = await extractResponseError(res);
-        if (isAgentOfflineResponse(res.status, errorMessage)) {
-          setAgentOnline(false);
-          showToast(
-            "Agent is offline. Please refresh agent connection in Settings.",
-            "error",
-          );
-        }
-        throw new Error(errorMessage || "Failed to share files");
-      }
-      // Don't set agentOnline here - only explicit status checks should update it
-      const data = await res.json();
-      const links = buildShareUrlMap(data);
-      await refreshFiles();
-      return links;
-    } catch (error) {
-      handleAgentStatusFromError(error);
-      throw error;
-    }
+    const data = await res.json();
+    const links = buildShareUrlMap(data);
+    await refreshFiles();
+    return links;
   };
 
   const getShareLinks = async (
@@ -1079,121 +905,70 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   const starFilesApi = async (ids: string[], starred: boolean) => {
-    if (customDriveEnabled && agentOnline === false) {
-      const errorMsg =
-        "Agent is offline. Please refresh agent connection in Settings.";
-      showToast(errorMsg, "error");
-      throw new Error(errorMsg);
+    const res = await fetch(`/api/files/star`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ ids, starred }),
+    });
+    if (!res.ok) {
+      const errorMessage = await extractResponseError(res);
+      throw new Error(errorMessage || "Failed to update star status");
     }
-    try {
-      const res = await fetch(`/api/files/star`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ ids, starred }),
-      });
-      if (!res.ok) {
-        const errorMessage = await extractResponseError(res);
-        if (isAgentOfflineResponse(res.status, errorMessage)) {
-          setAgentOnline(false);
-          showToast(
-            "Agent is offline. Please refresh agent connection in Settings.",
-            "error",
-          );
-        }
-        throw new Error(errorMessage || "Failed to update star status");
-      }
-      // Don't set agentOnline here - only explicit status checks should update it
-      await refreshFiles();
-    } catch (error) {
-      handleAgentStatusFromError(error);
-      throw error;
-    }
+    await refreshFiles();
   };
 
   const deleteFilesApi = async (ids: string[]) => {
-    ensureAgentOnline();
-    try {
-      const res = await fetch(`/api/files/delete`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ ids }),
-      });
-      await handleAgentStatusFromResponse(res);
-      await refreshFiles();
-    } catch (error) {
-      handleAgentStatusFromError(error);
-      throw error;
-    }
+    const res = await fetch(`/api/files/delete`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ ids }),
+    });
+    if (!res.ok) throw new Error(await extractResponseError(res));
+    await refreshFiles();
   };
 
   const restoreFilesApi = async (ids: string[]) => {
-    ensureAgentOnline();
-    try {
-      const res = await fetch(`/api/files/trash/restore`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ ids }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        const errorMessage = data.message || "Failed to restore files";
-        if (isAgentOfflineResponse(res.status, errorMessage)) {
-          setAgentOnline(false);
-        }
-        throw new Error(errorMessage);
-      }
-      // Don't set agentOnline here - only explicit status checks should update it
-      await refreshFiles();
-      return data;
-    } catch (error) {
-      handleAgentStatusFromError(error);
-      throw error;
+    const res = await fetch(`/api/files/trash/restore`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ ids }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      const errorMessage = data.message || "Failed to restore files";
+      throw new Error(errorMessage);
     }
+    await refreshFiles();
+    return data;
   };
 
   const deleteForeverApi = async (ids: string[]) => {
-    ensureAgentOnline();
-    try {
-      const res = await fetch(`/api/files/trash/delete`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ ids }),
-      });
-      await handleAgentStatusFromResponse(res);
-      await refreshFiles();
-    } catch (error) {
-      handleAgentStatusFromError(error);
-      throw error;
-    }
+    const res = await fetch(`/api/files/trash/delete`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ ids }),
+    });
+    if (!res.ok) throw new Error(await extractResponseError(res));
+    await refreshFiles();
   };
 
   const emptyTrashApi = async () => {
-    ensureAgentOnline();
-    try {
-      const res = await fetch(`/api/files/trash/empty`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        const errorMessage = data.message || "Failed to empty trash";
-        if (isAgentOfflineResponse(res.status, errorMessage)) {
-          setAgentOnline(false);
-        }
-        throw new Error(errorMessage);
-      }
-      // Don't set agentOnline here - only explicit status checks should update it
-      await refreshFiles();
-      return data;
-    } catch (error) {
-      handleAgentStatusFromError(error);
-      throw error;
+    const res = await fetch(`/api/files/trash/empty`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      const errorMessage = data.message || "Failed to empty trash";
+      throw new Error(errorMessage);
     }
+    await refreshFiles();
+    return data;
   };
 
   const linkToParentShareApi = async (
@@ -1214,7 +989,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   const pasteClipboard = async (parentId: string | null) => {
-    ensureAgentOnline();
     if (!clipboard) return;
 
     return operationQueue.add(async () => {
@@ -1231,9 +1005,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
 
         if (!res.ok) {
           const errorMessage = await extractResponseError(res);
-          if (isAgentOfflineResponse(res.status, errorMessage)) {
-            setAgentOnline(false);
-          }
           throw new Error(
             errorMessage ||
               (clipboard.action === "cut"
@@ -1242,14 +1013,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
           );
         }
 
-        // Don't set agentOnline here - only explicit status checks should update it
-
         setPasteProgress(100);
         await refreshFiles();
         setClipboard(null);
         setTimeout(() => setPasteProgress(null), 300);
       } catch (error) {
-        handleAgentStatusFromError(error);
         setPasteProgress(null);
         throw error;
       }
@@ -1296,17 +1064,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   const downloadFiles = async (ids: string[]) => {
-    ensureAgentOnline();
     if (isDownloading || ids.length === 0) return;
-
-    // Pre-check: block if custom drive is enabled AND agent is offline
-    if (customDriveEnabled && agentOnline === false) {
-      showToast(
-        "Agent is offline. Please refresh agent connection in Settings.",
-        "error",
-      );
-      return;
-    }
 
     setIsDownloading(true);
     try {
@@ -1321,17 +1079,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
 
         if (!res.ok) {
           const errorMessage = await extractResponseError(res);
-          const isAgentError = isAgentOfflineResponse(res.status, errorMessage);
-
-          if (isAgentError) {
-            setAgentOnline(false);
-            showToast(
-              "Agent is offline. Please refresh agent connection in Settings.",
-              "error",
-            );
-          } else {
-            showToast(errorMessage || "Failed to download files", "error");
-          }
+          showToast(errorMessage || "Failed to download files", "error");
           throw new Error(errorMessage || "Failed to download files");
         }
 
@@ -1393,31 +1141,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
           await downloadFileApi(firstId, filename);
         }
       }
-
-      // Don't set agentOnline here - only explicit status checks should update it
-      // Regular file operations can succeed even when agent is offline
     } catch (error) {
-      // Check if it's an agent offline error
       const errorMessage =
         error instanceof Error ? error.message : String(error);
-      const status = (error as { status?: number })?.status;
-
-      // Check both status code and error message
-      const isAgentError =
-        status === 503 ||
-        isAgentOfflineError(error) ||
-        isAgentOfflineResponse(status || 0, errorMessage);
-
-      if (isAgentError) {
-        setAgentOnline(false);
-        showToast(
-          "Agent is offline. Please refresh agent connection in Settings.",
-          "error",
-        );
-      } else {
-        // Show generic error for other failures
-        showToast(errorMessage || "Failed to download files", "error");
-      }
+      showToast(errorMessage || "Failed to download files", "error");
     } finally {
       setIsDownloading(false);
     }
@@ -1441,7 +1168,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, []);
 
-  // Load admin status, OnlyOffice config status, and custom drive settings on mount
+  // Load admin status and OnlyOffice config status on mount
   useEffect(() => {
     const loadAdminStatus = async () => {
       try {
@@ -1452,18 +1179,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         setCanConfigureOnlyOffice(false);
       }
     };
-    const loadCustomDriveSettings = async () => {
-      try {
-        const settings = await getCustomDriveSettings();
-        setCustomDriveEnabled(settings.enabled);
-      } catch {
-        // Error handled silently - assume custom drive is disabled
-        setCustomDriveEnabled(false);
-      }
-    };
     void loadAdminStatus();
     void refreshOnlyOfficeConfig();
-    void loadCustomDriveSettings();
   }, [refreshOnlyOfficeConfig]);
 
   return (
@@ -1536,9 +1253,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         onlyOfficeConfigured,
         canConfigureOnlyOffice,
         refreshOnlyOfficeConfig,
-        agentOnline,
-        setAgentOnline,
-        customDriveEnabled,
       }}
     >
       {children}

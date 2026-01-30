@@ -49,7 +49,7 @@ Validation errors (HTTP status `422`) provide additional detail in a `details` a
 - `422 Unprocessable Entity`: The request was well-formed but could not be processed due to validation errors. Check the `details` field for more information.
 - `429 Too Many Requests`: The user has sent too many requests in a given amount of time.
 - `500 Internal Server Error`: An unexpected condition was encountered on the server.
-- `503 Service Unavailable`: The server is not ready to handle the request, for example, if a required downstream service (like the agent) is offline.
+- `503 Service Unavailable`: The server is not ready to handle the request.
 
 ## Error Handling Best Practices
 

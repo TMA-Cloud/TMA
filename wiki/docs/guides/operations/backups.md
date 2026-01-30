@@ -36,12 +36,6 @@ psql -h localhost -U postgres cloud_storage < backup.sql
 - Preserve file structure
 - Include all user files
 
-### Custom Drives
-
-- Backup custom drive paths
-- Preserve file structure
-- Include all mounted storage
-
 ## Backup Strategies
 
 ### Full Backups

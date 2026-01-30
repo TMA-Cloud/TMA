@@ -204,67 +204,6 @@ export async function toggleSignup(
   });
 }
 
-/**
- * Get user's custom drive settings
- */
-export async function getCustomDriveSettings(targetUserId?: string): Promise<{
-  enabled: boolean;
-  path: string | null;
-  ignorePatterns: string[];
-}> {
-  const url = targetUserId
-    ? `/api/user/custom-drive?targetUserId=${encodeURIComponent(targetUserId)}`
-    : "/api/user/custom-drive";
-  return await apiGet<{
-    enabled: boolean;
-    path: string | null;
-    ignorePatterns: string[];
-  }>(url);
-}
-
-/**
- * Get all users' custom drive settings (admin only)
- */
-export interface UserCustomDriveInfo {
-  id: string;
-  email: string;
-  name: string;
-  createdAt: string;
-  customDrive: {
-    enabled: boolean;
-    path: string | null;
-    ignorePatterns: string[];
-  };
-}
-
-export async function getAllUsersCustomDriveSettings(): Promise<{
-  users: UserCustomDriveInfo[];
-}> {
-  return await apiGet<{ users: UserCustomDriveInfo[] }>(
-    "/api/user/custom-drive/all",
-  );
-}
-
-/**
- * Update user's custom drive settings (admin only)
- */
-export async function updateCustomDriveSettings(
-  enabled: boolean,
-  path: string | null,
-  targetUserId?: string,
-  ignorePatterns?: string[],
-): Promise<{
-  enabled: boolean;
-  path: string | null;
-  ignorePatterns: string[];
-}> {
-  return await apiPut<{
-    enabled: boolean;
-    path: string | null;
-    ignorePatterns: string[];
-  }>("/api/user/custom-drive", { enabled, path, targetUserId, ignorePatterns });
-}
-
 export interface UserSummary {
   id: string;
   name: string;
@@ -274,7 +213,6 @@ export interface UserSummary {
   storageUsed?: number;
   storageLimit?: number | null;
   storageTotal?: number;
-  actualDiskSize?: number; // Actual disk space available (for validation)
 }
 
 export async function fetchAllUsers(): Promise<{
@@ -337,32 +275,6 @@ export async function updateOnlyOfficeConfig(
 }
 
 /**
- * Get agent configuration (admin only)
- */
-export async function getAgentConfig(signal?: AbortSignal): Promise<{
-  tokenSet: boolean;
-  url: string | null;
-}> {
-  return await apiGet<{ tokenSet: boolean; url: string | null }>(
-    "/api/user/agent-config",
-    { signal },
-  );
-}
-
-/**
- * Update agent configuration (admin only)
- */
-export async function updateAgentConfig(
-  token: string | null,
-  url: string | null,
-): Promise<{ tokenSet: boolean; url: string | null }> {
-  return await apiPut<{ tokenSet: boolean; url: string | null }>(
-    "/api/user/agent-config",
-    { token, url },
-  );
-}
-
-/**
  * Get share base URL configuration (admin only)
  */
 export async function getShareBaseUrlConfig(signal?: AbortSignal): Promise<{
@@ -384,34 +296,6 @@ export async function updateShareBaseUrlConfig(
     "/api/user/share-base-url-config",
     { url },
   );
-}
-
-/**
- * Get agent paths (admin only)
- */
-export async function getAgentPaths(): Promise<{ paths: string[] }> {
-  return await apiGet<{ paths: string[] }>("/api/user/agent-paths");
-}
-
-/**
- * Check agent status (admin only)
- */
-export async function checkAgentStatus(): Promise<{ isOnline: boolean }> {
-  return await apiGet<{ isOnline: boolean }>("/api/user/agent-status");
-}
-
-/**
- * Check agent status for current user (non-admin endpoint)
- */
-export async function checkMyAgentStatus(): Promise<{ isOnline: boolean }> {
-  return await apiGet<{ isOnline: boolean }>("/api/user/my-agent-status");
-}
-
-/**
- * Refresh agent connection (admin only)
- */
-export async function refreshAgentConnection(): Promise<{ isOnline: boolean }> {
-  return await apiPost<{ isOnline: boolean }>("/api/user/agent-refresh");
 }
 
 /**
@@ -561,28 +445,23 @@ export async function getBackupCodesCount(): Promise<{ count: number }> {
 export interface VersionInfo {
   frontend: string;
   backend: string;
-  agent: string;
 }
 
 /**
- * Get currently deployed versions for frontend, backend, and agent
- * Backend and agent versions come from server, frontend version is embedded at build time
+ * Get currently deployed versions for frontend and backend.
+ * Backend version comes from server, frontend version is embedded at build time.
  */
 export async function getCurrentVersions(): Promise<VersionInfo> {
-  const backendVersions = await apiGet<{ backend: string; agent: string }>(
-    "/api/version",
-  );
+  const backendVersions = await apiGet<{ backend: string }>("/api/version");
 
-  // Frontend version is embedded at build time, so use it directly
   const frontendVersion =
     typeof __FRONTEND_VERSION__ !== "undefined"
       ? __FRONTEND_VERSION__
       : "unknown";
 
   return {
-    backend: backendVersions.backend,
+    backend: backendVersions.backend ?? "unknown",
     frontend: frontendVersion,
-    agent: backendVersions.agent || "unknown",
   };
 }
 
@@ -592,6 +471,18 @@ export async function getCurrentVersions(): Promise<VersionInfo> {
  */
 export async function fetchLatestVersions(): Promise<VersionInfo> {
   return apiGet<VersionInfo>("/api/version/latest");
+}
+
+/**
+ * Check if an upload of the given size would exceed storage limit.
+ * Call before starting upload so the user sees an error without uploading.
+ * @param fileSize - Size in bytes (single file or total for bulk)
+ * @throws ApiError with status 413 and message if would exceed
+ */
+export async function checkUploadStorage(
+  fileSize: number,
+): Promise<{ allowed: true }> {
+  return apiPost<{ allowed: true }>("/api/files/upload/check", { fileSize });
 }
 
 /**
@@ -623,7 +514,7 @@ export async function downloadFile(
     const error = new Error(
       errorMessage || `Download failed: ${response.statusText}`,
     );
-    // Attach status code to error for agent detection
+    // Attach status code to error for caller
     (error as { status?: number }).status = response.status;
     throw error;
   }

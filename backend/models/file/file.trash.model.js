@@ -200,7 +200,6 @@ async function permanentlyDeleteFiles(ids, userId) {
   const fs = require('fs');
   const { resolveFilePath } = require('../../utils/filePath');
   const { logger } = require('../../config/logger');
-  const { agentDeletePath, agentListDirectory } = require('../../utils/agentFileOperations');
 
   // Separate files and folders for efficient processing
   const filesToDelete = [];
@@ -211,9 +210,8 @@ async function permanentlyDeleteFiles(ids, userId) {
 
     if (f.type === 'file') {
       const filePath = resolveFilePath(f.path);
-      filesToDelete.push({ path: f.path, resolvedPath: filePath, isAbsolute: path.isAbsolute(f.path) });
+      filesToDelete.push({ path: f.path, resolvedPath: filePath });
     } else if (f.type === 'folder') {
-      // Only delete custom drive folders (those with absolute paths)
       if (path.isAbsolute(f.path)) {
         foldersToDelete.push(f.path);
       }
@@ -221,43 +219,26 @@ async function permanentlyDeleteFiles(ids, userId) {
   }
 
   // Delete all files in parallel (bulk operation)
-  const fileDeletePromises = filesToDelete.map(async ({ path: originalPath, resolvedPath, isAbsolute }) => {
+  const fileDeletePromises = filesToDelete.map(async ({ path: originalPath, resolvedPath }) => {
     try {
-      if (isAbsolute) {
-        // Use agent API for custom drive files (absolute paths)
-        await agentDeletePath(resolvedPath);
-      } else {
-        // Regular file - use direct filesystem access
-        await fs.promises.unlink(resolvedPath);
-      }
+      await fs.promises.unlink(resolvedPath);
     } catch (error) {
-      // Log error but continue with other deletions
       logger.error({ err: error, path: originalPath }, `[File] Error deleting file ${originalPath}`);
     }
   });
 
-  // Wait for all file deletions to complete
   await Promise.allSettled(fileDeletePromises);
 
-  // Delete folders (in reverse order to handle nested folders)
-  // Sort by path length descending so deeper folders are deleted first
+  // Delete folders (in reverse order) - use fs.promises.rm with recursive
   foldersToDelete.sort((a, b) => b.length - a.length);
-
-  // Delete folders in parallel (but after files are deleted)
   const folderDeletePromises = foldersToDelete.map(async folderPath => {
     try {
-      // Check if folder is empty via agent before deleting
-      const contents = await agentListDirectory(folderPath);
-      if (contents.length === 0) {
-        await agentDeletePath(folderPath);
-      }
+      await fs.promises.rm(folderPath, { recursive: true, force: true });
     } catch (error) {
-      // Folder might not be empty or already deleted, skip
       logger.error({ err: error, path: folderPath }, `[File] Error deleting folder ${folderPath}`);
     }
   });
 
-  // Wait for all folder deletions to complete
   await Promise.allSettled(folderDeletePromises);
 
   await pool.query('DELETE FROM files WHERE id = ANY($1::text[]) AND user_id = $2', [allIds, userId]);

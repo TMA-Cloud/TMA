@@ -13,7 +13,6 @@ The first user to sign up automatically becomes an administrator with:
 - Storage limit configuration
 - Signup control
 - MFA management
-- Custom drive configuration
 - OnlyOffice settings
 - System settings
 

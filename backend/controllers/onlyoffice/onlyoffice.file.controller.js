@@ -74,8 +74,7 @@ async function serveFile(req, res) {
       return streamEncryptedFile(res, filePath, fileRow.name, fileRow.mimeType || 'application/octet-stream');
     }
 
-    // For unencrypted files (custom drive), use createReadStream instead of sendFile
-    // This handles case-sensitive paths better on Windows
+    // For unencrypted files, stream via createReadStream
     return streamUnencryptedFile(res, filePath, fileRow.name, fileRow.mimeType || 'application/octet-stream');
   } catch (err) {
     logger.error({ err }, '[ONLYOFFICE] Error serving file');

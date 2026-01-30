@@ -8,13 +8,11 @@ import { useToast } from "../../hooks/useToast";
 import { useSignupStatus } from "./hooks/useSignupStatus";
 import { useVersions } from "./hooks/useVersions";
 import { useSessions } from "./hooks/useSessions";
-import { useCustomDriveManagement } from "./hooks/useCustomDriveManagement";
 
 // Components
 import { SettingsHeader } from "./components/SettingsHeader";
 import { ProfileSection } from "./sections/ProfileSection";
 import { StorageSection } from "./sections/StorageSection";
-import { CustomDriveManagementSection } from "./sections/CustomDriveManagementSection";
 import { AdministrationSection } from "./sections/AdministrationSection";
 import { OnlyOfficeSection } from "./sections/OnlyOfficeSection";
 import { ShareBaseUrlSection } from "./sections/ShareBaseUrlSection";
@@ -24,13 +22,11 @@ import { SecuritySection } from "./sections/SecuritySection";
 // Modals
 import { UsersModal } from "./modals/UsersModal";
 import { SessionsModal } from "./modals/SessionsModal";
-import { CustomDriveEnableModal } from "./modals/CustomDriveEnableModal";
-import { CustomDriveDisableModal } from "./modals/CustomDriveDisableModal";
 import { MfaModal } from "./modals/MfaModal";
 
 export const Settings: React.FC = () => {
   const { user } = useAuth();
-  const { usage, loading } = useStorageUsage();
+  const { usage, loading, refresh: refreshStorage } = useStorageUsage();
   const { showToast } = useToast();
 
   // Signup status hook
@@ -63,23 +59,6 @@ export const Settings: React.FC = () => {
     handleRevokeSession,
     handleLogoutAllDevices,
   } = useSessions();
-
-  // Custom drive management hook
-  const {
-    allUsersCustomDrive,
-    loadingAllUsersCustomDrive,
-    updatingUserCustomDrive,
-    userCustomDriveLocalState,
-    setUserCustomDriveLocalState,
-    confirmingUserId,
-    confirmingAction,
-    handleUpdateUserCustomDrive,
-    handleConfirmEnable,
-    handleConfirmDisable,
-    handleCancelConfirmation,
-    handleProceedEnable,
-    handleProceedDisable,
-  } = useCustomDriveManagement(canToggleSignup);
 
   // Users modal state
   const [usersModalOpen, setUsersModalOpen] = useState(false);
@@ -116,14 +95,6 @@ export const Settings: React.FC = () => {
     loadActiveSessions();
   };
 
-  const confirmingUserInfo = confirmingUserId
-    ? allUsersCustomDrive.find((u) => u.id === confirmingUserId)
-    : undefined;
-
-  const confirmingLocalState = confirmingUserId
-    ? userCustomDriveLocalState[confirmingUserId]
-    : undefined;
-
   return (
     <div className="p-6 md:p-8 space-y-8">
       <SettingsHeader
@@ -131,26 +102,11 @@ export const Settings: React.FC = () => {
         usage={usage ?? undefined}
         loading={loading}
       />
-
       {/* Settings Sections */}
       <div className="space-y-8">
         <ProfileSection userName={user?.name} userEmail={user?.email} />
 
         <StorageSection usage={usage ?? undefined} loading={loading} />
-
-        {canToggleSignup && (
-          <CustomDriveManagementSection
-            allUsersCustomDrive={allUsersCustomDrive}
-            loadingAllUsersCustomDrive={loadingAllUsersCustomDrive}
-            updatingUserCustomDrive={updatingUserCustomDrive}
-            userCustomDriveLocalState={userCustomDriveLocalState}
-            setUserCustomDriveLocalState={setUserCustomDriveLocalState}
-            onConfirmEnable={handleConfirmEnable}
-            onConfirmDisable={handleConfirmDisable}
-            onUpdateUserCustomDrive={handleUpdateUserCustomDrive}
-            currentUserId={user?.id}
-          />
-        )}
 
         {canToggleSignup && (
           <AdministrationSection
@@ -201,6 +157,8 @@ export const Settings: React.FC = () => {
         loadingUsersList={loadingUsersList}
         usersListError={usersListError}
         onRefresh={loadUsersList}
+        onStorageUpdated={refreshStorage}
+        currentUserId={user?.id}
       />
 
       <SessionsModal
@@ -211,24 +169,6 @@ export const Settings: React.FC = () => {
         revokingSessionId={revokingSessionId}
         onRefresh={loadActiveSessions}
         onRevokeSession={handleRevokeSession}
-      />
-
-      <CustomDriveEnableModal
-        isOpen={confirmingAction === "enable" && confirmingUserId !== null}
-        onClose={handleCancelConfirmation}
-        userInfo={confirmingUserInfo}
-        onCancel={handleCancelConfirmation}
-        onProceed={handleProceedEnable}
-      />
-
-      <CustomDriveDisableModal
-        isOpen={confirmingAction === "disable" && confirmingUserId !== null}
-        onClose={handleCancelConfirmation}
-        userInfo={confirmingUserInfo}
-        localState={confirmingLocalState}
-        updating={updatingUserCustomDrive === confirmingUserId}
-        onCancel={handleCancelConfirmation}
-        onProceed={handleProceedDisable}
       />
 
       <MfaModal isOpen={mfaModalOpen} onClose={() => setMfaModalOpen(false)} />

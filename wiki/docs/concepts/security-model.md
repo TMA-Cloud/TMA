@@ -61,7 +61,7 @@ All incoming data from clients is strictly validated and sanitized on the backen
 ### File Encryption
 
 - **Algorithm:** AES-256-GCM authenticated encryption
-- **Scope:** Files in `UPLOAD_DIR` (custom drive files excluded)
+- **Scope:** Files in `UPLOAD_DIR`
 - **Key Management:** Environment variable configuration
 - **Stream Processing:** Memory-efficient for large files
 - **Automatic:** Encryption on upload, decryption on download

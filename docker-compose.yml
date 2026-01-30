@@ -15,9 +15,6 @@ services:
       - LOG_FORMAT=json
     volumes:
       - ./uploads:/app/uploads
-    extra_hosts:
-      # Allow access to host services (e.g., tma-agent)
-      - "host.docker.internal:host-gateway"
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:${BPORT:-3000}/health || exit 1"]
       interval: 30s
@@ -91,8 +88,6 @@ services:
       - LOG_FORMAT=json
     volumes:
       - ./uploads:/app/uploads
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     command: node backend/audit-worker.js
     depends_on:
       app:

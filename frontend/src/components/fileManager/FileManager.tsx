@@ -63,8 +63,6 @@ export const FileManager: React.FC = () => {
     setShareLinkModalOpen,
     onlyOfficeConfigured,
     canConfigureOnlyOffice,
-    agentOnline,
-    customDriveEnabled,
   } = useApp();
 
   const { showToast } = useToast();
@@ -534,8 +532,6 @@ export const FileManager: React.FC = () => {
           onRestore={handleRestore}
           onDeleteForever={() => setDeleteForeverModalOpen(true)}
           onEmptyTrash={() => setEmptyTrashModalOpen(true)}
-          agentOnline={agentOnline}
-          customDriveEnabled={customDriveEnabled}
         />
       </div>
 

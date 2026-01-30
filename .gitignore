@@ -8,20 +8,6 @@ agent_data/
 agent_cache/
 agent_logs/
 
-# Go Agent
-agent/agent
-agent/tma-agent
-agent/*.json
-agent/*.exe
-agent/*.dll
-agent/*.so
-agent/*.dylib
-agent/coverage.out
-agent/coverage.html
-agent/go.work
-agent/go.work.sum
-agent/vendor/
-
 # Dependencies
 node_modules/
 

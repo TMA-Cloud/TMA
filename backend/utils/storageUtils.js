@@ -16,69 +16,36 @@ function formatFileSize(bytes) {
 }
 
 /**
- * Get actual disk size for a user (checks custom drive if enabled)
- * @param {Object} customDrive - Custom drive settings {enabled, path}
- * @param {string} defaultBasePath - Default base path for disk space check
- * @returns {Promise<number>} Actual disk size in bytes
+ * Get actual disk size for a path (total size in bytes).
+ * @param {string} basePath - Path to check (e.g. UPLOAD_DIR)
+ * @returns {Promise<number>} Total disk size in bytes
  */
-async function getActualDiskSize(customDrive, defaultBasePath) {
+async function getActualDiskSize(basePath) {
   const checkDiskSpace = require('check-disk-space').default;
-
-  if (customDrive.enabled && customDrive.path) {
-    // For custom drives, use agent API to get actual disk size from the mounted volume
-    // This ensures we get the real size of the custom drive, not the Docker host's size
-    const { agentGetDiskUsage } = require('./agentFileOperations');
-    const { total: size } = await agentGetDiskUsage(customDrive.path);
-    return size;
-  }
-
-  const { size } = await checkDiskSpace(defaultBasePath);
+  const { size } = await checkDiskSpace(basePath);
   return size;
-}
-
-/**
- * Get effective storage limit for a user
- * @param {number|null} userStorageLimit - User's custom storage limit (null = use actual disk)
- * @param {number} actualDiskSize - Actual disk size
- * @returns {number} Effective limit
- */
-function getEffectiveLimit(userStorageLimit, actualDiskSize) {
-  return userStorageLimit !== null ? userStorageLimit : actualDiskSize;
 }
 
 /**
  * Check if file size would exceed storage limit
  * @param {Object} params - Parameters
  * @param {number} fileSize - File size in bytes
- * @param {Object} customDrive - Custom drive settings
  * @param {number} used - Currently used storage
  * @param {number} userStorageLimit - User's storage limit (null = use actual disk)
  * @param {string} defaultBasePath - Default base path
  * @returns {Promise<{exceeded: boolean, message?: string}>}
  */
-async function checkStorageLimitExceeded({ fileSize, customDrive, used, userStorageLimit, defaultBasePath }) {
-  const checkDiskSpace = require('check-disk-space').default;
-
-  if (customDrive.enabled && customDrive.path) {
-    // For custom drives, use agent API to check actual free disk space from the mounted volume
-    // This ensures we get the real free space of the custom drive, not the Docker host's space
-    const { agentGetDiskUsage } = require('./agentFileOperations');
-    const { free: diskFree } = await agentGetDiskUsage(customDrive.path);
-    if (fileSize > diskFree) {
-      return { exceeded: true, message: 'Storage limit exceeded. Not enough space on custom drive.' };
-    }
-    return { exceeded: false };
+async function checkStorageLimitExceeded({ fileSize, used, userStorageLimit }) {
+  if (userStorageLimit === null) {
+    return { exceeded: false }; // No limit set
   }
 
-  // For regular uploads, check against user's storage limit
-  const { size } = await checkDiskSpace(defaultBasePath);
-  const effectiveLimit = getEffectiveLimit(userStorageLimit, size);
   const newTotal = used + fileSize;
 
-  if (newTotal > effectiveLimit) {
+  if (newTotal > userStorageLimit) {
     const usedFormatted = formatFileSize(used);
-    const limitFormatted = formatFileSize(effectiveLimit);
-    const availableFormatted = formatFileSize(Math.max(0, effectiveLimit - used));
+    const limitFormatted = formatFileSize(userStorageLimit);
+    const availableFormatted = formatFileSize(Math.max(0, userStorageLimit - used));
     return {
       exceeded: true,
       message: `Storage limit exceeded. You have used ${usedFormatted} of ${limitFormatted}. ${availableFormatted} available.`,
@@ -91,6 +58,5 @@ async function checkStorageLimitExceeded({ fileSize, customDrive, used, userStor
 module.exports = {
   formatFileSize,
   getActualDiskSize,
-  getEffectiveLimit,
   checkStorageLimitExceeded,
 };

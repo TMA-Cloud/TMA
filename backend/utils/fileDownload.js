@@ -3,8 +3,6 @@ const path = require('path');
 const { resolveFilePath, isValidPath, isFilePathEncrypted } = require('./filePath');
 const { createDecryptStream } = require('./fileEncryption');
 const { logger } = require('../config/logger');
-const { isAgentOfflineError } = require('./agentErrorDetection');
-
 /**
  * Validates and resolves file path for download
  * @param {Object} file - File object from database
@@ -30,33 +28,11 @@ async function validateAndResolveFile(file) {
     return { success: false, error: err.message || 'Invalid file path' };
   }
 
-  // For custom drive files (absolute paths), verify via agent
-  if (path.isAbsolute(file.path)) {
-    try {
-      const { agentStatPath } = require('./agentFileOperations');
-      await agentStatPath(filePath); // Verify file exists via agent
-      // Path is valid - use it as-is (agent will handle case sensitivity)
-    } catch (err) {
-      // Check if error is agent connection related
-      if (isAgentOfflineError(err)) {
-        return {
-          success: false,
-          error: 'Agent is offline. Please refresh agent connection in Settings.',
-          agentOffline: true,
-        };
-      }
-      // File doesn't exist or other error
-      return { success: false, error: 'File not found via agent' };
-    }
-  } else {
-    // Regular file - check filesystem
-    filePath = path.resolve(filePath);
-    if (!fs.existsSync(filePath)) {
-      return { success: false, error: 'File not found on disk' };
-    }
+  filePath = path.resolve(filePath);
+  if (!fs.existsSync(filePath)) {
+    return { success: false, error: 'File not found on disk' };
   }
 
-  // Check if file is encrypted based on path type
   const isEncrypted = isFilePathEncrypted(file.path);
 
   return { success: true, filePath, isEncrypted };
@@ -151,7 +127,6 @@ async function streamEncryptedFile(res, encryptedPath, filename, mimeType) {
 
 /**
  * Stream an unencrypted file to response
- * For custom drive files (absolute paths), uses agent API
  * @param {Object} res - Express response object
  * @param {string} filePath - Path to file
  * @param {string} filename - Original filename for Content-Disposition header
@@ -164,43 +139,6 @@ async function streamUnencryptedFile(res, filePath, filename, mimeType, attachme
   const disposition = attachment ? 'attachment' : 'inline';
   res.setHeader('Content-Disposition', `${disposition}; filename="${filename}"; filename*=UTF-8''${encodedFilename}`);
 
-  // If it's a custom drive path (absolute), use agent API with streaming
-  if (path.isAbsolute(filePath)) {
-    try {
-      const { agentReadFileStream } = require('./agentFileOperations');
-      const stream = agentReadFileStream(filePath);
-
-      // Handle stream errors
-      stream.on('error', error => {
-        logger.error({ error, filePath }, 'Error streaming file via agent');
-        if (!res.headersSent) {
-          res.status(404).json({ error: 'File not found' });
-        } else {
-          res.destroy();
-        }
-      });
-
-      // Handle client disconnect
-      res.on('close', () => {
-        if (!stream.destroyed) {
-          stream.destroy();
-        }
-      });
-
-      // Pipe stream directly to response (memory efficient for large files)
-      stream.pipe(res);
-    } catch (error) {
-      logger.error({ error, filePath }, 'Error creating stream via agent');
-      if (!res.headersSent) {
-        res.status(404).json({ error: 'File not found' });
-      } else {
-        res.destroy();
-      }
-    }
-    return;
-  }
-
-  // Regular file - use direct filesystem access
   const stream = fs.createReadStream(filePath);
 
   stream.on('error', error => {

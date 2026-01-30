@@ -113,88 +113,6 @@ Enable or disable public user signup (admin only).
 }
 ```
 
-## Custom Drive
-
-### GET `/api/user/custom-drive`
-
-Get custom drive settings for a user.
-
-**Query Parameters:**
-
-- `targetUserId` - Target user ID (optional, admin only). If not provided, returns settings for the current user.
-
-**Validation:**
-
-- `targetUserId`: Optional. Must be a string.
-
-**Response:**
-
-```json
-{
-  "enabled": false,
-  "path": null,
-  "ignorePatterns": []
-}
-```
-
-### GET `/api/user/custom-drive/all`
-
-Get custom drive settings for all users (admin only).
-
-**Response:**
-
-```json
-{
-  "users": [
-    {
-      "id": "user_123",
-      "email": "user@example.com",
-      "name": "User Name",
-      "createdAt": "2024-01-01T00:00:00Z",
-      "customDrive": {
-        "enabled": true,
-        "path": "/custom/path",
-        "ignorePatterns": [".git", "node_modules", ".env"]
-      }
-    }
-  ]
-}
-```
-
-### PUT `/api/user/custom-drive`
-
-Update custom drive settings for a user (admin only).
-
-**Request Body:**
-
-```json
-{
-  "enabled": true,
-  "path": "/data/custom_drive",
-  "targetUserId": "user_id",
-  "ignorePatterns": [".git", "node_modules"]
-}
-```
-
-**Validation:**
-
-- `enabled`: Optional. Must be a boolean.
-- `path`: Optional. Must be a string representing a valid path.
-- `targetUserId`: Optional. Must be a string.
-- `ignorePatterns`: Optional. Must be an array of strings.
-
-**Response:**
-
-The updated custom drive settings for the target user.
-
-```json
-{
-  "enabled": true,
-  "path": "/data/custom_drive",
-  "ignorePatterns": [".git", "node_modules"]
-}
-```
-
 ## OnlyOffice Configuration
 
 ### GET `/api/user/onlyoffice-configured`
@@ -253,52 +171,6 @@ The updated OnlyOffice configuration status.
 }
 ```
 
-## Agent Configuration
-
-### GET `/api/user/agent-config`
-
-Get the agent configuration (admin only).
-
-**Response:**
-
-```json
-{
-  "tokenSet": true,
-  "url": "http://host.docker.internal:8080"
-}
-```
-
-### PUT `/api/user/agent-config`
-
-Update the agent configuration (admin only).
-
-**Request Body:**
-
-```json
-{
-  "url": "http://host.docker.internal:8080",
-  "token": "agent_token_here"
-}
-```
-
-**Validation:**
-
-- `token`: Optional. Must be a string.
-- `url`: Optional. Must be a valid URL.
-
-**Note:** Both `url` and `token` can be set to `null` to clear the configuration.
-
-**Response:**
-
-The updated agent configuration status.
-
-```json
-{
-  "tokenSet": true,
-  "url": "http://host.docker.internal:8080"
-}
-```
-
 ## Share Base URL Configuration
 
 ### GET `/api/user/share-base-url-config`
@@ -338,30 +210,6 @@ The updated share base URL configuration.
 ```json
 {
   "url": "https://share.example.com"
-}
-```
-
-### GET `/api/user/agent-paths`
-
-Get configured paths from the agent (admin only).
-
-**Response:**
-
-```json
-{
-  "paths": ["/mnt/storage", "/data/drive"]
-}
-```
-
-### GET `/api/user/agent-status`
-
-Check the agent's connection status (admin only).
-
-**Response:**
-
-```json
-{
-  "isOnline": true
 }
 ```
 

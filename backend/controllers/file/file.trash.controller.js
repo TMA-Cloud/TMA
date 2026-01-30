@@ -10,18 +10,10 @@ const {
 } = require('../../models/file.model');
 const { validateSortBy, validateSortOrder } = require('../../utils/validation');
 const { publishFileEventsBatch, EventTypes } = require('../../services/fileEvents');
-const { checkAgentForUser } = require('../../utils/agentCheck');
-const { AGENT_OFFLINE_MESSAGE, AGENT_OFFLINE_STATUS } = require('../../utils/agentConstants');
-
 /**
  * Delete files/folders (move to trash)
  */
 async function deleteFilesController(req, res) {
-  // Check if agent is required - STRICT: block if agent is not confirmed online
-  const agentCheck = await checkAgentForUser(req.userId);
-  if (agentCheck.required && !agentCheck.online) {
-    return sendError(res, AGENT_OFFLINE_STATUS, AGENT_OFFLINE_MESSAGE);
-  }
   const { ids } = req.body;
 
   // Get file info for audit logging and events
@@ -167,12 +159,6 @@ async function deleteForeverController(req, res) {
  * Empty trash (permanently delete all files in trash)
  */
 async function emptyTrashController(req, res) {
-  // Check if agent is required and online
-  const agentCheck = await checkAgentForUser(req.userId);
-  if (agentCheck.required && !agentCheck.online) {
-    return sendError(res, AGENT_OFFLINE_STATUS, AGENT_OFFLINE_MESSAGE);
-  }
-
   // Get all trash files for the user
   const trashFiles = await getTrashFiles(req.userId);
 

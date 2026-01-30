@@ -38,7 +38,7 @@ http_request_duration_seconds{method="GET"} 0.05
 
 ### GET `/api/version`
 
-Get currently deployed backend and agent versions.
+Get currently deployed backend and frontend versions.
 
 **Rate limiting:** 100 requests per 15 minutes.
 
@@ -47,12 +47,12 @@ Get currently deployed backend and agent versions.
 ```json
 {
   "backend": "2.0.5",
-  "agent": "1.0.1"
+  "frontend": "2.0.5"
 }
 ```
 
 - `backend`: Backend version from package.json
-- `agent`: Agent version from agent API, or `"unknown"` if agent is not configured or unavailable
+- `frontend`: Frontend version from package.json
 
 ### GET `/api/version/latest`
 
@@ -67,8 +67,7 @@ The response format depends on the external update feed. Example:
 ```json
 {
   "frontend": "2.0.5",
-  "backend": "2.0.5",
-  "agent": "1.0.1"
+  "backend": "2.0.5"
 }
 ```
 

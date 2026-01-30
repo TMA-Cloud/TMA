@@ -132,11 +132,8 @@ Access at `http://localhost:5173`
 
 **Audit Worker:** Must run `npm run worker` in production. See [Audit Logs Documentation](/guides/operations/audit-logs).
 
-**Custom Drives:** The agent is required for custom drive functionality. See [Agent Setup](agent-setup.md) for installation and configuration. The agent is needed for both bare metal and Docker setups. Prebuilt `tma-agent` binaries are available in [GitHub Releases](https://github.com/TMA-Cloud/TMA/releases).
-
 ## Next Steps
 
 - [Docker Setup](docker.md) - Alternative installation method
-- [Agent Setup](agent-setup.md) - Agent installation for custom drives
 - [Environment Setup](environment-setup.md) - Detailed environment configuration
 - [First Login](first-login.md) - Create your first account

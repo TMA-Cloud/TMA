@@ -55,21 +55,7 @@ Environment variable reference for TMA Cloud.
 | ------------ | -------- | ----------- | --------------------- |
 | `UPLOAD_DIR` | No       | `./uploads` | Upload directory path |
 
-**Note:** Storage limits are configured per-user in Settings (admin only). Default limit uses actual available disk space. Custom drive settings override per-user (configured in Settings).
-
-**File Operations:**
-
-- All file operations use streaming for large files
-- No memory limits for file size
-- Custom drives use agent API in Docker environments
-
-## Custom Drive Agent (Docker Only)
-
-| Variable              | Required | Description                                          |
-| --------------------- | -------- | ---------------------------------------------------- |
-| `AGENT_WEBHOOK_TOKEN` | No       | Token for agent webhook authentication (recommended) |
-
-**Note:** Set to secure webhook endpoint (optional but recommended).
+**Note:** Storage limits are configured per-user in Settings (admin only). Default limit uses actual available disk space.
 
 ## Logging Configuration
 

@@ -19,4 +19,3 @@ BEGIN
         ADD COLUMN onlyoffice_url TEXT;
     END IF;
 END $$;
-

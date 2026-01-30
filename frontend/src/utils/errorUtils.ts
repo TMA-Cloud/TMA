@@ -40,33 +40,44 @@ export function extractErrorMessage(
  * @param xhr - XMLHttpRequest object
  * @returns Error message string
  */
+const UPLOAD_FAILED_PREFIX = "Upload failed: ";
+
 export function extractXhrErrorMessage(xhr: XMLHttpRequest): string {
-  let errorMessage = `Upload failed: ${xhr.statusText}`;
+  let errorMessage = `${UPLOAD_FAILED_PREFIX}${xhr.statusText}`;
 
   try {
     const responseText = xhr.responseText;
     if (responseText && responseText.trim().length > 0) {
       try {
         const errorData = JSON.parse(responseText);
-        // Try multiple possible error message fields
-        errorMessage =
-          errorData.message || errorData.error || errorData.msg || errorMessage;
+        const bodyMessage =
+          errorData.message || errorData.error || errorData.msg;
+        if (bodyMessage && typeof bodyMessage === "string") {
+          errorMessage = bodyMessage;
+        }
       } catch {
-        // If JSON parsing fails, use responseText if it's short enough
         if (responseText.length < 500) {
-          errorMessage = responseText;
+          errorMessage = responseText.trim() || errorMessage;
         }
       }
     }
   } catch {
-    // If all parsing fails, use status-specific defaults
+    // Use status-specific defaults when parsing fails
     if (xhr.status === 413) {
-      errorMessage = "File too large or storage limit exceeded";
+      errorMessage = "File too large or storage limit exceeded.";
     } else if (xhr.status === 400) {
-      errorMessage = "Invalid file or request";
+      errorMessage = "Invalid file or request.";
     } else if (xhr.status >= 500) {
       errorMessage = "Server error. Please try again later.";
     }
+  }
+
+  // For 413, never show raw status text; use a clear storage-limit message if we have no body message
+  if (
+    xhr.status === 413 &&
+    (errorMessage.startsWith(UPLOAD_FAILED_PREFIX) || !errorMessage.trim())
+  ) {
+    errorMessage = "File too large or storage limit exceeded.";
   }
 
   return errorMessage;
@@ -83,6 +94,18 @@ export function getErrorMessage(
   fallback = "An error occurred",
 ): string {
   return extractErrorMessage(error, fallback);
+}
+
+/**
+ * Extract error message from fetch Response
+ */
+export async function extractResponseError(res: Response): Promise<string> {
+  try {
+    const data = await res.json();
+    return data.message || data.error || res.statusText;
+  } catch {
+    return res.statusText;
+  }
 }
 
 /**

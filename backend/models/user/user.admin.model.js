@@ -85,35 +85,45 @@ async function getAllUsersBasic() {
   const cached = await getCache(cacheKey);
 
   if (cached !== null) {
-    // Cache hit - fetch emails and MFA status separately from database (emails not cached for security)
-    // This gives us cache performance while protecting sensitive email data
-    const emailResult = await pool.query('SELECT id, email, mfa_enabled FROM users ORDER BY created_at ASC');
-    const emailMap = new Map(
-      emailResult.rows.map(row => [row.id, { email: row.email, mfa_enabled: row.mfa_enabled || false }])
+    // Cache hit - fetch emails, MFA, and storage_limit from database (emails not cached for security)
+    const freshResult = await pool.query(
+      'SELECT id, email, mfa_enabled, storage_limit FROM users ORDER BY created_at ASC'
+    );
+    const freshMap = new Map(
+      freshResult.rows.map(row => [
+        row.id,
+        {
+          email: row.email,
+          mfa_enabled: row.mfa_enabled || false,
+          storage_limit: row.storage_limit != null ? Number(row.storage_limit) : null,
+        },
+      ])
     );
 
-    // Merge cached data with fresh emails and MFA status
     return cached.map(user => {
-      const freshData = emailMap.get(user.id);
+      const fresh = freshMap.get(user.id);
       return {
         ...user,
-        email: freshData?.email || null,
-        mfa_enabled: freshData?.mfa_enabled || false,
+        email: fresh?.email ?? null,
+        mfa_enabled: fresh?.mfa_enabled ?? false,
+        storage_limit: fresh?.storage_limit ?? null,
       };
     });
   }
 
   // Cache miss - query database
-  const result = await pool.query('SELECT id, email, name, created_at, mfa_enabled FROM users ORDER BY created_at ASC');
+  const result = await pool.query(
+    'SELECT id, email, name, created_at, mfa_enabled, storage_limit FROM users ORDER BY created_at ASC'
+  );
   const users = result.rows;
 
   // Cache users WITHOUT emails for security (emails are sensitive PII)
-  // If Redis is compromised, attackers won't get a clean email dump
   const usersWithoutEmails = users.map(user => ({
     id: user.id,
     name: user.name,
     created_at: user.created_at,
     mfa_enabled: user.mfa_enabled || false,
+    storage_limit: user.storage_limit != null ? Number(user.storage_limit) : null,
   }));
   await setCache(cacheKey, usersWithoutEmails, 120);
 
@@ -289,119 +299,6 @@ async function setOnlyOfficeSettings(jwtSecret, url, userId) {
 
     // Log security event
     logger.info(`[SECURITY] OnlyOffice settings updated by first user (ID: ${userId})`);
-  } catch (err) {
-    await client.query('ROLLBACK');
-    throw err;
-  } finally {
-    client.release();
-  }
-}
-
-async function getAgentSettings() {
-  // Try to get from cache first
-  const cacheKey = cacheKeys.agentSettings();
-  const cached = await getCache(cacheKey);
-  if (cached !== null) {
-    return cached;
-  }
-
-  // Cache miss - query database
-  const result = await pool.query('SELECT agent_url, agent_token FROM app_settings WHERE id = $1', ['app_settings']);
-
-  const settings = {
-    url: null,
-    token: null,
-  };
-
-  if (result.rows.length > 0) {
-    settings.url = result.rows[0].agent_url || null;
-    settings.token = result.rows[0].agent_token || null;
-  }
-
-  // Cache the result (5 minutes TTL)
-  await setCache(cacheKey, settings, DEFAULT_TTL);
-
-  return settings;
-}
-
-async function setAgentSettings(url, token, userId) {
-  // Use transaction to ensure atomicity and verify user is first user
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-
-    // Verify user is the first user using stored first_user_id
-    const settingsResult = await client.query('SELECT first_user_id FROM app_settings WHERE id = $1', ['app_settings']);
-
-    if (settingsResult.rows.length === 0) {
-      throw new Error('App settings not found');
-    }
-
-    const storedFirstUserId = settingsResult.rows[0].first_user_id;
-
-    // If first_user_id is not set yet, set it now (should only happen once)
-    if (!storedFirstUserId) {
-      // Get the actual first user
-      const firstUserResult = await client.query('SELECT id FROM users ORDER BY created_at ASC LIMIT 1 FOR UPDATE');
-
-      if (firstUserResult.rows.length === 0) {
-        throw new Error('No users exist');
-      }
-
-      const actualFirstUserId = firstUserResult.rows[0].id;
-
-      // Only allow if the requesting user is the actual first user
-      if (actualFirstUserId !== userId) {
-        await client.query('ROLLBACK');
-        throw new Error('Only the first user can configure agent settings');
-      }
-
-      // Set the first_user_id (immutable after this point)
-      await client.query('UPDATE app_settings SET first_user_id = $1 WHERE id = $2 AND first_user_id IS NULL', [
-        actualFirstUserId,
-        'app_settings',
-      ]);
-    } else if (storedFirstUserId !== userId) {
-      // Verify the requesting user matches the stored first user ID
-      await client.query('ROLLBACK');
-      throw new Error('Only the first user can configure agent settings');
-    }
-
-    // Validate inputs (allow null to clear settings)
-    if (url !== null && (typeof url !== 'string' || url.trim().length === 0)) {
-      await client.query('ROLLBACK');
-      throw new Error('Agent URL must be a non-empty string or null');
-    }
-
-    if (token !== null && (typeof token !== 'string' || token.trim().length === 0)) {
-      await client.query('ROLLBACK');
-      throw new Error('Agent token must be a non-empty string or null');
-    }
-
-    // Validate URL format if provided
-    if (url !== null) {
-      try {
-        new URL(url);
-      } catch {
-        await client.query('ROLLBACK');
-        throw new Error('Invalid URL format');
-      }
-    }
-
-    // Update agent settings
-    await client.query('UPDATE app_settings SET agent_url = $1, agent_token = $2, updated_at = NOW() WHERE id = $3', [
-      url,
-      token,
-      'app_settings',
-    ]);
-
-    await client.query('COMMIT');
-
-    // Invalidate agent settings cache
-    await deleteCache(cacheKeys.agentSettings());
-
-    // Log security event
-    logger.info(`[SECURITY] Agent settings updated by first user (ID: ${userId})`);
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;
@@ -612,18 +509,9 @@ async function setUserStorageLimit(userId, targetUserId, storageLimit) {
       }
 
       // Validate against actual disk space
-      const customDriveResult = await client.query(
-        'SELECT custom_drive_enabled, custom_drive_path FROM users WHERE id = $1',
-        [targetUserId]
-      );
-
       const { getActualDiskSize } = require('../../utils/storageUtils');
-      const customDrive = {
-        enabled: customDriveResult.rows.length > 0 && customDriveResult.rows[0].custom_drive_enabled,
-        path: customDriveResult.rows.length > 0 ? customDriveResult.rows[0].custom_drive_path : null,
-      };
       const basePath = process.env.UPLOAD_DIR || __dirname;
-      const actualDiskSize = await getActualDiskSize(customDrive, basePath);
+      const actualDiskSize = await getActualDiskSize(basePath);
 
       // Storage limit cannot exceed actual available disk space
       if (limit > actualDiskSize) {
@@ -666,8 +554,6 @@ module.exports = {
   getAllUsersBasic,
   getOnlyOfficeSettings,
   setOnlyOfficeSettings,
-  getAgentSettings,
-  setAgentSettings,
   getShareBaseUrlSettings,
   setShareBaseUrlSettings,
   handleFirstUserSetup,

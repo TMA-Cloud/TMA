@@ -11,7 +11,6 @@ TMA Cloud is a self-hosted cloud storage platform that provides:
 - File sharing capabilities
 - Online document editing (OnlyOffice)
 - Comprehensive audit logging
-- Custom drive support
 
 ## Prerequisites
 
@@ -26,9 +25,8 @@ Before you begin, ensure you have:
 
 1. **[Installation Guide](installation.md)** - Step-by-step installation instructions
 2. **[Docker Setup](docker.md)** - Deploy using Docker with prebuilt images from `ghcr.io/tma-cloud/tma`
-3. **[Agent Setup](agent-setup.md)** - Download tma-agent from [GitHub Releases](https://github.com/TMA-Cloud/TMA/releases) for custom drives
-4. **[Environment Setup](environment-setup.md)** - Configure environment variables
-5. **[First Login](first-login.md)** - Create your first account
+3. **[Environment Setup](environment-setup.md)** - Configure environment variables
+4. **[First Login](first-login.md)** - Create your first account
 
 ## Next Steps
 

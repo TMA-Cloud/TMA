@@ -3,8 +3,6 @@ const archiver = require('archiver');
 const { resolveFilePath, isValidPath, isFilePathEncrypted } = require('./filePath');
 const { createDecryptStream } = require('./fileEncryption');
 const { logger } = require('../config/logger');
-const { agentReadFileStream } = require('./agentFileOperations');
-const { isAgentOfflineError } = require('./agentErrorDetection');
 
 /**
  * Create a ZIP archive from a tree of entries and pipe it to a response
@@ -68,28 +66,16 @@ async function createZipArchive(res, archiveName, entries, rootId, baseName, onS
           try {
             const p = resolveFilePath(entry.path);
             const isEncrypted = isFilePathEncrypted(entry.path);
-            const isCustomDrive = path.isAbsolute(entry.path);
 
             if (isEncrypted) {
-              // For encrypted files, use decrypt stream
               const { stream } = await createDecryptStream(p);
               archive.append(stream, { name: relPath });
-            } else if (isCustomDrive) {
-              // For custom drive files, stream via agent API (memory efficient for large files)
-              const stream = agentReadFileStream(p);
-              archive.append(stream, { name: relPath });
             } else {
-              // For regular unencrypted files, add directly
               archive.file(p, { name: relPath });
             }
           } catch (err) {
             logger.error(`[ZIP] Error adding file to archive: ${entry.name}`, err);
-            // Re-throw agent connection errors so they can be caught upstream
-            if (isAgentOfflineError(err)) {
-              archiveAborted = true;
-              archiveError = err;
-              throw err;
-            }
+            throw err;
           }
         } else if (entry.type === 'folder') {
           await addEntry(entry.id, relPath);
@@ -106,13 +92,7 @@ async function createZipArchive(res, archiveName, entries, rootId, baseName, onS
     archive.abort();
 
     if (!res.headersSent) {
-      // Check if it's an agent error
-      if (isAgentOfflineError(err)) {
-        const { AGENT_OFFLINE_MESSAGE, AGENT_OFFLINE_STATUS } = require('./agentConstants');
-        res.status(AGENT_OFFLINE_STATUS).json({ error: AGENT_OFFLINE_MESSAGE });
-      } else {
-        res.status(500).json({ error: 'Failed to create archive' });
-      }
+      res.status(500).json({ error: 'Failed to create archive' });
     } else {
       // Headers already sent - can't send error response, just log
       logger.error('[ZIP] Error after headers sent - cannot send error response');
@@ -174,28 +154,16 @@ async function createBulkZipArchive(res, archiveName, allEntries, rootIds, onSuc
           try {
             const p = resolveFilePath(entry.path);
             const isEncrypted = isFilePathEncrypted(entry.path);
-            const isCustomDrive = path.isAbsolute(entry.path);
 
             if (isEncrypted) {
-              // For encrypted files, use decrypt stream
               const { stream } = await createDecryptStream(p);
               archive.append(stream, { name: relPath });
-            } else if (isCustomDrive) {
-              // For custom drive files, stream via agent API (memory efficient for large files)
-              const stream = agentReadFileStream(p);
-              archive.append(stream, { name: relPath });
             } else {
-              // For regular unencrypted files, add directly
               archive.file(p, { name: relPath });
             }
           } catch (err) {
             logger.error(`[ZIP] Error adding file to archive: ${entry.name}`, err);
-            // Re-throw agent connection errors so they can be caught upstream
-            if (isAgentOfflineError(err)) {
-              archiveAborted = true;
-              archiveError = err;
-              throw err;
-            }
+            throw err;
           }
         } else if (entry.type === 'folder') {
           await addEntry(entry.id, relPath);
@@ -213,24 +181,16 @@ async function createBulkZipArchive(res, archiveName, allEntries, rootIds, onSuc
         try {
           const p = resolveFilePath(rootEntry.path);
           const isEncrypted = isFilePathEncrypted(rootEntry.path);
-          const isCustomDrive = path.isAbsolute(rootEntry.path);
 
           if (isEncrypted) {
             const { stream } = await createDecryptStream(p);
-            archive.append(stream, { name: rootEntry.name });
-          } else if (isCustomDrive) {
-            const stream = agentReadFileStream(p);
             archive.append(stream, { name: rootEntry.name });
           } else {
             archive.file(p, { name: rootEntry.name });
           }
         } catch (err) {
           logger.error(`[ZIP] Error adding root file to archive: ${rootEntry.name}`, err);
-          if (isAgentOfflineError(err)) {
-            archiveAborted = true;
-            archiveError = err;
-            throw err;
-          }
+          throw err;
         }
       } else if (rootEntry.type === 'folder') {
         // Add folder and its contents
@@ -246,12 +206,7 @@ async function createBulkZipArchive(res, archiveName, allEntries, rootIds, onSuc
     archive.abort();
 
     if (!res.headersSent) {
-      if (isAgentOfflineError(err)) {
-        const { AGENT_OFFLINE_MESSAGE, AGENT_OFFLINE_STATUS } = require('./agentConstants');
-        res.status(AGENT_OFFLINE_STATUS).json({ error: AGENT_OFFLINE_MESSAGE });
-      } else {
-        res.status(500).json({ error: 'Failed to create archive' });
-      }
+      res.status(500).json({ error: 'Failed to create archive' });
     } else {
       logger.error('[ZIP] Error after headers sent - cannot send error response');
     }

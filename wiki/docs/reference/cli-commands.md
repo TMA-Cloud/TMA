@@ -145,4 +145,3 @@ Migrations run automatically on application startup.
 
 - [Installation](/getting-started/installation) - Setup guide
 - [Docker Setup](/getting-started/docker) - Docker guide with prebuilt images
-- [Agent Setup](/getting-started/agent-setup) - Install tma-agent from [GitHub Releases](https://github.com/TMA-Cloud/TMA/releases)

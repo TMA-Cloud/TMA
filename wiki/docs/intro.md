@@ -20,10 +20,9 @@ A self-hosted cloud storage platform with file storage and management capabiliti
 
 1. **[Getting Started](getting-started/overview.md)** --- Start here for installation and setup
 2. **[Docker Deployment](getting-started/docker.md)** --- Use prebuilt Docker images from `ghcr.io/tma-cloud/tma`
-3. **[Agent Setup](getting-started/agent-setup.md)** --- Download tma-agent from [GitHub Releases](https://github.com/TMA-Cloud/TMA/releases) for custom drives
-4. **[Concepts](concepts/architecture.md)** --- Understand the system architecture
-5. **[User Guides](guides/user/upload-files.md)** --- Learn how to use TMA Cloud
-6. **[API Reference](api/overview.md)** --- Integrate with the REST API
+3. **[Concepts](concepts/architecture.md)** --- Understand the system architecture
+4. **[User Guides](guides/user/upload-files.md)** --- Learn how to use TMA Cloud
+5. **[API Reference](api/overview.md)** --- Integrate with the REST API
 
 ## Documentation Structure
 

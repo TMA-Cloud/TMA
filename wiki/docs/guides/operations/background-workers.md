@@ -39,13 +39,6 @@ npm run worker
 - Periodic scanning
 - Disk space recovery
 
-### Custom Drive Scanner
-
-- Watches custom drive paths
-- Syncs files to database
-- Handles file changes
-- Per-user configuration
-
 ## Running Workers
 
 ### Production

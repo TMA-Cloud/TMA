@@ -8,7 +8,6 @@ import { ToastProvider } from "./hooks/ToastProvider";
 import { useIsMobile } from "./hooks/useIsMobile";
 import { Sidebar } from "./components/layout/Sidebar";
 import { Header } from "./components/layout/Header";
-import { AgentStatusBanner } from "./components/AgentStatusBanner";
 
 // Lazy load main page components (using default exports for cleaner syntax)
 const Dashboard = lazy(() => import("./components/dashboard/Dashboard"));
@@ -84,7 +83,6 @@ const AppContent: React.FC = () => {
     uploadProgress,
     setUploadProgress,
     setIsUploadProgressInteracting,
-    setAgentOnline,
   } = useApp();
   const isMobile = useIsMobile();
 
@@ -140,7 +138,6 @@ const AppContent: React.FC = () => {
         className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 ${!sidebarOpen ? "lg:ml-0" : ""}`}
       >
         <Header />
-        <AgentStatusBanner onStatusChange={setAgentOnline} />
 
         <main className="flex-1 overflow-y-auto">{renderContent()}</main>
       </div>

@@ -2,8 +2,6 @@ const pool = require('../../config/db');
 const fs = require('fs');
 const path = require('path');
 const { getCache, setCache, cacheKeys, DEFAULT_TTL } = require('../../utils/cache');
-const { getUserCustomDrive } = require('./file.cache.model');
-const { agentPathExists } = require('../../utils/agentFileOperations');
 
 const SORT_FIELDS = {
   name: 'name',
@@ -75,14 +73,12 @@ async function fillFolderSizes(files, userId) {
 }
 
 /**
- * Gets the folder path for a parent folder ID
- * Returns the absolute path if it's a custom drive folder, or null if regular folder
+ * Gets the folder path for a parent folder ID (for path helpers).
+ * All paths are relative to UPLOAD_DIR; returns null when no absolute path applies.
  */
 async function getFolderPath(parentId, userId) {
-  const customDrive = await getUserCustomDrive(userId);
-
   if (!parentId) {
-    return customDrive.enabled && customDrive.path ? customDrive.path : null;
+    return null;
   }
 
   const result = await pool.query('SELECT path, type, parent_id FROM files WHERE id = $1 AND user_id = $2', [
@@ -91,80 +87,31 @@ async function getFolderPath(parentId, userId) {
   ]);
 
   if (result.rows.length === 0) {
-    return customDrive.enabled && customDrive.path ? customDrive.path : null;
+    return null;
   }
 
   const targetEntry = result.rows[0];
 
-  // If the target is a file, we want its parent folder's path
   if (targetEntry.type === 'file') {
     if (targetEntry.path && path.isAbsolute(targetEntry.path)) {
-      // If it's a custom drive file, return the directory name of its path
       return path.dirname(targetEntry.path);
-    } else {
-      // For regular files, recursively get the path of its database parent_id
-      return getFolderPath(targetEntry.parent_id, userId);
     }
+    return getFolderPath(targetEntry.parent_id, userId);
   }
 
-  // If it's a custom drive folder (has absolute path), use it
   if (targetEntry.path && path.isAbsolute(targetEntry.path)) {
     return targetEntry.path;
-  }
-
-  // If custom drive is enabled but folder doesn't have path, use custom drive root
-  // For regular folders, we'll need to build the path by traversing up
-  if (customDrive.enabled && customDrive.path) {
-    // Try to build path by traversing parent chain
-    const folderPath = await buildFolderPath(parentId, userId);
-    return folderPath || customDrive.path;
   }
 
   return null;
 }
 
 /**
- * Builds the folder path by traversing the parent chain
+ * Builds the folder path by traversing the parent chain.
+ * No longer used; returns null (paths are relative to UPLOAD_DIR).
  */
-async function buildFolderPath(folderId, userId) {
-  const customDrive = await getUserCustomDrive(userId);
-
-  if (!customDrive.enabled || !customDrive.path) {
-    return null;
-  }
-
-  const pathParts = [];
-  let currentId = folderId;
-
-  // Traverse up the parent chain to build the path
-  while (currentId) {
-    const result = await pool.query('SELECT name, parent_id, path FROM files WHERE id = $1 AND user_id = $2', [
-      currentId,
-      userId,
-    ]);
-
-    if (result.rows.length === 0) break;
-
-    const folder = result.rows[0];
-
-    // If we hit a custom drive folder (has absolute path), use it as base
-    if (folder.path && path.isAbsolute(folder.path)) {
-      return folder.path;
-    }
-
-    pathParts.unshift(folder.name);
-    currentId = folder.parent_id;
-
-    // Safety check to avoid infinite loops
-    if (pathParts.length > 100) break;
-  }
-
-  // Build path from custom drive root
-  if (pathParts.length > 0) {
-    return path.join(customDrive.path, ...pathParts);
-  }
-
-  return customDrive.path;
+async function buildFolderPath(_folderId, _userId) {
+  return null;
 }
 
 /**
@@ -181,12 +128,10 @@ function generateUniqueName(baseName, ext, counter) {
 /**
  * Generates a unique filename if the file already exists
  * @param {string} filePath - Full file path to check
- * @param {string} _folderPath - Unused parameter (kept for backward compatibility)
- * @param {boolean} useAgent - If true, use agent API instead of direct filesystem access
  * @param {string} userId - Optional user ID to check database for existing files
  * @returns {Promise<string>} Unique file path
  */
-async function getUniqueFilename(filePath, _folderPath, useAgent = false, userId = null) {
+async function getUniqueFilename(filePath, userId = null) {
   const dir = path.dirname(filePath);
   const ext = path.extname(filePath);
   const baseName = path.basename(filePath, ext);
@@ -197,17 +142,10 @@ async function getUniqueFilename(filePath, _folderPath, useAgent = false, userId
   while (true) {
     let exists = false;
 
-    // Check filesystem
-    if (useAgent) {
-      // Use agent API to check if path exists
-      exists = await agentPathExists(finalPath);
-    } else {
-      // Use direct filesystem access
-      exists = await fs.promises
-        .access(finalPath)
-        .then(() => true)
-        .catch(() => false);
-    }
+    exists = await fs.promises
+      .access(finalPath)
+      .then(() => true)
+      .catch(() => false);
 
     // Also check database if userId is provided
     if (!exists && userId) {
@@ -239,10 +177,9 @@ async function getUniqueFilename(filePath, _folderPath, useAgent = false, userId
 /**
  * Generates a unique folder name if the folder already exists
  * @param {string} folderPath - Full folder path to check
- * @param {boolean} useAgent - If true, use agent API instead of direct filesystem access
  * @returns {Promise<string>} Unique folder path
  */
-async function getUniqueFolderPath(folderPath, useAgent = false) {
+async function getUniqueFolderPath(folderPath) {
   const dir = path.dirname(folderPath);
   const baseName = path.basename(folderPath);
 
@@ -250,17 +187,10 @@ async function getUniqueFolderPath(folderPath, useAgent = false) {
   let counter = 1;
 
   while (true) {
-    let exists = false;
-    if (useAgent) {
-      // Use agent API to check if path exists
-      exists = await agentPathExists(finalPath);
-    } else {
-      // Use direct filesystem access
-      exists = await fs.promises
-        .access(finalPath)
-        .then(() => true)
-        .catch(() => false);
-    }
+    const exists = await fs.promises
+      .access(finalPath)
+      .then(() => true)
+      .catch(() => false);
 
     if (!exists) {
       break; // Path is available

@@ -20,19 +20,10 @@ const pool = require('../../config/db');
 const { validateSortBy, validateSortOrder } = require('../../utils/validation');
 const { buildShareLink } = require('../../utils/shareLink');
 const { publishFileEventsBatch, EventTypes } = require('../../services/fileEvents');
-const { checkAgentForUser } = require('../../utils/agentCheck');
-const { AGENT_OFFLINE_MESSAGE, AGENT_OFFLINE_STATUS } = require('../../utils/agentConstants');
-
 /**
  * Star or unstar files/folders
  */
 async function starFilesController(req, res) {
-  // Check if agent is required - STRICT: block if agent is not confirmed online
-  const agentCheck = await checkAgentForUser(req.userId);
-  if (agentCheck.required && !agentCheck.online) {
-    return sendError(res, AGENT_OFFLINE_STATUS, AGENT_OFFLINE_MESSAGE);
-  }
-
   const { ids, starred } = req.body;
 
   // Get file info for audit logging and events
@@ -93,12 +84,6 @@ async function listStarred(req, res) {
  * Share or unshare files/folders
  */
 async function shareFilesController(req, res) {
-  // Check if agent is required - STRICT: block if agent is not confirmed online
-  const agentCheck = await checkAgentForUser(req.userId);
-  if (agentCheck.required && !agentCheck.online) {
-    return sendError(res, AGENT_OFFLINE_STATUS, AGENT_OFFLINE_MESSAGE);
-  }
-
   const { ids, shared } = req.body;
 
   const client = await pool.connect();
