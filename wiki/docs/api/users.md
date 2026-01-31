@@ -40,6 +40,9 @@ Get storage usage information for the authenticated user.
 
 **Response:**
 
+- **Local:** `used`, `total`, `free` (total/free from disk and per-user limit).
+- **S3:** `used`; `total` and `free` are per-user limit and (limit − used), or `null` when no limit (Unlimited).
+
 ```json
 {
   "used": 1073741824,
@@ -47,6 +50,8 @@ Get storage usage information for the authenticated user.
   "free": 106300440576
 }
 ```
+
+When S3 and no limit set: `total` and `free` may be `null` (Unlimited).
 
 ### PUT `/api/user/storage-limit`
 

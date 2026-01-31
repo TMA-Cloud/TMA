@@ -143,7 +143,7 @@ frontend/src/
 │(FormData)│                                └────┬─────┘
 └──────────┘                                     │
                                                  │ Validate & save file
-                                                 │ Stream to storage
+                                                 │ Stream to storage (local or S3)
                                                  │ Create database record
                                                  │ Update cache
                                                  │
@@ -151,6 +151,8 @@ frontend/src/
 │ Browser │<─────────────────────────────────────┘
 └─────────┘
 ```
+
+**Storage:** Local disk (`UPLOAD_DIR`) or S3-compatible object storage (when `STORAGE_DRIVER=s3`). Same streaming and encryption for both.
 
 ### Share Link Flow
 

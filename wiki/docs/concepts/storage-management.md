@@ -2,15 +2,21 @@
 
 Storage limits and management in TMA Cloud.
 
+## Storage Driver
+
+- **Local:** Files stored on disk under `UPLOAD_DIR`. Paths stored in database.
+- **S3:** Files stored in S3-compatible object storage (e.g. AWS S3/RustFS). Object keys stored in database.
+- Set `STORAGE_DRIVER=local` (default) or `STORAGE_DRIVER=s3`. When S3, set endpoint, bucket, and credentials (see [Environment Variables](/reference/environment-variables)).
+- Upload, download, copy, rename, delete, and share work the same for both; implementation uses streaming for S3 (no temp files).
+
 ## Storage Limits
 
 ### Per-User Limits
 
 - Configurable storage limits per user
-- Default: Uses actual available disk space
-- Set by administrators
-- Real-time usage tracking
-- Limits validated against physical disk capacity
+- **Local:** Default uses actual available disk space. Limits validated against disk capacity.
+- **S3:** No disk; default is unlimited when no limit set. Display: "X used of Unlimited" or "X used of Y" (when limit set). Only per-user limit enforced.
+- Set by administrators; real-time usage tracking
 
 ### Storage Calculation
 
@@ -22,15 +28,15 @@ Storage limits and management in TMA Cloud.
 
 ### Tracking
 
-- Real-time usage calculation
-- Visual charts and indicators
-- Per-user usage statistics
-- System-wide usage overview
+- Real-time usage calculation (sum of file sizes in DB)
+- **Local:** Total/free derived from disk and per-user limit.
+- **S3:** Total = per-user limit or null (Unlimited). Free = limit − used or null. No disk.
+- Visual charts and indicators; per-user usage statistics
 
 ### Monitoring
 
 - Usage warnings at thresholds
-- Limit enforcement on upload
+- Limit enforcement on upload (per-user limit only)
 - Storage quota exceeded errors
 
 ## File Encryption
@@ -39,16 +45,17 @@ Files are automatically encrypted. Encryption uses AES-256-GCM with authenticate
 
 ### Behavior
 
-- **Scope:** Files in `UPLOAD_DIR` are encrypted
+- **Scope:** Files in `UPLOAD_DIR` (local) or S3 object key (S3) are encrypted
 - **Transparent:** Encryption and decryption happen automatically
 - **Streaming:** Large files processed in streams to avoid memory issues
 
 ### File Operations
 
-- **Read/Write:** All file operations use streaming
-- **Upload:** Files streamed from client to storage
-- **Download:** Files streamed from storage to client
-- **Copy:** Files streamed from source to destination
+- **Read/Write:** All file operations use streaming (local path or S3 key)
+- **Upload:** Files streamed from client to storage (S3: multipart upload when needed)
+- **Download:** Files streamed from storage to client (S3: GetObject stream)
+- **Copy:** Files streamed from source to destination (S3: stream copy with re-encrypt)
+- **Share:** Share link download uses same path/key resolution; works for both local and S3
 
 ### Key Configuration
 
@@ -57,7 +64,7 @@ Files are automatically encrypted. Encryption uses AES-256-GCM with authenticate
 - Key can be base64, hex, or string (derived with PBKDF2)
 - Development fallback key used if not set (not secure for production)
 
-## Disk Space Monitoring
+## Disk Space Monitoring (Local only)
 
 ### System-Level
 
@@ -72,6 +79,8 @@ Files are automatically encrypted. Encryption uses AES-256-GCM with authenticate
 - Limit enforcement
 - Usage visualization
 
+**Note:** S3 has no disk; total/free in UI come from per-user limit or "Unlimited" when no limit set.
+
 ## Storage Operations
 
 ### Upload Limits
@@ -85,8 +94,9 @@ Files are automatically encrypted. Encryption uses AES-256-GCM with authenticate
 ### Cleanup
 
 - Trash cleanup frees space
-- Orphan file cleanup
+- Orphan file cleanup (S3: paginated listing to avoid loading all keys)
 - Automatic background processes
+- **S3:** Configure bucket lifecycle to abort incomplete multipart uploads (e.g. after 1 day). From backend: `npm run s3:lifecycle` applies this rule via the project S3 config (only incomplete uploads; no effect on completed objects). Run orphan cleanup frequently; upload validation (e.g. parentId) runs after stream upload, so rejected uploads can leave orphan objects until cleanup.
 
 ## Related Topics
 

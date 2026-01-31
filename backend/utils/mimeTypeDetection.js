@@ -1,7 +1,10 @@
-const { fileTypeFromFile } = require('file-type');
+const { fileTypeFromFile, fileTypeFromBuffer } = require('file-type');
 const mime = require('mime-types');
 const path = require('path');
+const { Transform } = require('stream');
 const { logger } = require('../config/logger');
+
+const MIME_CHECK_BUFFER_SIZE = 8192;
 
 /**
  * Normalize MIME type for comparison (lowercase, remove parameters)
@@ -86,14 +89,115 @@ function getExpectedMimeTypesForExtension(ext) {
 }
 
 /**
+ * Validate MIME type from a buffer (magic bytes) against the file extension.
+ * Used for S3 stream upload to prevent spoofing (e.g. .exe renamed to .jpg).
+ * @param {Buffer} buffer - First bytes of the file (at least 4KB recommended)
+ * @param {string} filename - Original filename with extension
+ * @returns {Promise<{ valid: boolean, error: string|null }>}
+ */
+async function validateMimeTypeFromBuffer(buffer, filename) {
+  if (!buffer || buffer.length < 256) {
+    return { valid: true, error: null };
+  }
+  if (typeof fileTypeFromBuffer !== 'function') {
+    return { valid: true, error: null };
+  }
+  try {
+    const fileType = await fileTypeFromBuffer(buffer);
+    if (!fileType || !fileType.mime) {
+      return { valid: true, error: null };
+    }
+    const ext = path.extname(filename).toLowerCase().replace(/^\./, '');
+    const expected = getExpectedMimeTypesForExtension(ext);
+    if (expected.length === 0) {
+      return { valid: true, error: null };
+    }
+    const normalizedExpected = expected.map(normalizeMime);
+    const normalizedActual = normalizeMime(fileType.mime);
+    if (!normalizedExpected.includes(normalizedActual)) {
+      logger.warn(
+        { filename, detected: fileType.mime, expected },
+        '[SECURITY] MIME spoof: content does not match extension'
+      );
+      return { valid: false, error: `File content does not match extension .${ext}` };
+    }
+    return { valid: true, error: null };
+  } catch (err) {
+    logger.warn({ err: err.message, filename }, 'MIME detection from buffer failed');
+    return { valid: true, error: null };
+  }
+}
+
+/**
+ * Transform stream that buffers the first N bytes, validates MIME from magic bytes, then passes through.
+ * Use in S3 stream upload pipeline to prevent MIME spoofing without writing to disk.
+ * @param {string} filename - Original filename (for extension check)
+ * @returns {Transform}
+ */
+function createMimeCheckStream(filename) {
+  const chunks = [];
+  let length = 0;
+  let validated = false;
+
+  return new Transform({
+    async transform(chunk, encoding, callback) {
+      if (validated) {
+        this.push(chunk);
+        return callback();
+      }
+      chunks.push(chunk);
+      length += chunk.length;
+      if (length < MIME_CHECK_BUFFER_SIZE) {
+        return callback();
+      }
+      validated = true;
+      const buffer = Buffer.concat(chunks);
+      try {
+        const result = await validateMimeTypeFromBuffer(buffer, filename);
+        if (!result.valid) {
+          this.destroy(new Error(result.error));
+          return callback();
+        }
+        this.push(buffer);
+        callback();
+      } catch (err) {
+        this.destroy(err);
+        callback(err);
+      }
+    },
+    flush(callback) {
+      if (validated) return callback();
+      const buffer = chunks.length ? Buffer.concat(chunks) : Buffer.alloc(0);
+      validateMimeTypeFromBuffer(buffer, filename)
+        .then(result => {
+          if (!result.valid) {
+            callback(new Error(result.error));
+            return;
+          }
+          if (buffer.length > 0) this.push(buffer);
+          callback();
+        })
+        .catch(callback);
+    },
+  });
+}
+
+/**
  * Validates that a file's actual MIME type matches what ONLYOFFICE expects for the given extension
- * @param {string} filePath - Path to the file
+ * @param {string} filePath - Path to the file (or S3 key when skipContentDetection is true)
  * @param {string} filename - Filename with extension
  * @param {string} storedMimeType - MIME type stored in database
  * @param {boolean} isEncrypted - Whether the file is encrypted (can't detect MIME from encrypted content)
+ * @param {boolean} [skipContentDetection=false] - When true (e.g. S3), validate using stored MIME only
  * @returns {Promise<Object>} { valid: boolean, error: string|null, actualMimeType: string|null }
  */
-async function validateOnlyOfficeMimeType(filePath, filename, storedMimeType, isEncrypted = false) {
+async function validateOnlyOfficeMimeType(
+  filePath,
+  filename,
+  storedMimeType,
+  isEncrypted = false,
+  skipContentDetection = false
+) {
   const ext = path.extname(filename).toLowerCase().replace(/^\./, '');
 
   const expectedMimeTypes = getExpectedMimeTypesForExtension(ext);
@@ -108,8 +212,8 @@ async function validateOnlyOfficeMimeType(filePath, filename, storedMimeType, is
   const normalizedExpected = expectedMimeTypes.map(normalizeMime);
   const normalizedStored = normalizeMime(storedMimeType);
 
-  // For encrypted files, we can't detect MIME type from content, so validate stored MIME type
-  if (isEncrypted) {
+  // For encrypted files or when content detection is skipped (e.g. S3), validate stored MIME type only
+  if (isEncrypted || skipContentDetection) {
     if (!storedMimeType) {
       return {
         valid: false,
@@ -136,7 +240,6 @@ async function validateOnlyOfficeMimeType(filePath, filename, storedMimeType, is
       };
     }
 
-    // Stored MIME type matches expected - allow (we trust the stored type for encrypted files)
     return {
       valid: true,
       error: null,
@@ -144,7 +247,7 @@ async function validateOnlyOfficeMimeType(filePath, filename, storedMimeType, is
     };
   }
 
-  // For unencrypted files, detect actual MIME type from file content
+  // For unencrypted files, detect actual MIME type from file content (requires local path)
   const actualMimeType = await detectMimeTypeFromContent(filePath);
 
   // If detection fails for unencrypted file, fall back to stored MIME type if it matches expected
@@ -207,5 +310,7 @@ async function validateOnlyOfficeMimeType(filePath, filename, storedMimeType, is
 module.exports = {
   detectMimeTypeFromContent,
   validateMimeType,
+  validateMimeTypeFromBuffer,
+  createMimeCheckStream,
   validateOnlyOfficeMimeType,
 };

@@ -2,8 +2,8 @@ import { useState, useEffect, useCallback } from "react";
 
 export interface StorageUsage {
   used: number;
-  total: number;
-  free: number;
+  total: number | null;
+  free: number | null;
 }
 
 export function useStorageUsage() {

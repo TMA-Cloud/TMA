@@ -5,6 +5,7 @@ const { safeUnlink } = require('../../utils/fileCleanup');
 const { generateId } = require('../../utils/id');
 const { UPLOAD_DIR } = require('../../config/paths');
 const { resolveFilePath } = require('../../utils/filePath');
+const storage = require('../../utils/storageDriver');
 const { logger } = require('../../config/logger');
 const {
   getCache,
@@ -76,25 +77,29 @@ async function createFolder(name, parentId = null, userId) {
 }
 
 /**
- * Create a new file
+ * Create a new file (local: from multer temp path; S3: use createFileFromStreamedUpload instead).
+ * When S3 is enabled, uploads go via stream middleware and createFileFromStreamedUpload — no temp dir.
  */
 async function createFile(name, size, mimeType, tempPath, parentId = null, userId) {
   const id = generateId(16);
-
-  // File was uploaded to UPLOAD_DIR, rename to final storage name
   const ext = path.extname(name);
   const storageName = id + ext;
-  const dest = path.join(UPLOAD_DIR, storageName);
 
-  const tempDest = dest + '.tmp';
-  await fs.promises.rename(tempPath, tempDest);
-  try {
-    await encryptFile(tempDest, dest);
-  } catch (error) {
-    logger.error('[File] Error encrypting file:', error);
-    // If encryption fails, clean up temp file
-    await safeUnlink(tempDest);
-    throw new Error('Failed to encrypt file');
+  if (storage.useS3()) {
+    throw new Error('createFile with temp path is not used when S3 is enabled; use createFileFromStreamedUpload');
+  }
+
+  {
+    const dest = path.join(UPLOAD_DIR, storageName);
+    const tempDest = dest + '.tmp';
+    await fs.promises.rename(tempPath, tempDest);
+    try {
+      await encryptFile(tempDest, dest);
+    } catch (error) {
+      logger.error('[File] Error encrypting file:', error);
+      await safeUnlink(tempDest);
+      throw new Error('Failed to encrypt file');
+    }
   }
 
   const result = await pool.query(
@@ -107,6 +112,29 @@ async function createFile(name, size, mimeType, tempPath, parentId = null, userI
   await invalidateSearchCache(userId);
   await deleteCache(cacheKeys.fileStats(userId));
   await deleteCache(cacheKeys.userStorage(userId)); // Invalidate storage usage cache
+
+  return result.rows[0];
+}
+
+/**
+ * Create file record after streamed upload to S3 (no temp file; stream was piped directly to bucket).
+ * @param {Object} upload - { id, storageName, name, size, mimeType }
+ * @param {string|null} parentId
+ * @param {string} userId
+ * @returns {Promise<Object>} Created file row
+ */
+async function createFileFromStreamedUpload(upload, parentId, userId) {
+  const { id, storageName, name, size, mimeType } = upload;
+
+  const result = await pool.query(
+    'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id, name, type, size, modified, mime_type AS "mimeType", starred, shared',
+    [id, name, 'file', size, mimeType, storageName, parentId, userId]
+  );
+
+  await invalidateFileCache(userId, parentId);
+  await invalidateSearchCache(userId);
+  await deleteCache(cacheKeys.fileStats(userId));
+  await deleteCache(cacheKeys.userStorage(userId));
 
   return result.rows[0];
 }
@@ -192,7 +220,6 @@ async function getFilesByIds(ids, userId) {
  * Rename a file or folder
  */
 async function renameFile(id, name, userId) {
-  // Get file info before renaming (need path and parent_id)
   const fileResult = await pool.query('SELECT path, parent_id, type FROM files WHERE id = $1 AND user_id = $2', [
     id,
     userId,
@@ -204,34 +231,53 @@ async function renameFile(id, name, userId) {
   const oldFile = fileResult.rows[0];
   const parentId = oldFile.parent_id || null;
 
-  // For files/folders with path, also rename on filesystem
   if (oldFile.path) {
-    const oldPath = resolveFilePath(oldFile.path);
-    const newPath = path.join(path.dirname(oldPath), name);
-
-    try {
-      const targetExists = await fs.promises
-        .access(newPath)
-        .then(() => true)
-        .catch(() => false);
-      if (targetExists) {
-        throw new Error('File or folder with this name already exists');
-      }
-      await fs.promises.rename(oldPath, newPath);
-      // Store relative path (basename) for UPLOAD_DIR files
-      const newPathForDb = path.basename(newPath);
-      await pool.query('UPDATE files SET name = $1, path = $2 WHERE id = $3 AND user_id = $4', [
-        name,
-        newPathForDb,
-        id,
-        userId,
-      ]);
-    } catch (err) {
-      if (err.code === 'ENOENT') {
-        // Path doesn't exist on disk (e.g. legacy), just update name in DB
+    if (storage.useS3()) {
+      const newKey = name;
+      try {
+        const keyExists = await storage.exists(newKey);
+        if (keyExists) {
+          throw new Error('File or folder with this name already exists');
+        }
+        await storage.copyObject(oldFile.path, newKey);
+        await storage.deleteObject(oldFile.path);
+        await pool.query('UPDATE files SET name = $1, path = $2 WHERE id = $3 AND user_id = $4', [
+          name,
+          newKey,
+          id,
+          userId,
+        ]);
+      } catch (err) {
+        if (err.message && err.message.includes('already exists')) throw err;
+        logger.warn({ err, id, path: oldFile.path }, '[File] S3 rename failed, updating name only');
         await pool.query('UPDATE files SET name = $1 WHERE id = $2 AND user_id = $3', [name, id, userId]);
-      } else {
-        throw err;
+      }
+    } else {
+      const oldPath = resolveFilePath(oldFile.path);
+      const newPath = path.join(path.dirname(oldPath), name);
+
+      try {
+        const targetExists = await fs.promises
+          .access(newPath)
+          .then(() => true)
+          .catch(() => false);
+        if (targetExists) {
+          throw new Error('File or folder with this name already exists');
+        }
+        await fs.promises.rename(oldPath, newPath);
+        const newPathForDb = path.basename(newPath);
+        await pool.query('UPDATE files SET name = $1, path = $2 WHERE id = $3 AND user_id = $4', [
+          name,
+          newPathForDb,
+          id,
+          userId,
+        ]);
+      } catch (err) {
+        if (err.code === 'ENOENT') {
+          await pool.query('UPDATE files SET name = $1 WHERE id = $2 AND user_id = $3', [name, id, userId]);
+        } else {
+          throw err;
+        }
       }
     }
   } else {
@@ -261,6 +307,7 @@ module.exports = {
   getFiles,
   createFolder,
   createFile,
+  createFileFromStreamedUpload,
   getFile,
   getFilesByIds,
   renameFile,

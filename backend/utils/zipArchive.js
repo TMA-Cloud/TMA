@@ -1,8 +1,9 @@
 const path = require('path');
 const archiver = require('archiver');
 const { resolveFilePath, isValidPath, isFilePathEncrypted } = require('./filePath');
-const { createDecryptStream } = require('./fileEncryption');
+const { createDecryptStream, createDecryptStreamFromStream } = require('./fileEncryption');
 const { logger } = require('../config/logger');
+const storage = require('./storageDriver');
 
 /**
  * Create a ZIP archive from a tree of entries and pipe it to a response
@@ -64,14 +65,23 @@ async function createZipArchive(res, archiveName, entries, rootId, baseName, onS
         const relPath = base ? path.join(base, entry.name) : entry.name;
         if (entry.type === 'file' && isValidPath(entry.path)) {
           try {
-            const p = resolveFilePath(entry.path);
             const isEncrypted = isFilePathEncrypted(entry.path);
-
-            if (isEncrypted) {
-              const { stream } = await createDecryptStream(p);
-              archive.append(stream, { name: relPath });
+            if (storage.useS3()) {
+              const readStream = await storage.getReadStream(entry.path);
+              if (isEncrypted) {
+                const { stream } = await createDecryptStreamFromStream(readStream);
+                archive.append(stream, { name: relPath });
+              } else {
+                archive.append(readStream, { name: relPath });
+              }
             } else {
-              archive.file(p, { name: relPath });
+              const p = resolveFilePath(entry.path);
+              if (isEncrypted) {
+                const { stream } = await createDecryptStream(p);
+                archive.append(stream, { name: relPath });
+              } else {
+                archive.file(p, { name: relPath });
+              }
             }
           } catch (err) {
             logger.error(`[ZIP] Error adding file to archive: ${entry.name}`, err);
@@ -146,21 +156,35 @@ async function createBulkZipArchive(res, archiveName, allEntries, rootIds, onSuc
   archive.pipe(res);
 
   try {
+    const addFileToArchive = async (entry, nameInArchive) => {
+      if (!isValidPath(entry.path)) return;
+      const isEncrypted = isFilePathEncrypted(entry.path);
+      if (storage.useS3()) {
+        const readStream = await storage.getReadStream(entry.path);
+        if (isEncrypted) {
+          const { stream } = await createDecryptStreamFromStream(readStream);
+          archive.append(stream, { name: nameInArchive });
+        } else {
+          archive.append(readStream, { name: nameInArchive });
+        }
+      } else {
+        const p = resolveFilePath(entry.path);
+        if (isEncrypted) {
+          const { stream } = await createDecryptStream(p);
+          archive.append(stream, { name: nameInArchive });
+        } else {
+          archive.file(p, { name: nameInArchive });
+        }
+      }
+    };
+
     const addEntry = async (id, base) => {
       const entriesToProcess = allEntries.filter(e => e.parent_id === id);
       for (const entry of entriesToProcess) {
         const relPath = base ? path.join(base, entry.name) : entry.name;
         if (entry.type === 'file' && isValidPath(entry.path)) {
           try {
-            const p = resolveFilePath(entry.path);
-            const isEncrypted = isFilePathEncrypted(entry.path);
-
-            if (isEncrypted) {
-              const { stream } = await createDecryptStream(p);
-              archive.append(stream, { name: relPath });
-            } else {
-              archive.file(p, { name: relPath });
-            }
+            await addFileToArchive(entry, relPath);
           } catch (err) {
             logger.error(`[ZIP] Error adding file to archive: ${entry.name}`, err);
             throw err;
@@ -171,29 +195,18 @@ async function createBulkZipArchive(res, archiveName, allEntries, rootIds, onSuc
       }
     };
 
-    // Add each root entry to the archive
     for (const rootId of rootIds) {
       const rootEntry = allEntries.find(e => e.id === rootId);
       if (!rootEntry) continue;
 
       if (rootEntry.type === 'file' && isValidPath(rootEntry.path)) {
-        // Add file directly at root level
         try {
-          const p = resolveFilePath(rootEntry.path);
-          const isEncrypted = isFilePathEncrypted(rootEntry.path);
-
-          if (isEncrypted) {
-            const { stream } = await createDecryptStream(p);
-            archive.append(stream, { name: rootEntry.name });
-          } else {
-            archive.file(p, { name: rootEntry.name });
-          }
+          await addFileToArchive(rootEntry, rootEntry.name);
         } catch (err) {
           logger.error(`[ZIP] Error adding root file to archive: ${rootEntry.name}`, err);
           throw err;
         }
       } else if (rootEntry.type === 'folder') {
-        // Add folder and its contents
         await addEntry(rootId, rootEntry.name);
       }
     }

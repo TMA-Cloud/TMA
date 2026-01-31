@@ -8,6 +8,7 @@ const {
   getFiles,
   createFolder,
   createFile,
+  createFileFromStreamedUpload,
   getFile,
   getFilesByIds,
   renameFile: renameFileModel,
@@ -113,19 +114,48 @@ async function addFolder(req, res) {
 }
 
 /**
- * Upload a file
+ * Upload a file (multer disk/local or stream-to-S3 when S3 enabled)
  */
 async function uploadFile(req, res) {
+  // S3: streamed upload (no temp file)
+  if (req.streamedUpload) {
+    const upload = req.streamedUpload;
+    if (!validateFileName(upload.name)) {
+      return sendError(res, 400, 'Invalid file name');
+    }
+    validateFileUpload(upload.mimeType, upload.name);
+
+    const { valid, parentId, error } = validateParentId(req);
+    if (!valid) {
+      return sendError(res, 400, error);
+    }
+
+    const file = await userOperationLock(req.userId, () => {
+      return createFileFromStreamedUpload(upload, parentId, req.userId);
+    });
+
+    await fileUploaded(file.id, file.name, file.size, req);
+    logger.info({ fileId: file.id, fileName: file.name, fileSize: file.size }, 'File uploaded (stream to S3)');
+    await publishFileEvent(EventTypes.FILE_UPLOADED, {
+      id: file.id,
+      name: file.name,
+      type: file.type,
+      size: file.size,
+      mimeType: file.mimeType,
+      parentId,
+      userId: req.userId,
+    });
+    return sendSuccess(res, file);
+  }
+
   if (!req.file) {
     return sendError(res, 400, 'No file uploaded');
   }
 
-  // Validate filename
   if (!validateFileName(req.file.originalname)) {
     return sendError(res, 400, 'Invalid file name');
   }
 
-  // Detect and validate actual MIME type from file content (prevents MIME spoofing)
   let actualMimeType = req.file.mimetype || 'application/octet-stream';
   const mimeValidation = await validateMimeType(req.file.path, req.file.mimetype, req.file.originalname);
   if (!mimeValidation.valid) {
@@ -134,7 +164,6 @@ async function uploadFile(req, res) {
   }
   actualMimeType = mimeValidation.actualMimeType || req.file.mimetype || 'application/octet-stream';
 
-  // Validate for security concerns (executable files, etc.)
   validateFileUpload(actualMimeType, req.file.originalname);
 
   const { valid, parentId, error } = validateParentId(req);
@@ -143,13 +172,10 @@ async function uploadFile(req, res) {
     return sendError(res, 400, error);
   }
 
-  // Final safeguard: Check storage limit with actual file size
   try {
     const used = await getUserStorageUsage(req.userId);
     const basePath = process.env.UPLOAD_DIR || __dirname;
     const userStorageLimit = await getUserStorageLimit(req.userId);
-    const { checkStorageLimitExceeded } = require('../../utils/storageUtils');
-
     const checkResult = await checkStorageLimitExceeded({
       fileSize: req.file.size,
       used,
@@ -171,11 +197,9 @@ async function uploadFile(req, res) {
     return createFile(req.file.originalname, req.file.size, actualMimeType, req.file.path, parentId, req.userId);
   });
 
-  // Log file upload
   await fileUploaded(file.id, file.name, file.size, req);
   logger.info({ fileId: file.id, fileName: file.name, fileSize: file.size }, 'File uploaded');
 
-  // Publish file uploaded event
   await publishFileEvent(EventTypes.FILE_UPLOADED, {
     id: file.id,
     name: file.name,
@@ -190,14 +214,70 @@ async function uploadFile(req, res) {
 }
 
 /**
- * Bulk upload multiple files
+ * Bulk upload multiple files (multer disk/local or stream-to-S3 when S3 enabled)
  */
 async function uploadFilesBulk(req, res) {
+  // S3: streamed uploads (no temp files)
+  if (req.streamedUploads) {
+    const uploads = req.streamedUploads;
+    if (uploads.length === 0) {
+      return sendError(res, 400, 'No files uploaded');
+    }
+
+    for (const u of uploads) {
+      if (!validateFileName(u.name)) {
+        return sendError(res, 400, `Invalid file name: ${u.name}`);
+      }
+      validateFileUpload(u.mimeType, u.name);
+    }
+
+    const { valid, parentId, error } = validateParentId(req);
+    if (!valid) {
+      return sendError(res, 400, error);
+    }
+
+    const successful = [];
+    const failed = [];
+
+    for (const upload of uploads) {
+      try {
+        const file = await userOperationLock(req.userId, () => {
+          return createFileFromStreamedUpload(upload, parentId, req.userId);
+        });
+        await fileUploaded(file.id, file.name, file.size, req);
+        logger.info({ fileId: file.id, fileName: file.name }, 'File uploaded (stream to S3)');
+        await publishFileEvent(EventTypes.FILE_UPLOADED, {
+          id: file.id,
+          name: file.name,
+          type: file.type,
+          size: file.size,
+          mimeType: file.mimeType,
+          parentId,
+          userId: req.userId,
+        });
+        successful.push(file);
+      } catch (err) {
+        failed.push({ fileName: upload.name, error: err?.message || 'Upload failed' });
+      }
+    }
+
+    if (successful.length === 0) {
+      return sendError(res, 400, failed[0]?.error || 'All uploads failed');
+    }
+
+    return sendSuccess(res, {
+      files: successful,
+      failed: failed.length > 0 ? failed : undefined,
+      total: uploads.length,
+      successful: successful.length,
+      failedCount: failed.length,
+    });
+  }
+
   if (!req.files || req.files.length === 0) {
     return sendError(res, 400, 'No files uploaded');
   }
 
-  // Validate all filenames
   for (const file of req.files) {
     if (!validateFileName(file.originalname)) {
       for (const f of req.files) {
@@ -207,7 +287,6 @@ async function uploadFilesBulk(req, res) {
     }
   }
 
-  // Validate parentId (same for all files)
   const { valid, parentId, error } = validateParentId(req);
   if (!valid) {
     for (const file of req.files) {
@@ -216,14 +295,11 @@ async function uploadFilesBulk(req, res) {
     return sendError(res, 400, error);
   }
 
-  // Calculate total size and check storage limit
   const totalSize = req.files.reduce((sum, file) => sum + file.size, 0);
   try {
     const used = await getUserStorageUsage(req.userId);
     const basePath = process.env.UPLOAD_DIR || __dirname;
     const userStorageLimit = await getUserStorageLimit(req.userId);
-    const { checkStorageLimitExceeded } = require('../../utils/storageUtils');
-
     const checkResult = await checkStorageLimitExceeded({
       fileSize: totalSize,
       used,
@@ -245,7 +321,6 @@ async function uploadFilesBulk(req, res) {
     return sendError(res, 500, 'Unable to verify storage limit. Please try again.');
   }
 
-  // Process all files in parallel
   const uploadPromises = req.files.map(async file => {
     let actualMimeType = file.mimetype || 'application/octet-stream';
     const mimeValidation = await validateMimeType(file.path, file.mimetype, file.originalname);
@@ -262,11 +337,9 @@ async function uploadFilesBulk(req, res) {
         return createFile(file.originalname, file.size, actualMimeType, file.path, parentId, req.userId);
       });
 
-      // Log file upload
       await fileUploaded(createdFile.id, createdFile.name, createdFile.size, req);
       logger.info({ fileId: createdFile.id, fileName: createdFile.name, fileSize: createdFile.size }, 'File uploaded');
 
-      // Publish file uploaded event
       await publishFileEvent(EventTypes.FILE_UPLOADED, {
         id: createdFile.id,
         name: createdFile.name,
@@ -284,10 +357,8 @@ async function uploadFilesBulk(req, res) {
     }
   });
 
-  // Wait for all uploads to complete
   const results = await Promise.allSettled(uploadPromises);
 
-  // Separate successful and failed uploads
   const successful = [];
   const failed = [];
 
@@ -303,12 +374,10 @@ async function uploadFilesBulk(req, res) {
     }
   }
 
-  // If all failed, return error
   if (successful.length === 0) {
     return sendError(res, 400, failed.length > 0 ? failed[0].error : 'All uploads failed');
   }
 
-  // Return results with success/failure info
   sendSuccess(res, {
     files: successful,
     failed: failed.length > 0 ? failed : undefined,
@@ -360,11 +429,13 @@ async function downloadFile(req, res) {
     }
   }
 
-  // For files, download directly
-  const { success, filePath, isEncrypted, error: fileError } = await validateAndResolveFile(file);
+  // For files, download directly (filePath for local, storageKey for S3)
+  const { success, filePath, storageKey, isEncrypted, error: fileError } = await validateAndResolveFile(file);
   if (!success) {
-    return sendError(res, filePath ? 400 : 404, fileError);
+    return sendError(res, filePath || storageKey ? 400 : 404, fileError);
   }
+
+  const pathOrKey = filePath || storageKey;
 
   // Log file download
   await fileDownloaded(fileId, file.name, req);
@@ -380,12 +451,11 @@ async function downloadFile(req, res) {
 
   // If file is encrypted, stream decrypted content
   if (isEncrypted) {
-    return streamEncryptedFile(res, filePath, file.name, file.mimeType);
+    return streamEncryptedFile(res, pathOrKey, file.name, file.mimeType);
   }
 
-  // For unencrypted files, use createReadStream instead of sendFile
-  // This handles case-sensitive paths better on Windows
-  return streamUnencryptedFile(res, filePath, file.name, file.mimeType, true);
+  // For unencrypted files, stream from path or S3
+  return streamUnencryptedFile(res, pathOrKey, file.name, file.mimeType, true);
 }
 
 /**

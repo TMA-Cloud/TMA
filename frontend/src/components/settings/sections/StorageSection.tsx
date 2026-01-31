@@ -7,8 +7,8 @@ import { formatFileSize } from "../../../utils/fileUtils";
 interface StorageSectionProps {
   usage?: {
     used: number;
-    total: number;
-    free: number;
+    total: number | null;
+    free: number | null;
   };
   loading?: boolean;
 }
@@ -17,6 +17,11 @@ export const StorageSection: React.FC<StorageSectionProps> = ({
   usage,
   loading,
 }) => {
+  const totalLabel =
+    usage && usage.total !== null ? formatFileSize(usage.total) : "Unlimited";
+  const availableLabel =
+    usage && usage.free !== null ? formatFileSize(usage.free) : "Unlimited";
+
   return (
     <SettingsSection
       title="Storage"
@@ -28,12 +33,12 @@ export const StorageSection: React.FC<StorageSectionProps> = ({
         value={
           loading || !usage
             ? "Loading..."
-            : `${formatFileSize(usage.used)} of ${formatFileSize(usage.total)}`
+            : `${formatFileSize(usage.used)} of ${totalLabel}`
         }
       />
       <SettingsItem
         label="Available Space"
-        value={loading || !usage ? "Loading..." : formatFileSize(usage.free)}
+        value={loading || !usage ? "Loading..." : availableLabel}
       />
     </SettingsSection>
   );

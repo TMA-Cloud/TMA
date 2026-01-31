@@ -1,15 +1,15 @@
 const pool = require('../../config/db');
-
 const path = require('path');
+const { PassThrough } = require('stream');
 const { safeUnlink } = require('../../utils/fileCleanup');
 const { generateId } = require('../../utils/id');
 const { UPLOAD_DIR } = require('../../config/paths');
 const { resolveFilePath, isFilePathEncrypted } = require('../../utils/filePath');
 const { logger } = require('../../config/logger');
 const { invalidateFileCache, invalidateSearchCache, deleteCache, cacheKeys } = require('../../utils/cache');
-
+const storage = require('../../utils/storageDriver');
 const { getUniqueDbFileName } = require('./file.utils.model');
-const { copyEncryptedFile } = require('../../utils/fileEncryption');
+const { copyEncryptedFile, copyEncryptedFileStreams } = require('../../utils/fileEncryption');
 
 /**
  * Move files to a different parent folder
@@ -77,31 +77,42 @@ async function copyEntry(id, parentId, userId, client = null) {
   let newPath = null;
 
   if (file.type === 'file') {
-    // Get source file path (handles both relative and absolute)
-    const sourcePath = resolveFilePath(file.path);
-
-    // Regular copy to UPLOAD_DIR
     const ext = path.extname(file.name);
     storageName = newId + ext;
-    const destPath = path.join(UPLOAD_DIR, storageName);
-    try {
-      const isSourceEncrypted = isFilePathEncrypted(file.path);
+    const isSourceEncrypted = isFilePathEncrypted(file.path);
 
-      if (isSourceEncrypted) {
-        // Copy encrypted file by decrypting and re-encrypting in a single pipeline
-        // This avoids writing plaintext to disk (more secure and faster)
-        await copyEncryptedFile(sourcePath, destPath);
+    try {
+      if (storage.useS3()) {
+        const destKey = storageName;
+        if (isSourceEncrypted) {
+          const passThrough = new PassThrough();
+          const uploadPromise = storage.putStream(destKey, passThrough);
+          await copyEncryptedFileStreams(await storage.getReadStream(file.path), passThrough);
+          await uploadPromise;
+        } else {
+          const stream = await storage.getReadStream(file.path);
+          await storage.putStream(destKey, stream);
+        }
+      } else {
+        const sourcePath = resolveFilePath(file.path);
+        const destPath = path.join(UPLOAD_DIR, storageName);
+        if (isSourceEncrypted) {
+          await copyEncryptedFile(sourcePath, destPath);
+        } else {
+          const fs = require('fs');
+          await fs.promises.copyFile(sourcePath, destPath);
+        }
       }
     } catch (error) {
       logger.error('Failed to copy file:', error);
-      // Clean up any temporary files
-      try {
-        const tempFiles = [destPath, destPath + '.tmp'];
-        for (const tempFile of tempFiles) {
-          await safeUnlink(tempFile);
+      if (!storage.useS3()) {
+        try {
+          const destPath = path.join(UPLOAD_DIR, storageName);
+          await safeUnlink(destPath);
+          await safeUnlink(destPath + '.tmp');
+        } catch (_cleanupError) {
+          // Ignore
         }
-      } catch (_cleanupError) {
-        // Ignore cleanup errors
       }
       throw new Error('File copy operation failed');
     }
@@ -232,37 +243,47 @@ async function copyEntryWithFile(file, parentId, userId, client) {
   let newPath = null;
 
   if (file.type === 'file') {
-    // Get source file path (handles both relative and absolute)
-    const sourcePath = resolveFilePath(file.path);
-
-    // Regular copy to UPLOAD_DIR
     const ext = path.extname(file.name);
     storageName = newId + ext;
-    const destPath = path.join(UPLOAD_DIR, storageName);
-    try {
-      const isSourceEncrypted = isFilePathEncrypted(file.path);
+    const isSourceEncrypted = isFilePathEncrypted(file.path);
 
-      if (isSourceEncrypted) {
-        // Copy encrypted file by decrypting and re-encrypting in a single pipeline
-        // This avoids writing plaintext to disk (more secure and faster)
-        await copyEncryptedFile(sourcePath, destPath);
+    try {
+      if (storage.useS3()) {
+        const destKey = storageName;
+        if (isSourceEncrypted) {
+          const passThrough = new PassThrough();
+          const uploadPromise = storage.putStream(destKey, passThrough);
+          await copyEncryptedFileStreams(await storage.getReadStream(file.path), passThrough);
+          await uploadPromise;
+        } else {
+          const stream = await storage.getReadStream(file.path);
+          await storage.putStream(destKey, stream);
+        }
+      } else {
+        const sourcePath = resolveFilePath(file.path);
+        const destPath = path.join(UPLOAD_DIR, storageName);
+        if (isSourceEncrypted) {
+          await copyEncryptedFile(sourcePath, destPath);
+        } else {
+          const fs = require('fs');
+          await fs.promises.copyFile(sourcePath, destPath);
+        }
       }
     } catch (error) {
       logger.error('Failed to copy file:', error);
-      // Clean up any temporary files
-      try {
-        const tempFiles = [destPath, destPath + '.tmp'];
-        for (const tempFile of tempFiles) {
-          await safeUnlink(tempFile);
+      if (!storage.useS3()) {
+        try {
+          const destPath = path.join(UPLOAD_DIR, storageName);
+          await safeUnlink(destPath);
+          await safeUnlink(destPath + '.tmp');
+        } catch (_cleanupError) {
+          // Ignore
         }
-      } catch (_cleanupError) {
-        // Ignore cleanup errors
       }
       throw new Error('File copy operation failed');
     }
     newPath = storageName;
 
-    // Get a unique display name for the file in the database
     const uniqueDisplayName = await getUniqueDbFileName(file.name, parentId, userId);
 
     const insertResult = await client.query(
@@ -282,7 +303,6 @@ async function copyEntryWithFile(file, parentId, userId, client) {
       ]
     );
 
-    // Explicitly compare and update modified timestamp if the database overrode it (e.g., via trigger)
     const insertedModified = insertResult.rows[0].modified;
     const originalModified = new Date(file.modified);
     const actualModified = new Date(insertedModified);

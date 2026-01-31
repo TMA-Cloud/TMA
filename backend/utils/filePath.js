@@ -1,21 +1,23 @@
 const path = require('path');
 const { UPLOAD_DIR } = require('../config/paths');
+const { useS3 } = require('./storageDriver');
+const localStorage = require('./localStorage');
 
 /**
- * Resolves a file path from the database to an absolute file system path.
- * Paths are relative to UPLOAD_DIR.
- * @param {string} dbPath - Path stored in database (relative)
- * @returns {string} Absolute file system path
+ * Resolves a file path from the database to an absolute file system path (local only).
+ * For S3, the DB path is the object key; use storage driver (getReadStream, etc.) instead.
+ * @param {string} dbPath - Path stored in database (relative path or S3 key)
+ * @returns {string} Absolute file system path (local only)
  */
 function resolveFilePath(dbPath) {
   if (!dbPath) {
     throw new Error('File path is required');
   }
+  if (useS3()) {
+    throw new Error('resolveFilePath is for local storage only; use storage driver for S3');
+  }
 
-  // For all paths, join with UPLOAD_DIR
   const filePath = path.join(UPLOAD_DIR, dbPath);
-
-  // Ensure the resolved path is within uploads directory (security check)
   const resolvedUploadDir = path.resolve(UPLOAD_DIR);
   const resolvedFilePath = path.resolve(filePath);
 
@@ -24,6 +26,17 @@ function resolveFilePath(dbPath) {
   }
 
   return resolvedFilePath;
+}
+
+/**
+ * Resolve DB path to absolute path when using local storage; when S3, returns null.
+ * @param {string} dbPath - Path stored in database
+ * @returns {string|null} Absolute path or null if S3
+ */
+function resolveFilePathIfLocal(dbPath) {
+  if (!dbPath) return null;
+  if (useS3()) return null;
+  return localStorage.resolveKey(dbPath);
 }
 
 /**
@@ -51,6 +64,7 @@ function isFilePathEncrypted(dbPath) {
 
 module.exports = {
   resolveFilePath,
+  resolveFilePathIfLocal,
   isValidPath,
   isFilePathEncrypted,
 };

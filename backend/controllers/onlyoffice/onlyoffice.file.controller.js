@@ -59,23 +59,22 @@ async function serveFile(req, res) {
       logger.error('[ONLYOFFICE] File not found in DB', id);
       return res.status(404).json({ error: 'File not found' });
     }
-    const { success, filePath, isEncrypted, error: fileError } = await validateAndResolveFile(fileRow);
+    const { success, filePath, storageKey, isEncrypted, error: fileError } = await validateAndResolveFile(fileRow);
     if (!success) {
       logger.error('[ONLYOFFICE] File validation failed', id, fileError);
       return res.status(404).json({ error: fileError || 'File not found' });
     }
 
-    // Set appropriate headers
+    const pathOrKey = filePath || storageKey;
+
     res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(fileRow.name)}"`);
     res.type(fileRow.mimeType || 'application/octet-stream');
 
-    // If file is encrypted, stream decrypted content
     if (isEncrypted) {
-      return streamEncryptedFile(res, filePath, fileRow.name, fileRow.mimeType || 'application/octet-stream');
+      return streamEncryptedFile(res, pathOrKey, fileRow.name, fileRow.mimeType || 'application/octet-stream');
     }
 
-    // For unencrypted files, stream via createReadStream
-    return streamUnencryptedFile(res, filePath, fileRow.name, fileRow.mimeType || 'application/octet-stream');
+    return streamUnencryptedFile(res, pathOrKey, fileRow.name, fileRow.mimeType || 'application/octet-stream');
   } catch (err) {
     logger.error({ err }, '[ONLYOFFICE] Error serving file');
     res.status(500).json({ error: 'Server error' });

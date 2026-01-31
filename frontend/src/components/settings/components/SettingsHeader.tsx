@@ -6,8 +6,8 @@ interface SettingsHeaderProps {
   userName?: string;
   usage?: {
     used: number;
-    total: number;
-    free: number;
+    total: number | null;
+    free: number | null;
   };
   loading?: boolean;
 }
@@ -18,7 +18,7 @@ export const SettingsHeader: React.FC<SettingsHeaderProps> = ({
   loading,
 }) => {
   const storageUsagePercent =
-    usage && usage.total > 0
+    usage && usage.total != null && usage.total > 0
       ? Math.min(100, Math.round((usage.used / usage.total) * 100))
       : null;
 
@@ -50,9 +50,11 @@ export const SettingsHeader: React.FC<SettingsHeaderProps> = ({
           <div className="flex items-center justify-between text-sm font-medium text-gray-700 dark:text-gray-300">
             <span>Storage usage</span>
             <span className="font-semibold">
-              {storageUsagePercent !== null
-                ? `${storageUsagePercent}%`
-                : "Loading..."}
+              {loading || !usage
+                ? "Loading..."
+                : storageUsagePercent !== null
+                  ? `${storageUsagePercent}%`
+                  : "—"}
             </span>
           </div>
           <div className="relative h-4 w-full rounded-full bg-gray-200/80 dark:bg-gray-700/80 overflow-hidden border border-gray-300/50 dark:border-gray-600/50 shadow-inner">
@@ -69,9 +71,13 @@ export const SettingsHeader: React.FC<SettingsHeaderProps> = ({
           <p className="text-xs text-gray-500/80 dark:text-gray-400/80">
             {loading || !usage
               ? "Calculating storage details..."
-              : usage.used > 0
-                ? `${formatFileSize(usage.used)} used · ${formatFileSize(usage.free)} free of ${formatFileSize(usage.total)}`
-                : `${formatFileSize(usage.free)} free of ${formatFileSize(usage.total)}`}
+              : usage.total != null
+                ? usage.used > 0
+                  ? `${formatFileSize(usage.used)} used · ${formatFileSize(usage.free ?? 0)} free of ${formatFileSize(usage.total)}`
+                  : `${formatFileSize(usage.free ?? 0)} free of ${formatFileSize(usage.total)}`
+                : usage.used > 0
+                  ? `${formatFileSize(usage.used)} used of Unlimited`
+                  : "Unlimited"}
           </p>
         </div>
       </div>

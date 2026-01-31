@@ -53,10 +53,26 @@ Complete reference for all environment variables in TMA Cloud.
 
 | Variable              | Required | Default             | Description                        |
 | --------------------- | -------- | ------------------- | ---------------------------------- |
-| `UPLOAD_DIR`          | No       | `./uploads`         | Upload directory path              |
+| `STORAGE_DRIVER`      | No       | `local`             | `local` or `s3`                    |
+| `UPLOAD_DIR`          | No       | `./uploads`         | Upload directory (local only)      |
 | `FILE_ENCRYPTION_KEY` | No       | Development default | Encryption key for file encryption |
 
 **Note:** All file operations use streaming for large files. No memory limits for file size.
+
+## S3-compatible (when STORAGE_DRIVER=s3)
+
+| Setting    | Required | Default     | Env var (either name)                              |
+| ---------- | -------- | ----------- | -------------------------------------------------- |
+| Endpoint   | Yes\*    | -           | `RUSTFS_ENDPOINT` or `AWS_S3_ENDPOINT`             |
+| Bucket     | Yes\*    | -           | `RUSTFS_BUCKET` or `AWS_S3_BUCKET`                 |
+| Access key | Yes\*    | -           | `RUSTFS_ACCESS_KEY` or `AWS_ACCESS_KEY_ID`         |
+| Secret key | Yes\*    | -           | `RUSTFS_SECRET_KEY` or `AWS_SECRET_ACCESS_KEY`     |
+| Region     | No       | `us-east-1` | `RUSTFS_REGION` or `AWS_REGION`                    |
+| Path style | No       | `true`      | `RUSTFS_FORCE_PATH_STYLE` (set `false` to disable) |
+
+\*Required when `STORAGE_DRIVER=s3`. Use one set of names consistently (e.g. all AWS*\* or all RUSTFS*\*).
+
+**Note:** Abort incomplete multipart uploads after 1 day: from backend run `npm run s3:lifecycle`. Run orphan cleanup frequently; see [Storage Management](/concepts/storage-management).
 
 ## Logging Configuration
 

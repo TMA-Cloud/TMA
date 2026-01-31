@@ -59,8 +59,9 @@ File system architecture and organization in TMA Cloud.
 
 ### Physical Storage
 
-- Files stored in `UPLOAD_DIR` directory
-- Organized by user ID and file ID
+- **Local:** Files stored in `UPLOAD_DIR`. Database stores path.
+- **S3:** Files stored in S3-compatible object storage. Database stores object key.
+- Set `STORAGE_DRIVER=local` (default) or `s3`. Same operations (upload, download, copy, share) work for both.
 - Original filenames preserved in database
 
 ### File Encryption

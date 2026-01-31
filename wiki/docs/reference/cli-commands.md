@@ -64,6 +64,16 @@ npm run format:check
 
 Check code formatting without making changes.
 
+### S3 bucket (when STORAGE_DRIVER=s3)
+
+```bash
+npm run s3:lifecycle
+```
+
+Apply bucket lifecycle rule: abort incomplete multipart uploads after 1 day. Uses project S3 config; only targets incomplete uploads. Run from backend directory.
+
+To check current lifecycle config from project root: `node backend/scripts/check-s3-lifecycle.js`.
+
 ## Docker Commands
 
 ### Using Prebuilt Images (Recommended)

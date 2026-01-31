@@ -1,12 +1,14 @@
 const fs = require('fs');
 const path = require('path');
 const { resolveFilePath, isValidPath, isFilePathEncrypted } = require('./filePath');
-const { createDecryptStream } = require('./fileEncryption');
+const { createDecryptStream, createDecryptStreamFromStream } = require('./fileEncryption');
 const { logger } = require('../config/logger');
+const storage = require('./storageDriver');
+
 /**
- * Validates and resolves file path for download
+ * Validates and resolves file for download (local path or S3 key).
  * @param {Object} file - File object from database
- * @returns {Promise<Object>} { success: boolean, filePath?: string, isEncrypted?: boolean, error?: string }
+ * @returns {Promise<Object>} { success: boolean, filePath?: string, storageKey?: string, isEncrypted?: boolean, error?: string }
  */
 async function validateAndResolveFile(file) {
   if (!file) {
@@ -21,6 +23,16 @@ async function validateAndResolveFile(file) {
     return { success: false, error: 'Invalid file path' };
   }
 
+  const isEncrypted = isFilePathEncrypted(file.path);
+
+  if (storage.useS3()) {
+    const exists = await storage.exists(file.path);
+    if (!exists) {
+      return { success: false, error: 'File not found in storage' };
+    }
+    return { success: true, storageKey: file.path, isEncrypted };
+  }
+
   let filePath;
   try {
     filePath = resolveFilePath(file.path);
@@ -33,19 +45,17 @@ async function validateAndResolveFile(file) {
     return { success: false, error: 'File not found on disk' };
   }
 
-  const isEncrypted = isFilePathEncrypted(file.path);
-
   return { success: true, filePath, isEncrypted };
 }
 
 /**
- * Stream an encrypted file to response
+ * Stream an encrypted file to response (local path or S3 key)
  * @param {Object} res - Express response object
- * @param {string} encryptedPath - Path to encrypted file
+ * @param {string} encryptedPathOrKey - Local path to encrypted file or S3 object key
  * @param {string} filename - Original filename for Content-Disposition header
  * @param {string} mimeType - MIME type for Content-Type header
  */
-async function streamEncryptedFile(res, encryptedPath, filename, mimeType) {
+async function streamEncryptedFile(res, encryptedPathOrKey, filename, mimeType) {
   let cleanupCalled = false;
   let stream = null;
 
@@ -58,12 +68,11 @@ async function streamEncryptedFile(res, encryptedPath, filename, mimeType) {
     }
   };
 
-  // Helper to create error details object
   const createErrorDetails = error => ({
     message: error?.message || 'Unknown error',
     code: error?.code,
     stack: error?.stack,
-    encryptedPath,
+    encryptedPathOrKey,
   });
 
   try {
@@ -71,26 +80,23 @@ async function streamEncryptedFile(res, encryptedPath, filename, mimeType) {
     const encodedFilename = encodeURIComponent(filename);
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"; filename*=UTF-8''${encodedFilename}`);
 
-    const decryptResult = await createDecryptStream(encryptedPath);
+    const decryptResult = storage.useS3()
+      ? await createDecryptStreamFromStream(await storage.getReadStream(encryptedPathOrKey))
+      : await createDecryptStream(encryptedPathOrKey);
     stream = decryptResult;
     const decryptStream = decryptResult.stream;
 
-    // Handle stream errors with better error logging
     decryptStream.on('error', error => {
       logger.error(createErrorDetails(error), 'Error streaming decrypted file');
-
       if (!res.headersSent) {
         res.status(500).json({ error: 'Error decrypting file' });
       } else {
-        // If headers are sent, we can't send JSON, just destroy the connection
         res.destroy();
       }
       cleanup();
     });
 
-    // Handle response errors (client disconnect, etc.)
     res.on('error', error => {
-      // Ignore expected errors (client disconnect)
       const isExpectedError =
         error.code === 'ECONNRESET' ||
         error.code === 'EPIPE' ||
@@ -98,26 +104,22 @@ async function streamEncryptedFile(res, encryptedPath, filename, mimeType) {
         error.message === 'aborted' ||
         error.message?.includes('aborted') ||
         error.message?.includes('socket hang up');
-
       if (!isExpectedError) {
         logger.warn(
-          { error: error.message, code: error.code, encryptedPath },
+          { error: error.message, code: error.code, encryptedPathOrKey },
           'Response error during decryption stream'
         );
       }
       cleanup();
     });
 
-    // Handle client disconnect
     res.on('close', () => {
       cleanup();
     });
 
-    // Pipe the decrypted stream to response
     decryptStream.pipe(res);
   } catch (error) {
     logger.error(createErrorDetails(error), 'Error creating decrypt stream');
-
     if (!res.headersSent) {
       res.status(500).json({ error: 'Error decrypting file' });
     }
@@ -126,23 +128,23 @@ async function streamEncryptedFile(res, encryptedPath, filename, mimeType) {
 }
 
 /**
- * Stream an unencrypted file to response
+ * Stream an unencrypted file to response (local path or S3 key)
  * @param {Object} res - Express response object
- * @param {string} filePath - Path to file
+ * @param {string} filePathOrKey - Local file path or S3 object key
  * @param {string} filename - Original filename for Content-Disposition header
  * @param {string} mimeType - MIME type for Content-Type header
  * @param {boolean} attachment - If true, use "attachment" disposition (download), else "inline" (view)
  */
-async function streamUnencryptedFile(res, filePath, filename, mimeType, attachment = false) {
+async function streamUnencryptedFile(res, filePathOrKey, filename, mimeType, attachment = false) {
   res.type(mimeType);
   const encodedFilename = encodeURIComponent(filename);
   const disposition = attachment ? 'attachment' : 'inline';
   res.setHeader('Content-Disposition', `${disposition}; filename="${filename}"; filename*=UTF-8''${encodedFilename}`);
 
-  const stream = fs.createReadStream(filePath);
+  const stream = storage.useS3() ? await storage.getReadStream(filePathOrKey) : fs.createReadStream(filePathOrKey);
 
   stream.on('error', error => {
-    logger.error({ error, filePath }, 'Error streaming file');
+    logger.error({ error, filePathOrKey }, 'Error streaming file');
     if (!res.headersSent) {
       res.status(404).json({ error: 'File not found' });
     } else {

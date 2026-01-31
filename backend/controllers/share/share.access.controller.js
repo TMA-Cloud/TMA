@@ -37,18 +37,19 @@ async function handleShared(req, res) {
       html += `</body></html>`;
       res.send(html);
     } else {
-      const { success, filePath, isEncrypted, error } = await validateAndResolveFile(file);
+      const { success, filePath, storageKey, isEncrypted, error } = await validateAndResolveFile(file);
       if (!success) {
         return res.status(400).send(error || 'Invalid file path');
       }
+      const pathOrKey = filePath || storageKey;
 
       // If file is encrypted, stream decrypted content
       if (isEncrypted) {
-        return streamEncryptedFile(res, filePath, file.name, file.mime_type || 'application/octet-stream');
+        return streamEncryptedFile(res, pathOrKey, file.name, file.mime_type || 'application/octet-stream');
       }
 
       // For unencrypted files, use streaming
-      return streamUnencryptedFile(res, filePath, file.name, file.mime_type || 'application/octet-stream', true);
+      return streamUnencryptedFile(res, pathOrKey, file.name, file.mime_type || 'application/octet-stream', true);
     }
   } catch (err) {
     sendError(res, 500, 'Server error', err);

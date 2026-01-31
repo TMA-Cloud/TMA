@@ -1,5 +1,6 @@
 const pool = require('../../config/db');
 const path = require('path');
+const fs = require('fs');
 const {
   invalidateFileCache,
   invalidateSearchCache,
@@ -9,6 +10,9 @@ const {
 } = require('../../utils/cache');
 const { buildOrderClause, fillFolderSizes } = require('./file.utils.model');
 const { getRecursiveIds } = require('./file.metadata.model');
+const storage = require('../../utils/storageDriver');
+const { resolveFilePath } = require('../../utils/filePath');
+const { logger } = require('../../config/logger');
 
 /**
  * Delete files (soft delete - move to trash)
@@ -197,11 +201,6 @@ async function permanentlyDeleteFiles(ids, userId) {
     userId,
   ]);
 
-  const fs = require('fs');
-  const { resolveFilePath } = require('../../utils/filePath');
-  const { logger } = require('../../config/logger');
-
-  // Separate files and folders for efficient processing
   const filesToDelete = [];
   const foldersToDelete = [];
 
@@ -209,8 +208,7 @@ async function permanentlyDeleteFiles(ids, userId) {
     if (!f.path) continue;
 
     if (f.type === 'file') {
-      const filePath = resolveFilePath(f.path);
-      filesToDelete.push({ path: f.path, resolvedPath: filePath });
+      filesToDelete.push({ key: f.path });
     } else if (f.type === 'folder') {
       if (path.isAbsolute(f.path)) {
         foldersToDelete.push(f.path);
@@ -218,18 +216,21 @@ async function permanentlyDeleteFiles(ids, userId) {
     }
   }
 
-  // Delete all files in parallel (bulk operation)
-  const fileDeletePromises = filesToDelete.map(async ({ path: originalPath, resolvedPath }) => {
+  const fileDeletePromises = filesToDelete.map(async ({ key }) => {
     try {
-      await fs.promises.unlink(resolvedPath);
+      if (storage.useS3()) {
+        await storage.deleteObject(key);
+      } else {
+        const resolvedPath = resolveFilePath(key);
+        await fs.promises.unlink(resolvedPath);
+      }
     } catch (error) {
-      logger.error({ err: error, path: originalPath }, `[File] Error deleting file ${originalPath}`);
+      logger.error({ err: error, path: key }, `[File] Error deleting file ${key}`);
     }
   });
 
   await Promise.allSettled(fileDeletePromises);
 
-  // Delete folders (in reverse order) - use fs.promises.rm with recursive
   foldersToDelete.sort((a, b) => b.length - a.length);
   const folderDeletePromises = foldersToDelete.map(async folderPath => {
     try {

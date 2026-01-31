@@ -1,9 +1,12 @@
 const fs = require('fs');
 const http = require('http');
 const https = require('https');
+const { Readable } = require('stream');
 const { validateId } = require('../../utils/validation');
 const { resolveFilePath } = require('../../utils/filePath');
 const { logger } = require('../../config/logger');
+const storage = require('../../utils/storageDriver');
+const { createEncryptStream } = require('../../utils/fileEncryption');
 const { logAuditEvent } = require('../../services/auditLogger');
 const { getOnlyOfficeConfig } = require('./onlyoffice.utils');
 const {
@@ -189,33 +192,37 @@ async function callback(req, res) {
         return res.status(200).json({ error: 0 });
       }
 
-      const filePath = resolveFilePath(fileRow.path);
-
-      // Download the updated document from OnlyOffice
       let fileBuffer;
       try {
         fileBuffer = await downloadFile(body.url);
       } catch (error) {
         logger.error('[ONLYOFFICE] Failed to download document:', error);
-        return res.status(200).json({ error: 0 }); // Still return success
+        return res.status(200).json({ error: 0 });
       }
 
-      // Save the downloaded file, replacing the existing one
       const { isFilePathEncrypted } = require('../../utils/filePath');
       const { encryptFile } = require('../../utils/fileEncryption');
+      const { safeUnlink } = require('../../utils/fileCleanup');
 
-      if (isFilePathEncrypted(fileRow.path)) {
-        // For encrypted files, write to temp first, then encrypt to final location
-        const tempPath = filePath + '.tmp';
-        await fs.promises.writeFile(tempPath, fileBuffer);
-        try {
-          await encryptFile(tempPath, filePath);
-        } catch (error) {
-          logger.error('[ONLYOFFICE] Error encrypting file after save:', error);
-          // Clean up temp file if encryption fails
-          const { safeUnlink } = require('../../utils/fileCleanup');
-          await safeUnlink(tempPath);
-          throw error;
+      if (storage.useS3()) {
+        const plainStream = Readable.from(fileBuffer);
+        const encryptStream = createEncryptStream();
+        plainStream.pipe(encryptStream);
+        await storage.putStream(fileRow.path, encryptStream);
+      } else {
+        const filePath = resolveFilePath(fileRow.path);
+        if (isFilePathEncrypted(fileRow.path)) {
+          const tempPath = filePath + '.tmp';
+          await fs.promises.writeFile(tempPath, fileBuffer);
+          try {
+            await encryptFile(tempPath, filePath);
+          } catch (error) {
+            logger.error('[ONLYOFFICE] Error encrypting file after save:', error);
+            await safeUnlink(tempPath);
+            throw error;
+          }
+        } else {
+          await fs.promises.writeFile(filePath, fileBuffer);
         }
       }
 

@@ -63,18 +63,19 @@ async function downloadSharedItem(req, res) {
     logger.info({ shareToken: token, fileId, fileType: file.type }, 'Share item downloaded');
 
     if (file.type === 'file') {
-      const { success, filePath, isEncrypted, error } = await validateAndResolveFile(file);
+      const { success, filePath, storageKey, isEncrypted, error } = await validateAndResolveFile(file);
       if (!success) {
         return res.status(400).send(error || 'Invalid file path');
       }
+      const pathOrKey = filePath || storageKey;
 
       // If file is encrypted, stream decrypted content
       if (isEncrypted) {
-        return streamEncryptedFile(res, filePath, file.name, file.mimeType || 'application/octet-stream');
+        return streamEncryptedFile(res, pathOrKey, file.name, file.mimeType || 'application/octet-stream');
       }
 
       // For unencrypted files, use streaming
-      return streamUnencryptedFile(res, filePath, file.name, file.mimeType || 'application/octet-stream', true);
+      return streamUnencryptedFile(res, pathOrKey, file.name, file.mimeType || 'application/octet-stream', true);
     }
     // folder: create zip of shared contents under this folder
     const entries = await getSharedTree(token, fileId);

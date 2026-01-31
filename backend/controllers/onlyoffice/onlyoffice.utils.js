@@ -170,17 +170,26 @@ async function validateFileForOnlyOffice(file, validateAndResolveFile, validateO
     return { valid: false, error: 'File type is not supported by ONLYOFFICE' };
   }
 
-  const { success, filePath, isEncrypted, error: fileError } = await validateAndResolveFile(file);
+  const { success, filePath, storageKey, isEncrypted, error: fileError } = await validateAndResolveFile(file);
   if (!success) {
     return { valid: false, error: fileError || 'File not found' };
   }
 
-  const mimeValidation = await validateOnlyOfficeMimeType(filePath, file.name, file.mimeType, isEncrypted);
+  const pathOrKey = filePath || storageKey;
+  const storage = require('../../utils/storageDriver');
+  const skipContentDetection = storage.useS3(); // S3 key is not a filesystem path
+  const mimeValidation = await validateOnlyOfficeMimeType(
+    pathOrKey,
+    file.name,
+    file.mimeType,
+    isEncrypted,
+    skipContentDetection
+  );
   if (!mimeValidation.valid) {
     return { valid: false, error: mimeValidation.error || 'File type mismatch detected' };
   }
 
-  return { valid: true, filePath, isEncrypted };
+  return { valid: true, filePath: pathOrKey, isEncrypted };
 }
 
 module.exports = {

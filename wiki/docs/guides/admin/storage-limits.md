@@ -6,17 +6,16 @@ Configure storage limits for users in TMA Cloud (admin only).
 
 ### Default Behavior
 
-- Default: Uses actual available disk space
-- No hardcoded limits
-- Configurable per user
-- Set via Settings → Users
+- **Local:** Default uses actual available disk space.
+- **S3:** No disk; default is unlimited when no limit set. UI shows "X used of Unlimited" or "X used of Y" when limit set.
+- No hardcoded limits; configurable per user; set via Settings → Users
 
 ### Per-User Limits
 
 - Set custom limits for specific users
-- Limits cannot exceed actual disk space
+- **Local:** Limits cannot exceed actual disk space; validated against disk capacity.
+- **S3:** Only per-user limit enforced; no disk cap.
 - Monitor usage in real-time
-- Limits validated against physical disk capacity
 
 ## Setting Storage Limits
 
@@ -29,8 +28,8 @@ Configure storage limits for users in TMA Cloud (admin only).
 
 ### Limit Validation
 
-- Limits validated against actual disk space
-- Cannot set limit greater than available disk
+- **Local:** Limits validated against actual disk space; cannot set limit greater than available disk.
+- **S3:** Only per-user limit; no disk validation.
 - Frontend and backend validation
 
 ## Storage Usage Monitoring
@@ -38,8 +37,9 @@ Configure storage limits for users in TMA Cloud (admin only).
 ### User-Level
 
 - View current usage per user (used, total, free)
+- **Local:** total/free from disk and per-user limit; percentage when total > 0.
+- **S3:** total/free from per-user limit or "Unlimited" when no limit; percentage shown only when limit set.
 - Visual indicators
-- Usage can be calculated as percentage (used/total)
 
 ### System-Level
 

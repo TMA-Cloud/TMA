@@ -51,11 +51,13 @@ Environment variable reference for TMA Cloud.
 
 ## File Storage
 
-| Variable     | Required | Default     | Description           |
-| ------------ | -------- | ----------- | --------------------- |
-| `UPLOAD_DIR` | No       | `./uploads` | Upload directory path |
+| Variable              | Required | Default     | Description                    |
+| --------------------- | -------- | ----------- | ------------------------------ |
+| `STORAGE_DRIVER`      | No       | `local`     | `local` or `s3`                |
+| `UPLOAD_DIR`          | No       | `./uploads` | Upload directory (local only)  |
+| `FILE_ENCRYPTION_KEY` | No       | -           | Encryption key (see reference) |
 
-**Note:** Storage limits are configured per-user in Settings (admin only). Default limit uses actual available disk space.
+**Note:** Storage limits are configured per-user in Settings (admin only). For S3-compatible storage, see [Environment Variables](/reference/environment-variables).
 
 ## Logging Configuration
 

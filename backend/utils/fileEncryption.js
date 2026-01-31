@@ -12,6 +12,49 @@ const TAG_LENGTH = 16; // 128 bits for authentication tag
 const KEY_LENGTH = 32; // 256 bits
 
 /**
+ * Read exactly n bytes from a readable stream (consumes from stream; rest remains readable)
+ * @param {import('stream').Readable} stream - Readable stream
+ * @param {number} n - Number of bytes to read
+ * @returns {Promise<Buffer>} First n bytes
+ */
+function readBytes(stream, n) {
+  return new Promise((resolve, reject) => {
+    let buf = Buffer.alloc(0);
+    function onReadable() {
+      const chunk = stream.read();
+      if (chunk) {
+        buf = Buffer.concat([buf, chunk]);
+        if (buf.length >= n) {
+          const result = buf.subarray(0, n);
+          const rest = buf.subarray(n);
+          if (rest.length > 0) stream.unshift(rest);
+          stream.removeListener('readable', onReadable);
+          stream.removeListener('error', onError);
+          stream.removeListener('end', onEnd);
+          resolve(result);
+        }
+      }
+    }
+    function onError(err) {
+      stream.removeListener('readable', onReadable);
+      stream.removeListener('end', onEnd);
+      reject(err);
+    }
+    function onEnd() {
+      if (buf.length < n) {
+        stream.removeListener('readable', onReadable);
+        stream.removeListener('error', onError);
+        reject(new Error('Invalid encrypted stream: too short for IV'));
+      }
+    }
+    stream.on('readable', onReadable);
+    stream.on('error', onError);
+    stream.on('end', onEnd);
+    onReadable();
+  });
+}
+
+/**
  * Helper to create a Transform stream that appends auth tag at the end
  * @param {Object} cipher - Cipher object to get auth tag from
  * @returns {Transform} Transform stream
@@ -26,6 +69,65 @@ function createAppendTagStream(cipher) {
       cb();
     },
   });
+}
+
+/**
+ * Create a transform stream that encrypts plaintext input (for direct stream-to-S3 upload).
+ * Output format: [IV][ENCRYPTED_DATA][TAG]
+ * @returns {Transform} Transform stream (plaintext in -> encrypted out)
+ */
+function createEncryptStream() {
+  const key = getEncryptionKey();
+  const iv = crypto.randomBytes(IV_LENGTH);
+  const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
+
+  return new Transform({
+    transform(chunk, encoding, callback) {
+      if (!this._ivPushed) {
+        this._ivPushed = true;
+        this.push(iv);
+      }
+      try {
+        const out = cipher.update(chunk);
+        if (out.length > 0) this.push(out);
+        callback();
+      } catch (err) {
+        callback(err);
+      }
+    },
+    flush(callback) {
+      try {
+        if (!this._ivPushed) {
+          this._ivPushed = true;
+          this.push(iv);
+        }
+        const final = cipher.final();
+        if (final.length > 0) this.push(final);
+        this.push(cipher.getAuthTag());
+        callback();
+      } catch (err) {
+        callback(err);
+      }
+    },
+  });
+}
+
+/**
+ * Create a transform stream that counts bytes passed through (for stream upload size).
+ * @returns {{ stream: Transform, getByteCount: () => number }}
+ */
+function createByteCountStream() {
+  let byteCount = 0;
+  const stream = new Transform({
+    transform(chunk, encoding, callback) {
+      byteCount += chunk.length;
+      callback(null, chunk);
+    },
+  });
+  return {
+    stream,
+    getByteCount: () => byteCount,
+  };
 }
 
 /**
@@ -253,6 +355,108 @@ async function copyEncryptedFile(sourceEncryptedPath, destEncryptedPath) {
 }
 
 /**
+ * Create a decryption stream from an encrypted readable stream (for S3/object storage).
+ * File format: [IV][ENCRYPTED_DATA][TAG]
+ * @param {import('stream').Readable} encryptedStream - Readable stream of encrypted content
+ * @returns {Promise<{stream: Transform, cleanup: Function}>}
+ */
+async function createDecryptStreamFromStream(encryptedStream) {
+  const iv = await readBytes(encryptedStream, IV_LENGTH);
+  const key = getEncryptionKey();
+  const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
+
+  const bufferTagTransform = new Transform({
+    transform(chunk, encoding, callback) {
+      this._tail = Buffer.concat([this._tail || Buffer.alloc(0), chunk]);
+      while (this._tail.length > TAG_LENGTH) {
+        const out = this._tail.subarray(0, this._tail.length - TAG_LENGTH);
+        this._tail = this._tail.subarray(this._tail.length - TAG_LENGTH);
+        try {
+          const dec = decipher.update(out);
+          if (dec.length > 0) this.push(dec);
+        } catch (err) {
+          return callback(err);
+        }
+      }
+      callback();
+    },
+    flush(callback) {
+      try {
+        decipher.setAuthTag(this._tail || Buffer.alloc(0));
+        const final = decipher.final();
+        if (final.length > 0) this.push(final);
+        callback();
+      } catch (err) {
+        callback(err);
+      }
+    },
+  });
+
+  encryptedStream.on('error', err => bufferTagTransform.destroy(err));
+  encryptedStream.pipe(bufferTagTransform);
+
+  return {
+    stream: bufferTagTransform,
+    cleanup: () => {
+      try {
+        encryptedStream.destroy();
+        bufferTagTransform.destroy();
+      } catch (_err) {
+        // Ignore
+      }
+    },
+  };
+}
+
+/**
+ * Copy encrypted content from a readable stream to a writable stream (decrypt then re-encrypt).
+ * Used for S3 copy: source stream -> decrypt -> encrypt -> dest stream.
+ * @param {import('stream').Readable} sourceEncryptedStream - Readable stream of encrypted content
+ * @param {import('stream').Writable} destEncryptedStream - Writable stream for encrypted output
+ * @returns {Promise<void>}
+ */
+async function copyEncryptedFileStreams(sourceEncryptedStream, destEncryptedStream) {
+  const iv = await readBytes(sourceEncryptedStream, IV_LENGTH);
+  const key = getEncryptionKey();
+  const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
+
+  const destIv = crypto.randomBytes(IV_LENGTH);
+  const cipher = crypto.createCipheriv(ALGORITHM, key, destIv);
+
+  const bufferTagTransform = new Transform({
+    transform(chunk, encoding, callback) {
+      this._tail = Buffer.concat([this._tail || Buffer.alloc(0), chunk]);
+      while (this._tail.length > TAG_LENGTH) {
+        const out = this._tail.subarray(0, this._tail.length - TAG_LENGTH);
+        this._tail = this._tail.subarray(this._tail.length - TAG_LENGTH);
+        try {
+          const dec = decipher.update(out);
+          if (dec.length > 0) this.push(dec);
+        } catch (err) {
+          return callback(err);
+        }
+      }
+      callback();
+    },
+    flush(callback) {
+      try {
+        decipher.setAuthTag(this._tail || Buffer.alloc(0));
+        const final = decipher.final();
+        if (final.length > 0) this.push(final);
+        callback();
+      } catch (err) {
+        callback(err);
+      }
+    },
+  });
+
+  destEncryptedStream.write(destIv);
+  const appendTagStream = createAppendTagStream(cipher);
+
+  await pipeline(sourceEncryptedStream, bufferTagTransform, cipher, appendTagStream, destEncryptedStream);
+}
+
+/**
  * Check if a file is encrypted by checking its format
  * Encrypted files have IV + TAG + DATA structure
  * @param {string} filePath - Path to the file
@@ -280,6 +484,10 @@ module.exports = {
   encryptFile,
   decryptFile,
   createDecryptStream,
+  createDecryptStreamFromStream,
+  createEncryptStream,
+  createByteCountStream,
   copyEncryptedFile,
+  copyEncryptedFileStreams,
   isFileEncrypted,
 };
