@@ -1,10 +1,39 @@
 const { fileTypeFromFile, fileTypeFromBuffer } = require('file-type');
 const mime = require('mime-types');
+const mimeDb = require('mime-db');
 const path = require('path');
 const { Transform } = require('stream');
 const { logger } = require('../config/logger');
 
 const MIME_CHECK_BUFFER_SIZE = 8192;
+
+/**
+ * Reverse index: extension (lowercase) -> array of MIME types from mime-db.
+ * Built once at load so we accept all MIME types that the official DB associates with an extension
+ * (e.g. .exe -> application/x-msdos-program, application/x-msdownload, application/octet-stream).
+ */
+const extensionToMimeTypes = (function buildExtensionToMimes() {
+  const map = Object.create(null);
+  for (const [mimeType, data] of Object.entries(mimeDb)) {
+    if (!data.extensions) continue;
+    for (const ext of data.extensions) {
+      const key = ext.toLowerCase();
+      if (!map[key]) map[key] = [];
+      if (!map[key].includes(mimeType)) map[key].push(mimeType);
+    }
+  }
+  return map;
+})();
+
+/**
+ * MIME types that file-type (magic-byte detection) may return for an extension
+ * but that mime-db does not list for that extension. Add them so validation still passes.
+ */
+const DETECTION_ALIASES = {
+  msi: ['application/x-cfb'], // MSI is CFB/OLE; file-type reports application/x-cfb
+  // CSV flexibility: file-type often sees CSVs as simple text
+  csv: ['text/plain', 'application/csv', 'application/x-csv'],
+};
 
 /**
  * Normalize MIME type for comparison (lowercase, remove parameters)
@@ -59,33 +88,28 @@ async function validateMimeType(filePath, declaredMimeType, filename) {
 }
 
 /**
- * Get expected MIME types for an extension using mime-types package
- * Some extensions may have multiple valid MIME types (e.g., CSV can be text/csv or text/plain)
+ * Get expected MIME types for an extension using mime-db (all registered MIMEs for that extension)
+ * plus mime-types primary and any content-detection aliases (e.g. file-type may return x-cfb for .msi).
  * @param {string} ext - File extension (without dot)
  * @returns {string[]} Array of expected MIME types
  */
 function getExpectedMimeTypesForExtension(ext) {
-  const expectedMimeTypes = [];
+  const key = ext.toLowerCase();
+  const expected = extensionToMimeTypes[key] ? [...extensionToMimeTypes[key]] : [];
 
-  // Get primary MIME type from mime-types package
-  const primaryMime = mime.lookup(`.${ext}`);
-  if (primaryMime) {
-    expectedMimeTypes.push(primaryMime);
+  const primary = mime.lookup(`.${key}`);
+  if (primary && !expected.includes(primary)) {
+    expected.unshift(primary);
   }
 
-  // Special cases: some extensions have multiple valid MIME types
-  if (ext === 'csv') {
-    // CSV files can be detected as text/plain by file-type, which is also valid
-    if (!expectedMimeTypes.includes('text/plain')) {
-      expectedMimeTypes.push('text/plain');
-    }
-    // Some systems use application/csv
-    if (!expectedMimeTypes.includes('application/csv')) {
-      expectedMimeTypes.push('application/csv');
+  const aliases = DETECTION_ALIASES[key];
+  if (aliases) {
+    for (const mimeType of aliases) {
+      if (!expected.includes(mimeType)) expected.push(mimeType);
     }
   }
 
-  return expectedMimeTypes;
+  return expected;
 }
 
 /**
