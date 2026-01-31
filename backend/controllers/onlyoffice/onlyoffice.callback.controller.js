@@ -42,17 +42,18 @@ function downloadFile(url) {
 }
 
 /**
- * Extract file ID from OnlyOffice document key
- * Key format: `${fileId}-${timestamp}`
- * Since file IDs are 16 characters and don't contain hyphens, we take everything before the last hyphen
+ * Extract userId and fileId from OnlyOffice document key (per-user encryption context).
+ * Key format: `${userId}-${fileId}-${timestamp}` (IDs are alphanumeric, no hyphens)
  */
-function extractFileIdFromKey(key) {
-  if (!key) return null;
+function parseDocumentKey(key) {
+  if (!key || typeof key !== 'string') return null;
   const parts = key.split('-');
-  if (parts.length < 2) return null;
-  // File ID is everything except the last part (which is the timestamp)
-  const fileIdPart = parts.slice(0, -1).join('-');
-  return fileIdPart || null;
+  if (parts.length < 3) return null;
+  const userId = parts[0];
+  const fileId = parts.slice(1, -1).join('-');
+  const timestamp = parts[parts.length - 1];
+  if (!userId || !fileId || !timestamp) return null;
+  return { userId, fileId };
 }
 
 /**
@@ -82,17 +83,20 @@ async function callback(req, res) {
     const shouldSave = status === 2 || status === 6;
 
     if (shouldSave && body.url) {
-      const fileId = extractFileIdFromKey(body.key);
+      const parsed = parseDocumentKey(body.key);
 
-      if (!fileId) {
-        logger.error('[ONLYOFFICE] Could not extract file ID from key:', body.key);
+      if (!parsed) {
+        logger.error('[ONLYOFFICE] Could not parse document key (expected userId-fileId-timestamp):', body.key);
         return res.status(200).json({ error: 0 }); // Still return success to OnlyOffice
       }
 
-      // Validate file ID format
+      const { userId: keyUserId, fileId } = parsed;
+
+      // Validate file ID and user ID format
       const validatedFileId = validateId(fileId);
-      if (!validatedFileId) {
-        logger.error('[ONLYOFFICE] Invalid file ID format:', fileId);
+      const validatedUserId = validateId(keyUserId);
+      if (!validatedFileId || !validatedUserId) {
+        logger.error('[ONLYOFFICE] Invalid file ID or user ID in key:', { fileId, userId: keyUserId });
         return res.status(200).json({ error: 0 });
       }
 
@@ -173,14 +177,18 @@ async function callback(req, res) {
         return res.status(200).json({ error: 0 });
       }
 
-      // Get file info from database
+      // Strict DB permission: only accept callback when file belongs to user in key (User A cannot overwrite User B's file)
       const db = require('../../config/db');
-      const fileResult = await db.query('SELECT id, name, path, user_id, parent_id, size FROM files WHERE id = $1', [
-        validatedFileId,
-      ]);
+      const fileResult = await db.query(
+        'SELECT id, name, path, user_id, parent_id, size FROM files WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL',
+        [validatedFileId, validatedUserId]
+      );
 
       if (fileResult.rows.length === 0) {
-        logger.error('[ONLYOFFICE] File not found in database:', fileId);
+        logger.error('[ONLYOFFICE] File not found or access denied (key user does not own file):', {
+          fileId: validatedFileId,
+          userId: validatedUserId,
+        });
         return res.status(200).json({ error: 0 });
       }
 
@@ -188,7 +196,7 @@ async function callback(req, res) {
 
       // Resolve file path (relative to UPLOAD_DIR)
       if (!fileRow.path) {
-        logger.error('[ONLYOFFICE] File has no path:', fileId);
+        logger.error('[ONLYOFFICE] File has no path:', validatedFileId);
         return res.status(200).json({ error: 0 });
       }
 

@@ -68,13 +68,15 @@ function getFileTypeFromName(name) {
 }
 
 /**
- * Build signed JWT token for file access
+ * Build signed JWT token for file access (per-user encryption context).
+ * Token includes userId so serveFile can enforce strict DB permissions:
+ * file is only served when id AND user_id match the token.
  */
-async function buildSignedFileToken(fileId) {
+async function buildSignedFileToken(fileId, userId) {
   const config = await getOnlyOfficeConfig();
   if (!config.jwtSecret) return null;
   // Explicitly specify algorithm to prevent algorithm confusion attacks
-  return jwt.sign({ fileId }, config.jwtSecret, { expiresIn: '10m', algorithm: 'HS256' });
+  return jwt.sign({ fileId, userId }, config.jwtSecret, { expiresIn: '10m', algorithm: 'HS256' });
 }
 
 /**
@@ -124,7 +126,7 @@ function buildOnlyofficeConfig(file, userId, userName, downloadUrl, callbackUrl,
   return {
     document: {
       fileType,
-      key: `${file.id}-${Date.now()}`,
+      key: `${userId}-${file.id}-${Date.now()}`,
       title: file.name,
       url: downloadUrl,
     },

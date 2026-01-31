@@ -3,6 +3,7 @@ const { validateAndResolveFile, streamEncryptedFile, streamUnencryptedFile } = r
 const { validateSingleId } = require('../../utils/controllerHelpers');
 const { logger } = require('../../config/logger');
 const { getOnlyOfficeConfig } = require('./onlyoffice.utils');
+const { getFile } = require('../../models/file.model');
 
 /**
  * Serve file to ONLYOFFICE server
@@ -36,14 +37,17 @@ async function serveFile(req, res) {
       return res.status(401).json({ error: 'Missing token' });
     }
 
-    // Validate token signature
+    // Validate token signature and require per-user context (userId in payload)
+    let payload;
     try {
-      // Decode token (it's already URL encoded)
       const decodedToken = decodeURIComponent(String(token));
-      // Explicitly specify allowed algorithms to prevent algorithm confusion attacks
-      const payload = jwt.verify(decodedToken, onlyOfficeConfig.jwtSecret, { algorithms: ['HS256'] });
+      payload = jwt.verify(decodedToken, onlyOfficeConfig.jwtSecret, { algorithms: ['HS256'] });
       if (payload.fileId !== id) {
         logger.error('[ONLYOFFICE] Token fileId mismatch', { tokenFileId: payload.fileId, requestedId: id });
+        return res.status(401).json({ error: 'Invalid token' });
+      }
+      if (!payload.userId) {
+        logger.error('[ONLYOFFICE] Token missing userId (per-user context required)');
         return res.status(401).json({ error: 'Invalid token' });
       }
     } catch (e) {
@@ -51,12 +55,10 @@ async function serveFile(req, res) {
       return res.status(401).json({ error: 'Invalid token' });
     }
 
-    // Fetch file path directly from DB by id
-    const db = require('../../config/db');
-    const result = await db.query('SELECT name, mime_type AS "mimeType", path FROM files WHERE id = $1', [id]);
-    const fileRow = result.rows[0];
+    // Strict DB permission: fetch file only when id AND user_id match token (User A cannot download User B's file by guessing ID)
+    const fileRow = await getFile(id, payload.userId);
     if (!fileRow) {
-      logger.error('[ONLYOFFICE] File not found in DB', id);
+      logger.error('[ONLYOFFICE] File not found or access denied', { id, userId: payload.userId });
       return res.status(404).json({ error: 'File not found' });
     }
     const { success, filePath, storageKey, isEncrypted, error: fileError } = await validateAndResolveFile(fileRow);

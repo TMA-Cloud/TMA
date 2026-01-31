@@ -39,6 +39,16 @@ Storage limits and management in TMA Cloud.
 - Limit enforcement on upload (per-user limit only)
 - Storage quota exceeded errors
 
+## Per-User Access (Strict DB Permissions)
+
+File access is enforced with **strict database permissions** so that User A cannot download or access User B's files, even if they guess a file ID.
+
+- **Main file API:** All file operations (download, rename, move, etc.) use `getFile(id, userId)` or equivalent queries that require `id AND user_id` and `deleted_at IS NULL`. Only the owning user sees their files.
+- **OnlyOffice:** The file-serving and callback endpoints use a **per-user encryption context**: the JWT and document key include `userId`. The server only serves or saves a file when the database row matches both `id` and `user_id` from the token/key.
+- **Share links:** Shared-item download requires a valid share token and returns the file only if it is in that share (join with `share_link_files`), so access is scoped to the share.
+
+This ensures that guessing or enumerating file IDs does not grant access to another user's data.
+
 ## File Encryption
 
 Files are automatically encrypted. Encryption uses AES-256-GCM with authenticated encryption.

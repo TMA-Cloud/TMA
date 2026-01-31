@@ -43,9 +43,14 @@ async function downloadSharedItem(req, res) {
     const { token, id: fileId } = req.params;
     const allowed = await isFileShared(token, fileId);
     if (!allowed) return res.status(404).send('Not found');
-    const res2 = await pool.query('SELECT id, name, type, mime_type AS "mimeType", path FROM files WHERE id = $1', [
-      fileId,
-    ]);
+    // Strict DB permission: only return file if it belongs to this share (defense-in-depth)
+    const res2 = await pool.query(
+      `SELECT f.id, f.name, f.type, f.mime_type AS "mimeType", f.path
+       FROM files f
+       INNER JOIN share_link_files slf ON slf.file_id = f.id AND slf.share_id = $1
+       WHERE f.id = $2`,
+      [token, fileId]
+    );
     const file = res2.rows[0];
     if (!file) return res.status(404).send('Not found');
 
