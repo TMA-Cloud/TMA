@@ -58,7 +58,7 @@ For detailed setup instructions, see the [Documentation Wiki](https://tma-cloud.
 ## UI Preview
 
 A quick preview of the TMA Cloud interface.  
-Full gallery available in the [Documentation Wiki](https://tma-cloud.github.io/TMA).
+Full gallery available in the [Documentation Wiki](https://tma-cloud.github.io/TMA/gallery).
 
 ### Dashboard & File Manager
 

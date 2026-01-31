@@ -97,6 +97,10 @@ const config: Config = {
           title: "Documentation",
           items: [
             {
+              label: "UI Gallery",
+              to: "/gallery",
+            },
+            {
               label: "Getting Started",
               to: "/getting-started/overview",
             },
