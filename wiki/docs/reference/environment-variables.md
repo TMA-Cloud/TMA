@@ -72,7 +72,7 @@ Complete reference for all environment variables in TMA Cloud.
 
 \*Required when `STORAGE_DRIVER=s3`. Use one set of names consistently (e.g. all AWS*\* or all RUSTFS*\*).
 
-**Note:** Abort incomplete multipart uploads after 1 day: from backend run `npm run s3:lifecycle`. Run orphan cleanup frequently; see [Storage Management](/concepts/storage-management).
+**Note:** From backend, `npm run s3:protect-all` applies bucket protections (public access block, HTTPS-only policy, versioning, optional encryption, lifecycle). Lifecycle aborts incomplete multipart after 1 day and deletes noncurrent versions after 7 days. Run orphan cleanup frequently; see [Storage Management](/concepts/storage-management).
 
 ## Logging Configuration
 

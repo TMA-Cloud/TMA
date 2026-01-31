@@ -66,11 +66,43 @@ Check code formatting without making changes.
 
 ### S3 bucket (when STORAGE_DRIVER=s3)
 
+Run from backend directory. Uses project S3 config (RUSTFS*\* or AWS*\* env vars).
+
+```bash
+npm run s3:protect-all
+```
+
+Apply all bucket protections: block public access; bucket policy (HTTPS only); versioning; default SSE if supported; lifecycle (abort incomplete multipart + delete old versions and delete markers).
+
 ```bash
 npm run s3:lifecycle
 ```
 
-Apply bucket lifecycle rule: abort incomplete multipart uploads after 1 day. Uses project S3 config; only targets incomplete uploads. Run from backend directory.
+Apply lifecycle rules only: abort incomplete multipart uploads after 1 day; delete noncurrent versions after 7 days; remove expired delete markers.
+
+```bash
+npm run s3:policy-https
+```
+
+Apply bucket policy that denies HTTP (HTTPS only).
+
+```bash
+npm run s3:public-block
+```
+
+Block public access (private bucket).
+
+```bash
+npm run s3:versioning
+```
+
+Enable versioning on the bucket.
+
+```bash
+npm run s3:encryption
+```
+
+Enable default server-side encryption (AES256). Not supported by all S3-compatible stores; script exits with error if unsupported.
 
 To check current lifecycle config from project root: `node backend/scripts/check-s3-lifecycle.js`.
 

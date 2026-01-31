@@ -1,6 +1,9 @@
 /**
- * Apply bucket lifecycle rule: abort incomplete multipart uploads after 1 day.
- * Uses project S3 config (RUSTFS_* or AWS_* env vars). Only targets incomplete uploads; no effect on completed objects.
+ * Apply bucket lifecycle rules:
+ *   1. Abort incomplete multipart uploads after 1 day.
+ *   2. Delete old versions after 7 days and remove delete markers (versioning cleanup).
+ *
+ * Uses project S3 config (RUSTFS_* or AWS_* env vars).
  *
  * Usage: from backend dir, with .env set for S3:
  *   node scripts/s3-lifecycle-incomplete-multipart.js
@@ -19,6 +22,7 @@ const { S3Client, PutBucketLifecycleConfigurationCommand } = require('@aws-sdk/c
 const { useS3, s3: s3Config } = require('../config/storage');
 
 const DAYS_AFTER_INITIATION = 1;
+const NONCURRENT_DAYS = 7;
 
 async function applyLifecycle() {
   if (!useS3) {
@@ -50,15 +54,26 @@ async function applyLifecycle() {
             DaysAfterInitiation: DAYS_AFTER_INITIATION,
           },
         },
+        {
+          ID: 'DeleteOldVersions',
+          Status: 'Enabled',
+          Filter: {},
+          NoncurrentVersionExpiration: {
+            NoncurrentDays: NONCURRENT_DAYS,
+          },
+          Expiration: {
+            ExpiredObjectDeleteMarker: true,
+          },
+        },
       ],
     },
   };
 
   try {
     await client.send(new PutBucketLifecycleConfigurationCommand(lifecycle));
-    console.log(
-      `Lifecycle rule applied on bucket "${s3Config.bucket}": abort incomplete multipart uploads after ${DAYS_AFTER_INITIATION} day(s). No effect on completed objects.`
-    );
+    console.log(`Lifecycle rules applied on bucket "${s3Config.bucket}":`);
+    console.log(`  - Abort incomplete multipart uploads after ${DAYS_AFTER_INITIATION} day(s).`);
+    console.log(`  - Delete noncurrent versions after ${NONCURRENT_DAYS} days; remove expired delete markers.`);
   } catch (err) {
     console.error('Failed to apply lifecycle configuration:', err.message);
     process.exit(1);

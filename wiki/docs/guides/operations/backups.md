@@ -30,11 +30,16 @@ psql -h localhost -U postgres cloud_storage < backup.sql
 
 ## File Backups
 
-### Upload Directory
+### Upload Directory (local)
 
 - Backup `UPLOAD_DIR` directory
 - Preserve file structure
 - Include all user files
+
+### S3-compatible (when STORAGE_DRIVER=s3)
+
+- Backup the bucket via storage vendor tools or replication
+- Application stores object keys in the database; bucket holds the blobs
 
 ## Backup Strategies
 

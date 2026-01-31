@@ -106,9 +106,43 @@ Files are automatically encrypted. Encryption uses AES-256-GCM with authenticate
 - Trash cleanup frees space
 - Orphan file cleanup (S3: paginated listing to avoid loading all keys)
 - Automatic background processes
-- **S3:** Configure bucket lifecycle to abort incomplete multipart uploads (e.g. after 1 day). From backend: `npm run s3:lifecycle` applies this rule via the project S3 config (only incomplete uploads; no effect on completed objects). Run orphan cleanup frequently; upload validation (e.g. parentId) runs after stream upload, so rejected uploads can leave orphan objects until cleanup.
+- **S3:** Run orphan cleanup frequently; upload validation (e.g. parentId) runs after stream upload, so rejected uploads can leave orphan objects until cleanup.
+
+## S3 Bucket Protection (when STORAGE_DRIVER=s3)
+
+Backend scripts apply bucket settings using the project S3 config (RUSTFS*\* or AWS*\* env vars). Run from backend directory.
+
+### Apply all protections
+
+```bash
+npm run s3:protect-all
+```
+
+Applies in one run: block public access; bucket policy that denies HTTP (HTTPS only); versioning; default SSE if supported; lifecycle rules.
+
+### Lifecycle rules
+
+- **Abort incomplete multipart uploads** after 1 day (no effect on completed objects).
+- **Delete noncurrent versions** after 7 days (versioning cleanup).
+- **Remove expired delete markers** (tombstones from deletes on versioned bucket).
+
+From backend: `npm run s3:lifecycle` applies both lifecycle rules. See [CLI Commands](/reference/cli-commands).
+
+### Individual scripts
+
+| Command                   | Effect                                                                         |
+| ------------------------- | ------------------------------------------------------------------------------ |
+| `npm run s3:protect-all`  | All of the below in one run                                                    |
+| `npm run s3:lifecycle`    | Lifecycle: abort incomplete multipart + delete old versions and delete markers |
+| `npm run s3:policy-https` | Bucket policy: deny HTTP (HTTPS only)                                          |
+| `npm run s3:public-block` | Block public access (private bucket)                                           |
+| `npm run s3:versioning`   | Enable versioning                                                              |
+| `npm run s3:encryption`   | Enable default SSE (AES256); not supported by all S3-compatible stores         |
+
+PutBucketPolicy replaces the entire bucket policy. If you add other policy statements in the storage UI, re-running `s3:policy-https` or `s3:protect-all` overwrites them.
 
 ## Related Topics
 
 - [File System](file-system.md) - How files are stored
 - [Admin Guide: Storage Limits](/guides/admin/storage-limits) - Configure limits
+- [CLI Commands](/reference/cli-commands) - S3 scripts reference

@@ -79,6 +79,7 @@ All incoming data from clients is strictly validated and sanitized on the backen
 - **Recommended:** Use HTTPS in production
 - **Cookie Security:** Secure flag for cookies
 - **Headers:** Security headers configured
+- **S3 (when STORAGE_DRIVER=s3):** Bucket policy can enforce HTTPS-only access; run `npm run s3:policy-https` or `npm run s3:protect-all` from backend (see [Storage Management](/concepts/storage-management)).
 
 ### Rate Limiting
 
