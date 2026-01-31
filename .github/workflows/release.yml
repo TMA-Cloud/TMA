@@ -7,86 +7,11 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag (e.g., v2.0.5)'
+        description: 'Release tag (e.g., vX.Y.Z)'
         required: true
 
 jobs:
-  build-agent:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        include:
-          - os: ubuntu-latest
-            goos: linux
-            goarch: amd64
-            ext: ''
-            name: linux-amd64
-          - os: windows-latest
-            goos: windows
-            goarch: amd64
-            ext: '.exe'
-            name: windows-amd64
-          - os: macos-latest
-            goos: darwin
-            goarch: amd64
-            ext: ''
-            name: darwin-amd64
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Get version
-        id: version
-        shell: bash
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            TAG="${{ github.event.inputs.tag }}"
-          else
-            TAG="${GITHUB_REF#refs/tags/}"
-          fi
-          VERSION="${TAG#v}"
-          echo "tag=$TAG" >> $GITHUB_OUTPUT
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          
-      - name: Get agent version from constants.go
-        id: agent_version
-        shell: bash
-        run: |
-          VERSION_MATCH=$(grep 'version.*=' agent/constants.go | head -1)
-          AGENT_VERSION=$(echo "$VERSION_MATCH" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
-          if [ -z "$AGENT_VERSION" ]; then
-            echo "Error: Could not extract version from: $VERSION_MATCH"
-            exit 1
-          fi
-          echo "version=$AGENT_VERSION" >> $GITHUB_OUTPUT
-          echo "Extracted version: $AGENT_VERSION"
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: agent/go.mod
-          cache-dependency-path: agent/go.sum
-
-      - name: Build agent binary
-        working-directory: agent
-        env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
-          CGO_ENABLED: 0
-        run: |
-          go build -ldflags="-s -w" -o tma-agent-v${{ steps.agent_version.outputs.version }}-${{ matrix.name }}${{ matrix.ext }} .
-
-      - name: Upload agent artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: tma-agent-${{ matrix.name }}
-          path: agent/tma-agent-v${{ steps.agent_version.outputs.version }}-${{ matrix.name }}${{ matrix.ext }}
-          retention-days: 30
-
   release:
-    needs: build-agent
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -114,47 +39,12 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Tag: $TAG, Version: $VERSION"
 
-      - name: Get agent version from constants.go
-        id: agent_version
-        shell: bash
-        run: |
-          VERSION_MATCH=$(grep 'version.*=' agent/constants.go | head -1)
-          AGENT_VERSION=$(echo "$VERSION_MATCH" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
-          if [ -z "$AGENT_VERSION" ]; then
-            echo "Error: Could not extract version from: $VERSION_MATCH"
-            exit 1
-          fi
-          echo "version=$AGENT_VERSION" >> $GITHUB_OUTPUT
-          echo "Extracted version: $AGENT_VERSION"
-
       - name: Verify version matches package.json
         run: |
           PKG_VERSION=$(node -p "require('./backend/package.json').version")
           if [ "$PKG_VERSION" != "${{ steps.version.outputs.version }}" ]; then
             echo "Warning: Package version ($PKG_VERSION) doesn't match tag version (${{ steps.version.outputs.version }})"
           fi
-
-      - name: Download agent artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: agent-binaries
-
-      - name: Prepare agent binaries for release
-        run: |
-          # Flatten the directory structure and preserve versioned filenames
-          mkdir -p release-binaries
-          for dir in agent-binaries/*/; do
-            if [ -d "$dir" ]; then
-              for file in "$dir"*; do
-                if [ -f "$file" ]; then
-                  # Copy file with its original name (includes version)
-                  filename=$(basename "$file")
-                  cp "$file" "release-binaries/$filename"
-                fi
-              done
-            fi
-          done
-          ls -lh release-binaries/
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
@@ -170,16 +60,8 @@ jobs:
             docker pull ${{ env.REGISTRY }}/${{ github.repository }}:latest
             ```
 
-            ### tma-agent Binaries
-            Prebuilt binaries for the tma-agent are available for download:
-            - `tma-agent-v${{ steps.agent_version.outputs.version }}-linux-amd64` - Linux (amd64)
-            - `tma-agent-v${{ steps.agent_version.outputs.version }}-windows-amd64.exe` - Windows (amd64)
-            - `tma-agent-v${{ steps.agent_version.outputs.version }}-darwin-amd64` - macOS (amd64)
-
             ### Changes
             See [CHANGELOG](https://github.com/${{ github.repository }}/compare/${{ steps.version.outputs.tag }}^...${{ steps.version.outputs.tag }}) for details.
-          files: |
-            release-binaries/*
           draft: false
           prerelease: ${{ contains(steps.version.outputs.tag, '-') }}
         env:
