@@ -92,4 +92,4 @@ Complete reference for all environment variables in TMA Cloud.
 ## Related Topics
 
 - [Environment Setup](/getting-started/environment-setup) - Setup guide
-- [Docker Setup](/getting-started/docker) - Docker configuration
+- [Docker Compose / Docker](/getting-started/docker) - Docker Compose and env configuration

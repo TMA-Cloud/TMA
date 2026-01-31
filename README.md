@@ -4,53 +4,39 @@ A self-hosted cloud storage platform with file storage and management capabiliti
 
 ## Features
 
-- 🔐 **Authentication** --- JWT-based auth with optional Google OAuth and MFA
-- 🔒 **Signup Control** --- Self-hosted deployments can control user registration
-- 📁 **File Management** --- Upload, download, organize, and manage files and folders
-- 🔗 **Sharing** --- Create shareable links for files and folders
-- 🌐 **Custom Share Domain** --- Dedicated domain for share links to isolate traffic
-- 📝 **Document Editing** --- OnlyOffice integration for online document editing
-- ⚡ **Redis Caching** --- High-performance caching layer for improved response times
-- 🎨 **Modern UI** --- React + TypeScript frontend with Tailwind CSS
-- 🗄️ **PostgreSQL** --- Robust database with automatic migrations
-- 🧹 **Background Services** --- Automatic cleanup of trash and orphaned files
-- 📊 **Audit Logging** --- Comprehensive audit trail with queue-based event tracking
+- **Authentication** --- JWT-based auth with optional Google OAuth and MFA
+- **Signup Control** --- Self-hosted deployments can control user registration
+- **File Management** --- Upload, download, organize, and manage files and folders
+- **Sharing** --- Create shareable links for files and folders
+- **Custom Share Domain** --- Dedicated domain for share links to isolate traffic
+- **Document Editing** --- OnlyOffice integration for online document editing
+- **Redis Caching** --- High-performance caching layer for improved response times
+- **Modern UI** --- React + TypeScript frontend with Tailwind CSS
+- **PostgreSQL** --- Robust database with automatic migrations
+- **Background Services** --- Automatic cleanup of trash and orphaned files
+- **Audit Logging** --- Comprehensive audit trail with queue-based event tracking
 
 ## Quick Start
 
-### Prerequisites
-
-- Node.js (v25+)
-- PostgreSQL (v17+)
-- Redis (v6+)
-- npm or yarn
-
-### Installation
+Create a directory and download the files
 
 ```bash
-git clone https://github.com/TMA-Cloud/TMA.git
-cd TMA
+mkdir tma-cloud && cd tma-cloud
+curl -sSL -o docker-compose.yml https://raw.githubusercontent.com/TMA-Cloud/TMA/main/docker-compose.yml
+curl -sSL -o .env.example https://raw.githubusercontent.com/TMA-Cloud/TMA/main/.env.example
 ```
 
-#### Frontend Setup & Build
+Configure environment
 
 ```bash
-cd ../frontend
-npm install
-npm run build
-# Frontend will be built to dist/ dir
+cp .env.example .env
+# Edit .env with your configuration.
 ```
 
-#### Backend Setup
+Start all services
 
 ```bash
-cd backend
-npm install
-# Copy .env.example to .env
-cp ../.env.example ../.env
-# Edit ../.env with your configuration
-npm start
-# Access the application at http://localhost:3000
+docker compose up -d
 ```
 
 For detailed setup instructions, see the [Documentation Wiki](https://tma-cloud.github.io/TMA).

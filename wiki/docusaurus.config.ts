@@ -60,6 +60,8 @@ const config: Config = {
     ],
   ],
 
+  favicon: "img/logo.png",
+
   themeConfig: {
     colorMode: {
       respectPrefersColorScheme: false,
@@ -70,7 +72,7 @@ const config: Config = {
       title: "TMA Cloud",
       logo: {
         alt: "TMA Cloud Logo",
-        src: "img/logo.svg",
+        src: "img/logo.png",
         width: 32,
         height: 32,
       },

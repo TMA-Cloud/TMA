@@ -6,28 +6,75 @@ Step-by-step installation guide for TMA Cloud.
 
 TMA Cloud can be installed in two ways:
 
-1. **[Docker Deployment](docker.md)** (Recommended) - Use prebuilt Docker images from `ghcr.io/tma-cloud/tma` for the easiest setup
+1. **[Docker Compose](docker.md)** (Recommended) - Use the project's `docker-compose.yml` for the easiest setup
 2. **Manual Installation** - Build and run from source (see below)
 
-For Docker deployment with prebuilt images, see the [Docker Setup Guide](docker.md).
+For full Docker options (prebuilt images, build from source), see the [Docker Setup Guide](docker.md).
 
-## Prerequisites
+## Option 1: Docker Compose (Recommended)
+
+Download `docker-compose.yml` and `.env.example` with curl—no need to clone the repo.
+
+### Docker-Compose Prerequisites
+
+- [Docker](https://docs.docker.com/get-docker/) (v29.0+)
+- [Docker Compose](https://docs.docker.com/compose/install/) (v5.0+)
+
+### Steps
+
+Create a directory and download the files
+
+```bash
+mkdir tma-cloud && cd tma-cloud
+curl -sSL -o docker-compose.yml https://raw.githubusercontent.com/TMA-Cloud/TMA/main/docker-compose.yml
+curl -sSL -o .env.example https://raw.githubusercontent.com/TMA-Cloud/TMA/main/.env.example
+```
+
+Configure environment
+
+```bash
+cp .env.example .env
+# Edit .env with your configuration.
+```
+
+Start all services
+
+```bash
+docker compose up -d
+```
+
+This starts: **app** (main API), **postgres**, **redis**, and **worker** (audit processor). Access at `http://localhost:3000` (or your `BPORT`).
+
+Verify
+
+```bash
+docker compose ps
+docker compose logs -f
+```
+
+For more Docker options (prebuilt images, building from source, volumes, etc.), see [Docker Deployment](docker.md).
+
+---
+
+## Option 2: Manual Installation
+
+### Manual-Installation Prerequisites
 
 - Node.js (v25+)
 - PostgreSQL (v17+)
 - Redis (v6+) - Optional but recommended
 - npm or yarn
 
-## Installation Steps
+### Installation Steps
 
-### 1. Clone Repository
+#### 1. Clone Repository
 
 ```bash
 git clone https://github.com/TMA-Cloud/TMA.git
 cd TMA
 ```
 
-### 2. Backend Setup
+#### 2. Backend Setup
 
 ```bash
 cd backend
@@ -49,7 +96,7 @@ cp ../.env.example ../.env
 - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` - Google OAuth
 - `BACKEND_URL` - Public backend URL (for OnlyOffice)
 
-### 3. Create Database
+#### 3. Create Database
 
 ```sql
 CREATE DATABASE cloud_storage;
@@ -57,7 +104,7 @@ CREATE DATABASE cloud_storage;
 
 Migrations run automatically on startup.
 
-### 4. Setup Redis (Optional)
+#### 4. Setup Redis (Optional)
 
 **Linux/macOS:**
 
@@ -76,7 +123,7 @@ redis-server
 
 **Verify:** `redis-cli ping` (should return PONG)
 
-### 5. Frontend Setup
+#### 5. Frontend Setup
 
 ```bash
 cd ../frontend
@@ -84,7 +131,7 @@ npm install
 npm run build
 ```
 
-### 6. Start Application
+#### 6. Start Application
 
 **Production:**
 
@@ -134,6 +181,6 @@ Access at `http://localhost:5173`
 
 ## Next Steps
 
-- [Docker Setup](docker.md) - Alternative installation method
+- [Docker Deployment](docker.md) - Full Docker guide (prebuilt images, build from source, volumes)
 - [Environment Setup](environment-setup.md) - Detailed environment configuration
 - [First Login](first-login.md) - Create your first account

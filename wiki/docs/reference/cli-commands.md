@@ -154,4 +154,4 @@ Migrations run automatically on application startup.
 ## Related Topics
 
 - [Installation](/getting-started/installation) - Setup guide
-- [Docker Setup](/getting-started/docker) - Docker guide with prebuilt images
+- [Docker Compose / Docker](/getting-started/docker) - Docker Compose and prebuilt images

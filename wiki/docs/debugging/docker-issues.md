@@ -54,5 +54,5 @@ docker inspect --format='{{.State.Health.Status}}' tma-cloud-app
 
 ## Related Topics
 
-- [Docker Setup](/getting-started/docker) - Docker guide with prebuilt images from `ghcr.io/tma-cloud/tma`
+- [Docker Compose / Docker](/getting-started/docker) - Docker Compose and prebuilt images
 - [Environment Setup](/getting-started/environment-setup) - Configuration

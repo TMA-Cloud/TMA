@@ -4,25 +4,27 @@ Docker deployment guide for TMA Cloud.
 
 ## Prerequisites
 
-- Docker (v20.10+)
-- Docker Compose (v2.0+)
+- Docker (v29.0+)
+- Docker Compose (v5.0+)
 - Node.js (v25+) - For version extraction during build (only if building from source)
 
 ## Quick Start
 
-### Option 1: Use Prebuilt Docker Images (Recommended)
+See [Option 1: Docker Compose](installation.md#option-1-docker-compose-recommended).
 
-Prebuilt Docker images are available on GitHub Container Registry. This is the easiest way to get started:
+### Option 1: Use Prebuilt Docker Images (Default)
+
+Prebuilt Docker images are available on GitHub Container Registry.
 
 ```bash
-# Pull the latest image
+# Pull the latest image (optional; compose will pull if missing)
 docker pull ghcr.io/tma-cloud/tma:latest
 
 # Or pull a specific version
-docker pull ghcr.io/tma-cloud/tma:2.0.0
+docker pull ghcr.io/tma-cloud/tma:X.0.0
 ```
 
-Then update your `docker-compose.yml` to use the prebuilt image instead of building locally.
+To pin a version, edit `docker-compose.yml` and set `image: ghcr.io/tma-cloud/tma:X.0.0` for the `app` and `worker` services.
 
 ### Option 2: Build Docker Image from Source
 
@@ -48,8 +50,9 @@ docker compose up -d
 Starts three services:
 
 - **App** (`tma-cloud-app`) - Main application
+- **PostgreSQL** (`tma-cloud-postgres`) - Database
+- **Redis** (`tma-cloud-redis`) - Caching layer
 - **Worker** (`tma-cloud-worker`) - Audit event processor (required)
-- **Redis** (`tma-cloud-redis`) - Caching layer (optional but recommended)
 
 Access at `http://localhost:3000` (or configured `BPORT`).
 
