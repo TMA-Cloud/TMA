@@ -508,18 +508,18 @@ async function setUserStorageLimit(userId, targetUserId, storageLimit) {
         throw new Error('Storage limit exceeds maximum safe value');
       }
 
-      // Validate against actual disk space
-      const { getActualDiskSize } = require('../../utils/storageUtils');
-      const basePath = process.env.UPLOAD_DIR || __dirname;
-      const actualDiskSize = await getActualDiskSize(basePath);
-
-      // Storage limit cannot exceed actual available disk space
-      if (limit > actualDiskSize) {
-        const { formatFileSize } = require('../../utils/storageUtils');
-        const limitFormatted = formatFileSize(limit);
-        const actualFormatted = formatFileSize(actualDiskSize);
-        await client.query('ROLLBACK');
-        throw new Error(`Storage limit (${limitFormatted}) cannot exceed actual disk space (${actualFormatted})`);
+      // When using local disk, cap limit by actual VM disk space. When using S3, skip this (S3 capacity is independent).
+      const { useS3 } = require('../../config/storage');
+      if (!useS3) {
+        const { getActualDiskSize, formatFileSize } = require('../../utils/storageUtils');
+        const basePath = process.env.UPLOAD_DIR || __dirname;
+        const actualDiskSize = await getActualDiskSize(basePath);
+        if (limit > actualDiskSize) {
+          const limitFormatted = formatFileSize(limit);
+          const actualFormatted = formatFileSize(actualDiskSize);
+          await client.query('ROLLBACK');
+          throw new Error(`Storage limit (${limitFormatted}) cannot exceed actual disk space (${actualFormatted})`);
+        }
       }
     }
 
