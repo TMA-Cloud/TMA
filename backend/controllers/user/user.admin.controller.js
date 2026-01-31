@@ -427,6 +427,11 @@ async function _updateUserStorageLimit(req, res) {
       logger.warn({ userId: req.userId }, 'Unauthorized storage limit update attempt');
       return sendError(res, 403, err.message);
     }
+    // Validation errors from setUserStorageLimit (e.g. limit exceeds disk, invalid format) → 400 so frontend can show the message
+    if (err.message?.startsWith('Storage limit') || err.message === 'Invalid targetUserId format') {
+      logger.warn({ err, userId: req.userId }, 'Storage limit update rejected');
+      return sendError(res, 400, err.message);
+    }
     logger.error({ err }, 'Failed to update user storage limit');
     sendError(res, 500, 'Server error', err);
   }
