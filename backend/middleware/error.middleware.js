@@ -1,8 +1,6 @@
 const { logger } = require('../config/logger');
 
 const errorHandler = (err, req, res, _next) => {
-  logger.error({ err }, 'Unhandled error');
-
   // Multer errors
   if (err.code === 'LIMIT_FILE_SIZE') {
     return res.status(400).json({
@@ -58,8 +56,9 @@ const errorHandler = (err, req, res, _next) => {
     });
   }
 
-  // File system errors
+  // File system errors (e.g. missing static/frontend file) - expected when frontend not built
   if (err.code === 'ENOENT') {
+    logger.warn({ path: err.path }, 'File not found (e.g. frontend not built or missing static file)');
     return res.status(404).json({
       message: 'File not found',
       error: 'FILE_NOT_FOUND',
@@ -73,7 +72,8 @@ const errorHandler = (err, req, res, _next) => {
     });
   }
 
-  // Default error
+  // Default error - only truly unhandled errors reach here
+  logger.error({ err }, 'Unhandled error');
   res.status(err.status || 500).json({
     message: err.message || 'Internal server error',
     error: process.env.NODE_ENV === 'production' ? 'INTERNAL_ERROR' : err.stack,

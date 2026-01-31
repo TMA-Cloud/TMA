@@ -113,23 +113,34 @@ app.use('/api/onlyoffice', onlyofficeRoutes);
 app.use('/api/version', versionRoutes);
 app.use('/s', shareRoutes);
 
-// Serve static frontend files
+// Serve static frontend files (only when frontend is built)
 const frontendPath = path.join(__dirname, '..', 'frontend', 'dist');
-app.use(express.static(frontendPath));
+const frontendExists = fs.existsSync(frontendPath) && fs.existsSync(path.join(frontendPath, 'index.html'));
 
-// SPA fallback - serve index.html for all non-API routes
-app.use((req, res, next) => {
-  // Skip API routes and static files
-  if (req.path.startsWith('/api') || req.path.startsWith('/s')) {
-    return next();
-  }
-  // For all other routes, serve index.html (SPA routing)
-  res.sendFile(path.join(frontendPath, 'index.html'), err => {
-    if (err) {
-      next(err);
+if (frontendExists) {
+  app.use(express.static(frontendPath));
+  // SPA fallback - serve index.html for all non-API routes
+  app.use((req, res, next) => {
+    if (req.path.startsWith('/api') || req.path.startsWith('/s')) {
+      return next();
     }
+    res.sendFile(path.join(frontendPath, 'index.html'), err => {
+      if (err) next(err);
+    });
   });
-});
+} else {
+  logger.warn('Frontend not built (frontend/dist missing). Non-API routes will return a graceful 404.');
+  // Graceful response when frontend is missing - no ENOENT, no stack traces
+  app.use((req, res, next) => {
+    if (req.path.startsWith('/api') || req.path.startsWith('/s')) {
+      return next();
+    }
+    res.status(404).json({
+      message: 'Frontend not available. Build the frontend.',
+      error: 'FRONTEND_NOT_BUILT',
+    });
+  });
+}
 
 // Error handling middleware (must be last)
 app.use(errorHandler);
