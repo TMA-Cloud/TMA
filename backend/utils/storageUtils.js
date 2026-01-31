@@ -27,12 +27,12 @@ async function getActualDiskSize(basePath) {
 }
 
 /**
- * Check if file size would exceed storage limit
+ * Check if file size would exceed storage limit (DB-based usage; works for both local and S3).
+ * Does not use UPLOAD_DIR or disk paths — safe to call when STORAGE_DRIVER=s3.
  * @param {Object} params - Parameters
  * @param {number} fileSize - File size in bytes
- * @param {number} used - Currently used storage
- * @param {number} userStorageLimit - User's storage limit (null = use actual disk)
- * @param {string} defaultBasePath - Default base path
+ * @param {number} used - Currently used storage (e.g. from getUserStorageUsage)
+ * @param {number|null} userStorageLimit - User's storage limit (null = no limit / unlimited)
  * @returns {Promise<{exceeded: boolean, message?: string}>}
  */
 async function checkStorageLimitExceeded({ fileSize, used, userStorageLimit }) {

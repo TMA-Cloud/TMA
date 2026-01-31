@@ -33,14 +33,12 @@ async function checkUploadStorage(req, res) {
   }
   try {
     const used = await getUserStorageUsage(req.userId);
-    const basePath = process.env.UPLOAD_DIR || __dirname;
     const userStorageLimit = await getUserStorageLimit(req.userId);
 
     const checkResult = await checkStorageLimitExceeded({
       fileSize,
       used,
       userStorageLimit,
-      defaultBasePath: basePath,
     });
 
     if (checkResult.exceeded) {
@@ -174,13 +172,11 @@ async function uploadFile(req, res) {
 
   try {
     const used = await getUserStorageUsage(req.userId);
-    const basePath = process.env.UPLOAD_DIR || __dirname;
     const userStorageLimit = await getUserStorageLimit(req.userId);
     const checkResult = await checkStorageLimitExceeded({
       fileSize: req.file.size,
       used,
       userStorageLimit,
-      defaultBasePath: basePath,
     });
 
     if (checkResult.exceeded) {
@@ -298,13 +294,11 @@ async function uploadFilesBulk(req, res) {
   const totalSize = req.files.reduce((sum, file) => sum + file.size, 0);
   try {
     const used = await getUserStorageUsage(req.userId);
-    const basePath = process.env.UPLOAD_DIR || __dirname;
     const userStorageLimit = await getUserStorageLimit(req.userId);
     const checkResult = await checkStorageLimitExceeded({
       fileSize: totalSize,
       used,
       userStorageLimit,
-      defaultBasePath: basePath,
     });
 
     if (checkResult.exceeded) {

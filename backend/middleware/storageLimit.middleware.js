@@ -3,8 +3,8 @@ const { checkStorageLimitExceeded } = require('../utils/storageUtils');
 const { logger } = require('../config/logger');
 
 /**
- * Middleware to check storage limits before file upload
- * This runs BEFORE multer processes the file, preventing unnecessary uploads
+ * Middleware to check storage limits before file upload.
+ * Runs BEFORE multer processes the file. Uses DB-based usage only (no UPLOAD_DIR) — safe for S3.
  */
 async function checkStorageLimit(req, res, next) {
   try {
@@ -21,14 +21,12 @@ async function checkStorageLimit(req, res, next) {
     const estimatedFileSize = Math.max(0, contentLength - 500);
 
     const used = await getUserStorageUsage(req.userId);
-    const basePath = process.env.UPLOAD_DIR || __dirname;
     const userStorageLimit = await getUserStorageLimit(req.userId);
 
     const checkResult = await checkStorageLimitExceeded({
       fileSize: estimatedFileSize,
       used,
       userStorageLimit,
-      defaultBasePath: basePath,
     });
 
     if (checkResult.exceeded) {
