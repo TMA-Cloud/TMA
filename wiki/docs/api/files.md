@@ -116,6 +116,40 @@ The created folder object.
 }
 ```
 
+## Check Upload Storage
+
+### POST `/api/files/upload/check`
+
+Check if the user has enough storage space for an upload before sending the file.
+
+**Request Body:**
+
+```json
+{
+  "fileSize": 1024
+}
+```
+
+**Validation:**
+
+- `fileSize`: Required. Must be a non-negative integer representing the file size in bytes.
+
+**Response (Success):**
+
+```json
+{
+  "message": "Storage space available"
+}
+```
+
+**Response (Error):**
+
+```json
+{
+  "message": "Storage limit exceeded. Required: 1 GB, available: 500 MB."
+}
+```
+
 ## Upload File
 
 ### POST `/api/files/upload`
@@ -147,6 +181,45 @@ The uploaded file object.
   "parentId": null,
   "modified": "2024-01-01T00:00:00Z"
 }
+```
+
+## Bulk Upload Files
+
+### POST `/api/files/upload/bulk`
+
+Upload multiple files at once using `multipart/form-data`.
+
+**Form Data:**
+
+- `files` - Files to upload (required)
+- `parent_id` - Parent folder ID (optional)
+- `path` - Target path (optional)
+
+**Response:**
+
+An array of the uploaded file objects.
+
+```json
+[
+  {
+    "id": "file_123",
+    "name": "file1.pdf",
+    "type": "file",
+    "size": 1024,
+    "mimeType": "application/pdf",
+    "parentId": null,
+    "modified": "2024-01-01T00:00:00Z"
+  },
+  {
+    "id": "file_456",
+    "name": "file2.jpg",
+    "type": "file",
+    "size": 2048,
+    "mimeType": "image/jpeg",
+    "parentId": null,
+    "modified": "2024-01-01T00:00:00Z"
+  }
+]
 ```
 
 ## Move Files

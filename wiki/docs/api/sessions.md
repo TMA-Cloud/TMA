@@ -4,7 +4,7 @@ Session management endpoints for TMA Cloud.
 
 ## Get Sessions
 
-### GET `/api/auth/sessions`
+### GET `/api/sessions`
 
 Get all active sessions for authenticated user.
 
@@ -27,7 +27,7 @@ Get all active sessions for authenticated user.
 
 ## Revoke Session
 
-### DELETE `/api/auth/sessions/:sessionId`
+### DELETE `/api/sessions/:sessionId`
 
 Revoke a specific session.
 
@@ -41,7 +41,7 @@ Revoke a specific session.
 
 ## Revoke Other Sessions
 
-### POST `/api/auth/sessions/revoke-others`
+### POST `/api/sessions/revoke-others`
 
 Revoke all other active sessions except the current one.
 

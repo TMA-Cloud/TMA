@@ -16,8 +16,8 @@ function HomepageHeader() {
           </Heading>
           <p className="hero__subtitle">{siteConfig.tagline}</p>
           <p className={styles.heroDescription}>
-            Technical documentation for TMA Cloud, a self-hosted file storage
-            and sharing platform
+            Build, integrate, and extend your self-hosted cloud with TMA's
+            powerful and flexible APIs.
           </p>
           <div className={styles.buttons}>
             <Link
@@ -66,7 +66,7 @@ function FeaturesSection() {
       <div className="container">
         <div className={styles.featuresHeader}>
           <Heading as="h2" className={styles.sectionTitle}>
-            What TMA Cloud provides
+            Explore Core Features
           </Heading>
         </div>
         <div className={styles.featuresGrid}>
@@ -84,7 +84,7 @@ function FeaturesSection() {
           />
           <FeatureCard
             title="Sharing & Collaboration"
-            description="CPublic and private share links for files and folders, with optional expiration and custom domains"
+            description="Public and private share links for files and folders, with optional expiration and custom domains"
             icon="🔗"
             to="/guides/user/share-files"
           />

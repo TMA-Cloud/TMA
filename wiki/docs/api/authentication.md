@@ -61,7 +61,7 @@ Authenticate a user and receive a JWT token. If MFA is enabled for the user, `mf
 **Validation:**
 
 - `email`: Must be a valid email format.
-- `password`: Cannot be empty.
+- `password`: Must not exceed 128 characters.
 
 **Response:**
 
