@@ -68,11 +68,11 @@ const backupCodeRegenerationRateLimiter = rateLimit({
 
 /**
  * Rate limiter for general API endpoints
- * 100 requests per 15 minutes per IP
+ * 1000 requests per 15 minutes per IP
  */
 const apiRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // 100 requests per window
+  max: 1000, // 1000 requests per window
   message: { error: 'Too many requests, please try again later' },
   standardHeaders: true,
   legacyHeaders: false,
@@ -82,11 +82,11 @@ const apiRateLimiter = rateLimit({
 
 /**
  * Rate limiter for file upload endpoints
- * 50 uploads per hour per user/IP
+ * 200 uploads per hour per user/IP
  */
 const uploadRateLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
-  max: 50, // 50 uploads per hour
+  max: 200, // 200 uploads per hour
   message: { error: 'Too many uploads, please try again later' },
   standardHeaders: true,
   legacyHeaders: false,
