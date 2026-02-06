@@ -81,16 +81,39 @@ Update a user's storage limit (admin only).
 
 ## Signup Status
 
-### GET `/api/user/signup-status`
+### GET `/api/signup-status`
 
-Get the current user signup status and whether the current user is allowed to toggle it.
+Public endpoint. No authentication. Use to show or hide the signup link on the login page.
 
 **Response:**
 
 ```json
 {
+  "signupEnabled": true
+}
+```
+
+### GET `/api/user/signup-status`
+
+Requires authentication. Returns signup status and whether the current user can toggle it. The first user (admin) also receives `totalUsers` and `additionalUsers`.
+
+**Response (any authenticated user):**
+
+```json
+{
   "signupEnabled": true,
-  "canToggle": true
+  "canToggle": false
+}
+```
+
+**Response (first user / admin):**
+
+```json
+{
+  "signupEnabled": true,
+  "canToggle": true,
+  "totalUsers": 3,
+  "additionalUsers": 2
 }
 ```
 

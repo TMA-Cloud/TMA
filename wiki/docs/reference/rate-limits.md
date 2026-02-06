@@ -22,9 +22,10 @@ Rate limits are enforced per IP address and/or user for different endpoint types
 - **Limit:** 100 requests per 15 minutes per IP address.
 - **Purpose:** Prevents abuse of general application functionality.
 - **Endpoints:**
+  - Public endpoints (e.g. `GET /api/signup-status`).
   - Most authenticated endpoints under `/api/auth/`, including profile, session management, and some MFA operations.
   - All file operation endpoints under `/api/files/`.
-  - All user management endpoints under `/api/user/`.
+  - All user management endpoints under `/api/user/` (including `GET /api/user/signup-status`).
   - All version check endpoints under `/api/version/`.
   - OnlyOffice configuration, viewer, and file-serving endpoints under `/api/onlyoffice/`.
 

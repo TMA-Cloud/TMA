@@ -41,6 +41,24 @@ const response = await fetch("/api/signup", {
 const data = await response.json();
 ```
 
+### Signup status (public, for login page)
+
+```javascript
+const response = await fetch("/api/signup-status", { credentials: "include" });
+const data = await response.json();
+// data.signupEnabled - show or hide signup link
+```
+
+### Signup status (authenticated, for Settings)
+
+```javascript
+const response = await fetch("/api/user/signup-status", {
+  credentials: "include",
+});
+const data = await response.json();
+// data.signupEnabled, data.canToggle, data.totalUsers (admin), data.additionalUsers (admin)
+```
+
 ## File Operations
 
 ### Upload File

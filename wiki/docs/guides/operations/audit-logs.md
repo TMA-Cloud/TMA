@@ -65,7 +65,8 @@ npm run worker
 
 ### Settings Events
 
-- `settings.signup.toggle` - Signup enabled/disabled
+- `admin.settings.update` - Admin setting changed (e.g. signup enabled/disabled)
+- `admin.settings.read` - Admin read of protected settings
 
 ## Querying Audit Logs
 

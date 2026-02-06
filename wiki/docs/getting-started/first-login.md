@@ -21,7 +21,7 @@ Create your first account and get started with TMA Cloud.
 
 The first user to sign up automatically becomes the **administrator** with the following privileges:
 
-- **User Management** - Create, edit, and manage all users
+- **User Management** - Manage all users
 - **Storage Limits** - Set storage limits for users
 - **Signup Control** - Enable or disable user registration
 - **MFA Management** - Manage multi-factor authentication settings
@@ -37,7 +37,7 @@ As the first user (admin), you can control whether new users can sign up:
 2. Find **"User Signup"** section
 3. Toggle signup on/off as needed
 
-When signup is disabled, only admins can create new accounts.
+When signup is disabled, only the first user (admin) can allow signup.
 
 ## Next Steps
 

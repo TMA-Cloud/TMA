@@ -6,9 +6,9 @@ Manage users in TMA Cloud (admin only).
 
 ### Viewing Users
 
-1. Navigate to **Settings** → **Users**
-2. View all registered users
-3. See user details (email, name, storage usage)
+1. Go to **Settings** → **Administration** (admin only)
+2. Click **Show all users** under Registered Users
+3. View user details (email, name, storage usage)
 
 ### User Information
 
@@ -24,8 +24,8 @@ Manage users in TMA Cloud (admin only).
 ### Signup Control
 
 - **Enable Signup:** Allow public registration
-- **Disable Signup:** Only admins can create accounts
-- Toggle in Settings → Signup Control
+- **Disable Signup:** No one is allowed to signup
+- Toggle in **Settings** → **Administration** → **Allow User Signup**
 
 ## Managing Users
 

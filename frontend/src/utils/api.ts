@@ -173,7 +173,9 @@ export async function checkGoogleAuthEnabled(): Promise<boolean> {
 }
 
 /**
- * Get signup status and whether current user can toggle it
+ * Get signup status and whether current user can toggle it.
+ * When logged in, uses GET /api/user/signup-status (returns canToggle, totalUsers, etc.).
+ * When not logged in, falls back to GET /api/signup-status (public, signupEnabled only).
  */
 export async function getSignupStatus(): Promise<{
   signupEnabled: boolean;
@@ -182,13 +184,20 @@ export async function getSignupStatus(): Promise<{
   additionalUsers?: number;
 }> {
   try {
-    return await apiGet<{
+    const authenticated = await apiGet<{
       signupEnabled: boolean;
       canToggle: boolean;
       totalUsers?: number;
       additionalUsers?: number;
     }>("/api/user/signup-status");
-  } catch {
+    return authenticated;
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 401) {
+      const publicRes = await apiGet<{ signupEnabled: boolean }>(
+        "/api/signup-status",
+      ).catch(() => ({ signupEnabled: true }));
+      return { ...publicRes, canToggle: false };
+    }
     return { signupEnabled: true, canToggle: false };
   }
 }

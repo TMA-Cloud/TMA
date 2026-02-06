@@ -11,6 +11,7 @@ const shareRoutes = require('./routes/share.routes');
 const onlyofficeRoutes = require('./routes/onlyoffice.routes');
 const userRoutes = require('./routes/user.routes');
 const versionRoutes = require('./routes/version.routes');
+const publicRoutes = require('./routes/public.routes');
 const { startTrashCleanup } = require('./services/trashCleanup');
 
 const { startAuditCleanup } = require('./services/auditCleanup');
@@ -106,6 +107,7 @@ app.get(
 );
 
 // API routes
+app.use('/api', publicRoutes);
 app.use('/api', authRoutes);
 app.use('/api/files', fileRoutes);
 app.use('/api/user', userRoutes);

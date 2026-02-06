@@ -4,7 +4,10 @@ import { PasswordInput } from "./PasswordInput";
 import { SocialAuthButtons } from "./SocialAuthButtons";
 import { checkGoogleAuthEnabled } from "../../utils/api";
 
-export const LoginForm: React.FC<{ onSwitch: () => void }> = ({ onSwitch }) => {
+export const LoginForm: React.FC<{
+  onSwitch: () => void;
+  signupEnabled: boolean;
+}> = ({ onSwitch, signupEnabled }) => {
   const { login } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -116,16 +119,18 @@ export const LoginForm: React.FC<{ onSwitch: () => void }> = ({ onSwitch }) => {
           Login
         </button>
         <SocialAuthButtons googleEnabled={googleEnabled} />
-        <p className="text-sm text-center text-gray-500 dark:text-gray-400">
-          No account?{" "}
-          <button
-            type="button"
-            onClick={onSwitch}
-            className="underline text-blue-500 hover:text-blue-700 font-medium transition-colors duration-200"
-          >
-            Sign up
-          </button>
-        </p>
+        {signupEnabled && (
+          <p className="text-sm text-center text-gray-500 dark:text-gray-400">
+            No account?{" "}
+            <button
+              type="button"
+              onClick={onSwitch}
+              className="underline text-blue-500 hover:text-blue-700 font-medium transition-colors duration-200"
+            >
+              Sign up
+            </button>
+          </p>
+        )}
       </form>
     </div>
   );

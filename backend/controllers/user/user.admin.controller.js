@@ -16,7 +16,19 @@ const { logAuditEvent } = require('../../services/auditLogger');
 const { invalidateOnlyOfficeOriginCache } = require('../../utils/onlyofficeOriginCache');
 
 /**
- * Get signup status and admin information
+ * Get public signup status (no auth). Returns only signupEnabled for login page.
+ */
+async function _getPublicSignupStatus(req, res) {
+  try {
+    const signupEnabled = await getSignupEnabled();
+    sendSuccess(res, { signupEnabled });
+  } catch (err) {
+    sendError(res, 500, 'Server error', err);
+  }
+}
+
+/**
+ * Get signup status and admin information (authenticated). Returns canToggle and user counts for first user.
  */
 async function _getSignupStatus(req, res) {
   try {
@@ -438,6 +450,7 @@ async function _updateUserStorageLimit(req, res) {
 }
 
 module.exports = {
+  getPublicSignupStatus: _getPublicSignupStatus,
   getSignupStatus: _getSignupStatus,
   toggleSignup: _toggleSignup,
   listUsers: _listUsers,

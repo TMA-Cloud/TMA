@@ -5,6 +5,7 @@ import { useApp } from "./contexts/AppContext";
 import { AuthProvider } from "./contexts/AuthProvider";
 import { useAuth } from "./contexts/AuthContext";
 import { ToastProvider } from "./hooks/ToastProvider";
+import { useSignupStatus } from "./components/settings/hooks/useSignupStatus";
 import { useIsMobile } from "./hooks/useIsMobile";
 import { Sidebar } from "./components/layout/Sidebar";
 import { Header } from "./components/layout/Header";
@@ -166,6 +167,16 @@ const AuthGate: React.FC = () => {
   const [view, setView] = useState<"login" | "signup">("login");
   const [error, setError] = useState<string | null>(null);
 
+  const { signupEnabled, loadingSignupStatus } = useSignupStatus();
+
+  // If signup is disabled, force view to login
+  React.useEffect(() => {
+    if (!loadingSignupStatus && !signupEnabled && view === "signup") {
+      setView("login");
+      setError("Signup is currently disabled.");
+    }
+  }, [signupEnabled, loadingSignupStatus, view]);
+
   // Check for error in URL (e.g., from Google OAuth callback)
   React.useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -178,7 +189,7 @@ const AuthGate: React.FC = () => {
     }
   }, []);
 
-  if (loading) {
+  if (loading || loadingSignupStatus) {
     return (
       <div className="h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-950">
         <div className="text-center animate-fadeIn">
@@ -200,11 +211,14 @@ const AuthGate: React.FC = () => {
           </div>
         )}
         <Suspense fallback={<PageLoadingFallback />}>
-          {view === "login" ? (
+          {view === "login" || !signupEnabled ? (
             <LoginForm
+              signupEnabled={signupEnabled}
               onSwitch={() => {
-                setView("signup");
-                setError(null);
+                if (signupEnabled) {
+                  setView("signup");
+                  setError(null);
+                }
               }}
             />
           ) : (

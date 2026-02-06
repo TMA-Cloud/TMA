@@ -43,7 +43,8 @@ Complete list of audit event types in TMA Cloud.
 
 ## Settings Events
 
-- `settings.signup.toggle` - Signup enabled/disabled
+- `admin.settings.update` - Admin setting changed (metadata: `setting`, e.g. `signup_enabled`; `newValue`)
+- `admin.settings.read` - Admin viewed protected settings (failure when unauthorized)
 
 ## Event Metadata
 
