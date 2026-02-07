@@ -40,11 +40,48 @@ export const FileTypeIcon: React.FC<{
     [k: string]: unknown;
   };
 
+  // Archive/compressed types: document-with-zipper look, clear label (zip, rar, 7z, etc.)
+  const archiveStyle = {
+    type: "compressed",
+    color: "#F1F5F9",
+    labelColor: "#475569",
+    glyphColor: "#94A3B8",
+    labelTextColor: "#FFFFFF",
+  } as const;
+
   // Extension-specific styles so Windows/Mac/text/JSON get proper colored icons (not white)
   const extensionOverrides: Record<
     string,
-    { type: string; color: string; labelColor: string; glyphColor: string }
+    {
+      type: string;
+      color: string;
+      labelColor: string;
+      glyphColor: string;
+      labelTextColor?: string;
+    }
   > = {
+    // Archives – consistent document + zipper + extension label
+    zip: archiveStyle,
+    zipx: archiveStyle,
+    rar: archiveStyle,
+    "7z": archiveStyle,
+    "7zip": archiveStyle,
+    tar: archiveStyle,
+    gz: archiveStyle,
+    gzip: archiveStyle,
+    bz2: archiveStyle,
+    xz: archiveStyle,
+    lz: archiveStyle,
+    lzma: archiveStyle,
+    z: archiveStyle,
+    // Disk images – drive icon with clear "iso" label
+    iso: {
+      type: "drive",
+      color: "#E0E7FF",
+      labelColor: "#4F46E5",
+      glyphColor: "#6366F1",
+      labelTextColor: "#FFFFFF",
+    },
     exe: {
       type: "settings",
       color: "#0078D4",
