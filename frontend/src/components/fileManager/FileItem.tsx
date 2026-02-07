@@ -1,15 +1,14 @@
 import React, { useRef } from "react";
 import { type FileItem as FileItemType } from "../../contexts/AppContext";
 import {
-  getFileIcon,
   formatFileSize,
   formatDate,
   formatFileNameForTooltip,
 } from "../../utils/fileUtils";
-import { Star, Share2 } from "lucide-react";
+import { Star, Share2, Eye } from "lucide-react";
 import { Tooltip } from "../ui/Tooltip";
-import { Eye } from "lucide-react";
 import { useIsMobile } from "../../hooks/useIsMobile";
+import { FileTypeIcon } from "./FileTypeIcon";
 
 interface FileItemProps {
   file: FileItemType;
@@ -26,14 +25,6 @@ interface FileItemProps {
   isDragOver?: boolean;
   dragDisabled?: boolean;
 }
-
-const FileIcon: React.FC<{ file: FileItemType; className?: string }> = ({
-  file,
-  className,
-}) => {
-  const IconComp = getFileIcon(file);
-  return React.createElement(IconComp as React.ElementType, { className });
-};
 
 export const FileItemComponent: React.FC<FileItemProps> = ({
   file,
@@ -155,9 +146,9 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
           <div
             className={`relative ${isMobile ? "mb-1" : "mb-2"} transition-transform duration-200 group-hover:scale-105 flex-shrink-0`}
           >
-            <FileIcon
+            <FileTypeIcon
               file={file}
-              className={`${isMobile ? "w-10 h-10" : "w-14 h-14"} transition-all duration-200 ${file.type === "folder" ? "text-blue-500 dark:text-blue-400 group-hover:text-blue-600 dark:group-hover:text-blue-300" : "text-gray-600/80 dark:text-gray-400/80 group-hover:text-gray-700 dark:group-hover:text-gray-300"}`}
+              className={`${isMobile ? "w-10 h-10" : "w-14 h-14"} transition-all duration-200`}
             />
             {file.starred && (
               <Star
@@ -254,9 +245,9 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
       onTouchMove={handleTouchMove}
     >
       <div className="relative flex-shrink-0 transition-transform duration-200 group-hover:scale-105">
-        <FileIcon
+        <FileTypeIcon
           file={file}
-          className={`w-10 h-10 transition-all duration-200 ${file.type === "folder" ? "text-blue-500 dark:text-blue-400 group-hover:text-blue-600 dark:group-hover:text-blue-300" : "text-gray-600/80 dark:text-gray-400/80 group-hover:text-gray-700 dark:group-hover:text-gray-300"}`}
+          className="w-10 h-10 transition-all duration-200"
         />
         {file.starred && (
           <Star className="absolute -top-2 -right-2 w-4 h-4 text-yellow-400 fill-yellow-400" />

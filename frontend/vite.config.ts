@@ -32,16 +32,16 @@ export default defineConfig({
         manualChunks(id) {
           if (!id.includes("node_modules")) return;
 
-          // React is large and used everywhere - separate it for better caching
+          // Only core React packages (exact names) to avoid circular chunk:
+          // e.g. "react-file-icon" must stay in vendor, not react-vendor
           if (
-            id.includes("react") ||
-            id.includes("react-dom") ||
-            id.includes("scheduler")
+            /node_modules[/\\]react[/\\]/.test(id) ||
+            /node_modules[/\\]react-dom[/\\]/.test(id) ||
+            /node_modules[/\\]scheduler[/\\]/.test(id)
           ) {
             return "react-vendor";
           }
 
-          // Everything else in one vendor chunk (Vite will auto-split if too large)
           return "vendor";
         },
       },
