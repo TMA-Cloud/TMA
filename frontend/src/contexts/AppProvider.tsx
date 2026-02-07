@@ -452,8 +452,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
           debouncedSSERefresh();
         }
       } catch (error) {
-        // Log parsing errors for debugging
-        console.error("[SSE] Error parsing event:", error, event.data);
+        if (import.meta.env.DEV) {
+          console.error("[SSE] Error parsing event:", error, event.data);
+        }
       }
     };
 

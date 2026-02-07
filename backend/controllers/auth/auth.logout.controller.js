@@ -40,10 +40,7 @@ async function logout(req, res) {
     // Revoke the current session if session ID is available
     if (sessionId && userId) {
       try {
-        const deleted = await deleteSession(sessionId, userId);
-        if (deleted) {
-          logger.info({ userId, sessionId }, 'Session revoked on logout');
-        }
+        await deleteSession(sessionId, userId);
       } catch (err) {
         // Log error but don't fail logout if session deletion fails
         logger.warn({ err, userId, sessionId }, 'Failed to revoke session on logout');

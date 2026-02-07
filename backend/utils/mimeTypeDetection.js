@@ -278,7 +278,7 @@ async function validateOnlyOfficeMimeType(
   if (!actualMimeType) {
     if (storedMimeType && normalizedExpected.includes(normalizedStored)) {
       // Stored MIME type matches expected - allow (file-type might not detect all formats)
-      logger.info(
+      logger.debug(
         { filename, storedMimeType, extension: ext },
         '[ONLYOFFICE] MIME type detection failed, but stored MIME type matches expected type'
       );

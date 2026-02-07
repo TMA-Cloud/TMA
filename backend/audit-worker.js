@@ -177,15 +177,12 @@ async function processAuditEvent(job) {
       event.processingTimeMs || null,
     ];
 
-    const result = await pool.query(query, values);
-    const auditLogId = result.rows[0].id;
+    await pool.query(query, values);
 
     // Record metrics
     const duration = (Date.now() - startTime) / 1000; // Convert to seconds
     recordProcessingDuration(duration);
     incrementEventsProcessed();
-
-    logger.info({ jobId: job.id, auditLogId, action: event.action, duration }, 'Audit event processed successfully');
   } catch (error) {
     // Determine failure reason
     let reason = 'unknown';

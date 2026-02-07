@@ -536,8 +536,6 @@ async function setUserStorageLimit(userId, targetUserId, storageLimit) {
 
     // Invalidate user cache
     await deleteCache(cacheKeys.allUsers());
-
-    logger.info({ userId, targetUserId, storageLimit }, 'User storage limit updated');
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;

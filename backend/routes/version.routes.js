@@ -38,7 +38,7 @@ function readPackageVersion(packagePath) {
     const parsed = JSON.parse(fileContents);
     return typeof parsed.version === 'string' ? parsed.version : 'unknown';
   } catch (error) {
-    console.error('Error reading package version:', error);
+    logger.error({ err: error }, 'Error reading package version');
     return 'unknown';
   }
 }
@@ -74,7 +74,7 @@ router.get('/latest', requireAdmin, (req, res) => {
 
     // Handle response stream errors
     httpsRes.on('error', error => {
-      console.error('Error reading response stream:', error);
+      logger.error({ err: error }, 'Error reading response stream');
       sendLocalError(502, 'Error reading response from GitHub');
     });
 
@@ -93,7 +93,7 @@ router.get('/latest', requireAdmin, (req, res) => {
           backend: versions.backend ?? 'unknown',
         });
       } catch (error) {
-        console.error('Error parsing versions JSON:', error);
+        logger.error({ err: error }, 'Error parsing versions JSON');
         sendLocalError(500, 'Failed to parse versions data');
       }
     });
@@ -101,7 +101,7 @@ router.get('/latest', requireAdmin, (req, res) => {
 
   // Handle request-level errors
   request.on('error', error => {
-    console.error('Error fetching latest versions:', error);
+    logger.error({ err: error }, 'Error fetching latest versions');
     sendLocalError(500, 'Failed to fetch latest versions');
   });
 
