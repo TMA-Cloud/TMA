@@ -3,7 +3,8 @@ const { body, param } = require('express-validator');
 const MAX_EMAIL_LENGTH = 254;
 const MAX_PASSWORD_LENGTH = 128;
 const MAX_NAME_LENGTH = 100;
-const FILE_NAME_REGEX = /^[a-zA-Z0-9_.-]+$/;
+// Allow letters, numbers, underscore, dot, hyphen, and spaces (no path/control chars)
+const FILE_NAME_REGEX = /^[a-zA-Z0-9_.\s-]+$/;
 
 const signupSchema = [
   body('email')
@@ -39,6 +40,7 @@ const loginSchema = [
 
 const addFolderSchema = [
   body('name')
+    .trim()
     .notEmpty()
     .withMessage('Folder name is required')
     .matches(FILE_NAME_REGEX)
@@ -51,6 +53,7 @@ const addFolderSchema = [
 const renameFileSchema = [
   body('id').notEmpty().withMessage('File ID is required').isString().withMessage('File ID must be a string'),
   body('name')
+    .trim()
     .notEmpty()
     .withMessage('New name is required')
     .matches(FILE_NAME_REGEX)
