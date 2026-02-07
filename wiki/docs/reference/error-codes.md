@@ -9,7 +9,7 @@ Complete reference for all error codes in TMA Cloud API.
 - `MFA_REQUIRED` - MFA code required
 - `INVALID_MFA_CODE` - Invalid MFA code
 - `TOKEN_EXPIRED` - JWT token expired
-- `TOKEN_INVALID` - Invalid JWT token
+- `INVALID_TOKEN` - Invalid JWT token (middleware)
 - `SESSION_EXPIRED` - Session expired
 
 ## Authorization Errors
@@ -48,6 +48,16 @@ Complete reference for all error codes in TMA Cloud API.
 - `DATABASE_ERROR` - Database operation failed
 - `SERVICE_UNAVAILABLE` - Service temporarily unavailable
 - `RATE_LIMIT_EXCEEDED` - Rate limit exceeded
+
+## Middleware / Structural Errors (from error handler)
+
+- `FILE_TOO_LARGE` - Multer file size limit
+- `UNEXPECTED_FILE` - Multer unexpected file field
+- `DUPLICATE_RESOURCE` - PostgreSQL unique violation (23505)
+- `INVALID_REFERENCE` - PostgreSQL foreign key violation (23503)
+- `PERMISSION_DENIED` - File system EACCES
+
+**Note:** Many endpoints return only a `message` field; the `error` code is set for the cases above and for JWT/metrics errors.
 
 ## Related Topics
 

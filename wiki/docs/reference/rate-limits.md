@@ -19,11 +19,11 @@ Rate limits are enforced per IP address and/or user for different endpoint types
 
 ### General API Limiter
 
-- **Limit:** 100 requests per 15 minutes per IP address.
+- **Limit:** 1000 requests per 15 minutes per IP address.
 - **Purpose:** Prevents abuse of general application functionality.
 - **Endpoints:**
   - Public endpoints (e.g. `GET /api/signup-status`).
-  - Most authenticated endpoints under `/api/auth/`, including profile, session management, and some MFA operations.
+  - Authenticated auth and profile endpoints (e.g. `/api/profile`, `/api/sessions`, `/api/mfa/*`, `/api/logout`).
   - All file operation endpoints under `/api/files/`.
   - All user management endpoints under `/api/user/` (including `GET /api/user/signup-status`).
   - All version check endpoints under `/api/version/`.
@@ -37,7 +37,7 @@ Rate limits are enforced per IP address and/or user for different endpoint types
 
 ### Upload Limiter
 
-- **Limit:** 50 uploads per hour per user/IP.
+- **Limit:** 200 uploads per hour per user/IP.
 - **Purpose:** Prevents storage abuse through rapid file uploads.
 - **Endpoints:**
   - `POST /api/files/upload`

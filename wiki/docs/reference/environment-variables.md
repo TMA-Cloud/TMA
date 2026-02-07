@@ -12,14 +12,15 @@ Complete reference for all environment variables in TMA Cloud.
 
 ## Database Configuration
 
-| Variable      | Required | Default         | Description       |
-| ------------- | -------- | --------------- | ----------------- |
-| `DB_HOST`     | No       | `localhost`     | PostgreSQL host   |
-| `DB_PORT`     | No       | `5432`          | PostgreSQL port   |
-| `DB_USER`     | No       | `postgres`      | Database username |
-| `DB_PASSWORD` | Yes      | -               | Database password |
-| `DB_NAME`     | No       | `cloud_storage` | Database name     |
-| `DB_SSLMODE`  | No       | `disable`       | SSL mode          |
+| Variable        | Required | Default             | Description                  |
+| --------------- | -------- | ------------------- | ---------------------------- |
+| `DB_HOST`       | No       | `localhost`         | PostgreSQL host              |
+| `DB_PORT`       | No       | `5432`              | PostgreSQL port              |
+| `DB_USER`       | No       | `postgres`          | Database username            |
+| `DB_PASSWORD`   | Yes      | -                   | Database password            |
+| `DB_NAME`       | No       | `tma_cloud_storage` | Database name                |
+| `DB_SSLMODE`    | No       | `disable`           | SSL mode (`require` for TLS) |
+| `PGBOSS_SCHEMA` | No       | `pgboss`            | pg-boss job queue schema     |
 
 ## Redis Configuration
 
@@ -34,10 +35,11 @@ Complete reference for all environment variables in TMA Cloud.
 
 ## Authentication
 
-| Variable          | Required | Default | Description                                  |
-| ----------------- | -------- | ------- | -------------------------------------------- |
-| `JWT_SECRET`      | Yes      | -       | Secret key for JWT tokens                    |
-| `SESSION_BINDING` | No       | `true`  | Enable session binding (browser fingerprint) |
+| Variable                 | Required | Default | Description                                                  |
+| ------------------------ | -------- | ------- | ------------------------------------------------------------ |
+| `JWT_SECRET`             | Yes      | -       | Secret key for JWT tokens                                    |
+| `SESSION_BINDING`        | No       | `true`  | Enable session binding (browser fingerprint)                 |
+| `FORCE_INSECURE_COOKIES` | No       | `false` | If `true`, cookie `secure` flag off in production (insecure) |
 
 ## Google OAuth (Optional)
 
@@ -80,7 +82,7 @@ Complete reference for all environment variables in TMA Cloud.
 | --------------------- | -------- | ----------------------------- | -------------------------------------------------- |
 | `LOG_LEVEL`           | No       | `info` (prod), `debug` (dev)  | Log level (fatal, error, warn, info, debug, trace) |
 | `LOG_FORMAT`          | No       | `json` (prod), `pretty` (dev) | Log format (json, pretty)                          |
-| `METRICS_ALLOWED_IPS` | No       | `127.0.0.1,::1`               | IPs allowed to access `/metrics`                   |
+| `METRICS_ALLOWED_IPS` | No       | `127.0.0.1`                   | Comma-separated IPs allowed to access `/metrics`   |
 
 ## Audit Logging Configuration
 

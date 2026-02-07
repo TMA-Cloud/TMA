@@ -38,27 +38,25 @@ http_request_duration_seconds{method="GET"} 0.05
 
 ### GET `/api/version`
 
-Get currently deployed backend and frontend versions.
+Get currently deployed backend version. Requires authentication.
 
-**Rate limiting:** 100 requests per 15 minutes.
+**Rate limiting:** General API limit (1000 per 15 minutes per IP).
 
 **Response:**
 
 ```json
 {
-  "backend": "2.0.5",
-  "frontend": "2.0.5"
+  "backend": "2.0.5"
 }
 ```
 
-- `backend`: Backend version from package.json
-- `frontend`: Frontend version from package.json
+- `backend`: Backend version from backend package.json
 
 ### GET `/api/version/latest`
 
 Fetch latest versions from update feed. Admin only (first user).
 
-**Rate limiting:** 100 requests per 15 minutes.
+**Rate limiting:** General API limit (1000 per 15 minutes per IP).
 
 **Response:**
 

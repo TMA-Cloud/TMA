@@ -2,7 +2,7 @@
 
 User management endpoints for TMA Cloud.
 
-**Note:** All endpoints in this section are rate-limited to 100 requests per 15 minutes per IP address. Most also require admin privileges (first user).
+**Note:** All endpoints in this section use the general API rate limit (1000 requests per 15 minutes per IP). Most also require admin privileges (first user).
 
 ## List Users
 

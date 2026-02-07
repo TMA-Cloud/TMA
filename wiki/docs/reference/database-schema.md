@@ -71,12 +71,13 @@ Junction table linking share links to files.
 
 Application-wide settings.
 
-| Column           | Type        | Description                         |
-| ---------------- | ----------- | ----------------------------------- |
-| `id`             | TEXT        | Primary key (always 'app_settings') |
-| `signup_enabled` | BOOLEAN     | Default true                        |
-| `first_user_id`  | TEXT        | FK → users.id (immutable)           |
-| `updated_at`     | TIMESTAMPTZ | Default now()                       |
+| Column           | Type        | Description                                            |
+| ---------------- | ----------- | ------------------------------------------------------ |
+| `id`             | TEXT        | Primary key (always 'app_settings')                    |
+| `signup_enabled` | BOOLEAN     | Default true                                           |
+| `first_user_id`  | TEXT        | FK → users.id (immutable)                              |
+| `share_base_url` | TEXT        | Custom share link base URL (null = use request origin) |
+| `updated_at`     | TIMESTAMPTZ | Default now()                                          |
 
 ### `sessions`
 

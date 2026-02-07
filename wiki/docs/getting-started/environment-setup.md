@@ -12,14 +12,14 @@ Environment variable reference for TMA Cloud.
 
 ## Database Configuration
 
-| Variable      | Required | Default         | Description       |
-| ------------- | -------- | --------------- | ----------------- |
-| `DB_HOST`     | No       | `localhost`     | PostgreSQL host   |
-| `DB_PORT`     | No       | `5432`          | PostgreSQL port   |
-| `DB_USER`     | No       | `postgres`      | Database username |
-| `DB_PASSWORD` | Yes      | -               | Database password |
-| `DB_NAME`     | No       | `cloud_storage` | Database name     |
-| `DB_SSLMODE`  | No       | `disable`       | SSL mode          |
+| Variable      | Required | Default             | Description       |
+| ------------- | -------- | ------------------- | ----------------- |
+| `DB_HOST`     | No       | `localhost`         | PostgreSQL host   |
+| `DB_PORT`     | No       | `5432`              | PostgreSQL port   |
+| `DB_USER`     | No       | `postgres`          | Database username |
+| `DB_PASSWORD` | Yes      | -                   | Database password |
+| `DB_NAME`     | No       | `tma_cloud_storage` | Database name     |
+| `DB_SSLMODE`  | No       | `disable`           | SSL mode          |
 
 ## Redis Configuration
 

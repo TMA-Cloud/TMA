@@ -95,7 +95,7 @@ Log out the current user by clearing the authentication token cookie.
 }
 ```
 
-**Rate limiting:** 100 requests per 15 minutes.
+**Rate limiting:** General API limit (1000 per 15 minutes per IP).
 
 ### POST `/api/logout-all`
 
@@ -110,7 +110,7 @@ Log out from all devices by invalidating all of the user's active sessions and t
 }
 ```
 
-**Rate limiting:** 100 requests per 15 minutes.
+**Rate limiting:** General API limit (1000 per 15 minutes per IP).
 
 ## Profile
 
@@ -130,7 +130,7 @@ Get the current authenticated user's profile.
 }
 ```
 
-**Rate limiting:** 100 requests per 15 minutes.
+**Rate limiting:** General API limit (1000 per 15 minutes per IP).
 
 ## Google OAuth
 
@@ -170,7 +170,7 @@ Get the MFA status for the current authenticated user.
 }
 ```
 
-**Rate limiting:** 100 requests per 15 minutes.
+**Rate limiting:** General API limit (1000 per 15 minutes per IP).
 
 ### POST `/api/mfa/setup`
 
@@ -185,7 +185,7 @@ Generate an MFA secret and a corresponding QR code for setup in an authenticator
 }
 ```
 
-**Rate limiting:** 100 requests per 15 minutes.
+**Rate limiting:** General API limit (1000 per 15 minutes per IP).
 
 ### POST `/api/mfa/verify`
 
@@ -285,7 +285,7 @@ Get the number of remaining unused backup codes for the user.
 }
 ```
 
-**Rate limiting:** 100 requests per 15 minutes.
+**Rate limiting:** General API limit (1000 per 15 minutes per IP).
 
 ## Related Topics
 

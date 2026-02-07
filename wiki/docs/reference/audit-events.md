@@ -4,19 +4,20 @@ Complete list of audit event types in TMA Cloud.
 
 ## Authentication Events
 
-- `user.signup` - User creates account
-- `user.login` - User logs in
-- `user.logout` - User logs out
-- `user.login.failed` - Failed login attempt
+- `auth.signup` - User creates account
+- `auth.login` - User logs in
+- `auth.login.failure` - Failed login attempt
 - `auth.logout` - Session logout
 - `auth.logout_all` - Logout from all devices
 - `auth.suspicious_token` - Token fingerprint mismatch
-- `auth.session_revoked` - Session revoked
+- `auth.session_revoked` - Single session revoked
+- `auth.other_sessions_revoked` - All other sessions revoked
 
 ## File Events
 
 - `file.upload` - File uploaded
-- `file.download` - File downloaded
+- `file.download` - File downloaded (single)
+- `file.download.bulk` - Multiple files/folders downloaded as ZIP
 - `file.delete` - File moved to trash
 - `file.delete.permanent` - File permanently deleted
 - `file.restore` - File restored from trash
@@ -34,17 +35,20 @@ Complete list of audit event types in TMA Cloud.
 
 - `share.create` - Share link created
 - `share.delete` - Share link removed
-- `share.access` - Public access to shared file/folder
+- `share.access` - Public view of share (anonymous access)
+- `share.download` - File or folder downloaded from share
 
 ## Document Events (OnlyOffice)
 
 - `document.open` - Document opened in OnlyOffice
 - `document.save` - Document saved from OnlyOffice
 
-## Settings Events
+## Admin Events
 
 - `admin.settings.update` - Admin setting changed (metadata: `setting`, e.g. `signup_enabled`; `newValue`)
 - `admin.settings.read` - Admin viewed protected settings (failure when unauthorized)
+- `admin.user.list` - Admin listed all users
+- `admin.user.update` - Admin updated user (e.g. storage limit)
 
 ## Event Metadata
 
