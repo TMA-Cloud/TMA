@@ -59,9 +59,24 @@ async function getFiles(userId, parentId = null, sortBy = 'modified', order = 'D
 
 /**
  * Create a new folder
+ * @param {string} name
+ * @param {string|null} parentId
+ * @param {string} userId
+ * @param {Date|string|null} [modified] - Optional modification time (e.g. from directory mtime)
  */
-async function createFolder(name, parentId = null, userId) {
+async function createFolder(name, parentId = null, userId, modified = null) {
   const id = generateId(16);
+
+  if (modified != null) {
+    const result = await pool.query(
+      'INSERT INTO files(id, name, type, parent_id, user_id, modified) VALUES($1,$2,$3,$4,$5,$6) RETURNING id, name, type, size, modified, mime_type AS "mimeType", starred, shared',
+      [id, name, 'folder', parentId, userId, modified]
+    );
+    await invalidateFileCache(userId, parentId);
+    await invalidateSearchCache(userId);
+    await deleteCache(cacheKeys.fileStats(userId));
+    return result.rows[0];
+  }
 
   const result = await pool.query(
     'INSERT INTO files(id, name, type, parent_id, user_id) VALUES($1,$2,$3,$4,$5) RETURNING id, name, type, size, modified, mime_type AS "mimeType", starred, shared',
@@ -118,13 +133,25 @@ async function createFile(name, size, mimeType, tempPath, parentId = null, userI
 
 /**
  * Create file record after streamed upload to S3 (no temp file; stream was piped directly to bucket).
- * @param {Object} upload - { id, storageName, name, size, mimeType }
+ * @param {Object} upload - { id, storageName, name, size, mimeType, modified? }
  * @param {string|null} parentId
  * @param {string} userId
  * @returns {Promise<Object>} Created file row
  */
 async function createFileFromStreamedUpload(upload, parentId, userId) {
-  const { id, storageName, name, size, mimeType } = upload;
+  const { id, storageName, name, size, mimeType, modified } = upload;
+
+  if (modified != null) {
+    const result = await pool.query(
+      'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id, modified) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id, name, type, size, modified, mime_type AS "mimeType", starred, shared',
+      [id, name, 'file', size, mimeType, storageName, parentId, userId, modified]
+    );
+    await invalidateFileCache(userId, parentId);
+    await invalidateSearchCache(userId);
+    await deleteCache(cacheKeys.fileStats(userId));
+    await deleteCache(cacheKeys.userStorage(userId));
+    return result.rows[0];
+  }
 
   const result = await pool.query(
     'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id, name, type, size, modified, mime_type AS "mimeType", starred, shared',

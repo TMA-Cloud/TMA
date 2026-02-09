@@ -106,6 +106,31 @@ Enable default server-side encryption (AES256). Not supported by all S3-compatib
 
 To check current lifecycle config from project root: `node backend/scripts/check-s3-lifecycle.js`.
 
+### Bulk import drive to S3
+
+When you have existing data on a local drive (e.g. 100GB+) and want it in the app’s S3 bucket **with** encryption and DB records (so the app and DB stay in sync), use the bulk import script. Copying files directly into the bucket would skip encryption and the `files` table, causing mismatch and `FILE_ENCRYPTION_KEY` issues.
+
+From the **backend** directory, with `.env` set (S3 + `FILE_ENCRYPTION_KEY`):
+
+```bash
+# Dry run: only list folders/files and total size
+node scripts/bulk-import-drive-to-s3.js --source-dir "D:\MyDrive" --user-id YOUR_USER_ID --dry-run
+
+# Import (creates folder hierarchy in DB, encrypts and uploads each file)
+node scripts/bulk-import-drive-to-s3.js --source-dir "D:\MyDrive" --user-id YOUR_USER_ID
+
+# Use email instead of user ID
+node scripts/bulk-import-drive-to-s3.js --source-dir "D:\MyDrive" --user-email "you@example.com"
+
+# Optional: more concurrent uploads (default 2)
+node scripts/bulk-import-drive-to-s3.js --source-dir "D:\MyDrive" --user-id YOUR_USER_ID --concurrency 4
+
+```
+
+- Preserves folder structure and file names; invalid names are skipped with a warning.
+- Always enforces per-user storage limit and max file size (checked before any upload).
+- Preserves file and folder modification times (mtime).
+
 ## Docker Commands
 
 ### Using Prebuilt Images (Recommended)
