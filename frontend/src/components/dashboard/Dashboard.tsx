@@ -149,47 +149,48 @@ export const Dashboard: React.FC = () => {
   }, [fileCount, folderCount, sharedCount, starredCount]);
 
   return (
-    <div className="p-6 md:p-8 space-y-8 bg-gradient-to-br from-gray-50 to-white dark:from-slate-900 dark:to-slate-950 min-h-screen">
-      {/* Welcome section */}
-      <div>
-        <h1 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-gray-100 mb-2 tracking-tight">
-          Welcome back!
-        </h1>
-        <p className="text-sm md:text-base text-gray-600/80 dark:text-gray-400/80">
-          Here's what's happening with your files today!
-        </p>
-      </div>
+    <div className="p-6 md:p-8 bg-gradient-to-br from-gray-50 to-white dark:from-slate-900 dark:to-slate-950 min-h-screen">
+      <div className="space-y-8 max-w-6xl mx-auto">
+        {/* Welcome section */}
+        <div>
+          <h1 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-gray-100 mb-2 tracking-tight">
+            Welcome back!
+          </h1>
+          <p className="text-sm md:text-base text-gray-600/80 dark:text-gray-400/80">
+            Here's what's happening with your files today!
+          </p>
+        </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {statsData.map((stat, index) => (
-          <div
-            key={index}
-            className="card-premium hover-lift flex flex-col items-center justify-center p-4 md:p-5 animate-fadeIn"
-          >
-            <p className="text-2xl md:text-3xl font-semibold text-gray-700/90 dark:text-gray-300/90 transition-all duration-200 mb-1.5">
-              {animatedStats[index]}
-            </p>
-            <p className="text-xs text-gray-500/70 dark:text-gray-400/70 font-medium uppercase tracking-wide">
-              {stat.label}
-            </p>
-          </div>
-        ))}
-      </div>
-
-      {/* Quick Actions */}
-      <div>
-        <h2 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4 tracking-tight">
-          Quick Actions
-        </h2>
+        {/* Stats */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {quickActions.map((action, index) => {
-            const Icon = action.icon;
-            return (
-              <button
-                key={index}
-                onClick={action.onClick}
-                className={`
+          {statsData.map((stat, index) => (
+            <div
+              key={index}
+              className="card-premium hover-lift flex flex-col items-center justify-center p-4 md:p-5 animate-fadeIn"
+            >
+              <p className="text-2xl md:text-3xl font-semibold text-gray-700/90 dark:text-gray-300/90 transition-all duration-200 mb-1.5">
+                {animatedStats[index]}
+              </p>
+              <p className="text-xs text-gray-500/70 dark:text-gray-400/70 font-medium uppercase tracking-wide">
+                {stat.label}
+              </p>
+            </div>
+          ))}
+        </div>
+
+        {/* Quick Actions */}
+        <div>
+          <h2 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4 tracking-tight">
+            Quick Actions
+          </h2>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {quickActions.map((action, index) => {
+              const Icon = action.icon;
+              return (
+                <button
+                  key={index}
+                  onClick={action.onClick}
+                  className={`
                   group p-4 md:p-5 rounded-xl transition-all duration-200
                   flex flex-col items-center space-y-2
                   border border-gray-300/30 dark:border-gray-700/50
@@ -205,26 +206,26 @@ export const Dashboard: React.FC = () => {
                   }
                   ${action.hoverColor}
                 `}
-              >
-                <Icon
-                  className={`w-6 h-6 md:w-7 md:h-7 transition-colors duration-200 ${
-                    action.isPrimary
-                      ? "text-blue-600 dark:text-blue-400"
-                      : "text-gray-600 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-gray-100"
-                  }`}
-                />
-                <span className="text-sm font-semibold tracking-tight">
-                  {action.title}
-                </span>
-              </button>
-            );
-          })}
+                >
+                  <Icon
+                    className={`w-6 h-6 md:w-7 md:h-7 transition-colors duration-200 ${
+                      action.isPrimary
+                        ? "text-blue-600 dark:text-blue-400"
+                        : "text-gray-600 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-gray-100"
+                    }`}
+                  />
+                  <span className="text-sm font-semibold tracking-tight">
+                    {action.title}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
-      </div>
-
-      {/* Main content */}
-      <div>
-        <RecentFiles files={files} />
+        {/* Main content */}
+        <div>
+          <RecentFiles files={files} />
+        </div>
       </div>
     </div>
   );

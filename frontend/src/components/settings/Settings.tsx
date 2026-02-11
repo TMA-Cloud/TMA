@@ -96,7 +96,7 @@ export const Settings: React.FC = () => {
   };
 
   return (
-    <div className="p-6 md:p-8 space-y-8">
+    <div className="p-6 md:p-8 space-y-8 max-w-5xl mx-auto">
       <SettingsHeader
         userName={user?.name}
         usage={usage ?? undefined}

@@ -765,6 +765,10 @@ html.dark * {
 
 html {
   scroll-behavior: smooth;
+  /* Global responsive font size:
+     ensures 2wf >= w >= wf where
+     wf = --wf-font-base and w = computed font-size */
+  font-size: clamp(var(--wf-font-base), 0.9vw, var(--wf-font-max));
 }
 
 html,
@@ -789,6 +793,10 @@ body {
 /* Background layers - darkest to lightest */
 @layer base {
   :root {
+    /* Responsive size base tokens (2wf >= w >= wf) */
+    --wf-font-base: 12px;
+    --wf-font-max: calc(2 * var(--wf-font-base));
+
     /* Main background - darkest */
     --bg-primary: #0f172a; /* slate-900 */
     /* Surface 1 - slightly lighter for cards */

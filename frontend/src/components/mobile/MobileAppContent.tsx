@@ -109,7 +109,7 @@ export const MobileAppContent: React.FC = () => {
       {/* Compact top bar */}
       <header className="relative px-4 py-3 flex items-center justify-between bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-b border-gray-200/50 dark:border-slate-800/50 shadow-sm z-[9999]">
         <div className="flex items-center space-x-2">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-lg transition-all duration-200">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-lg transition-all duration-200">
             <HardDrive className="w-5 h-5 text-white" />
           </div>
           <div className="flex flex-col">
@@ -125,7 +125,7 @@ export const MobileAppContent: React.FC = () => {
         <div className="flex items-center space-x-2">
           <button
             onClick={() => setUploadModalOpen(true)}
-            className="inline-flex items-center justify-center rounded-full bg-blue-500 hover:bg-blue-600 text-white w-9 h-9 shadow-lg hover:shadow-xl transition-all duration-200 active:scale-95"
+            className="inline-flex items-center justify-center rounded-full bg-blue-500 hover:bg-blue-600 text-white w-10 h-10 shadow-lg hover:shadow-xl transition-all duration-200 active:scale-95"
             aria-label="Upload"
           >
             <Upload className="w-4 h-4 transition-transform duration-200" />
@@ -135,9 +135,9 @@ export const MobileAppContent: React.FC = () => {
           <div className="relative z-[10000]" ref={dropdownRef}>
             <button
               onClick={() => setDropdownOpen(!dropdownOpen)}
-              className="flex items-center space-x-1 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 rounded-lg p-1 transition-all duration-200 relative z-[10001]"
+              className="flex items-center space-x-1 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 rounded-lg px-1.5 py-1 transition-all duration-200 relative z-[10001]"
             >
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-xs font-bold text-white shadow-lg transition-all duration-200">
+              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-xs font-bold text-white shadow-lg transition-all duration-200">
                 {getInitials(user?.name)}
               </div>
               <ChevronDown
@@ -183,10 +183,10 @@ export const MobileAppContent: React.FC = () => {
               <button
                 key={item.id}
                 onClick={() => handleNavClick(item.id)}
-                className="group flex flex-col items-center flex-1 px-1 py-1 rounded-xl active:scale-95 transition-all duration-200"
+                className="group flex flex-col items-center flex-1 px-1.5 py-1.5 rounded-xl active:scale-95 transition-all duration-200"
               >
                 <div
-                  className={`flex items-center justify-center w-9 h-9 rounded-full text-xs transition-all duration-200 ${
+                  className={`flex items-center justify-center w-10 h-10 rounded-full text-xs transition-all duration-200 ${
                     active
                       ? "bg-blue-500/20 dark:bg-blue-500/30 text-blue-600 dark:text-blue-300 shadow-md"
                       : "text-gray-500/80 dark:text-gray-400/80"
