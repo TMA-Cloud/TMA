@@ -10,6 +10,8 @@ const {
   updateOnlyOfficeConfig,
   getShareBaseUrlConfig,
   updateShareBaseUrlConfig,
+  getMaxUploadSizeConfig,
+  updateMaxUploadSizeConfig,
   updateUserStorageLimit,
 } = require('../controllers/user.controller');
 const { apiRateLimiter } = require('../middleware/rateLimit.middleware');
@@ -18,6 +20,7 @@ const {
   toggleSignupSchema,
   updateOnlyOfficeConfigSchema,
   updateShareBaseUrlConfigSchema,
+  updateMaxUploadSizeConfigSchema,
   updateUserStorageLimitSchema,
 } = require('../utils/validationSchemas');
 
@@ -35,6 +38,8 @@ router.get('/onlyoffice-config', getOnlyOfficeConfig);
 router.put('/onlyoffice-config', updateOnlyOfficeConfigSchema, validate, updateOnlyOfficeConfig);
 router.get('/share-base-url-config', getShareBaseUrlConfig);
 router.put('/share-base-url-config', updateShareBaseUrlConfigSchema, validate, updateShareBaseUrlConfig);
+router.get('/max-upload-size-config', getMaxUploadSizeConfig);
+router.put('/max-upload-size-config', updateMaxUploadSizeConfigSchema, validate, updateMaxUploadSizeConfig);
 router.put('/storage-limit', updateUserStorageLimitSchema, validate, updateUserStorageLimit);
 
 module.exports = router;

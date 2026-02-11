@@ -106,7 +106,11 @@ export const Settings: React.FC = () => {
       <div className="space-y-8">
         <ProfileSection userName={user?.name} userEmail={user?.email} />
 
-        <StorageSection usage={usage ?? undefined} loading={loading} />
+        <StorageSection
+          usage={usage ?? undefined}
+          loading={loading}
+          canConfigure={canToggleSignup}
+        />
 
         {canToggleSignup && (
           <AdministrationSection

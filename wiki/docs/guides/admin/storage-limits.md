@@ -47,11 +47,31 @@ Configure storage limits for users in TMA Cloud (admin only).
 - Per-user breakdown
 - Storage trends
 
+## Max Upload Size
+
+The maximum size for a single uploaded file. Applies to all users.
+
+### Configuring
+
+1. Navigate to **Settings** → **Storage**
+2. Click the pencil icon next to **Max upload size**
+3. Enter a value and select the unit (MB or GB)
+4. Click **Save**
+
+### Limits
+
+- Minimum: 1 MB
+- Maximum: 100 GB
+- Default: 10 GB
+
+Enforced on both frontend (before upload starts) and backend (during upload). The bulk import script also reads this setting from the database.
+
 ## Limit Enforcement
 
 ### Upload Restrictions
 
-- Uploads blocked when limit reached
+- Uploads blocked when per-user storage limit reached
+- Uploads blocked when file exceeds max upload size
 - Clear error messages
 - Real-time enforcement
 

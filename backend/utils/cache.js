@@ -275,6 +275,7 @@ const cacheKeys = {
   allUsers: () => `app:all_users`,
   onlyOfficeSettings: () => `app:onlyoffice_settings`,
   shareBaseUrlSettings: () => `app:share_base_url_settings`,
+  maxUploadSizeSettings: () => `app:max_upload_size_settings`,
 
   // Google OAuth cache keys
   userByGoogleId: googleId => `user:google:${googleId}`,

@@ -24,7 +24,7 @@
  *   --concurrency  Max concurrent file uploads (default 2)
  *   --dry-run      Only list what would be imported; do not upload or insert
  *
- * Always enforces: per-user storage limit and 10GB max file size (checked before any upload).
+ * Always enforces: per-user storage limit and admin-configured max file size (checked before any upload).
  * Preserves file and folder modification times (mtime) from the source drive.
  */
 
@@ -47,9 +47,10 @@ const { validateFileName } = require('../utils/validation');
 const { checkStorageLimitExceeded } = require('../utils/storageUtils');
 const pool = require('../config/db');
 const mime = require('mime-types');
+const { getMaxUploadSizeSettings } = require('../models/user.model');
 
-/** Max file size (same as app stream upload): 10GB */
-const MAX_FILE_SIZE = 10 * 1024 * 1024 * 1024;
+/** Resolved once at startup from app_settings (admin-configurable). */
+let MAX_FILE_SIZE;
 
 /**
  * Get user storage usage and limit via direct DB (no Redis/cache).
@@ -208,6 +209,14 @@ async function run() {
     console.warn('WARNING: FILE_ENCRYPTION_KEY is not set. App will use development default; ensure consistency.');
   }
 
+  // Load admin-configured max upload size from app_settings
+  const settings = await getMaxUploadSizeSettings();
+  MAX_FILE_SIZE = settings.maxBytes;
+  if (!MAX_FILE_SIZE || !Number.isFinite(MAX_FILE_SIZE) || MAX_FILE_SIZE <= 0) {
+    throw new Error('Failed to load max upload size from app_settings. Ensure the database has been migrated.');
+  }
+  console.log('Max file size from settings:', formatSize(MAX_FILE_SIZE));
+
   const userId = await resolveUserId(args.userId, args.userEmail);
 
   console.log('Scanning directory tree...');
@@ -249,8 +258,8 @@ async function run() {
   if (oversize.length > 0) {
     const list = oversize.map(o => `${o.path} (${formatSize(o.size)})`).join(', ');
     throw new Error(
-      `Import aborted before any upload. The following file(s) exceed the ${MAX_FILE_SIZE / 1024 / 1024 / 1024}GB per-file limit: ${list}. ` +
-        'Remove or split these files, or increase MAX_FILE_SIZE in the script.'
+      `Import aborted before any upload. The following file(s) exceed the ${formatSize(MAX_FILE_SIZE)} per-file limit: ${list}. ` +
+        'Remove or split these files, or increase the max upload size in Settings.'
     );
   }
   const { used, userStorageLimit } = await getStorageUsageAndLimit(userId);
@@ -321,7 +330,7 @@ async function run() {
       const stat = await fs.stat(fullPath);
       if (stat.size > MAX_FILE_SIZE) {
         // Abort the whole import on first oversize file
-        throw new Error(`File exceeds ${MAX_FILE_SIZE / 1024 / 1024 / 1024}GB limit: ${relPath}`);
+        throw new Error(`File exceeds ${formatSize(MAX_FILE_SIZE)} limit: ${relPath}`);
       }
       const { used, userStorageLimit } = await getStorageUsageAndLimit(userId);
       const check = await checkStorageLimitExceeded({

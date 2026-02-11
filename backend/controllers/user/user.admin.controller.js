@@ -8,6 +8,8 @@ const {
   setOnlyOfficeSettings,
   getShareBaseUrlSettings,
   setShareBaseUrlSettings,
+  getMaxUploadSizeSettings,
+  setMaxUploadSizeSettings,
   setUserStorageLimit,
 } = require('../../models/user.model');
 const { sendError, sendSuccess } = require('../../utils/response');
@@ -385,6 +387,75 @@ async function _updateShareBaseUrlConfig(req, res) {
 }
 
 /**
+ * Get max upload size config (any authenticated user; used by UI for display and validation)
+ */
+async function _getMaxUploadSizeConfig(req, res) {
+  try {
+    const settings = await getMaxUploadSizeSettings();
+    sendSuccess(res, { maxBytes: settings.maxBytes });
+  } catch (err) {
+    logger.error({ err }, 'Failed to get max upload size config');
+    sendError(res, 500, 'Server error', err);
+  }
+}
+
+/**
+ * Update max upload size config (admin only)
+ */
+async function _updateMaxUploadSizeConfig(req, res) {
+  try {
+    const userIsFirst = await isFirstUser(req.userId);
+    if (!userIsFirst) {
+      await logAuditEvent(
+        'admin.settings.update',
+        {
+          status: 'failure',
+          resourceType: 'settings',
+          metadata: { action: 'update_max_upload_size_config', reason: 'unauthorized' },
+        },
+        req
+      );
+      logger.warn({ userId: req.userId }, 'Unauthorized max upload size config update attempt');
+      return sendError(res, 403, 'Only the first user can configure max upload size');
+    }
+
+    const { maxBytes } = req.body;
+
+    await setMaxUploadSizeSettings(maxBytes, req.userId);
+
+    await logAuditEvent(
+      'admin.settings.update',
+      {
+        status: 'success',
+        resourceType: 'settings',
+        metadata: { setting: 'max_upload_size_config', maxBytes },
+      },
+      req
+    );
+    logger.info({ userId: req.userId, maxBytes }, 'Max upload size settings updated');
+
+    const updatedSettings = await getMaxUploadSizeSettings();
+    sendSuccess(res, { maxBytes: updatedSettings.maxBytes });
+  } catch (err) {
+    if (err.message === 'Only the first user can configure max upload size') {
+      await logAuditEvent(
+        'admin.settings.update',
+        {
+          status: 'failure',
+          resourceType: 'settings',
+          errorMessage: err.message,
+          metadata: { action: 'update_max_upload_size_config' },
+        },
+        req
+      );
+      return sendError(res, 403, err.message);
+    }
+    logger.error({ err }, 'Failed to update max upload size settings');
+    sendError(res, 500, 'Server error', err);
+  }
+}
+
+/**
  * Update user storage limit (admin only)
  */
 async function _updateUserStorageLimit(req, res) {
@@ -459,5 +530,7 @@ module.exports = {
   updateOnlyOfficeConfig: _updateOnlyOfficeConfig,
   getShareBaseUrlConfig: _getShareBaseUrlConfig,
   updateShareBaseUrlConfig: _updateShareBaseUrlConfig,
+  getMaxUploadSizeConfig: _getMaxUploadSizeConfig,
+  updateMaxUploadSizeConfig: _updateMaxUploadSizeConfig,
   updateUserStorageLimit: _updateUserStorageLimit,
 };

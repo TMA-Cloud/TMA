@@ -26,18 +26,18 @@ const {
 } = require('../controllers/file.controller');
 const { streamFileEvents } = require('../controllers/file/file.events.controller');
 const auth = require('../middleware/auth.middleware');
-const upload = require('../utils/multer');
+const { uploadSingleWithDynamicLimit, uploadArrayWithDynamicLimit } = require('../utils/multer');
 const { streamUploadToS3 } = require('../middleware/streamUploadToS3.middleware');
 const storage = require('../utils/storageDriver');
 const { apiRateLimiter, uploadRateLimiter, sseConnectionLimiter } = require('../middleware/rateLimit.middleware');
 const { checkStorageLimit } = require('../middleware/storageLimit.middleware');
 
-/** When S3: stream directly to bucket (no temp dir). Otherwise use multer disk. */
+/** When S3: stream directly to bucket (no temp dir). Otherwise use multer disk with admin-configurable max file size. */
 function uploadSingle() {
-  return storage.useS3() ? streamUploadToS3('single') : upload.single('file');
+  return storage.useS3() ? streamUploadToS3('single') : uploadSingleWithDynamicLimit();
 }
 function uploadBulk() {
-  return storage.useS3() ? streamUploadToS3('bulk') : upload.array('files');
+  return storage.useS3() ? streamUploadToS3('bulk') : uploadArrayWithDynamicLimit();
 }
 const router = express.Router();
 const { validate } = require('../middleware/validation.middleware');

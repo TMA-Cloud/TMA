@@ -19,9 +19,10 @@ Learn how to upload and manage files in TMA Cloud.
 
 ### Upload Limits
 
-- File size limited by your storage quota
+- Per-file size limited by the max upload size setting (default 10 GB, configurable by admin in **Settings** → **Storage**)
+- Total upload size limited by your storage quota
 - Upload rate limited to 50 uploads per hour
-- Storage limit enforced at upload time
+- Both limits enforced before upload starts
 
 ## File Management
 

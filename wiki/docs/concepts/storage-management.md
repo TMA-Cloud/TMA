@@ -95,6 +95,7 @@ Files are automatically encrypted. Encryption uses AES-256-GCM with authenticate
 
 ### Upload Limits
 
+- **Max upload size:** Per-file size limit, configurable by admin in **Settings** → **Storage** (default 10 GB). Stored in `app_settings.max_upload_size_bytes`. Enforced on frontend (before upload) and backend (during upload).
 - Pre-upload validation (Content-Length check)
 - Final safeguard check (actual file size)
 - Prevents file upload if limit exceeded

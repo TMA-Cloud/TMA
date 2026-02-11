@@ -411,6 +411,88 @@ async function setShareBaseUrlSettings(url, userId) {
   }
 }
 
+/** Default max single-file upload size (10GB) when not set in DB */
+const DEFAULT_MAX_UPLOAD_BYTES = 10 * 1024 * 1024 * 1024;
+
+/** Min 1MB, max 100GB */
+const MIN_MAX_UPLOAD_BYTES = 1024 * 1024;
+const MAX_MAX_UPLOAD_BYTES = 100 * 1024 * 1024 * 1024;
+
+async function getMaxUploadSizeSettings() {
+  const cacheKey = cacheKeys.maxUploadSizeSettings();
+  const cached = await getCache(cacheKey);
+  if (cached !== null) {
+    return cached;
+  }
+
+  const result = await pool.query('SELECT max_upload_size_bytes FROM app_settings WHERE id = $1', ['app_settings']);
+
+  let maxBytes = DEFAULT_MAX_UPLOAD_BYTES;
+  if (result.rows.length > 0 && result.rows[0].max_upload_size_bytes != null) {
+    const val = Number(result.rows[0].max_upload_size_bytes);
+    if (Number.isInteger(val) && val >= MIN_MAX_UPLOAD_BYTES && val <= MAX_MAX_UPLOAD_BYTES) {
+      maxBytes = val;
+    }
+  }
+
+  const settings = { maxBytes };
+  await setCache(cacheKey, settings, DEFAULT_TTL);
+  return settings;
+}
+
+async function setMaxUploadSizeSettings(maxBytes, userId) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const settingsResult = await client.query('SELECT first_user_id FROM app_settings WHERE id = $1', ['app_settings']);
+    if (settingsResult.rows.length === 0) {
+      throw new Error('App settings not found');
+    }
+
+    const storedFirstUserId = settingsResult.rows[0].first_user_id;
+
+    if (!storedFirstUserId) {
+      const firstUserResult = await client.query('SELECT id FROM users ORDER BY created_at ASC LIMIT 1 FOR UPDATE');
+      if (firstUserResult.rows.length === 0) {
+        throw new Error('No users exist');
+      }
+      const actualFirstUserId = firstUserResult.rows[0].id;
+      if (actualFirstUserId !== userId) {
+        await client.query('ROLLBACK');
+        throw new Error('Only the first user can configure max upload size');
+      }
+      await client.query('UPDATE app_settings SET first_user_id = $1 WHERE id = $2 AND first_user_id IS NULL', [
+        actualFirstUserId,
+        'app_settings',
+      ]);
+    } else if (storedFirstUserId !== userId) {
+      await client.query('ROLLBACK');
+      throw new Error('Only the first user can configure max upload size');
+    }
+
+    const val = Number(maxBytes);
+    if (!Number.isInteger(val) || val < MIN_MAX_UPLOAD_BYTES || val > MAX_MAX_UPLOAD_BYTES) {
+      await client.query('ROLLBACK');
+      throw new Error(`Max upload size must be between ${MIN_MAX_UPLOAD_BYTES} and ${MAX_MAX_UPLOAD_BYTES} bytes`);
+    }
+
+    await client.query('UPDATE app_settings SET max_upload_size_bytes = $1, updated_at = NOW() WHERE id = $2', [
+      val,
+      'app_settings',
+    ]);
+
+    await client.query('COMMIT');
+    await deleteCache(cacheKeys.maxUploadSizeSettings());
+    logger.info(`[SECURITY] Max upload size settings updated by first user (ID: ${userId}), maxBytes: ${val}`);
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 /**
  * Handle first user setup: set first_user_id and disable signup atomically
  * This is called after a new user is created to ensure the first user is properly set
@@ -554,6 +636,8 @@ module.exports = {
   setOnlyOfficeSettings,
   getShareBaseUrlSettings,
   setShareBaseUrlSettings,
+  getMaxUploadSizeSettings,
+  setMaxUploadSizeSettings,
   handleFirstUserSetup,
   getUserStorageLimit,
   setUserStorageLimit,

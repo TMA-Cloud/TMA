@@ -9,7 +9,7 @@ Troubleshooting file upload problems.
 **Check:**
 
 1. Storage limit not exceeded
-2. File size within limits
+2. File size within max upload size (admin-configurable in **Settings** → **Storage**)
 3. Network connection stable
 4. Disk space available
 
@@ -21,6 +21,16 @@ Troubleshooting file upload problems.
 2. Delete unnecessary files
 3. Empty trash
 4. Admin: Increase storage limit
+
+### File Too Large
+
+The file exceeds the max upload size setting.
+
+**Solutions:**
+
+1. Check the current max upload size in **Settings** → **Storage**
+2. Admin: Increase the max upload size
+3. Split the file into smaller parts
 
 ## Upload Errors
 

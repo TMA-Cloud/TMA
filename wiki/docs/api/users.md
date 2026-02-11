@@ -241,6 +241,44 @@ The updated share base URL configuration.
 }
 ```
 
+## Max Upload Size Configuration
+
+### GET `/api/user/max-upload-size-config`
+
+Get the current max upload size. Accessible to any authenticated user (used by the frontend for validation).
+
+**Response:**
+
+```json
+{
+  "maxBytes": 10737418240
+}
+```
+
+### PUT `/api/user/max-upload-size-config`
+
+Update the max upload size (admin only).
+
+**Request Body:**
+
+```json
+{
+  "maxBytes": 5368709120
+}
+```
+
+**Validation:**
+
+- `maxBytes`: Required. Integer between 1048576 (1 MB) and 107374182400 (100 GB).
+
+**Response:**
+
+```json
+{
+  "maxBytes": 5368709120
+}
+```
+
 ## Related Topics
 
 - [Admin Guides](/guides/admin/user-management) - User management

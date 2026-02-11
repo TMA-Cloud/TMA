@@ -308,6 +308,30 @@ export async function updateShareBaseUrlConfig(
 }
 
 /**
+ * Get max upload size config (any authenticated user; used for display and validation).
+ */
+export async function getMaxUploadSizeConfig(signal?: AbortSignal): Promise<{
+  maxBytes: number;
+}> {
+  return await apiGet<{ maxBytes: number }>(
+    "/api/user/max-upload-size-config",
+    { signal },
+  );
+}
+
+/**
+ * Update max upload size config (admin only)
+ */
+export async function updateMaxUploadSizeConfig(
+  maxBytes: number,
+): Promise<{ maxBytes: number }> {
+  return await apiPut<{ maxBytes: number }>(
+    "/api/user/max-upload-size-config",
+    { maxBytes },
+  );
+}
+
+/**
  * Logout from all devices by invalidating all tokens
  * This will log out the user from every device/browser
  */

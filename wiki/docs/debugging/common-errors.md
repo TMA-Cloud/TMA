@@ -54,12 +54,23 @@ Frequently encountered errors and solutions.
 
 ## Upload Errors
 
+### Error: "This file is too large"
+
+**Causes:**
+
+- File exceeds the max upload size setting
+
+**Solutions:**
+
+1. Check current max upload size in **Settings** → **Storage**
+2. Admin: Increase the max upload size
+3. Split the file into smaller parts
+
 ### Error: "Upload failed"
 
 **Causes:**
 
 - Storage limit exceeded
-- File too large
 - Network issues
 - Disk space full
 
@@ -67,8 +78,7 @@ Frequently encountered errors and solutions.
 
 1. Check storage quota
 2. Verify disk space: `df -h`
-3. Check file size limits
-4. Retry upload
+3. Retry upload
 
 ## Authentication Errors
 

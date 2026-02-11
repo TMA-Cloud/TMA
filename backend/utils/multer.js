@@ -1,6 +1,7 @@
 const multer = require('multer');
 const path = require('path');
 const { UPLOAD_DIR } = require('../config/paths');
+const { getMaxUploadSizeSettings } = require('../models/user.model');
 
 /**
  * Disk storage engine - stores uploaded files in UPLOAD_DIR
@@ -29,12 +30,49 @@ function fileFilter(req, file, cb) {
   cb(null, true);
 }
 
-const upload = multer({
+/**
+ * Create multer instance with configurable max file size from app settings.
+ */
+function createUploadWithLimit(limitBytes) {
+  return multer({
+    storage,
+    fileFilter,
+    limits: { fileSize: limitBytes },
+  });
+}
+
+/**
+ * Middleware: single file upload with max size from settings (admin-configurable).
+ */
+function uploadSingleWithDynamicLimit() {
+  return (req, res, next) => {
+    getMaxUploadSizeSettings()
+      .then(settings => {
+        const upload = createUploadWithLimit(settings.maxBytes);
+        upload.single('file')(req, res, next);
+      })
+      .catch(err => next(err));
+  };
+}
+
+/**
+ * Middleware: multiple files upload with max size per file from settings (admin-configurable).
+ */
+function uploadArrayWithDynamicLimit() {
+  return (req, res, next) => {
+    getMaxUploadSizeSettings()
+      .then(settings => {
+        const upload = createUploadWithLimit(settings.maxBytes);
+        upload.array('files')(req, res, next);
+      })
+      .catch(err => next(err));
+  };
+}
+
+module.exports = multer({
   storage,
   fileFilter,
-  limits: {
-    fileSize: 10 * 1024 * 1024 * 1024, // 10GB max file size (safety limit)
-  },
+  limits: { fileSize: 10 * 1024 * 1024 * 1024 }, // fallback if not using dynamic
 });
-
-module.exports = upload;
+module.exports.uploadSingleWithDynamicLimit = uploadSingleWithDynamicLimit;
+module.exports.uploadArrayWithDynamicLimit = uploadArrayWithDynamicLimit;

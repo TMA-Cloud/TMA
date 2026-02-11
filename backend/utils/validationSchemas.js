@@ -131,6 +131,14 @@ const updateShareBaseUrlConfigSchema = [
   body('url').optional({ nullable: true }).isURL().withMessage('Invalid URL format'),
 ];
 
+// Max upload size in bytes (1MB to 100GB)
+const updateMaxUploadSizeConfigSchema = [
+  body('maxBytes')
+    .isInt({ min: 1048576, max: 107374182400 })
+    .withMessage('Max upload size must be between 1 MB and 100 GB (in bytes)')
+    .toInt(),
+];
+
 const updateUserStorageLimitSchema = [
   body('targetUserId')
     .notEmpty()
@@ -184,6 +192,7 @@ module.exports = {
   toggleSignupSchema,
   updateOnlyOfficeConfigSchema,
   updateShareBaseUrlConfigSchema,
+  updateMaxUploadSizeConfigSchema,
   updateUserStorageLimitSchema,
   getOnlyOfficeConfigSchema,
   handleSharedSchema,

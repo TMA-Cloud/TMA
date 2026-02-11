@@ -7,6 +7,7 @@ import {
   getSignupStatus,
   hasAuthState,
   checkUploadStorage,
+  getMaxUploadSizeConfig,
 } from "../utils/api";
 import { useToast } from "../hooks/useToast";
 import {
@@ -20,6 +21,13 @@ import {
   createAutoDismissTimeout,
   type UploadProgressItem,
 } from "../utils/uploadUtils";
+
+function formatMaxSize(bytes: number): string {
+  const gb = bytes / (1024 * 1024 * 1024);
+  if (gb >= 1) return `${gb % 1 === 0 ? gb : Math.round(gb * 10) / 10} GB`;
+  const mb = bytes / (1024 * 1024);
+  return `${mb % 1 === 0 ? mb : Math.round(mb * 10) / 10} MB`;
+}
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
@@ -510,11 +518,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   const uploadFile = async (file: File) => {
     return operationQueue.add(async () => {
       try {
+        const { maxBytes } = await getMaxUploadSizeConfig();
+        if (file.size > maxBytes) {
+          const msg = `This file is too large. Maximum upload size is ${formatMaxSize(maxBytes)}.`;
+          showToast(msg, "error");
+          throw new Error(msg);
+        }
         await checkUploadStorage(file.size);
       } catch (e) {
         const msg =
           e instanceof ApiError ? e.message : "Storage limit exceeded.";
-        showToast(msg, "error");
+        if (
+          !(
+            e instanceof Error && e.message.startsWith("This file is too large")
+          )
+        ) {
+          showToast(msg, "error");
+        }
         throw e;
       }
       const data = new FormData();
@@ -535,13 +555,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
     if (files.length === 0) return;
 
     return operationQueue.add(async () => {
-      const totalSize = files.reduce((sum, f) => sum + f.size, 0);
       try {
+        const { maxBytes } = await getMaxUploadSizeConfig();
+        const oversized = files.find((f) => f.size > maxBytes);
+        if (oversized) {
+          const msg = `"${oversized.name}" is too large. Maximum upload size is ${formatMaxSize(maxBytes)}.`;
+          showToast(msg, "error");
+          throw new Error(msg);
+        }
+        const totalSize = files.reduce((sum, f) => sum + f.size, 0);
         await checkUploadStorage(totalSize);
       } catch (e) {
         const msg =
           e instanceof ApiError ? e.message : "Storage limit exceeded.";
-        showToast(msg, "error");
+        if (!(e instanceof Error && e.message.startsWith('"'))) {
+          showToast(msg, "error");
+        }
         throw e;
       }
 
@@ -706,11 +735,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   ) => {
     return operationQueue.add(async () => {
       try {
+        const { maxBytes } = await getMaxUploadSizeConfig();
+        if (file.size > maxBytes) {
+          const msg = `This file is too large. Maximum upload size is ${formatMaxSize(maxBytes)}.`;
+          showToast(msg, "error");
+          throw new Error(msg);
+        }
         await checkUploadStorage(file.size);
       } catch (e) {
         const msg =
           e instanceof ApiError ? e.message : "Storage limit exceeded.";
-        showToast(msg, "error");
+        if (
+          !(
+            e instanceof Error && e.message.startsWith("This file is too large")
+          )
+        ) {
+          showToast(msg, "error");
+        }
         throw e;
       }
 
