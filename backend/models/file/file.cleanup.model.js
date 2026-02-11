@@ -83,7 +83,7 @@ async function cleanupOrphanFiles() {
   }
 
   const uploadsDir = UPLOAD_DIR;
-  let diskFiles = [];
+  let diskFiles;
   try {
     diskFiles = await fs.promises.readdir(uploadsDir);
   } catch {

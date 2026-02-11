@@ -113,7 +113,7 @@ async function createFile(name, size, mimeType, tempPath, parentId = null, userI
     } catch (error) {
       logger.error('[File] Error encrypting file:', error);
       await safeUnlink(tempDest);
-      throw new Error('Failed to encrypt file');
+      throw new Error('Failed to encrypt file', { cause: error });
     }
   }
 

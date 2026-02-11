@@ -180,7 +180,7 @@ function getEncryptionKey() {
       return crypto.pbkdf2Sync(envKey, 'file-encryption-salt', 100000, KEY_LENGTH, 'sha256');
     } catch (error) {
       logger.error('[Encryption] Error processing encryption key from environment', error);
-      throw new Error('Invalid encryption key format');
+      throw new Error('Invalid encryption key format', { cause: error });
     }
   }
 

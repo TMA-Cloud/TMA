@@ -140,7 +140,7 @@ async function getUniqueFilename(filePath, userId = null) {
   let counter = 1;
 
   while (true) {
-    let exists = false;
+    let exists;
 
     exists = await fs.promises
       .access(finalPath)

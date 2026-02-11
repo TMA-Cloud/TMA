@@ -73,8 +73,8 @@ async function copyEntry(id, parentId, userId, client = null) {
   if (res.rows.length === 0) return null;
   const file = res.rows[0];
   const newId = generateId(16);
-  let storageName = null;
-  let newPath = null;
+  let storageName;
+  let newPath;
 
   if (file.type === 'file') {
     const ext = path.extname(file.name);
@@ -114,7 +114,7 @@ async function copyEntry(id, parentId, userId, client = null) {
           // Ignore
         }
       }
-      throw new Error('File copy operation failed');
+      throw new Error('File copy operation failed', { cause: error });
     }
     newPath = storageName;
 
@@ -239,8 +239,8 @@ async function copyFiles(ids, parentId = null, userId) {
  */
 async function copyEntryWithFile(file, parentId, userId, client) {
   const newId = generateId(16);
-  let storageName = null;
-  let newPath = null;
+  let storageName;
+  let newPath;
 
   if (file.type === 'file') {
     const ext = path.extname(file.name);
@@ -280,7 +280,7 @@ async function copyEntryWithFile(file, parentId, userId, client) {
           // Ignore
         }
       }
-      throw new Error('File copy operation failed');
+      throw new Error('File copy operation failed', { cause: error });
     }
     newPath = storageName;
 
