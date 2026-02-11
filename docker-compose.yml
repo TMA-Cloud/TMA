@@ -2,6 +2,16 @@
 # Requires .env file with environment variables
 
 services:
+  # INIT SERVICE: Prepares filesystem permissions
+  # Runs once, fixes ownership of ./uploads, and exits.
+  init-permissions:
+    image: busybox:latest
+    container_name: tma-cloud-init
+    # Create directory if missing -> change ownership to 1001:1001
+    command: sh -c "mkdir -p /uploads && chown -R 1001:1001 /uploads"
+    volumes:
+      - ./uploads:/uploads
+
   # TMA Cloud App
   app:
     image: ghcr.io/tma-cloud/tma:latest
@@ -26,6 +36,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      init-permissions:
+        condition: service_completed_successfully
     networks:
       - tma-cloud-network
 
@@ -96,6 +108,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      init-permissions:
+        condition: service_completed_successfully
     networks:
       - tma-cloud-network
 
