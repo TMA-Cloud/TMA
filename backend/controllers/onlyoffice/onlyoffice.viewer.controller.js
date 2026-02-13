@@ -15,6 +15,7 @@ const {
   getOnlyofficeJsUrl,
   validateFileForOnlyOffice,
 } = require('./onlyoffice.utils');
+const { registerOpenDocument } = require('../../services/onlyofficeAutoSave');
 
 /**
  * Get standalone viewer HTML page for document editing/viewing
@@ -75,6 +76,9 @@ async function getViewerPage(req, res) {
     const config = buildOnlyofficeConfig(file, userId, userName, downloadUrl, callbackUrl, isMobile);
     const configToken = await signConfigToken(config);
     const onlyofficeJsUrl = await getOnlyofficeJsUrl();
+
+    // Register document for auto-save
+    registerOpenDocument(config.document.key, file.id, userId);
 
     // Add token to config if JWT is enabled (for viewer page)
     if (configToken) {

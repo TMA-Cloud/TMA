@@ -136,6 +136,7 @@ function buildOnlyofficeConfig(file, userId, userName, downloadUrl, callbackUrl,
       lang: 'en',
       customization: {
         autosave: !viewOnly,
+        forcesave: !viewOnly,
       },
       user: {
         id: String(userId),

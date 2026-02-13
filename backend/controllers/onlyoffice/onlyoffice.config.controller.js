@@ -13,6 +13,7 @@ const {
   getOnlyofficeJsUrl,
   validateFileForOnlyOffice,
 } = require('./onlyoffice.utils');
+const { registerOpenDocument } = require('../../services/onlyofficeAutoSave');
 
 /**
  * Get ONLYOFFICE editor configuration for a file
@@ -46,6 +47,9 @@ async function getConfig(req, res) {
     const config = buildOnlyofficeConfig(file, userId, userName, downloadUrl, callbackUrl, isMobile);
     const tokenForConfig = await signConfigToken(config);
     const onlyofficeJsUrl = await getOnlyofficeJsUrl();
+
+    // Register document for auto-save
+    registerOpenDocument(config.document.key, file.id, userId);
 
     res.json({ config, token: tokenForConfig, onlyofficeJsUrl });
   } catch (err) {

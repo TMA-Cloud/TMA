@@ -71,10 +71,29 @@ File content
 
 ### POST `/api/onlyoffice/callback`
 
-OnlyOffice callback endpoint.
+OnlyOffice callback endpoint. Called by the OnlyOffice Document Server when document state changes.
 
 **Request Body:**
-OnlyOffice callback data
+OnlyOffice callback data including `status`, `key`, `url`, and `forcesavetype`.
+
+**Callback Statuses:**
+
+| Status | Meaning                                                   |
+| ------ | --------------------------------------------------------- |
+| 0      | Document is being edited                                  |
+| 2      | Document is ready for saving (all users closed)           |
+| 3      | Document saving error                                     |
+| 4      | Document closed with no changes                           |
+| 6      | Document is being edited, current state saved (forcesave) |
+
+**Forcesave Types (when status = 6):**
+
+| Type | Trigger                                     |
+| ---- | ------------------------------------------- |
+| 0    | Command service request (auto-save service) |
+| 1    | Save button click (Ctrl+S)                  |
+| 2    | Timer-based (autoAssembly)                  |
+| 3    | Form submission                             |
 
 **Response:**
 
@@ -84,9 +103,42 @@ OnlyOffice callback data
 }
 ```
 
-**Note:** OnlyOffice callback format. `error: 0` indicates success.
+**Note:** `error: 0` must always be returned, even on internal errors. Otherwise OnlyOffice will retry indefinitely.
+
+## Auto-Save
+
+Documents are saved to storage periodically while being edited, not just on close.
+
+**How it works:**
+
+1. When a document is opened (via viewer or config endpoint), it is registered with the auto-save service.
+2. Every 30 seconds, the backend sends a `forcesave` command to the OnlyOffice Document Server command service API (`/coauthoring/CommandService.ashx`).
+3. OnlyOffice responds by calling the callback endpoint with status 6 and `forcesavetype: 0`.
+4. The callback handler downloads the current document and writes it to storage.
+5. When all users close the document (status 2 or 4), it is unregistered from auto-save.
+
+**Editor configuration:**
+
+The editor config includes `customization.forcesave: true`, which also allows manual saves via Ctrl+S or the save button without closing the document.
+
+**Command service request format:**
+
+```json
+{
+  "c": "forcesave",
+  "key": "userId-fileId-timestamp"
+}
+```
+
+When JWT is enabled, the payload is signed and sent as `{ "token": "signed_jwt" }`.
+
+**Files:**
+
+- `backend/services/onlyofficeAutoSave.js` - Auto-save service
+- `backend/controllers/onlyoffice/onlyoffice.callback.controller.js` - Callback handler
 
 ## Related Topics
 
 - [Files](files.md) - File management
 - [OnlyOffice Integration](/concepts/architecture) - Architecture overview
+- [OnlyOffice Issues](/debugging/onlyoffice-issues) - Troubleshooting

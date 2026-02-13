@@ -17,6 +17,7 @@ const {
   invalidateSearchCache,
 } = require('../../utils/cache');
 const { publishFileEvent, EventTypes } = require('../../services/fileEvents');
+const { unregisterOpenDocument } = require('../../services/onlyofficeAutoSave');
 
 /**
  * Download file from URL
@@ -75,12 +76,39 @@ async function callback(req, res) {
 
     // OnlyOffice callback statuses:
     // 0 = document is being edited
-    // 2 = document is ready for saving
+    // 2 = document is ready for saving (closed)
     // 3 = document saving error occurred
     // 4 = document is closed with no changes
     // 6 = document is being edited, but the current document state is saved
     const status = body.status;
+    const forcesavetype = body.forcesavetype; // 0=command, 1=button, 2=timer(autoAssembly), 3=form
     const shouldSave = status === 2 || status === 6;
+
+    // Handle document close (status 2 or 4) - unregister from auto-save
+    if (status === 2 || status === 4) {
+      unregisterOpenDocument(body.key);
+      logger.debug({ status, key: body.key }, '[ONLYOFFICE] Document closed, unregistered from auto-save');
+    }
+
+    // Log callback for debugging
+    if (status === 6) {
+      logger.info(
+        {
+          status,
+          forcesavetype,
+          key: body.key,
+          forcesaveType:
+            forcesavetype === 2
+              ? 'autoAssembly (timer)'
+              : forcesavetype === 1
+                ? 'button'
+                : forcesavetype === 0
+                  ? 'command'
+                  : 'unknown',
+        },
+        '[ONLYOFFICE] Status 6 callback received'
+      );
+    }
 
     if (shouldSave && body.url) {
       const parsed = parseDocumentKey(body.key);
@@ -294,12 +322,11 @@ async function callback(req, res) {
       logger.error('[ONLYOFFICE] Document saving error for:', body.key);
     }
 
-    // Always return success to OnlyOffice
+    // Always return success to OnlyOffice (required to prevent timeout and retries)
     res.status(200).json({ error: 0 });
   } catch (err) {
     logger.error({ err }, '[ONLYOFFICE] Callback error');
-    // Still return success to OnlyOffice even on error
-    // to prevent OnlyOffice from retrying
+    // Still return success to OnlyOffice even on error to prevent retries
     res.status(200).json({ error: 0 });
   }
 }
