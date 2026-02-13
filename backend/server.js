@@ -15,6 +15,7 @@ const publicRoutes = require('./routes/public.routes');
 const { startTrashCleanup } = require('./services/trashCleanup');
 
 const { startAuditCleanup } = require('./services/auditCleanup');
+const { startOrphanFileCleanup } = require('./services/orphanCleanup');
 const errorHandler = require('./middleware/error.middleware');
 // Logging and audit system
 const { requestIdMiddleware } = require('./middleware/requestId.middleware');
@@ -263,6 +264,8 @@ runMigrations()
     startTrashCleanup();
 
     startAuditCleanup();
+
+    startOrphanFileCleanup();
 
     // Register shutdown handlers
     process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
