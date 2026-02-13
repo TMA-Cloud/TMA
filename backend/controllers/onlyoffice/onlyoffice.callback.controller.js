@@ -297,6 +297,9 @@ async function callback(req, res) {
         userId,
       });
 
+      // Attach userId to req so audit logger can pick it up
+      req.userId = validatedUserId;
+
       // Log audit event for document save
       await logAuditEvent(
         'document.save',
