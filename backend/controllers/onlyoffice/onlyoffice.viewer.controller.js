@@ -69,7 +69,7 @@ async function getViewerPage(req, res) {
     }
 
     const userName = await getUserName(userId);
-    const token = await buildSignedFileToken(file.id);
+    const token = await buildSignedFileToken(file.id, userId);
     const { downloadUrl, callbackUrl } = buildOnlyofficeUrls(req, file.id, token);
     const isMobile = isMobileDevice(req);
     const config = buildOnlyofficeConfig(file, userId, userName, downloadUrl, callbackUrl, isMobile);
