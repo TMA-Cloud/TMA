@@ -76,6 +76,9 @@ wiki/.env.production.local
 wiki/.env.development.local
 wiki/i18n/
 
+# Database backups
+backups/
+
 # Misc
 *.tgz
 .next/

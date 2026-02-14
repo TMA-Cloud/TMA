@@ -12,15 +12,17 @@ Complete reference for all environment variables in TMA Cloud.
 
 ## Database Configuration
 
-| Variable        | Required | Default             | Description                  |
-| --------------- | -------- | ------------------- | ---------------------------- |
-| `DB_HOST`       | No       | `localhost`         | PostgreSQL host              |
-| `DB_PORT`       | No       | `5432`              | PostgreSQL port              |
-| `DB_USER`       | No       | `postgres`          | Database username            |
-| `DB_PASSWORD`   | Yes      | -                   | Database password            |
-| `DB_NAME`       | No       | `tma_cloud_storage` | Database name                |
-| `DB_SSLMODE`    | No       | `disable`           | SSL mode (`require` for TLS) |
-| `PGBOSS_SCHEMA` | No       | `pgboss`            | pg-boss job queue schema     |
+| Variable              | Required | Default             | Description                                       |
+| --------------------- | -------- | ------------------- | ------------------------------------------------- |
+| `DB_HOST`             | No       | `localhost`         | PostgreSQL host                                   |
+| `DB_PORT`             | No       | `5432`              | PostgreSQL port                                   |
+| `DB_USER`             | No       | `postgres`          | Database username                                 |
+| `DB_PASSWORD`         | Yes      | -                   | Database password                                 |
+| `DB_NAME`             | No       | `tma_cloud_storage` | Database name                                     |
+| `DB_SSLMODE`          | No       | `disable`           | SSL mode (`require` for TLS)                      |
+| `PGBOSS_SCHEMA`       | No       | `pgboss`            | pg-boss job queue schema                          |
+| `DB_CONTAINER`        | No       | auto-detected       | Docker container name for backup/restore script   |
+| `BACKUP_RETAIN_COUNT` | No       | `10`                | Number of database backups to keep before pruning |
 
 ## Redis Configuration
 

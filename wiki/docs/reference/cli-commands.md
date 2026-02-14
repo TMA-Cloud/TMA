@@ -208,6 +208,34 @@ Connect to PostgreSQL database.
 
 Migrations run automatically on application startup.
 
+### Backup & Restore
+
+```bash
+./scripts/db-backup-restore.sh backup
+```
+
+Full database backup. Outputs a compressed `.dump` file with a `.meta` sidecar (SHA-256 checksum, table row counts, backup metadata).
+
+```bash
+./scripts/db-backup-restore.sh restore backups/<file>.dump
+```
+
+Restore database from a backup. Validates integrity before touching the database, restores in single-transaction mode.
+
+```bash
+./scripts/db-backup-restore.sh verify backups/<file>.dump
+```
+
+Verify a backup file's SHA-256 checksum and dump TOC without restoring.
+
+```bash
+./scripts/db-backup-restore.sh list
+```
+
+List available backups with file sizes and dates.
+
+The script auto-detects the PostgreSQL Docker container. Override with `DB_CONTAINER` env var. See [Backups](/guides/operations/backups) for details.
+
 ## Related Topics
 
 - [Installation](/getting-started/installation) - Setup guide
