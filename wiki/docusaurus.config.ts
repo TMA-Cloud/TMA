@@ -85,7 +85,7 @@ const config: Config = {
           label: "Documentation",
         },
         {
-          href: "https://github.com/TMA-Cloud/TMA",
+          href: "https://github.com/TMA-Cloud",
           label: "GitHub",
           position: "right",
           className: "header-github-link",
@@ -138,7 +138,7 @@ const config: Config = {
           items: [
             {
               label: "GitHub",
-              href: "https://github.com/TMA-Cloud/TMA",
+              href: "https://github.com/TMA-Cloud",
             },
             {
               label: "Debugging",
