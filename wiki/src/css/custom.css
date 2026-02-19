@@ -279,6 +279,11 @@ body {
   margin: 1.5rem 0;
 }
 
+.theme-code-block [class*="buttonGroup"] {
+  top: 50% !important;
+  transform: translateY(-50%);
+}
+
 code {
   background-color: var(--ifm-code-background);
   color: var(--ifm-code-color);
