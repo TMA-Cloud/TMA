@@ -30,14 +30,21 @@ npm run worker
 #### Trash Cleanup
 
 - Automatic deletion after 15 days
-- Background scheduler
-- Permanent file deletion
+- Runs every 24 hours
+- Permanent file deletion from storage
 
 #### Orphan Cleanup
 
 - Removes files without database records
 - Periodic scanning
 - Disk space recovery
+
+#### Share Link Cleanup
+
+- Deletes expired share links (`expires_at < NOW()`)
+- Sets `shared = false` on files that no longer have an active share link
+- Runs at startup and every 7 days
+- Invalidates related caches after cleanup
 
 ## Running Workers
 

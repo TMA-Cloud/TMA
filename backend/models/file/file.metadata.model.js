@@ -77,24 +77,23 @@ async function setShared(ids, shared, userId) {
 }
 
 /**
- * Get shared files (top-level only)
+ * Get shared files (top-level only), including share link expiry info
  */
 async function getSharedFiles(userId, sortBy = 'modified', order = 'DESC') {
-  // Try to get from cache first
   const cacheKey = cacheKeys.sharedFiles(userId, sortBy, order);
   const cached = await getCache(cacheKey);
   if (cached !== null) {
     return cached;
   }
 
-  // Cache miss - query database
   const orderClause = sortBy === 'size' ? '' : buildOrderClause(sortBy, order, 'f');
-  // Only return top-level shared items (not children of shared folders)
-  // A file is top-level shared if it's shared AND (has no parent OR parent is not shared)
   const result = await pool.query(
-    `SELECT f.id, f.name, f.type, f.size, f.modified, f.mime_type AS "mimeType", f.starred, f.shared 
+    `SELECT f.id, f.name, f.type, f.size, f.modified, f.mime_type AS "mimeType",
+            f.starred, f.shared,
+            s.expires_at AS "expiresAt"
      FROM files f
      LEFT JOIN files parent ON f.parent_id = parent.id AND parent.user_id = $1
+     LEFT JOIN share_links s ON s.file_id = f.id AND s.user_id = $1
      WHERE f.user_id = $1 
        AND f.shared = TRUE 
        AND f.deleted_at IS NULL
@@ -111,7 +110,6 @@ async function getSharedFiles(userId, sortBy = 'modified', order = 'DESC') {
     });
   }
 
-  // Cache the result (1 minute TTL)
   await setCache(cacheKey, files, 60);
 
   return files;

@@ -1,5 +1,10 @@
 import React, { useCallback, useEffect, useState, useRef } from "react";
-import { AppContext, type FileItem, type FileItemResponse } from "./AppContext";
+import {
+  AppContext,
+  type FileItem,
+  type FileItemResponse,
+  type ShareExpiry,
+} from "./AppContext";
 import { usePromiseQueue, useDebouncedCallback } from "../utils/debounce";
 import {
   downloadFile as downloadFileApi,
@@ -207,6 +212,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
             ...f,
             modified: new Date(f.modified),
             deletedAt: f.deletedAt ? new Date(f.deletedAt) : undefined,
+            expiresAt: f.expiresAt
+              ? new Date(f.expiresAt)
+              : f.expiresAt === null
+                ? null
+                : undefined,
           })),
         );
       } catch {
@@ -913,12 +923,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   const shareFilesApi = async (
     ids: string[],
     shared: boolean,
+    expiry?: ShareExpiry,
   ): Promise<Record<string, string>> => {
     const res = await fetch(`/api/files/share`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify({ ids, shared }),
+      body: JSON.stringify({
+        ids,
+        shared,
+        ...(shared && expiry ? { expiry } : {}),
+      }),
     });
     if (!res.ok) {
       const errorMessage = await extractResponseError(res);

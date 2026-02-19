@@ -14,8 +14,11 @@ View shared files/folders.
 
 - `token`: Required. Must be a non-empty string.
 
-**Response:**
-HTML page with shared files
+**Responses:**
+
+- **200** - HTML page with shared files
+- **404** - Link does not exist or has been removed
+- **410** - Link has expired
 
 ### GET `/s/:token/file/:id`
 
@@ -26,8 +29,11 @@ Download a file from a share link.
 - `token`: Required. Must be a non-empty string.
 - `id`: Required. Must be a non-empty string.
 
-**Response:**
-File download
+**Responses:**
+
+- **200** - File download
+- **404** - Link or file not found
+- **410** - Link has expired
 
 ### GET `/s/:token/zip`
 
@@ -37,8 +43,11 @@ Download a folder as ZIP from a share link.
 
 - `token`: Required. Must be a non-empty string.
 
-**Response:**
-ZIP archive download
+**Responses:**
+
+- **200** - ZIP archive download
+- **404** - Link not found or not a folder
+- **410** - Link has expired
 
 ## Related Topics
 

@@ -19,11 +19,12 @@ import {
   Square,
   RotateCcw,
 } from "lucide-react";
-import { useApp } from "../../contexts/AppContext";
+import { useApp, type ShareExpiry } from "../../contexts/AppContext";
 import { useToast } from "../../hooks/useToast";
 import { useIsMobile } from "../../hooks/useIsMobile";
 import { Modal } from "../ui/Modal";
 import { getErrorMessage } from "../../utils/errorUtils";
+import { ShareExpiryModal } from "./ShareLinkModal";
 
 interface ContextMenuProps {
   isOpen: boolean;
@@ -49,6 +50,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
   const menuRef = useRef<HTMLDivElement>(null);
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
+  const [shareExpiryOpen, setShareExpiryOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState<{
     type: "delete" | "deleteForever";
     files: string[];
@@ -246,16 +248,16 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
         label: allShared ? "Remove from Shared" : "Add to Shared",
         disabled: false,
         action: async () => {
-          try {
-            const links = await shareFiles(selectedFiles, !allShared);
-            if (!allShared) {
-              const list = Object.values(links);
-              setShareLinkModalOpen(true, list);
+          if (allShared) {
+            try {
+              await shareFiles(selectedFiles, false);
+              onActionComplete?.();
+            } catch {
+              showToast("Failed to unshare files", "error");
             }
-            onActionComplete?.();
-          } catch {
-            // Error handled by toast notification
-            showToast("Failed to share files", "error");
+          } else {
+            // Show expiry picker — action continues in handleShareExpiry
+            setShareExpiryOpen(true);
           }
         },
       },
@@ -530,6 +532,18 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
       ? `Are you sure you want to permanently delete ${pendingAction.files.length} item${pendingAction.files.length !== 1 ? "s" : ""}? This action cannot be undone.`
       : `Are you sure you want to move ${pendingAction?.files.length || 0} item${(pendingAction?.files.length || 0) !== 1 ? "s" : ""} to trash?`;
 
+  const handleShareExpiry = async (expiry: ShareExpiry) => {
+    setShareExpiryOpen(false);
+    try {
+      const links = await shareFiles(selectedFiles, true, expiry);
+      const list = Object.values(links);
+      if (list.length) setShareLinkModalOpen(true, list);
+      onActionComplete?.();
+    } catch {
+      showToast("Failed to share files", "error");
+    }
+  };
+
   // Render modal outside of isOpen check so it persists when context menu closes
   const modalElement = (
     <Modal
@@ -568,9 +582,23 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     </Modal>
   );
 
+  const shareExpiryElement = (
+    <ShareExpiryModal
+      isOpen={shareExpiryOpen}
+      onClose={() => setShareExpiryOpen(false)}
+      onConfirm={handleShareExpiry}
+      fileCount={selectedFiles.length}
+    />
+  );
+
   if (!isOpen) {
-    // Still render modal even when context menu is closed
-    return modalElement;
+    // Still render modals even when context menu is closed
+    return (
+      <>
+        {modalElement}
+        {shareExpiryElement}
+      </>
+    );
   }
 
   // Mobile: bottom sheet with overlay
@@ -632,6 +660,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
           </div>
         </div>
         {modalElement}
+        {shareExpiryElement}
       </>
     );
   }
@@ -696,6 +725,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
         })}
       </div>
       {modalElement}
+      {shareExpiryElement}
     </>
   );
 };

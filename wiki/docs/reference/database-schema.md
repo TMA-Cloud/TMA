@@ -49,11 +49,13 @@ Share link metadata.
 
 | Column       | Type         | Description                       |
 | ------------ | ------------ | --------------------------------- |
-| `id`         | VARCHAR(255) | Primary key                       |
-| `token`      | VARCHAR(255) | Unique, not null                  |
+| `id`         | VARCHAR(255) | Primary key (used as token)       |
+| `file_id`    | VARCHAR(255) | FK → files.id                     |
 | `user_id`    | VARCHAR(255) | FK → users.id                     |
 | `expires_at` | TIMESTAMPTZ  | Expiration (null = no expiration) |
 | `created_at` | TIMESTAMPTZ  | Default now()                     |
+
+**Indexes:** Partial index on `expires_at` where `expires_at IS NOT NULL`
 
 ### `share_link_files`
 

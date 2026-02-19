@@ -1,6 +1,8 @@
 import { createContext, useContext } from "react";
 import type { UploadProgressItem } from "../utils/uploadUtils";
 
+export type ShareExpiry = "7d" | "30d" | "never";
+
 export interface FileItem {
   id: string;
   name: string;
@@ -12,6 +14,7 @@ export interface FileItem {
   starred?: boolean;
   shared?: boolean;
   deletedAt?: Date;
+  expiresAt?: Date | null;
 }
 
 export interface FileItemResponse {
@@ -25,6 +28,7 @@ export interface FileItemResponse {
   starred?: boolean;
   shared?: boolean;
   deletedAt?: string | null;
+  expiresAt?: string | null;
 }
 
 export interface AppContextType {
@@ -65,6 +69,7 @@ export interface AppContextType {
   shareFiles: (
     ids: string[],
     shared: boolean,
+    expiry?: ShareExpiry,
   ) => Promise<Record<string, string>>;
   getShareLinks: (ids: string[]) => Promise<Record<string, string>>;
   linkToParentShare: (ids: string[]) => Promise<Record<string, string>>;

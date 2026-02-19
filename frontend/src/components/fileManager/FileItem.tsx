@@ -5,7 +5,7 @@ import {
   formatDate,
   formatFileNameForTooltip,
 } from "../../utils/fileUtils";
-import { Star, Share2, Eye } from "lucide-react";
+import { Star, Share2, Eye, Clock } from "lucide-react";
 import { Tooltip } from "../ui/Tooltip";
 import { useIsMobile } from "../../hooks/useIsMobile";
 import { FileTypeIcon } from "./FileTypeIcon";
@@ -44,6 +44,10 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
   const isMobile = useIsMobile();
   const longPressTimeoutRef = useRef<number | null>(null);
   const longPressTriggeredRef = useRef(false);
+  const isExpired =
+    file.shared &&
+    file.expiresAt instanceof Date &&
+    file.expiresAt < new Date();
 
   const clearLongPress = () => {
     if (longPressTimeoutRef.current !== null) {
@@ -155,12 +159,16 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
                 className={`absolute -top-1 -right-1 ${isMobile ? "w-3 h-3" : "w-5 h-5"} text-yellow-400 fill-yellow-400`}
               />
             )}
-            {file.shared && (
+            {file.shared && !isExpired && (
               <Share2
                 className={`absolute -top-1 -left-1 ${isMobile ? "w-3 h-3" : "w-5 h-5"} text-green-400`}
               />
             )}
-            {/* Quick preview icon on hover for files */}
+            {isExpired && (
+              <Clock
+                className={`absolute -top-1 -left-1 ${isMobile ? "w-3 h-3" : "w-5 h-5"} text-red-400`}
+              />
+            )}
             {file.type === "file" && !isMobile && (
               <button
                 className="absolute -bottom-3 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 scale-90 group-hover:scale-100 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-full p-1.5 shadow-lg hover:shadow-xl hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:border-blue-400 transition-all duration-200"
@@ -210,6 +218,9 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
               <p className="truncate">{formatFileSize(file.size)}</p>
             )}
             <p className="truncate">{formatDate(file.modified)}</p>
+            {isExpired && (
+              <p className="truncate text-red-400 font-medium">Link expired</p>
+            )}
           </div>
         </div>
       </div>
@@ -252,10 +263,12 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
         {file.starred && (
           <Star className="absolute -top-2 -right-2 w-4 h-4 text-yellow-400 fill-yellow-400" />
         )}
-        {file.shared && (
+        {file.shared && !isExpired && (
           <Share2 className="absolute -top-2 -left-2 w-4 h-4 text-green-400" />
         )}
-        {/* Quick preview icon on hover for files */}
+        {isExpired && (
+          <Clock className="absolute -top-2 -left-2 w-4 h-4 text-red-400" />
+        )}
         {file.type === "file" && (
           <button
             className="absolute -bottom-3 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 scale-90 group-hover:scale-100 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-full p-1 shadow-lg hover:shadow-xl hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:border-blue-400 transition-all duration-200"
@@ -294,6 +307,9 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
             file.size &&
             `${formatFileSize(file.size)} • `}
           {formatDate(file.modified)}
+          {isExpired && (
+            <span className="ml-2 text-red-400 font-medium">Link expired</span>
+          )}
         </p>
       </div>
     </div>

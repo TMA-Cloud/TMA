@@ -1,19 +1,31 @@
 const pool = require('../config/db');
 const { generateId } = require('../utils/id');
-const { getCache, setCache, deleteCache, cacheKeys, invalidateShareCache, DEFAULT_TTL } = require('../utils/cache');
+const {
+  getCache,
+  setCache,
+  deleteCache,
+  deleteCachePattern,
+  cacheKeys,
+  invalidateShareCache,
+  invalidateFileCache,
+  DEFAULT_TTL,
+} = require('../utils/cache');
+const { logger } = require('../config/logger');
 
-async function createShareLink(fileId, userId, fileIds = [fileId]) {
-  // Use 16-character tokens for ~93 bits of entropy (same as file IDs)
-  // This makes brute-force attacks computationally infeasible
+async function createShareLink(fileId, userId, fileIds = [fileId], expiresAt = null) {
   const id = generateId(16);
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    await client.query('INSERT INTO share_links(id, file_id, user_id) VALUES($1,$2,$3)', [id, fileId, userId]);
+    await client.query('INSERT INTO share_links(id, file_id, user_id, expires_at) VALUES($1,$2,$3,$4)', [
+      id,
+      fileId,
+      userId,
+      expiresAt,
+    ]);
     await client.query('INSERT INTO share_link_files(share_id, file_id) SELECT $1, unnest($2::text[])', [id, fileIds]);
     await client.query('COMMIT');
 
-    // Invalidate share cache
     await invalidateShareCache(id, userId);
   } catch (err) {
     await client.query('ROLLBACK');
@@ -98,6 +110,11 @@ async function getShareLinks(fileIds, userId) {
   return { ...cacheResults, ...dbResults };
 }
 
+async function updateShareExpiry(shareId, expiresAt) {
+  await pool.query('UPDATE share_links SET expires_at = $1 WHERE id = $2', [expiresAt, shareId]);
+  await invalidateShareCache(shareId);
+}
+
 async function addFilesToShare(shareId, fileIds) {
   if (!fileIds || fileIds.length === 0) return;
   await pool.query(
@@ -168,17 +185,27 @@ async function deleteShareLinks(fileIds, userId) {
   }
 }
 
+/**
+ * Look up a share link by token.
+ * Returns:
+ *   file object  — valid link
+ *   { expired: true } — link exists but is past its expires_at
+ *   null — token does not exist
+ */
 async function getFileByToken(token) {
-  // Try to get from cache first
   const cacheKey = cacheKeys.shareByToken(token);
   const cached = await getCache(cacheKey);
   if (cached !== null) {
+    if (cached.expiresAt && new Date(cached.expiresAt) < new Date()) {
+      await deleteCache(cacheKey);
+      return { expired: true };
+    }
     return cached;
   }
 
-  // Cache miss - query database
   const res = await pool.query(
-    `SELECT f.id, f.name, f.type, f.mime_type AS "mimeType", f.path, f.user_id AS "userId"
+    `SELECT f.id, f.name, f.type, f.mime_type AS "mimeType", f.path, f.user_id AS "userId",
+            s.expires_at AS "expiresAt"
      FROM share_links s
      JOIN files f ON s.file_id = f.id
      WHERE s.id = $1`,
@@ -186,9 +213,18 @@ async function getFileByToken(token) {
   );
   const file = res.rows[0] || null;
 
-  // Cache the result
   if (file) {
-    await setCache(cacheKey, file, DEFAULT_TTL);
+    if (file.expiresAt && new Date(file.expiresAt) < new Date()) {
+      return { expired: true };
+    }
+    // Cache TTL = min(DEFAULT_TTL, seconds until expiry) so the entry
+    // can never outlive the link's expiration.
+    let ttl = DEFAULT_TTL;
+    if (file.expiresAt) {
+      const remaining = Math.floor((new Date(file.expiresAt) - Date.now()) / 1000);
+      ttl = Math.min(ttl, Math.max(remaining, 1));
+    }
+    await setCache(cacheKey, file, ttl);
   }
 
   return file;
@@ -281,10 +317,72 @@ async function getSharedTree(token, rootId) {
   return res.rows;
 }
 
+/**
+ * Delete all expired share links and unshare associated files.
+ * Intended to be run periodically (e.g. every 7 days).
+ */
+async function cleanupExpiredShareLinks() {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const expired = await client.query(
+      `SELECT s.id, s.file_id, s.user_id
+       FROM share_links s
+       WHERE s.expires_at IS NOT NULL AND s.expires_at < NOW()`
+    );
+
+    if (expired.rows.length === 0) {
+      await client.query('COMMIT');
+      logger.info('[ShareCleanup] No expired share links found');
+      return;
+    }
+
+    const shareIds = expired.rows.map(r => r.id);
+
+    await client.query('DELETE FROM share_link_files WHERE share_id = ANY($1::text[])', [shareIds]);
+    await client.query('DELETE FROM share_links WHERE id = ANY($1::text[])', [shareIds]);
+
+    const userFileMap = new Map();
+    for (const row of expired.rows) {
+      if (!userFileMap.has(row.user_id)) {
+        userFileMap.set(row.user_id, []);
+      }
+      userFileMap.get(row.user_id).push(row.file_id);
+    }
+
+    for (const [userId, fileIds] of userFileMap) {
+      await client.query(
+        `UPDATE files SET shared = FALSE
+         WHERE id = ANY($1::text[]) AND user_id = $2
+           AND NOT EXISTS (
+             SELECT 1 FROM share_links sl WHERE sl.file_id = files.id AND sl.user_id = $2
+           )`,
+        [fileIds, userId]
+      );
+      await invalidateFileCache(userId);
+      await deleteCachePattern(`files:${userId}:shared:*`);
+    }
+
+    for (const shareId of shareIds) {
+      await invalidateShareCache(shareId);
+    }
+
+    await client.query('COMMIT');
+    logger.info({ count: shareIds.length }, '[ShareCleanup] Cleaned up expired share links');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 module.exports = {
   createShareLink,
   getShareLink,
   getShareLinks,
+  updateShareExpiry,
   addFilesToShare,
   removeFilesFromShares,
   deleteShareLink,
@@ -294,4 +392,5 @@ module.exports = {
   getFolderContentsByShare,
   isFileShared,
   getSharedTree,
+  cleanupExpiredShareLinks,
 };

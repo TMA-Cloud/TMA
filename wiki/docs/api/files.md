@@ -380,7 +380,8 @@ Share or unshare files. Creates share links if they don't exist, or removes shar
 ```json
 {
   "ids": ["file_123", "file_456"],
-  "shared": true
+  "shared": true,
+  "expiry": "7d"
 }
 ```
 
@@ -388,6 +389,7 @@ Share or unshare files. Creates share links if they don't exist, or removes shar
 
 - `ids`: Required. Must be a non-empty array of strings.
 - `shared`: Required. Must be a boolean.
+- `expiry`: Optional. One of `"7d"`, `"30d"`, or `"never"`.
 
 **Response (when sharing):**
 
@@ -468,7 +470,7 @@ Link files to their parent folder's share link. If the parent folder is shared, 
 
 ### GET `/api/files/shared`
 
-List files and folders shared by the current user.
+List files and folders shared by the current user. Includes share link expiry information.
 
 **Query Parameters:**
 
@@ -477,7 +479,7 @@ List files and folders shared by the current user.
 
 **Response:**
 
-An array of shared file and folder objects.
+An array of shared file and folder objects. Each object includes `expiresAt` from the associated share link (`null` if the link has no expiration).
 
 ```json
 [
@@ -487,9 +489,10 @@ An array of shared file and folder objects.
     "type": "file",
     "size": 1024,
     "mimeType": "application/pdf",
-    "parentId": "folder_456",
     "starred": false,
-    "modified": "2024-01-01T00:00:00Z"
+    "shared": true,
+    "modified": "2024-01-01T00:00:00Z",
+    "expiresAt": "2024-01-08T00:00:00Z"
   }
 ]
 ```

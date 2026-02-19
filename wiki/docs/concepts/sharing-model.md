@@ -12,7 +12,7 @@ Share links provide public access to files and folders without requiring authent
 
 - **Token:** Cryptographically secure random token
 - **Files:** One or more files/folders linked
-- **Expiration:** Optional expiration date
+- **Expiration:** Configurable expiration (`7 days`, `30 days`, or `never`).
 - **Owner:** User who created the share
 
 ### Access Control
@@ -56,25 +56,49 @@ http://share.your-domain.com/s/{token}
 
 Share domain middleware blocks all routes except `/s/*`, `/health`, and `/metrics`.
 
+## Link Expiration
+
+### Expiry Options
+
+When creating or re-sharing a link, the user selects one of:
+
+- **7 days** (default)
+- **30 days**
+- **No expiration**
+
+Re-sharing an existing link updates its expiry to the newly selected value.
+
+### Expired Link Behavior
+
+- Expired links return **410 Gone** on the public page with an "Link expired" message
+- The **Shared** page in the file manager still lists expired files with a red clock icon and "Link expired" label
+- Downloads and ZIP exports for expired links are blocked with the same 410 response
+
+### Auto-Cleanup
+
+A background job removes expired share links from the database. It runs once at server startup and then every 7 days. Cleanup deletes the `share_links` and `share_link_files` rows and sets `shared = false` on files that no longer have an active share link.
+
 ## Share Management
 
 ### Viewing Shares
 
-- List all shares created by user
-- View share link URLs
-- Copy share links
+- Go to the **Shared** section in the file manager
+- Active links show the green share icon
+- Expired links show a red clock icon and "Link expired" label
+- Copy share links from the share modal
 
 ### Revoking Shares
 
-- Delete share links
+- Unshare via context menu or toolbar
 - Immediate access revocation
-- No access to previously shared files
+- Link becomes invalid
 
 ## Security Considerations
 
 - Tokens are cryptographically secure
 - No authentication required (by design)
-- Expiration dates supported
+- Expiration enforced on every access (not just cleanup)
+- Redis cache TTL is capped at the link's remaining lifetime to prevent stale access
 - Share domain isolation (optional)
 
 ## Related Topics

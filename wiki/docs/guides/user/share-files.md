@@ -8,29 +8,48 @@ Create shareable links for files and folders in TMA Cloud.
 
 1. Right-click on a file
 2. Select **"Share"**
-3. Click **"Create Share Link"**
+3. Choose an expiry option (7 days, 30 days, or no expiration)
 4. Copy the generated link
 
 ### Folder Share
 
 1. Right-click on a folder
 2. Select **"Share"**
-3. Click **"Create Share Link"**
+3. Choose an expiry option
 4. All folder contents accessible via link
 
 ### Bulk Share
 
 1. Select multiple files/folders
-2. Click **"Share"** button
-3. Create single share link for all selected items
+2. Click **"Share"** button in the toolbar
+3. Choose an expiry option
+4. A share link is created for each selected item
+
+## Share Link Expiry
+
+### Expiry Options
+
+When sharing, you choose one of:
+
+- **7 days** (default) - link expires after 7 days
+- **30 days** - link expires after 30 days
+- **No expiration** - link stays active until manually revoked
+
+Re-sharing an already-shared file lets you change the expiry.
+
+### Expired Links
+
+- Expired links remain visible in the **Shared** section with a red clock icon and **"Link expired"** label
+- Anyone visiting an expired link sees a "Link expired" page
+- A background job automatically cleans up expired share links every 7 days
 
 ## Share Link Management
 
 ### Viewing Shares
 
 - Go to **"Shared"** section
-- View all your share links
-- See expiration dates (if set)
+- Active links show the green share icon
+- Expired links show a red clock icon and "Link expired" label
 
 ### Copying Links
 
@@ -40,7 +59,7 @@ Create shareable links for files and folders in TMA Cloud.
 
 ### Revoking Shares
 
-- Click **"Revoke"** on a share link
+- Right-click and select **"Unshare"**, or use the toolbar
 - Immediate access revocation
 - Link becomes invalid
 
@@ -51,12 +70,6 @@ Create shareable links for files and folders in TMA Cloud.
 - No authentication required
 - Accessible to anyone with link
 - Read-only access
-
-### Expiration
-
-- Optional expiration dates
-- Automatic revocation after expiration
-- Set during share creation
 
 ### Custom Domain
 

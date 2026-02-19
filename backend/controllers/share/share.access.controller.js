@@ -3,7 +3,7 @@ const { sendError } = require('../../utils/response');
 const { getFileByToken, getFolderContentsByShare } = require('../../models/share.model');
 const { logger } = require('../../config/logger');
 const { shareAccessed } = require('../../services/auditLogger');
-const { escapeHtml } = require('./share.utils');
+const { escapeHtml, renderErrorPage } = require('./share.utils');
 
 /**
  * Handle shared file/folder access
@@ -14,7 +14,13 @@ async function handleShared(req, res) {
   try {
     const { token } = req.params;
     const file = await getFileByToken(token);
-    if (!file) return res.status(404).send('Not found');
+
+    if (!file) {
+      return renderErrorPage(res, 404, 'Link not found', 'This share link does not exist or has been removed.');
+    }
+    if (file.expired) {
+      return renderErrorPage(res, 410, 'Link expired', 'This share link has expired and is no longer available.');
+    }
 
     // Log share access (anonymous users)
     await shareAccessed(token, req);

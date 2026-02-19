@@ -93,6 +93,7 @@ const shareFilesSchema = [
   body('ids').isArray({ min: 1 }).withMessage('File IDs must be an array with at least one ID'),
   body('ids.*').isString().withMessage('All file IDs must be strings'),
   body('shared').isBoolean().withMessage('Shared must be a boolean'),
+  body('expiry').optional().isIn(['7d', '30d', 'never']).withMessage('Expiry must be 7d, 30d, or never'),
 ];
 
 const getShareLinksSchema = [

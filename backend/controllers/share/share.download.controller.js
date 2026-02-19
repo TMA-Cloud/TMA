@@ -5,6 +5,7 @@ const { getFileByToken, isFileShared, getSharedTree } = require('../../models/sh
 const pool = require('../../config/db');
 const { logger } = require('../../config/logger');
 const { logAuditEvent } = require('../../services/auditLogger');
+const { renderErrorPage } = require('./share.utils');
 
 /**
  * Download shared folder as ZIP
@@ -13,7 +14,16 @@ async function downloadFolderZip(req, res) {
   try {
     const { token } = req.params;
     const file = await getFileByToken(token);
-    if (!file || file.type !== 'folder') return res.status(404).send('Not found');
+
+    if (!file) {
+      return renderErrorPage(res, 404, 'Link not found', 'This share link does not exist or has been removed.');
+    }
+    if (file.expired) {
+      return renderErrorPage(res, 410, 'Link expired', 'This share link has expired and is no longer available.');
+    }
+    if (file.type !== 'folder') {
+      return renderErrorPage(res, 404, 'Not found', 'The requested resource was not found.');
+    }
 
     // Log share download (ZIP)
     await logAuditEvent(
@@ -41,8 +51,21 @@ async function downloadFolderZip(req, res) {
 async function downloadSharedItem(req, res) {
   try {
     const { token, id: fileId } = req.params;
+
+    // Check link-level expiry first
+    const shareFile = await getFileByToken(token);
+    if (!shareFile) {
+      return renderErrorPage(res, 404, 'Link not found', 'This share link does not exist or has been removed.');
+    }
+    if (shareFile.expired) {
+      return renderErrorPage(res, 410, 'Link expired', 'This share link has expired and is no longer available.');
+    }
+
     const allowed = await isFileShared(token, fileId);
-    if (!allowed) return res.status(404).send('Not found');
+    if (!allowed) {
+      return renderErrorPage(res, 404, 'Not found', 'The requested file was not found in this share.');
+    }
+
     // Strict DB permission: only return file if it belongs to this share (defense-in-depth)
     const res2 = await pool.query(
       `SELECT f.id, f.name, f.type, f.mime_type AS "mimeType", f.path
@@ -52,7 +75,9 @@ async function downloadSharedItem(req, res) {
       [token, fileId]
     );
     const file = res2.rows[0];
-    if (!file) return res.status(404).send('Not found');
+    if (!file) {
+      return renderErrorPage(res, 404, 'Not found', 'The requested file was not found in this share.');
+    }
 
     // Log share item download
     await logAuditEvent(

@@ -1,5 +1,9 @@
 import React, { useState, useCallback, useRef, useEffect } from "react";
-import { useApp, type FileItem } from "../../contexts/AppContext";
+import {
+  useApp,
+  type FileItem,
+  type ShareExpiry,
+} from "../../contexts/AppContext";
 import { Breadcrumbs } from "./Breadcrumbs";
 import { ContextMenu } from "./ContextMenu";
 import { PasteProgress } from "./PasteProgress";
@@ -27,6 +31,7 @@ import {
 import { FileManagerToolbar } from "./FileManagerToolbar";
 import { FileList } from "./FileList";
 import { MultiSelectIndicator } from "./MultiSelectIndicator";
+import { ShareExpiryModal } from "./ShareLinkModal";
 
 export const FileManager: React.FC = () => {
   const {
@@ -69,6 +74,7 @@ export const FileManager: React.FC = () => {
   const [emptyTrashModalOpen, setEmptyTrashModalOpen] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [deleteForeverModalOpen, setDeleteForeverModalOpen] = useState(false);
+  const [shareExpiryModalOpen, setShareExpiryModalOpen] = useState(false);
 
   const canCreateFolder = currentPath[0] === "My Files";
   const isTrashView = currentPath[0] === "Trash";
@@ -436,17 +442,26 @@ export const FileManager: React.FC = () => {
   const allStarred =
     selectedItems.length > 0 && selectedItems.every((f) => f.starred);
 
-  const handleShare = async () => {
+  const handleShare = () => {
+    if (allShared) {
+      // Unsharing — no expiry picker needed
+      shareFiles(selectedFiles, false)
+        .then(() => closeMultiSelectIfMobile())
+        .catch(() => closeMultiSelectIfMobile());
+    } else {
+      // Sharing — show expiry picker first
+      setShareExpiryModalOpen(true);
+    }
+  };
+
+  const handleShareConfirm = async (expiry: ShareExpiry) => {
+    setShareExpiryModalOpen(false);
     try {
-      const links = await shareFiles(selectedFiles, !allShared);
-      if (!allShared) {
-        const list = Object.values(links);
-        setShareLinkModalOpen(true, list);
-      }
+      const links = await shareFiles(selectedFiles, true, expiry);
+      const list = Object.values(links);
+      setShareLinkModalOpen(true, list);
       closeMultiSelectIfMobile();
     } catch {
-      // Error already handled by shareFilesApi (toast shown)
-      // Just prevent uncaught promise error
       closeMultiSelectIfMobile();
     }
   };
@@ -607,6 +622,13 @@ export const FileManager: React.FC = () => {
         isOpen={deleteForeverModalOpen}
         onClose={() => setDeleteForeverModalOpen(false)}
         onConfirm={handleDeleteForever}
+        fileCount={selectedFiles.length}
+      />
+
+      <ShareExpiryModal
+        isOpen={shareExpiryModalOpen}
+        onClose={() => setShareExpiryModalOpen(false)}
+        onConfirm={handleShareConfirm}
         fileCount={selectedFiles.length}
       />
     </div>

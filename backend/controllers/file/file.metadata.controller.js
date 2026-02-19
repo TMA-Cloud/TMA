@@ -15,6 +15,7 @@ const {
   deleteShareLinks,
   addFilesToShare,
   removeFilesFromShares,
+  updateShareExpiry,
 } = require('../../models/share.model');
 const pool = require('../../config/db');
 const { validateSortBy, validateSortOrder } = require('../../utils/validation');
@@ -81,19 +82,30 @@ async function listStarred(req, res) {
 }
 
 /**
+ * Convert expiry tag to a Date (or null for unlimited).
+ * Accepted values: "7d", "30d", "never". Default: "7d".
+ */
+function computeExpiresAt(expiry) {
+  if (expiry === 'never') return null;
+  const days = expiry === '30d' ? 30 : 7;
+  return new Date(Date.now() + days * 86400000);
+}
+
+/**
  * Share or unshare files/folders
  */
 async function shareFilesController(req, res) {
-  const { ids, shared } = req.body;
+  const { ids, shared, expiry } = req.body;
 
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
 
-    // New contract: links[id] = full URL (respecting share base URL from database / proxy headers)
     const links = {};
 
     if (shared) {
+      const expiresAt = computeExpiresAt(expiry || '7d');
+
       // Bulk operation: Get all existing share links at once
       const existingShareLinks = await getShareLinks(ids, req.userId);
 
@@ -103,9 +115,8 @@ async function shareFilesController(req, res) {
         let token = existingShareLinks[id];
 
         if (!token) {
-          token = await createShareLink(id, req.userId, treeIds);
+          token = await createShareLink(id, req.userId, treeIds, expiresAt);
 
-          // Log audit event for share creation
           await logAuditEvent(
             'share.create',
             {
@@ -115,13 +126,19 @@ async function shareFilesController(req, res) {
               metadata: {
                 fileId: id,
                 fileCount: treeIds.length,
+                expiry: expiry || '7d',
               },
             },
             req
           );
-          logger.info({ fileId: id, shareToken: token, fileCount: treeIds.length }, 'Share link created');
+          logger.info(
+            { fileId: id, shareToken: token, fileCount: treeIds.length, expiry: expiry || '7d' },
+            'Share link created'
+          );
         } else {
           await addFilesToShare(token, treeIds);
+          // Update expiry on existing link to match new selection
+          await updateShareExpiry(token, expiresAt);
         }
 
         links[id] = await buildShareLink(token, req);
