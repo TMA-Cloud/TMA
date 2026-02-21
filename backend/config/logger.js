@@ -4,7 +4,8 @@ const { getRequestId, getUserId } = require('../middleware/requestId.middleware'
 const os = require('os');
 
 const isDevelopment = process.env.NODE_ENV !== 'production';
-const logLevel = process.env.LOG_LEVEL || (isDevelopment ? 'debug' : 'info');
+// Default to 'info' in all envs so development is not spammy; set LOG_LEVEL=debug if needed
+const logLevel = process.env.LOG_LEVEL || 'info';
 const logFormat = process.env.LOG_FORMAT || (isDevelopment ? 'pretty' : 'json');
 
 /**
@@ -363,16 +364,14 @@ const httpLogger = pinoHttp({
     responseTime: 'duration',
   },
 
-  // Don't log health checks to reduce noise
+  // Don't log health checks or static assets to reduce noise
   // Note: ignore() only receives req, not res, so we can't check status codes here
   // Errors are still logged explicitly in the webhook handler (server.js)
   autoLogging: {
     ignore: req => {
-      // Always ignore health checks
-      if (req.url === '/health') {
-        return true;
-      }
-
+      if (req.url === '/health') return true;
+      if (req.url === '/favicon.ico') return true;
+      if (req.url.startsWith('/assets/')) return true;
       return false;
     },
   },

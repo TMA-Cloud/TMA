@@ -37,11 +37,11 @@ Complete reference for all environment variables in TMA Cloud.
 
 ## Authentication
 
-| Variable                 | Required | Default | Description                                                  |
-| ------------------------ | -------- | ------- | ------------------------------------------------------------ |
-| `JWT_SECRET`             | Yes      | -       | Secret key for JWT tokens                                    |
-| `SESSION_BINDING`        | No       | `true`  | Enable session binding (browser fingerprint)                 |
-| `FORCE_INSECURE_COOKIES` | No       | `false` | If `true`, cookie `secure` flag off in production (insecure) |
+| Variable                 | Required | Default | Description                                               |
+| ------------------------ | -------- | ------- | --------------------------------------------------------- |
+| `JWT_SECRET`             | Yes      | -       | Secret key for JWT tokens                                 |
+| `SESSION_BINDING`        | No       | `true`  | Enable session binding (browser fingerprint)              |
+| `FORCE_INSECURE_COOKIES` | No       | `false` | If `true`, auth cookie has no `Secure` flag in production |
 
 ## Google OAuth (Optional)
 
@@ -82,7 +82,7 @@ Complete reference for all environment variables in TMA Cloud.
 
 | Variable              | Required | Default                       | Description                                        |
 | --------------------- | -------- | ----------------------------- | -------------------------------------------------- |
-| `LOG_LEVEL`           | No       | `info` (prod), `debug` (dev)  | Log level (fatal, error, warn, info, debug, trace) |
+| `LOG_LEVEL`           | No       | `info`                        | Log level (fatal, error, warn, info, debug, trace) |
 | `LOG_FORMAT`          | No       | `json` (prod), `pretty` (dev) | Log format (json, pretty)                          |
 | `METRICS_ALLOWED_IPS` | No       | `127.0.0.1`                   | Comma-separated IPs allowed to access `/metrics`   |
 

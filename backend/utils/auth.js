@@ -5,24 +5,38 @@
 const crypto = require('crypto');
 const { logger } = require('../config/logger');
 
-// Security check: warn if running in production without HTTPS
-if (process.env.NODE_ENV === 'production' && process.env.FORCE_INSECURE_COOKIES === 'true') {
-  logger.warn(
-    '[SECURITY] Running in production with FORCE_INSECURE_COOKIES=true. Cookies will not have secure flag. This is insecure!'
-  );
-}
-
 // Session binding: when enabled, tokens are bound to client fingerprint
 const SESSION_BINDING_ENABLED = process.env.SESSION_BINDING !== 'false';
 
+/** True when production is served over HTTP (BACKEND_URL starts with http:// or FORCE_INSECURE_COOKIES) */
+function isProductionOverHttp() {
+  if (process.env.NODE_ENV !== 'production') return false;
+  if (process.env.FORCE_INSECURE_COOKIES === 'true') return true;
+  const url = process.env.BACKEND_URL || '';
+  return url.toLowerCase().startsWith('http://');
+}
+
+// One-time warn when production uses non-secure cookies (HTTP)
+if (process.env.NODE_ENV === 'production') {
+  if (process.env.FORCE_INSECURE_COOKIES === 'true') {
+    logger.warn(
+      '[SECURITY] FORCE_INSECURE_COOKIES=true: auth cookies will not use Secure flag. Use only for HTTP deployments.'
+    );
+  } else if ((process.env.BACKEND_URL || '').toLowerCase().startsWith('http://')) {
+    logger.warn('[SECURITY] BACKEND_URL is HTTP: auth cookies will not use Secure flag so login works over HTTP.');
+  }
+}
+
 /**
  * Get cookie options for JWT tokens
+ * In production over HTTPS we set secure: true so the browser only sends the cookie over HTTPS.
+ * In production over HTTP (BACKEND_URL=http://... or FORCE_INSECURE_COOKIES=true) we set secure: false so the cookie is sent over HTTP.
  * @returns {Object} Cookie options
  */
 function getCookieOptions() {
   const isProduction = process.env.NODE_ENV === 'production';
-  // In production, always use secure cookies unless explicitly overridden (not recommended)
-  const secure = isProduction && process.env.FORCE_INSECURE_COOKIES !== 'true';
+  const overHttp = isProductionOverHttp();
+  const secure = isProduction && !overHttp;
 
   return {
     httpOnly: true,

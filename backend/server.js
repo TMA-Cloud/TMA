@@ -95,11 +95,11 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Metrics endpoint (protected by IP whitelist in production)
+// Metrics endpoint (protected by IP whitelist in all envs)
 app.get(
   '/metrics',
   (req, res, next) => {
-    if (process.env.NODE_ENV === 'production' && !METRICS_ALLOWED_IPS.includes(req.ip)) {
+    if (!METRICS_ALLOWED_IPS.includes(req.ip)) {
       logger.warn({ ip: req.ip }, 'Unauthorized metrics access attempt');
       return res.status(403).send('Forbidden');
     }
@@ -211,14 +211,9 @@ async function gracefulShutdown(signal) {
 // Store server instance for graceful shutdown
 let server = null;
 
-// Handle unhandled promise rejections
+// Handle unhandled promise rejections (log only; do not exit in any env)
 process.on('unhandledRejection', (reason, promise) => {
   logger.error({ reason, promise }, 'Unhandled Promise Rejection');
-  // Don't exit in production - let the error handler middleware deal with it
-  if (process.env.NODE_ENV === 'development') {
-    logger.error('Exiting due to unhandled rejection in development mode');
-    process.exit(1);
-  }
 });
 
 // Handle uncaught exceptions

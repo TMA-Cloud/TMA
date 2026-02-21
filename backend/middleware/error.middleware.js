@@ -74,9 +74,10 @@ const errorHandler = (err, req, res, _next) => {
 
   // Default error - only truly unhandled errors reach here
   logger.error({ err }, 'Unhandled error');
+  // Always return generic error code to client (production-like); full details remain in server logs
   res.status(err.status || 500).json({
     message: err.message || 'Internal server error',
-    error: process.env.NODE_ENV === 'production' ? 'INTERNAL_ERROR' : err.stack,
+    error: 'INTERNAL_ERROR',
   });
 };
 
