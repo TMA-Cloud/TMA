@@ -79,6 +79,12 @@ wiki/i18n/
 # Database backups
 backups/
 
+# Docker
+docker-compose-prod.yml
+docker-compose-dev.yml
+docker-compose-test.yml
+docker-compose-local.yml
+
 # Misc
 *.tgz
 .next/
