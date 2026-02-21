@@ -1,37 +1,39 @@
 /**
- * Bulk import a local drive (folder tree) into the app's S3 bucket with:
+ * Bulk import a local drive (folder tree) into the app's local storage with:
  * - Full folder hierarchy recreated in the DB (files table)
- * - Each file encrypted with FILE_ENCRYPTION_KEY and uploaded to S3
+ * - Each file encrypted with FILE_ENCRYPTION_KEY and stored locally
  * - File rows inserted so the app and DB stay in sync (no mismatch)
  *
  * Use this when you have existing data on disk (e.g. 100GB+) that you want
- * to move into the app without copying raw files to S3 (which would skip
+ * to move into the app without copying raw files to disk (which would skip
  * encryption and DB records).
  *
  * Prerequisites:
- * - STORAGE_DRIVER=s3 and S3 env vars (RUSTFS_* or AWS_*) set in .env
+ * - STORAGE_DRIVER=local and LOCAL_STORAGE_PATH set in .env
  * - FILE_ENCRYPTION_KEY set in .env (same key the app uses for decrypt)
  * - Database and (optionally) Redis running
+ * - Sufficient disk space for encrypted files
  *
  * Usage (from backend directory):
- *   node scripts/bulk-import-drive-to-s3.js --source-dir "D:\MyDrive" --user-id "YOUR_USER_ID"
- *   node scripts/bulk-import-drive-to-s3.js --source-dir "D:\MyDrive" --user-email "you@example.com"
+ *   node scripts/bulk-import-drive-to-local.js --source-dir "D:\MyDrive" --user-id "YOUR_USER_ID"
+ *   node scripts/bulk-import-drive-to-local.js --source-dir "D:\MyDrive" --user-email "you@example.com"
  *
  * Options:
  *   --source-dir   (required) Root folder on disk to import
  *   --user-id      User ID in the app (owner of the imported files)
  *   --user-email   Alternatively, user email to resolve to user ID
  *   --concurrency  Max concurrent file uploads (default 2)
- *   --dry-run      Only list what would be imported; do not upload or insert
+ *   --dry-run      Only list what would be imported; do not copy or insert
  *
- * Always enforces: per-user storage limit and admin-configured max file size (checked before any upload).
+ * Always enforces: per-user storage limit and admin-configured max file size (checked before any copy).
  * Preserves file and folder modification times (mtime) from the source drive.
  */
 
 const path = require('path');
 const fs = require('fs').promises;
-const { createReadStream } = require('fs');
+const { createReadStream, createWriteStream } = require('fs');
 const dotenv = require('dotenv');
+const { pipeline } = require('stream/promises');
 
 const scriptDir = __dirname;
 const backendDir = path.join(scriptDir, '..');
@@ -43,6 +45,7 @@ if (!process.env.DOCKER && process.env.DB_HOST === 'postgres') process.env.DB_HO
 if (!process.env.DOCKER && process.env.REDIS_HOST === 'redis') process.env.REDIS_HOST = 'localhost';
 
 const storage = require('../utils/storageDriver');
+const { UPLOAD_DIR } = require('../config/paths');
 const { createEncryptStream, createByteCountStream } = require('../utils/fileEncryption');
 const { generateId } = require('../utils/id');
 const { createFolder, createFileFromStreamedUpload } = require('../models/file/file.crud.model');
@@ -148,11 +151,13 @@ function sanitizeFileName(name) {
   let sanitized = name.replace(/\.{2,}/g, '.');
   sanitized = sanitized.replace(/[<>:"\\/|?*]/g, '_');
   sanitized = sanitized.replace(/^\.+/, '').replace(/\.+$/, '');
-  if (!sanitized || sanitized === '') sanitized = 'file_' + Date.now();
+  if (!sanitized || sanitized === '') {
+    sanitized = 'file_' + Date.now();
+  }
   return sanitized;
 }
 
-async function uploadOneFile(filePath, name, parentId, userId, dryRun, modified = null) {
+async function copyOneFile(filePath, name, parentId, userId, dryRun, modified = null) {
   const id = generateId(16);
   const ext = path.extname(name);
   const storageName = id + ext;
@@ -167,16 +172,25 @@ async function uploadOneFile(filePath, name, parentId, userId, dryRun, modified 
   const encryptStream = createEncryptStream();
   const readStream = createReadStream(filePath);
 
+  await fs.mkdir(UPLOAD_DIR, { recursive: true });
+  const destPath = path.join(UPLOAD_DIR, storageName);
+  const writeStream = createWriteStream(destPath);
+
+  // Swallow stream errors so EPIPE doesn't kill the process
   readStream.on('error', () => {});
   byteCount.stream.on('error', () => {});
   encryptStream.on('error', () => {});
-
-  readStream.pipe(byteCount.stream).pipe(encryptStream);
+  writeStream.on('error', () => {});
 
   try {
-    await storage.putStream(storageName, encryptStream);
+    await pipeline(readStream, encryptStream, byteCount.stream, writeStream);
   } catch (err) {
     readStream.destroy();
+    try {
+      await fs.unlink(destPath);
+    } catch {
+      /* ignore */
+    }
     throw err;
   }
 
@@ -189,7 +203,7 @@ async function run() {
   const args = parseArgs();
   if (!args.sourceDir) {
     console.error(
-      'Missing --source-dir. Usage: node scripts/bulk-import-drive-to-s3.js --source-dir "D:\\MyDrive" --user-id YOUR_USER_ID'
+      'Missing --source-dir. Usage: node scripts/bulk-import-drive-to-local.js --source-dir "D:\\MyDrive" --user-id YOUR_USER_ID'
     );
     process.exit(1);
   }
@@ -200,8 +214,8 @@ async function run() {
     process.exit(1);
   }
 
-  if (!storage.useS3()) {
-    console.error('STORAGE_DRIVER must be s3. Set STORAGE_DRIVER=s3 and RUSTFS_* (or AWS_*) in .env.');
+  if (storage.useS3()) {
+    console.error('STORAGE_DRIVER must be local. Set STORAGE_DRIVER=local and UPLOAD_DIR in .env.');
     process.exit(1);
   }
 
@@ -226,8 +240,6 @@ async function run() {
   const sortedDirs = sortDirsForCreation(dirs);
   const relToFolderId = { '': null };
   const createdFolderIds = [];
-  let aborted = false;
-  let firstError = null;
   const committedFiles = [];
 
   if (args.dryRun) {
@@ -255,7 +267,7 @@ async function run() {
   if (oversize.length > 0) {
     const list = oversize.map(o => `${o.path} (${formatSize(o.size)})`).join(', ');
     throw new Error(
-      `Import aborted before any upload. The following file(s) exceed the ${formatSize(MAX_FILE_SIZE)} per-file limit: ${list}. ` +
+      `Import aborted before any copy. The following file(s) exceed the ${formatSize(MAX_FILE_SIZE)} per-file limit: ${list}. ` +
         'Remove or split these files, or increase the max upload size in Settings.'
     );
   }
@@ -267,7 +279,7 @@ async function run() {
   });
   if (check.exceeded) {
     throw new Error(
-      `Import aborted before any upload. Total size would exceed storage limit: ${check.message || 'Storage limit exceeded'}`
+      `Import aborted before any copy. Total size would exceed storage limit: ${check.message || 'Storage limit exceeded'}`
     );
   }
   console.log('Preflight OK. Total size:', formatSize(totalSize));
@@ -295,7 +307,7 @@ async function run() {
     createdFolderIds.push(folder.id);
   }
 
-  console.log('Uploading', files.length, 'files (concurrency:', args.concurrency, ')...');
+  console.log('Copying', files.length, 'files (concurrency:', args.concurrency, ')...');
   let done = 0;
   let totalBytes = 0;
   const failed = [];
@@ -308,7 +320,6 @@ async function run() {
   }
 
   async function processNext() {
-    if (aborted) return;
     if (queue.length === 0) return;
     const item = queue.shift();
     if (!item) return;
@@ -340,21 +351,21 @@ async function run() {
       }
 
       const modified = stat.mtime ? new Date(stat.mtime) : null;
-      const uploadMeta = await uploadOneFile(fullPath, name, parentId, userId, false, modified);
+      const copyMeta = await copyOneFile(fullPath, name, parentId, userId, false, modified);
       await createFileFromStreamedUpload(
         {
-          id: uploadMeta.id,
-          storageName: uploadMeta.storageName,
-          name: uploadMeta.name,
-          size: uploadMeta.size,
-          mimeType: uploadMeta.mimeType,
-          modified: uploadMeta.modified,
+          id: copyMeta.id,
+          storageName: copyMeta.storageName,
+          name: copyMeta.name,
+          size: copyMeta.size,
+          mimeType: copyMeta.mimeType,
+          modified: copyMeta.modified,
         },
         parentId,
         userId
       );
-      committedFiles.push({ ...uploadMeta, parentId });
-      totalBytes += uploadMeta.size;
+      committedFiles.push({ ...copyMeta, parentId });
+      totalBytes += copyMeta.size;
       done++;
       if (done % 50 === 0 || done === files.length) {
         console.log(`Progress: ${done}/${files.length} files, ${formatSize(totalBytes)}`);
@@ -364,51 +375,14 @@ async function run() {
       failed.push({ path: relPath, error: msg });
       console.error('Failed:', relPath, msg);
       done++;
-      if (!aborted) {
-        aborted = true;
-        firstError = err;
-      }
     } finally {
       inFlight.delete(key);
-      if (!aborted && queue.length > 0) await processNext();
+      if (queue.length > 0) await processNext();
     }
   }
 
   const concurrency = Math.min(args.concurrency, files.length);
   await Promise.allSettled(Array.from({ length: concurrency }, () => processNext()));
-
-  if (aborted && firstError) {
-    console.error('Import aborted due to first error. Rolling back all changes...');
-    for (const fileMeta of committedFiles) {
-      try {
-        await pool.query('DELETE FROM files WHERE id = $1 AND user_id = $2', [fileMeta.id, userId]);
-      } catch (rollbackErr) {
-        console.error('Failed to roll back file DB record', fileMeta.id, rollbackErr.message || rollbackErr);
-      }
-      try {
-        await storage.deleteObject(fileMeta.storageName);
-      } catch (rollbackErr) {
-        console.error('Failed to delete S3 object', fileMeta.storageName, rollbackErr.message || rollbackErr);
-      }
-    }
-    for (let i = createdFolderIds.length - 1; i >= 0; i -= 1) {
-      const folderId = createdFolderIds[i];
-      try {
-        await pool.query('DELETE FROM files WHERE id = $1 AND user_id = $2', [folderId, userId]);
-      } catch (rollbackErr) {
-        console.error('Failed to roll back folder with id', folderId, rollbackErr.message || rollbackErr);
-      }
-    }
-
-    console.error(
-      'Rollback complete. Rolled back',
-      committedFiles.length,
-      'files and',
-      createdFolderIds.length,
-      'folders.'
-    );
-    throw firstError;
-  }
 
   console.log('Done. Total files:', committedFiles.length, 'Total size:', formatSize(totalBytes));
   const maxDisplayFailed = 20;

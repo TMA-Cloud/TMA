@@ -106,14 +106,42 @@ Enable default server-side encryption (AES256). Not supported by all S3-compatib
 
 To check current lifecycle config from project root: `node backend/scripts/check-s3-lifecycle.js`.
 
-### Bulk import drive to S3
+### Bulk import (drive to storage)
 
-When you have existing data on a local drive (e.g. 100GB+) and want it in the app’s S3 bucket **with** encryption and DB records (so the app and DB stay in sync), use the bulk import script. Copying files directly into the bucket would skip encryption and the `files` table, causing mismatch and `FILE_ENCRYPTION_KEY` issues.
+**Requirement:** the database must be reachable from the host. If the app runs in Docker, uncomment the postgres `ports` in `docker-compose.yml` (e.g. `127.0.0.1:5432:5432`) so the host can connect.
 
-From the **backend** directory, with `.env` set (S3 + `FILE_ENCRYPTION_KEY`):
+#### Bulk import drive to local
+
+Use when you have existing data on disk and want it in the app's **local** storage with encryption and DB records. Requires `STORAGE_DRIVER=local`, `LOCAL_STORAGE_PATH`, and `FILE_ENCRYPTION_KEY` in `.env`.
+
+From the **backend** directory:
 
 ```bash
-# Dry run: only list folders/files and total size
+# Dry run: list folders/files and total size only
+node scripts/bulk-import-drive-to-local.js --source-dir "D:\MyDrive" --user-id YOUR_USER_ID --dry-run
+
+# Import (creates folder hierarchy in DB, encrypts and copies each file)
+node scripts/bulk-import-drive-to-local.js --source-dir "D:\MyDrive" --user-id YOUR_USER_ID
+
+# Use email instead of user ID
+node scripts/bulk-import-drive-to-local.js --source-dir "D:\MyDrive" --user-email "you@example.com"
+
+# Optional: more concurrent copies (default 2)
+node scripts/bulk-import-drive-to-local.js --source-dir "D:\MyDrive" --user-id YOUR_USER_ID --concurrency 4
+```
+
+- Preserves folder structure; invalid file names are sanitized with a warning.
+- Enforces per-user storage limit and max file size (checked before any copy).
+- Preserves file and folder modification times (mtime).
+
+#### Bulk import drive to S3
+
+Use when you have existing data on disk and want it in the app's S3 bucket with encryption and DB records. Copying files directly into the bucket would skip encryption and the `files` table. Requires S3 env vars and `FILE_ENCRYPTION_KEY` in `.env`.
+
+From the **backend** directory:
+
+```bash
+# Dry run: list folders/files and total size only
 node scripts/bulk-import-drive-to-s3.js --source-dir "D:\MyDrive" --user-id YOUR_USER_ID --dry-run
 
 # Import (creates folder hierarchy in DB, encrypts and uploads each file)
@@ -127,9 +155,9 @@ node scripts/bulk-import-drive-to-s3.js --source-dir "D:\MyDrive" --user-id YOUR
 
 ```
 
-- Preserves folder structure and file names; invalid names are skipped with a warning.
-- Always enforces per-user storage limit and max file size (checked before any upload).
-- Preserves file and folder modification times (mtime).
+- Preserves folder structure; invalid file names are sanitized with a warning.
+- Enforces per-user storage limit and max file size (checked before any upload).
+- Preserves file and folder modification times (mtime). On first error, S3 script rolls back created folders and uploaded files.
 
 ## Docker Commands
 

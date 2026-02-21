@@ -73,6 +73,8 @@ All variables loaded from `.env` file.
 - `REDIS_PORT=6379`
 - `REDIS_PASSWORD` (optional, recommended for production)
 
+**Database access from host:** To run backend scripts that need the database (e.g. bulk import) from the host, the DB port must be reachable. In `docker-compose.yml`, uncomment the postgres `ports` entry (e.g. `127.0.0.1:5432:5432`).
+
 ### Volume Mounts
 
 Default: `./uploads:/app/uploads`
