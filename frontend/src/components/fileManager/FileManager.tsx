@@ -68,6 +68,8 @@ export const FileManager: React.FC = () => {
     setShareLinkModalOpen,
     onlyOfficeConfigured,
     canConfigureOnlyOffice,
+    uploadFile,
+    uploadFilesBulk,
   } = useApp();
 
   const { showToast } = useToast();
@@ -81,6 +83,39 @@ export const FileManager: React.FC = () => {
   const isSharedView = currentPath[0] === "Shared";
   const isStarredView = currentPath[0] === "Starred";
   const hasTrashFiles = isTrashView && files.length > 0;
+  const isMyFilesView = currentPath[0] === "My Files";
+
+  // Paste (Ctrl+V): upload clipboard files only in My Files
+  useEffect(() => {
+    if (!isMyFilesView) return;
+
+    const onPaste = (e: ClipboardEvent) => {
+      const fileList = e.clipboardData?.files;
+      if (!fileList || fileList.length === 0) return;
+
+      const target = e.target as Node;
+      if (
+        target &&
+        (target instanceof HTMLInputElement ||
+          target instanceof HTMLTextAreaElement ||
+          (target instanceof HTMLElement && target.isContentEditable))
+      ) {
+        return; // let input handle paste
+      }
+
+      e.preventDefault();
+      const pastedFiles = Array.from(fileList);
+      if (pastedFiles.length === 1) {
+        const file = pastedFiles[0];
+        if (file) void uploadFile(file);
+      } else if (pastedFiles.length > 1) {
+        void uploadFilesBulk(pastedFiles);
+      }
+    };
+
+    document.addEventListener("paste", onPaste);
+    return () => document.removeEventListener("paste", onPaste);
+  }, [isMyFilesView, uploadFile, uploadFilesBulk]);
 
   const handleEmptyTrash = async () => {
     setEmptyTrashModalOpen(false);

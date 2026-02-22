@@ -17,6 +17,14 @@ Learn how to upload and manage files in TMA Cloud.
 - Drop them in the desired folder
 - Upload progress shown in real-time
 
+### Paste from Clipboard (Ctrl+V)
+
+- Copy files on your computer (e.g. in Explorer with Ctrl+C)
+- Open **My Files** and go to the folder where you want to upload
+- Press **Ctrl+V** in the file list; pasted files upload to the current folder
+- Single file uses standard upload; multiple files use bulk upload with progress
+- Same size and quota limits apply as for Upload
+
 ### Upload Limits
 
 - Per-file size limited by the max upload size setting (default 10 GB, configurable by admin in **Settings** → **Storage**)
