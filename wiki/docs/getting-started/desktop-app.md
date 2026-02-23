@@ -71,6 +71,31 @@ Builds are unsigned by default (`signAndEditExecutable: false`). To sign, config
 
 The server URL is embedded at build time only. No config file is needed after install.
 
+## Desktop Editing with Office (Windows)
+
+When you run the Windows desktop app, you can open documents in the locally installed Office applications and have changes sync back automatically.
+
+- **Supported:** `.docx`, `.xlsx`, `.pptx`, `.pdf` (and other types that your OS can open)
+- **Where it works:** Electron desktop app on Windows only
+
+### Open on Desktop
+
+- Right-click a document → **Open on desktop** (desktop app only), or
+- Double-click a document when:
+  - It is an OnlyOffice-supported type, and
+  - OnlyOffice is **not** configured in the server settings, and
+  - You are using the Windows desktop app
+
+### How Sync Works
+
+- The desktop app downloads an encrypted copy of the file to a temporary location.
+- The file is opened using the default application registered in Windows (for example, Word, Excel, PowerPoint, or another associated editor).
+- While the file is open, the desktop app watches it for changes.
+- When you press **Save** in the desktop editor, the updated content is uploaded back to TMA Cloud in the background.
+- The same file entry is updated (ID stays the same); the modified time and size reflect the new version.
+
+If you open a document and close it without saving, no upload is performed and the stored version is unchanged.
+
 ## Related Topics
 
 - [Architecture — Electron Desktop App](/concepts/architecture#electron-desktop-app) - How the desktop app fits in the system

@@ -330,6 +330,79 @@ async function renameFile(id, name, userId) {
   return file;
 }
 
+async function replaceFileData(id, size, mimeType, tempPath, userId) {
+  const fileResult = await pool.query('SELECT path, parent_id, type FROM files WHERE id = $1 AND user_id = $2', [
+    id,
+    userId,
+  ]);
+  if (fileResult.rows.length === 0) {
+    await safeUnlink(tempPath);
+    return null;
+  }
+
+  const oldFile = fileResult.rows[0];
+  const parentId = oldFile.parent_id || null;
+
+  if (!oldFile.path) {
+    await safeUnlink(tempPath);
+    return null;
+  }
+
+  if (storage.useS3()) {
+    const readStream = fs.createReadStream(tempPath);
+    const { createEncryptStream } = require('../../utils/fileEncryption');
+    const encryptStream = createEncryptStream();
+    readStream.pipe(encryptStream);
+    try {
+      await storage.putStream(oldFile.path, encryptStream);
+    } finally {
+      readStream.destroy();
+      await safeUnlink(tempPath);
+    }
+  } else {
+    const dest = resolveFilePath(oldFile.path);
+    const tempDest = dest + '.tmp';
+    try {
+      await fs.promises.rename(tempPath, tempDest);
+    } catch (err) {
+      // On Windows, EPERM/EACCES can happen if the destination is locked or already exists.
+      // EXDEV occurs when crossing device/drive boundaries (e.g. C: -> D:).
+      // Fall back to copy + unlink to avoid leaving the original temp file around.
+      if (err && (err.code === 'EPERM' || err.code === 'EACCES' || err.code === 'EXDEV')) {
+        await fs.promises.copyFile(tempPath, tempDest);
+        await safeUnlink(tempPath);
+      } else {
+        await safeUnlink(tempPath);
+        throw err;
+      }
+    }
+    try {
+      await encryptFile(tempDest, dest);
+    } catch (error) {
+      logger.error('[File] Error encrypting file on replace:', error);
+      await safeUnlink(tempDest);
+      throw new Error('Failed to encrypt file', { cause: error });
+    }
+  }
+
+  const result = await pool.query(
+    'UPDATE files SET size = $1, mime_type = $2, modified = NOW() WHERE id = $3 AND user_id = $4 RETURNING id, name, type, size, modified, mime_type AS "mimeType", starred, shared',
+    [size, mimeType, id, userId]
+  );
+
+  await invalidateFileCache(userId, parentId);
+  await invalidateSearchCache(userId);
+  await deleteCache(cacheKeys.fileStats(userId));
+  await deleteCache(cacheKeys.userStorage(userId));
+
+  const file = result.rows[0];
+  if (file) {
+    file.parentId = parentId;
+  }
+
+  return file;
+}
+
 module.exports = {
   getFiles,
   createFolder,
@@ -338,4 +411,5 @@ module.exports = {
   getFile,
   getFilesByIds,
   renameFile,
+  replaceFileData,
 };

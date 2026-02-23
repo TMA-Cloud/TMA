@@ -23,6 +23,7 @@ const {
   emptyTrash,
   searchFiles,
   getFileStats,
+  replaceFileContents,
 } = require('../controllers/file.controller');
 const { streamFileEvents } = require('../controllers/file/file.events.controller');
 const auth = require('../middleware/auth.middleware');
@@ -86,5 +87,6 @@ router.post('/trash/delete', deleteForeverSchema, validate, deleteForever);
 router.post('/trash/empty', emptyTrash);
 router.post('/download/bulk', downloadFilesBulkSchema, validate, downloadFilesBulk);
 router.get('/:id/download', downloadFileSchema, validate, downloadFile);
+router.post('/:id/replace', uploadRateLimiter, uploadSingleWithDynamicLimit(), replaceFileContents);
 
 module.exports = router;

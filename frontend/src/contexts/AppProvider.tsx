@@ -30,6 +30,7 @@ import {
   getFilesFromElectronClipboard,
   copyFilesToPcClipboard,
   MAX_COPY_TO_PC_BYTES,
+  editFileWithDesktopElectron,
 } from "../utils/electronClipboard";
 
 function formatMaxSize(bytes: number): string {
@@ -790,6 +791,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   };
 
+  const editFileWithDesktop = async (id: string) => {
+    const file = files.find((f) => f.id === id);
+    if (!file || String(file.type || "").toLowerCase() === "folder") {
+      showToast("Select a single file to open on desktop.", "error");
+      return;
+    }
+
+    if (!file.mimeType) {
+      showToast("Cannot open this file on desktop: unknown type.", "error");
+      return;
+    }
+
+    const result = await editFileWithDesktopElectron({
+      id: file.id,
+      name: file.name,
+      mimeType: file.mimeType,
+    });
+
+    if (!result.ok) {
+      showToast(
+        result.error ?? "Failed to open or edit file on desktop.",
+        "error",
+      );
+      return;
+    }
+
+    showToast(
+      "File opened on desktop. Changes will be auto-synced.",
+      "success",
+    );
+  };
+
   const uploadFileWithProgress = async (
     file: File,
     onProgress?: (progress: number) => void,
@@ -1354,6 +1387,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         isDownloading,
         downloadFiles,
         copyFilesToPc,
+        editFileWithDesktop,
         uploadProgress,
         setUploadProgress,
         uploadFileWithProgress,

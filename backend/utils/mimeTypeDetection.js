@@ -80,7 +80,13 @@ async function validateMimeType(filePath, declaredMimeType, filename) {
   const normalizedActual = normalizeMime(actualMimeType);
   const normalizedDeclared = normalizeMime(declaredMimeType);
 
-  if (normalizedDeclared && normalizedActual !== normalizedDeclared) {
+  // If the client only sent a generic type (application/octet-stream),
+  // treat it as "unknown" and don't log a mismatch warning.
+  if (
+    normalizedDeclared &&
+    normalizedDeclared !== 'application/octet-stream' &&
+    normalizedActual !== normalizedDeclared
+  ) {
     logger.warn({ declaredMimeType, actualMimeType, filename }, '[SECURITY] MIME type mismatch detected');
   }
 

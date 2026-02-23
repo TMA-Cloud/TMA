@@ -1,7 +1,8 @@
-const { app, BrowserWindow, ipcMain, Menu, net, session } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu, net, session, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const crypto = require('crypto');
 
 const EMBEDDED_SERVER_URL = '';
 
@@ -149,9 +150,17 @@ ipcMain.handle('clipboard:writeFiles', async (_event, paths) => {
 });
 
 const PASTE_DIR_PREFIX = 'tma-cloud-paste-';
+const EDIT_DIR_PREFIX = 'tma-cloud-edit-';
 
 function sanitizeFileName(name) {
   return name.replace(/[/\\:*?"<>|]/g, '_').trim() || 'file';
+}
+
+function createTempDir(prefix) {
+  const tmpRoot = os.tmpdir();
+  const dir = path.join(tmpRoot, `${prefix}${Date.now()}`);
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
 }
 
 async function downloadToFile(url, filePath) {
@@ -224,6 +233,117 @@ function setClipboardToPaths(writtenPaths) {
     } catch (_) {
       /* ignore */
     }
+  });
+}
+
+function cleanTempDirsByPrefix(prefix, maxAgeMs) {
+  const tmpRoot = os.tmpdir();
+  const now = Date.now();
+  try {
+    const existing = fs.readdirSync(tmpRoot, { withFileTypes: true });
+    for (const e of existing) {
+      if (!e.isDirectory() || !e.name.startsWith(prefix)) continue;
+      const dirPath = path.join(tmpRoot, e.name);
+      try {
+        const stat = fs.statSync(dirPath);
+        const age = now - stat.mtimeMs;
+        if (age >= maxAgeMs) {
+          fs.rmSync(dirPath, { recursive: true });
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+async function uploadFileToReplace(base, fileId, filePath, fileName) {
+  const url = `${base}/api/files/${encodeURIComponent(fileId)}/replace`;
+
+  let cookieHeader = '';
+  try {
+    const cookies = await session.defaultSession.cookies.get({ url: base });
+    cookieHeader = cookies.map(c => `${c.name}=${c.value}`).join('; ');
+  } catch {
+    cookieHeader = '';
+  }
+
+  const boundary = `----ElectronFormBoundary${crypto.randomBytes(16).toString('hex')}`;
+  const dispositionName = 'file';
+  const safeFileName = String(fileName).replace(/"/g, '\\"');
+
+  const preamble =
+    `--${boundary}\r\n` +
+    `Content-Disposition: form-data; name="${dispositionName}"; filename="${safeFileName}"\r\n` +
+    `Content-Type: application/octet-stream\r\n\r\n`;
+  const closing = `\r\n--${boundary}--\r\n`;
+
+  return new Promise((resolve, reject) => {
+    const request = net.request({ method: 'POST', url });
+    request.setHeader('Content-Type', `multipart/form-data; boundary=${boundary}`);
+    if (cookieHeader) {
+      request.setHeader('Cookie', cookieHeader);
+    }
+
+    request.on('response', response => {
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        const status = response.statusCode || 0;
+        let body = '';
+        response.on('data', chunk => {
+          if (body.length < 4096) {
+            body += chunk.toString('utf8');
+          }
+        });
+        response.on('end', () => {
+          reject(new Error(body ? `Upload failed (${status}): ${body}` : `Upload failed (${status})`));
+        });
+        response.on('error', reject);
+        return;
+      }
+
+      // Consume response and resolve
+      response.on('data', () => {});
+      response.on('end', () => resolve());
+      response.on('error', reject);
+    });
+
+    request.on('error', reject);
+
+    request.write(preamble);
+
+    const fileStream = fs.createReadStream(filePath);
+    fileStream.on('data', chunk => {
+      request.write(chunk);
+    });
+    fileStream.on('end', () => {
+      request.write(closing);
+      request.end();
+    });
+    fileStream.on('error', err => {
+      request.destroy();
+      reject(err);
+    });
+  });
+}
+
+function hashFile(filePath) {
+  return new Promise((resolve, reject) => {
+    const hash = crypto.createHash('sha256');
+    const stream = fs.createReadStream(filePath);
+
+    stream.on('data', chunk => {
+      hash.update(chunk);
+    });
+
+    stream.on('error', err => {
+      reject(err);
+    });
+
+    stream.on('end', () => {
+      resolve(hash.digest('hex'));
+    });
   });
 }
 
@@ -361,41 +481,141 @@ ipcMain.handle('clipboard:writeFilesFromServer', async (_event, payload) => {
 });
 
 function cleanTempClipboardDirs(maxAgeMs) {
-  const tmpRoot = os.tmpdir();
-  const now = Date.now();
+  cleanTempDirsByPrefix(PASTE_DIR_PREFIX, maxAgeMs);
+}
+
+function cleanTempEditDirs(maxAgeMs) {
+  cleanTempDirsByPrefix(EDIT_DIR_PREFIX, maxAgeMs);
+}
+
+ipcMain.handle('files:editWithDesktop', async (_event, payload) => {
+  if (process.platform !== 'win32') {
+    return { ok: false, error: 'Desktop editing is only supported on Windows' };
+  }
+
   try {
-    const existing = fs.readdirSync(tmpRoot, { withFileTypes: true });
-    for (const e of existing) {
-      if (!e.isDirectory() || !e.name.startsWith(PASTE_DIR_PREFIX)) continue;
-      const dirPath = path.join(tmpRoot, e.name);
+    const origin = typeof payload?.origin === 'string' ? payload.origin : '';
+    const item = payload?.item;
+    if (!origin || !item || !item.id || !item.name) {
+      return { ok: false, error: 'Invalid payload' };
+    }
+
+    const base = origin.replace(/\/$/, '');
+    const downloadUrl = `${base}/api/files/${encodeURIComponent(String(item.id))}/download`;
+
+    const editDir = createTempDir(EDIT_DIR_PREFIX);
+    const filePath = path.join(editDir, sanitizeFileName(String(item.name)));
+
+    let lastHash = null;
+    let lastUploadTime = 0;
+    const THROTTLE_MS = 5000;
+    let watcher = null;
+    let uploadInProgress = false;
+
+    try {
+      await downloadToFile(downloadUrl, filePath);
       try {
-        const stat = fs.statSync(dirPath);
-        const age = now - stat.mtimeMs;
-        if (age >= maxAgeMs) {
-          fs.rmSync(dirPath, { recursive: true });
-        }
-      } catch (_) {
-        /* ignore */
+        lastHash = await hashFile(filePath);
+      } catch {
+        lastHash = null;
+      }
+    } catch (e) {
+      return {
+        ok: false,
+        error: e && e.message ? e.message : 'Failed to download file',
+      };
+    }
+
+    async function uploadIfChangedThrottled() {
+      const now = Date.now();
+      if (now - lastUploadTime < THROTTLE_MS) return;
+
+      if (uploadInProgress) return;
+      uploadInProgress = true;
+
+      let newHash;
+      try {
+        newHash = await hashFile(filePath);
+      } catch {
+        uploadInProgress = false;
+        return;
+      }
+
+      if (lastHash && newHash && lastHash === newHash) {
+        uploadInProgress = false;
+        return;
+      }
+
+      try {
+        await uploadFileToReplace(base, String(item.id), filePath, String(item.name));
+        lastHash = newHash;
+        lastUploadTime = Date.now();
+      } catch {
+        // Silently ignore upload errors here; backend/logs can capture them
+      } finally {
+        uploadInProgress = false;
       }
     }
-  } catch (_) {
-    /* ignore */
+
+    try {
+      watcher = fs.watch(filePath, () => {
+        void uploadIfChangedThrottled();
+      });
+      watcher.on('error', () => {
+        try {
+          watcher.close();
+        } catch {
+          /* ignore */
+        }
+      });
+    } catch {
+      watcher = null;
+    }
+
+    try {
+      const errorMessage = await shell.openPath(filePath);
+      if (errorMessage) {
+        return {
+          ok: false,
+          error: errorMessage,
+        };
+      }
+    } catch (e) {
+      return {
+        ok: false,
+        error: e && e.message ? e.message : 'Failed to open file with default application',
+      };
+    }
+
+    return { ok: true };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e && e.message ? e.message : 'Unexpected error',
+    };
   }
-}
+});
 
 app.whenReady().then(() => {
   const serverUrl = getServerUrl();
   createWindow(serverUrl || NO_SERVER_URL_PAGE);
 
-  const CLEAN_INTERVAL_MS = 5 * 60 * 1000;
-  const MAX_AGE_MS = 10 * 60 * 1000;
+  // Run cleanup roughly once per hour, deleting temp dirs that are at least 24 hours old.
+  const CLEAN_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
+  const MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
   setInterval(() => {
-    if (process.platform === 'win32') cleanTempClipboardDirs(MAX_AGE_MS);
+    if (process.platform === 'win32') {
+      cleanTempClipboardDirs(MAX_AGE_MS);
+      cleanTempEditDirs(MAX_AGE_MS);
+    }
   }, CLEAN_INTERVAL_MS);
 });
 
 app.on('before-quit', () => {
-  if (process.platform === 'win32') cleanTempClipboardDirs(0);
+  if (process.platform === 'win32') {
+    cleanTempClipboardDirs(0);
+    cleanTempEditDirs(0);
+  }
 });
 
 app.on('window-all-closed', () => app.quit());

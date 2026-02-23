@@ -101,6 +101,8 @@ export interface AppContextType {
   downloadFiles: (ids: string[]) => Promise<void>;
   /** Copy selected files to OS clipboard so user can paste in Explorer (Electron only). */
   copyFilesToPc: (ids: string[]) => Promise<void>;
+  /** Open a single file on the desktop (Windows) and save changes back */
+  editFileWithDesktop: (id: string) => Promise<void>;
   uploadProgress: UploadProgressItem[];
   setUploadProgress: (
     progress:

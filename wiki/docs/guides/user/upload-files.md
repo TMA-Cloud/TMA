@@ -69,7 +69,8 @@ Learn how to upload and manage files in TMA Cloud.
 
 ### Document Editing
 
-- **OnlyOffice Integration:** Edit .docx, .xlsx, .pptx files
+- **OnlyOffice Integration (browser):** Edit `.docx`, `.xlsx`, `.pptx` files in the browser when OnlyOffice is configured
+- **Desktop Editing (Windows app):** In the Windows desktop app, open Office documents on your computer (Word, Excel, PowerPoint) and changes sync back automatically when you save
 - **PDF Viewing:** View PDF files in browser
 - **Image Viewing:** View images with zoom
 

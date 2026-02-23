@@ -8,4 +8,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     writeFilesFromData: payload => ipcRenderer.invoke('clipboard:writeFilesFromData', payload),
     writeFilesFromServer: payload => ipcRenderer.invoke('clipboard:writeFilesFromServer', payload),
   },
+  files: {
+    editWithDesktop: payload => ipcRenderer.invoke('files:editWithDesktop', payload),
+  },
 });

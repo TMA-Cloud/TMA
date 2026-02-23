@@ -22,6 +22,15 @@ declare global {
           items: { id: string; name: string }[];
         }) => Promise<{ ok: boolean; error?: string }>;
       };
+      files?: {
+        editWithDesktop: (payload: {
+          origin: string;
+          item: { id: string; name: string };
+        }) => Promise<{
+          ok: boolean;
+          error?: string;
+        }>;
+      };
     };
   }
 }
@@ -36,7 +45,7 @@ export function isElectron(): boolean {
 
 /** 200MB limit for "Copy to computer". */
 export const MAX_COPY_TO_PC_BYTES = 200 * 1024 * 1024;
-function base64ToFile(base64: string, name: string, mime: string): File {
+export function base64ToFile(base64: string, name: string, mime: string): File {
   const bin = atob(base64);
   const arr = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
@@ -82,6 +91,42 @@ export async function copyFilesToPcClipboard(
     const origin = window.location.origin;
     const result = await clip.writeFilesFromServer({ origin, items });
     return result ?? { ok: false };
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    return { ok: false, error: message };
+  }
+}
+
+export async function editFileWithDesktopElectron(payload: {
+  id: string;
+  name: string;
+  mimeType: string;
+}): Promise<{
+  ok: boolean;
+  error?: string;
+}> {
+  try {
+    const api = window.electronAPI;
+    if (!isElectron() || !api?.files?.editWithDesktop) {
+      return {
+        ok: false,
+        error: "Desktop editing is only available in the Windows app.",
+      };
+    }
+
+    const result = await api.files.editWithDesktop({
+      origin: window.location.origin,
+      item: { id: payload.id, name: payload.name },
+    });
+
+    if (!result || !result.ok) {
+      return {
+        ok: false,
+        error: result?.error || "Failed to edit file on desktop.",
+      };
+    }
+
+    return { ok: true };
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     return { ok: false, error: message };

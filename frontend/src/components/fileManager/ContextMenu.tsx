@@ -84,6 +84,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     downloadFiles,
     isDownloading,
     copyFilesToPc,
+    editFileWithDesktop,
     clearSelection,
   } = useApp();
   const { showToast } = useToast();
@@ -113,6 +114,19 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     selectedItems.length > 0 && selectedItems.every((f) => !f.shared);
 
   const isTrashView = currentPath[0] === "Trash";
+  const singleSelectedItem =
+    selectedItems.length === 1 ? selectedItems[0] : null;
+  const canOpenOnDesktop =
+    !isTrashView &&
+    isElectron() &&
+    !!singleSelectedItem &&
+    String(singleSelectedItem.type || "").toLowerCase() !== "folder" &&
+    !!singleSelectedItem.mimeType &&
+    (singleSelectedItem.mimeType.startsWith(
+      "application/vnd.openxmlformats-officedocument.",
+    ) ||
+      singleSelectedItem.mimeType === "application/msword" ||
+      singleSelectedItem.mimeType === "application/pdf");
 
   const handleRestore = useCallback(async () => {
     try {
@@ -342,6 +356,28 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
         },
         disabled: isDownloading || selectedFiles.length === 0,
       },
+      ...(!isTrashView && isElectron() && singleSelectedItem
+        ? [
+            {
+              icon: MonitorDown,
+              label: "Open on desktop",
+              disabled: !canOpenOnDesktop,
+              action: async () => {
+                const file = singleSelectedItem;
+                if (!file) return;
+                try {
+                  await editFileWithDesktop(file.id);
+                  onActionComplete?.();
+                } catch {
+                  showToast(
+                    "Failed to open or save file from desktop.",
+                    "error",
+                  );
+                }
+              },
+            },
+          ]
+        : []),
       ...(!isTrashView && isElectron()
         ? [
             {
@@ -485,6 +521,9 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     downloadFiles,
     isDownloading,
     copyFilesToPc,
+    singleSelectedItem,
+    canOpenOnDesktop,
+    editFileWithDesktop,
     showToast,
     isMobile,
     multiSelectMode,

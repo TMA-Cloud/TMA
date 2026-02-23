@@ -634,6 +634,47 @@ Download a single file or a folder (folders are returned as a ZIP archive).
 **Response:**
 The raw file content or a ZIP archive.
 
+## Replace File Contents
+
+### POST `/api/files/:id/replace`
+
+Replace the contents of an existing file. The file ID and name stay the same; size and modified time are updated. Used by the Windows desktop app when syncing edits from Word, Excel, PowerPoint, or other desktop editors.
+
+**Path Parameters:**
+
+- `id` - File ID (required)
+
+**Form Data:**
+
+- `file` - New file content (required). Single file in `multipart/form-data`.
+
+**Validation:**
+
+- The file must exist and belong to the authenticated user.
+- MIME type is detected from file content. Stored MIME type is updated to match.
+
+**Response:**
+
+The updated file object.
+
+```json
+{
+  "id": "file_123",
+  "name": "document.docx",
+  "type": "file",
+  "size": 2048,
+  "mimeType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "parentId": "folder_456",
+  "starred": false,
+  "modified": "2024-01-01T12:00:00Z"
+}
+```
+
+**Errors:**
+
+- `404` - File not found or not owned by the user
+- `400` - No file in request or invalid file type
+
 ## Bulk Download Files
 
 ### POST `/api/files/download/bulk`

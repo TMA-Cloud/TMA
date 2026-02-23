@@ -13,6 +13,7 @@ import {
   getExt,
   validateOnlyOfficeMimeType,
 } from "../../utils/fileUtils";
+import { isElectron } from "../../utils/electronClipboard";
 import { useIsMobile } from "../../hooks/useIsMobile";
 import { useToast } from "../../hooks/useToast";
 import { getErrorMessage } from "../../utils/errorUtils";
@@ -70,6 +71,7 @@ export const FileManager: React.FC = () => {
     canConfigureOnlyOffice,
     uploadFile,
     uploadFilesBulk,
+    editFileWithDesktop,
   } = useApp();
 
   const { showToast } = useToast();
@@ -351,16 +353,20 @@ export const FileManager: React.FC = () => {
         }
         // Check if OnlyOffice is configured before opening (using cached value)
         if (!onlyOfficeConfigured) {
-          if (canConfigureOnlyOffice) {
-            showToast(
-              "OnlyOffice not configured. Configure in Settings.",
-              "error",
-            );
+          if (isElectron()) {
+            void editFileWithDesktop(file.id);
           } else {
-            showToast(
-              "OnlyOffice not configured. Contact administrator.",
-              "error",
-            );
+            if (canConfigureOnlyOffice) {
+              showToast(
+                "OnlyOffice not configured. Configure in Settings.",
+                "error",
+              );
+            } else {
+              showToast(
+                "OnlyOffice not configured. Contact administrator.",
+                "error",
+              );
+            }
           }
           return;
         }

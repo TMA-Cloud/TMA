@@ -210,6 +210,89 @@ async function uploadFile(req, res) {
 }
 
 /**
+ * Replace contents of an existing file (used by desktop editor integration)
+ */
+async function replaceFileContents(req, res) {
+  const fileId = req.params.id;
+
+  if (!req.file) {
+    return sendError(res, 400, 'No file uploaded');
+  }
+
+  try {
+    const existing = await getFile(fileId, req.userId);
+    if (!existing) {
+      await safeUnlink(req.file.path);
+      return sendError(res, 404, 'File not found');
+    }
+
+    if (!validateFileName(existing.name)) {
+      await safeUnlink(req.file.path);
+      return sendError(res, 400, 'Invalid file name');
+    }
+
+    let actualMimeType = req.file.mimetype || 'application/octet-stream';
+    const mimeValidation = await validateMimeType(req.file.path, req.file.mimetype, existing.name);
+    if (!mimeValidation.valid) {
+      await safeUnlink(req.file.path);
+      return sendError(res, 400, mimeValidation.error || 'Invalid file type');
+    }
+    actualMimeType = mimeValidation.actualMimeType || req.file.mimetype || 'application/octet-stream';
+
+    validateFileUpload(actualMimeType, existing.name);
+
+    const updated = await require('../../models/file.model').replaceFileData(
+      fileId,
+      req.file.size,
+      actualMimeType,
+      req.file.path,
+      req.userId
+    );
+
+    if (!updated) {
+      return sendError(res, 404, 'File not found');
+    }
+
+    await logAuditEvent(
+      'file.update',
+      {
+        status: 'success',
+        resourceType: updated.type,
+        resourceId: updated.id,
+        metadata: {
+          fileName: updated.name,
+          size: updated.size,
+        },
+      },
+      req
+    );
+    logger.info({ fileId, fileName: updated.name }, 'File contents updated');
+
+    await publishFileEvent(EventTypes.FILE_UPDATED, {
+      id: updated.id,
+      name: updated.name,
+      type: updated.type,
+      size: updated.size,
+      mimeType: updated.mimeType,
+      parentId: updated.parentId || null,
+      userId: req.userId,
+    });
+
+    return sendSuccess(res, updated);
+  } catch (err) {
+    logger.error({ err, fileId }, 'Error replacing file contents');
+    if (req.file?.path) {
+      try {
+        await safeUnlink(req.file.path);
+      } catch (_) {
+        // ignore
+      }
+    }
+    return sendError(res, 500, 'Failed to update file');
+  }
+}
+
+/**
  * Bulk upload multiple files (multer disk/local or stream-to-S3 when S3 enabled)
  */
 async function uploadFilesBulk(req, res) {
@@ -566,4 +649,5 @@ module.exports = {
   downloadFile,
   downloadFilesBulk,
   renameFile,
+  replaceFileContents,
 };
