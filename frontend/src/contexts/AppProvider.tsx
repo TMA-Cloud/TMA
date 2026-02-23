@@ -31,7 +31,7 @@ import {
   copyFilesToPcClipboard,
   MAX_COPY_TO_PC_BYTES,
   editFileWithDesktopElectron,
-} from "../utils/electronClipboard";
+} from "../utils/electronDesktop";
 
 function formatMaxSize(bytes: number): string {
   const gb = bytes / (1024 * 1024 * 1024);

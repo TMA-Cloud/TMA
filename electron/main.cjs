@@ -129,7 +129,7 @@ ipcMain.handle('clipboard:writeFiles', async (_event, paths) => {
   if (process.platform !== 'win32' || !Array.isArray(paths) || paths.length === 0) {
     return { ok: false };
   }
-  const tmp = path.join(os.tmpdir(), `electron-clipboard-${Date.now()}.txt`);
+  const tmp = path.join(os.tmpdir(), `electron-desktop-${Date.now()}.txt`);
   try {
     fs.writeFileSync(tmp, paths.join('\n'), 'utf8');
     const { exec } = require('child_process');
@@ -221,7 +221,7 @@ async function downloadToFile(url, filePath) {
 
 function setClipboardToPaths(writtenPaths) {
   const tmpRoot = os.tmpdir();
-  const tmp = path.join(tmpRoot, `electron-clipboard-${Date.now()}.txt`);
+  const tmp = path.join(tmpRoot, `electron-desktop-${Date.now()}.txt`);
   fs.writeFileSync(tmp, writtenPaths.join('\n'), 'utf8');
   const { exec } = require('child_process');
   const { promisify } = require('util');

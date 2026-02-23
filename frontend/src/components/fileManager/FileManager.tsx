@@ -13,7 +13,7 @@ import {
   getExt,
   validateOnlyOfficeMimeType,
 } from "../../utils/fileUtils";
-import { isElectron } from "../../utils/electronClipboard";
+import { isElectron } from "../../utils/electronDesktop";
 import { useIsMobile } from "../../hooks/useIsMobile";
 import { useToast } from "../../hooks/useToast";
 import { getErrorMessage } from "../../utils/errorUtils";

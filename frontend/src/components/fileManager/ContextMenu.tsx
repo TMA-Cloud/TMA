@@ -22,10 +22,7 @@ import {
 } from "lucide-react";
 import { useApp, type ShareExpiry } from "../../contexts/AppContext";
 import { useToast } from "../../hooks/useToast";
-import {
-  isElectron,
-  MAX_COPY_TO_PC_BYTES,
-} from "../../utils/electronClipboard";
+import { isElectron, MAX_COPY_TO_PC_BYTES } from "../../utils/electronDesktop";
 import { useIsMobile } from "../../hooks/useIsMobile";
 import { Modal } from "../ui/Modal";
 import { getErrorMessage } from "../../utils/errorUtils";

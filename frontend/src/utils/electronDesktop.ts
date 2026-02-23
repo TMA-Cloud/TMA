@@ -1,6 +1,5 @@
 /**
- * Electron exposes clipboard file read/write via preload (contextBridge).
- * Only defined when the app runs inside Electron.
+ * Electron desktop app integration
  */
 
 declare global {
