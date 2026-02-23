@@ -28,6 +28,10 @@ fs.mkdirSync(distDir, { recursive: true });
 for (const name of ['main.cjs', 'preload.cjs']) {
   fs.copyFileSync(path.join(electronDir, name), path.join(distDir, name));
 }
+const iconSrc = path.join(electronDir, 'build', 'icon.png');
+if (fs.existsSync(iconSrc)) {
+  fs.copyFileSync(iconSrc, path.join(distDir, 'icon.png'));
+}
 
 const mainPath = path.join(distDir, 'main.cjs');
 let main = fs.readFileSync(mainPath, 'utf8');

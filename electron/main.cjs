@@ -6,6 +6,46 @@ const crypto = require('crypto');
 
 const EMBEDDED_SERVER_URL = '';
 
+/**
+ * Escape a path for safe use inside a PowerShell single-quoted string (e.g. -LiteralPath '...').
+ * In single-quoted strings only ' is special; escape as ''.
+ * Control chars (newline, CR, null) are stripped so the path cannot break script or line-based parsing.
+ * Use this for any path interpolated into a PowerShell -Command script.
+ */
+function escapePathForPowerShellLiteralPath(pathStr) {
+  if (pathStr == null || typeof pathStr !== 'string') return '';
+  return pathStr.replace(/\r\n|\r|\n|\0/g, '').replace(/'/g, "''");
+}
+
+/** Run a PowerShell script without shell (avoids Node DEP0190). Returns promise with stdout string. */
+function runPowerShell(script, timeoutMs = 5000) {
+  return new Promise((resolve, reject) => {
+    const { spawn } = require('child_process');
+    const child = spawn('powershell', ['-NoProfile', '-Command', script], {
+      shell: false,
+      windowsHide: true,
+    });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', d => {
+      stdout += d.toString();
+    });
+    child.stderr.on('data', d => {
+      stderr += d.toString();
+    });
+    const t = setTimeout(() => {
+      child.kill();
+      reject(new Error('Timeout'));
+    }, timeoutMs);
+    child.on('close', code => {
+      clearTimeout(t);
+      if (code !== 0) reject(new Error(stderr || `exit ${code}`));
+      else resolve(stdout);
+    });
+    child.on('error', reject);
+  });
+}
+
 function getServerUrl() {
   if (EMBEDDED_SERVER_URL) return EMBEDDED_SERVER_URL;
   const buildConfigPath = path.join(__dirname, 'configs', 'build-config.json');
@@ -43,11 +83,15 @@ function serverErrorPage(serverUrl) {
 }
 
 function createWindow(loadUrl) {
+  const iconInApp = path.join(__dirname, 'icon.png');
+  const iconInBuild = path.join(__dirname, 'build', 'icon.png');
+  const iconPath = fs.existsSync(iconInApp) ? iconInApp : fs.existsSync(iconInBuild) ? iconInBuild : null;
   const win = new BrowserWindow({
     width: 1280,
     height: 800,
     title: 'TMA Cloud',
     show: false,
+    ...(iconPath && { icon: iconPath }),
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -83,13 +127,9 @@ function createWindow(loadUrl) {
 
 ipcMain.handle('clipboard:readFiles', async () => {
   if (process.platform !== 'win32') return { files: [] };
-  const { exec } = require('child_process');
-  const { promisify } = require('util');
-  const execAsync = promisify(exec);
   try {
-    const { stdout } = await execAsync(
-      'powershell -NoProfile -Command "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.Clipboard]::GetFileDropList() | ForEach-Object { $_ }"',
-      { encoding: 'utf8', timeout: 5000 }
+    const stdout = await runPowerShell(
+      'Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.Clipboard]::GetFileDropList() | ForEach-Object { $_ }'
     );
     const paths = stdout
       .split(/\r?\n/)
@@ -129,14 +169,13 @@ ipcMain.handle('clipboard:writeFiles', async (_event, paths) => {
   if (process.platform !== 'win32' || !Array.isArray(paths) || paths.length === 0) {
     return { ok: false };
   }
+  const safePaths = paths.filter(p => typeof p === 'string' && p.length > 0 && !/[\r\n\0]/.test(p));
+  if (safePaths.length === 0) return { ok: false };
   const tmp = path.join(os.tmpdir(), `electron-desktop-${Date.now()}.txt`);
   try {
-    fs.writeFileSync(tmp, paths.join('\n'), 'utf8');
-    const { exec } = require('child_process');
-    const { promisify } = require('util');
-    const execAsync = promisify(exec);
-    const ps = `Add-Type -AssemblyName System.Windows.Forms; $col = New-Object System.Collections.Specialized.StringCollection; Get-Content -LiteralPath '${tmp.replace(/'/g, "''")}' | ForEach-Object { $col.Add($_) }; [System.Windows.Forms.Clipboard]::SetFileDropList($col)`;
-    await execAsync(`powershell -NoProfile -Command "${ps.replace(/"/g, '\\"')}"`, { timeout: 5000 });
+    fs.writeFileSync(tmp, safePaths.join('\n'), 'utf8');
+    const ps = `Add-Type -AssemblyName System.Windows.Forms; $col = New-Object System.Collections.Specialized.StringCollection; Get-Content -Encoding UTF8 -LiteralPath '${escapePathForPowerShellLiteralPath(tmp)}' | ForEach-Object { $col.Add($_) }; [System.Windows.Forms.Clipboard]::SetFileDropList($col)`;
+    await runPowerShell(ps);
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e.message };
@@ -220,14 +259,13 @@ async function downloadToFile(url, filePath) {
 }
 
 function setClipboardToPaths(writtenPaths) {
+  const safePaths = (writtenPaths || []).filter(p => typeof p === 'string' && p.length > 0 && !/[\r\n\0]/.test(p));
+  if (safePaths.length === 0) return Promise.resolve();
   const tmpRoot = os.tmpdir();
   const tmp = path.join(tmpRoot, `electron-desktop-${Date.now()}.txt`);
-  fs.writeFileSync(tmp, writtenPaths.join('\n'), 'utf8');
-  const { exec } = require('child_process');
-  const { promisify } = require('util');
-  const execAsync = promisify(exec);
-  const ps = `Add-Type -AssemblyName System.Windows.Forms; $col = New-Object System.Collections.Specialized.StringCollection; Get-Content -LiteralPath '${tmp.replace(/'/g, "''")}' | ForEach-Object { $col.Add($_) }; [System.Windows.Forms.Clipboard]::SetFileDropList($col)`;
-  return execAsync(`powershell -NoProfile -Command "${ps.replace(/"/g, '\\"')}"`, { timeout: 5000 }).then(() => {
+  fs.writeFileSync(tmp, safePaths.join('\n'), 'utf8');
+  const ps = `Add-Type -AssemblyName System.Windows.Forms; $col = New-Object System.Collections.Specialized.StringCollection; Get-Content -Encoding UTF8 -LiteralPath '${escapePathForPowerShellLiteralPath(tmp)}' | ForEach-Object { $col.Add($_) }; [System.Windows.Forms.Clipboard]::SetFileDropList($col)`;
+  return runPowerShell(ps).then(() => {
     try {
       fs.unlinkSync(tmp);
     } catch (_) {

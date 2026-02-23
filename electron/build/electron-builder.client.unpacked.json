@@ -6,6 +6,7 @@
   "files": ["dist-electron/**/*"],
   "win": {
     "target": ["dir"],
-    "signAndEditExecutable": false
+    "signAndEditExecutable": false,
+    "icon": "build/icon.png"
   }
 }

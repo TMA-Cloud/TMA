@@ -6,7 +6,8 @@
   "files": ["dist-electron/**/*"],
   "win": {
     "target": ["nsis"],
-    "signAndEditExecutable": false
+    "signAndEditExecutable": false,
+    "icon": "build/icon.png"
   },
   "nsis": {
     "oneClick": false,
