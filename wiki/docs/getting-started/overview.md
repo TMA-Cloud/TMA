@@ -25,8 +25,9 @@ Before you begin, ensure you have:
 
 1. **[Installation Guide](installation.md)** - Step-by-step installation instructions
 2. **[Docker Compose / Docker](docker.md)** - Deploy with `docker-compose` (curl, no clone) or prebuilt images
-3. **[Environment Setup](environment-setup.md)** - Configure environment variables
-4. **[First Login](first-login.md)** - Create your first account
+3. **[Desktop App (Electron)](desktop-app.md)** - Build and install the Windows desktop client
+4. **[Environment Setup](environment-setup.md)** - Configure environment variables
+5. **[First Login](first-login.md)** - Create your first account
 
 ## Next Steps
 

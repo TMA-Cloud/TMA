@@ -26,6 +26,11 @@ import {
   createAutoDismissTimeout,
   type UploadProgressItem,
 } from "../utils/uploadUtils";
+import {
+  getFilesFromElectronClipboard,
+  copyFilesToPcClipboard,
+  MAX_COPY_TO_PC_BYTES,
+} from "../utils/electronClipboard";
 
 function formatMaxSize(bytes: number): string {
   const gb = bytes / (1024 * 1024 * 1024);
@@ -304,6 +309,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
             ...f,
             modified: new Date(f.modified),
             deletedAt: f.deletedAt ? new Date(f.deletedAt) : undefined,
+            expiresAt:
+              f.expiresAt == null ? f.expiresAt : new Date(f.expiresAt),
           })),
         );
       } catch (e) {
@@ -737,6 +744,50 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         xhr.send(data);
       });
     });
+  };
+
+  const uploadFilesFromClipboard = async () => {
+    const files = await getFilesFromElectronClipboard();
+    if (files.length === 0) return;
+    await uploadFilesBulk(files);
+  };
+
+  const copyFilesToPc = async (ids: string[]) => {
+    if (ids.length === 0) return;
+    const fileItems = ids
+      .map((id) => files.find((f) => f.id === id))
+      .filter(
+        (f): f is FileItem =>
+          f != null && String(f.type || "").toLowerCase() !== "folder",
+      );
+    if (fileItems.length === 0) {
+      showToast(
+        "Select at least one file (folders are not supported)",
+        "error",
+      );
+      return;
+    }
+    const anyOverLimit = fileItems.some(
+      (f) => f.size != null && Number(f.size) > MAX_COPY_TO_PC_BYTES,
+    );
+    const totalBytes = fileItems.reduce((s, f) => s + Number(f.size ?? 0), 0);
+    if (anyOverLimit || totalBytes > MAX_COPY_TO_PC_BYTES) {
+      showToast(
+        `Copy to computer is only allowed for files up to 200 MB total.`,
+        "error",
+      );
+      return;
+    }
+    const items = fileItems.map((f) => ({ id: f.id, name: f.name }));
+    const result = await copyFilesToPcClipboard(items);
+    if (result.ok) {
+      showToast(
+        `Copied ${items.length} file${items.length !== 1 ? "s" : ""} to clipboard. Paste in Explorer to save.`,
+        "success",
+      );
+    } else {
+      showToast(result.error ?? "Failed to copy to computer", "error");
+    }
   };
 
   const uploadFileWithProgress = async (
@@ -1302,10 +1353,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         searchFiles: searchFilesApi,
         isDownloading,
         downloadFiles,
+        copyFilesToPc,
         uploadProgress,
         setUploadProgress,
         uploadFileWithProgress,
         uploadFilesBulk,
+        uploadFilesFromClipboard,
         setIsUploadProgressInteracting,
         onlyOfficeConfigured,
         canConfigureOnlyOffice,

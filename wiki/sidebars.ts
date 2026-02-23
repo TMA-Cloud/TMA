@@ -11,6 +11,7 @@ const sidebars: SidebarsConfig = {
         "getting-started/overview",
         "getting-started/installation",
         "getting-started/docker",
+        "getting-started/desktop-app",
         "getting-started/environment-setup",
         "getting-started/first-login",
       ],

@@ -113,6 +113,49 @@ frontend/src/
 - **Contexts:** AuthContext, AppContext, ThemeContext
 - **Viewers:** Image and document viewers with device-specific implementations
 
+## Electron Desktop App
+
+Optional Windows client. Loads the same frontend from the TMA Cloud server URL; no separate frontend build.
+
+### Electron Architecture
+
+```bash
+┌─────────────────────────────────────────────────────────────────┐
+│  Main Process (Node)                                            │
+│  main.cjs: createWindow, getServerUrl(), IPC                    │
+│  Server URL: embedded at build, or userData/config.json,        │
+│  or electron/configs/build-config.json (dev)                    │
+└──────────────────────────────┬──────────────────────────────────┘
+                               │ loadURL(serverUrl)
+                               │ IPC
+┌──────────────────────────────▼──────────────────────────────────┐
+│  Renderer (BrowserWindow)                                       │
+│  Same React frontend as web; origin = server URL                │
+│  Preload (preload.cjs) exposes window.electronAPI to renderer   │
+└──────────────────────────────┬──────────────────────────────────┘
+                               │ fetch /api/* (same origin, cookies)
+                               ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  TMA Cloud Backend                                              │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Electron Folder Structure
+
+```bash
+electron/
+├── main.cjs          # Main process: window, server URL, IPC
+├── preload.cjs       # Preload: contextBridge, exposes electronAPI
+├── configs/          # build-config.json (serverUrl when run from source)
+└── build/            # electron-builder configs
+```
+
+**Main process:** Creates a single BrowserWindow; loads a loading page, then the server URL. Resolves server URL from build constant, then userData `config.json`, then `configs/build-config.json`. Registers IPC handlers used by the renderer (e.g. OS clipboard on Windows).
+
+**Preload:** contextIsolation: true, nodeIntegration: false. Exposes a small API (e.g. `electronAPI.clipboard`) via contextBridge and ipcRenderer.invoke.
+
+**Renderer:** Same React app as web. Detects Electron via `window.electronAPI` and uses it where needed; all API calls go to the same backend via fetch.
+
 ## Data Flow
 
 ### Authentication Flow

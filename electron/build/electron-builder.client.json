@@ -1,0 +1,15 @@
+{
+  "appId": "com.tmacloud.app",
+  "productName": "TMA Cloud",
+  "directories": { "output": "dist-client" },
+  "extraMetadata": { "main": "dist-electron/main.cjs" },
+  "files": ["dist-electron/**/*"],
+  "win": {
+    "target": ["nsis"],
+    "signAndEditExecutable": false
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true
+  }
+}

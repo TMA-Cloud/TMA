@@ -25,6 +25,13 @@ Learn how to upload and manage files in TMA Cloud.
 - Single file uses standard upload; multiple files use bulk upload with progress
 - Same size and quota limits apply as for Upload
 
+### Copy to Computer (desktop app only)
+
+- Available in the Electron desktop app (Windows)
+- Right-click one or more files → **Copy to computer**; Files are placed on the OS clipboard and paste in Explorer to save
+- Limit: 200 MB total per action; no single file over 200 MB
+- Folders are not supported; only files and Not available in Trash view
+
 ### Upload Limits
 
 - Per-file size limited by the max upload size setting (default 10 GB, configurable by admin in **Settings** → **Storage**)
@@ -44,9 +51,10 @@ Learn how to upload and manage files in TMA Cloud.
 
 - **Download:** Click to download single file
 - **Bulk Download:** Select multiple files → Download (creates ZIP archive)
+- **Copy to computer:** (desktop app) Right-click files → Copy to computer and paste in Explorer (200 MB total limit)
 - **Rename:** Right-click → Rename
 - **Move:** Drag and drop or use Move option
-- **Copy:** Right-click → Copy
+- **Copy:** Right-click → Copy (in-app copy)
 - **Delete:** Right-click → Delete (moves to trash)
 - **Star:** Mark files as favorites
 

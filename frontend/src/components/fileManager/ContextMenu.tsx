@@ -18,9 +18,14 @@ import {
   CheckSquare,
   Square,
   RotateCcw,
+  MonitorDown,
 } from "lucide-react";
 import { useApp, type ShareExpiry } from "../../contexts/AppContext";
 import { useToast } from "../../hooks/useToast";
+import {
+  isElectron,
+  MAX_COPY_TO_PC_BYTES,
+} from "../../utils/electronClipboard";
 import { useIsMobile } from "../../hooks/useIsMobile";
 import { Modal } from "../ui/Modal";
 import { getErrorMessage } from "../../utils/errorUtils";
@@ -62,6 +67,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     setClipboard,
     clipboard,
     pasteClipboard,
+    uploadFilesFromClipboard,
     folderStack,
     folderSharedStack,
     files,
@@ -77,11 +83,25 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     currentPath,
     downloadFiles,
     isDownloading,
+    copyFilesToPc,
     clearSelection,
   } = useApp();
   const { showToast } = useToast();
 
   const selectedItems = files.filter((f) => selectedFiles.includes(f.id));
+  const selectedFilesOnly = selectedItems.filter(
+    (f) => String(f.type || "").toLowerCase() !== "folder",
+  );
+  const copyToPcTotalBytes = selectedFilesOnly.reduce(
+    (s, f) => s + Number(f.size ?? 0),
+    0,
+  );
+  const canCopyToPc =
+    selectedFilesOnly.length > 0 &&
+    copyToPcTotalBytes <= MAX_COPY_TO_PC_BYTES &&
+    selectedFilesOnly.every(
+      (f) => f.size == null || Number(f.size) <= MAX_COPY_TO_PC_BYTES,
+    );
   const allStarred =
     selectedItems.length > 0 && selectedItems.every((f) => f.starred);
   const allShared =
@@ -322,6 +342,23 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
         },
         disabled: isDownloading || selectedFiles.length === 0,
       },
+      ...(!isTrashView && isElectron()
+        ? [
+            {
+              icon: MonitorDown,
+              label: "Copy to computer",
+              disabled: !canCopyToPc,
+              action: async () => {
+                try {
+                  await copyFilesToPc(selectedFiles);
+                  onActionComplete?.();
+                } catch {
+                  showToast("Failed to copy to computer", "error");
+                }
+              },
+            },
+          ]
+        : []),
       {
         icon: Star,
         label: allStarred ? "Remove from Starred" : "Add to Starred",
@@ -354,6 +391,27 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
           onActionComplete?.();
         },
       },
+      ...(!isTrashView && isElectron()
+        ? [
+            {
+              icon: ClipboardPaste,
+              label: "Paste from computer",
+              disabled: false,
+              action: async () => {
+                try {
+                  await uploadFilesFromClipboard();
+                  onActionComplete?.();
+                } catch (error) {
+                  const errorMessage =
+                    error instanceof Error
+                      ? error.message
+                      : "Failed to upload from clipboard";
+                  showToast(errorMessage, "error");
+                }
+              },
+            },
+          ]
+        : []),
       ...(clipboard
         ? [
             {
@@ -408,6 +466,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     linkToParentShare,
     selectedFiles,
     selectedItems,
+    canCopyToPc,
     setShareLinkModalOpen,
     shareFiles,
     getShareLinks,
@@ -418,12 +477,14 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     setClipboard,
     clipboard,
     pasteClipboard,
+    uploadFilesFromClipboard,
     targetId,
     folderStack,
     files,
     setRenameTarget,
     downloadFiles,
     isDownloading,
+    copyFilesToPc,
     showToast,
     isMobile,
     multiSelectMode,

@@ -1,0 +1,36 @@
+{
+  "name": "tma-cloud-electron-app",
+  "private": true,
+  "version": "2.0.9",
+  "description": "Desktop client for TMA Cloud",
+  "keywords": [
+    "tma-cloud",
+    "electron",
+    "desktop",
+    "client"
+  ],
+  "author": "ZIDAN44",
+  "license": "ISC",
+  "main": "main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "build:client": "node scripts/prepare-client-build.js && npx electron-builder --config build/electron-builder.client.json",
+    "build:client:win": "node scripts/prepare-client-build.js && set CSC_IDENTITY_AUTO_DISCOVERY=false&& npx electron-builder --config build/electron-builder.client.json --win",
+    "build:client:win:unpacked": "node scripts/prepare-client-build.js && set CSC_IDENTITY_AUTO_DISCOVERY=false&& npx electron-builder --config build/electron-builder.client.unpacked.json --win",
+    "build:client:win:portable": "node scripts/prepare-client-build.js && set CSC_IDENTITY_AUTO_DISCOVERY=false&& npx electron-builder --config build/electron-builder.client.portable.json --win",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.0.1",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-prettier": "^5.5.5",
+    "globals": "^17.3.0",
+    "prettier": "^3.8.1",
+    "electron": "^40.6.0",
+    "electron-builder": "^26.8.1"
+  }
+}

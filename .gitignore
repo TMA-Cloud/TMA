@@ -24,13 +24,6 @@ npm-debug.log*
 yarn-debug.log*
 pnpm-debug.log*
 
-# Build output
-dist/
-build/
-coverage/
-out/
-*.tsbuildinfo
-
 # Frontend
 frontend/dist/
 frontend/.vite/
@@ -84,6 +77,11 @@ docker-compose-prod.yml
 docker-compose-dev.yml
 docker-compose-test.yml
 docker-compose-local.yml
+
+# Electron
+electron/dist-client/
+electron/dist-electron/
+electron/configs/build-config.json
 
 # Misc
 *.tgz

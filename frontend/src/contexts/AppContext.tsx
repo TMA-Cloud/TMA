@@ -99,6 +99,8 @@ export interface AppContextType {
   searchFiles: (query: string) => Promise<void>;
   isDownloading: boolean;
   downloadFiles: (ids: string[]) => Promise<void>;
+  /** Copy selected files to OS clipboard so user can paste in Explorer (Electron only). */
+  copyFilesToPc: (ids: string[]) => Promise<void>;
   uploadProgress: UploadProgressItem[];
   setUploadProgress: (
     progress:
@@ -110,6 +112,8 @@ export interface AppContextType {
     onProgress?: (progress: number) => void,
   ) => Promise<void>;
   uploadFilesBulk: (files: File[]) => Promise<void>;
+  /** Upload files from OS clipboard (Electron only). */
+  uploadFilesFromClipboard: () => Promise<void>;
   setIsUploadProgressInteracting: (isInteracting: boolean) => void;
   onlyOfficeConfigured: boolean;
   canConfigureOnlyOffice: boolean;
