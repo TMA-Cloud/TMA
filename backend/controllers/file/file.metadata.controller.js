@@ -95,7 +95,7 @@ function computeExpiresAt(expiry) {
  * Share or unshare files/folders
  */
 async function shareFilesController(req, res) {
-  const { ids, shared, expiry } = req.body;
+  const { ids, expiry, shared = true } = req.body;
 
   const client = await pool.connect();
   try {

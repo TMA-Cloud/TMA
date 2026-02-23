@@ -90,9 +90,34 @@ const starFilesSchema = [
 ];
 
 const shareFilesSchema = [
-  body('ids').isArray({ min: 1 }).withMessage('File IDs must be an array with at least one ID'),
-  body('ids.*').isString().withMessage('All file IDs must be strings'),
-  body('shared').isBoolean().withMessage('Shared must be a boolean'),
+  // Allow a single ID string or an array of IDs, but always normalize to a non-empty array.
+  body('ids')
+    .custom(value => {
+      if (Array.isArray(value)) {
+        return value.length > 0;
+      }
+      if (typeof value === 'string' && value.trim().length > 0) {
+        return true;
+      }
+      return false;
+    })
+    .withMessage('File IDs must be an array with at least one ID'),
+  body('ids').customSanitizer(value => {
+    if (Array.isArray(value)) {
+      return value.map(String);
+    }
+    if (typeof value === 'string') {
+      return [value];
+    }
+    return value;
+  }),
+  // Be tolerant of different boolean representations (true/false, "true"/"false").
+  // Default is handled in the controller, but we still validate shape here.
+  body('shared')
+    .optional()
+    .custom(val => typeof val === 'boolean' || val === 'true' || val === 'false')
+    .withMessage('Shared must be a boolean')
+    .customSanitizer(val => val === 'true' || val === true),
   body('expiry').optional().isIn(['7d', '30d', 'never']).withMessage('Expiry must be 7d, 30d, or never'),
 ];
 
