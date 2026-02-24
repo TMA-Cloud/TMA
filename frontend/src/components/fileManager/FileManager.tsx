@@ -366,6 +366,32 @@ export const FileManager: React.FC = () => {
     };
   }, [handleClearSelection, isMobile]);
 
+  // Keyboard Delete: move selected files/folders to trash
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "Delete") return;
+
+      const target = e.target as Node | null;
+      if (
+        target &&
+        (target instanceof HTMLInputElement ||
+          target instanceof HTMLTextAreaElement ||
+          (target instanceof HTMLElement && target.isContentEditable))
+      ) {
+        return;
+      }
+
+      if (!selectedFiles.length) return;
+      if (isTrashView) return;
+
+      e.preventDefault();
+      setDeleteModalOpen(true);
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [isTrashView, selectedFiles.length, setDeleteModalOpen]);
+
   const handleFileClick = (fileId: string, e: React.MouseEvent) => {
     if (dragSelectingRef.current) return;
 
