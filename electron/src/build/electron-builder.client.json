@@ -4,6 +4,13 @@
   "directories": { "output": "dist-client" },
   "extraMetadata": { "main": "dist-electron/main/index.cjs" },
   "files": ["dist-electron/**/*"],
-  "win": { "target": ["nsis"], "signAndEditExecutable": false, "icon": "src/build/icon.png" },
-  "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true }
+  "win": {
+    "target": ["nsis"],
+    "signAndEditExecutable": true,
+    "icon": "src/build/icon.png"
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true
+  }
 }

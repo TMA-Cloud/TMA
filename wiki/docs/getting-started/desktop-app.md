@@ -39,6 +39,8 @@ Useful for development or testing without building an installer.
 
 Builds a Windows installer with the server URL embedded so users do not need a config file.
 
+**Admin privilege required:** Run your terminal (or IDE) **as Administrator** when building.
+
 1. In `electron/`, ensure `src/config/build-config.json` exists and contains your `serverUrl` (same format as above).
 
 2. Run the build:
@@ -61,7 +63,7 @@ Builds a Windows installer with the server URL embedded so users do not need a c
    npm run build:client:win:unpacked
    ```
 
-Builds are unsigned by default (`signAndEditExecutable: false`). To sign, configure code signing and use the standard `build:client` flow.
+Builds are unsigned by default. To sign the app, configure code signing and use the same `build:client` flow.
 
 ## Install on Windows
 

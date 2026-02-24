@@ -42,7 +42,7 @@ function copyRecursive(src, dest) {
 copyRecursive(path.join(srcDir, 'main'), path.join(distDir, 'main'));
 copyRecursive(path.join(srcDir, 'preload'), path.join(distDir, 'preload'));
 
-// Icon at app root for packaged app
+// Icon at app root for packaged app (window icon at runtime)
 const iconSrc = path.join(electronDir, 'src', 'build', 'icon.png');
 if (fs.existsSync(iconSrc)) {
   fs.copyFileSync(iconSrc, path.join(distDir, 'icon.png'));

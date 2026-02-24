@@ -7,7 +7,7 @@ const { LOADING_PAGE, serverErrorPage } = require('./config.cjs');
  * Create and show the main app window.
  * @param {string} loadUrl - URL to load (data: or http(s):)
  * @param {string} preloadPath - Absolute path to preload script
- * @param {string} appRoot - Application root (icons: appRoot/icon.png packaged, appRoot/src/build/icon.png dev)
+ * @param {string} appRoot - Application root (dev: project root; packaged: dir containing app.asar)
  */
 function createWindow(loadUrl, preloadPath, appRoot) {
   const absolutePreload = path.isAbsolute(preloadPath) ? preloadPath : path.resolve(preloadPath);
@@ -15,16 +15,20 @@ function createWindow(loadUrl, preloadPath, appRoot) {
     console.error('[Electron] Preload script not found:', absolutePreload);
   }
 
+  // Packaged: files are under app.asar/dist-electron/ (icon at dist-electron/icon.png). Dev: same layout in dist-electron/.
+  const iconNextToMain = path.join(__dirname, '..', 'icon.png');
   const iconInApp = path.join(appRoot, 'icon.png');
   const iconInSrcBuild = path.join(appRoot, 'src', 'build', 'icon.png');
   const iconInBuild = path.join(appRoot, 'build', 'icon.png');
-  const iconPath = fs.existsSync(iconInApp)
-    ? iconInApp
-    : fs.existsSync(iconInSrcBuild)
-      ? iconInSrcBuild
-      : fs.existsSync(iconInBuild)
-        ? iconInBuild
-        : null;
+  const iconPath = fs.existsSync(iconNextToMain)
+    ? iconNextToMain
+    : fs.existsSync(iconInApp)
+      ? iconInApp
+      : fs.existsSync(iconInSrcBuild)
+        ? iconInSrcBuild
+        : fs.existsSync(iconInBuild)
+          ? iconInBuild
+          : null;
 
   const win = new BrowserWindow({
     width: 1280,

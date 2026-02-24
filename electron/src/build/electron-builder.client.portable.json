@@ -4,5 +4,9 @@
   "directories": { "output": "dist-client" },
   "extraMetadata": { "main": "dist-electron/main/index.cjs" },
   "files": ["dist-electron/**/*"],
-  "win": { "target": ["portable"], "signAndEditExecutable": false, "icon": "src/build/icon.png" }
+  "win": {
+    "target": ["portable"],
+    "signAndEditExecutable": true,
+    "icon": "src/build/icon.png"
+  }
 }
