@@ -18,10 +18,25 @@ const storage = multer.diskStorage({
 });
 
 /**
+ * Re-decode filename from Latin-1 to UTF-8. Busboy/multer default to Latin-1 for
+ * Content-Disposition params, so UTF-8 filenames (emojis, non-English) become mojibake.
+ */
+function decodeFilenameToUtf8(name) {
+  if (typeof name !== 'string' || !name) return name;
+  try {
+    return Buffer.from(name, 'latin1').toString('utf8');
+  } catch {
+    return name;
+  }
+}
+
+/**
  * FileFilter - simplified since middleware already handles storage limit checks
- * This is kept as a safety net but middleware should catch issues first
+ * This is kept as a safety net but middleware should catch issues first.
+ * Also fixes filename encoding: multer/busboy treat filename as Latin-1 by default.
  */
 function fileFilter(req, file, cb) {
+  file.originalname = decodeFilenameToUtf8(file.originalname);
   // If response was already sent by middleware (storage limit exceeded), reject
   if (req.res && (req.res.headersSent || req.res.finished)) {
     return cb(new Error('Upload rejected - storage limit exceeded'), false);

@@ -2,6 +2,7 @@ const path = require('path');
 const archiver = require('archiver');
 const { resolveFilePath, isValidPath, isFilePathEncrypted } = require('./filePath');
 const { createDecryptStream, createDecryptStreamFromStream } = require('./fileEncryption');
+const { contentDispositionValue } = require('./fileDownload');
 const { logger } = require('../config/logger');
 const storage = require('./storageDriver');
 
@@ -16,10 +17,8 @@ const storage = require('./storageDriver');
  */
 async function createZipArchive(res, archiveName, entries, rootId, baseName, onSuccess) {
   res.setHeader('Content-Type', 'application/zip');
-  // Use RFC 5987 encoding for filenames with special characters
   const zipFilename = `${archiveName}.zip`;
-  const encodedFilename = encodeURIComponent(zipFilename);
-  res.setHeader('Content-Disposition', `attachment; filename="${zipFilename}"; filename*=UTF-8''${encodedFilename}`);
+  res.setHeader('Content-Disposition', contentDispositionValue('attachment', zipFilename));
 
   const archive = archiver('zip');
   archive.on('error', err => {
@@ -121,10 +120,8 @@ async function createZipArchive(res, archiveName, entries, rootId, baseName, onS
  */
 async function createBulkZipArchive(res, archiveName, allEntries, rootIds, onSuccess) {
   res.setHeader('Content-Type', 'application/zip');
-  // Use RFC 5987 encoding for filenames with special characters
   const zipFilename = `${archiveName}.zip`;
-  const encodedFilename = encodeURIComponent(zipFilename);
-  res.setHeader('Content-Disposition', `attachment; filename="${zipFilename}"; filename*=UTF-8''${encodedFilename}`);
+  res.setHeader('Content-Disposition', contentDispositionValue('attachment', zipFilename));
 
   const archive = archiver('zip');
   // Track if archive was aborted due to error

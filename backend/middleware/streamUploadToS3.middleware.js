@@ -32,7 +32,10 @@ function streamUploadToS3(singleOrBulk = 'single') {
           return next(new Error('Expected multipart/form-data'));
         }
 
-        const busboy = Busboy({ headers: { 'content-type': contentType } });
+        const busboy = Busboy({
+          headers: { 'content-type': contentType },
+          defParamCharset: 'utf8',
+        });
         const fields = {};
         const uploads = [];
         let fileCount = 0;

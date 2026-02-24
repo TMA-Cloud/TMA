@@ -1,5 +1,10 @@
 const jwt = require('jsonwebtoken');
-const { validateAndResolveFile, streamEncryptedFile, streamUnencryptedFile } = require('../../utils/fileDownload');
+const {
+  validateAndResolveFile,
+  streamEncryptedFile,
+  streamUnencryptedFile,
+  contentDispositionValue,
+} = require('../../utils/fileDownload');
 const { validateSingleId } = require('../../utils/controllerHelpers');
 const { logger } = require('../../config/logger');
 const { getOnlyOfficeConfig } = require('./onlyoffice.utils');
@@ -69,7 +74,7 @@ async function serveFile(req, res) {
 
     const pathOrKey = filePath || storageKey;
 
-    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(fileRow.name)}"`);
+    res.setHeader('Content-Disposition', contentDispositionValue('inline', fileRow.name));
     res.type(fileRow.mimeType || 'application/octet-stream');
 
     if (isEncrypted) {

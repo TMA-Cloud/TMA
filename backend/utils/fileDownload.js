@@ -6,6 +6,29 @@ const { logger } = require('../config/logger');
 const storage = require('./storageDriver');
 
 /**
+ * Build a Content-Disposition header value that is safe for Node's setHeader (ASCII-only).
+ * Uses RFC 5987 (filename*=UTF-8''...) for the real filename; legacy filename= is ASCII-only
+ * so headers never contain invalid characters (fixes ERR_INVALID_CHAR for mojibake/emoji names).
+ */
+function contentDispositionValue(disposition, filename) {
+  const name = typeof filename === 'string' ? filename : 'download';
+  const ext = path.extname(name);
+  const asciiSafe = name
+    .replace(/[^\x20-\x7E]/g, '_')
+    .replace(/["\\]/g, '_')
+    .trim();
+  const legacyName = (asciiSafe && asciiSafe.length > 0 ? asciiSafe : 'download').replace(/^_+/, '') || 'download';
+  const fallback = legacyName.endsWith(ext) ? legacyName : legacyName + (ext || '');
+  let encoded;
+  try {
+    encoded = encodeURIComponent(name);
+  } catch {
+    encoded = encodeURIComponent(fallback);
+  }
+  return `${disposition}; filename="${fallback}"; filename*=UTF-8''${encoded}`;
+}
+
+/**
  * Validates and resolves file for download (local path or S3 key).
  * @param {Object} file - File object from database
  * @returns {Promise<Object>} { success: boolean, filePath?: string, storageKey?: string, isEncrypted?: boolean, error?: string }
@@ -77,8 +100,7 @@ async function streamEncryptedFile(res, encryptedPathOrKey, filename, mimeType) 
 
   try {
     res.type(mimeType);
-    const encodedFilename = encodeURIComponent(filename);
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"; filename*=UTF-8''${encodedFilename}`);
+    res.setHeader('Content-Disposition', contentDispositionValue('attachment', filename));
 
     const decryptResult = storage.useS3()
       ? await createDecryptStreamFromStream(await storage.getReadStream(encryptedPathOrKey))
@@ -137,9 +159,8 @@ async function streamEncryptedFile(res, encryptedPathOrKey, filename, mimeType) 
  */
 async function streamUnencryptedFile(res, filePathOrKey, filename, mimeType, attachment = false) {
   res.type(mimeType);
-  const encodedFilename = encodeURIComponent(filename);
   const disposition = attachment ? 'attachment' : 'inline';
-  res.setHeader('Content-Disposition', `${disposition}; filename="${filename}"; filename*=UTF-8''${encodedFilename}`);
+  res.setHeader('Content-Disposition', contentDispositionValue(disposition, filename));
 
   const stream = storage.useS3() ? await storage.getReadStream(filePathOrKey) : fs.createReadStream(filePathOrKey);
 
@@ -165,4 +186,5 @@ module.exports = {
   validateAndResolveFile,
   streamEncryptedFile,
   streamUnencryptedFile,
+  contentDispositionValue,
 };
