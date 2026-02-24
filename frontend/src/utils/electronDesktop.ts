@@ -34,6 +34,20 @@ declare global {
           ok: boolean;
           error?: string;
         }>;
+        saveFile: (payload: {
+          origin: string;
+          fileId: string;
+          suggestedFileName: string;
+        }) => Promise<{
+          ok: boolean;
+          canceled?: boolean;
+          error?: string;
+        }>;
+        saveFilesBulk: (payload: { origin: string; ids: string[] }) => Promise<{
+          ok: boolean;
+          canceled?: boolean;
+          error?: string;
+        }>;
       };
     };
   }
@@ -149,6 +163,50 @@ export async function editFileWithDesktopElectron(payload: {
     }
 
     return { ok: true };
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    return { ok: false, error: message };
+  }
+}
+
+/** Save a single file via Electron Save dialog (title shows app name). Returns ok: true on success so caller can show toast. */
+export async function saveFileViaElectron(payload: {
+  fileId: string;
+  suggestedFileName: string;
+}): Promise<{ ok: boolean; canceled?: boolean; error?: string }> {
+  const api = window.electronAPI;
+  if (!isElectron() || !api?.files?.saveFile) {
+    return { ok: false, error: "Not available" };
+  }
+  try {
+    const result = await api.files.saveFile({
+      origin: window.location.origin,
+      fileId: payload.fileId,
+      suggestedFileName: payload.suggestedFileName,
+    });
+    return result ?? { ok: false };
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    return { ok: false, error: message };
+  }
+}
+
+/** Save multiple files as ZIP via Electron Save dialog. Returns ok: true on success so caller can show toast. */
+export async function saveFilesBulkViaElectron(ids: string[]): Promise<{
+  ok: boolean;
+  canceled?: boolean;
+  error?: string;
+}> {
+  const api = window.electronAPI;
+  if (!isElectron() || !api?.files?.saveFilesBulk) {
+    return { ok: false, error: "Not available" };
+  }
+  try {
+    const result = await api.files.saveFilesBulk({
+      origin: window.location.origin,
+      ids,
+    });
+    return result ?? { ok: false };
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     return { ok: false, error: message };

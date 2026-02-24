@@ -12,6 +12,8 @@ const { contextBridge, ipcRenderer } = require('electron');
       },
       files: {
         editWithDesktop: payload => ipcRenderer.invoke('files:editWithDesktop', payload),
+        saveFile: payload => ipcRenderer.invoke('files:saveFile', payload),
+        saveFilesBulk: payload => ipcRenderer.invoke('files:saveFilesBulk', payload),
       },
     };
     contextBridge.exposeInMainWorld('electronAPI', api);

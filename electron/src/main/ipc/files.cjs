@@ -1,14 +1,17 @@
 const path = require('path');
 const fs = require('fs');
-const { ipcMain, shell } = require('electron');
+const { ipcMain, shell, dialog, BrowserWindow } = require('electron');
 const {
   EDIT_DIR_PREFIX,
   sanitizeFileName,
   createTempDir,
   downloadToFile,
+  downloadPostToFile,
   uploadFileToReplace,
   hashFile,
 } = require('../utils/file-utils.cjs');
+
+const SAVE_DIALOG_TITLE = 'TMA Cloud';
 
 function registerEditWithDesktopHandler() {
   ipcMain.handle('files:editWithDesktop', async (_event, payload) => {
@@ -120,4 +123,67 @@ function registerEditWithDesktopHandler() {
   });
 }
 
-module.exports = { registerEditWithDesktopHandler };
+function registerSaveFileHandlers() {
+  ipcMain.handle('files:saveFile', async (event, payload) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win) {
+      return { ok: false, error: 'No window' };
+    }
+    const origin = typeof payload?.origin === 'string' ? payload.origin.replace(/\/$/, '') : '';
+    const fileId = payload?.fileId;
+    const suggestedFileName = typeof payload?.suggestedFileName === 'string' ? payload.suggestedFileName : 'download';
+    if (!origin || !fileId) {
+      return { ok: false, error: 'Invalid payload' };
+    }
+    const safeName = sanitizeFileName(suggestedFileName);
+    const { canceled, filePath } = await dialog.showSaveDialog(win, {
+      title: SAVE_DIALOG_TITLE,
+      defaultPath: safeName,
+    });
+    if (canceled || !filePath) {
+      return { ok: false, canceled: true };
+    }
+    const downloadUrl = `${origin}/api/files/${encodeURIComponent(String(fileId))}/download`;
+    try {
+      await downloadToFile(downloadUrl, filePath);
+      return { ok: true };
+    } catch (e) {
+      return {
+        ok: false,
+        error: e && e.message ? e.message : 'Failed to download file',
+      };
+    }
+  });
+
+  ipcMain.handle('files:saveFilesBulk', async (event, payload) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win) {
+      return { ok: false, error: 'No window' };
+    }
+    const origin = typeof payload?.origin === 'string' ? payload.origin.replace(/\/$/, '') : '';
+    const ids = Array.isArray(payload?.ids) ? payload.ids.filter(id => id != null) : [];
+    if (!origin || ids.length === 0) {
+      return { ok: false, error: 'Invalid payload' };
+    }
+    const defaultPath = `download_${Date.now()}.zip`;
+    const { canceled, filePath } = await dialog.showSaveDialog(win, {
+      title: SAVE_DIALOG_TITLE,
+      defaultPath,
+    });
+    if (canceled || !filePath) {
+      return { ok: false, canceled: true };
+    }
+    const bulkUrl = `${origin}/api/files/download/bulk`;
+    try {
+      await downloadPostToFile(bulkUrl, { ids }, filePath);
+      return { ok: true };
+    } catch (e) {
+      return {
+        ok: false,
+        error: e && e.message ? e.message : 'Failed to download files',
+      };
+    }
+  });
+}
+
+module.exports = { registerEditWithDesktopHandler, registerSaveFileHandlers };

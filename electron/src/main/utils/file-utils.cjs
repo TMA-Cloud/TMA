@@ -75,6 +75,67 @@ async function downloadToFile(url, filePath) {
   });
 }
 
+/**
+ * POST JSON body to a URL and stream the response to a file (e.g. bulk download zip).
+ * Uses the same session cookies as downloadToFile.
+ */
+async function downloadPostToFile(url, jsonBody, filePath) {
+  let cookieHeader = '';
+  try {
+    const cookies = await session.defaultSession.cookies.get({ url });
+    cookieHeader = cookies.map(c => `${c.name}=${c.value}`).join('; ');
+  } catch (_) {
+    cookieHeader = '';
+  }
+
+  return new Promise((resolve, reject) => {
+    const request = net.request({
+      url,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(cookieHeader && { Cookie: cookieHeader }),
+      },
+    });
+    request.write(JSON.stringify(jsonBody));
+    request.end();
+
+    request.on('response', response => {
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        const status = response.statusCode || 0;
+        let body = '';
+        response.on('data', chunk => {
+          if (body.length < 4096) {
+            body += chunk.toString('utf8');
+          }
+        });
+        response.on('end', () => {
+          reject(new Error(body ? `Download failed (${status}): ${body}` : `Download failed (${status})`));
+        });
+        response.on('error', reject);
+        return;
+      }
+
+      const fileStream = fs.createWriteStream(filePath);
+      response.on('data', chunk => {
+        fileStream.write(chunk);
+      });
+      response.on('end', () => {
+        fileStream.end(() => resolve());
+      });
+      response.on('error', err => {
+        fileStream.destroy();
+        reject(err);
+      });
+      fileStream.on('error', err => {
+        response.destroy();
+        reject(err);
+      });
+    });
+    request.on('error', reject);
+  });
+}
+
 function setClipboardToPaths(writtenPaths) {
   const safePaths = (writtenPaths || []).filter(p => typeof p === 'string' && p.length > 0 && !/[\r\n\0]/.test(p));
   if (safePaths.length === 0) return Promise.resolve();
@@ -215,6 +276,7 @@ module.exports = {
   sanitizeFileName,
   createTempDir,
   downloadToFile,
+  downloadPostToFile,
   setClipboardToPaths,
   cleanTempDirsByPrefix,
   cleanTempClipboardDirs,

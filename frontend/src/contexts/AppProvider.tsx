@@ -27,10 +27,13 @@ import {
   type UploadProgressItem,
 } from "../utils/uploadUtils";
 import {
+  isElectron,
   getFilesFromElectronClipboard,
   copyFilesToPcClipboard,
   MAX_COPY_TO_PC_BYTES,
   editFileWithDesktopElectron,
+  saveFileViaElectron,
+  saveFilesBulkViaElectron,
 } from "../utils/electronDesktop";
 
 function formatMaxSize(bytes: number): string {
@@ -1209,7 +1212,37 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
 
     setIsDownloading(true);
     try {
-      // Use bulk download endpoint for multiple files (creates a single ZIP)
+      // Electron: use native Save dialog (title = app name) and show toast on success
+      if (isElectron()) {
+        if (ids.length > 1) {
+          const result = await saveFilesBulkViaElectron(ids);
+          if (result.ok) {
+            showToast("Files saved successfully", "success");
+          } else if (!result.canceled && result.error) {
+            showToast(result.error, "error");
+          }
+        } else {
+          const firstId = ids[0];
+          if (!firstId) return;
+          const file = files.find((f) => f.id === firstId);
+          const fileName =
+            file?.name || (file?.type === "folder" ? "folder" : "file");
+          const suggestedFileName =
+            file?.type === "folder" ? `${fileName}.zip` : fileName;
+          const result = await saveFileViaElectron({
+            fileId: firstId,
+            suggestedFileName,
+          });
+          if (result.ok) {
+            showToast("File saved successfully", "success");
+          } else if (!result.canceled && result.error) {
+            showToast(result.error, "error");
+          }
+        }
+        return;
+      }
+
+      // Web: Use bulk download endpoint for multiple files (creates a single ZIP)
       if (ids.length > 1) {
         const res = await fetch(`/api/files/download/bulk`, {
           method: "POST",
