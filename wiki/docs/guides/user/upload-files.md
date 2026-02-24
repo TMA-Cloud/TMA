@@ -19,18 +19,19 @@ Learn how to upload and manage files in TMA Cloud.
 
 ### Paste from Clipboard (Ctrl+V)
 
-- Copy files on your computer (e.g. in Explorer with Ctrl+C)
+- Copy files on your computer (for example, in Explorer with **Ctrl+C**)
 - Open **My Files** and go to the folder where you want to upload
-- Press **Ctrl+V** in the file list; pasted files upload to the current folder
+- Press **Ctrl+V** in the file list; files from the clipboard upload to the current folder
 - Single file uses standard upload; multiple files use bulk upload with progress
 - Same size and quota limits apply as for Upload
+- In the Windows desktop app, this uses the desktop client's OS clipboard integration
 
-### Copy to Computer (desktop app only)
+### Copy to Computer (Windows desktop app)
 
 - Available in the Electron desktop app (Windows)
-- Right-click one or more files → **Copy to computer**; Files are placed on the OS clipboard and paste in Explorer to save
+- Right-click one or more files → **Copy** (desktop app); files are placed on the OS clipboard and can be pasted in Explorer to save
 - Limit: 200 MB total per action; no single file over 200 MB
-- Folders are not supported; only files and Not available in Trash view
+- Folders are not supported; only files; not available in Trash view
 
 ### Upload Limits
 
@@ -51,10 +52,12 @@ Learn how to upload and manage files in TMA Cloud.
 
 - **Download:** Click to download single file
 - **Bulk Download:** Select multiple files → Download (creates ZIP archive)
-- **Copy to computer:** (desktop app) Right-click files → Copy to computer and paste in Explorer (200 MB total limit)
+- **Copy:** (Windows desktop app) Right-click files → Copy to put them on the OS clipboard and paste in Explorer (200 MB total limit)
+- **Copy in cloud:** In-app copy between folders inside TMA Cloud
 - **Rename:** Right-click → Rename
 - **Move:** Drag and drop or use Move option
-- **Copy:** Right-click → Copy (in-app copy)
+- **Paste:** Right-click → Paste to upload files from the OS clipboard into the current folder (desktop app)
+- **Paste in cloud:** Right-click → Paste in cloud to paste from the in-app clipboard
 - **Delete:** Right-click → Delete (moves to trash)
 - **Star:** Mark files as favorites
 

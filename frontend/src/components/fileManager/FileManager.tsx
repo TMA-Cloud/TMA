@@ -40,6 +40,10 @@ export const FileManager: React.FC = () => {
     selectedFiles,
     viewMode,
     currentPath,
+    folderStack,
+    clipboard,
+    setClipboard,
+    pasteClipboard,
     setViewMode,
     setSelectedFiles,
     addSelectedFile,
@@ -72,6 +76,8 @@ export const FileManager: React.FC = () => {
     uploadFile,
     uploadFilesBulk,
     editFileWithDesktop,
+    uploadFilesFromClipboard,
+    copyFilesToPc,
   } = useApp();
 
   const { showToast } = useToast();
@@ -118,6 +124,78 @@ export const FileManager: React.FC = () => {
     document.addEventListener("paste", onPaste);
     return () => document.removeEventListener("paste", onPaste);
   }, [isMyFilesView, uploadFile, uploadFilesBulk]);
+
+  // Electron desktop: keyboard shortcuts for file copy/paste
+  // - Ctrl+C / Cmd+C: "Copy to computer" (OS clipboard)
+  // - Ctrl+V / Cmd+V: "Paste from computer" (upload from OS clipboard)
+  // - Ctrl+Shift+C / Cmd+Shift+C: Cloud copy (internal clipboard)
+  // - Ctrl+Shift+V / Cmd+Shift+V: Cloud paste (from internal clipboard)
+  useEffect(() => {
+    if (!isElectron()) return;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+
+      const target = e.target as Node | null;
+      if (
+        target &&
+        (target instanceof HTMLInputElement ||
+          target instanceof HTMLTextAreaElement ||
+          (target instanceof HTMLElement && target.isContentEditable))
+      ) {
+        return;
+      }
+
+      const key = e.key.toLowerCase();
+
+      if (key === "c") {
+        if (!selectedFiles.length) return;
+        e.preventDefault();
+
+        if (e.shiftKey) {
+          setClipboard({ ids: selectedFiles, action: "copy" });
+          return;
+        }
+
+        void copyFilesToPc(selectedFiles);
+        return;
+      }
+
+      if (key === "v") {
+        e.preventDefault();
+
+        if (e.shiftKey) {
+          if (!clipboard) return;
+          void pasteClipboard(
+            folderStack[folderStack.length - 1] ?? null,
+          ).catch((error) => {
+            const message =
+              error instanceof Error ? error.message : String(error);
+            showToast(message || "Failed to paste files", "error");
+          });
+          return;
+        }
+
+        void uploadFilesFromClipboard().catch((error) => {
+          const message =
+            error instanceof Error ? error.message : String(error);
+          showToast(message || "Failed to upload from clipboard", "error");
+        });
+      }
+    };
+
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [
+    clipboard,
+    copyFilesToPc,
+    folderStack,
+    pasteClipboard,
+    selectedFiles,
+    setClipboard,
+    showToast,
+    uploadFilesFromClipboard,
+  ]);
 
   const handleEmptyTrash = async () => {
     setEmptyTrashModalOpen(false);

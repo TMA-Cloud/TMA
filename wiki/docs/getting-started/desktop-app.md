@@ -98,7 +98,25 @@ When you run the Windows desktop app, you can open documents in the locally inst
 
 If you open a document and close it without saving, no upload is performed and the stored version is unchanged.
 
+## Clipboard Integration (Windows desktop app)
+
+The Windows desktop app adds OS-level clipboard support on top of the standard browser behavior.
+
+### Context Menu
+
+- **Copy:** Right-click one or more files → **Copy** to place them on the Windows clipboard, then paste in Explorer to save them (200 MB total limit; folders not supported; not available in Trash).
+- **Paste:** Right-click in a folder → **Paste** to upload files from the Windows clipboard into the current folder (same upload limits as regular uploads).
+- **Copy in cloud:** Uses the in-app clipboard to copy items between folders inside TMA Cloud.
+- **Paste in cloud:** Pastes from the in-app clipboard into the current folder.
+
+### Keyboard Shortcuts
+
+- **Ctrl+C / Cmd+C:** Copy selected files to the Windows clipboard (same as context menu **Copy** in the desktop app).
+- **Ctrl+V / Cmd+V:** Upload files from the Windows clipboard into the current folder (same as context menu **Paste** in the desktop app).
+- **Ctrl+Shift+C / Cmd+Shift+C:** Copy selected items using the in-app clipboard (same as **Copy in cloud**).
+- **Ctrl+Shift+V / Cmd+Shift+V:** Paste from the in-app clipboard into the current folder (same as **Paste in cloud**).
+
 ## Related Topics
 
 - [Architecture — Electron Desktop App](/concepts/architecture#electron-desktop-app) - How the desktop app fits in the system
-- [Upload Files](/guides/user/upload-files) - Paste from computer, copy to computer (desktop only)
+- [Upload Files](/guides/user/upload-files) - Upload, copy to computer, and clipboard usage

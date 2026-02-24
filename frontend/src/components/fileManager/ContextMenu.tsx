@@ -129,6 +129,8 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
       singleSelectedItem.mimeType === "application/msword" ||
       singleSelectedItem.mimeType === "application/pdf");
 
+  const electronClipboardAvailable = hasElectronClipboard();
+
   const handleRestore = useCallback(async () => {
     try {
       await restoreFiles(selectedFiles);
@@ -379,11 +381,11 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
             },
           ]
         : []),
-      ...(!isTrashView && hasElectronClipboard()
+      ...(electronClipboardAvailable
         ? [
             {
               icon: MonitorDown,
-              label: "Copy to computer",
+              label: "Copy",
               disabled: !canCopyToPc,
               action: async () => {
                 try {
@@ -410,29 +412,11 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
           }
         },
       },
-      {
-        icon: Copy,
-        label: "Copy",
-        disabled: false,
-        action: () => {
-          setClipboard({ ids: selectedFiles, action: "copy" });
-          onActionComplete?.();
-        },
-      },
-      {
-        icon: Scissors,
-        label: "Cut",
-        disabled: false,
-        action: () => {
-          setClipboard({ ids: selectedFiles, action: "cut" });
-          onActionComplete?.();
-        },
-      },
-      ...(!isTrashView && hasElectronClipboard()
+      ...(electronClipboardAvailable
         ? [
             {
               icon: ClipboardPaste,
-              label: "Paste from computer",
+              label: "Paste",
               disabled: false,
               action: async () => {
                 try {
@@ -449,11 +433,29 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
             },
           ]
         : []),
+      {
+        icon: Copy,
+        label: electronClipboardAvailable ? "Copy in cloud" : "Copy",
+        disabled: false,
+        action: () => {
+          setClipboard({ ids: selectedFiles, action: "copy" });
+          onActionComplete?.();
+        },
+      },
+      {
+        icon: Scissors,
+        label: "Cut",
+        disabled: false,
+        action: () => {
+          setClipboard({ ids: selectedFiles, action: "cut" });
+          onActionComplete?.();
+        },
+      },
       ...(clipboard
         ? [
             {
               icon: ClipboardPaste,
-              label: "Paste",
+              label: electronClipboardAvailable ? "Paste in cloud" : "Paste",
               disabled: false,
               action: async () => {
                 try {
@@ -532,6 +534,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     onClose,
     handleRestore,
     onActionComplete,
+    electronClipboardAvailable,
   ]);
 
   // Calculate adjusted position immediately (before render) to prevent "flying" effect
