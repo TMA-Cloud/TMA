@@ -43,6 +43,64 @@ function formatMaxSize(bytes: number): string {
   return `${mb % 1 === 0 ? mb : Math.round(mb * 10) / 10} MB`;
 }
 
+function sortFilesWithFoldersFirst(
+  items: FileItem[],
+  sortBy: "name" | "size" | "modified" | "deletedAt",
+  sortOrder: "asc" | "desc",
+): FileItem[] {
+  const direction = sortOrder === "desc" ? -1 : 1;
+
+  const compareCore = (a: FileItem, b: FileItem): number => {
+    switch (sortBy) {
+      case "name":
+        return a.name.localeCompare(b.name, undefined, {
+          sensitivity: "base",
+          numeric: true,
+        });
+      case "size": {
+        const aSize = a.size ?? 0;
+        const bSize = b.size ?? 0;
+        if (aSize === bSize) {
+          return a.name.localeCompare(b.name, undefined, {
+            sensitivity: "base",
+            numeric: true,
+          });
+        }
+        return aSize < bSize ? -1 : 1;
+      }
+      case "deletedAt": {
+        const aDate = a.deletedAt ? a.deletedAt.getTime() : 0;
+        const bDate = b.deletedAt ? b.deletedAt.getTime() : 0;
+        if (aDate === bDate) {
+          return a.name.localeCompare(b.name, undefined, {
+            sensitivity: "base",
+            numeric: true,
+          });
+        }
+        return aDate < bDate ? -1 : 1;
+      }
+      case "modified":
+      default: {
+        const aDate = a.modified ? a.modified.getTime() : 0;
+        const bDate = b.modified ? b.modified.getTime() : 0;
+        if (aDate === bDate) {
+          return a.name.localeCompare(b.name, undefined, {
+            sensitivity: "base",
+            numeric: true,
+          });
+        }
+        return aDate < bDate ? -1 : 1;
+      }
+    }
+  };
+
+  return [...items].sort((a, b) => {
+    if (a.type === "folder" && b.type !== "folder") return -1;
+    if (a.type !== "folder" && b.type === "folder") return 1;
+    return compareCore(a, b) * direction;
+  });
+}
+
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
@@ -72,8 +130,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
   const [pasteProgress, setPasteProgress] = useState<number | null>(null);
   const [sortBy, setSortBy] = useState<
     "name" | "size" | "modified" | "deletedAt"
-  >("modified");
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+  >("name");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [isSearching, setIsSearching] = useState<boolean>(false);
   const [isDownloading, setIsDownloading] = useState<boolean>(false);
@@ -216,18 +274,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
           credentials: "include",
         });
         const data: FileItemResponse[] = await res.json();
-        setFiles(
-          data.map((f) => ({
-            ...f,
-            modified: new Date(f.modified),
-            deletedAt: f.deletedAt ? new Date(f.deletedAt) : undefined,
-            expiresAt: f.expiresAt
-              ? new Date(f.expiresAt)
-              : f.expiresAt === null
-                ? null
-                : undefined,
-          })),
-        );
+        const mapped: FileItem[] = data.map((f) => ({
+          ...f,
+          modified: new Date(f.modified),
+          deletedAt: f.deletedAt ? new Date(f.deletedAt) : undefined,
+          expiresAt: f.expiresAt
+            ? new Date(f.expiresAt)
+            : f.expiresAt === null
+              ? null
+              : undefined,
+        }));
+        setFiles(sortFilesWithFoldersFirst(mapped, sortBy, sortOrder));
       } catch {
         // Silently handle file loading errors - UI will show empty state
       }
@@ -308,15 +365,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
           return;
         }
 
-        setFiles(
-          data.map((f) => ({
-            ...f,
-            modified: new Date(f.modified),
-            deletedAt: f.deletedAt ? new Date(f.deletedAt) : undefined,
-            expiresAt:
-              f.expiresAt == null ? f.expiresAt : new Date(f.expiresAt),
-          })),
-        );
+        const mapped: FileItem[] = data.map((f) => ({
+          ...f,
+          modified: new Date(f.modified),
+          deletedAt: f.deletedAt ? new Date(f.deletedAt) : undefined,
+          expiresAt: f.expiresAt == null ? f.expiresAt : new Date(f.expiresAt),
+        }));
+
+        setFiles(sortFilesWithFoldersFirst(mapped, sortBy, sortOrder));
       } catch (e) {
         // Ignore abort errors (expected when cancelling)
         if (e instanceof Error && e.name === "AbortError") {
@@ -342,7 +398,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
         }
       }
     },
-    [refreshFiles],
+    [refreshFiles, sortBy, sortOrder],
   );
 
   // Debounced search function with cancellation support
