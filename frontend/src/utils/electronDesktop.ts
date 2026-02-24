@@ -1,5 +1,10 @@
 /**
- * Electron desktop app integration
+ * Electron desktop app integration.
+ *
+ * Types and usage here must match the API exposed by the preload script:
+ * electron/src/preload/index.cjs (inlined API).
+ * The renderer loads the same web app as the browser; this file is only
+ * used when the app runs inside the Electron desktop client (Windows).
  */
 
 declare global {
@@ -34,11 +39,29 @@ declare global {
   }
 }
 
+/** True when running inside the Windows Electron desktop app (clipboard + open on desktop supported). */
 export function isElectron(): boolean {
   return (
     typeof window !== "undefined" &&
     !!window.electronAPI?.clipboard &&
     window.electronAPI?.platform === "win32"
+  );
+}
+
+/** True when the desktop app exposes clipboard APIs (copy/paste to PC). Show "Copy to computer" / "Paste from computer". */
+export function hasElectronClipboard(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    !!window.electronAPI?.clipboard?.readFiles &&
+    !!window.electronAPI?.clipboard?.writeFilesFromServer
+  );
+}
+
+/** True when the desktop app supports opening files in the system default app. Show "Open on desktop". */
+export function hasElectronOpenOnDesktop(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    !!window.electronAPI?.files?.editWithDesktop
   );
 }
 

@@ -19,7 +19,7 @@ Useful for development or testing without building an installer.
    npm install
    ```
 
-2. Set the server URL. Create `electron/configs/build-config.json` (copy from `configs/build-config.example.json` if present) with:
+2. Set the server URL. Create `electron/src/config/build-config.json` (copy from `src/config/build-config.example.json` if present) with:
 
    ```json
    { "serverUrl": "https://your-tma-cloud.example.com" }
@@ -39,7 +39,7 @@ Useful for development or testing without building an installer.
 
 Builds a Windows installer with the server URL embedded so users do not need a config file.
 
-1. In `electron/`, ensure `configs/build-config.json` exists and contains your `serverUrl` (same format as above).
+1. In `electron/`, ensure `src/config/build-config.json` exists and contains your `serverUrl` (same format as above).
 
 2. Run the build:
 
@@ -47,7 +47,7 @@ Builds a Windows installer with the server URL embedded so users do not need a c
    npm run build:client
    ```
 
-   This runs `prepare-client-build.js` (copies main/preload into `dist-electron/` and injects `serverUrl` into `main.cjs`), then runs electron-builder. Output is in `electron/dist-client/` (NSIS installer by default).
+   This runs `prepare-client-build.js` (copies `src/main` and `src/preload` into `dist-electron/` and injects `serverUrl` into main config), then runs electron-builder. Output is in `electron/dist-client/` (NSIS installer by default).
 
 3. For a portable executable (no installer):
 

@@ -122,16 +122,16 @@ Optional Windows client. Loads the same frontend from the TMA Cloud server URL; 
 ```bash
 ┌─────────────────────────────────────────────────────────────────┐
 │  Main Process (Node)                                            │
-│  main.cjs: createWindow, getServerUrl(), IPC                    │
+│  src/main: createWindow, getServerUrl(), IPC                    │
 │  Server URL: embedded at build, or userData/config.json,        │
-│  or electron/configs/build-config.json (dev)                    │
+│  or electron/src/config/build-config.json (dev)                 │
 └──────────────────────────────┬──────────────────────────────────┘
                                │ loadURL(serverUrl)
                                │ IPC
 ┌──────────────────────────────▼──────────────────────────────────┐
 │  Renderer (BrowserWindow)                                       │
 │  Same React frontend as web; origin = server URL                │
-│  Preload (preload.cjs) exposes window.electronAPI to renderer   │
+│  Preload (src/preload) exposes window.electronAPI to renderer   │
 └──────────────────────────────┬──────────────────────────────────┘
                                │ fetch /api/* (same origin, cookies)
                                ▼
@@ -144,13 +144,16 @@ Optional Windows client. Loads the same frontend from the TMA Cloud server URL; 
 
 ```bash
 electron/
-├── main.cjs          # Main process: window, server URL, IPC
-├── preload.cjs       # Preload: contextBridge, exposes electronAPI
-├── configs/          # build-config.json (serverUrl when run from source)
-└── build/            # electron-builder configs
+├── src/
+│   ├── main/         # Main process: window, server URL, IPC
+│   ├── preload/       # contextBridge, exposes electronAPI
+│   ├── config/       # build-config.json (serverUrl when run from source)
+│   └── build/        # electron-builder configs + icon
+├── scripts/          # prepare-client-build.js
+└── dist-electron/    # Staging for packaging (generated)
 ```
 
-**Main process:** Creates a single BrowserWindow; loads a loading page, then the server URL. Resolves server URL from build constant, then userData `config.json`, then `configs/build-config.json`. Registers IPC handlers used by the renderer (e.g. OS clipboard on Windows).
+**Main process:** Creates a single BrowserWindow; loads a loading page, then the server URL. Resolves server URL from embedded constant (at build time) or `src/config/build-config.json` (when run from source). Registers IPC handlers used by the renderer (e.g. OS clipboard on Windows).
 
 **Preload:** contextIsolation: true, nodeIntegration: false. Exposes a small API (e.g. `electronAPI.clipboard`) via contextBridge and ipcRenderer.invoke.
 

@@ -22,7 +22,11 @@ import {
 } from "lucide-react";
 import { useApp, type ShareExpiry } from "../../contexts/AppContext";
 import { useToast } from "../../hooks/useToast";
-import { isElectron, MAX_COPY_TO_PC_BYTES } from "../../utils/electronDesktop";
+import {
+  hasElectronClipboard,
+  hasElectronOpenOnDesktop,
+  MAX_COPY_TO_PC_BYTES,
+} from "../../utils/electronDesktop";
 import { useIsMobile } from "../../hooks/useIsMobile";
 import { Modal } from "../ui/Modal";
 import { getErrorMessage } from "../../utils/errorUtils";
@@ -115,7 +119,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     selectedItems.length === 1 ? selectedItems[0] : null;
   const canOpenOnDesktop =
     !isTrashView &&
-    isElectron() &&
+    hasElectronOpenOnDesktop() &&
     !!singleSelectedItem &&
     String(singleSelectedItem.type || "").toLowerCase() !== "folder" &&
     !!singleSelectedItem.mimeType &&
@@ -353,7 +357,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
         },
         disabled: isDownloading || selectedFiles.length === 0,
       },
-      ...(!isTrashView && isElectron() && singleSelectedItem
+      ...(!isTrashView && hasElectronOpenOnDesktop() && singleSelectedItem
         ? [
             {
               icon: MonitorDown,
@@ -375,7 +379,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
             },
           ]
         : []),
-      ...(!isTrashView && isElectron()
+      ...(!isTrashView && hasElectronClipboard()
         ? [
             {
               icon: MonitorDown,
@@ -424,7 +428,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
           onActionComplete?.();
         },
       },
-      ...(!isTrashView && isElectron()
+      ...(!isTrashView && hasElectronClipboard()
         ? [
             {
               icon: ClipboardPaste,

@@ -81,7 +81,7 @@ docker-compose-local.yml
 # Electron
 electron/dist-client/
 electron/dist-electron/
-electron/configs/build-config.json
+electron/src/config/build-config.json
 
 # Misc
 *.tgz

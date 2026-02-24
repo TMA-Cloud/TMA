@@ -1,0 +1,8 @@
+{
+  "appId": "com.tmacloud.app",
+  "productName": "TMA Cloud",
+  "directories": { "output": "dist-client" },
+  "extraMetadata": { "main": "dist-electron/main/index.cjs" },
+  "files": ["dist-electron/**/*"],
+  "win": { "target": ["portable"], "signAndEditExecutable": false, "icon": "src/build/icon.png" }
+}
