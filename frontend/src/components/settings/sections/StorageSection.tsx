@@ -1,15 +1,12 @@
-import React, { useState, useCallback, useEffect, useRef } from "react";
-import { HardDrive, Pencil, CheckCircle2 } from "lucide-react";
-import { useToast } from "../../../hooks/useToast";
-import { useAuth } from "../../../contexts/AuthContext";
-import {
-  getMaxUploadSizeConfig,
-  updateMaxUploadSizeConfig,
-} from "../../../utils/api";
-import { getErrorMessage, isAuthError } from "../../../utils/errorUtils";
-import { SettingsSection } from "../components/SettingsSection";
-import { SettingsItem } from "../components/SettingsItem";
-import { formatFileSize } from "../../../utils/fileUtils";
+import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { HardDrive, Pencil, CheckCircle2 } from 'lucide-react';
+import { useToast } from '../../../hooks/useToast';
+import { useAuth } from '../../../contexts/AuthContext';
+import { getMaxUploadSizeConfig, updateMaxUploadSizeConfig } from '../../../utils/api';
+import { getErrorMessage, isAuthError } from '../../../utils/errorUtils';
+import { SettingsSection } from '../components/SettingsSection';
+import { SettingsItem } from '../components/SettingsItem';
+import { formatFileSize } from '../../../utils/fileUtils';
 
 const BYTES_PER_MB = 1024 * 1024;
 const BYTES_PER_GB = 1024 * 1024 * 1024;
@@ -17,10 +14,10 @@ const MIN_MB = 1;
 const MAX_MB = 100 * 1024; // 100 GB in MB
 const MIN_GB = 1 / 1024;
 const MAX_GB = 100;
-const MIN_LABEL = "1 MB";
-const MAX_LABEL = "100 GB";
+const MIN_LABEL = '1 MB';
+const MAX_LABEL = '100 GB';
 
-type SizeUnit = "MB" | "GB";
+type SizeUnit = 'MB' | 'GB';
 
 function bytesToMb(bytes: number): number {
   return Math.round((bytes / BYTES_PER_MB) * 1000) / 1000;
@@ -57,16 +54,12 @@ interface StorageSectionProps {
   canConfigure?: boolean;
 }
 
-export const StorageSection: React.FC<StorageSectionProps> = ({
-  usage,
-  loading,
-  canConfigure,
-}) => {
+export const StorageSection: React.FC<StorageSectionProps> = ({ usage, loading, canConfigure }) => {
   const { showToast } = useToast();
   const { user } = useAuth();
   const [maxBytes, setMaxBytes] = useState<number>(10 * BYTES_PER_GB);
-  const [sizeInput, setSizeInput] = useState<string>("10");
-  const [sizeUnit, setSizeUnit] = useState<SizeUnit>("GB");
+  const [sizeInput, setSizeInput] = useState<string>('10');
+  const [sizeUnit, setSizeUnit] = useState<SizeUnit>('GB');
   const [maxUploadLoading, setMaxUploadLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [isEditingMaxUpload, setIsEditingMaxUpload] = useState(false);
@@ -83,19 +76,16 @@ export const StorageSection: React.FC<StorageSectionProps> = ({
       if (abortController.signal.aborted) return;
       const config = await getMaxUploadSizeConfig(abortController.signal);
       setMaxBytes(config.maxBytes);
-      setSizeInput("");
-      setSizeUnit("GB");
+      setSizeInput('');
+      setSizeUnit('GB');
       setIsEditingMaxUpload(false);
       setHasLoadedMaxUpload(true);
     } catch (error) {
-      if (error instanceof Error && error.name === "AbortError") return;
+      if (error instanceof Error && error.name === 'AbortError') return;
       if (isAuthError(error)) return;
-      showToast("Failed to load max upload size settings", "error");
+      showToast('Failed to load max upload size settings', 'error');
     } finally {
-      if (
-        !abortController.signal.aborted &&
-        abortControllerRef.current === abortController
-      ) {
+      if (!abortController.signal.aborted && abortControllerRef.current === abortController) {
         setMaxUploadLoading(false);
         abortControllerRef.current = null;
       }
@@ -116,10 +106,8 @@ export const StorageSection: React.FC<StorageSectionProps> = ({
   const handleEditMaxUpload = () => {
     setIsEditingMaxUpload(true);
     const useGb = maxBytes >= BYTES_PER_GB;
-    setSizeUnit(useGb ? "GB" : "MB");
-    setSizeInput(
-      useGb ? bytesToGb(maxBytes).toString() : bytesToMb(maxBytes).toString(),
-    );
+    setSizeUnit(useGb ? 'GB' : 'MB');
+    setSizeInput(useGb ? bytesToGb(maxBytes).toString() : bytesToMb(maxBytes).toString());
   };
 
   const handleCancelMaxUpload = () => {
@@ -132,38 +120,28 @@ export const StorageSection: React.FC<StorageSectionProps> = ({
       setSizeUnit(newUnit);
       return;
     }
-    const bytes = sizeUnit === "GB" ? gbToBytes(num) : mbToBytes(num);
+    const bytes = sizeUnit === 'GB' ? gbToBytes(num) : mbToBytes(num);
     setSizeUnit(newUnit);
-    setSizeInput(
-      newUnit === "GB"
-        ? bytesToGb(bytes).toString()
-        : bytesToMb(bytes).toString(),
-    );
+    setSizeInput(newUnit === 'GB' ? bytesToGb(bytes).toString() : bytesToMb(bytes).toString());
   };
 
   const handleSaveMaxUpload = async () => {
     if (!canConfigure) return;
     const num = parseFloat(sizeInput);
     if (Number.isNaN(num) || num <= 0) {
-      showToast(`Enter a value between ${MIN_LABEL} and ${MAX_LABEL}`, "error");
+      showToast(`Enter a value between ${MIN_LABEL} and ${MAX_LABEL}`, 'error');
       return;
     }
     let newBytes: number;
-    if (sizeUnit === "GB") {
+    if (sizeUnit === 'GB') {
       if (num < MIN_GB || num > MAX_GB) {
-        showToast(
-          `Enter a value between ${MIN_LABEL} and ${MAX_LABEL}`,
-          "error",
-        );
+        showToast(`Enter a value between ${MIN_LABEL} and ${MAX_LABEL}`, 'error');
         return;
       }
       newBytes = gbToBytes(num);
     } else {
       if (num < MIN_MB || num > MAX_MB) {
-        showToast(
-          `Enter a value between ${MIN_LABEL} and ${MAX_LABEL}`,
-          "error",
-        );
+        showToast(`Enter a value between ${MIN_LABEL} and ${MAX_LABEL}`, 'error');
         return;
       }
       newBytes = mbToBytes(num);
@@ -174,62 +152,41 @@ export const StorageSection: React.FC<StorageSectionProps> = ({
       setMaxBytes(response.maxBytes);
       setIsEditingMaxUpload(false);
       setHasLoadedMaxUpload(true);
-      showToast("Settings saved", "success");
+      showToast('Settings saved', 'success');
     } catch (error) {
-      showToast(
-        getErrorMessage(error, "Failed to save max upload size settings"),
-        "error",
-      );
+      showToast(getErrorMessage(error, 'Failed to save max upload size settings'), 'error');
     } finally {
       setSaving(false);
     }
   };
 
-  const totalLabel =
-    usage && usage.total !== null ? formatFileSize(usage.total) : "Unlimited";
-  const availableLabel =
-    usage && usage.free !== null ? formatFileSize(usage.free) : "Unlimited";
+  const totalLabel = usage && usage.total !== null ? formatFileSize(usage.total) : 'Unlimited';
+  const availableLabel = usage && usage.free !== null ? formatFileSize(usage.free) : 'Unlimited';
 
   return (
-    <SettingsSection
-      title="Storage"
-      icon={HardDrive}
-      description="Track how your allocated drive space is being used."
-    >
+    <SettingsSection title="Storage" icon={HardDrive} description="Track how your allocated drive space is being used.">
       <div className="space-y-4">
         <SettingsItem
           label="Used Space"
-          value={
-            loading || !usage
-              ? "Loading..."
-              : `${formatFileSize(usage.used)} of ${totalLabel}`
-          }
+          value={loading || !usage ? 'Loading...' : `${formatFileSize(usage.used)} of ${totalLabel}`}
         />
-        <SettingsItem
-          label="Available Space"
-          value={loading || !usage ? "Loading..." : availableLabel}
-        />
+        <SettingsItem label="Available Space" value={loading || !usage ? 'Loading...' : availableLabel} />
 
         {canConfigure && (
           <>
             {hasLoadedMaxUpload && !isEditingMaxUpload && (
               <div className="stagger-item hover-lift flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-2xl bg-gray-50/70 dark:bg-gray-900/60 px-4 py-3 border border-transparent hover:border-blue-500/40 transition-all duration-200">
                 <div>
-                  <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                    Max upload size
-                  </p>
+                  <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Max upload size</p>
                   <p className="text-sm text-gray-500 dark:text-gray-400">
-                    Maximum size for a single uploaded file (applies to all
-                    users).
+                    Maximum size for a single uploaded file (applies to all users).
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="flex items-center gap-1 text-green-600 dark:text-green-400">
                     <CheckCircle2 className="w-4 h-4" />
                     <span className="text-base font-semibold">
-                      {maxUploadLoading
-                        ? "Loading..."
-                        : formatMaxUploadSize(maxBytes)}
+                      {maxUploadLoading ? 'Loading...' : formatMaxUploadSize(maxBytes)}
                     </span>
                   </div>
                   <button
@@ -245,7 +202,7 @@ export const StorageSection: React.FC<StorageSectionProps> = ({
             )}
 
             {isEditingMaxUpload && (
-              <form autoComplete="off" onSubmit={(e) => e.preventDefault()}>
+              <form autoComplete="off" onSubmit={e => e.preventDefault()}>
                 <div className="space-y-4">
                   <div className="stagger-item hover-lift flex flex-col gap-2 rounded-2xl bg-gray-50/70 dark:bg-gray-900/60 px-4 py-3 border border-transparent hover:border-blue-500/40 transition-all duration-200">
                     <label
@@ -261,11 +218,11 @@ export const StorageSection: React.FC<StorageSectionProps> = ({
                       <input
                         id="max-upload-size-value"
                         type="number"
-                        min={sizeUnit === "GB" ? MIN_GB : MIN_MB}
-                        max={sizeUnit === "GB" ? MAX_GB : MAX_MB}
-                        step={sizeUnit === "GB" ? 0.1 : 1}
+                        min={sizeUnit === 'GB' ? MIN_GB : MIN_MB}
+                        max={sizeUnit === 'GB' ? MAX_GB : MAX_MB}
+                        step={sizeUnit === 'GB' ? 0.1 : 1}
                         value={sizeInput}
-                        onChange={(e) => setSizeInput(e.target.value)}
+                        onChange={e => setSizeInput(e.target.value)}
                         disabled={maxUploadLoading || saving}
                         autoComplete="off"
                         data-form-type="other"
@@ -274,9 +231,7 @@ export const StorageSection: React.FC<StorageSectionProps> = ({
                       <select
                         aria-label="Unit"
                         value={sizeUnit}
-                        onChange={(e) =>
-                          handleUnitChange(e.target.value as SizeUnit)
-                        }
+                        onChange={e => handleUnitChange(e.target.value as SizeUnit)}
                         disabled={maxUploadLoading || saving}
                         className="px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
                       >
@@ -300,7 +255,7 @@ export const StorageSection: React.FC<StorageSectionProps> = ({
                       disabled={maxUploadLoading || saving}
                       className="px-6 py-2 text-sm font-medium rounded-lg bg-blue-500 hover:bg-blue-600 text-white transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                     >
-                      {saving ? "Saving..." : "Save"}
+                      {saving ? 'Saving...' : 'Save'}
                     </button>
                   </div>
                 </div>

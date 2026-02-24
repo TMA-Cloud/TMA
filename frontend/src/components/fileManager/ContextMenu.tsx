@@ -1,10 +1,4 @@
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Edit3,
   Trash2,
@@ -19,18 +13,14 @@ import {
   Square,
   RotateCcw,
   MonitorDown,
-} from "lucide-react";
-import { useApp, type ShareExpiry } from "../../contexts/AppContext";
-import { useToast } from "../../hooks/useToast";
-import {
-  hasElectronClipboard,
-  hasElectronOpenOnDesktop,
-  MAX_COPY_TO_PC_BYTES,
-} from "../../utils/electronDesktop";
-import { useIsMobile } from "../../hooks/useIsMobile";
-import { Modal } from "../ui/Modal";
-import { getErrorMessage } from "../../utils/errorUtils";
-import { ShareExpiryModal } from "./ShareLinkModal";
+} from 'lucide-react';
+import { useApp, type ShareExpiry } from '../../contexts/AppContext';
+import { useToast } from '../../hooks/useToast';
+import { hasElectronClipboard, hasElectronOpenOnDesktop, MAX_COPY_TO_PC_BYTES } from '../../utils/electronDesktop';
+import { useIsMobile } from '../../hooks/useIsMobile';
+import { Modal } from '../ui/Modal';
+import { getErrorMessage } from '../../utils/errorUtils';
+import { ShareExpiryModal } from './ShareLinkModal';
 
 interface ContextMenuProps {
   isOpen: boolean;
@@ -58,7 +48,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
   const [shareExpiryOpen, setShareExpiryOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState<{
-    type: "delete" | "deleteForever";
+    type: 'delete' | 'deleteForever';
     files: string[];
   } | null>(null);
   const isMobile = useIsMobile();
@@ -90,44 +80,30 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
   } = useApp();
   const { showToast } = useToast();
 
-  const selectedItems = files.filter((f) => selectedFiles.includes(f.id));
-  const selectedFilesOnly = selectedItems.filter(
-    (f) => String(f.type || "").toLowerCase() !== "folder",
-  );
-  const copyToPcTotalBytes = selectedFilesOnly.reduce(
-    (s, f) => s + Number(f.size ?? 0),
-    0,
-  );
+  const selectedItems = files.filter(f => selectedFiles.includes(f.id));
+  const selectedFilesOnly = selectedItems.filter(f => String(f.type || '').toLowerCase() !== 'folder');
+  const copyToPcTotalBytes = selectedFilesOnly.reduce((s, f) => s + Number(f.size ?? 0), 0);
   const canCopyToPc =
     selectedFilesOnly.length > 0 &&
     copyToPcTotalBytes <= MAX_COPY_TO_PC_BYTES &&
-    selectedFilesOnly.every(
-      (f) => f.size == null || Number(f.size) <= MAX_COPY_TO_PC_BYTES,
-    );
-  const allStarred =
-    selectedItems.length > 0 && selectedItems.every((f) => f.starred);
-  const allShared =
-    selectedItems.length > 0 && selectedItems.every((f) => f.shared);
-  const anyShared =
-    selectedItems.length > 0 && selectedItems.some((f) => f.shared);
+    selectedFilesOnly.every(f => f.size == null || Number(f.size) <= MAX_COPY_TO_PC_BYTES);
+  const allStarred = selectedItems.length > 0 && selectedItems.every(f => f.starred);
+  const allShared = selectedItems.length > 0 && selectedItems.every(f => f.shared);
+  const anyShared = selectedItems.length > 0 && selectedItems.some(f => f.shared);
   const parentShared = folderSharedStack[folderSharedStack.length - 1];
-  const allUnshared =
-    selectedItems.length > 0 && selectedItems.every((f) => !f.shared);
+  const allUnshared = selectedItems.length > 0 && selectedItems.every(f => !f.shared);
 
-  const isTrashView = currentPath[0] === "Trash";
-  const singleSelectedItem =
-    selectedItems.length === 1 ? selectedItems[0] : null;
+  const isTrashView = currentPath[0] === 'Trash';
+  const singleSelectedItem = selectedItems.length === 1 ? selectedItems[0] : null;
   const canOpenOnDesktop =
     !isTrashView &&
     hasElectronOpenOnDesktop() &&
     !!singleSelectedItem &&
-    String(singleSelectedItem.type || "").toLowerCase() !== "folder" &&
+    String(singleSelectedItem.type || '').toLowerCase() !== 'folder' &&
     !!singleSelectedItem.mimeType &&
-    (singleSelectedItem.mimeType.startsWith(
-      "application/vnd.openxmlformats-officedocument.",
-    ) ||
-      singleSelectedItem.mimeType === "application/msword" ||
-      singleSelectedItem.mimeType === "application/pdf");
+    (singleSelectedItem.mimeType.startsWith('application/vnd.openxmlformats-officedocument.') ||
+      singleSelectedItem.mimeType === 'application/msword' ||
+      singleSelectedItem.mimeType === 'application/pdf');
 
   const electronClipboardAvailable = hasElectronClipboard();
 
@@ -136,24 +112,12 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
       await restoreFiles(selectedFiles);
       const count = selectedFiles.length;
       clearSelection(); // Clear selection after successful restore
-      showToast(
-        `Restored ${count} item${count !== 1 ? "s" : ""} from trash`,
-        "success",
-      );
+      showToast(`Restored ${count} item${count !== 1 ? 's' : ''} from trash`, 'success');
       onActionComplete?.();
     } catch (error: unknown) {
-      showToast(
-        getErrorMessage(error, "Failed to restore files. Please try again."),
-        "error",
-      );
+      showToast(getErrorMessage(error, 'Failed to restore files. Please try again.'), 'error');
     }
-  }, [
-    restoreFiles,
-    selectedFiles,
-    clearSelection,
-    showToast,
-    onActionComplete,
-  ]);
+  }, [restoreFiles, selectedFiles, clearSelection, showToast, onActionComplete]);
 
   const handleConfirmDelete = async () => {
     if (!pendingAction) return;
@@ -163,29 +127,23 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     const count = files.length;
 
     try {
-      if (type === "deleteForever") {
+      if (type === 'deleteForever') {
         await deleteForever(files);
         clearSelection(); // Clear selection after successful deletion
-        showToast(
-          `Permanently deleted ${count} item${count !== 1 ? "s" : ""}`,
-          "success",
-        );
+        showToast(`Permanently deleted ${count} item${count !== 1 ? 's' : ''}`, 'success');
       } else {
         await deleteFiles(files);
         clearSelection(); // Clear selection after successful deletion
-        showToast(
-          `Moved ${count} item${count !== 1 ? "s" : ""} to trash`,
-          "success",
-        );
+        showToast(`Moved ${count} item${count !== 1 ? 's' : ''} to trash`, 'success');
       }
       onActionComplete?.();
     } catch (error: unknown) {
       showToast(
         getErrorMessage(
           error,
-          `Failed to ${type === "deleteForever" ? "permanently delete" : "delete"}. Please try again.`,
+          `Failed to ${type === 'deleteForever' ? 'permanently delete' : 'delete'}. Please try again.`
         ),
-        "error",
+        'error'
       );
     } finally {
       setPendingAction(null);
@@ -201,9 +159,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
           ? [
               {
                 icon: multiSelectMode ? CheckSquare : Square,
-                label: multiSelectMode
-                  ? "Exit Multi-Select"
-                  : "Select Multiple",
+                label: multiSelectMode ? 'Exit Multi-Select' : 'Select Multiple',
                 action: () => {
                   if (setMultiSelectMode) {
                     setMultiSelectMode(!multiSelectMode);
@@ -219,7 +175,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
           : []),
         {
           icon: RotateCcw,
-          label: "Restore",
+          label: 'Restore',
           disabled: false,
           action: () => {
             handleRestore();
@@ -228,10 +184,10 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
         },
         {
           icon: Trash2,
-          label: "Delete Forever",
+          label: 'Delete Forever',
           disabled: false,
           action: () => {
-            setPendingAction({ type: "deleteForever", files: selectedFiles });
+            setPendingAction({ type: 'deleteForever', files: selectedFiles });
             setConfirmModalOpen(true);
             onClose();
           },
@@ -247,7 +203,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
         ? [
             {
               icon: multiSelectMode ? CheckSquare : Square,
-              label: multiSelectMode ? "Exit Multi-Select" : "Select Multiple",
+              label: multiSelectMode ? 'Exit Multi-Select' : 'Select Multiple',
               action: () => {
                 if (setMultiSelectMode) {
                   setMultiSelectMode(!multiSelectMode);
@@ -265,7 +221,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
         ? [
             {
               icon: Share2,
-              label: "Link to Folder Share",
+              label: 'Link to Folder Share',
               action: async () => {
                 try {
                   const links = await linkToParentShare(selectedFiles);
@@ -274,7 +230,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                   onActionComplete?.();
                 } catch {
                   // Error handled by toast notification
-                  showToast("Failed to link to parent share", "error");
+                  showToast('Failed to link to parent share', 'error');
                 }
               },
             },
@@ -282,7 +238,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
         : []),
       {
         icon: Share2,
-        label: allShared ? "Remove from Shared" : "Add to Shared",
+        label: allShared ? 'Remove from Shared' : 'Add to Shared',
         disabled: false,
         action: async () => {
           if (allShared) {
@@ -290,7 +246,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
               await shareFiles(selectedFiles, false);
               onActionComplete?.();
             } catch {
-              showToast("Failed to unshare files", "error");
+              showToast('Failed to unshare files', 'error');
             }
           } else {
             // Show expiry picker — action continues in handleShareExpiry
@@ -302,44 +258,42 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
         ? [
             {
               icon: Link2,
-              label: "Copy Link",
+              label: 'Copy Link',
               disabled: false,
               action: async () => {
                 try {
-                  const sharedIds = selectedItems
-                    .filter((file) => file.shared)
-                    .map((file) => file.id);
+                  const sharedIds = selectedItems.filter(file => file.shared).map(file => file.id);
                   if (sharedIds.length === 0) return;
                   const links = await getShareLinks(sharedIds);
                   const list = Object.values(links);
                   if (!list.length) return;
 
-                  const text = list.join("\n");
+                  const text = list.join('\n');
                   try {
                     if (navigator.clipboard?.writeText) {
                       await navigator.clipboard.writeText(text);
                     } else {
-                      const textArea = document.createElement("textarea");
+                      const textArea = document.createElement('textarea');
                       textArea.value = text;
-                      textArea.style.position = "fixed";
-                      textArea.style.left = "-999999px";
-                      textArea.style.top = "-999999px";
+                      textArea.style.position = 'fixed';
+                      textArea.style.left = '-999999px';
+                      textArea.style.top = '-999999px';
                       document.body.appendChild(textArea);
                       textArea.focus();
                       textArea.select();
-                      const successful = document.execCommand("copy");
+                      const successful = document.execCommand('copy');
                       document.body.removeChild(textArea);
-                      if (!successful) throw new Error("Copy command failed");
+                      if (!successful) throw new Error('Copy command failed');
                     }
-                    showToast("Link copied to clipboard", "success");
+                    showToast('Link copied to clipboard', 'success');
                     onActionComplete?.();
                   } catch {
                     // Error handled by toast notification
-                    showToast("Failed to copy link", "error");
+                    showToast('Failed to copy link', 'error');
                   }
                 } catch {
                   // Error handled by toast notification
-                  showToast("Failed to get share links", "error");
+                  showToast('Failed to get share links', 'error');
                 }
               },
             },
@@ -347,14 +301,14 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
         : []),
       {
         icon: Download,
-        label: "Download",
+        label: 'Download',
         action: async () => {
           try {
             await downloadFiles(selectedFiles);
             onActionComplete?.();
           } catch {
             // Error handled by toast notification
-            showToast("Failed to download files", "error");
+            showToast('Failed to download files', 'error');
           }
         },
         disabled: isDownloading || selectedFiles.length === 0,
@@ -363,7 +317,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
         ? [
             {
               icon: MonitorDown,
-              label: "Open on desktop",
+              label: 'Open on desktop',
               disabled: !canOpenOnDesktop,
               action: async () => {
                 const file = singleSelectedItem;
@@ -372,10 +326,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                   await editFileWithDesktop(file.id);
                   onActionComplete?.();
                 } catch {
-                  showToast(
-                    "Failed to open or save file from desktop.",
-                    "error",
-                  );
+                  showToast('Failed to open or save file from desktop.', 'error');
                 }
               },
             },
@@ -385,14 +336,14 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
         ? [
             {
               icon: MonitorDown,
-              label: "Copy",
+              label: 'Copy',
               disabled: !canCopyToPc,
               action: async () => {
                 try {
                   await copyFilesToPc(selectedFiles);
                   onActionComplete?.();
                 } catch {
-                  showToast("Failed to copy to computer", "error");
+                  showToast('Failed to copy to computer', 'error');
                 }
               },
             },
@@ -400,7 +351,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
         : []),
       {
         icon: Star,
-        label: allStarred ? "Remove from Starred" : "Add to Starred",
+        label: allStarred ? 'Remove from Starred' : 'Add to Starred',
         disabled: false,
         action: async () => {
           try {
@@ -408,7 +359,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
             onActionComplete?.();
           } catch {
             // Error handled by toast notification
-            showToast("Failed to update star status", "error");
+            showToast('Failed to update star status', 'error');
           }
         },
       },
@@ -416,18 +367,15 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
         ? [
             {
               icon: ClipboardPaste,
-              label: "Paste",
+              label: 'Paste',
               disabled: false,
               action: async () => {
                 try {
                   await uploadFilesFromClipboard();
                   onActionComplete?.();
                 } catch (error) {
-                  const errorMessage =
-                    error instanceof Error
-                      ? error.message
-                      : "Failed to upload from clipboard";
-                  showToast(errorMessage, "error");
+                  const errorMessage = error instanceof Error ? error.message : 'Failed to upload from clipboard';
+                  showToast(errorMessage, 'error');
                 }
               },
             },
@@ -435,19 +383,19 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
         : []),
       {
         icon: Copy,
-        label: electronClipboardAvailable ? "Copy in cloud" : "Copy",
+        label: electronClipboardAvailable ? 'Copy in cloud' : 'Copy',
         disabled: false,
         action: () => {
-          setClipboard({ ids: selectedFiles, action: "copy" });
+          setClipboard({ ids: selectedFiles, action: 'copy' });
           onActionComplete?.();
         },
       },
       {
         icon: Scissors,
-        label: "Cut",
+        label: 'Cut',
         disabled: false,
         action: () => {
-          setClipboard({ ids: selectedFiles, action: "cut" });
+          setClipboard({ ids: selectedFiles, action: 'cut' });
           onActionComplete?.();
         },
       },
@@ -455,21 +403,16 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
         ? [
             {
               icon: ClipboardPaste,
-              label: electronClipboardAvailable ? "Paste in cloud" : "Paste",
+              label: electronClipboardAvailable ? 'Paste in cloud' : 'Paste',
               disabled: false,
               action: async () => {
                 try {
-                  await pasteClipboard(
-                    targetId ?? folderStack[folderStack.length - 1] ?? null,
-                  );
+                  await pasteClipboard(targetId ?? folderStack[folderStack.length - 1] ?? null);
                   onActionComplete?.();
                 } catch (error) {
                   // Error handled by toast notification
-                  const errorMessage =
-                    error instanceof Error
-                      ? error.message
-                      : "Failed to paste files";
-                  showToast(errorMessage, "error");
+                  const errorMessage = error instanceof Error ? error.message : 'Failed to paste files';
+                  showToast(errorMessage, 'error');
                 }
               },
             },
@@ -477,21 +420,21 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
         : []),
       {
         icon: Edit3,
-        label: "Rename",
+        label: 'Rename',
         disabled: false,
         action: () => {
           const id = targetId ?? selectedFiles[0];
-          const file = files.find((f) => f.id === id);
+          const file = files.find(f => f.id === id);
           if (file) setRenameTarget(file);
           onActionComplete?.();
         },
       },
       {
         icon: Trash2,
-        label: "Delete",
+        label: 'Delete',
         disabled: false,
         action: () => {
-          setPendingAction({ type: "delete", files: selectedFiles });
+          setPendingAction({ type: 'delete', files: selectedFiles });
           setConfirmModalOpen(true);
           onClose();
         },
@@ -547,8 +490,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     const estimatedMenuWidth = 192; // min-w-48 = 12rem = 192px
     const estimatedItemHeight = 40; // py-2.5 = ~40px per item
     const estimatedHeaderHeight = 40; // header section
-    const estimatedMenuHeight =
-      estimatedHeaderHeight + menuItems.length * estimatedItemHeight;
+    const estimatedMenuHeight = estimatedHeaderHeight + menuItems.length * estimatedItemHeight;
 
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
@@ -591,24 +533,20 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     };
 
     const handleEscKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
+      if (event.key === 'Escape') {
         onClose();
       }
     };
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (!isOpen) return;
-      if (event.key === "ArrowDown") {
+      if (event.key === 'ArrowDown') {
         event.preventDefault();
-        setFocusedIndex((prev) =>
-          prev === null ? 0 : Math.min(prev + 1, menuItems.length - 1),
-        );
-      } else if (event.key === "ArrowUp") {
+        setFocusedIndex(prev => (prev === null ? 0 : Math.min(prev + 1, menuItems.length - 1)));
+      } else if (event.key === 'ArrowUp') {
         event.preventDefault();
-        setFocusedIndex((prev) =>
-          prev === null ? menuItems.length - 1 : Math.max(prev - 1, 0),
-        );
-      } else if (event.key === "Enter" && focusedIndex !== null) {
+        setFocusedIndex(prev => (prev === null ? menuItems.length - 1 : Math.max(prev - 1, 0)));
+      } else if (event.key === 'Enter' && focusedIndex !== null) {
         event.preventDefault();
         const item = menuItems[focusedIndex];
         if (item && !item.disabled) {
@@ -618,23 +556,22 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
       }
     };
 
-    document.addEventListener("mousedown", handleClickOutside);
-    document.addEventListener("keydown", handleEscKey);
-    document.addEventListener("keydown", handleKeyDown);
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleEscKey);
+    document.addEventListener('keydown', handleKeyDown);
 
     return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-      document.removeEventListener("keydown", handleEscKey);
-      document.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscKey);
+      document.removeEventListener('keydown', handleKeyDown);
     };
   }, [isOpen, onClose, menuItems, focusedIndex, isMobile]);
 
-  const confirmationTitle =
-    pendingAction?.type === "deleteForever" ? "Delete Forever" : "Delete";
+  const confirmationTitle = pendingAction?.type === 'deleteForever' ? 'Delete Forever' : 'Delete';
   const confirmationMessage =
-    pendingAction?.type === "deleteForever"
-      ? `Are you sure you want to permanently delete ${pendingAction.files.length} item${pendingAction.files.length !== 1 ? "s" : ""}? This action cannot be undone.`
-      : `Are you sure you want to move ${pendingAction?.files.length || 0} item${(pendingAction?.files.length || 0) !== 1 ? "s" : ""} to trash?`;
+    pendingAction?.type === 'deleteForever'
+      ? `Are you sure you want to permanently delete ${pendingAction.files.length} item${pendingAction.files.length !== 1 ? 's' : ''}? This action cannot be undone.`
+      : `Are you sure you want to move ${pendingAction?.files.length || 0} item${(pendingAction?.files.length || 0) !== 1 ? 's' : ''} to trash?`;
 
   const handleShareExpiry = async (expiry: ShareExpiry) => {
     setShareExpiryOpen(false);
@@ -644,7 +581,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
       if (list.length) setShareLinkModalOpen(true, list);
       onActionComplete?.();
     } catch {
-      showToast("Failed to share files", "error");
+      showToast('Failed to share files', 'error');
     }
   };
 
@@ -660,9 +597,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
       size="sm"
     >
       <div className="space-y-4">
-        <p className="text-gray-700 dark:text-gray-300">
-          {confirmationMessage}
-        </p>
+        <p className="text-gray-700 dark:text-gray-300">{confirmationMessage}</p>
         <div className="flex justify-end space-x-3 pt-4">
           <button
             onClick={() => {
@@ -677,9 +612,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
             onClick={handleConfirmDelete}
             className="px-4 py-2 rounded-lg text-white bg-red-600 hover:bg-red-700 dark:bg-red-500 dark:hover:bg-red-600 transition-colors duration-200"
           >
-            {pendingAction?.type === "deleteForever"
-              ? "Delete Forever"
-              : "Delete"}
+            {pendingAction?.type === 'deleteForever' ? 'Delete Forever' : 'Delete'}
           </button>
         </div>
       </div>
@@ -718,14 +651,14 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
           <div
             ref={menuRef}
             className="bg-white/95 dark:bg-slate-800/95 backdrop-blur-xl rounded-t-2xl shadow-2xl pt-3 pb-4 px-4 max-h-[70vh] overflow-y-auto animate-slideUp"
-            onClick={(e) => e.stopPropagation()}
+            onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-center mb-3">
               <div className="h-1 w-10 rounded-full bg-gray-300/50 dark:bg-gray-700/50" />
             </div>
             <div className="mb-3 text-center">
               <p className="text-xs font-medium text-gray-500/80 dark:text-gray-400/80">
-                {selectedCount} item{selectedCount !== 1 ? "s" : ""} selected
+                {selectedCount} item{selectedCount !== 1 ? 's' : ''} selected
               </p>
             </div>
             <div className="space-y-1">
@@ -745,10 +678,10 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                       text-sm transition-all duration-200
                       ${
                         item.disabled
-                          ? "opacity-50 cursor-not-allowed text-gray-400 dark:text-gray-500"
+                          ? 'opacity-50 cursor-not-allowed text-gray-400 dark:text-gray-500'
                           : item.danger
-                            ? "text-red-600 dark:text-red-400 bg-red-50/80 dark:bg-red-900/20 hover:bg-red-100/80 dark:hover:bg-red-900/30"
-                            : "text-gray-800 dark:text-gray-100 hover:bg-gray-100/80 dark:hover:bg-slate-700/50"
+                            ? 'text-red-600 dark:text-red-400 bg-red-50/80 dark:bg-red-900/20 hover:bg-red-100/80 dark:hover:bg-red-900/30'
+                            : 'text-gray-800 dark:text-gray-100 hover:bg-gray-100/80 dark:hover:bg-slate-700/50'
                       }
                     `}
                     disabled={item.disabled}
@@ -785,7 +718,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
       >
         <div className="px-4 py-2.5 border-b border-gray-200/30 dark:border-slate-700/30">
           <p className="text-xs font-medium text-gray-500/80 dark:text-gray-400/80">
-            {selectedCount} item{selectedCount !== 1 ? "s" : ""} selected
+            {selectedCount} item{selectedCount !== 1 ? 's' : ''} selected
           </p>
         </div>
 
@@ -808,12 +741,12 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                 focus:outline-none
                 ${
                   item.disabled
-                    ? "opacity-50 cursor-not-allowed text-gray-400 dark:text-gray-500"
+                    ? 'opacity-50 cursor-not-allowed text-gray-400 dark:text-gray-500'
                     : isFocused
-                      ? "bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
+                      ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
                       : item.danger
-                        ? "text-red-600 dark:text-red-400 hover:bg-red-50/50 dark:hover:bg-red-900/20"
-                        : "text-gray-700 dark:text-gray-300 hover:bg-gray-100/80 dark:hover:bg-slate-700/50"
+                        ? 'text-red-600 dark:text-red-400 hover:bg-red-50/50 dark:hover:bg-red-900/20'
+                        : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100/80 dark:hover:bg-slate-700/50'
                 }
               `}
               disabled={item.disabled}

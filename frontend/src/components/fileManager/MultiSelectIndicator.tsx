@@ -1,15 +1,12 @@
-import React from "react";
-import { CheckSquare, X } from "lucide-react";
+import React from 'react';
+import { CheckSquare, X } from 'lucide-react';
 
 interface MultiSelectIndicatorProps {
   selectedCount: number;
   onExit: () => void;
 }
 
-export const MultiSelectIndicator: React.FC<MultiSelectIndicatorProps> = ({
-  selectedCount,
-  onExit,
-}) => {
+export const MultiSelectIndicator: React.FC<MultiSelectIndicatorProps> = ({ selectedCount, onExit }) => {
   return (
     <div className="bg-blue-500/90 dark:bg-blue-600/90 backdrop-blur-xl text-white px-4 py-3 rounded-xl flex items-center justify-between mb-3 shadow-lg border border-blue-400/30 dark:border-blue-500/30 animate-slideDown">
       <div className="flex items-center space-x-2">

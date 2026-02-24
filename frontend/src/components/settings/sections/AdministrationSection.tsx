@@ -1,7 +1,7 @@
-import React from "react";
-import { Settings as SettingsIcon } from "lucide-react";
-import { SettingsSection } from "../components/SettingsSection";
-import { SettingsItem } from "../components/SettingsItem";
+import React from 'react';
+import { Settings as SettingsIcon } from 'lucide-react';
+import { SettingsSection } from '../components/SettingsSection';
+import { SettingsItem } from '../components/SettingsItem';
 
 interface AdministrationSectionProps {
   loadingSignupStatus: boolean;
@@ -34,28 +34,22 @@ export const AdministrationSection: React.FC<AdministrationSectionProps> = ({
         label="Other Registered Users"
         value={
           loadingSignupStatus
-            ? "Loading..."
+            ? 'Loading...'
             : additionalUsers === null
-              ? "Unavailable"
+              ? 'Unavailable'
               : additionalUsers === 0
-                ? "No other users yet"
-                : `${additionalUsers} ${additionalUsers === 1 ? "user" : "users"}`
+                ? 'No other users yet'
+                : `${additionalUsers} ${additionalUsers === 1 ? 'user' : 'users'}`
         }
       />
       <SettingsItem
         label="Total Users (including you)"
-        value={
-          loadingSignupStatus
-            ? "Loading..."
-            : totalUsers === null
-              ? "Unavailable"
-              : totalUsers.toString()
-        }
+        value={loadingSignupStatus ? 'Loading...' : totalUsers === null ? 'Unavailable' : totalUsers.toString()}
       />
       <SettingsItem
         label="Registered Users"
         value=""
-        action={loadingUsersList ? "Loading..." : "Show all users"}
+        action={loadingUsersList ? 'Loading...' : 'Show all users'}
         onAction={onShowUsers}
         actionDisabled={loadingUsersList}
         description="Review every account currently registered"

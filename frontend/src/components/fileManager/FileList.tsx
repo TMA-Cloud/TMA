@@ -1,14 +1,14 @@
-import React from "react";
-import { type FileItem } from "../../contexts/AppContext";
-import { FileItemComponent } from "./FileItem";
-import { FileSkeleton } from "./FileSkeleton";
-import { EmptyState } from "./EmptyState";
-import { MarqueeSelector } from "./MarqueeSelector";
+import React from 'react';
+import { type FileItem } from '../../contexts/AppContext';
+import { FileItemComponent } from './FileItem';
+import { FileSkeleton } from './FileSkeleton';
+import { EmptyState } from './EmptyState';
+import { MarqueeSelector } from './MarqueeSelector';
 
 interface FileListProps {
   files: FileItem[];
   selectedFiles: string[];
-  viewMode: "grid" | "list";
+  viewMode: 'grid' | 'list';
   isMobile: boolean;
   isSearching: boolean;
   searchQuery: string;
@@ -63,9 +63,9 @@ export const FileList: React.FC<FileListProps> = ({
     : `grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4`;
 
   const containerClassName = `
-    ${viewMode === "grid" ? gridClassName : "space-y-1"}
+    ${viewMode === 'grid' ? gridClassName : 'space-y-1'}
     min-h-[50vh] relative pb-32
-    ${files.length === 0 ? "flex flex-col items-center justify-center" : ""}
+    ${files.length === 0 ? 'flex flex-col items-center justify-center' : ''}
   `;
 
   const handleContainerClick = (e: React.MouseEvent) => {
@@ -78,9 +78,9 @@ export const FileList: React.FC<FileListProps> = ({
   const fileListContent = (
     <div
       className={containerClassName}
-      style={{ overflow: "unset", height: "auto" }}
+      style={{ overflow: 'unset', height: 'auto' }}
       onClick={handleContainerClick}
-      onContextMenu={(e) => onContextMenu(e)}
+      onContextMenu={e => onContextMenu(e)}
     >
       {files.length === 0 ? (
         <EmptyState
@@ -91,42 +91,29 @@ export const FileList: React.FC<FileListProps> = ({
           onCreateFolder={onCreateFolder}
         />
       ) : isSearching ? (
-        <FileSkeleton
-          viewMode={viewMode}
-          count={viewMode === "grid" ? 12 : 8}
-        />
+        <FileSkeleton viewMode={viewMode} count={viewMode === 'grid' ? 12 : 8} />
       ) : (
         <>
-          {files.map((file) => (
+          {files.map(file => (
             <div key={file.id} className="relative">
               <FileItemComponent
                 file={file}
                 isSelected={selectedFiles.includes(file.id)}
                 viewMode={viewMode}
-                onClick={(e) => onFileClick(file.id, e)}
+                onClick={e => onFileClick(file.id, e)}
                 onDoubleClick={() => onFileDoubleClick(file)}
-                onContextMenu={(e) => onContextMenu(e, file.id)}
+                onContextMenu={e => onContextMenu(e, file.id)}
                 onDragStart={onDragStart(file.id)}
                 onDragEnd={onDragEnd}
-                onDragOver={
-                  file.type === "folder" ? onFolderDragOver(file.id) : undefined
-                }
-                onDragLeave={
-                  file.type === "folder"
-                    ? onFolderDragLeave(file.id)
-                    : undefined
-                }
-                onDrop={
-                  file.type === "folder" ? onFolderDrop(file.id) : undefined
-                }
+                onDragOver={file.type === 'folder' ? onFolderDragOver(file.id) : undefined}
+                onDragLeave={file.type === 'folder' ? onFolderDragLeave(file.id) : undefined}
+                onDrop={file.type === 'folder' ? onFolderDrop(file.id) : undefined}
                 isDragOver={dragOverFolder === file.id}
                 dragDisabled={isSelecting}
               />
-              {file.type === "folder" &&
-                dragOverFolder === file.id &&
-                draggingIds.length > 1 && (
-                  <div className="drop-count-badge">{draggingIds.length}</div>
-                )}
+              {file.type === 'folder' && dragOverFolder === file.id && draggingIds.length > 1 && (
+                <div className="drop-count-badge">{draggingIds.length}</div>
+              )}
             </div>
           ))}
           {/* Dropzone highlight for drag-and-drop - disabled on mobile */}

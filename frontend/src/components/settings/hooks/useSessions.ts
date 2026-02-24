@@ -1,21 +1,14 @@
-import { useState, useEffect, useCallback } from "react";
-import { useAuth } from "../../../contexts/AuthContext";
-import {
-  getActiveSessions,
-  revokeSession,
-  logoutAllDevices,
-  type ActiveSession,
-} from "../../../utils/api";
-import { useToast } from "../../../hooks/useToast";
+import { useState, useEffect, useCallback } from 'react';
+import { useAuth } from '../../../contexts/AuthContext';
+import { getActiveSessions, revokeSession, logoutAllDevices, type ActiveSession } from '../../../utils/api';
+import { useToast } from '../../../hooks/useToast';
 
 export function useSessions() {
   const { logout } = useAuth();
   const { showToast } = useToast();
   const [activeSessions, setActiveSessions] = useState<ActiveSession[]>([]);
   const [loadingSessions, setLoadingSessions] = useState(false);
-  const [revokingSessionId, setRevokingSessionId] = useState<string | null>(
-    null,
-  );
+  const [revokingSessionId, setRevokingSessionId] = useState<string | null>(null);
   const [loggingOutAll, setLoggingOutAll] = useState(false);
 
   const loadActiveSessions = useCallback(async () => {
@@ -34,13 +27,13 @@ export function useSessions() {
     if (revokingSessionId) return;
 
     // Check if this is the current session
-    const sessionToRevoke = activeSessions.find((s) => s.id === sessionId);
+    const sessionToRevoke = activeSessions.find(s => s.id === sessionId);
     const isRevokingCurrent = sessionToRevoke?.isCurrent || false;
 
     try {
       setRevokingSessionId(sessionId);
       await revokeSession(sessionId);
-      showToast("Session revoked successfully", "success");
+      showToast('Session revoked successfully', 'success');
 
       // If revoking current session, user will be logged out on next request
       if (isRevokingCurrent) {
@@ -50,7 +43,7 @@ export function useSessions() {
             await logout();
           } catch {
             // Error handled silently - session already revoked, redirecting
-            window.location.href = "/";
+            window.location.href = '/';
           }
         }, 1000);
       } else {
@@ -59,7 +52,7 @@ export function useSessions() {
       }
     } catch {
       // Error handled by toast notification
-      showToast("Failed to revoke session", "error");
+      showToast('Failed to revoke session', 'error');
     } finally {
       setRevokingSessionId(null);
     }
@@ -71,12 +64,12 @@ export function useSessions() {
     try {
       setLoggingOutAll(true);
       await logoutAllDevices();
-      showToast("Successfully logged out from all devices", "success");
+      showToast('Successfully logged out from all devices', 'success');
       // Clear sessions list since all are invalidated
       setActiveSessions([]);
     } catch {
       // Error handled by toast notification
-      showToast("Failed to logout from all devices", "error");
+      showToast('Failed to logout from all devices', 'error');
       // Don't return - still clear local session to avoid inconsistent state
       // (e.g., server may have processed the request before network error)
     } finally {
@@ -91,7 +84,7 @@ export function useSessions() {
     } catch {
       // Error handled silently - redirecting to login page
       // Redirect to login page manually if logout() fails
-      window.location.href = "/";
+      window.location.href = '/';
     }
   };
 

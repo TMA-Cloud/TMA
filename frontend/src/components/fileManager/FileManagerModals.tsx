@@ -1,5 +1,5 @@
-import React from "react";
-import { Modal } from "../ui/Modal";
+import React from 'react';
+import { Modal } from '../ui/Modal';
 
 interface EmptyTrashModalProps {
   isOpen: boolean;
@@ -8,18 +8,12 @@ interface EmptyTrashModalProps {
   fileCount: number;
 }
 
-export const EmptyTrashModal: React.FC<EmptyTrashModalProps> = ({
-  isOpen,
-  onClose,
-  onConfirm,
-  fileCount,
-}) => {
+export const EmptyTrashModal: React.FC<EmptyTrashModalProps> = ({ isOpen, onClose, onConfirm, fileCount }) => {
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Empty Trash" size="sm">
       <div className="space-y-4">
         <p className="text-gray-700 dark:text-gray-300">
-          Are you sure you want to permanently delete all {fileCount} item(s)
-          from trash? This action cannot be undone.
+          Are you sure you want to permanently delete all {fileCount} item(s) from trash? This action cannot be undone.
         </p>
         <div className="flex justify-end space-x-3 pt-4">
           <button
@@ -47,18 +41,13 @@ interface DeleteModalProps {
   fileCount: number;
 }
 
-export const DeleteModal: React.FC<DeleteModalProps> = ({
-  isOpen,
-  onClose,
-  onConfirm,
-  fileCount,
-}) => {
+export const DeleteModal: React.FC<DeleteModalProps> = ({ isOpen, onClose, onConfirm, fileCount }) => {
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Delete" size="sm">
       <div className="space-y-4">
         <p className="text-gray-700 dark:text-gray-300">
           Are you sure you want to move {fileCount} item
-          {fileCount !== 1 ? "s" : ""} to trash?
+          {fileCount !== 1 ? 's' : ''} to trash?
         </p>
         <div className="flex justify-end space-x-3 pt-4">
           <button
@@ -86,18 +75,13 @@ interface DeleteForeverModalProps {
   fileCount: number;
 }
 
-export const DeleteForeverModal: React.FC<DeleteForeverModalProps> = ({
-  isOpen,
-  onClose,
-  onConfirm,
-  fileCount,
-}) => {
+export const DeleteForeverModal: React.FC<DeleteForeverModalProps> = ({ isOpen, onClose, onConfirm, fileCount }) => {
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Delete Forever" size="sm">
       <div className="space-y-4">
         <p className="text-gray-700 dark:text-gray-300">
           Are you sure you want to permanently delete {fileCount} item
-          {fileCount !== 1 ? "s" : ""}? This action cannot be undone.
+          {fileCount !== 1 ? 's' : ''}? This action cannot be undone.
         </p>
         <div className="flex justify-end space-x-3 pt-4">
           <button

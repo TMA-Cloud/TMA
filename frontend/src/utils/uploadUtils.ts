@@ -2,24 +2,21 @@
  * Upload utility functions
  */
 
-import type React from "react";
+import type React from 'react';
 
 export type UploadProgressItem = {
   id: string;
   fileName: string;
   fileSize: number;
   progress: number;
-  status: "uploading" | "completed" | "error";
+  status: 'uploading' | 'completed' | 'error';
 };
 
 /**
  * Remove upload progress item by ID
  */
-export function removeUploadProgress(
-  prev: UploadProgressItem[],
-  uploadId: string,
-): UploadProgressItem[] {
-  return prev.filter((item) => item.id !== uploadId);
+export function removeUploadProgress(prev: UploadProgressItem[], uploadId: string): UploadProgressItem[] {
+  return prev.filter(item => item.id !== uploadId);
 }
 
 /**
@@ -28,11 +25,9 @@ export function removeUploadProgress(
 export function updateUploadProgress(
   prev: UploadProgressItem[],
   uploadId: string,
-  updates: Partial<Pick<UploadProgressItem, "progress" | "status">>,
+  updates: Partial<Pick<UploadProgressItem, 'progress' | 'status'>>
 ): UploadProgressItem[] {
-  return prev.map((item) =>
-    item.id === uploadId ? { ...item, ...updates } : item,
-  );
+  return prev.map(item => (item.id === uploadId ? { ...item, ...updates } : item));
 }
 
 /**
@@ -53,17 +48,17 @@ export function createAutoDismissTimeout(
     current: Map<string, ReturnType<typeof setTimeout>>;
   },
   delay: number = 10000,
-  retryDelay: number = 5000,
+  retryDelay: number = 5000
 ): ReturnType<typeof setTimeout> {
   return setTimeout(() => {
     if (!isInteractingRef.current) {
-      setUploadProgress((prev) => removeUploadProgress(prev, uploadId));
+      setUploadProgress(prev => removeUploadProgress(prev, uploadId));
       uploadDismissTimeoutsRef.current.delete(uploadId);
     } else {
       // If user is interacting, retry after retryDelay
       const retryTimeout = setTimeout(() => {
         if (!isInteractingRef.current) {
-          setUploadProgress((prev) => removeUploadProgress(prev, uploadId));
+          setUploadProgress(prev => removeUploadProgress(prev, uploadId));
         }
         uploadDismissTimeoutsRef.current.delete(uploadId);
       }, retryDelay);

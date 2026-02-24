@@ -1,38 +1,26 @@
-import React, { useState, useCallback, useRef, useEffect } from "react";
-import {
-  useApp,
-  type FileItem,
-  type ShareExpiry,
-} from "../../contexts/AppContext";
-import { Breadcrumbs } from "./Breadcrumbs";
-import { ContextMenu } from "./ContextMenu";
-import { PasteProgress } from "./PasteProgress";
-import { DownloadProgress } from "./DownloadProgress";
-import {
-  ONLYOFFICE_EXTS,
-  getExt,
-  validateOnlyOfficeMimeType,
-} from "../../utils/fileUtils";
-import { isElectron } from "../../utils/electronDesktop";
-import { useIsMobile } from "../../hooks/useIsMobile";
-import { useToast } from "../../hooks/useToast";
-import { getErrorMessage } from "../../utils/errorUtils";
+import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { useApp, type FileItem, type ShareExpiry } from '../../contexts/AppContext';
+import { Breadcrumbs } from './Breadcrumbs';
+import { ContextMenu } from './ContextMenu';
+import { PasteProgress } from './PasteProgress';
+import { DownloadProgress } from './DownloadProgress';
+import { ONLYOFFICE_EXTS, getExt, validateOnlyOfficeMimeType } from '../../utils/fileUtils';
+import { isElectron } from '../../utils/electronDesktop';
+import { useIsMobile } from '../../hooks/useIsMobile';
+import { useToast } from '../../hooks/useToast';
+import { getErrorMessage } from '../../utils/errorUtils';
 import {
   createDragPreview,
   moveDragPreview,
   removeDragPreview,
   animateFlyToFolder,
   getTransparentImage,
-} from "./utils/dragPreview";
-import {
-  EmptyTrashModal,
-  DeleteModal,
-  DeleteForeverModal,
-} from "./FileManagerModals";
-import { FileManagerToolbar } from "./FileManagerToolbar";
-import { FileList } from "./FileList";
-import { MultiSelectIndicator } from "./MultiSelectIndicator";
-import { ShareExpiryModal } from "./ShareLinkModal";
+} from './utils/dragPreview';
+import { EmptyTrashModal, DeleteModal, DeleteForeverModal } from './FileManagerModals';
+import { FileManagerToolbar } from './FileManagerToolbar';
+import { FileList } from './FileList';
+import { MultiSelectIndicator } from './MultiSelectIndicator';
+import { ShareExpiryModal } from './ShareLinkModal';
 
 export const FileManager: React.FC = () => {
   const {
@@ -86,12 +74,12 @@ export const FileManager: React.FC = () => {
   const [deleteForeverModalOpen, setDeleteForeverModalOpen] = useState(false);
   const [shareExpiryModalOpen, setShareExpiryModalOpen] = useState(false);
 
-  const canCreateFolder = currentPath[0] === "My Files";
-  const isTrashView = currentPath[0] === "Trash";
-  const isSharedView = currentPath[0] === "Shared";
-  const isStarredView = currentPath[0] === "Starred";
+  const canCreateFolder = currentPath[0] === 'My Files';
+  const isTrashView = currentPath[0] === 'Trash';
+  const isSharedView = currentPath[0] === 'Shared';
+  const isStarredView = currentPath[0] === 'Starred';
   const hasTrashFiles = isTrashView && files.length > 0;
-  const isMyFilesView = currentPath[0] === "My Files";
+  const isMyFilesView = currentPath[0] === 'My Files';
 
   // Paste (Ctrl+V): upload clipboard files only in My Files
   useEffect(() => {
@@ -121,8 +109,8 @@ export const FileManager: React.FC = () => {
       }
     };
 
-    document.addEventListener("paste", onPaste);
-    return () => document.removeEventListener("paste", onPaste);
+    document.addEventListener('paste', onPaste);
+    return () => document.removeEventListener('paste', onPaste);
   }, [isMyFilesView, uploadFile, uploadFilesBulk]);
 
   // Electron desktop: keyboard shortcuts for file copy/paste
@@ -148,12 +136,12 @@ export const FileManager: React.FC = () => {
 
       const key = e.key.toLowerCase();
 
-      if (key === "c") {
+      if (key === 'c') {
         if (!selectedFiles.length) return;
         e.preventDefault();
 
         if (e.shiftKey) {
-          setClipboard({ ids: selectedFiles, action: "copy" });
+          setClipboard({ ids: selectedFiles, action: 'copy' });
           return;
         }
 
@@ -161,31 +149,27 @@ export const FileManager: React.FC = () => {
         return;
       }
 
-      if (key === "v") {
+      if (key === 'v') {
         e.preventDefault();
 
         if (e.shiftKey) {
           if (!clipboard) return;
-          void pasteClipboard(
-            folderStack[folderStack.length - 1] ?? null,
-          ).catch((error) => {
-            const message =
-              error instanceof Error ? error.message : String(error);
-            showToast(message || "Failed to paste files", "error");
+          void pasteClipboard(folderStack[folderStack.length - 1] ?? null).catch(error => {
+            const message = error instanceof Error ? error.message : String(error);
+            showToast(message || 'Failed to paste files', 'error');
           });
           return;
         }
 
-        void uploadFilesFromClipboard().catch((error) => {
-          const message =
-            error instanceof Error ? error.message : String(error);
-          showToast(message || "Failed to upload from clipboard", "error");
+        void uploadFilesFromClipboard().catch(error => {
+          const message = error instanceof Error ? error.message : String(error);
+          showToast(message || 'Failed to upload from clipboard', 'error');
         });
       }
     };
 
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
   }, [
     clipboard,
     copyFilesToPc,
@@ -202,16 +186,9 @@ export const FileManager: React.FC = () => {
     try {
       const result = await emptyTrash();
       handleClearSelection(); // Clear selection after successful deletion
-      showToast(
-        result?.message ||
-          `Successfully deleted ${files.length} item(s) from trash`,
-        "success",
-      );
+      showToast(result?.message || `Successfully deleted ${files.length} item(s) from trash`, 'success');
     } catch (error: unknown) {
-      showToast(
-        getErrorMessage(error, "Failed to empty trash. Please try again."),
-        "error",
-      );
+      showToast(getErrorMessage(error, 'Failed to empty trash. Please try again.'), 'error');
     }
   };
 
@@ -221,15 +198,9 @@ export const FileManager: React.FC = () => {
       await deleteFiles(selectedFiles);
       const count = selectedFiles.length;
       handleClearSelection(); // Clear selection after successful deletion
-      showToast(
-        `Moved ${count} item${count !== 1 ? "s" : ""} to trash`,
-        "success",
-      );
+      showToast(`Moved ${count} item${count !== 1 ? 's' : ''} to trash`, 'success');
     } catch (error: unknown) {
-      showToast(
-        getErrorMessage(error, "Failed to delete. Please try again."),
-        "error",
-      );
+      showToast(getErrorMessage(error, 'Failed to delete. Please try again.'), 'error');
     }
   };
 
@@ -239,18 +210,9 @@ export const FileManager: React.FC = () => {
       await deleteForever(selectedFiles);
       const count = selectedFiles.length;
       handleClearSelection(); // Clear selection after successful deletion
-      showToast(
-        `Permanently deleted ${count} item${count !== 1 ? "s" : ""}`,
-        "success",
-      );
+      showToast(`Permanently deleted ${count} item${count !== 1 ? 's' : ''}`, 'success');
     } catch (error: unknown) {
-      showToast(
-        getErrorMessage(
-          error,
-          "Failed to permanently delete. Please try again.",
-        ),
-        "error",
-      );
+      showToast(getErrorMessage(error, 'Failed to permanently delete. Please try again.'), 'error');
     }
   };
 
@@ -259,16 +221,9 @@ export const FileManager: React.FC = () => {
       const result = await restoreFiles(selectedFiles);
       const count = selectedFiles.length;
       handleClearSelection(); // Clear selection after successful restore
-      showToast(
-        result?.message ||
-          `Restored ${count} item${count !== 1 ? "s" : ""} from trash`,
-        "success",
-      );
+      showToast(result?.message || `Restored ${count} item${count !== 1 ? 's' : ''} from trash`, 'success');
     } catch (error: unknown) {
-      showToast(
-        getErrorMessage(error, "Failed to restore files. Please try again."),
-        "error",
-      );
+      showToast(getErrorMessage(error, 'Failed to restore files. Please try again.'), 'error');
     }
   };
 
@@ -322,20 +277,12 @@ export const FileManager: React.FC = () => {
         setMultiSelectMode(false);
       }
     },
-    [
-      removeSelectedFile,
-      isMobile,
-      multiSelectMode,
-      selectedFiles.length,
-      setMultiSelectMode,
-    ],
+    [removeSelectedFile, isMobile, multiSelectMode, selectedFiles.length, setMultiSelectMode]
   );
 
   // Filter out deleted files from selection
   useEffect(() => {
-    const validSelectedFiles = selectedFiles.filter((id) =>
-      files.some((f) => f.id === id),
-    );
+    const validSelectedFiles = selectedFiles.filter(id => files.some(f => f.id === id));
     if (validSelectedFiles.length !== selectedFiles.length) {
       setSelectedFiles(validSelectedFiles);
     }
@@ -351,25 +298,25 @@ export const FileManager: React.FC = () => {
       }
     };
 
-    document.addEventListener("click", handleDocumentClick);
+    document.addEventListener('click', handleDocumentClick);
 
     const handleDrag = (ev: DragEvent) => {
       if (!isMobile) {
         moveDragPreview(ev.clientX, ev.clientY);
       }
     };
-    document.addEventListener("dragover", handleDrag);
+    document.addEventListener('dragover', handleDrag);
 
     return () => {
-      document.removeEventListener("click", handleDocumentClick);
-      document.removeEventListener("dragover", handleDrag);
+      document.removeEventListener('click', handleDocumentClick);
+      document.removeEventListener('dragover', handleDrag);
     };
   }, [handleClearSelection, isMobile]);
 
   // Keyboard Delete: move selected files/folders to trash
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== "Delete") return;
+      if (e.key !== 'Delete') return;
 
       const target = e.target as Node | null;
       if (
@@ -388,8 +335,8 @@ export const FileManager: React.FC = () => {
       setDeleteModalOpen(true);
     };
 
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
   }, [isTrashView, selectedFiles.length, setDeleteModalOpen]);
 
   const handleFileClick = (fileId: string, e: React.MouseEvent) => {
@@ -417,7 +364,7 @@ export const FileManager: React.FC = () => {
       }
     } else if (e.shiftKey && selectedFiles.length > 0) {
       // Range select with Shift
-      const fileIds = files.map((f) => f.id);
+      const fileIds = files.map(f => f.id);
       const lastSelectedId = selectedFiles[selectedFiles.length - 1];
       if (!lastSelectedId) return; // Safety check
       const lastSelectedIndex = fileIds.indexOf(lastSelectedId);
@@ -436,23 +383,20 @@ export const FileManager: React.FC = () => {
 
   const handleFileDoubleClick = (file: FileItem) => {
     // Don't allow opening anything from Trash
-    if (currentPath[0] === "Trash") {
+    if (currentPath[0] === 'Trash') {
       return;
     }
 
-    if (file.type === "folder") {
+    if (file.type === 'folder') {
       openFolder(file);
     } else {
-      if (file.mimeType && file.mimeType.startsWith("image/")) {
+      if (file.mimeType && file.mimeType.startsWith('image/')) {
         setImageViewerFile(file);
       } else if (ONLYOFFICE_EXTS.has(getExt(file.name))) {
         // Validate MIME type before opening (prevents unnecessary API calls)
         if (!validateOnlyOfficeMimeType(file.name, file.mimeType)) {
           const ext = getExt(file.name);
-          showToast(
-            `Cannot open file: type mismatch (expected .${ext.slice(1)} format)`,
-            "error",
-          );
+          showToast(`Cannot open file: type mismatch (expected .${ext.slice(1)} format)`, 'error');
           return;
         }
         // Check if OnlyOffice is configured before opening (using cached value)
@@ -461,15 +405,9 @@ export const FileManager: React.FC = () => {
             void editFileWithDesktop(file.id);
           } else {
             if (canConfigureOnlyOffice) {
-              showToast(
-                "OnlyOffice not configured. Configure in Settings.",
-                "error",
-              );
+              showToast('OnlyOffice not configured. Configure in Settings.', 'error');
             } else {
-              showToast(
-                "OnlyOffice not configured. Contact administrator.",
-                "error",
-              );
+              showToast('OnlyOffice not configured. Contact administrator.', 'error');
             }
           }
           return;
@@ -477,7 +415,7 @@ export const FileManager: React.FC = () => {
         // On mobile, open in new tab instead of modal
         if (isMobile) {
           const url = `/api/onlyoffice/viewer/${file.id}`;
-          window.open(url, "_blank", "noopener,noreferrer");
+          window.open(url, '_blank', 'noopener,noreferrer');
         } else {
           setDocumentViewerFile?.(file);
         }
@@ -511,7 +449,7 @@ export const FileManager: React.FC = () => {
         setSelectedFiles(selectedIds);
       }
     },
-    [selectedFiles, setSelectedFiles],
+    [selectedFiles, setSelectedFiles]
   );
 
   const handleDragStart = (fileId: string) => (e: React.DragEvent) => {
@@ -525,23 +463,18 @@ export const FileManager: React.FC = () => {
     } else {
       setDraggingIds(selectedFiles);
     }
-    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setDragImage(getTransparentImage(), 0, 0);
     // mark global dragging state (used to suppress tooltips)
-    document.body.classList.add("is-dragging");
-    createDragPreview(
-      selectedFiles.includes(fileId) ? selectedFiles : [fileId],
-      e.clientX,
-      e.clientY,
-      isMobile,
-    );
+    document.body.classList.add('is-dragging');
+    createDragPreview(selectedFiles.includes(fileId) ? selectedFiles : [fileId], e.clientX, e.clientY, isMobile);
   };
 
   const handleDragEnd = () => {
     setDraggingIds([]);
     setDragOverFolder(null);
     removeDragPreview();
-    document.body.classList.remove("is-dragging");
+    document.body.classList.remove('is-dragging');
   };
 
   const handleFolderDragOver = (folderId: string) => (e: React.DragEvent) => {
@@ -564,28 +497,23 @@ export const FileManager: React.FC = () => {
       await animateFlyToFolder(draggingIds, folderId);
       await moveFiles(draggingIds, folderId);
       setDraggingIds([]);
-      document.body.classList.remove("is-dragging");
+      document.body.classList.remove('is-dragging');
       closeMultiSelectIfMobile();
     } catch (error) {
       // Show error toast if not already shown by moveFiles
-      const errorMessage = getErrorMessage(
-        error,
-        "Failed to move files. Please try again.",
-      );
-      showToast(errorMessage, "error");
+      const errorMessage = getErrorMessage(error, 'Failed to move files. Please try again.');
+      showToast(errorMessage, 'error');
       // Reset drag state on error
       setDraggingIds([]);
-      document.body.classList.remove("is-dragging");
+      document.body.classList.remove('is-dragging');
       closeMultiSelectIfMobile();
     }
   };
 
   // Calculate shared/starred status for selected files
-  const selectedItems = files.filter((f) => selectedFiles.includes(f.id));
-  const allShared =
-    selectedItems.length > 0 && selectedItems.every((f) => f.shared);
-  const allStarred =
-    selectedItems.length > 0 && selectedItems.every((f) => f.starred);
+  const selectedItems = files.filter(f => selectedFiles.includes(f.id));
+  const allShared = selectedItems.length > 0 && selectedItems.every(f => f.shared);
+  const allStarred = selectedItems.length > 0 && selectedItems.every(f => f.starred);
 
   const handleShare = () => {
     if (allShared) {
@@ -624,17 +552,14 @@ export const FileManager: React.FC = () => {
 
   const handleRename = () => {
     if (selectedFiles.length === 1) {
-      const file = files.find((f) => f.id === selectedFiles[0]);
+      const file = files.find(f => f.id === selectedFiles[0]);
       if (file) setRenameTarget(file);
       closeMultiSelectIfMobile();
     }
   };
 
   return (
-    <div
-      className={`${isMobile ? "p-3" : "p-6 md:p-8"} space-y-6 md:space-y-8`}
-      ref={managerRef}
-    >
+    <div className={`${isMobile ? 'p-3' : 'p-6 md:p-8'} space-y-6 md:space-y-8`} ref={managerRef}>
       {/* Multi-Select Mode Indicator (Mobile Only) */}
       {isMobile && multiSelectMode && (
         <MultiSelectIndicator
@@ -649,9 +574,9 @@ export const FileManager: React.FC = () => {
       {/* Header */}
       <div
         ref={headerRef}
-        className={`${isMobile ? "flex-col space-y-3 px-3 py-3" : "flex items-center justify-between px-6 py-4"} rounded-xl card-premium mb-4 transition-all duration-200 animate-slideDown sticky top-0 z-30`}
+        className={`${isMobile ? 'flex-col space-y-3 px-3 py-3' : 'flex items-center justify-between px-6 py-4'} rounded-xl card-premium mb-4 transition-all duration-200 animate-slideDown sticky top-0 z-30`}
       >
-        <div className={`${isMobile ? "w-full" : "flex-1 min-w-0"}`}>
+        <div className={`${isMobile ? 'w-full' : 'flex-1 min-w-0'}`}>
           <Breadcrumbs />
         </div>
 
@@ -671,7 +596,7 @@ export const FileManager: React.FC = () => {
           isDownloading={isDownloading}
           onViewModeChange={setViewMode}
           onSortChange={(by, order) => {
-            setSortBy(by as "name" | "size" | "modified" | "deletedAt");
+            setSortBy(by as 'name' | 'size' | 'modified' | 'deletedAt');
             setSortOrder(order);
           }}
           onCreateFolder={() => setCreateFolderModalOpen(true)}
@@ -744,9 +669,7 @@ export const FileManager: React.FC = () => {
       <PasteProgress progress={pasteProgress} />
       <DownloadProgress
         isDownloading={isDownloading}
-        hasFolders={selectedFiles.some(
-          (id) => files.find((f) => f.id === id)?.type === "folder",
-        )}
+        hasFolders={selectedFiles.some(id => files.find(f => f.id === id)?.type === 'folder')}
       />
 
       <EmptyTrashModal

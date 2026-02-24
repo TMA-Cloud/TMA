@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from "react";
-import { RecentFiles } from "./RecentFiles";
-import { useApp } from "../../contexts/AppContext";
-import { Upload, FolderPlus, Share2, Star } from "lucide-react";
-import { apiGet } from "../../utils/api";
+import React, { useEffect, useState } from 'react';
+import { RecentFiles } from './RecentFiles';
+import { useApp } from '../../contexts/AppContext';
+import { Upload, FolderPlus, Share2, Star } from 'lucide-react';
+import { apiGet } from '../../utils/api';
 
 interface FileStats {
   totalFiles: number;
@@ -12,12 +12,7 @@ interface FileStats {
 }
 
 export const Dashboard: React.FC = () => {
-  const {
-    files,
-    setUploadModalOpen,
-    setCreateFolderModalOpen,
-    setCurrentPath,
-  } = useApp();
+  const { files, setUploadModalOpen, setCreateFolderModalOpen, setCurrentPath } = useApp();
   const [stats, setStats] = useState<FileStats>({
     totalFiles: 0,
     totalFolders: 0,
@@ -28,7 +23,7 @@ export const Dashboard: React.FC = () => {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const data = await apiGet<FileStats>("/api/files/stats");
+        const data = await apiGet<FileStats>('/api/files/stats');
         setStats(data);
       } catch {
         // Error handled silently - stats will show as unavailable
@@ -42,7 +37,7 @@ export const Dashboard: React.FC = () => {
 
     const startPolling = () => {
       // Only poll if tab is visible
-      if (document.visibilityState === "visible") {
+      if (document.visibilityState === 'visible') {
         interval = setInterval(fetchStats, 60000); // Refresh every 60 seconds (reduced from 30s)
       }
     };
@@ -55,7 +50,7 @@ export const Dashboard: React.FC = () => {
     };
 
     const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
+      if (document.visibilityState === 'visible') {
         // Tab became visible - fetch immediately and start polling
         fetchStats();
         startPolling();
@@ -69,46 +64,42 @@ export const Dashboard: React.FC = () => {
     startPolling();
 
     // Listen for visibility changes
-    document.addEventListener("visibilitychange", handleVisibilityChange);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
       stopPolling();
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, []);
 
   const quickActions = [
     {
-      title: "Upload Files",
+      title: 'Upload Files',
       icon: Upload,
       isPrimary: true,
-      hoverColor:
-        "hover:border-blue-500/50 hover:bg-blue-500/10 dark:hover:bg-blue-500/20",
+      hoverColor: 'hover:border-blue-500/50 hover:bg-blue-500/10 dark:hover:bg-blue-500/20',
       onClick: () => setUploadModalOpen(true),
     },
     {
-      title: "Create Folder",
+      title: 'Create Folder',
       icon: FolderPlus,
       isPrimary: false,
-      hoverColor:
-        "hover:border-green-500/50 hover:bg-green-500/10 dark:hover:bg-green-500/20",
+      hoverColor: 'hover:border-green-500/50 hover:bg-green-500/10 dark:hover:bg-green-500/20',
       onClick: () => setCreateFolderModalOpen(true),
     },
     {
-      title: "Share Files",
+      title: 'Share Files',
       icon: Share2,
       isPrimary: false,
-      hoverColor:
-        "hover:border-purple-500/50 hover:bg-purple-500/10 dark:hover:bg-purple-500/20",
-      onClick: () => setCurrentPath(["Shared"]),
+      hoverColor: 'hover:border-purple-500/50 hover:bg-purple-500/10 dark:hover:bg-purple-500/20',
+      onClick: () => setCurrentPath(['Shared']),
     },
     {
-      title: "Starred Items",
+      title: 'Starred Items',
       icon: Star,
       isPrimary: false,
-      hoverColor:
-        "hover:border-yellow-500/50 hover:bg-yellow-500/10 dark:hover:bg-yellow-500/20",
-      onClick: () => setCurrentPath(["Starred"]),
+      hoverColor: 'hover:border-yellow-500/50 hover:bg-yellow-500/10 dark:hover:bg-yellow-500/20',
+      onClick: () => setCurrentPath(['Starred']),
     },
   ];
 
@@ -118,10 +109,10 @@ export const Dashboard: React.FC = () => {
   const starredCount = stats.starredCount;
 
   const statsData = [
-    { label: "Total Files", value: fileCount },
-    { label: "Folders", value: folderCount },
-    { label: "Shared", value: sharedCount },
-    { label: "Starred", value: starredCount },
+    { label: 'Total Files', value: fileCount },
+    { label: 'Folders', value: folderCount },
+    { label: 'Shared', value: sharedCount },
+    { label: 'Starred', value: starredCount },
   ];
 
   const [animatedStats, setAnimatedStats] = useState([0, 0, 0, 0]);
@@ -137,7 +128,7 @@ export const Dashboard: React.FC = () => {
       const animate = () => {
         start += step;
         if (start > end) start = end;
-        setAnimatedStats((prev) => {
+        setAnimatedStats(prev => {
           const copy = [...prev];
           copy[i] = start;
           return copy;
@@ -201,8 +192,8 @@ export const Dashboard: React.FC = () => {
                   active:scale-95
                   ${
                     action.isPrimary
-                      ? "border-blue-500/30 bg-blue-50/50 dark:bg-blue-900/20 dark:border-blue-500/30"
-                      : ""
+                      ? 'border-blue-500/30 bg-blue-50/50 dark:bg-blue-900/20 dark:border-blue-500/30'
+                      : ''
                   }
                   ${action.hoverColor}
                 `}
@@ -210,13 +201,11 @@ export const Dashboard: React.FC = () => {
                   <Icon
                     className={`w-6 h-6 md:w-7 md:h-7 transition-colors duration-200 ${
                       action.isPrimary
-                        ? "text-blue-600 dark:text-blue-400"
-                        : "text-gray-600 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-gray-100"
+                        ? 'text-blue-600 dark:text-blue-400'
+                        : 'text-gray-600 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-gray-100'
                     }`}
                   />
-                  <span className="text-sm font-semibold tracking-tight">
-                    {action.title}
-                  </span>
+                  <span className="text-sm font-semibold tracking-tight">{action.title}</span>
                 </button>
               );
             })}

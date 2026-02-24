@@ -1,4 +1,4 @@
-import React, { type ReactNode, useEffect, useState } from "react";
+import React, { type ReactNode, useEffect, useState } from 'react';
 
 interface TooltipProps {
   text: string;
@@ -15,11 +15,11 @@ export const Tooltip: React.FC<TooltipProps> = ({ text, children }) => {
       setVisible(false);
     };
     const onDragEnd = () => setDragging(false);
-    window.addEventListener("dragstart", onDragStart);
-    window.addEventListener("dragend", onDragEnd);
+    window.addEventListener('dragstart', onDragStart);
+    window.addEventListener('dragend', onDragEnd);
     return () => {
-      window.removeEventListener("dragstart", onDragStart);
-      window.removeEventListener("dragend", onDragEnd);
+      window.removeEventListener('dragstart', onDragStart);
+      window.removeEventListener('dragend', onDragEnd);
     };
   }, []);
 
@@ -39,7 +39,7 @@ export const Tooltip: React.FC<TooltipProps> = ({ text, children }) => {
           px-3 py-1 rounded-lg shadow-lg text-sm font-medium
           bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900
           transition-all duration-200 opacity-0 scale-95
-          ${visible && !dragging ? "opacity-100 scale-100" : ""}
+          ${visible && !dragging ? 'opacity-100 scale-100' : ''}
           max-w-xs truncate
         `}
         role="tooltip"

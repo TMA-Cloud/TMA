@@ -1,18 +1,16 @@
-import React, { useState, useEffect } from "react";
-import { useAuth } from "../../contexts/AuthContext";
-import { PasswordInput } from "./PasswordInput";
-import { SocialAuthButtons } from "./SocialAuthButtons";
-import { checkGoogleAuthEnabled } from "../../utils/api";
-import { getErrorMessage } from "../../utils/errorUtils";
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '../../contexts/AuthContext';
+import { PasswordInput } from './PasswordInput';
+import { SocialAuthButtons } from './SocialAuthButtons';
+import { checkGoogleAuthEnabled } from '../../utils/api';
+import { getErrorMessage } from '../../utils/errorUtils';
 
-export const SignupForm: React.FC<{ onSwitch: () => void }> = ({
-  onSwitch,
-}) => {
+export const SignupForm: React.FC<{ onSwitch: () => void }> = ({ onSwitch }) => {
   const { signup } = useAuth();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [name, setName] = useState("");
-  const [error, setError] = useState("");
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
+  const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [googleEnabled, setGoogleEnabled] = useState(false);
 
@@ -28,11 +26,11 @@ export const SignupForm: React.FC<{ onSwitch: () => void }> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError("");
+    setError('');
     try {
       await signup(email, password, name);
     } catch (err) {
-      setError(getErrorMessage(err, "Failed to sign up"));
+      setError(getErrorMessage(err, 'Failed to sign up'));
     }
   };
 
@@ -44,7 +42,7 @@ export const SignupForm: React.FC<{ onSwitch: () => void }> = ({
             className="border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-3 w-full bg-gray-50/80 dark:bg-gray-800/80 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm transition-all duration-200 text-base"
             placeholder="Name"
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={e => setName(e.target.value)}
             autoComplete="name"
             maxLength={100}
           />
@@ -54,24 +52,21 @@ export const SignupForm: React.FC<{ onSwitch: () => void }> = ({
             className="border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-3 w-full bg-gray-50/80 dark:bg-gray-800/80 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm transition-all duration-200 text-base"
             placeholder="Email"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={e => setEmail(e.target.value)}
             autoComplete="email"
             maxLength={254}
           />
         </div>
         <PasswordInput
           value={password}
-          onChange={(e) => setPassword(e.target.value)}
+          onChange={e => setPassword(e.target.value)}
           autoComplete="new-password"
           maxLength={128}
           showPassword={showPassword}
-          onTogglePassword={() => setShowPassword((v) => !v)}
+          onTogglePassword={() => setShowPassword(v => !v)}
         />
         {error && (
-          <p
-            className="text-red-500 text-sm font-medium animate-bounceIn"
-            key={error}
-          >
+          <p className="text-red-500 text-sm font-medium animate-bounceIn" key={error}>
             {error}
           </p>
         )}
@@ -83,7 +78,7 @@ export const SignupForm: React.FC<{ onSwitch: () => void }> = ({
         </button>
         <SocialAuthButtons googleEnabled={googleEnabled} />
         <p className="text-sm text-center text-gray-500 dark:text-gray-400">
-          Already have an account?{" "}
+          Already have an account?{' '}
           <button
             type="button"
             onClick={onSwitch}

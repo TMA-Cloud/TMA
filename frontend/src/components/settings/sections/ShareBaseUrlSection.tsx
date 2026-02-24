@@ -1,25 +1,20 @@
-import React, { useState, useCallback, useEffect, useRef } from "react";
-import { Link, Pencil, CheckCircle2, XCircle } from "lucide-react";
-import { useToast } from "../../../hooks/useToast";
-import { useAuth } from "../../../contexts/AuthContext";
-import {
-  getShareBaseUrlConfig,
-  updateShareBaseUrlConfig,
-} from "../../../utils/api";
-import { getErrorMessage, isAuthError } from "../../../utils/errorUtils";
-import { SettingsSection } from "../components/SettingsSection";
+import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { Link, Pencil, CheckCircle2, XCircle } from 'lucide-react';
+import { useToast } from '../../../hooks/useToast';
+import { useAuth } from '../../../contexts/AuthContext';
+import { getShareBaseUrlConfig, updateShareBaseUrlConfig } from '../../../utils/api';
+import { getErrorMessage, isAuthError } from '../../../utils/errorUtils';
+import { SettingsSection } from '../components/SettingsSection';
 
 interface ShareBaseUrlSectionProps {
   canConfigure: boolean;
 }
 
-export const ShareBaseUrlSection: React.FC<ShareBaseUrlSectionProps> = ({
-  canConfigure,
-}) => {
+export const ShareBaseUrlSection: React.FC<ShareBaseUrlSectionProps> = ({ canConfigure }) => {
   const { showToast } = useToast();
   const { user } = useAuth();
-  const [url, setUrl] = useState("");
-  const [originalUrl, setOriginalUrl] = useState("");
+  const [url, setUrl] = useState('');
+  const [originalUrl, setOriginalUrl] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -46,7 +41,7 @@ export const ShareBaseUrlSection: React.FC<ShareBaseUrlSectionProps> = ({
       }
 
       const config = await getShareBaseUrlConfig(abortController.signal);
-      const urlValue = config.url || "";
+      const urlValue = config.url || '';
       setUrl(urlValue);
       setOriginalUrl(urlValue);
       setIsEditing(false);
@@ -55,18 +50,15 @@ export const ShareBaseUrlSection: React.FC<ShareBaseUrlSectionProps> = ({
         setIsCollapsed(true);
       }
     } catch (error) {
-      if (error instanceof Error && error.name === "AbortError") {
+      if (error instanceof Error && error.name === 'AbortError') {
         return;
       }
       if (isAuthError(error)) {
         return;
       }
-      showToast("Failed to load share base URL settings", "error");
+      showToast('Failed to load share base URL settings', 'error');
     } finally {
-      if (
-        !abortController.signal.aborted &&
-        abortControllerRef.current === abortController
-      ) {
+      if (!abortController.signal.aborted && abortControllerRef.current === abortController) {
         setLoading(false);
         abortControllerRef.current = null;
       }
@@ -113,19 +105,16 @@ export const ShareBaseUrlSection: React.FC<ShareBaseUrlSectionProps> = ({
     try {
       setSaving(true);
       const response = await updateShareBaseUrlConfig(url || null);
-      const savedUrl = response.url || "";
+      const savedUrl = response.url || '';
       setUrl(savedUrl);
       setOriginalUrl(savedUrl);
       setHasLoadedSettings(true);
       setIsEditing(false);
       setIsCollapsed(true);
 
-      showToast("Settings saved", "success");
+      showToast('Settings saved', 'success');
     } catch (error) {
-      showToast(
-        getErrorMessage(error, "Failed to save share base URL settings"),
-        "error",
-      );
+      showToast(getErrorMessage(error, 'Failed to save share base URL settings'), 'error');
     } finally {
       setSaving(false);
     }
@@ -140,22 +129,22 @@ export const ShareBaseUrlSection: React.FC<ShareBaseUrlSectionProps> = ({
   const getStatusInfo = () => {
     if (loading) {
       return {
-        text: "Loading...",
+        text: 'Loading...',
         icon: null,
-        color: "text-gray-500 dark:text-gray-400",
+        color: 'text-gray-500 dark:text-gray-400',
       };
     }
     if (isConfigured) {
       return {
-        text: "Configured",
+        text: 'Configured',
         icon: CheckCircle2,
-        color: "text-green-600 dark:text-green-400",
+        color: 'text-green-600 dark:text-green-400',
       };
     }
     return {
-      text: "Not configured",
+      text: 'Not configured',
       icon: XCircle,
-      color: "text-gray-500 dark:text-gray-400",
+      color: 'text-gray-500 dark:text-gray-400',
     };
   };
 
@@ -183,9 +172,7 @@ export const ShareBaseUrlSection: React.FC<ShareBaseUrlSectionProps> = ({
               onClick={handleEdit}
               disabled={loading || saving}
               className="p-2 rounded-lg text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-              aria-label={
-                isEditing ? "Cancel editing" : "Edit share base URL settings"
-              }
+              aria-label={isEditing ? 'Cancel editing' : 'Edit share base URL settings'}
             >
               <Pencil className="w-5 h-5" />
             </button>
@@ -193,27 +180,23 @@ export const ShareBaseUrlSection: React.FC<ShareBaseUrlSectionProps> = ({
         )}
 
         {!isCollapsed && (
-          <form autoComplete="off" onSubmit={(e) => e.preventDefault()}>
+          <form autoComplete="off" onSubmit={e => e.preventDefault()}>
             <div className="space-y-4">
               {isEditing ? (
                 <>
                   <div className="stagger-item hover-lift flex flex-col gap-2 rounded-2xl bg-gray-50/70 dark:bg-gray-900/60 px-4 py-3 border border-transparent hover:border-blue-500/40 transition-all duration-200">
-                    <label
-                      htmlFor="share-base-url"
-                      className="text-sm font-medium text-gray-900 dark:text-gray-100"
-                    >
+                    <label htmlFor="share-base-url" className="text-sm font-medium text-gray-900 dark:text-gray-100">
                       Share Base URL
                     </label>
                     <p className="text-xs text-gray-500 dark:text-gray-400">
-                      Base URL for public share links (e.g.,
-                      https://share.example.com). Leave empty to use the request
+                      Base URL for public share links (e.g., https://share.example.com). Leave empty to use the request
                       origin.
                     </p>
                     <input
                       id="share-base-url"
                       type="text"
                       value={url}
-                      onChange={(e) => setUrl(e.target.value)}
+                      onChange={e => setUrl(e.target.value)}
                       disabled={loading || saving}
                       placeholder="https://share.example.com"
                       autoComplete="off"
@@ -238,23 +221,17 @@ export const ShareBaseUrlSection: React.FC<ShareBaseUrlSectionProps> = ({
                       disabled={loading || saving}
                       className="px-6 py-2 text-sm font-medium rounded-lg bg-blue-500 hover:bg-blue-600 text-white transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                     >
-                      {saving ? "Saving..." : "Save Settings"}
+                      {saving ? 'Saving...' : 'Save Settings'}
                     </button>
                   </div>
                 </>
               ) : (
                 <div className="stagger-item hover-lift flex flex-col gap-2 rounded-2xl bg-gray-50/70 dark:bg-gray-900/60 px-4 py-3 border border-transparent hover:border-blue-500/40 transition-all duration-200">
-                  <label className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                    Share Base URL
-                  </label>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    Base URL for public share links
-                  </p>
+                  <label className="text-sm font-medium text-gray-900 dark:text-gray-100">Share Base URL</label>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Base URL for public share links</p>
                   <div className="mt-1 px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-800/50 text-gray-900 dark:text-gray-100">
                     {loading ? (
-                      <span className="text-gray-500 dark:text-gray-400">
-                        Loading...
-                      </span>
+                      <span className="text-gray-500 dark:text-gray-400">Loading...</span>
                     ) : originalUrl ? (
                       originalUrl
                     ) : (

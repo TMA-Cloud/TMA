@@ -1,5 +1,5 @@
 // MarqueeSelector.tsx
-import React, { useRef, useState, useCallback } from "react";
+import React, { useRef, useState, useCallback } from 'react';
 
 interface MarqueeSelectorProps {
   onSelectionChange: (selectedIds: string[], additive: boolean) => void;
@@ -27,9 +27,7 @@ export const MarqueeSelector: React.FC<MarqueeSelectorProps> = ({
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isSelecting, setIsSelecting] = useState(false);
-  const [selectionRect, setSelectionRect] = useState<SelectionRect | null>(
-    null,
-  );
+  const [selectionRect, setSelectionRect] = useState<SelectionRect | null>(null);
 
   const dragStateRef = useRef({
     isDragging: false,
@@ -51,20 +49,18 @@ export const MarqueeSelector: React.FC<MarqueeSelectorProps> = ({
     const selB = Math.max(rect.startY, rect.endY);
 
     const selectedIds: string[] = [];
-    container
-      .querySelectorAll<HTMLElement>("[data-file-id]")
-      .forEach((item) => {
-        const ir = item.getBoundingClientRect();
-        const left = ir.left - containerRect.left + container.scrollLeft;
-        const top = ir.top - containerRect.top + container.scrollTop;
-        const right = left + ir.width;
-        const bottom = top + ir.height;
+    container.querySelectorAll<HTMLElement>('[data-file-id]').forEach(item => {
+      const ir = item.getBoundingClientRect();
+      const left = ir.left - containerRect.left + container.scrollLeft;
+      const top = ir.top - containerRect.top + container.scrollTop;
+      const right = left + ir.width;
+      const bottom = top + ir.height;
 
-        if (!(right < selL || left > selR || bottom < selT || top > selB)) {
-          const id = item.getAttribute("data-file-id");
-          if (id) selectedIds.push(id);
-        }
-      });
+      if (!(right < selL || left > selR || bottom < selT || top > selB)) {
+        const id = item.getAttribute('data-file-id');
+        if (id) selectedIds.push(id);
+      }
+    });
 
     return selectedIds;
   }, []);
@@ -88,11 +84,7 @@ export const MarqueeSelector: React.FC<MarqueeSelectorProps> = ({
 
       // Don't interfere with buttons, links, inputs
       const target = e.target as HTMLElement;
-      if (
-        target.closest("button") ||
-        target.closest("a") ||
-        target.closest("input")
-      ) {
+      if (target.closest('button') || target.closest('a') || target.closest('input')) {
         return;
       }
 
@@ -100,9 +92,9 @@ export const MarqueeSelector: React.FC<MarqueeSelectorProps> = ({
       if (!container) return;
 
       // Check if clicking on an ALREADY SELECTED file - allow drag in that case
-      const fileElement = target.closest("[data-file-id]");
+      const fileElement = target.closest('[data-file-id]');
       if (fileElement) {
-        const fileId = fileElement.getAttribute("data-file-id");
+        const fileId = fileElement.getAttribute('data-file-id');
         if (fileId && selectedFiles.includes(fileId)) {
           // Clicking on already selected file - let native drag handle it
           return;
@@ -128,10 +120,8 @@ export const MarqueeSelector: React.FC<MarqueeSelectorProps> = ({
         if (!dragStateRef.current.isDragging) return;
 
         const containerRect = container.getBoundingClientRect();
-        const curX =
-          moveEvent.clientX - containerRect.left + container.scrollLeft;
-        const curY =
-          moveEvent.clientY - containerRect.top + container.scrollTop;
+        const curX = moveEvent.clientX - containerRect.left + container.scrollLeft;
+        const curY = moveEvent.clientY - containerRect.top + container.scrollTop;
         const { startX, startY } = dragStateRef.current;
 
         // Start selection after small threshold
@@ -169,8 +159,8 @@ export const MarqueeSelector: React.FC<MarqueeSelectorProps> = ({
       };
 
       const handleMouseUp = (upEvent: MouseEvent) => {
-        document.removeEventListener("mousemove", handleMouseMove);
-        document.removeEventListener("mouseup", handleMouseUp);
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
 
         if (!dragStateRef.current.isDragging) return;
 
@@ -184,10 +174,8 @@ export const MarqueeSelector: React.FC<MarqueeSelectorProps> = ({
           }
 
           const containerRect = container.getBoundingClientRect();
-          const endX =
-            upEvent.clientX - containerRect.left + container.scrollLeft;
-          const endY =
-            upEvent.clientY - containerRect.top + container.scrollTop;
+          const endX = upEvent.clientX - containerRect.left + container.scrollLeft;
+          const endY = upEvent.clientY - containerRect.top + container.scrollTop;
           const { startX, startY } = dragStateRef.current;
 
           const finalRect: SelectionRect = {
@@ -208,24 +196,14 @@ export const MarqueeSelector: React.FC<MarqueeSelectorProps> = ({
         cancelSelection();
       };
 
-      document.addEventListener("mousemove", handleMouseMove);
-      document.addEventListener("mouseup", handleMouseUp);
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
     },
-    [
-      onSelectionChange,
-      onSelectingChange,
-      getSelectedIds,
-      cancelSelection,
-      selectedFiles,
-    ],
+    [onSelectionChange, onSelectingChange, getSelectedIds, cancelSelection, selectedFiles]
   );
 
   return (
-    <div
-      ref={containerRef}
-      className="relative select-none overflow-visible"
-      onMouseDown={handleMouseDown}
-    >
+    <div ref={containerRef} className="relative select-none overflow-visible" onMouseDown={handleMouseDown}>
       {children}
       {isSelecting && selectionRect && (
         <div

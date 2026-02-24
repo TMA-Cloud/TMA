@@ -1,21 +1,15 @@
-import React, { useEffect, useState, useRef } from "react";
-import { X, CheckCircle, AlertCircle, Info } from "lucide-react";
+import React, { useEffect, useState, useRef } from 'react';
+import { X, CheckCircle, AlertCircle, Info } from 'lucide-react';
 
 interface ToastProps {
   id: string;
   message: string;
-  type?: "success" | "error" | "info";
+  type?: 'success' | 'error' | 'info';
   duration?: number;
   onClose: (id: string) => void;
 }
 
-export const Toast: React.FC<ToastProps> = ({
-  id,
-  message,
-  type = "info",
-  duration = 5000,
-  onClose,
-}) => {
+export const Toast: React.FC<ToastProps> = ({ id, message, type = 'info', duration = 5000, onClose }) => {
   const [isVisible, setIsVisible] = useState(true);
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
   const [touchDeltaX, setTouchDeltaX] = useState(0);
@@ -59,9 +53,9 @@ export const Toast: React.FC<ToastProps> = ({
   };
 
   const colors = {
-    success: "bg-emerald-500",
-    error: "bg-red-500",
-    info: "bg-blue-500",
+    success: 'bg-emerald-500',
+    error: 'bg-red-500',
+    info: 'bg-blue-500',
   };
 
   const Icon = icons[type];
@@ -71,13 +65,13 @@ export const Toast: React.FC<ToastProps> = ({
       ref={toastRef}
       className={`
         transform transition-all duration-300 ease-in-out
-        ${isVisible ? "translate-x-0 opacity-100" : "translate-x-full opacity-0"}
+        ${isVisible ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'}
         bg-white/80 dark:bg-gray-900/80 backdrop-blur-md rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700
         p-4 flex items-center space-x-3 min-w-80 animate-toastIn mb-2
       `}
       style={{
-        marginBottom: "0.5rem",
-        touchAction: "pan-y",
+        marginBottom: '0.5rem',
+        touchAction: 'pan-y',
         transform: `translateX(${touchDeltaX}px)`,
       }}
       onTouchStart={handleTouchStart}
@@ -86,14 +80,10 @@ export const Toast: React.FC<ToastProps> = ({
       aria-live="polite"
       role="status"
     >
-      <div
-        className={`${colors[type]} rounded-full p-2 shadow-md animate-bounceIn`}
-      >
+      <div className={`${colors[type]} rounded-full p-2 shadow-md animate-bounceIn`}>
         <Icon className="w-5 h-5 text-white" />
       </div>
-      <p className="text-gray-900 dark:text-gray-100 flex-1 font-medium text-base">
-        {message}
-      </p>
+      <p className="text-gray-900 dark:text-gray-100 flex-1 font-medium text-base">{message}</p>
       <button
         onClick={() => {
           setIsVisible(false);
@@ -112,18 +102,15 @@ interface ToastContainerProps {
   toasts: Array<{
     id: string;
     message: string;
-    type?: "success" | "error" | "info";
+    type?: 'success' | 'error' | 'info';
   }>;
   onClose: (id: string) => void;
 }
 
-export const ToastContainer: React.FC<ToastContainerProps> = ({
-  toasts,
-  onClose,
-}) => {
+export const ToastContainer: React.FC<ToastContainerProps> = ({ toasts, onClose }) => {
   return (
     <div className="fixed bottom-4 right-4 z-50 space-y-2">
-      {toasts.map((toast) => (
+      {toasts.map(toast => (
         <Toast key={toast.id} {...toast} onClose={onClose} />
       ))}
     </div>

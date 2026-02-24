@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
-import { getSignupStatus, toggleSignup } from "../../../utils/api";
-import { useToast } from "../../../hooks/useToast";
+import { useState, useEffect } from 'react';
+import { getSignupStatus, toggleSignup } from '../../../utils/api';
+import { useToast } from '../../../hooks/useToast';
 
 export function useSignupStatus() {
   const { showToast } = useToast();
@@ -17,14 +17,8 @@ export function useSignupStatus() {
       const status = await getSignupStatus();
       setSignupEnabled(status.signupEnabled);
       setCanToggleSignup(status.canToggle);
-      setTotalUsers(
-        typeof status.totalUsers === "number" ? status.totalUsers : null,
-      );
-      setAdditionalUsers(
-        typeof status.additionalUsers === "number"
-          ? status.additionalUsers
-          : null,
-      );
+      setTotalUsers(typeof status.totalUsers === 'number' ? status.totalUsers : null);
+      setAdditionalUsers(typeof status.additionalUsers === 'number' ? status.additionalUsers : null);
     } catch {
       // Error handled silently - signup toggle will be unavailable
     } finally {
@@ -40,13 +34,10 @@ export function useSignupStatus() {
       const newStatus = !signupEnabled;
       await toggleSignup(newStatus);
       setSignupEnabled(newStatus);
-      showToast(
-        newStatus ? "Signup enabled" : "Signup disabled",
-        newStatus ? "success" : "info",
-      );
+      showToast(newStatus ? 'Signup enabled' : 'Signup disabled', newStatus ? 'success' : 'info');
     } catch {
       // Error handled by toast notification
-      showToast("Failed to update signup setting", "error");
+      showToast('Failed to update signup setting', 'error');
     } finally {
       setTogglingSignup(false);
     }

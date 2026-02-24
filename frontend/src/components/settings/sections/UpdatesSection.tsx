@@ -1,8 +1,8 @@
-import React from "react";
-import { RefreshCw } from "lucide-react";
-import { SettingsSection } from "../components/SettingsSection";
-import { SettingsItem } from "../components/SettingsItem";
-import type { VersionInfo } from "../../../utils/api";
+import React from 'react';
+import { RefreshCw } from 'lucide-react';
+import { SettingsSection } from '../components/SettingsSection';
+import { SettingsItem } from '../components/SettingsItem';
+import type { VersionInfo } from '../../../utils/api';
 
 interface UpdatesSectionProps {
   versionStatusText: (key: keyof VersionInfo) => string;
@@ -20,30 +20,20 @@ export const UpdatesSection: React.FC<UpdatesSectionProps> = ({
   onCheckVersions,
 }) => {
   return (
-    <SettingsSection
-      title="Updates"
-      icon={RefreshCw}
-      description="Check whether this deployment is up to date."
-    >
+    <SettingsSection title="Updates" icon={RefreshCw} description="Check whether this deployment is up to date.">
       <SettingsItem
         label="Frontend"
-        value={versionStatusText("frontend")}
-        description={versionDescription("frontend")}
+        value={versionStatusText('frontend')}
+        description={versionDescription('frontend')}
       />
-      <SettingsItem
-        label="Backend"
-        value={versionStatusText("backend")}
-        description={versionDescription("backend")}
-      />
+      <SettingsItem label="Backend" value={versionStatusText('backend')} description={versionDescription('backend')} />
       <SettingsItem
         label="Check for Updates"
         value=""
-        action={checkingVersions ? "Checking..." : "Check now"}
+        action={checkingVersions ? 'Checking...' : 'Check now'}
         onAction={onCheckVersions}
         actionDisabled={checkingVersions}
-        description={
-          versionError ?? "Fetches latest version tags from tma-cloud.github.io"
-        }
+        description={versionError ?? 'Fetches latest version tags from tma-cloud.github.io'}
       />
     </SettingsSection>
   );

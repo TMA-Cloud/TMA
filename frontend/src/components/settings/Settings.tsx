@@ -1,28 +1,28 @@
-import React, { useState } from "react";
-import { useAuth } from "../../contexts/AuthContext";
-import { useStorageUsage } from "../../hooks/useStorageUsage";
-import { fetchAllUsers, type UserSummary } from "../../utils/api";
-import { useToast } from "../../hooks/useToast";
+import React, { useState } from 'react';
+import { useAuth } from '../../contexts/AuthContext';
+import { useStorageUsage } from '../../hooks/useStorageUsage';
+import { fetchAllUsers, type UserSummary } from '../../utils/api';
+import { useToast } from '../../hooks/useToast';
 
 // Hooks
-import { useSignupStatus } from "./hooks/useSignupStatus";
-import { useVersions } from "./hooks/useVersions";
-import { useSessions } from "./hooks/useSessions";
+import { useSignupStatus } from './hooks/useSignupStatus';
+import { useVersions } from './hooks/useVersions';
+import { useSessions } from './hooks/useSessions';
 
 // Components
-import { SettingsHeader } from "./components/SettingsHeader";
-import { ProfileSection } from "./sections/ProfileSection";
-import { StorageSection } from "./sections/StorageSection";
-import { AdministrationSection } from "./sections/AdministrationSection";
-import { OnlyOfficeSection } from "./sections/OnlyOfficeSection";
-import { ShareBaseUrlSection } from "./sections/ShareBaseUrlSection";
-import { UpdatesSection } from "./sections/UpdatesSection";
-import { SecuritySection } from "./sections/SecuritySection";
+import { SettingsHeader } from './components/SettingsHeader';
+import { ProfileSection } from './sections/ProfileSection';
+import { StorageSection } from './sections/StorageSection';
+import { AdministrationSection } from './sections/AdministrationSection';
+import { OnlyOfficeSection } from './sections/OnlyOfficeSection';
+import { ShareBaseUrlSection } from './sections/ShareBaseUrlSection';
+import { UpdatesSection } from './sections/UpdatesSection';
+import { SecuritySection } from './sections/SecuritySection';
 
 // Modals
-import { UsersModal } from "./modals/UsersModal";
-import { SessionsModal } from "./modals/SessionsModal";
-import { MfaModal } from "./modals/MfaModal";
+import { UsersModal } from './modals/UsersModal';
+import { SessionsModal } from './modals/SessionsModal';
+import { MfaModal } from './modals/MfaModal';
 
 export const Settings: React.FC = () => {
   const { user } = useAuth();
@@ -41,13 +41,7 @@ export const Settings: React.FC = () => {
   } = useSignupStatus();
 
   // Versions hook
-  const {
-    versionStatusText,
-    versionDescription,
-    checkingVersions,
-    versionError,
-    handleCheckVersions,
-  } = useVersions();
+  const { versionStatusText, versionDescription, checkingVersions, versionError, handleCheckVersions } = useVersions();
 
   // Sessions hook
   const {
@@ -78,8 +72,8 @@ export const Settings: React.FC = () => {
       setUsersList(users);
     } catch {
       // Error handled by toast notification and error state
-      setUsersListError("Unable to load users right now");
-      showToast("Failed to load user list", "error");
+      setUsersListError('Unable to load users right now');
+      showToast('Failed to load user list', 'error');
     } finally {
       setLoadingUsersList(false);
     }
@@ -97,20 +91,12 @@ export const Settings: React.FC = () => {
 
   return (
     <div className="p-6 md:p-8 space-y-8 max-w-5xl mx-auto">
-      <SettingsHeader
-        userName={user?.name}
-        usage={usage ?? undefined}
-        loading={loading}
-      />
+      <SettingsHeader userName={user?.name} usage={usage ?? undefined} loading={loading} />
       {/* Settings Sections */}
       <div className="space-y-8">
         <ProfileSection userName={user?.name} userEmail={user?.email} />
 
-        <StorageSection
-          usage={usage ?? undefined}
-          loading={loading}
-          canConfigure={canToggleSignup}
-        />
+        <StorageSection usage={usage ?? undefined} loading={loading} canConfigure={canToggleSignup} />
 
         {canToggleSignup && (
           <AdministrationSection
@@ -125,13 +111,9 @@ export const Settings: React.FC = () => {
           />
         )}
 
-        {canToggleSignup && (
-          <OnlyOfficeSection canConfigure={canToggleSignup} />
-        )}
+        {canToggleSignup && <OnlyOfficeSection canConfigure={canToggleSignup} />}
 
-        {canToggleSignup && (
-          <ShareBaseUrlSection canConfigure={canToggleSignup} />
-        )}
+        {canToggleSignup && <ShareBaseUrlSection canConfigure={canToggleSignup} />}
 
         {canToggleSignup && (
           <UpdatesSection

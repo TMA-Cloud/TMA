@@ -1,4 +1,4 @@
-import React from "react";
+import React from 'react';
 
 interface SettingsSectionProps {
   title: string;
@@ -19,7 +19,7 @@ export const SettingsSection: React.FC<SettingsSectionProps> = ({
     <div
       className="relative overflow-hidden card-premium hover-lift spacing-card"
       style={{
-        animation: "slideUp 0.45s cubic-bezier(0.16, 1, 0.3, 1) both",
+        animation: 'slideUp 0.45s cubic-bezier(0.16, 1, 0.3, 1) both',
         animationDelay: `${index * 80}ms`,
       }}
     >
@@ -31,11 +31,7 @@ export const SettingsSection: React.FC<SettingsSectionProps> = ({
           <h3 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-gray-100 tracking-tight mb-1">
             {title}
           </h3>
-          {description && (
-            <p className="text-sm text-gray-500/80 dark:text-gray-400/80">
-              {description}
-            </p>
-          )}
+          {description && <p className="text-sm text-gray-500/80 dark:text-gray-400/80">{description}</p>}
         </div>
       </div>
 

@@ -1,5 +1,5 @@
-declare module "react-file-icon" {
-  import type { ComponentType } from "react";
+declare module 'react-file-icon' {
+  import type { ComponentType } from 'react';
 
   export interface FileIconProps {
     extension?: string;

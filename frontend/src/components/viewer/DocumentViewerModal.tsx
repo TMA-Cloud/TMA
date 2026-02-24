@@ -1,10 +1,10 @@
-import React, { useEffect, useRef, useState } from "react";
-import { ExternalLink } from "lucide-react";
-import { useApp } from "../../contexts/AppContext";
-import { useAuth } from "../../contexts/AuthContext";
-import { ONLYOFFICE_EXTS, getExt } from "../../utils/fileUtils";
-import { getErrorMessage, isAuthError } from "../../utils/errorUtils";
-import { useToast } from "../../hooks/useToast";
+import React, { useEffect, useRef, useState } from 'react';
+import { ExternalLink } from 'lucide-react';
+import { useApp } from '../../contexts/AppContext';
+import { useAuth } from '../../contexts/AuthContext';
+import { ONLYOFFICE_EXTS, getExt } from '../../utils/fileUtils';
+import { getErrorMessage, isAuthError } from '../../utils/errorUtils';
+import { useToast } from '../../hooks/useToast';
 
 interface DocsAPIEditor {
   destroyEditor?: () => void;
@@ -20,7 +20,7 @@ interface DocsAPIConfig {
   };
   editorConfig: {
     callbackUrl: string;
-    mode: "view" | "edit";
+    mode: 'view' | 'edit';
     lang: string;
     customization: {
       autosave: boolean;
@@ -37,10 +37,7 @@ interface DocsAPIConfig {
 declare global {
   interface Window {
     DocsAPI?: {
-      DocEditor: new (
-        containerId: string,
-        config: DocsAPIConfig,
-      ) => DocsAPIEditor;
+      DocEditor: new (containerId: string, config: DocsAPIConfig) => DocsAPIEditor;
     };
   }
 }
@@ -103,13 +100,10 @@ export const DocumentViewerModal: React.FC = () => {
       setError(null);
       try {
         // Fetch config first to get ONLYOFFICE JS URL
-        const res = await fetch(
-          `/api/onlyoffice/config/${documentViewerFile.id}`,
-          {
-            credentials: "include",
-            signal: abortController.signal,
-          },
-        );
+        const res = await fetch(`/api/onlyoffice/config/${documentViewerFile.id}`, {
+          credentials: 'include',
+          signal: abortController.signal,
+        });
 
         // Check if request was aborted after fetch
         if (abortController.signal.aborted) {
@@ -126,16 +120,10 @@ export const DocumentViewerModal: React.FC = () => {
             try {
               const errorData = await res.json();
               const errorMessage =
-                errorData.message ||
-                errorData.error ||
-                "Cannot open file. File type mismatch detected.";
-              showToast(errorMessage, "error");
+                errorData.message || errorData.error || 'Cannot open file. File type mismatch detected.';
+              showToast(errorMessage, 'error');
             } catch {
-              showToast(
-                res.statusText ||
-                  "Cannot open file. File type mismatch detected.",
-                "error",
-              );
+              showToast(res.statusText || 'Cannot open file. File type mismatch detected.', 'error');
             }
             setDocumentViewerFile?.(null);
             return;
@@ -148,23 +136,20 @@ export const DocumentViewerModal: React.FC = () => {
               // Fire and forget - don't wait for it, just refresh the cache
               void refreshOnlyOfficeConfig();
             }
-            throw new Error(
-              "OnlyOffice not configured. Configure in Settings.",
-            );
+            throw new Error('OnlyOffice not configured. Configure in Settings.');
           }
-          throw new Error("Failed to fetch ONLYOFFICE config");
+          throw new Error('Failed to fetch ONLYOFFICE config');
         }
         const { config, token, onlyofficeJsUrl } = await res.json();
 
         // Load ONLYOFFICE JS if needed
         if (!window.DocsAPI) {
-          const script = document.createElement("script");
+          const script = document.createElement('script');
           script.src = onlyofficeJsUrl;
           script.async = true;
           await new Promise<void>((resolve, reject) => {
             script.onload = () => resolve();
-            script.onerror = () =>
-              reject(new Error("Failed to load ONLYOFFICE API"));
+            script.onerror = () => reject(new Error('Failed to load ONLYOFFICE API'));
             document.body.appendChild(script);
           });
         }
@@ -174,18 +159,15 @@ export const DocumentViewerModal: React.FC = () => {
         // Render editor
         if (containerRef.current) {
           // Cleanup any previous instance
-          containerRef.current.innerHTML = "";
+          containerRef.current.innerHTML = '';
         }
         if (!window.DocsAPI) {
-          throw new Error("ONLYOFFICE API not loaded");
+          throw new Error('ONLYOFFICE API not loaded');
         }
-        editorRef.current = new window.DocsAPI.DocEditor(
-          "onlyoffice-editor-container",
-          config,
-        );
+        editorRef.current = new window.DocsAPI.DocEditor('onlyoffice-editor-container', config);
       } catch (e) {
         // Ignore abort errors (expected when cancelling requests)
-        if (e instanceof Error && e.name === "AbortError") {
+        if (e instanceof Error && e.name === 'AbortError') {
           return;
         }
 
@@ -194,14 +176,11 @@ export const DocumentViewerModal: React.FC = () => {
           return;
         }
 
-        const errorMessage = getErrorMessage(e, "Failed to open document");
+        const errorMessage = getErrorMessage(e, 'Failed to open document');
         setError(errorMessage);
       } finally {
         // Only update loading state if this request wasn't aborted
-        if (
-          !abortController.signal.aborted &&
-          abortControllerRef.current === abortController
-        ) {
+        if (!abortController.signal.aborted && abortControllerRef.current === abortController) {
           setLoading(false);
           abortControllerRef.current = null;
         }
@@ -217,13 +196,7 @@ export const DocumentViewerModal: React.FC = () => {
         abortControllerRef.current = null;
       }
     };
-  }, [
-    documentViewerFile,
-    refreshOnlyOfficeConfig,
-    user,
-    setDocumentViewerFile,
-    showToast,
-  ]);
+  }, [documentViewerFile, refreshOnlyOfficeConfig, user, setDocumentViewerFile, showToast]);
 
   // Cancel any in-flight requests when user logs out
   useEffect(() => {
@@ -250,7 +223,7 @@ export const DocumentViewerModal: React.FC = () => {
               className="px-3 py-2 rounded-md bg-blue-600 dark:bg-blue-500 text-white text-sm hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors flex items-center gap-2 flex-shrink-0"
               onClick={() => {
                 const url = `/api/onlyoffice/viewer/${documentViewerFile.id}`;
-                window.open(url, "_blank", "noopener,noreferrer");
+                window.open(url, '_blank', 'noopener,noreferrer');
                 // Close the document in the main tab to avoid confusion when editing in the new tab
                 setDocumentViewerFile?.(null);
               }}
@@ -280,11 +253,7 @@ export const DocumentViewerModal: React.FC = () => {
               {error}
             </div>
           )}
-          <div
-            ref={containerRef}
-            id="onlyoffice-editor-container"
-            className="w-full h-full"
-          />
+          <div ref={containerRef} id="onlyoffice-editor-container" className="w-full h-full" />
         </div>
       </div>
     </div>

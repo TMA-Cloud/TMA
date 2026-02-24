@@ -1,7 +1,7 @@
-import React from "react";
-import { Shield, LogOut, Key } from "lucide-react";
-import { SettingsSection } from "../components/SettingsSection";
-import { SettingsItem } from "../components/SettingsItem";
+import React from 'react';
+import { Shield, LogOut, Key } from 'lucide-react';
+import { SettingsSection } from '../components/SettingsSection';
+import { SettingsItem } from '../components/SettingsItem';
 
 interface SecuritySectionProps {
   activeSessionsCount: number;
@@ -21,11 +21,7 @@ export const SecuritySection: React.FC<SecuritySectionProps> = ({
   onShowMfa,
 }) => {
   return (
-    <SettingsSection
-      title="Security"
-      icon={Shield}
-      description="Manage your account security and active sessions."
-    >
+    <SettingsSection title="Security" icon={Shield} description="Manage your account security and active sessions.">
       <SettingsItem
         label="Multi-Factor Authentication"
         value=""
@@ -37,16 +33,16 @@ export const SecuritySection: React.FC<SecuritySectionProps> = ({
       <SettingsItem
         label="Active Sessions"
         value=""
-        action={loadingSessions ? "Loading..." : "View sessions"}
+        action={loadingSessions ? 'Loading...' : 'View sessions'}
         onAction={onShowSessions}
         actionDisabled={loadingSessions}
-        description={`View and manage all active sessions. ${activeSessionsCount > 0 ? `${activeSessionsCount} active session${activeSessionsCount === 1 ? "" : "s"}` : "No active sessions"}.`}
+        description={`View and manage all active sessions. ${activeSessionsCount > 0 ? `${activeSessionsCount} active session${activeSessionsCount === 1 ? '' : 's'}` : 'No active sessions'}.`}
         loadingStates={{ sessions: loadingSessions }}
       />
       <SettingsItem
         label="Logout All Devices"
         value=""
-        action={loggingOutAll ? "Logging out..." : "Logout everywhere"}
+        action={loggingOutAll ? 'Logging out...' : 'Logout everywhere'}
         onAction={onLogoutAllDevices}
         actionDisabled={loggingOutAll}
         actionIcon={LogOut}

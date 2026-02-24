@@ -1,13 +1,13 @@
-import React, { useState } from "react";
-import { Modal } from "../ui/Modal";
-import { useApp, type ShareExpiry } from "../../contexts/AppContext";
-import { Clipboard, Check, Clock } from "lucide-react";
-import { useToast } from "../../hooks/useToast";
+import React, { useState } from 'react';
+import { Modal } from '../ui/Modal';
+import { useApp, type ShareExpiry } from '../../contexts/AppContext';
+import { Clipboard, Check, Clock } from 'lucide-react';
+import { useToast } from '../../hooks/useToast';
 
 const EXPIRY_OPTIONS: { value: ShareExpiry; label: string }[] = [
-  { value: "7d", label: "7 days" },
-  { value: "30d", label: "30 days" },
-  { value: "never", label: "No expiration" },
+  { value: '7d', label: '7 days' },
+  { value: '30d', label: '30 days' },
+  { value: 'never', label: 'No expiration' },
 ];
 
 export const ShareLinkModal: React.FC = () => {
@@ -22,25 +22,25 @@ export const ShareLinkModal: React.FC = () => {
       if (navigator.clipboard && navigator.clipboard.writeText) {
         await navigator.clipboard.writeText(link);
       } else {
-        const textArea = document.createElement("textarea");
+        const textArea = document.createElement('textarea');
         textArea.value = link;
-        textArea.style.position = "fixed";
-        textArea.style.left = "-999999px";
-        textArea.style.top = "-999999px";
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        textArea.style.top = '-999999px';
         document.body.appendChild(textArea);
         textArea.focus();
         textArea.select();
-        const successful = document.execCommand("copy");
+        const successful = document.execCommand('copy');
         document.body.removeChild(textArea);
         if (!successful) {
-          throw new Error("Copy command failed");
+          throw new Error('Copy command failed');
         }
       }
       setCopiedLink(link);
-      showToast("Link copied to clipboard", "success");
+      showToast('Link copied to clipboard', 'success');
       setTimeout(() => setCopiedLink(null), 2000);
     } catch {
-      showToast("Failed to copy link", "error");
+      showToast('Failed to copy link', 'error');
     }
   };
 
@@ -49,11 +49,9 @@ export const ShareLinkModal: React.FC = () => {
   return (
     <Modal isOpen onClose={handleClose} title="Share Links">
       <div className="space-y-4">
-        <p className="text-sm text-gray-600 dark:text-gray-400">
-          Anyone with these links can download the files.
-        </p>
+        <p className="text-sm text-gray-600 dark:text-gray-400">Anyone with these links can download the files.</p>
         <div className="space-y-2">
-          {shareLinks.map((link) => (
+          {shareLinks.map(link => (
             <div key={link} className="flex items-center space-x-2">
               <input
                 readOnly
@@ -62,23 +60,17 @@ export const ShareLinkModal: React.FC = () => {
               />
               <button
                 type="button"
-                onClick={(e) => {
+                onClick={e => {
                   e.preventDefault();
                   e.stopPropagation();
                   copy(link);
                 }}
                 className={`p-2 rounded-lg transition-colors ${
-                  copiedLink === link
-                    ? "bg-green-500 text-white"
-                    : "bg-blue-500 hover:bg-blue-600 text-white"
+                  copiedLink === link ? 'bg-green-500 text-white' : 'bg-blue-500 hover:bg-blue-600 text-white'
                 }`}
                 aria-label="Copy link to clipboard"
               >
-                {copiedLink === link ? (
-                  <Check className="w-4 h-4" />
-                ) : (
-                  <Clipboard className="w-4 h-4" />
-                )}
+                {copiedLink === link ? <Check className="w-4 h-4" /> : <Clipboard className="w-4 h-4" />}
               </button>
             </div>
           ))}
@@ -106,7 +98,7 @@ export const ShareExpiryModal: React.FC<{
   onConfirm: (expiry: ShareExpiry) => void;
   fileCount: number;
 }> = ({ isOpen, onClose, onConfirm, fileCount }) => {
-  const [expiry, setExpiry] = useState<ShareExpiry>("7d");
+  const [expiry, setExpiry] = useState<ShareExpiry>('7d');
 
   if (!isOpen) return null;
 
@@ -114,36 +106,32 @@ export const ShareExpiryModal: React.FC<{
     <Modal isOpen onClose={onClose} title="Share Options" size="sm">
       <div className="space-y-5">
         <p className="text-sm text-gray-600 dark:text-gray-400">
-          Choose how long the link stays active for{" "}
+          Choose how long the link stays active for{' '}
           <span className="font-medium text-gray-800 dark:text-gray-200">
-            {fileCount} item{fileCount !== 1 ? "s" : ""}
+            {fileCount} item{fileCount !== 1 ? 's' : ''}
           </span>
           .
         </p>
 
         <div className="space-y-2">
-          {EXPIRY_OPTIONS.map((opt) => (
+          {EXPIRY_OPTIONS.map(opt => (
             <button
               key={opt.value}
               onClick={() => setExpiry(opt.value)}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border transition-all duration-200 text-left ${
                 expiry === opt.value
-                  ? "border-blue-500 bg-blue-50 dark:bg-blue-900/30 dark:border-blue-400 ring-1 ring-blue-500/20"
-                  : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600"
+                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30 dark:border-blue-400 ring-1 ring-blue-500/20'
+                  : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
               }`}
             >
               <Clock
                 className={`w-4 h-4 flex-shrink-0 ${
-                  expiry === opt.value
-                    ? "text-blue-600 dark:text-blue-400"
-                    : "text-gray-400 dark:text-gray-500"
+                  expiry === opt.value ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 dark:text-gray-500'
                 }`}
               />
               <span
                 className={`text-sm font-medium ${
-                  expiry === opt.value
-                    ? "text-blue-700 dark:text-blue-300"
-                    : "text-gray-700 dark:text-gray-300"
+                  expiry === opt.value ? 'text-blue-700 dark:text-blue-300' : 'text-gray-700 dark:text-gray-300'
                 }`}
               >
                 {opt.label}

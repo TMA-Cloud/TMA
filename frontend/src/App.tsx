@@ -1,14 +1,14 @@
-import React, { useState, Suspense, lazy } from "react";
-import { ThemeProvider } from "./contexts/ThemeProvider";
-import { AppProvider } from "./contexts/AppProvider";
-import { useApp } from "./contexts/AppContext";
-import { AuthProvider } from "./contexts/AuthProvider";
-import { useAuth } from "./contexts/AuthContext";
-import { ToastProvider } from "./hooks/ToastProvider";
-import { useSignupStatus } from "./components/settings/hooks/useSignupStatus";
-import { useIsMobile } from "./hooks/useIsMobile";
-import { Sidebar } from "./components/layout/Sidebar";
-import { Header } from "./components/layout/Header";
+import React, { useState, Suspense, lazy } from 'react';
+import { ThemeProvider } from './contexts/ThemeProvider';
+import { AppProvider } from './contexts/AppProvider';
+import { useApp } from './contexts/AppContext';
+import { AuthProvider } from './contexts/AuthProvider';
+import { useAuth } from './contexts/AuthContext';
+import { ToastProvider } from './hooks/ToastProvider';
+import { useSignupStatus } from './components/settings/hooks/useSignupStatus';
+import { useIsMobile } from './hooks/useIsMobile';
+import { Sidebar } from './components/layout/Sidebar';
+import { Header } from './components/layout/Header';
 
 function easeOutCubic(t: number) {
   return 1 - Math.pow(1 - t, 3);
@@ -16,8 +16,8 @@ function easeOutCubic(t: number) {
 
 function scrollToTopFast(el: HTMLElement, durationMs = 180) {
   // Respect reduced-motion preference
-  if (window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches) {
-    el.scrollTo({ top: 0, behavior: "auto" });
+  if (window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches) {
+    el.scrollTo({ top: 0, behavior: 'auto' });
     return;
   }
 
@@ -35,60 +35,58 @@ function scrollToTopFast(el: HTMLElement, durationMs = 180) {
 }
 
 // Lazy load main page components (using default exports for cleaner syntax)
-const Dashboard = lazy(() => import("./components/dashboard/Dashboard"));
-const FileManager = lazy(() => import("./components/fileManager/FileManager"));
-const Settings = lazy(() => import("./components/settings/Settings"));
-const MobileAppContent = lazy(
-  () => import("./components/mobile/MobileAppContent"),
-);
+const Dashboard = lazy(() => import('./components/dashboard/Dashboard'));
+const FileManager = lazy(() => import('./components/fileManager/FileManager'));
+const Settings = lazy(() => import('./components/settings/Settings'));
+const MobileAppContent = lazy(() => import('./components/mobile/MobileAppContent'));
 
 // Lazy load modals (conditionally rendered)
 const UploadModal = lazy(() =>
-  import("./components/upload/UploadModal").then((mod) => ({
+  import('./components/upload/UploadModal').then(mod => ({
     default: mod.UploadModal,
-  })),
+  }))
 );
 const UploadProgress = lazy(() =>
-  import("./components/upload/UploadProgress").then((mod) => ({
+  import('./components/upload/UploadProgress').then(mod => ({
     default: mod.UploadProgress,
-  })),
+  }))
 );
 const CreateFolderModal = lazy(() =>
-  import("./components/folder/CreateFolderModal").then((mod) => ({
+  import('./components/folder/CreateFolderModal').then(mod => ({
     default: mod.CreateFolderModal,
-  })),
+  }))
 );
 const ImageViewerModal = lazy(() =>
-  import("./components/viewer/ImageViewerModal").then((mod) => ({
+  import('./components/viewer/ImageViewerModal').then(mod => ({
     default: mod.ImageViewerModal,
-  })),
+  }))
 );
 const DocumentViewerModal = lazy(() =>
-  import("./components/viewer/DocumentViewerModal").then((mod) => ({
+  import('./components/viewer/DocumentViewerModal').then(mod => ({
     default: mod.DocumentViewerModal,
-  })),
+  }))
 );
 const RenameModal = lazy(() =>
-  import("./components/fileManager/RenameModal").then((mod) => ({
+  import('./components/fileManager/RenameModal').then(mod => ({
     default: mod.RenameModal,
-  })),
+  }))
 );
 const ShareLinkModal = lazy(() =>
-  import("./components/fileManager/ShareLinkModal").then((mod) => ({
+  import('./components/fileManager/ShareLinkModal').then(mod => ({
     default: mod.ShareLinkModal,
-  })),
+  }))
 );
 
 // Lazy load auth components
 const LoginForm = lazy(() =>
-  import("./components/auth/LoginForm").then((mod) => ({
+  import('./components/auth/LoginForm').then(mod => ({
     default: mod.LoginForm,
-  })),
+  }))
 );
 const SignupForm = lazy(() =>
-  import("./components/auth/SignupForm").then((mod) => ({
+  import('./components/auth/SignupForm').then(mod => ({
     default: mod.SignupForm,
-  })),
+  }))
 );
 
 // Loading fallback component
@@ -102,13 +100,7 @@ const PageLoadingFallback: React.FC = () => (
 );
 
 const AppContent: React.FC = () => {
-  const {
-    currentPath,
-    sidebarOpen,
-    uploadProgress,
-    setUploadProgress,
-    setIsUploadProgressInteracting,
-  } = useApp();
+  const { currentPath, sidebarOpen, uploadProgress, setUploadProgress, setIsUploadProgressInteracting } = useApp();
   const isMobile = useIsMobile();
   const mainRef = React.useRef<HTMLElement | null>(null);
 
@@ -123,7 +115,7 @@ const AppContent: React.FC = () => {
     const currentPage = currentPath[0];
 
     switch (currentPage) {
-      case "Dashboard":
+      case 'Dashboard':
         return (
           <div className="animate-fadeIn">
             <Suspense fallback={<PageLoadingFallback />}>
@@ -131,7 +123,7 @@ const AppContent: React.FC = () => {
             </Suspense>
           </div>
         );
-      case "Settings":
+      case 'Settings':
         return (
           <div className="animate-fadeIn">
             <Suspense fallback={<PageLoadingFallback />}>
@@ -139,10 +131,10 @@ const AppContent: React.FC = () => {
             </Suspense>
           </div>
         );
-      case "My Files":
-      case "Shared":
-      case "Starred":
-      case "Trash":
+      case 'My Files':
+      case 'Shared':
+      case 'Starred':
+      case 'Trash':
       default:
         return (
           <div className="animate-fadeIn">
@@ -168,7 +160,7 @@ const AppContent: React.FC = () => {
       <Sidebar />
 
       <div
-        className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 ${!sidebarOpen ? "lg:ml-0" : ""}`}
+        className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 ${!sidebarOpen ? 'lg:ml-0' : ''}`}
       >
         <Header />
 
@@ -187,7 +179,7 @@ const AppContent: React.FC = () => {
         <UploadProgress
           uploads={uploadProgress}
           onDismiss={(id: string) => {
-            setUploadProgress((prev) => prev.filter((item) => item.id !== id));
+            setUploadProgress(prev => prev.filter(item => item.id !== id));
           }}
           onInteractionChange={setIsUploadProgressInteracting}
         />
@@ -198,28 +190,28 @@ const AppContent: React.FC = () => {
 
 const AuthGate: React.FC = () => {
   const { user, loading } = useAuth();
-  const [view, setView] = useState<"login" | "signup">("login");
+  const [view, setView] = useState<'login' | 'signup'>('login');
   const [error, setError] = useState<string | null>(null);
 
   const { signupEnabled, loadingSignupStatus } = useSignupStatus();
 
   // If signup is disabled, force view to login
   React.useEffect(() => {
-    if (!loadingSignupStatus && !signupEnabled && view === "signup") {
-      setView("login");
-      setError("Signup is currently disabled.");
+    if (!loadingSignupStatus && !signupEnabled && view === 'signup') {
+      setView('login');
+      setError('Signup is currently disabled.');
     }
   }, [signupEnabled, loadingSignupStatus, view]);
 
   // Check for error in URL (e.g., from Google OAuth callback)
   React.useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const errorParam = params.get("error");
-    if (errorParam === "signup_disabled") {
-      setError("Signup is currently disabled");
-      setView("login");
+    const errorParam = params.get('error');
+    if (errorParam === 'signup_disabled') {
+      setError('Signup is currently disabled');
+      setView('login');
       // Clean up URL
-      window.history.replaceState({}, "", window.location.pathname);
+      window.history.replaceState({}, '', window.location.pathname);
     }
   }, []);
 
@@ -228,9 +220,7 @@ const AuthGate: React.FC = () => {
       <div className="h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-950">
         <div className="text-center animate-fadeIn">
           <div className="w-16 h-16 mx-auto mb-4 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-lg font-semibold text-gray-700 dark:text-gray-300 animate-pulse">
-            Loading...
-          </p>
+          <p className="text-lg font-semibold text-gray-700 dark:text-gray-300 animate-pulse">Loading...</p>
         </div>
       </div>
     );
@@ -245,12 +235,12 @@ const AuthGate: React.FC = () => {
           </div>
         )}
         <Suspense fallback={<PageLoadingFallback />}>
-          {view === "login" || !signupEnabled ? (
+          {view === 'login' || !signupEnabled ? (
             <LoginForm
               signupEnabled={signupEnabled}
               onSwitch={() => {
                 if (signupEnabled) {
-                  setView("signup");
+                  setView('signup');
                   setError(null);
                 }
               }}
@@ -258,7 +248,7 @@ const AuthGate: React.FC = () => {
           ) : (
             <SignupForm
               onSwitch={() => {
-                setView("login");
+                setView('login');
                 setError(null);
               }}
             />

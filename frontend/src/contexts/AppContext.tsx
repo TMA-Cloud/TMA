@@ -1,12 +1,12 @@
-import { createContext, useContext } from "react";
-import type { UploadProgressItem } from "../utils/uploadUtils";
+import { createContext, useContext } from 'react';
+import type { UploadProgressItem } from '../utils/uploadUtils';
 
-export type ShareExpiry = "7d" | "30d" | "never";
+export type ShareExpiry = '7d' | '30d' | 'never';
 
 export interface FileItem {
   id: string;
   name: string;
-  type: "file" | "folder";
+  type: 'file' | 'folder';
   size?: number;
   modified: Date;
   mimeType?: string;
@@ -20,7 +20,7 @@ export interface FileItem {
 export interface FileItemResponse {
   id: string;
   name: string;
-  type: "file" | "folder";
+  type: 'file' | 'folder';
   size?: number;
   modified: string;
   mimeType?: string;
@@ -37,7 +37,7 @@ export interface AppContextType {
   folderSharedStack: boolean[];
   files: FileItem[];
   selectedFiles: string[];
-  viewMode: "grid" | "list";
+  viewMode: 'grid' | 'list';
   sidebarOpen: boolean;
   uploadModalOpen: boolean;
   createFolderModalOpen: boolean;
@@ -54,7 +54,7 @@ export interface AppContextType {
   setCurrentPath: (path: string[], ids?: (string | null)[]) => void;
   setFiles: (files: FileItem[]) => void;
   setSelectedFiles: (ids: string[]) => void;
-  setViewMode: (mode: "grid" | "list") => void;
+  setViewMode: (mode: 'grid' | 'list') => void;
   setSidebarOpen: (open: boolean) => void;
   setUploadModalOpen: (open: boolean) => void;
   setCreateFolderModalOpen: (open: boolean) => void;
@@ -66,33 +66,25 @@ export interface AppContextType {
   uploadFile: (file: File) => Promise<void>;
   moveFiles: (ids: string[], parentId: string | null) => Promise<void>;
   copyFiles: (ids: string[], parentId: string | null) => Promise<void>;
-  shareFiles: (
-    ids: string[],
-    shared: boolean,
-    expiry?: ShareExpiry,
-  ) => Promise<Record<string, string>>;
+  shareFiles: (ids: string[], shared: boolean, expiry?: ShareExpiry) => Promise<Record<string, string>>;
   getShareLinks: (ids: string[]) => Promise<Record<string, string>>;
   linkToParentShare: (ids: string[]) => Promise<Record<string, string>>;
   starFiles: (ids: string[], starred: boolean) => Promise<void>;
   deleteFiles: (ids: string[]) => Promise<void>;
-  restoreFiles: (
-    ids: string[],
-  ) => Promise<{ success: boolean; message?: string }>;
+  restoreFiles: (ids: string[]) => Promise<{ success: boolean; message?: string }>;
   deleteForever: (ids: string[]) => Promise<void>;
   emptyTrash: () => Promise<{ success: boolean; message?: string }>;
-  clipboard: { ids: string[]; action: "copy" | "cut" } | null;
-  setClipboard: (
-    clip: { ids: string[]; action: "copy" | "cut" } | null,
-  ) => void;
+  clipboard: { ids: string[]; action: 'copy' | 'cut' } | null;
+  setClipboard: (clip: { ids: string[]; action: 'copy' | 'cut' } | null) => void;
   pasteClipboard: (parentId: string | null) => Promise<void>;
   pasteProgress: number | null;
   setPasteProgress: (p: number | null) => void;
   openFolder: (folder: FileItem) => void;
   navigateTo: (index: number) => void;
-  sortBy: "name" | "size" | "modified" | "deletedAt";
-  sortOrder: "asc" | "desc";
-  setSortBy: (s: "name" | "size" | "modified" | "deletedAt") => void;
-  setSortOrder: (o: "asc" | "desc") => void;
+  sortBy: 'name' | 'size' | 'modified' | 'deletedAt';
+  sortOrder: 'asc' | 'desc';
+  setSortBy: (s: 'name' | 'size' | 'modified' | 'deletedAt') => void;
+  setSortOrder: (o: 'asc' | 'desc') => void;
   searchQuery: string;
   setSearchQuery: (query: string) => void;
   isSearching: boolean;
@@ -104,15 +96,8 @@ export interface AppContextType {
   /** Open a single file on the desktop (Windows) and save changes back */
   editFileWithDesktop: (id: string) => Promise<void>;
   uploadProgress: UploadProgressItem[];
-  setUploadProgress: (
-    progress:
-      | UploadProgressItem[]
-      | ((prev: UploadProgressItem[]) => UploadProgressItem[]),
-  ) => void;
-  uploadFileWithProgress: (
-    file: File,
-    onProgress?: (progress: number) => void,
-  ) => Promise<void>;
+  setUploadProgress: (progress: UploadProgressItem[] | ((prev: UploadProgressItem[]) => UploadProgressItem[])) => void;
+  uploadFileWithProgress: (file: File, onProgress?: (progress: number) => void) => Promise<void>;
   uploadFilesBulk: (files: File[]) => Promise<void>;
   /** Upload files from OS clipboard (Electron only). */
   uploadFilesFromClipboard: () => Promise<void>;
@@ -127,7 +112,7 @@ export const AppContext = createContext<AppContextType | undefined>(undefined);
 export const useApp = () => {
   const context = useContext(AppContext);
   if (!context) {
-    throw new Error("useApp must be used within an AppProvider");
+    throw new Error('useApp must be used within an AppProvider');
   }
   return context;
 };

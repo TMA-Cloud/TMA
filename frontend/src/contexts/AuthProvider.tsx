@@ -1,10 +1,8 @@
-import React, { useEffect, useState, useRef } from "react";
-import { AuthContext, type User } from "./AuthContext";
-import { checkAuthSilently, setAuthState, AUTH_STATE_KEY } from "../utils/api";
+import React, { useEffect, useState, useRef } from 'react';
+import { AuthContext, type User } from './AuthContext';
+import { checkAuthSilently, setAuthState, AUTH_STATE_KEY } from '../utils/api';
 
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
-  children,
-}) => {
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -73,33 +71,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     };
 
     // Listen for storage events (cross-tab synchronization)
-    window.addEventListener("storage", handleStorageChange);
+    window.addEventListener('storage', handleStorageChange);
 
     // Cleanup: only remove event listener
     // Don't abort requests here - the shared abortControllerRef is managed by
     // the main effect cleanup, not the storage listener cleanup
     return () => {
-      window.removeEventListener("storage", handleStorageChange);
+      window.removeEventListener('storage', handleStorageChange);
     };
   }, [loadProfile]);
 
   const login = async (email: string, password: string, mfaCode?: string) => {
     try {
       const res = await fetch(`/api/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ email, password, mfaCode }),
       });
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
-        const message = errorData.message || "Login failed";
+        const message = errorData.message || 'Login failed';
         // Return error info for MFA requirement detection
         throw {
           status: res.status,
           message,
-          requiresMfa: message === "MFA code required",
-          invalidMfa: message === "Invalid MFA code",
+          requiresMfa: message === 'MFA code required',
+          invalidMfa: message === 'Invalid MFA code',
         };
       }
       const data = await res.json();
@@ -125,14 +123,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const signup = async (email: string, password: string, name?: string) => {
     const res = await fetch(`/api/signup`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({ email, password, name }),
     });
     if (!res.ok) {
       const errorData = await res.json().catch(() => ({}));
-      throw new Error(errorData.message || "Failed to sign up");
+      throw new Error(errorData.message || 'Failed to sign up');
     }
     const data = await res.json();
     setUser(data.user);
@@ -144,8 +142,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const logout = async () => {
     try {
       await fetch(`/api/logout`, {
-        method: "POST",
-        credentials: "include",
+        method: 'POST',
+        credentials: 'include',
       });
     } catch {
       // ignore
@@ -155,9 +153,5 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     setAuthState(false);
   };
 
-  return (
-    <AuthContext.Provider value={{ user, loading, login, signup, logout }}>
-      {children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={{ user, loading, login, signup, logout }}>{children}</AuthContext.Provider>;
 };

@@ -1,17 +1,14 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
-import { Modal } from "../ui/Modal";
-import { ZoomIn, ZoomOut } from "lucide-react";
-import { type FileItem } from "../../contexts/AppContext";
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Modal } from '../ui/Modal';
+import { ZoomIn, ZoomOut } from 'lucide-react';
+import { type FileItem } from '../../contexts/AppContext';
 
 interface DesktopImageViewerProps {
   imageViewerFile: FileItem | null;
   onClose: () => void;
 }
 
-export const DesktopImageViewer: React.FC<DesktopImageViewerProps> = ({
-  imageViewerFile,
-  onClose,
-}) => {
+export const DesktopImageViewer: React.FC<DesktopImageViewerProps> = ({ imageViewerFile, onClose }) => {
   const [zoom, setZoom] = useState(1);
   const [imageSrc, setImageSrc] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -34,7 +31,7 @@ export const DesktopImageViewer: React.FC<DesktopImageViewerProps> = ({
       const load = async () => {
         try {
           const res = await fetch(`/api/files/${imageViewerFile.id}/download`, {
-            credentials: "include",
+            credentials: 'include',
           });
           const blob = await res.blob();
           const url = URL.createObjectURL(blob);
@@ -69,7 +66,7 @@ export const DesktopImageViewer: React.FC<DesktopImageViewerProps> = ({
               requestAnimationFrame(() => {
                 if (wrapperRef.current) {
                   wrapperRef.current.style.transform = `translate3d(${offset.current.x}px, ${offset.current.y}px, 0) scale(${scale})`;
-                  wrapperRef.current.style.transformOrigin = "0 0";
+                  wrapperRef.current.style.transformOrigin = '0 0';
                 }
               });
             }
@@ -134,8 +131,8 @@ export const DesktopImageViewer: React.FC<DesktopImageViewerProps> = ({
     e.preventDefault();
     setDragging(true);
     dragOrigin.current = { x: e.clientX, y: e.clientY };
-    window.addEventListener("pointermove", handlePointerMove);
-    window.addEventListener("pointerup", handlePointerUp);
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
   };
 
   const handlePointerMove = (e: PointerEvent) => {
@@ -176,18 +173,15 @@ export const DesktopImageViewer: React.FC<DesktopImageViewerProps> = ({
       applyTransform(zoom, false);
     });
 
-    window.removeEventListener("pointermove", handlePointerMove);
-    window.removeEventListener("pointerup", handlePointerUp);
+    window.removeEventListener('pointermove', handlePointerMove);
+    window.removeEventListener('pointerup', handlePointerUp);
   };
 
   const handleWheel = useCallback((e: WheelEvent) => {
     e.preventDefault();
-    setZoom((currentZoom) => {
+    setZoom(currentZoom => {
       const minZoom = Math.max(0.1, initialFitZoom.current || 0.25);
-      const newZoom =
-        e.deltaY < 0
-          ? Math.min(currentZoom + 0.25, 5)
-          : Math.max(currentZoom - 0.25, minZoom);
+      const newZoom = e.deltaY < 0 ? Math.min(currentZoom + 0.25, 5) : Math.max(currentZoom - 0.25, minZoom);
       const wrap = wrapperRef.current;
       if (!wrap) {
         return newZoom;
@@ -249,9 +243,9 @@ export const DesktopImageViewer: React.FC<DesktopImageViewerProps> = ({
     const container = containerRef.current;
     if (!container) return;
 
-    container.addEventListener("wheel", handleWheel, { passive: false });
+    container.addEventListener('wheel', handleWheel, { passive: false });
     return () => {
-      container.removeEventListener("wheel", handleWheel);
+      container.removeEventListener('wheel', handleWheel);
       // Clean up any pending animation frames
       if (rafId.current !== null) {
         cancelAnimationFrame(rafId.current);
@@ -268,28 +262,24 @@ export const DesktopImageViewer: React.FC<DesktopImageViewerProps> = ({
         <div
           ref={containerRef}
           onPointerDown={handlePointerDown}
-          onMouseMove={(e) =>
-            (lastMousePos.current = { x: e.clientX, y: e.clientY })
-          }
+          onMouseMove={e => (lastMousePos.current = { x: e.clientX, y: e.clientY })}
           onDoubleClick={resetZoom}
-          className={`w-full h-full touch-none ${dragging ? "cursor-grabbing" : "cursor-grab"}`}
-          style={{ willChange: dragging ? "transform" : "auto" }}
+          className={`w-full h-full touch-none ${dragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+          style={{ willChange: dragging ? 'transform' : 'auto' }}
         >
           <div
             ref={wrapperRef}
             className="will-change-transform"
             style={{
               transform: `translate3d(${offset.current.x}px, ${offset.current.y}px, 0) scale(${zoom})`,
-              transformOrigin: "0 0",
-              backfaceVisibility: "hidden",
+              transformOrigin: '0 0',
+              backfaceVisibility: 'hidden',
               perspective: 1000,
             }}
           >
             {loading ? (
               <div className="flex justify-center items-center h-full">
-                <span className="text-sm text-gray-500 dark:text-gray-400">
-                  Loading image...
-                </span>
+                <span className="text-sm text-gray-500 dark:text-gray-400">Loading image...</span>
               </div>
             ) : (
               imageSrc && (
@@ -315,9 +305,7 @@ export const DesktopImageViewer: React.FC<DesktopImageViewerProps> = ({
           >
             <ZoomOut className="w-5 h-5" />
           </button>
-          <span className="text-sm w-12 text-center">
-            {(zoom * 100).toFixed(0)}%
-          </span>
+          <span className="text-sm w-12 text-center">{(zoom * 100).toFixed(0)}%</span>
           <button
             onClick={zoomInHandler}
             className="p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700"

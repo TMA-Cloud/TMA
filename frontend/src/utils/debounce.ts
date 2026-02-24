@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 // Hook for debounced callbacks with cancellation support
 export function useDebouncedCallback<T extends (...args: unknown[]) => unknown>(
   callback: T,
-  delay: number,
+  delay: number
 ): [(...args: Parameters<T>) => void, () => void] {
   const callbackRef = useRef(callback);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -27,7 +27,7 @@ export function useDebouncedCallback<T extends (...args: unknown[]) => unknown>(
         timeoutRef.current = null;
       }, delay);
     },
-    [delay, cancel],
+    [delay, cancel]
   );
 
   // Cleanup on unmount

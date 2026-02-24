@@ -1,23 +1,13 @@
-import React from "react";
-import {
-  Grid,
-  List,
-  FolderPlus,
-  Trash2,
-  Share2,
-  Star,
-  Download,
-  Edit3,
-  RotateCcw,
-} from "lucide-react";
-import { Tooltip } from "../ui/Tooltip";
-import { SortMenu } from "./SortMenu";
+import React from 'react';
+import { Grid, List, FolderPlus, Trash2, Share2, Star, Download, Edit3, RotateCcw } from 'lucide-react';
+import { Tooltip } from '../ui/Tooltip';
+import { SortMenu } from './SortMenu';
 
 interface FileManagerToolbarProps {
   isMobile: boolean;
-  viewMode: "grid" | "list";
+  viewMode: 'grid' | 'list';
   sortBy: string;
-  sortOrder: "asc" | "desc";
+  sortOrder: 'asc' | 'desc';
   selectedFiles: string[];
   isTrashView: boolean;
   isSharedView: boolean;
@@ -27,8 +17,8 @@ interface FileManagerToolbarProps {
   allShared: boolean;
   allStarred: boolean;
   isDownloading: boolean;
-  onViewModeChange: (mode: "grid" | "list") => void;
-  onSortChange: (by: string, order: "asc" | "desc") => void;
+  onViewModeChange: (mode: 'grid' | 'list') => void;
+  onSortChange: (by: string, order: 'asc' | 'desc') => void;
   onCreateFolder: () => void;
   onShare: () => void;
   onStar: () => void;
@@ -67,29 +57,25 @@ export const FileManagerToolbar: React.FC<FileManagerToolbarProps> = ({
   onEmptyTrash,
 }) => {
   return (
-    <div
-      className={`flex items-center ${isMobile ? "justify-end w-full flex-wrap gap-2" : "space-x-2"}`}
-    >
+    <div className={`flex items-center ${isMobile ? 'justify-end w-full flex-wrap gap-2' : 'space-x-2'}`}>
       {/* Action buttons - only show when files are selected, but not on Trash page, and not on mobile */}
       {selectedFiles.length > 0 && !isTrashView && !isMobile && (
         <>
           {/* Hide "Add to Share" on Shared page */}
           {!isSharedView && (
-            <Tooltip text={allShared ? "Remove from Shared" : "Add to Share"}>
+            <Tooltip text={allShared ? 'Remove from Shared' : 'Add to Share'}>
               <button
                 className={`p-2.5 rounded-xl transition-all duration-200 ${
                   allShared
-                    ? "text-green-600 dark:text-green-400 bg-green-50/80 dark:bg-green-900/30 shadow-md shadow-green-500/40 dark:shadow-green-400/30 ring-1 ring-green-500/20 dark:ring-green-400/20 hover-lift"
-                    : "text-gray-500/80 dark:text-gray-400/80 hover:text-green-600 dark:hover:text-green-400 hover:bg-green-50/50 dark:hover:bg-green-900/20 shadow-lg shadow-green-500/30 dark:shadow-green-400/20 ring-1 ring-green-500/20 dark:ring-green-400/20 hover-lift"
+                    ? 'text-green-600 dark:text-green-400 bg-green-50/80 dark:bg-green-900/30 shadow-md shadow-green-500/40 dark:shadow-green-400/30 ring-1 ring-green-500/20 dark:ring-green-400/20 hover-lift'
+                    : 'text-gray-500/80 dark:text-gray-400/80 hover:text-green-600 dark:hover:text-green-400 hover:bg-green-50/50 dark:hover:bg-green-900/20 shadow-lg shadow-green-500/30 dark:shadow-green-400/20 ring-1 ring-green-500/20 dark:ring-green-400/20 hover-lift'
                 }`}
                 onClick={() => onShare()}
-                aria-label={allShared ? "Remove from Shared" : "Add to Share"}
+                aria-label={allShared ? 'Remove from Shared' : 'Add to Share'}
               >
                 <Share2
                   className={`w-5 h-5 transition-all duration-200 icon-muted ${
-                    allShared
-                      ? "fill-green-600 dark:fill-green-400 opacity-100"
-                      : ""
+                    allShared ? 'fill-green-600 dark:fill-green-400 opacity-100' : ''
                   }`}
                 />
               </button>
@@ -98,25 +84,19 @@ export const FileManagerToolbar: React.FC<FileManagerToolbarProps> = ({
 
           {/* Hide "Add to Starred" on Starred page */}
           {!isStarredView && (
-            <Tooltip
-              text={allStarred ? "Remove from Starred" : "Add to Starred"}
-            >
+            <Tooltip text={allStarred ? 'Remove from Starred' : 'Add to Starred'}>
               <button
                 className={`p-2.5 rounded-xl transition-all duration-200 ${
                   allStarred
-                    ? "text-yellow-600 dark:text-yellow-400 bg-yellow-50/80 dark:bg-yellow-900/30 shadow-md shadow-yellow-500/40 dark:shadow-yellow-400/30 ring-1 ring-yellow-500/20 dark:ring-yellow-400/20 hover-lift"
-                    : "text-gray-500/80 dark:text-gray-400/80 hover:text-yellow-600 dark:hover:text-yellow-400 hover:bg-yellow-50/50 dark:hover:bg-yellow-900/20 shadow-lg shadow-yellow-500/30 dark:shadow-yellow-400/20 ring-1 ring-yellow-500/20 dark:ring-yellow-400/20 hover-lift"
+                    ? 'text-yellow-600 dark:text-yellow-400 bg-yellow-50/80 dark:bg-yellow-900/30 shadow-md shadow-yellow-500/40 dark:shadow-yellow-400/30 ring-1 ring-yellow-500/20 dark:ring-yellow-400/20 hover-lift'
+                    : 'text-gray-500/80 dark:text-gray-400/80 hover:text-yellow-600 dark:hover:text-yellow-400 hover:bg-yellow-50/50 dark:hover:bg-yellow-900/20 shadow-lg shadow-yellow-500/30 dark:shadow-yellow-400/20 ring-1 ring-yellow-500/20 dark:ring-yellow-400/20 hover-lift'
                 }`}
                 onClick={() => onStar()}
-                aria-label={
-                  allStarred ? "Remove from Starred" : "Add to Starred"
-                }
+                aria-label={allStarred ? 'Remove from Starred' : 'Add to Starred'}
               >
                 <Star
                   className={`w-5 h-5 transition-all duration-200 icon-muted ${
-                    allStarred
-                      ? "fill-yellow-600 dark:fill-yellow-400 opacity-100"
-                      : ""
+                    allStarred ? 'fill-yellow-600 dark:fill-yellow-400 opacity-100' : ''
                   }`}
                 />
               </button>
@@ -127,10 +107,10 @@ export const FileManagerToolbar: React.FC<FileManagerToolbarProps> = ({
             <button
               className={`p-2.5 rounded-xl transition-all duration-200 ${
                 isDownloading || selectedFiles.length === 0
-                  ? "opacity-50 cursor-not-allowed text-gray-400 dark:text-gray-500 pointer-events-none"
-                  : "text-gray-500/80 hover:text-blue-600 dark:text-gray-400/80 dark:hover:text-blue-400 hover-lift hover:bg-blue-50/50 dark:hover:bg-blue-900/20 shadow-lg shadow-blue-500/30 dark:shadow-blue-400/20 ring-1 ring-blue-500/20 dark:ring-blue-400/20"
+                  ? 'opacity-50 cursor-not-allowed text-gray-400 dark:text-gray-500 pointer-events-none'
+                  : 'text-gray-500/80 hover:text-blue-600 dark:text-gray-400/80 dark:hover:text-blue-400 hover-lift hover:bg-blue-50/50 dark:hover:bg-blue-900/20 shadow-lg shadow-blue-500/30 dark:shadow-blue-400/20 ring-1 ring-blue-500/20 dark:ring-blue-400/20'
               }`}
-              onClick={(e) => {
+              onClick={e => {
                 if (isDownloading || selectedFiles.length === 0) {
                   e.preventDefault();
                   e.stopPropagation();
@@ -149,10 +129,10 @@ export const FileManagerToolbar: React.FC<FileManagerToolbarProps> = ({
             <button
               className={`p-2.5 rounded-xl transition-all duration-200 ${
                 selectedFiles.length !== 1
-                  ? "opacity-50 cursor-not-allowed text-gray-400 dark:text-gray-500 pointer-events-none"
-                  : "text-gray-500/80 hover:text-purple-600 dark:text-gray-400/80 dark:hover:text-purple-400 hover-lift hover:bg-purple-50/50 dark:hover:bg-purple-900/20 shadow-lg shadow-purple-500/30 dark:shadow-purple-400/20 ring-1 ring-purple-500/20 dark:ring-purple-400/20"
+                  ? 'opacity-50 cursor-not-allowed text-gray-400 dark:text-gray-500 pointer-events-none'
+                  : 'text-gray-500/80 hover:text-purple-600 dark:text-gray-400/80 dark:hover:text-purple-400 hover-lift hover:bg-purple-50/50 dark:hover:bg-purple-900/20 shadow-lg shadow-purple-500/30 dark:shadow-purple-400/20 ring-1 ring-purple-500/20 dark:ring-purple-400/20'
               }`}
-              onClick={(e) => {
+              onClick={e => {
                 if (selectedFiles.length !== 1) {
                   e.preventDefault();
                   e.stopPropagation();
@@ -220,13 +200,13 @@ export const FileManagerToolbar: React.FC<FileManagerToolbarProps> = ({
         <>
           <Tooltip text="Grid view">
             <button
-              onClick={() => onViewModeChange("grid")}
+              onClick={() => onViewModeChange('grid')}
               className={`
                     p-2.5 rounded-xl transition-all duration-200 ease-out hover-lift
                     ${
-                      viewMode === "grid"
-                        ? "bg-blue-100/80 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400 shadow-md"
-                        : "text-gray-500/80 hover:text-blue-600 dark:text-gray-400/80 dark:hover:text-blue-400 hover:bg-blue-50/50 dark:hover:bg-blue-900/20"
+                      viewMode === 'grid'
+                        ? 'bg-blue-100/80 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400 shadow-md'
+                        : 'text-gray-500/80 hover:text-blue-600 dark:text-gray-400/80 dark:hover:text-blue-400 hover:bg-blue-50/50 dark:hover:bg-blue-900/20'
                     }
                   `}
               aria-label="Grid view"
@@ -237,13 +217,13 @@ export const FileManagerToolbar: React.FC<FileManagerToolbarProps> = ({
 
           <Tooltip text="List view">
             <button
-              onClick={() => onViewModeChange("list")}
+              onClick={() => onViewModeChange('list')}
               className={`
                     p-2.5 rounded-xl transition-all duration-200 ease-out hover-lift
                     ${
-                      viewMode === "list"
-                        ? "bg-blue-100/80 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400 shadow-md"
-                        : "text-gray-500/80 hover:text-blue-600 dark:text-gray-400/80 dark:hover:text-blue-400 hover:bg-blue-50/50 dark:hover:bg-blue-900/20"
+                      viewMode === 'list'
+                        ? 'bg-blue-100/80 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400 shadow-md'
+                        : 'text-gray-500/80 hover:text-blue-600 dark:text-gray-400/80 dark:hover:text-blue-400 hover:bg-blue-50/50 dark:hover:bg-blue-900/20'
                     }
                   `}
               aria-label="List view"
@@ -264,11 +244,7 @@ export const FileManagerToolbar: React.FC<FileManagerToolbarProps> = ({
             </Tooltip>
           )}
 
-          <SortMenu
-            sortBy={sortBy}
-            sortOrder={sortOrder}
-            onSortChange={onSortChange}
-          />
+          <SortMenu sortBy={sortBy} sortOrder={sortOrder} onSortChange={onSortChange} />
         </>
       )}
     </div>

@@ -1,18 +1,18 @@
-import React, { useState, useEffect } from "react";
-import { useAuth } from "../../contexts/AuthContext";
-import { PasswordInput } from "./PasswordInput";
-import { SocialAuthButtons } from "./SocialAuthButtons";
-import { checkGoogleAuthEnabled } from "../../utils/api";
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '../../contexts/AuthContext';
+import { PasswordInput } from './PasswordInput';
+import { SocialAuthButtons } from './SocialAuthButtons';
+import { checkGoogleAuthEnabled } from '../../utils/api';
 
 export const LoginForm: React.FC<{
   onSwitch: () => void;
   signupEnabled: boolean;
 }> = ({ onSwitch, signupEnabled }) => {
   const { login } = useAuth();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [mfaCode, setMfaCode] = useState("");
-  const [error, setError] = useState("");
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [mfaCode, setMfaCode] = useState('');
+  const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [requiresMfa, setRequiresMfa] = useState(false);
   const [googleEnabled, setGoogleEnabled] = useState(false);
@@ -29,18 +29,14 @@ export const LoginForm: React.FC<{
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError("");
+    setError('');
 
     if (requiresMfa && !mfaCode) {
-      setError("Please enter your MFA code");
+      setError('Please enter your MFA code');
       return;
     }
 
-    const result = await login(
-      email,
-      password,
-      requiresMfa ? mfaCode : undefined,
-    );
+    const result = await login(email, password, requiresMfa ? mfaCode : undefined);
 
     if (result.success) {
       // Login successful
@@ -49,11 +45,11 @@ export const LoginForm: React.FC<{
 
     if (result.requiresMfa) {
       setRequiresMfa(true);
-      setError(result.message || "MFA code required");
+      setError(result.message || 'MFA code required');
     } else {
-      setError(result.message || "Invalid credentials");
+      setError(result.message || 'Invalid credentials');
       setRequiresMfa(false);
-      setMfaCode("");
+      setMfaCode('');
     }
   };
 
@@ -65,33 +61,31 @@ export const LoginForm: React.FC<{
             className="border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-3 w-full bg-gray-50/80 dark:bg-gray-800/80 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm transition-all duration-200 text-base"
             placeholder="Email"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={e => setEmail(e.target.value)}
             autoComplete="email"
             maxLength={254}
           />
         </div>
         <PasswordInput
           value={password}
-          onChange={(e) => setPassword(e.target.value)}
+          onChange={e => setPassword(e.target.value)}
           maxLength={128}
           showPassword={showPassword}
-          onTogglePassword={() => setShowPassword((v) => !v)}
+          onTogglePassword={() => setShowPassword(v => !v)}
         />
         {requiresMfa && (
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              MFA Code
-            </label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">MFA Code</label>
             <input
               type="text"
               maxLength={9}
               value={mfaCode}
-              onChange={(e) => {
+              onChange={e => {
                 const value = e.target.value.toUpperCase();
                 // Allow dashes for readability (e.g., ABCD-EFGH) but strip them before storing
-                const filtered = value.replace(/[^A-Z0-9-]/g, "");
+                const filtered = value.replace(/[^A-Z0-9-]/g, '');
                 // Strip dashes before setting state
-                const withoutDashes = filtered.replace(/-/g, "");
+                const withoutDashes = filtered.replace(/-/g, '');
                 setMfaCode(withoutDashes);
               }}
               className="border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-3 w-full bg-gray-50/80 dark:bg-gray-800/80 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm transition-all duration-200 text-base text-center text-xl tracking-widest font-mono uppercase"
@@ -99,16 +93,12 @@ export const LoginForm: React.FC<{
               autoFocus
             />
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-              Enter the 6-digit code from your authenticator app or an
-              8-character backup code
+              Enter the 6-digit code from your authenticator app or an 8-character backup code
             </p>
           </div>
         )}
         {error && (
-          <p
-            className="text-red-500 text-sm font-medium animate-bounceIn"
-            key={error}
-          >
+          <p className="text-red-500 text-sm font-medium animate-bounceIn" key={error}>
             {error}
           </p>
         )}
@@ -121,7 +111,7 @@ export const LoginForm: React.FC<{
         <SocialAuthButtons googleEnabled={googleEnabled} />
         {signupEnabled && (
           <p className="text-sm text-center text-gray-500 dark:text-gray-400">
-            No account?{" "}
+            No account?{' '}
             <button
               type="button"
               onClick={onSwitch}

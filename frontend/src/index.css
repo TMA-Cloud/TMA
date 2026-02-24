@@ -1,4 +1,4 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
 @theme {
   /* Custom Keyframes - Standardized timings for smoother UX */
@@ -314,72 +314,48 @@ html.dark .skeleton {
 
 /* Top border */
 .marquee-border::before {
-  content: "";
+  content: '';
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
   height: 2px;
-  background: repeating-linear-gradient(
-    90deg,
-    #3b82f6 0px,
-    #3b82f6 6px,
-    transparent 6px,
-    transparent 12px
-  );
+  background: repeating-linear-gradient(90deg, #3b82f6 0px, #3b82f6 6px, transparent 6px, transparent 12px);
   animation: marchRight 0.4s linear infinite;
 }
 
 /* Bottom border */
 .marquee-border::after {
-  content: "";
+  content: '';
   position: absolute;
   bottom: 0;
   left: 0;
   right: 0;
   height: 2px;
-  background: repeating-linear-gradient(
-    90deg,
-    #3b82f6 0px,
-    #3b82f6 6px,
-    transparent 6px,
-    transparent 12px
-  );
+  background: repeating-linear-gradient(90deg, #3b82f6 0px, #3b82f6 6px, transparent 6px, transparent 12px);
   animation: marchLeft 0.4s linear infinite;
 }
 
 /* Left and right borders using the glow element's pseudo-elements */
 .marquee-glow::before {
-  content: "";
+  content: '';
   position: absolute;
   top: 0;
   left: 0;
   bottom: 0;
   width: 2px;
-  background: repeating-linear-gradient(
-    180deg,
-    #3b82f6 0px,
-    #3b82f6 6px,
-    transparent 6px,
-    transparent 12px
-  );
+  background: repeating-linear-gradient(180deg, #3b82f6 0px, #3b82f6 6px, transparent 6px, transparent 12px);
   animation: marchDown 0.4s linear infinite;
 }
 
 .marquee-glow::after {
-  content: "";
+  content: '';
   position: absolute;
   top: 0;
   right: 0;
   bottom: 0;
   width: 2px;
-  background: repeating-linear-gradient(
-    180deg,
-    #3b82f6 0px,
-    #3b82f6 6px,
-    transparent 6px,
-    transparent 12px
-  );
+  background: repeating-linear-gradient(180deg, #3b82f6 0px, #3b82f6 6px, transparent 6px, transparent 12px);
   animation: marchUp 0.4s linear infinite;
 }
 
@@ -453,24 +429,12 @@ html.dark .marquee-glow {
 
 html.dark .marquee-border::before,
 html.dark .marquee-border::after {
-  background: repeating-linear-gradient(
-    90deg,
-    #60a5fa 0px,
-    #60a5fa 6px,
-    transparent 6px,
-    transparent 12px
-  );
+  background: repeating-linear-gradient(90deg, #60a5fa 0px, #60a5fa 6px, transparent 6px, transparent 12px);
 }
 
 html.dark .marquee-glow::before,
 html.dark .marquee-glow::after {
-  background: repeating-linear-gradient(
-    180deg,
-    #60a5fa 0px,
-    #60a5fa 6px,
-    transparent 6px,
-    transparent 12px
-  );
+  background: repeating-linear-gradient(180deg, #60a5fa 0px, #60a5fa 6px, transparent 6px, transparent 12px);
 }
 
 html.dark .marquee-corner {
@@ -509,11 +473,7 @@ html.dark .marquee-corner {
   gap: 14px;
   max-width: 320px;
   padding: 14px 20px;
-  background: linear-gradient(
-    135deg,
-    rgba(15, 23, 42, 0.95) 0%,
-    rgba(30, 41, 59, 0.9) 100%
-  );
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 41, 59, 0.9) 100%);
   color: #e5e7eb;
   border-radius: 14px;
   border: 1px solid rgba(148, 163, 184, 0.15);
@@ -527,7 +487,7 @@ html.dark .marquee-corner {
 
 /* Subtle shimmer effect on the chip */
 .drag-chip::before {
-  content: "";
+  content: '';
   position: absolute;
   inset: 0;
   border-radius: 14px;
@@ -639,11 +599,7 @@ html.dark .marquee-corner {
   left: 0;
   padding: 0.375rem 0.75rem;
   border-radius: 10px;
-  background: linear-gradient(
-    135deg,
-    rgba(15, 23, 42, 0.95) 0%,
-    rgba(30, 41, 59, 0.9) 100%
-  );
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 41, 59, 0.9) 100%);
   border: 1px solid rgba(148, 163, 184, 0.1);
   width: auto !important;
   height: auto !important;
@@ -683,8 +639,7 @@ html.dark .marquee-corner {
   position: absolute;
   top: -8px;
   left: -8px;
-  transform: translate(-20%, -20%)
-    scale(var(--badge-scale-x, 1), var(--badge-scale-y, 1));
+  transform: translate(-20%, -20%) scale(var(--badge-scale-x, 1), var(--badge-scale-y, 1));
   min-width: 24px;
   height: 24px;
   padding: 0 5px;
@@ -706,7 +661,7 @@ html.dark .marquee-corner {
 body.is-dragging {
   cursor: grabbing;
 }
-body.is-dragging [role="tooltip"] {
+body.is-dragging [role='tooltip'] {
   display: none !important;
 }
 
@@ -881,15 +836,11 @@ html.dark .hover-lift:hover {
 }
 
 .selection-glow::before {
-  content: "";
+  content: '';
   position: absolute;
   inset: -2px;
   border-radius: inherit;
-  background: linear-gradient(
-    135deg,
-    rgba(59, 130, 246, 0.3),
-    rgba(168, 85, 247, 0.3)
-  );
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.3), rgba(168, 85, 247, 0.3));
   opacity: 0;
   transition: opacity 0.2s ease;
   z-index: -1;

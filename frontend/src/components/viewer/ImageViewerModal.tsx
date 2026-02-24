@@ -1,8 +1,8 @@
-import React from "react";
-import { useApp } from "../../contexts/AppContext";
-import { useIsMobile } from "../../hooks/useIsMobile";
-import { DesktopImageViewer } from "./DesktopImageViewer";
-import { MobileImageViewer } from "./MobileImageViewer";
+import React from 'react';
+import { useApp } from '../../contexts/AppContext';
+import { useIsMobile } from '../../hooks/useIsMobile';
+import { DesktopImageViewer } from './DesktopImageViewer';
+import { MobileImageViewer } from './MobileImageViewer';
 
 export const ImageViewerModal: React.FC = () => {
   const { imageViewerFile, setImageViewerFile, files } = useApp();
@@ -23,10 +23,5 @@ export const ImageViewerModal: React.FC = () => {
     );
   }
 
-  return (
-    <DesktopImageViewer
-      imageViewerFile={imageViewerFile}
-      onClose={handleClose}
-    />
-  );
+  return <DesktopImageViewer imageViewerFile={imageViewerFile} onClose={handleClose} />;
 };

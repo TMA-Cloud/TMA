@@ -1,15 +1,12 @@
-import React from "react";
+import React from 'react';
 
 interface FileSkeletonProps {
-  viewMode: "grid" | "list";
+  viewMode: 'grid' | 'list';
   count?: number;
 }
 
-export const FileSkeleton: React.FC<FileSkeletonProps> = ({
-  viewMode,
-  count = 12,
-}) => {
-  if (viewMode === "grid") {
+export const FileSkeleton: React.FC<FileSkeletonProps> = ({ viewMode, count = 12 }) => {
+  if (viewMode === 'grid') {
     return (
       <>
         {Array.from({ length: count }).map((_, index) => (

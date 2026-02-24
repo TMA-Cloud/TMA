@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback } from 'react';
 
 export interface StorageUsage {
   used: number;
@@ -14,7 +14,7 @@ export function useStorageUsage() {
     setLoading(true);
     try {
       const res = await fetch(`/api/user/storage`, {
-        credentials: "include",
+        credentials: 'include',
       });
       if (res.ok) {
         const data = await res.json();

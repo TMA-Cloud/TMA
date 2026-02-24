@@ -1,15 +1,12 @@
-import React from "react";
-import { Download } from "lucide-react";
+import React from 'react';
+import { Download } from 'lucide-react';
 
 interface DownloadProgressProps {
   isDownloading: boolean;
   hasFolders: boolean;
 }
 
-export const DownloadProgress: React.FC<DownloadProgressProps> = ({
-  isDownloading,
-  hasFolders,
-}) => {
+export const DownloadProgress: React.FC<DownloadProgressProps> = ({ isDownloading, hasFolders }) => {
   if (!isDownloading) return null;
 
   return (
@@ -17,14 +14,11 @@ export const DownloadProgress: React.FC<DownloadProgressProps> = ({
       <div className="flex items-center space-x-2 mb-2">
         <Download className="w-4 h-4 text-gray-500 dark:text-gray-400" />
         <p className="text-sm font-medium text-gray-900 dark:text-gray-100 flex-1">
-          {hasFolders ? "Zipping and downloading..." : "Downloading..."}
+          {hasFolders ? 'Zipping and downloading...' : 'Downloading...'}
         </p>
       </div>
       <div className="bg-gray-200 dark:bg-gray-600 rounded-full h-2">
-        <div
-          className="bg-blue-500 h-2 rounded-full animate-pulse"
-          style={{ width: "100%" }}
-        />
+        <div className="bg-blue-500 h-2 rounded-full animate-pulse" style={{ width: '100%' }} />
       </div>
     </div>
   );

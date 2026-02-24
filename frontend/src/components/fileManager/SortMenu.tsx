@@ -1,28 +1,24 @@
-import React, { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import { SortAsc, Check } from "lucide-react";
-import { Tooltip } from "../ui/Tooltip";
+import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { SortAsc, Check } from 'lucide-react';
+import { Tooltip } from '../ui/Tooltip';
 
 interface SortMenuProps {
   sortBy: string;
-  sortOrder: "asc" | "desc";
-  onSortChange: (by: string, order: "asc" | "desc") => void;
+  sortOrder: 'asc' | 'desc';
+  onSortChange: (by: string, order: 'asc' | 'desc') => void;
 }
 
 const sortOptions = [
-  { label: "Name (A-Z)", by: "name", order: "asc" as const },
-  { label: "Name (Z-A)", by: "name", order: "desc" as const },
-  { label: "Modified (newest)", by: "modified", order: "desc" as const },
-  { label: "Modified (oldest)", by: "modified", order: "asc" as const },
-  { label: "Size (largest)", by: "size", order: "desc" as const },
-  { label: "Size (smallest)", by: "size", order: "asc" as const },
+  { label: 'Name (A-Z)', by: 'name', order: 'asc' as const },
+  { label: 'Name (Z-A)', by: 'name', order: 'desc' as const },
+  { label: 'Modified (newest)', by: 'modified', order: 'desc' as const },
+  { label: 'Modified (oldest)', by: 'modified', order: 'asc' as const },
+  { label: 'Size (largest)', by: 'size', order: 'desc' as const },
+  { label: 'Size (smallest)', by: 'size', order: 'asc' as const },
 ] as const;
 
-export const SortMenu: React.FC<SortMenuProps> = ({
-  sortBy,
-  sortOrder,
-  onSortChange,
-}) => {
+export const SortMenu: React.FC<SortMenuProps> = ({ sortBy, sortOrder, onSortChange }) => {
   const [showSortMenu, setShowSortMenu] = useState(false);
   const sortMenuRef = useRef<HTMLDivElement>(null);
   const sortButtonRef = useRef<HTMLButtonElement>(null);
@@ -31,15 +27,12 @@ export const SortMenu: React.FC<SortMenuProps> = ({
   useEffect(() => {
     if (!showSortMenu) return;
     const handler = (e: MouseEvent) => {
-      if (
-        sortMenuRef.current &&
-        !sortMenuRef.current.contains(e.target as Node)
-      ) {
+      if (sortMenuRef.current && !sortMenuRef.current.contains(e.target as Node)) {
         setShowSortMenu(false);
       }
     };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
   }, [showSortMenu]);
 
   return (
@@ -57,7 +50,7 @@ export const SortMenu: React.FC<SortMenuProps> = ({
                 right: window.innerWidth - rect.right,
               });
             }
-            setShowSortMenu((s) => !s);
+            setShowSortMenu(s => !s);
           }}
         >
           <SortAsc className="w-5 h-5 transition-transform duration-200 icon-muted" />
@@ -79,10 +72,10 @@ export const SortMenu: React.FC<SortMenuProps> = ({
                 top: `${sortMenuPos.top}px`,
                 right: `${sortMenuPos.right}px`,
               }}
-              onMouseDown={(e) => e.stopPropagation()}
-              onClick={(e) => e.stopPropagation()}
+              onMouseDown={e => e.stopPropagation()}
+              onClick={e => e.stopPropagation()}
             >
-              {sortOptions.map((opt) => (
+              {sortOptions.map(opt => (
                 <button
                   key={opt.label}
                   onClick={() => {
@@ -91,22 +84,18 @@ export const SortMenu: React.FC<SortMenuProps> = ({
                   }}
                   className={`flex items-center w-full px-4 py-2.5 text-sm text-left transition-all duration-200 rounded-lg mx-1 ${
                     sortBy === opt.by && sortOrder === opt.order
-                      ? "bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-semibold"
-                      : "text-gray-700 dark:text-gray-300 hover:bg-gray-100/80 dark:hover:bg-slate-700/50"
+                      ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-semibold'
+                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100/80 dark:hover:bg-slate-700/50'
                   }`}
                 >
-                  {sortBy === opt.by && sortOrder === opt.order && (
-                    <Check className="w-4 h-4 mr-2" />
-                  )}
-                  {!(sortBy === opt.by && sortOrder === opt.order) && (
-                    <span className="w-4 h-4 mr-2" />
-                  )}
+                  {sortBy === opt.by && sortOrder === opt.order && <Check className="w-4 h-4 mr-2" />}
+                  {!(sortBy === opt.by && sortOrder === opt.order) && <span className="w-4 h-4 mr-2" />}
                   {opt.label}
                 </button>
               ))}
             </div>
           </>,
-          document.body,
+          document.body
         )}
     </div>
   );

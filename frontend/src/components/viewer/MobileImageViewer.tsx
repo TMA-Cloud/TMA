@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef } from "react";
-import { ZoomIn, ZoomOut, X, ChevronLeft, ChevronRight } from "lucide-react";
-import { type FileItem } from "../../contexts/AppContext";
+import React, { useState, useEffect, useRef } from 'react';
+import { ZoomIn, ZoomOut, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { type FileItem } from '../../contexts/AppContext';
 
 interface MobileImageViewerProps {
   imageViewerFile: FileItem | null;
@@ -38,19 +38,13 @@ export const MobileImageViewer: React.FC<MobileImageViewerProps> = ({
   const initialZoom = useRef(1);
 
   // Swipe navigation state
-  const swipeStart = useRef<{ x: number; y: number; time: number } | null>(
-    null,
-  );
+  const swipeStart = useRef<{ x: number; y: number; time: number } | null>(null);
   const swipeThreshold = 50; // pixels
   const swipeTimeThreshold = 300; // ms
 
   // Get all image files for navigation
-  const imageFiles = files.filter(
-    (f) => f.type === "file" && f.mimeType?.startsWith("image/"),
-  );
-  const currentIndex = imageViewerFile
-    ? imageFiles.findIndex((f) => f.id === imageViewerFile.id)
-    : -1;
+  const imageFiles = files.filter(f => f.type === 'file' && f.mimeType?.startsWith('image/'));
+  const currentIndex = imageViewerFile ? imageFiles.findIndex(f => f.id === imageViewerFile.id) : -1;
   const hasNext = currentIndex >= 0 && currentIndex < imageFiles.length - 1;
   const hasPrev = currentIndex > 0;
 
@@ -64,7 +58,7 @@ export const MobileImageViewer: React.FC<MobileImageViewerProps> = ({
       const load = async () => {
         try {
           const res = await fetch(`/api/files/${imageViewerFile.id}/download`, {
-            credentials: "include",
+            credentials: 'include',
           });
           const blob = await res.blob();
           const url = URL.createObjectURL(blob);
@@ -94,7 +88,7 @@ export const MobileImageViewer: React.FC<MobileImageViewerProps> = ({
               requestAnimationFrame(() => {
                 if (wrapperRef.current) {
                   wrapperRef.current.style.transform = `translate(${offset.current.x}px, ${offset.current.y}px) scale(1)`;
-                  wrapperRef.current.style.transformOrigin = "0 0";
+                  wrapperRef.current.style.transformOrigin = '0 0';
                 }
               });
             }
@@ -133,16 +127,16 @@ export const MobileImageViewer: React.FC<MobileImageViewerProps> = ({
     const container = containerRef.current;
     if (!container) return;
 
-    container.addEventListener("wheel", handleWheel, { passive: false });
+    container.addEventListener('wheel', handleWheel, { passive: false });
     return () => {
-      container.removeEventListener("wheel", handleWheel);
+      container.removeEventListener('wheel', handleWheel);
     };
   }, []);
 
-  const navigateToImage = (direction: "next" | "prev") => {
-    if (direction === "next" && hasNext) {
+  const navigateToImage = (direction: 'next' | 'prev') => {
+    if (direction === 'next' && hasNext) {
       setImageViewerFile(imageFiles[currentIndex + 1] ?? null);
-    } else if (direction === "prev" && hasPrev) {
+    } else if (direction === 'prev' && hasPrev) {
       setImageViewerFile(imageFiles[currentIndex - 1] ?? null);
     }
   };
@@ -179,20 +173,18 @@ export const MobileImageViewer: React.FC<MobileImageViewerProps> = ({
   const applyTransform = (newZoom = zoom, smooth = false) => {
     clampOffset(newZoom);
     if (wrapperRef.current) {
-      wrapperRef.current.style.transition = smooth
-        ? "transform 0.2s ease-out"
-        : "none";
+      wrapperRef.current.style.transition = smooth ? 'transform 0.2s ease-out' : 'none';
       wrapperRef.current.style.transform = `translate(${offset.current.x}px, ${offset.current.y}px) scale(${newZoom})`;
-      wrapperRef.current.style.transformOrigin = "0 0";
+      wrapperRef.current.style.transformOrigin = '0 0';
     }
   };
 
   const handlePointerDown = (e: React.PointerEvent) => {
-    if (e.pointerType === "touch") return; // Let touch handlers take over
+    if (e.pointerType === 'touch') return; // Let touch handlers take over
     e.preventDefault();
     dragOrigin.current = { x: e.clientX, y: e.clientY };
-    window.addEventListener("pointermove", handlePointerMove);
-    window.addEventListener("pointerup", handlePointerUp);
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
   };
 
   const handlePointerMove = (e: PointerEvent) => {
@@ -208,8 +200,8 @@ export const MobileImageViewer: React.FC<MobileImageViewerProps> = ({
 
   const handlePointerUp = () => {
     dragOrigin.current = null;
-    window.removeEventListener("pointermove", handlePointerMove);
-    window.removeEventListener("pointerup", handlePointerUp);
+    window.removeEventListener('pointermove', handlePointerMove);
+    window.removeEventListener('pointerup', handlePointerUp);
   };
 
   const handleWheel = (e: WheelEvent) => {
@@ -270,11 +262,7 @@ export const MobileImageViewer: React.FC<MobileImageViewerProps> = ({
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
-    if (
-      e.touches.length === 2 &&
-      touchDistance.current &&
-      touchCenter.current
-    ) {
+    if (e.touches.length === 2 && touchDistance.current && touchCenter.current) {
       e.preventDefault();
       const newDistance = getTouchDistance(e.touches);
       if (!newDistance || !containerRef.current || !imageFit) return;
@@ -332,12 +320,7 @@ export const MobileImageViewer: React.FC<MobileImageViewerProps> = ({
       const dt = Date.now() - swipeStart.current.time;
 
       // Swipe down to dismiss
-      if (
-        Math.abs(dy) > swipeThreshold &&
-        dy > 0 &&
-        dt < swipeTimeThreshold &&
-        Math.abs(dx) < Math.abs(dy) * 0.5
-      ) {
+      if (Math.abs(dy) > swipeThreshold && dy > 0 && dt < swipeTimeThreshold && Math.abs(dx) < Math.abs(dy) * 0.5) {
         onClose();
         swipeStart.current = null;
         dragOrigin.current = null;
@@ -345,15 +328,11 @@ export const MobileImageViewer: React.FC<MobileImageViewerProps> = ({
       }
 
       // Swipe left/right to navigate
-      if (
-        Math.abs(dx) > swipeThreshold &&
-        dt < swipeTimeThreshold &&
-        Math.abs(dy) < Math.abs(dx) * 0.5
-      ) {
+      if (Math.abs(dx) > swipeThreshold && dt < swipeTimeThreshold && Math.abs(dy) < Math.abs(dx) * 0.5) {
         if (dx > 0 && hasPrev) {
-          navigateToImage("prev");
+          navigateToImage('prev');
         } else if (dx < 0 && hasNext) {
-          navigateToImage("next");
+          navigateToImage('next');
         }
       }
     }
@@ -406,7 +385,7 @@ export const MobileImageViewer: React.FC<MobileImageViewerProps> = ({
   };
 
   const toggleControls = () => {
-    setControlsVisible((prev) => !prev);
+    setControlsVisible(prev => !prev);
   };
 
   if (!imageViewerFile) return null;
@@ -420,9 +399,7 @@ export const MobileImageViewer: React.FC<MobileImageViewerProps> = ({
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
         onPointerDown={handlePointerDown}
-        onMouseMove={(e) =>
-          (lastMousePos.current = { x: e.clientX, y: e.clientY })
-        }
+        onMouseMove={e => (lastMousePos.current = { x: e.clientX, y: e.clientY })}
         onDoubleClick={handleDoubleTap}
         onClick={toggleControls}
         className="absolute inset-0 w-full h-full touch-none"
@@ -430,16 +407,14 @@ export const MobileImageViewer: React.FC<MobileImageViewerProps> = ({
         {/* Top bar with close button and title - overlays the image */}
         <div
           className={`absolute top-0 left-0 right-0 z-20 bg-gradient-to-b from-black/80 to-transparent px-4 py-2 flex items-center justify-between transition-opacity duration-300 ${
-            controlsVisible ? "opacity-100" : "opacity-0 pointer-events-none"
+            controlsVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'
           }`}
           style={{
             paddingTop: `max(env(safe-area-inset-top, 0px), 8px)`,
           }}
-          onClick={(e) => e.stopPropagation()}
+          onClick={e => e.stopPropagation()}
         >
-          <h3 className="text-white text-sm font-medium truncate flex-1 mr-2">
-            {imageViewerFile.name}
-          </h3>
+          <h3 className="text-white text-sm font-medium truncate flex-1 mr-2">{imageViewerFile.name}</h3>
           <button
             onClick={onClose}
             className="flex-shrink-0 w-10 h-10 flex items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/70 active:scale-95 transition"
@@ -453,7 +428,7 @@ export const MobileImageViewer: React.FC<MobileImageViewerProps> = ({
           className="will-change-transform"
           style={{
             transform: `translate(${offset.current.x}px, ${offset.current.y}px) scale(${zoom})`,
-            transformOrigin: "0 0",
+            transformOrigin: '0 0',
           }}
         >
           {loading ? (
@@ -473,8 +448,8 @@ export const MobileImageViewer: React.FC<MobileImageViewerProps> = ({
                   draggable={false}
                   className="select-none pointer-events-none max-w-full max-h-full object-contain"
                   style={{
-                    width: imageFit ? `${imageFit.width}px` : "auto",
-                    height: imageFit ? `${imageFit.height}px` : "auto",
+                    width: imageFit ? `${imageFit.width}px` : 'auto',
+                    height: imageFit ? `${imageFit.height}px` : 'auto',
                   }}
                 />
               </div>
@@ -488,11 +463,9 @@ export const MobileImageViewer: React.FC<MobileImageViewerProps> = ({
         <>
           {hasPrev && (
             <button
-              onClick={() => navigateToImage("prev")}
+              onClick={() => navigateToImage('prev')}
               className={`absolute left-4 top-1/2 -translate-y-1/2 z-20 w-12 h-12 flex items-center justify-center rounded-full bg-black/50 backdrop-blur-md text-white active:scale-95 transition ${
-                controlsVisible
-                  ? "opacity-100"
-                  : "opacity-0 pointer-events-none"
+                controlsVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'
               }`}
               aria-label="Previous image"
             >
@@ -501,11 +474,9 @@ export const MobileImageViewer: React.FC<MobileImageViewerProps> = ({
           )}
           {hasNext && (
             <button
-              onClick={() => navigateToImage("next")}
+              onClick={() => navigateToImage('next')}
               className={`absolute right-4 top-1/2 -translate-y-1/2 z-20 w-12 h-12 flex items-center justify-center rounded-full bg-black/50 backdrop-blur-md text-white active:scale-95 transition ${
-                controlsVisible
-                  ? "opacity-100"
-                  : "opacity-0 pointer-events-none"
+                controlsVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'
               }`}
               aria-label="Next image"
             >
@@ -518,7 +489,7 @@ export const MobileImageViewer: React.FC<MobileImageViewerProps> = ({
       {/* Bottom controls bar */}
       <div
         className={`absolute bottom-0 left-0 right-0 z-20 bg-gradient-to-t from-black/80 to-transparent px-4 py-4 transition-opacity duration-300 ${
-          controlsVisible ? "opacity-100" : "opacity-0 pointer-events-none"
+          controlsVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'
         }`}
       >
         <div className="flex items-center justify-center space-x-4">

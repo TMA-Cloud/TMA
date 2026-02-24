@@ -1,7 +1,7 @@
 /**
  * API utility functions
  */
-import { ApiError } from "./errorUtils";
+import { ApiError } from './errorUtils';
 
 /**
  * Request options with additional configuration
@@ -25,16 +25,13 @@ interface ApiRequestOptions extends RequestInit {
  * Make a fetch request with default options and enhanced error handling
  * Using relative URLs since frontend and backend are served from the same origin
  */
-async function apiRequest(
-  endpoint: string,
-  options: ApiRequestOptions = {},
-): Promise<Response> {
+async function apiRequest(endpoint: string, options: ApiRequestOptions = {}): Promise<Response> {
   const { silentAuth = false, ...fetchOptions } = options;
 
   const defaultOptions: RequestInit = {
-    credentials: "include",
+    credentials: 'include',
     headers: {
-      "Content-Type": "application/json",
+      'Content-Type': 'application/json',
       ...fetchOptions.headers,
     },
     ...fetchOptions,
@@ -63,21 +60,12 @@ async function apiRequest(
 /**
  * Make a GET request
  */
-export async function apiGet<T = unknown>(
-  endpoint: string,
-  options?: ApiRequestOptions,
-): Promise<T> {
-  const res = await apiRequest(endpoint, { method: "GET", ...options });
+export async function apiGet<T = unknown>(endpoint: string, options?: ApiRequestOptions): Promise<T> {
+  const res = await apiRequest(endpoint, { method: 'GET', ...options });
   if (!res.ok) {
-    const errorData = await res
-      .json()
-      .catch(() => ({ message: res.statusText }));
+    const errorData = await res.json().catch(() => ({ message: res.statusText }));
     const { message, error, ...rest } = errorData;
-    throw new ApiError(
-      message || error || res.statusText,
-      res.status,
-      Object.keys(rest).length > 0 ? rest : undefined,
-    );
+    throw new ApiError(message || error || res.statusText, res.status, Object.keys(rest).length > 0 ? rest : undefined);
   }
   return res.json();
 }
@@ -85,26 +73,16 @@ export async function apiGet<T = unknown>(
 /**
  * Make a POST request
  */
-export async function apiPost<T = unknown>(
-  endpoint: string,
-  data?: unknown,
-  options?: ApiRequestOptions,
-): Promise<T> {
+export async function apiPost<T = unknown>(endpoint: string, data?: unknown, options?: ApiRequestOptions): Promise<T> {
   const res = await apiRequest(endpoint, {
-    method: "POST",
+    method: 'POST',
     body: data ? JSON.stringify(data) : undefined,
     ...options,
   });
   if (!res.ok) {
-    const errorData = await res
-      .json()
-      .catch(() => ({ message: res.statusText }));
+    const errorData = await res.json().catch(() => ({ message: res.statusText }));
     const { message, error, ...rest } = errorData;
-    throw new ApiError(
-      message || error || res.statusText,
-      res.status,
-      Object.keys(rest).length > 0 ? rest : undefined,
-    );
+    throw new ApiError(message || error || res.statusText, res.status, Object.keys(rest).length > 0 ? rest : undefined);
   }
   return res.json();
 }
@@ -112,24 +90,15 @@ export async function apiPost<T = unknown>(
 /**
  * Make a PUT request
  */
-export async function apiPut<T = unknown>(
-  endpoint: string,
-  data?: unknown,
-  options?: ApiRequestOptions,
-): Promise<T> {
+export async function apiPut<T = unknown>(endpoint: string, data?: unknown, options?: ApiRequestOptions): Promise<T> {
   const res = await apiRequest(endpoint, {
-    method: "PUT",
+    method: 'PUT',
     body: data ? JSON.stringify(data) : undefined,
     ...options,
   });
   if (!res.ok) {
-    const errorData = await res
-      .json()
-      .catch(() => ({ message: res.statusText }));
-    throw new ApiError(
-      errorData.message || errorData.error || res.statusText,
-      res.status,
-    );
+    const errorData = await res.json().catch(() => ({ message: res.statusText }));
+    throw new ApiError(errorData.message || errorData.error || res.statusText, res.status);
   }
   return res.json();
 }
@@ -137,25 +106,16 @@ export async function apiPut<T = unknown>(
 /**
  * Make a POST request with FormData (for file uploads)
  */
-export async function apiPostForm<T = unknown>(
-  endpoint: string,
-  formData: FormData,
-): Promise<T> {
+export async function apiPostForm<T = unknown>(endpoint: string, formData: FormData): Promise<T> {
   const res = await apiRequest(endpoint, {
-    method: "POST",
+    method: 'POST',
     body: formData,
     headers: {}, // Don't set Content-Type, let browser set it with boundary
   });
   if (!res.ok) {
-    const errorData = await res
-      .json()
-      .catch(() => ({ message: res.statusText }));
+    const errorData = await res.json().catch(() => ({ message: res.statusText }));
     const { message, error, ...rest } = errorData;
-    throw new ApiError(
-      message || error || res.statusText,
-      res.status,
-      Object.keys(rest).length > 0 ? rest : undefined,
-    );
+    throw new ApiError(message || error || res.statusText, res.status, Object.keys(rest).length > 0 ? rest : undefined);
   }
   return res.json();
 }
@@ -165,7 +125,7 @@ export async function apiPostForm<T = unknown>(
  */
 export async function checkGoogleAuthEnabled(): Promise<boolean> {
   try {
-    const data = await apiGet<{ enabled: boolean }>("/api/google/enabled");
+    const data = await apiGet<{ enabled: boolean }>('/api/google/enabled');
     return data.enabled;
   } catch {
     return false;
@@ -189,13 +149,13 @@ export async function getSignupStatus(): Promise<{
       canToggle: boolean;
       totalUsers?: number;
       additionalUsers?: number;
-    }>("/api/user/signup-status");
+    }>('/api/user/signup-status');
     return authenticated;
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) {
-      const publicRes = await apiGet<{ signupEnabled: boolean }>(
-        "/api/signup-status",
-      ).catch(() => ({ signupEnabled: true }));
+      const publicRes = await apiGet<{ signupEnabled: boolean }>('/api/signup-status').catch(() => ({
+        signupEnabled: true,
+      }));
       return { ...publicRes, canToggle: false };
     }
     return { signupEnabled: true, canToggle: false };
@@ -205,10 +165,8 @@ export async function getSignupStatus(): Promise<{
 /**
  * Toggle signup enabled/disabled (only for first user)
  */
-export async function toggleSignup(
-  enabled: boolean,
-): Promise<{ signupEnabled: boolean }> {
-  return await apiPost<{ signupEnabled: boolean }>("/api/user/signup-toggle", {
+export async function toggleSignup(enabled: boolean): Promise<{ signupEnabled: boolean }> {
+  return await apiPost<{ signupEnabled: boolean }>('/api/user/signup-toggle', {
     enabled,
   });
 }
@@ -227,7 +185,7 @@ export interface UserSummary {
 export async function fetchAllUsers(): Promise<{
   users: UserSummary[];
 }> {
-  return await apiGet<{ users: UserSummary[] }>("/api/user/all");
+  return await apiGet<{ users: UserSummary[] }>('/api/user/all');
 }
 
 /**
@@ -235,15 +193,12 @@ export async function fetchAllUsers(): Promise<{
  */
 export async function updateUserStorageLimit(
   targetUserId: string,
-  storageLimit: number | null,
+  storageLimit: number | null
 ): Promise<{ storageLimit: number | null }> {
-  return await apiPut<{ storageLimit: number | null }>(
-    "/api/user/storage-limit",
-    {
-      targetUserId,
-      storageLimit,
-    },
-  );
+  return await apiPut<{ storageLimit: number | null }>('/api/user/storage-limit', {
+    targetUserId,
+    storageLimit,
+  });
 }
 
 /**
@@ -252,9 +207,7 @@ export async function updateUserStorageLimit(
 export async function checkOnlyOfficeConfigured(): Promise<{
   configured: boolean;
 }> {
-  return await apiGet<{ configured: boolean }>(
-    "/api/user/onlyoffice-configured",
-  );
+  return await apiGet<{ configured: boolean }>('/api/user/onlyoffice-configured');
 }
 
 /**
@@ -264,10 +217,7 @@ export async function getOnlyOfficeConfig(signal?: AbortSignal): Promise<{
   jwtSecretSet: boolean;
   url: string | null;
 }> {
-  return await apiGet<{ jwtSecretSet: boolean; url: string | null }>(
-    "/api/user/onlyoffice-config",
-    { signal },
-  );
+  return await apiGet<{ jwtSecretSet: boolean; url: string | null }>('/api/user/onlyoffice-config', { signal });
 }
 
 /**
@@ -275,12 +225,9 @@ export async function getOnlyOfficeConfig(signal?: AbortSignal): Promise<{
  */
 export async function updateOnlyOfficeConfig(
   jwtSecret: string | null,
-  url: string | null,
+  url: string | null
 ): Promise<{ jwtSecretSet: boolean; url: string | null }> {
-  return await apiPut<{ jwtSecretSet: boolean; url: string | null }>(
-    "/api/user/onlyoffice-config",
-    { jwtSecret, url },
-  );
+  return await apiPut<{ jwtSecretSet: boolean; url: string | null }>('/api/user/onlyoffice-config', { jwtSecret, url });
 }
 
 /**
@@ -289,22 +236,14 @@ export async function updateOnlyOfficeConfig(
 export async function getShareBaseUrlConfig(signal?: AbortSignal): Promise<{
   url: string | null;
 }> {
-  return await apiGet<{ url: string | null }>(
-    "/api/user/share-base-url-config",
-    { signal },
-  );
+  return await apiGet<{ url: string | null }>('/api/user/share-base-url-config', { signal });
 }
 
 /**
  * Update share base URL configuration (admin only)
  */
-export async function updateShareBaseUrlConfig(
-  url: string | null,
-): Promise<{ url: string | null }> {
-  return await apiPut<{ url: string | null }>(
-    "/api/user/share-base-url-config",
-    { url },
-  );
+export async function updateShareBaseUrlConfig(url: string | null): Promise<{ url: string | null }> {
+  return await apiPut<{ url: string | null }>('/api/user/share-base-url-config', { url });
 }
 
 /**
@@ -313,22 +252,14 @@ export async function updateShareBaseUrlConfig(
 export async function getMaxUploadSizeConfig(signal?: AbortSignal): Promise<{
   maxBytes: number;
 }> {
-  return await apiGet<{ maxBytes: number }>(
-    "/api/user/max-upload-size-config",
-    { signal },
-  );
+  return await apiGet<{ maxBytes: number }>('/api/user/max-upload-size-config', { signal });
 }
 
 /**
  * Update max upload size config (admin only)
  */
-export async function updateMaxUploadSizeConfig(
-  maxBytes: number,
-): Promise<{ maxBytes: number }> {
-  return await apiPut<{ maxBytes: number }>(
-    "/api/user/max-upload-size-config",
-    { maxBytes },
-  );
+export async function updateMaxUploadSizeConfig(maxBytes: number): Promise<{ maxBytes: number }> {
+  return await apiPut<{ maxBytes: number }>('/api/user/max-upload-size-config', { maxBytes });
 }
 
 /**
@@ -339,9 +270,7 @@ export async function logoutAllDevices(): Promise<{
   message: string;
   sessionsInvalidated: boolean;
 }> {
-  return await apiPost<{ message: string; sessionsInvalidated: boolean }>(
-    "/api/logout-all",
-  );
+  return await apiPost<{ message: string; sessionsInvalidated: boolean }>('/api/logout-all');
 }
 
 export interface ActiveSession {
@@ -361,25 +290,17 @@ export interface ActiveSession {
 export async function getActiveSessions(): Promise<{
   sessions: ActiveSession[];
 }> {
-  return await apiGet<{ sessions: ActiveSession[] }>("/api/sessions");
+  return await apiGet<{ sessions: ActiveSession[] }>('/api/sessions');
 }
 
 /**
  * Make a DELETE request
  */
-export async function apiDelete<T = unknown>(
-  endpoint: string,
-  options?: ApiRequestOptions,
-): Promise<T> {
-  const res = await apiRequest(endpoint, { method: "DELETE", ...options });
+export async function apiDelete<T = unknown>(endpoint: string, options?: ApiRequestOptions): Promise<T> {
+  const res = await apiRequest(endpoint, { method: 'DELETE', ...options });
   if (!res.ok) {
-    const errorData = await res
-      .json()
-      .catch(() => ({ message: res.statusText }));
-    throw new ApiError(
-      errorData.message || errorData.error || res.statusText,
-      res.status,
-    );
+    const errorData = await res.json().catch(() => ({ message: res.statusText }));
+    throw new ApiError(errorData.message || errorData.error || res.statusText, res.status);
   }
   return res.json();
 }
@@ -400,9 +321,7 @@ export async function revokeOtherSessions(): Promise<{
   message: string;
   deletedCount: number;
 }> {
-  return await apiPost<{ message: string; deletedCount: number }>(
-    "/api/sessions/revoke-others",
-  );
+  return await apiPost<{ message: string; deletedCount: number }>('/api/sessions/revoke-others');
 }
 
 /**
@@ -413,7 +332,7 @@ export async function revokeOtherSessions(): Promise<{
  * Get MFA status for current user
  */
 export async function getMfaStatus(): Promise<{ enabled: boolean }> {
-  return await apiGet<{ enabled: boolean }>("/api/mfa/status");
+  return await apiGet<{ enabled: boolean }>('/api/mfa/status');
 }
 
 /**
@@ -426,7 +345,7 @@ export async function setupMfa(): Promise<{
   return await apiPost<{
     secret: string;
     qrCode: string;
-  }>("/api/mfa/setup");
+  }>('/api/mfa/setup');
 }
 
 /**
@@ -441,7 +360,7 @@ export async function verifyAndEnableMfa(code: string): Promise<{
     message: string;
     backupCodes?: string[];
     shouldPromptSessions?: boolean;
-  }>("/api/mfa/verify", { code });
+  }>('/api/mfa/verify', { code });
 }
 
 /**
@@ -451,10 +370,7 @@ export async function disableMfa(code: string): Promise<{
   message: string;
   shouldPromptSessions?: boolean;
 }> {
-  return await apiPost<{ message: string; shouldPromptSessions?: boolean }>(
-    "/api/mfa/disable",
-    { code },
-  );
+  return await apiPost<{ message: string; shouldPromptSessions?: boolean }>('/api/mfa/disable', { code });
 }
 
 /**
@@ -463,16 +379,14 @@ export async function disableMfa(code: string): Promise<{
 export async function regenerateBackupCodes(): Promise<{
   backupCodes: string[];
 }> {
-  return await apiPost<{ backupCodes: string[] }>(
-    "/api/mfa/backup-codes/regenerate",
-  );
+  return await apiPost<{ backupCodes: string[] }>('/api/mfa/backup-codes/regenerate');
 }
 
 /**
  * Get remaining backup codes count
  */
 export async function getBackupCodesCount(): Promise<{ count: number }> {
-  return await apiGet<{ count: number }>("/api/mfa/backup-codes/count");
+  return await apiGet<{ count: number }>('/api/mfa/backup-codes/count');
 }
 
 export interface VersionInfo {
@@ -485,15 +399,12 @@ export interface VersionInfo {
  * Backend version comes from server, frontend version is embedded at build time.
  */
 export async function getCurrentVersions(): Promise<VersionInfo> {
-  const backendVersions = await apiGet<{ backend: string }>("/api/version");
+  const backendVersions = await apiGet<{ backend: string }>('/api/version');
 
-  const frontendVersion =
-    typeof __FRONTEND_VERSION__ !== "undefined"
-      ? __FRONTEND_VERSION__
-      : "unknown";
+  const frontendVersion = typeof __FRONTEND_VERSION__ !== 'undefined' ? __FRONTEND_VERSION__ : 'unknown';
 
   return {
-    backend: backendVersions.backend ?? "unknown",
+    backend: backendVersions.backend ?? 'unknown',
     frontend: frontendVersion,
   };
 }
@@ -503,7 +414,7 @@ export async function getCurrentVersions(): Promise<VersionInfo> {
  * Uses backend proxy to avoid CORS issues
  */
 export async function fetchLatestVersions(): Promise<VersionInfo> {
-  return apiGet<VersionInfo>("/api/version/latest");
+  return apiGet<VersionInfo>('/api/version/latest');
 }
 
 /**
@@ -512,10 +423,8 @@ export async function fetchLatestVersions(): Promise<VersionInfo> {
  * @param fileSize - Size in bytes (single file or total for bulk)
  * @throws ApiError with status 413 and message if would exceed
  */
-export async function checkUploadStorage(
-  fileSize: number,
-): Promise<{ allowed: true }> {
-  return apiPost<{ allowed: true }>("/api/files/upload/check", { fileSize });
+export async function checkUploadStorage(fileSize: number): Promise<{ allowed: true }> {
+  return apiPost<{ allowed: true }>('/api/files/upload/check', { fileSize });
 }
 
 /**
@@ -525,14 +434,11 @@ export async function checkUploadStorage(
  * @param id - File or folder ID
  * @param fallbackFilename - Fallback filename to use if Content-Disposition header is missing or invalid
  */
-export async function downloadFile(
-  id: string,
-  fallbackFilename?: string,
-): Promise<void> {
+export async function downloadFile(id: string, fallbackFilename?: string): Promise<void> {
   const url = `/api/files/${id}/download`;
   const response = await fetch(url, {
-    method: "GET",
-    credentials: "include",
+    method: 'GET',
+    credentials: 'include',
   });
 
   if (!response.ok) {
@@ -544,16 +450,14 @@ export async function downloadFile(
     } catch {
       // If JSON parsing fails, use statusText
     }
-    const error = new Error(
-      errorMessage || `Download failed: ${response.statusText}`,
-    );
+    const error = new Error(errorMessage || `Download failed: ${response.statusText}`);
     // Attach status code to error for caller
     (error as { status?: number }).status = response.status;
     throw error;
   }
 
   // Get the filename from Content-Disposition header or use fallback
-  const contentDisposition = response.headers.get("Content-Disposition");
+  const contentDisposition = response.headers.get('Content-Disposition');
   let filename: string | null = null;
 
   if (contentDisposition) {
@@ -561,9 +465,7 @@ export async function downloadFile(
     // Handle both quoted and unquoted filenames, and RFC 5987 encoded filenames (filename*=UTF-8''...)
 
     // First try RFC 5987 encoding (filename*=UTF-8''...)
-    const rfc5987Match = contentDisposition.match(
-      /filename\*=UTF-8''([^;,\s]+)/i,
-    );
+    const rfc5987Match = contentDisposition.match(/filename\*=UTF-8''([^;,\s]+)/i);
     if (rfc5987Match && rfc5987Match[1]) {
       try {
         filename = decodeURIComponent(rfc5987Match[1]);
@@ -593,8 +495,8 @@ export async function downloadFile(
   }
 
   // Use extracted filename if available, otherwise use fallback
-  if (!filename || filename.trim() === "") {
-    filename = fallbackFilename || "download";
+  if (!filename || filename.trim() === '') {
+    filename = fallbackFilename || 'download';
   }
 
   // Get the blob
@@ -602,7 +504,7 @@ export async function downloadFile(
 
   // Create a download link and trigger download
   const downloadUrl = window.URL.createObjectURL(blob);
-  const link = document.createElement("a");
+  const link = document.createElement('a');
   link.href = downloadUrl;
   link.download = filename;
   document.body.appendChild(link);
@@ -616,7 +518,7 @@ export async function downloadFile(
  * Used as an optimization hint to avoid unnecessary API calls on first visit.
  * Includes cross-tab synchronization via storage events.
  */
-export const AUTH_STATE_KEY = "tma_cloud_auth_state";
+export const AUTH_STATE_KEY = 'tma_cloud_auth_state';
 const AUTH_STATE_MAX_AGE = 7 * 24 * 60 * 60 * 1000; // 7 days (matches token expiry)
 
 interface AuthState {
@@ -729,8 +631,8 @@ export function hasAuthState(): boolean {
 function mightBeAuthCallback(): boolean {
   try {
     // Check sessionStorage for OAuth indicator (set by OAuth button click)
-    if (sessionStorage.getItem("oauth_initiated") === "true") {
-      sessionStorage.removeItem("oauth_initiated");
+    if (sessionStorage.getItem('oauth_initiated') === 'true') {
+      sessionStorage.removeItem('oauth_initiated');
       return true;
     }
     return false;
@@ -771,11 +673,11 @@ export async function checkAuthSilently(signal?: AbortSignal): Promise<{
 
   try {
     // Make the API call to verify token is still valid
-    const response = await fetch("/api/profile", {
-      method: "GET",
-      credentials: "include",
+    const response = await fetch('/api/profile', {
+      method: 'GET',
+      credentials: 'include',
       headers: {
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
       },
       signal, // Pass abort signal to actually cancel the request
     });
@@ -800,22 +702,20 @@ export async function checkAuthSilently(signal?: AbortSignal): Promise<{
 
     // Unexpected error status (not 401) - only log in development
     if (import.meta.env.DEV) {
-      console.warn(
-        `[Auth] Unexpected status ${response.status} from /api/profile: ${response.statusText}`,
-      );
+      console.warn(`[Auth] Unexpected status ${response.status} from /api/profile: ${response.statusText}`);
     }
     return null;
   } catch (error) {
     // Handle abort errors silently
-    if (error instanceof Error && error.name === "AbortError") {
+    if (error instanceof Error && error.name === 'AbortError') {
       return null;
     }
 
     // Handle network errors gracefully
     // Only log in development mode for debugging
     if (import.meta.env.DEV) {
-      if (error instanceof TypeError && error.message.includes("fetch")) {
-        console.warn("[Auth] Network error during auth check:", error);
+      if (error instanceof TypeError && error.message.includes('fetch')) {
+        console.warn('[Auth] Network error during auth check:', error);
       }
     }
     // Return null on any error - treat as unauthenticated
