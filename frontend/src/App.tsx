@@ -10,6 +10,30 @@ import { useIsMobile } from "./hooks/useIsMobile";
 import { Sidebar } from "./components/layout/Sidebar";
 import { Header } from "./components/layout/Header";
 
+function easeOutCubic(t: number) {
+  return 1 - Math.pow(1 - t, 3);
+}
+
+function scrollToTopFast(el: HTMLElement, durationMs = 180) {
+  // Respect reduced-motion preference
+  if (window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches) {
+    el.scrollTo({ top: 0, behavior: "auto" });
+    return;
+  }
+
+  const startTop = el.scrollTop;
+  if (startTop <= 0) return;
+
+  const start = performance.now();
+  const tick = (now: number) => {
+    const t = Math.min(1, (now - start) / durationMs);
+    const eased = easeOutCubic(t);
+    el.scrollTop = Math.round(startTop * (1 - eased));
+    if (t < 1) requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
+
 // Lazy load main page components (using default exports for cleaner syntax)
 const Dashboard = lazy(() => import("./components/dashboard/Dashboard"));
 const FileManager = lazy(() => import("./components/fileManager/FileManager"));
@@ -86,6 +110,14 @@ const AppContent: React.FC = () => {
     setIsUploadProgressInteracting,
   } = useApp();
   const isMobile = useIsMobile();
+  const mainRef = React.useRef<HTMLElement | null>(null);
+
+  // Ensure the main scroll container resets to top whenever the path changes
+  React.useEffect(() => {
+    if (!isMobile && mainRef.current) {
+      scrollToTopFast(mainRef.current, 180);
+    }
+  }, [currentPath, isMobile]);
 
   const renderContent = () => {
     const currentPage = currentPath[0];
@@ -140,7 +172,9 @@ const AppContent: React.FC = () => {
       >
         <Header />
 
-        <main className="flex-1 overflow-y-auto">{renderContent()}</main>
+        <main ref={mainRef} className="flex-1 overflow-y-auto">
+          {renderContent()}
+        </main>
       </div>
 
       <Suspense fallback={null}>

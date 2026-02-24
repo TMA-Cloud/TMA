@@ -24,6 +24,30 @@ import {
   ChevronDown,
 } from "lucide-react";
 
+function easeOutCubic(t: number) {
+  return 1 - Math.pow(1 - t, 3);
+}
+
+function scrollToTopFast(el: HTMLElement, durationMs = 180) {
+  // Respect reduced-motion preference
+  if (window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches) {
+    el.scrollTo({ top: 0, behavior: "auto" });
+    return;
+  }
+
+  const startTop = el.scrollTop;
+  if (startTop <= 0) return;
+
+  const start = performance.now();
+  const tick = (now: number) => {
+    const t = Math.min(1, (now - start) / durationMs);
+    const eased = easeOutCubic(t);
+    el.scrollTop = Math.round(startTop * (1 - eased));
+    if (t < 1) requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
+
 const navItems = [
   { id: "Dashboard", label: "Home", icon: Home },
   { id: "My Files", label: "Files", icon: FolderOpen },
@@ -47,6 +71,15 @@ export const MobileAppContent: React.FC = () => {
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const currentPage = currentPath[0];
+
+  const mainRef = useRef<HTMLElement | null>(null);
+
+  // Always reset the main scroll area to the top when navigating to a new path/folder
+  useEffect(() => {
+    if (mainRef.current) {
+      scrollToTopFast(mainRef.current, 180);
+    }
+  }, [currentPath]);
 
   const renderContent = () => {
     switch (currentPage) {
@@ -169,7 +202,7 @@ export const MobileAppContent: React.FC = () => {
       </header>
 
       {/* Main content */}
-      <main className="flex-1 overflow-y-auto px-3 pt-3 pb-16">
+      <main ref={mainRef} className="flex-1 overflow-y-auto px-3 pt-3 pb-16">
         <div className="animate-fadeIn">{renderContent()}</div>
       </main>
 
