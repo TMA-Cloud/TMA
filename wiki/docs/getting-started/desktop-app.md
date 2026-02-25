@@ -80,20 +80,19 @@ The server URL is embedded at build time only. No config file is needed after in
 - When an admin user opens the app, a one-time background check compares the current versions to the feed.
 - If any component is outdated, an **Updates Available** notice appears in the left sidebar above **Settings**, listing the latest versions for backend, frontend, and Electron.
 
-## Desktop Editing with Office (Windows)
+## Desktop Editing and Open on Desktop (Windows)
 
-When you run the Windows desktop app, you can open documents in the locally installed Office applications and have changes sync back automatically.
+When you run the Windows desktop app, you can open supported files in their desktop applications and have changes sync back automatically.
 
-- **Supported:** `.docx`, `.xlsx`, `.pptx`, `.pdf` (and other types that your OS can open)
+- **Supported:** `.docx`, `.xlsx`, `.pptx`, `.pdf`, and other types that Windows can open (including common image and video formats)
 - **Where it works:** Electron desktop app on Windows only
 
 ### Open on Desktop
 
-- Right-click a document → **Open on desktop** (desktop app only), or
-- Double-click a document when:
-  - It is an OnlyOffice-supported type, and
-  - OnlyOffice is **not** configured in the server settings, and
-  - You are using the Windows desktop app
+- Right-click a supported file (document, image, or video) → **Open on desktop**
+- Double-click behavior in the desktop app:
+  - Office/OnlyOffice-supported files open in the default desktop application
+  - Image and video files open in the default viewer for that type
 
 ### How Sync Works
 

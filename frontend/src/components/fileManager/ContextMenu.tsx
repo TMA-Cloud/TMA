@@ -101,14 +101,19 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
   const isTrashView = currentPath[0] === 'Trash';
   const singleSelectedItem = selectedItems.length === 1 ? selectedItems[0] : null;
 
-  // Allow "Open on desktop" for all Office-type files based on extension,
-  // matching what Microsoft Office typically supports (Word/Excel/PowerPoint, etc.).
+  const singleSelectedMime = (singleSelectedItem?.mimeType || '').toLowerCase();
+
+  // Allow "Open on desktop" for:
+  // - All Office-type files based on extension (Word/Excel/PowerPoint/etc.)
+  // - Image files (image/*) and video files (video/*)
   const canOpenOnDesktop =
     !isTrashView &&
     hasElectronOpenOnDesktop() &&
     !!singleSelectedItem &&
     String(singleSelectedItem.type || '').toLowerCase() !== 'folder' &&
-    isOnlyOfficeSupported(singleSelectedItem.name);
+    (isOnlyOfficeSupported(singleSelectedItem.name) ||
+      singleSelectedMime.startsWith('image/') ||
+      singleSelectedMime.startsWith('video/'));
 
   const electronClipboardAvailable = hasElectronClipboard();
 

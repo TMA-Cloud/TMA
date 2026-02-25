@@ -52,7 +52,7 @@ Learn how to upload and manage files in TMA Cloud.
 
 - **Download:** Click to download single file
 - **Bulk Download:** Select multiple files → Download (creates ZIP archive)
-- **Copy:** (Windows desktop app) Right-click files → Copy to put them on the OS clipboard and paste in Explorer (200 MB total limit)
+- **Copy:** (desktop app) Right-click files → Copy to put them on the OS clipboard and paste in Explorer (200 MB total limit)
 - **Copy in cloud:** In-app copy between folders inside TMA Cloud
 - **Rename:** Right-click → Rename
 - **Move:** Drag and drop or use Move option
@@ -70,12 +70,12 @@ Learn how to upload and manage files in TMA Cloud.
 - Actual file type stored regardless of filename extension
 - Preview for images and documents
 
-### Document Editing
+### Document Editing and Viewers
 
 - **OnlyOffice Integration (browser):** Edit `.docx`, `.xlsx`, `.pptx` files in the browser when OnlyOffice is configured
-- **Desktop Editing (Windows app):** In the Windows desktop app, open Office documents on your computer (Word, Excel, PowerPoint) and changes sync back automatically when you save
-- **PDF Viewing:** View PDF files in browser
-- **Image Viewing:** View images with zoom
+- **Desktop Editing (desktop app):** In the electron app, open supported documents on your computer (Word, Excel, PowerPoint, and other associated editors) and changes sync back automatically when you save
+- **Image Viewing (browser):** View images with zoom in the built-in viewer
+- **Image and Video Viewing (desktop app):** In the electron app, double-clicking images and videos opens them in the default desktop application
 
 ## Best Practices
 

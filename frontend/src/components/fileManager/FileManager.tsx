@@ -413,7 +413,13 @@ export const FileManager: React.FC = () => {
     if (file.type === 'folder') {
       openFolder(file);
     } else {
-      if (file.mimeType && file.mimeType.startsWith('image/')) {
+      const mime = (file.mimeType || '').toLowerCase();
+
+      // In the Electron desktop app, open images and videos directly
+      // in the system default application.
+      if (isElectron() && (mime.startsWith('image/') || mime.startsWith('video/'))) {
+        void editFileWithDesktop(file.id);
+      } else if (mime.startsWith('image/')) {
         setImageViewerFile(file);
       } else if (isElectron() && ONLYOFFICE_EXTS.has(getExt(file.name))) {
         // In the Electron desktop app, open Office documents directly
