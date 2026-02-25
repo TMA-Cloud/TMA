@@ -26,13 +26,78 @@ const extensionToMimeTypes = (function buildExtensionToMimes() {
 })();
 
 /**
- * MIME types that file-type (magic-byte detection) may return for an extension
- * but that mime-db does not list for that extension. Add them so validation still passes.
+ * MIME types that file-type (magic-byte detection) or various clients may
+ * return for an extension but that mime-db does not list for that extension.
+ * Add them so validation still passes, especially for Microsoft Office formats.
+ *
+ * Keys are extensions WITHOUT the leading dot.
  */
 const DETECTION_ALIASES = {
   msi: ['application/x-cfb'], // MSI is CFB/OLE; file-type reports application/x-cfb
+
   // CSV flexibility: file-type often sees CSVs as simple text
   csv: ['text/plain', 'application/csv', 'application/x-csv'],
+
+  // --- Microsoft Word formats ---
+  doc: [
+    'application/msword',
+    'application/x-msword',
+    'application/vnd.ms-word',
+    'application/vnd.ms-word.document.macroEnabled.12',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  ],
+  docx: [
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/msword',
+    'application/vnd.ms-word.document.macroEnabled.12',
+  ],
+  docm: ['application/vnd.ms-word.document.macroEnabled.12'],
+  dot: ['application/msword', 'application/x-msword'],
+  dotx: ['application/vnd.openxmlformats-officedocument.wordprocessingml.template'],
+  dotm: ['application/vnd.ms-word.template.macroEnabled.12'],
+
+  // Rich Text (opened by Word and other editors)
+  rtf: ['application/rtf', 'text/rtf'],
+
+  // --- Microsoft Excel formats ---
+  xls: [
+    'application/vnd.ms-excel',
+    'application/msexcel',
+    'application/x-msexcel',
+    'application/x-ms-excel',
+    'application/x-excel',
+    'application/x-dos_ms_excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/vnd.ms-excel.sheet.macroEnabled.12',
+  ],
+  xlsx: ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-excel'],
+  xlsm: ['application/vnd.ms-excel.sheet.macroEnabled.12'],
+  xlsb: ['application/vnd.ms-excel.sheet.binary.macroEnabled.12'],
+  xltx: ['application/vnd.openxmlformats-officedocument.spreadsheetml.template'],
+  xltm: ['application/vnd.ms-excel.template.macroEnabled.12'],
+
+  // --- Microsoft PowerPoint formats ---
+  ppt: [
+    'application/vnd.ms-powerpoint',
+    'application/mspowerpoint',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'application/vnd.ms-powerpoint.presentation.macroEnabled.12',
+  ],
+  pptx: ['application/vnd.openxmlformats-officedocument.presentationml.presentation', 'application/vnd.ms-powerpoint'],
+  pptm: ['application/vnd.ms-powerpoint.presentation.macroEnabled.12'],
+  pps: ['application/vnd.ms-powerpoint'],
+  ppsx: ['application/vnd.openxmlformats-officedocument.presentationml.slideshow'],
+  ppsm: ['application/vnd.ms-powerpoint.slideshow.macroEnabled.12'],
+  potx: ['application/vnd.openxmlformats-officedocument.presentationml.template'],
+  potm: ['application/vnd.ms-powerpoint.template.macroEnabled.12'],
+
+  // --- OpenDocument formats (also commonly edited in Office) ---
+  odt: ['application/vnd.oasis.opendocument.text'],
+  ods: ['application/vnd.oasis.opendocument.spreadsheet'],
+  odp: ['application/vnd.oasis.opendocument.presentation'],
+
+  // PDF (some clients send non-standard aliases)
+  pdf: ['application/x-pdf', 'application/acrobat', 'application/vnd.pdf', 'text/pdf', 'text/x-pdf'],
 };
 
 /**

@@ -415,6 +415,11 @@ export const FileManager: React.FC = () => {
     } else {
       if (file.mimeType && file.mimeType.startsWith('image/')) {
         setImageViewerFile(file);
+      } else if (isElectron() && ONLYOFFICE_EXTS.has(getExt(file.name))) {
+        // In the Electron desktop app, open Office documents directly
+        // in the native desktop application (Word/Excel/PowerPoint, etc.)
+        // instead of routing through ONLYOFFICE in the browser.
+        void editFileWithDesktop(file.id);
       } else if (ONLYOFFICE_EXTS.has(getExt(file.name))) {
         // Validate MIME type before opening (prevents unnecessary API calls)
         if (!validateOnlyOfficeMimeType(file.name, file.mimeType)) {

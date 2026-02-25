@@ -18,6 +18,7 @@ import {
 import { useApp, type ShareExpiry, type FileItem } from '../../contexts/AppContext';
 import { useToast } from '../../hooks/useToast';
 import { hasElectronClipboard, hasElectronOpenOnDesktop, MAX_COPY_TO_PC_BYTES } from '../../utils/electronDesktop';
+import { isOnlyOfficeSupported } from '../../utils/fileUtils';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { Modal } from '../ui/Modal';
 import { getErrorMessage } from '../../utils/errorUtils';
@@ -99,15 +100,15 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
 
   const isTrashView = currentPath[0] === 'Trash';
   const singleSelectedItem = selectedItems.length === 1 ? selectedItems[0] : null;
+
+  // Allow "Open on desktop" for all Office-type files based on extension,
+  // matching what Microsoft Office typically supports (Word/Excel/PowerPoint, etc.).
   const canOpenOnDesktop =
     !isTrashView &&
     hasElectronOpenOnDesktop() &&
     !!singleSelectedItem &&
     String(singleSelectedItem.type || '').toLowerCase() !== 'folder' &&
-    !!singleSelectedItem.mimeType &&
-    (singleSelectedItem.mimeType.startsWith('application/vnd.openxmlformats-officedocument.') ||
-      singleSelectedItem.mimeType === 'application/msword' ||
-      singleSelectedItem.mimeType === 'application/pdf');
+    isOnlyOfficeSupported(singleSelectedItem.name);
 
   const electronClipboardAvailable = hasElectronClipboard();
 
