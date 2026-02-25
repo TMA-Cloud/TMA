@@ -111,8 +111,8 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
         data-file-id={file.id}
         className={`
           stagger-item group relative rounded-xl border cursor-pointer
-          transition-all duration-200 ease-out transform-gpu
-          hover-lift will-change-transform hover:z-20
+          transition-colors duration-200 ease-out
+          hover:z-20
           active:scale-[0.98]
           ${isMobile ? 'min-w-0 w-full p-2 select-none' : 'p-4 min-w-0'}
           overflow-hidden
@@ -138,9 +138,7 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
         onTouchMove={handleTouchMove}
       >
         <div className={`flex flex-col items-center text-center w-full min-w-0 ${isMobile ? 'gap-1' : ''}`}>
-          <div
-            className={`relative ${isMobile ? 'mb-1' : 'mb-2'} transition-transform duration-200 group-hover:scale-105 flex-shrink-0`}
-          >
+          <div className={`relative ${isMobile ? 'mb-1' : 'mb-2'} flex-shrink-0`}>
             <FileTypeIcon
               file={file}
               className={`${isMobile ? 'w-10 h-10' : 'w-14 h-14'} transition-all duration-200`}
@@ -213,8 +211,8 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
       data-file-id={file.id}
       className={`
         stagger-item group flex items-center space-x-3 p-3.5 rounded-lg cursor-pointer
-        transition-all duration-200 ease-out transform-gpu
-        hover-lift active:scale-[0.99]
+        transition-colors duration-200 ease-out
+        active:scale-[0.99]
         ${isMobile ? 'select-none' : ''}
         ${
           isSelected
@@ -236,7 +234,7 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
       onTouchEnd={handleTouchEnd}
       onTouchMove={handleTouchMove}
     >
-      <div className="relative flex-shrink-0 transition-transform duration-200 group-hover:scale-105">
+      <div className="relative flex-shrink-0">
         <FileTypeIcon file={file} className="w-10 h-10 transition-all duration-200" />
         {file.starred && <Star className="absolute -top-2 -right-2 w-4 h-4 text-yellow-400 fill-yellow-400" />}
         {file.shared && !isExpired && <Share2 className="absolute -top-2 -left-2 w-4 h-4 text-green-400" />}
@@ -256,7 +254,7 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
         )}
       </div>
 
-      <div className="flex-1 min-w-0 transition-transform duration-200 group-hover:translate-x-1">
+      <div className="flex-1 min-w-0">
         <div className={isMobile ? 'w-full min-w-0' : 'w-full min-w-0'}>
           <Tooltip text={formatFileNameForTooltip(file.name, isMobile ? 25 : 40)}>
             <p
