@@ -45,7 +45,7 @@ Complete list of audit event types in TMA Cloud.
 
 ## Admin Events
 
-- `admin.settings.update` - Admin setting changed (metadata: `setting`, e.g. `signup_enabled`; `newValue`)
+- `admin.settings.update` - Admin setting changed (metadata: `setting`, e.g. `signup_enabled`, `hide_file_extensions`; `newValue` or `hidden`)
 - `admin.settings.read` - Admin viewed protected settings (failure when unauthorized)
 - `admin.user.list` - Admin listed all users
 - `admin.user.update` - Admin updated user (e.g. storage limit)

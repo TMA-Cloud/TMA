@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useApp } from '../../contexts/AppContext';
 import { useStorageUsage } from '../../hooks/useStorageUsage';
 import { fetchAllUsers, type UserSummary } from '../../utils/api';
 import { useToast } from '../../hooks/useToast';
@@ -26,10 +27,11 @@ import { MfaModal } from './modals/MfaModal';
 
 export const Settings: React.FC = () => {
   const { user } = useAuth();
+  const { setHideFileExtensions } = useApp();
   const { usage, loading, refresh: refreshStorage } = useStorageUsage();
   const { showToast } = useToast();
 
-  // Signup status hook
+  // Signup status hook (syncs hideFileExtensions to AppContext when admin toggles)
   const {
     signupEnabled,
     canToggleSignup,
@@ -38,7 +40,11 @@ export const Settings: React.FC = () => {
     loadingSignupStatus,
     togglingSignup,
     handleToggleSignup,
-  } = useSignupStatus();
+    hideFileExtensions,
+    canToggleHideFileExtensions,
+    togglingHideFileExtensions,
+    handleToggleHideFileExtensions,
+  } = useSignupStatus({ onHideFileExtensionsChange: setHideFileExtensions });
 
   // Versions hook
   const {
@@ -115,6 +121,10 @@ export const Settings: React.FC = () => {
             onToggleSignup={handleToggleSignup}
             togglingSignup={togglingSignup}
             onShowUsers={handleShowUsers}
+            hideFileExtensions={hideFileExtensions}
+            canToggleHideFileExtensions={canToggleHideFileExtensions}
+            togglingHideFileExtensions={togglingHideFileExtensions}
+            onToggleHideFileExtensions={handleToggleHideFileExtensions}
           />
         )}
 

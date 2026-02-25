@@ -119,6 +119,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isUploadProgressInteracting, setIsUploadProgressInteracting] = useState(false);
   const [onlyOfficeConfigured, setOnlyOfficeConfigured] = useState(false);
   const [canConfigureOnlyOffice, setCanConfigureOnlyOffice] = useState(false);
+  const [hideFileExtensions, setHideFileExtensions] = useState(false);
   const [updatesAvailable, setUpdatesAvailable] = useState<{
     frontend?: string;
     backend?: string;
@@ -1289,6 +1290,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try {
         const status = await getSignupStatus();
         setCanConfigureOnlyOffice(status.canToggle);
+        setHideFileExtensions(status.hideFileExtensions === true);
       } catch {
         // Error handled silently - admin features will be unavailable
         setCanConfigureOnlyOffice(false);
@@ -1412,6 +1414,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         onlyOfficeConfigured,
         canConfigureOnlyOffice,
         refreshOnlyOfficeConfig,
+        hideFileExtensions,
+        setHideFileExtensions,
         updatesAvailable,
       }}
     >

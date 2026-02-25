@@ -1,6 +1,6 @@
 import React, { useRef } from 'react';
-import { type FileItem as FileItemType } from '../../contexts/AppContext';
-import { formatFileSize, formatDate } from '../../utils/fileUtils';
+import { type FileItem as FileItemType, useApp } from '../../contexts/AppContext';
+import { formatFileSize, formatDate, getDisplayFileName } from '../../utils/fileUtils';
 import { Star, Share2, Eye, Clock } from 'lucide-react';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { FileTypeIcon } from './FileTypeIcon';
@@ -37,6 +37,8 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
   dragDisabled,
 }) => {
   const isMobile = useIsMobile();
+  const { hideFileExtensions } = useApp();
+  const displayName = getDisplayFileName(file.name, file.type === 'file', hideFileExtensions);
   const longPressTimeoutRef = useRef<number | null>(null);
   const longPressTriggeredRef = useRef(false);
   const isExpired = file.shared && file.expiresAt instanceof Date && file.expiresAt < new Date();
@@ -186,7 +188,7 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
                   lineHeight: '1.3',
                 }}
               >
-                {file.name}
+                {displayName}
               </p>
             </div>
           </div>
@@ -262,7 +264,7 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
               lineHeight: '1.4',
             }}
           >
-            {file.name}
+            {displayName}
           </p>
         </div>
         <p className="text-xs text-gray-500/80 dark:text-gray-400/80 transition-colors duration-200">

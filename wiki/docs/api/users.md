@@ -95,14 +95,16 @@ Public endpoint. No authentication. Use to show or hide the signup link on the l
 
 ### GET `/api/user/signup-status`
 
-Requires authentication. Returns signup status and whether the current user can toggle it. The first user (admin) also receives `totalUsers` and `additionalUsers`.
+Requires authentication. Returns signup status, hide file extensions setting, and whether the current user can toggle them. The first user (admin) also receives `totalUsers` and `additionalUsers`.
 
 **Response (any authenticated user):**
 
 ```json
 {
   "signupEnabled": true,
-  "canToggle": false
+  "canToggle": false,
+  "hideFileExtensions": false,
+  "canToggleHideFileExtensions": false
 }
 ```
 
@@ -113,7 +115,9 @@ Requires authentication. Returns signup status and whether the current user can 
   "signupEnabled": true,
   "canToggle": true,
   "totalUsers": 3,
-  "additionalUsers": 2
+  "additionalUsers": 2,
+  "hideFileExtensions": false,
+  "canToggleHideFileExtensions": true
 }
 ```
 
@@ -276,6 +280,44 @@ Update the max upload size (admin only).
 ```json
 {
   "maxBytes": 5368709120
+}
+```
+
+## Hide File Extensions Configuration
+
+### GET `/api/user/hide-file-extensions-config`
+
+Get the current hide file extensions setting. Accessible to any authenticated user (used by the frontend for display).
+
+**Response:**
+
+```json
+{
+  "hideFileExtensions": false
+}
+```
+
+### PUT `/api/user/hide-file-extensions-config`
+
+Update the hide file extensions setting (admin only). When true, file names are shown without extensions in the file manager and rename dialog.
+
+**Request Body:**
+
+```json
+{
+  "hidden": true
+}
+```
+
+**Validation:**
+
+- `hidden`: Required. Must be a boolean.
+
+**Response:**
+
+```json
+{
+  "hideFileExtensions": true
 }
 ```
 

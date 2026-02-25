@@ -1,9 +1,10 @@
 import React, { useRef } from 'react';
 import { Modal } from '../ui/Modal';
 import { useApp } from '../../contexts/AppContext';
+import { getDisplayFileName, getFullNameForRename } from '../../utils/fileUtils';
 
 export const RenameModal: React.FC = () => {
-  const { renameTarget, setRenameTarget, renameFile } = useApp();
+  const { renameTarget, setRenameTarget, renameFile, hideFileExtensions } = useApp();
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleClose = () => {
@@ -14,8 +15,11 @@ export const RenameModal: React.FC = () => {
     if (!renameTarget) return;
     const value = inputRef.current?.value ?? '';
     if (!value.trim()) return;
+    const isFile = renameTarget.type === 'file';
+    const nameToSubmit =
+      hideFileExtensions && isFile ? getFullNameForRename(value.trim(), renameTarget.name) : value.trim();
     try {
-      await renameFile(renameTarget.id, value.trim());
+      await renameFile(renameTarget.id, nameToSubmit);
       handleClose();
     } catch {
       // Error already handled by renameFileApi (toast shown)
@@ -26,6 +30,8 @@ export const RenameModal: React.FC = () => {
 
   if (!renameTarget) return null;
 
+  const initialDisplayValue = getDisplayFileName(renameTarget.name, renameTarget.type === 'file', hideFileExtensions);
+
   return (
     <Modal isOpen onClose={handleClose} title="Rename">
       <div className="space-y-4">
@@ -34,7 +40,7 @@ export const RenameModal: React.FC = () => {
           <input
             type="text"
             key={renameTarget?.id}
-            defaultValue={renameTarget?.name ?? ''}
+            defaultValue={initialDisplayValue}
             ref={inputRef}
             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />

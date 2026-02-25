@@ -12,6 +12,10 @@ interface AdministrationSectionProps {
   onToggleSignup: () => void;
   togglingSignup: boolean;
   onShowUsers: () => void;
+  hideFileExtensions: boolean;
+  canToggleHideFileExtensions: boolean;
+  togglingHideFileExtensions: boolean;
+  onToggleHideFileExtensions: () => void;
 }
 
 export const AdministrationSection: React.FC<AdministrationSectionProps> = ({
@@ -23,6 +27,10 @@ export const AdministrationSection: React.FC<AdministrationSectionProps> = ({
   onToggleSignup,
   togglingSignup,
   onShowUsers,
+  hideFileExtensions,
+  canToggleHideFileExtensions,
+  togglingHideFileExtensions,
+  onToggleHideFileExtensions,
 }) => {
   return (
     <SettingsSection
@@ -63,6 +71,15 @@ export const AdministrationSection: React.FC<AdministrationSectionProps> = ({
         onToggle={onToggleSignup}
         toggleDisabled={togglingSignup || loadingSignupStatus}
         description="Enable or disable new user registration"
+      />
+      <SettingsItem
+        label="Hide file extensions"
+        value={hideFileExtensions ? 'Yes' : 'No'}
+        toggle={true}
+        toggleValue={hideFileExtensions}
+        onToggle={onToggleHideFileExtensions}
+        toggleDisabled={!canToggleHideFileExtensions || togglingHideFileExtensions || loadingSignupStatus}
+        description="Show file names without extensions in the file manager and rename dialog"
       />
     </SettingsSection>
   );

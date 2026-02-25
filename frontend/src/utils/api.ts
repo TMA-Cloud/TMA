@@ -134,7 +134,7 @@ export async function checkGoogleAuthEnabled(): Promise<boolean> {
 
 /**
  * Get signup status and whether current user can toggle it.
- * When logged in, uses GET /api/user/signup-status (returns canToggle, totalUsers, etc.).
+ * When logged in, uses GET /api/user/signup-status (returns canToggle, totalUsers, hideFileExtensions, etc.).
  * When not logged in, falls back to GET /api/signup-status (public, signupEnabled only).
  */
 export async function getSignupStatus(): Promise<{
@@ -142,6 +142,8 @@ export async function getSignupStatus(): Promise<{
   canToggle: boolean;
   totalUsers?: number;
   additionalUsers?: number;
+  hideFileExtensions?: boolean;
+  canToggleHideFileExtensions?: boolean;
 }> {
   try {
     const authenticated = await apiGet<{
@@ -149,6 +151,8 @@ export async function getSignupStatus(): Promise<{
       canToggle: boolean;
       totalUsers?: number;
       additionalUsers?: number;
+      hideFileExtensions?: boolean;
+      canToggleHideFileExtensions?: boolean;
     }>('/api/user/signup-status');
     return authenticated;
   } catch (err) {
@@ -156,9 +160,9 @@ export async function getSignupStatus(): Promise<{
       const publicRes = await apiGet<{ signupEnabled: boolean }>('/api/signup-status').catch(() => ({
         signupEnabled: true,
       }));
-      return { ...publicRes, canToggle: false };
+      return { ...publicRes, canToggle: false, hideFileExtensions: false, canToggleHideFileExtensions: false };
     }
-    return { signupEnabled: true, canToggle: false };
+    return { signupEnabled: true, canToggle: false, hideFileExtensions: false, canToggleHideFileExtensions: false };
   }
 }
 
@@ -168,6 +172,15 @@ export async function getSignupStatus(): Promise<{
 export async function toggleSignup(enabled: boolean): Promise<{ signupEnabled: boolean }> {
   return await apiPost<{ signupEnabled: boolean }>('/api/user/signup-toggle', {
     enabled,
+  });
+}
+
+/**
+ * Update hide file extensions setting (only for first user). When true, file names are shown without extensions.
+ */
+export async function updateHideFileExtensionsConfig(hidden: boolean): Promise<{ hideFileExtensions: boolean }> {
+  return await apiPut<{ hideFileExtensions: boolean }>('/api/user/hide-file-extensions-config', {
+    hidden,
   });
 }
 

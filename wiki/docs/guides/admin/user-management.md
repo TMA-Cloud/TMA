@@ -27,6 +27,11 @@ Manage users in TMA Cloud (admin only).
 - **Disable Signup:** No one is allowed to signup
 - Toggle in **Settings** → **Administration** → **Allow User Signup**
 
+### Hide File Extensions
+
+- When enabled, file names are shown without extensions (applies to all users)
+- Toggle in **Settings** → **Administration** → **Hide file extensions**
+
 ## Managing Users
 
 ### Storage Limits

@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { Modal } from '../ui/Modal';
 import { useToast } from '../../hooks/useToast';
 import { formatBytes } from '../../utils/storageUtils';
-import { type FileItem, type FolderInfo } from '../../contexts/AppContext';
+import { type FileItem, type FolderInfo, useApp } from '../../contexts/AppContext';
+import { getDisplayFileName } from '../../utils/fileUtils';
 
 interface FileInfoModalProps {
   isOpen: boolean;
@@ -13,6 +14,7 @@ interface FileInfoModalProps {
 
 export const FileInfoModal: React.FC<FileInfoModalProps> = ({ isOpen, onClose, file, currentPath }) => {
   const { showToast } = useToast();
+  const { hideFileExtensions } = useApp();
   const [infoItem, setInfoItem] = useState<FileItem | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -86,7 +88,9 @@ export const FileInfoModal: React.FC<FileInfoModalProps> = ({ isOpen, onClose, f
         {loading && <p className="text-xs text-gray-500 dark:text-gray-400">Loading latest info…</p>}
         <div>
           <p className="font-semibold">Name</p>
-          <p className="mt-0.5 break-all">{effectiveItem.name}</p>
+          <p className="mt-0.5 break-all">
+            {getDisplayFileName(effectiveItem.name, effectiveItem.type === 'file', hideFileExtensions)}
+          </p>
         </div>
         {(hasFolderSize || hasItemSize) && (
           <div className="grid grid-cols-2 gap-4">

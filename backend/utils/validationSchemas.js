@@ -165,6 +165,8 @@ const updateMaxUploadSizeConfigSchema = [
     .toInt(),
 ];
 
+const updateHideFileExtensionsConfigSchema = [body('hidden').isBoolean().withMessage('Hidden must be a boolean')];
+
 const updateUserStorageLimitSchema = [
   body('targetUserId')
     .notEmpty()
@@ -219,6 +221,7 @@ module.exports = {
   updateOnlyOfficeConfigSchema,
   updateShareBaseUrlConfigSchema,
   updateMaxUploadSizeConfigSchema,
+  updateHideFileExtensionsConfigSchema,
   updateUserStorageLimitSchema,
   getOnlyOfficeConfigSchema,
   handleSharedSchema,

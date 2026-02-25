@@ -134,6 +134,29 @@ export function getExt(name?: string) {
   return idx >= 0 ? name.slice(idx).toLowerCase() : '';
 }
 
+/**
+ * Returns the name to display for a file/folder. When hideExtensions is true and item is a file
+ * with an extension, returns the name without the extension (e.g. "report" instead of "report.pdf").
+ */
+export function getDisplayFileName(name: string, isFile: boolean, hideExtensions: boolean): string {
+  if (!name) return '';
+  if (!hideExtensions || !isFile) return name;
+  const ext = getExt(name);
+  if (!ext) return name;
+  return name.slice(0, name.length - ext.length);
+}
+
+/**
+ * When extensions were hidden in the rename dialog, the user edits only the base name.
+ * This appends the original file's extension back to produce the full name to send to the API.
+ */
+export function getFullNameForRename(editedDisplayName: string, originalFullName: string): string {
+  const trimmed = editedDisplayName.trim();
+  const ext = getExt(originalFullName);
+  if (!ext) return trimmed;
+  return trimmed + ext;
+}
+
 export const isOnlyOfficeSupported = (name?: string) => ONLYOFFICE_EXTS.has(getExt(name));
 
 /**

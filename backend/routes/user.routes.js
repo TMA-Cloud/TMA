@@ -12,6 +12,8 @@ const {
   updateShareBaseUrlConfig,
   getMaxUploadSizeConfig,
   updateMaxUploadSizeConfig,
+  getHideFileExtensionsConfig,
+  updateHideFileExtensionsConfig,
   updateUserStorageLimit,
 } = require('../controllers/user.controller');
 const { apiRateLimiter } = require('../middleware/rateLimit.middleware');
@@ -21,6 +23,7 @@ const {
   updateOnlyOfficeConfigSchema,
   updateShareBaseUrlConfigSchema,
   updateMaxUploadSizeConfigSchema,
+  updateHideFileExtensionsConfigSchema,
   updateUserStorageLimitSchema,
 } = require('../utils/validationSchemas');
 
@@ -40,6 +43,13 @@ router.get('/share-base-url-config', getShareBaseUrlConfig);
 router.put('/share-base-url-config', updateShareBaseUrlConfigSchema, validate, updateShareBaseUrlConfig);
 router.get('/max-upload-size-config', getMaxUploadSizeConfig);
 router.put('/max-upload-size-config', updateMaxUploadSizeConfigSchema, validate, updateMaxUploadSizeConfig);
+router.get('/hide-file-extensions-config', getHideFileExtensionsConfig);
+router.put(
+  '/hide-file-extensions-config',
+  updateHideFileExtensionsConfigSchema,
+  validate,
+  updateHideFileExtensionsConfig
+);
 router.put('/storage-limit', updateUserStorageLimitSchema, validate, updateUserStorageLimit);
 
 module.exports = router;

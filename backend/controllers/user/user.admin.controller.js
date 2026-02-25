@@ -10,6 +10,8 @@ const {
   setShareBaseUrlSettings,
   getMaxUploadSizeSettings,
   setMaxUploadSizeSettings,
+  getHideFileExtensionsSettings,
+  setHideFileExtensionsSettings,
   setUserStorageLimit,
 } = require('../../models/user.model');
 const { sendError, sendSuccess } = require('../../utils/response');
@@ -34,8 +36,11 @@ async function _getPublicSignupStatus(req, res) {
  */
 async function _getSignupStatus(req, res) {
   try {
-    const signupEnabled = await getSignupEnabled();
-    const userIsFirst = await isFirstUser(req.userId);
+    const [signupEnabled, hideFileExtensions, userIsFirst] = await Promise.all([
+      getSignupEnabled(),
+      getHideFileExtensionsSettings(),
+      isFirstUser(req.userId),
+    ]);
     let totalUsers;
 
     if (userIsFirst) {
@@ -47,6 +52,8 @@ async function _getSignupStatus(req, res) {
       canToggle: userIsFirst,
       totalUsers,
       additionalUsers: typeof totalUsers === 'number' ? Math.max(totalUsers - 1, 0) : undefined,
+      hideFileExtensions,
+      canToggleHideFileExtensions: userIsFirst,
     });
   } catch (err) {
     sendError(res, 500, 'Server error', err);
@@ -456,6 +463,76 @@ async function _updateMaxUploadSizeConfig(req, res) {
 }
 
 /**
+ * Get hide file extensions setting (any authenticated user; used by UI for display).
+ * Update is admin only via _updateHideFileExtensionsConfig.
+ */
+async function _getHideFileExtensionsConfig(req, res) {
+  try {
+    const hideFileExtensions = await getHideFileExtensionsSettings();
+    sendSuccess(res, { hideFileExtensions });
+  } catch (err) {
+    logger.error({ err }, 'Failed to get hide file extensions config');
+    sendError(res, 500, 'Server error', err);
+  }
+}
+
+/**
+ * Update hide file extensions setting (admin only)
+ */
+async function _updateHideFileExtensionsConfig(req, res) {
+  try {
+    const userIsFirst = await isFirstUser(req.userId);
+    if (!userIsFirst) {
+      await logAuditEvent(
+        'admin.settings.update',
+        {
+          status: 'failure',
+          resourceType: 'settings',
+          metadata: { action: 'update_hide_file_extensions', reason: 'unauthorized' },
+        },
+        req
+      );
+      logger.warn({ userId: req.userId }, 'Unauthorized hide file extensions config update attempt');
+      return sendError(res, 403, 'Only the first user can configure hide file extensions');
+    }
+
+    const { hidden } = req.body;
+
+    await setHideFileExtensionsSettings(hidden, req.userId);
+
+    await logAuditEvent(
+      'admin.settings.update',
+      {
+        status: 'success',
+        resourceType: 'settings',
+        metadata: { setting: 'hide_file_extensions', hidden: !!hidden },
+      },
+      req
+    );
+    logger.info({ userId: req.userId, hidden: !!hidden }, 'Hide file extensions setting updated');
+
+    const hideFileExtensions = await getHideFileExtensionsSettings();
+    sendSuccess(res, { hideFileExtensions });
+  } catch (err) {
+    if (err.message === 'Only the first user can configure hide file extensions') {
+      await logAuditEvent(
+        'admin.settings.update',
+        {
+          status: 'failure',
+          resourceType: 'settings',
+          errorMessage: err.message,
+          metadata: { action: 'update_hide_file_extensions' },
+        },
+        req
+      );
+      return sendError(res, 403, err.message);
+    }
+    logger.error({ err }, 'Failed to update hide file extensions settings');
+    sendError(res, 500, 'Server error', err);
+  }
+}
+
+/**
  * Update user storage limit (admin only)
  */
 async function _updateUserStorageLimit(req, res) {
@@ -532,5 +609,7 @@ module.exports = {
   updateShareBaseUrlConfig: _updateShareBaseUrlConfig,
   getMaxUploadSizeConfig: _getMaxUploadSizeConfig,
   updateMaxUploadSizeConfig: _updateMaxUploadSizeConfig,
+  getHideFileExtensionsConfig: _getHideFileExtensionsConfig,
+  updateHideFileExtensionsConfig: _updateHideFileExtensionsConfig,
   updateUserStorageLimit: _updateUserStorageLimit,
 };

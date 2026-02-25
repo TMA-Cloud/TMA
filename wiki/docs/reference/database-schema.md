@@ -80,6 +80,7 @@ Application-wide settings.
 | `first_user_id`         | TEXT        | FK → users.id (immutable)                                          |
 | `share_base_url`        | TEXT        | Custom share link base URL (null = use request origin)             |
 | `max_upload_size_bytes` | BIGINT      | Max single-file upload size in bytes (default 10737418240 = 10 GB) |
+| `hide_file_extensions`  | BOOLEAN     | When true, file names are shown without extensions (default false) |
 | `updated_at`            | TIMESTAMPTZ | Default now()                                                      |
 
 ### `sessions`

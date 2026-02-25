@@ -13,6 +13,17 @@ Control user registration in TMA Cloud (admin only).
 
 **When disabled:** Only the first user (admin) can allow to create accounts; public signup is blocked.
 
+## Hide File Extensions
+
+1. Go to **Settings**
+2. Open the **Administration** section (visible only to the first user)
+3. Use the **Hide file extensions** toggle
+4. Changes apply immediately for all users
+
+**When on:** File names in the file manager and in the rename dialog are shown without extensions.
+
+**When off:** File names show with extensions (default).
+
 ## First User
 
 - The first user to sign up is the administrator
