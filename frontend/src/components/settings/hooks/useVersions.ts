@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { getCurrentVersions, fetchLatestVersions, type VersionInfo } from '../../../utils/api';
+import { getElectronAppVersion, isElectron } from '../../../utils/electronDesktop';
 import { useToast } from '../../../hooks/useToast';
 
 export function useVersions() {
@@ -34,7 +35,18 @@ export function useVersions() {
       setLatestVersions(latest);
       setVersionChecked(true);
 
-      const allUpToDate = current.frontend === latest.frontend && current.backend === latest.backend;
+      let allUpToDate = current.frontend === latest.frontend && current.backend === latest.backend;
+
+      if (isElectron() && latest.electron) {
+        try {
+          const desktopVersion = await getElectronAppVersion();
+          if (!desktopVersion || desktopVersion !== latest.electron) {
+            allUpToDate = false;
+          }
+        } catch {
+          allUpToDate = false;
+        }
+      }
 
       showToast(
         allUpToDate ? 'All components are up to date' : 'Updates are available',
@@ -85,6 +97,7 @@ export function useVersions() {
   return {
     currentVersions,
     latestVersions,
+    latestElectronVersion: latestVersions?.electron ?? null,
     checkingVersions,
     versionChecked,
     versionError,

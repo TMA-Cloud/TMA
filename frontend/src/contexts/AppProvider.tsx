@@ -8,6 +8,8 @@ import {
   hasAuthState,
   checkUploadStorage,
   getMaxUploadSizeConfig,
+  getCurrentVersions,
+  fetchLatestVersions,
 } from '../utils/api';
 import { useToast } from '../hooks/useToast';
 import { extractXhrErrorMessage, extractResponseError, ApiError } from '../utils/errorUtils';
@@ -25,6 +27,7 @@ import {
   editFileWithDesktopElectron,
   saveFileViaElectron,
   saveFilesBulkViaElectron,
+  getElectronAppVersion,
 } from '../utils/electronDesktop';
 import { formatBytes } from '../utils/storageUtils';
 
@@ -116,6 +119,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isUploadProgressInteracting, setIsUploadProgressInteracting] = useState(false);
   const [onlyOfficeConfigured, setOnlyOfficeConfigured] = useState(false);
   const [canConfigureOnlyOffice, setCanConfigureOnlyOffice] = useState(false);
+  const [updatesAvailable, setUpdatesAvailable] = useState<{
+    frontend?: string;
+    backend?: string;
+    electron?: string;
+  } | null>(null);
+  const [hasCheckedUpdates, setHasCheckedUpdates] = useState(false);
   const isUploadProgressInteractingRef = useRef(false);
   const uploadDismissTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const searchQueryRef = useRef<string>(''); // Track current search query to ignore stale results
@@ -1289,6 +1298,47 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     void refreshOnlyOfficeConfig();
   }, [refreshOnlyOfficeConfig]);
 
+  // One-time background update check when app opens (admin only).
+  useEffect(() => {
+    if (!canConfigureOnlyOffice || hasCheckedUpdates) return;
+
+    const checkForUpdatesOnce = async () => {
+      try {
+        const [current, latest] = await Promise.all([getCurrentVersions(), fetchLatestVersions()]);
+
+        const outdated: { frontend?: string; backend?: string; electron?: string } = {};
+
+        if (current.frontend && latest.frontend && current.frontend !== latest.frontend) {
+          outdated.frontend = latest.frontend;
+        }
+
+        if (current.backend && latest.backend && current.backend !== latest.backend) {
+          outdated.backend = latest.backend;
+        }
+
+        if (isElectron() && latest.electron) {
+          try {
+            const desktopVersion = await getElectronAppVersion();
+            if (desktopVersion && desktopVersion !== latest.electron) {
+              outdated.electron = latest.electron;
+            }
+          } catch {
+            // Ignore Electron version errors for the banner
+          }
+        }
+
+        setUpdatesAvailable(Object.keys(outdated).length > 0 ? outdated : null);
+      } catch {
+        // Silent failure: no banner if check fails
+        setUpdatesAvailable(null);
+      } finally {
+        setHasCheckedUpdates(true);
+      }
+    };
+
+    void checkForUpdatesOnce();
+  }, [canConfigureOnlyOffice, hasCheckedUpdates]);
+
   return (
     <AppContext.Provider
       value={{
@@ -1362,6 +1412,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         onlyOfficeConfigured,
         canConfigureOnlyOffice,
         refreshOnlyOfficeConfig,
+        updatesAvailable,
       }}
     >
       {children}

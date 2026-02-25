@@ -41,7 +41,14 @@ export const Settings: React.FC = () => {
   } = useSignupStatus();
 
   // Versions hook
-  const { versionStatusText, versionDescription, checkingVersions, versionError, handleCheckVersions } = useVersions();
+  const {
+    versionStatusText,
+    versionDescription,
+    checkingVersions,
+    versionError,
+    handleCheckVersions,
+    latestElectronVersion,
+  } = useVersions();
 
   // Sessions hook
   const {
@@ -122,6 +129,7 @@ export const Settings: React.FC = () => {
             checkingVersions={checkingVersions}
             versionError={versionError}
             onCheckVersions={handleCheckVersions}
+            latestElectronVersion={latestElectronVersion}
           />
         )}
 

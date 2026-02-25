@@ -4,11 +4,13 @@ const { app } = require('electron');
 const { getServerUrl, NO_SERVER_URL_PAGE } = require('./config.cjs');
 const { createWindow } = require('./window.cjs');
 const { registerClipboardHandlers } = require('./ipc/clipboard.cjs');
+const { registerAppHandlers } = require('./ipc/app.cjs');
 const { registerEditWithDesktopHandler, registerSaveFileHandlers } = require('./ipc/files.cjs');
 const { cleanTempClipboardDirs, cleanTempEditDirs } = require('./utils/file-utils.cjs');
 
 // Register IPC handlers before any window is created
 registerClipboardHandlers();
+registerAppHandlers();
 registerEditWithDesktopHandler();
 registerSaveFileHandlers();
 

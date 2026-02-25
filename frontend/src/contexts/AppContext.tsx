@@ -112,6 +112,11 @@ export interface AppContextType {
   onlyOfficeConfigured: boolean;
   canConfigureOnlyOffice: boolean;
   refreshOnlyOfficeConfig: () => Promise<void>;
+  updatesAvailable: {
+    frontend?: string;
+    backend?: string;
+    electron?: string;
+  } | null;
 }
 
 export const AppContext = createContext<AppContextType | undefined>(undefined);

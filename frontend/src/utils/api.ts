@@ -392,6 +392,7 @@ export async function getBackupCodesCount(): Promise<{ count: number }> {
 export interface VersionInfo {
   frontend: string;
   backend: string;
+  electron?: string;
 }
 
 /**

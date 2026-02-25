@@ -91,6 +91,7 @@ router.get('/latest', requireAdmin, (req, res) => {
         res.json({
           frontend: versions.frontend ?? 'unknown',
           backend: versions.backend ?? 'unknown',
+          electron: versions.electron ?? 'unknown',
         });
       } catch (error) {
         logger.error({ err: error }, 'Error parsing versions JSON');

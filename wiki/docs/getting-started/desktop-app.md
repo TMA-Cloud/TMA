@@ -73,6 +73,13 @@ Builds are unsigned by default. To sign the app, configure code signing and use 
 
 The server URL is embedded at build time only. No config file is needed after install.
 
+## Version and updates
+
+- The desktop app version comes from `electron/package.json` and is shown under **Settings → Updates → Desktop app**.
+- The app uses the same update feed as the web UI (`/api/version/latest`), which returns `frontend`, `backend`, and `electron` versions.
+- When an admin user opens the app, a one-time background check compares the current versions to the feed.
+- If any component is outdated, an **Updates Available** notice appears in the left sidebar above **Settings**, listing the latest versions for backend, frontend, and Electron.
+
 ## Desktop Editing with Office (Windows)
 
 When you run the Windows desktop app, you can open documents in the locally installed Office applications and have changes sync back automatically.

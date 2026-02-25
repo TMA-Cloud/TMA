@@ -16,7 +16,7 @@ const navigationItems = [
 ];
 
 export const Sidebar: React.FC = () => {
-  const { currentPath, setCurrentPath, sidebarOpen, setSidebarOpen } = useApp();
+  const { currentPath, setCurrentPath, sidebarOpen, setSidebarOpen, updatesAvailable } = useApp();
 
   const handleNavigation = (path: string[]) => {
     setCurrentPath(path);
@@ -113,6 +113,20 @@ export const Sidebar: React.FC = () => {
               );
             })}
           </nav>
+
+          {/* Updates banner (admin only, when components are outdated) */}
+          {updatesAvailable && (
+            <div className="px-4 pb-2">
+              <div className="rounded-xl border border-amber-400/60 bg-amber-50/90 dark:bg-amber-900/20 px-4 py-3 shadow-sm">
+                <p className="text-xs font-semibold text-amber-800 dark:text-amber-200 mb-1">Updates Available</p>
+                <ul className="text-xs text-amber-900 dark:text-amber-100 space-y-0.5">
+                  {updatesAvailable.backend && <li>Backend ⟶ {updatesAvailable.backend}</li>}
+                  {updatesAvailable.frontend && <li>Frontend ⟶ {updatesAvailable.frontend}</li>}
+                  {updatesAvailable.electron && <li>Electron ⟶ {updatesAvailable.electron}</li>}
+                </ul>
+              </div>
+            </div>
+          )}
 
           {/* Settings */}
           <div className="p-4 border-t border-gray-200/50 dark:border-gray-800/50">

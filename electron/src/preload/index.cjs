@@ -4,6 +4,9 @@ const { contextBridge, ipcRenderer } = require('electron');
   try {
     const api = {
       platform: process.platform,
+      app: {
+        getVersion: () => ipcRenderer.invoke('app:getVersion'),
+      },
       clipboard: {
         readFiles: () => ipcRenderer.invoke('clipboard:readFiles'),
         writeFiles: paths => ipcRenderer.invoke('clipboard:writeFiles', paths),

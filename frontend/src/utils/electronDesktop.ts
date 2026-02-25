@@ -11,6 +11,9 @@ declare global {
   interface Window {
     electronAPI?: {
       platform?: string;
+      app?: {
+        getVersion?: () => Promise<{ version: string | null; error?: string }>;
+      };
       clipboard: {
         readFiles: () => Promise<{
           files: { name: string; mime: string; data: string }[];
@@ -61,6 +64,18 @@ export function hasElectronClipboard(): boolean {
 /** True when the desktop app supports opening files in the system default app. Show "Open on desktop". */
 export function hasElectronOpenOnDesktop(): boolean {
   return typeof window !== 'undefined' && !!window.electronAPI?.files?.editWithDesktop;
+}
+
+/** Read the packaged desktop app version (Electron main process app.getVersion()). */
+export async function getElectronAppVersion(): Promise<string | null> {
+  const api = typeof window !== 'undefined' ? window.electronAPI : undefined;
+  if (!isElectron() || !api?.app?.getVersion) return null;
+  try {
+    const res = await api.app.getVersion();
+    return typeof res?.version === 'string' && res.version.length > 0 ? res.version : null;
+  } catch {
+    return null;
+  }
 }
 
 /** 200MB limit for "Copy to computer". */

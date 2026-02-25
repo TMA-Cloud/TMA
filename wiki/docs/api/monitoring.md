@@ -65,9 +65,14 @@ The response format depends on the external update feed. Example:
 ```json
 {
   "frontend": "2.0.5",
-  "backend": "2.0.5"
+  "backend": "2.0.5",
+  "electron": "1.0.0"
 }
 ```
+
+- `frontend`: Latest frontend version from the update feed
+- `backend`: Latest backend version from the update feed
+- `electron`: Latest Windows Electron app version from the update feed
 
 **Note:** This endpoint proxies the response directly from the update feed. If the request fails, returns an error response.
 
