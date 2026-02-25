@@ -23,6 +23,7 @@ const {
   emptyTrash,
   searchFiles,
   getFileStats,
+  getFileInfo,
   replaceFileContents,
 } = require('../controllers/file.controller');
 const { streamFileEvents } = require('../controllers/file/file.events.controller');
@@ -66,6 +67,7 @@ router.use(apiRateLimiter);
 router.get('/events', sseConnectionLimiter, streamFileEvents);
 router.get('/', listFiles);
 router.get('/stats', getFileStats);
+router.get('/:id/info', getFileInfo);
 router.get('/search', searchFiles);
 router.post('/folder', addFolderSchema, validate, addFolder);
 router.post('/upload/check', uploadRateLimiter, checkUploadStorageSchema, validate, checkUploadStorage);

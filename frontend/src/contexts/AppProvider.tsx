@@ -26,13 +26,7 @@ import {
   saveFileViaElectron,
   saveFilesBulkViaElectron,
 } from '../utils/electronDesktop';
-
-function formatMaxSize(bytes: number): string {
-  const gb = bytes / (1024 * 1024 * 1024);
-  if (gb >= 1) return `${gb % 1 === 0 ? gb : Math.round(gb * 10) / 10} GB`;
-  const mb = bytes / (1024 * 1024);
-  return `${mb % 1 === 0 ? mb : Math.round(mb * 10) / 10} MB`;
-}
+import { formatBytes } from '../utils/storageUtils';
 
 function sortFilesWithFoldersFirst(
   items: FileItem[],
@@ -548,7 +542,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try {
         const { maxBytes } = await getMaxUploadSizeConfig();
         if (file.size > maxBytes) {
-          const msg = `This file is too large. Maximum upload size is ${formatMaxSize(maxBytes)}.`;
+          const msg = `This file is too large. Maximum upload size is ${formatBytes(maxBytes)}.`;
           showToast(msg, 'error');
           throw new Error(msg);
         }
@@ -582,7 +576,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const { maxBytes } = await getMaxUploadSizeConfig();
         const oversized = files.find(f => f.size > maxBytes);
         if (oversized) {
-          const msg = `"${oversized.name}" is too large. Maximum upload size is ${formatMaxSize(maxBytes)}.`;
+          const msg = `"${oversized.name}" is too large. Maximum upload size is ${formatBytes(maxBytes)}.`;
           showToast(msg, 'error');
           throw new Error(msg);
         }
@@ -799,7 +793,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try {
         const { maxBytes } = await getMaxUploadSizeConfig();
         if (file.size > maxBytes) {
-          const msg = `This file is too large. Maximum upload size is ${formatMaxSize(maxBytes)}.`;
+          const msg = `This file is too large. Maximum upload size is ${formatBytes(maxBytes)}.`;
           showToast(msg, 'error');
           throw new Error(msg);
         }

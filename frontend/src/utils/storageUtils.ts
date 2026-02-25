@@ -48,6 +48,39 @@ export function bytesToNumberAndUnit(bytes: number | string | null | undefined):
 }
 
 /**
+ * Format a raw byte value into a human-readable string using
+ * B, KB, MB, GB, or TB depending on size.
+ */
+export function formatBytes(bytes: number | string | null | undefined): string {
+  if (bytes === null || bytes === undefined) {
+    return '—';
+  }
+
+  const numBytes = typeof bytes === 'string' ? Number(bytes) : bytes;
+  if (!Number.isFinite(numBytes) || numBytes < 0) {
+    return '—';
+  }
+
+  if (numBytes < 1024) {
+    return `${numBytes} B`;
+  }
+
+  const units = ['KB', 'MB', 'GB', 'TB'] as const;
+  let value = numBytes / 1024;
+  let unitIndex = 0;
+
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+
+  const fixed = value.toFixed(2);
+  const clean = parseFloat(fixed).toString();
+
+  return `${clean} ${units[unitIndex]}`;
+}
+
+/**
  * Convert number and unit to bytes
  * Returns null if invalid, otherwise returns bytes as integer
  */

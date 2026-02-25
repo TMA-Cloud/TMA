@@ -634,6 +634,52 @@ Download a single file or a folder (folders are returned as a ZIP archive).
 **Response:**
 The raw file content or a ZIP archive.
 
+## Get File or Folder Info
+
+### GET `/api/files/:id/info`
+
+Get basic metadata for a single file or folder.
+
+**Path Parameters:**
+
+- `id` - File or folder ID (required)
+
+**Response (file):**
+
+```json
+{
+  "id": "file_123",
+  "name": "document.pdf",
+  "type": "file",
+  "size": 1024,
+  "parentId": "folder_456"
+}
+```
+
+**Response (folder):**
+
+```json
+{
+  "id": "folder_123",
+  "name": "Reports",
+  "type": "folder",
+  "size": null,
+  "parentId": null,
+  "folderInfo": {
+    "totalSize": 1048576,
+    "fileCount": 25,
+    "folderCount": 3
+  }
+}
+```
+
+- `size` and `folderInfo.totalSize` are in bytes.
+- For folders, `size` may be `null`; use `folderInfo.totalSize` for the recursive size.
+
+**Errors:**
+
+- `404` - File or folder not found or not owned by the user
+
 ## Replace File Contents
 
 ### POST `/api/files/:id/replace`

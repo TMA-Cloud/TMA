@@ -3,6 +3,12 @@ import type { UploadProgressItem } from '../utils/uploadUtils';
 
 export type ShareExpiry = '7d' | '30d' | 'never';
 
+export interface FolderInfo {
+  totalSize: number;
+  fileCount: number;
+  folderCount: number;
+}
+
 export interface FileItem {
   id: string;
   name: string;
@@ -15,6 +21,7 @@ export interface FileItem {
   shared?: boolean;
   deletedAt?: Date;
   expiresAt?: Date | null;
+  folderInfo?: FolderInfo;
 }
 
 export interface FileItemResponse {

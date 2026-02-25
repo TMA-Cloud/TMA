@@ -8,6 +8,7 @@ const {
   getSharedFiles,
   getRecursiveIds,
   getFileInfo,
+  getFolderTree,
 } = require('../../models/file.model');
 const {
   createShareLink,
@@ -21,6 +22,50 @@ const pool = require('../../config/db');
 const { validateSortBy, validateSortOrder } = require('../../utils/validation');
 const { buildShareLink } = require('../../utils/shareLink');
 const { publishFileEventsBatch, EventTypes } = require('../../services/fileEvents');
+/**
+ * Get basic info for a single file or folder (for "Get Info" UI).
+ */
+async function getFileInfoController(req, res) {
+  const { id } = req.params;
+  const files = await getFileInfo([id], req.userId);
+
+  if (!files || files.length === 0) {
+    return sendError(res, 404, 'File not found');
+  }
+  const file = files[0];
+
+  // When it's a folder, also return recursive counts and total size
+  if (file.type === 'folder') {
+    const tree = await getFolderTree(id, req.userId);
+    let totalSize = 0;
+    let fileCount = 0;
+    let folderCount = 0;
+
+    for (const entry of tree) {
+      if (entry.type === 'file') {
+        fileCount += 1;
+        if (entry.size != null) {
+          const sizeValue = typeof entry.size === 'string' ? Number(entry.size) || 0 : entry.size || 0;
+          totalSize += sizeValue;
+        }
+      } else if (entry.type === 'folder' && entry.id !== id) {
+        folderCount += 1;
+      }
+    }
+
+    return sendSuccess(res, {
+      ...file,
+      folderInfo: {
+        totalSize,
+        fileCount,
+        folderCount,
+      },
+    });
+  }
+
+  return sendSuccess(res, file);
+}
+
 /**
  * Star or unstar files/folders
  */
@@ -345,6 +390,7 @@ async function linkParentShareController(req, res) {
 }
 
 module.exports = {
+  getFileInfo: getFileInfoController,
   starFiles: starFilesController,
   listStarred,
   shareFiles: shareFilesController,

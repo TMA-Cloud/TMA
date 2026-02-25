@@ -13,14 +13,16 @@ import {
   Square,
   RotateCcw,
   MonitorDown,
+  Info,
 } from 'lucide-react';
-import { useApp, type ShareExpiry } from '../../contexts/AppContext';
+import { useApp, type ShareExpiry, type FileItem } from '../../contexts/AppContext';
 import { useToast } from '../../hooks/useToast';
 import { hasElectronClipboard, hasElectronOpenOnDesktop, MAX_COPY_TO_PC_BYTES } from '../../utils/electronDesktop';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { Modal } from '../ui/Modal';
 import { getErrorMessage } from '../../utils/errorUtils';
 import { ShareExpiryModal } from './ShareLinkModal';
+import { FileInfoModal } from './FileInfoModal';
 
 interface ContextMenuProps {
   isOpen: boolean;
@@ -47,6 +49,8 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
   const [shareExpiryOpen, setShareExpiryOpen] = useState(false);
+  const [infoOpen, setInfoOpen] = useState(false);
+  const [infoFile, setInfoFile] = useState<FileItem | null>(null);
   const [pendingAction, setPendingAction] = useState<{
     type: 'delete' | 'deleteForever';
     files: string[];
@@ -419,6 +423,16 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
           ]
         : []),
       {
+        icon: Info,
+        label: 'Get Info',
+        disabled: !singleSelectedItem,
+        action: () => {
+          if (!singleSelectedItem) return;
+          setInfoFile(singleSelectedItem);
+          setInfoOpen(true);
+        },
+      },
+      {
         icon: Edit3,
         label: 'Rename',
         disabled: false,
@@ -634,6 +648,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
       <>
         {modalElement}
         {shareExpiryElement}
+        <FileInfoModal isOpen={infoOpen} onClose={() => setInfoOpen(false)} file={infoFile} currentPath={currentPath} />
       </>
     );
   }
@@ -763,6 +778,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
       </div>
       {modalElement}
       {shareExpiryElement}
+      <FileInfoModal isOpen={infoOpen} onClose={() => setInfoOpen(false)} file={infoFile} currentPath={currentPath} />
     </>
   );
 };

@@ -21,6 +21,7 @@ import { FileManagerToolbar } from './FileManagerToolbar';
 import { FileList } from './FileList';
 import { MultiSelectIndicator } from './MultiSelectIndicator';
 import { ShareExpiryModal } from './ShareLinkModal';
+import { FileInfoModal } from './FileInfoModal';
 
 export const FileManager: React.FC = () => {
   const {
@@ -73,6 +74,8 @@ export const FileManager: React.FC = () => {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [deleteForeverModalOpen, setDeleteForeverModalOpen] = useState(false);
   const [shareExpiryModalOpen, setShareExpiryModalOpen] = useState(false);
+  const [infoModalOpen, setInfoModalOpen] = useState(false);
+  const [infoModalFile, setInfoModalFile] = useState<FileItem | null>(null);
 
   const canCreateFolder = currentPath[0] === 'My Files';
   const isTrashView = currentPath[0] === 'Trash';
@@ -113,11 +116,24 @@ export const FileManager: React.FC = () => {
     return () => document.removeEventListener('paste', onPaste);
   }, [isMyFilesView, uploadFile, uploadFilesBulk]);
 
+  const openInfoModalForSelection = useCallback(() => {
+    if (isTrashView) return;
+    if (!selectedFiles.length) return;
+
+    const selectedItems = files.filter(f => selectedFiles.includes(f.id));
+    const singleSelectedItem = selectedItems.length === 1 ? selectedItems[0] : null;
+    if (!singleSelectedItem) return;
+
+    setInfoModalFile(singleSelectedItem);
+    setInfoModalOpen(true);
+  }, [files, isTrashView, selectedFiles]);
+
   // Electron desktop: keyboard shortcuts for file copy/paste
   // - Ctrl+C / Cmd+C: "Copy to computer" (OS clipboard)
   // - Ctrl+V / Cmd+V: "Paste from computer" (upload from OS clipboard)
   // - Ctrl+Shift+C / Cmd+Shift+C: Cloud copy (internal clipboard)
   // - Ctrl+Shift+V / Cmd+Shift+V: Cloud paste (from internal clipboard)
+  // - Ctrl+Shift+I / Cmd+Shift+I: Show "Get Info" for selected item
   useEffect(() => {
     if (!isElectron()) return;
 
@@ -166,6 +182,12 @@ export const FileManager: React.FC = () => {
           showToast(message || 'Failed to upload from clipboard', 'error');
         });
       }
+
+      if (key === 'i' && e.shiftKey) {
+        if (!selectedFiles.length) return;
+        e.preventDefault();
+        void openInfoModalForSelection();
+      }
     };
 
     document.addEventListener('keydown', onKeyDown);
@@ -179,6 +201,7 @@ export const FileManager: React.FC = () => {
     setClipboard,
     showToast,
     uploadFilesFromClipboard,
+    openInfoModalForSelection,
   ]);
 
   const handleEmptyTrash = async () => {
@@ -698,6 +721,12 @@ export const FileManager: React.FC = () => {
         onClose={() => setShareExpiryModalOpen(false)}
         onConfirm={handleShareConfirm}
         fileCount={selectedFiles.length}
+      />
+      <FileInfoModal
+        isOpen={infoModalOpen}
+        onClose={() => setInfoModalOpen(false)}
+        file={infoModalFile}
+        currentPath={currentPath}
       />
     </div>
   );

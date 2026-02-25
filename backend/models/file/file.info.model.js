@@ -15,7 +15,7 @@ const pool = require('../../config/db');
 async function getFileInfo(fileIds, userId, includeDeleted = false) {
   const deletedClause = includeDeleted ? '' : 'AND deleted_at IS NULL';
   const result = await pool.query(
-    `SELECT id, name, type, parent_id FROM files 
+    `SELECT id, name, type, parent_id, size FROM files 
      WHERE id = ANY($1) AND user_id = $2 ${deletedClause}`,
     [fileIds, userId]
   );
@@ -25,6 +25,7 @@ async function getFileInfo(fileIds, userId, includeDeleted = false) {
     name: f.name,
     type: f.type,
     parentId: f.parent_id,
+    size: f.size,
   }));
 }
 

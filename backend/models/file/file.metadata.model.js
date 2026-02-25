@@ -138,13 +138,13 @@ async function getRecursiveIds(ids, userId) {
 async function getFolderTree(folderId, userId) {
   const res = await pool.query(
     `WITH RECURSIVE sub AS (
-       SELECT id, name, type, path, parent_id FROM files WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL
+       SELECT id, name, type, path, size, parent_id FROM files WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL
        UNION ALL
-       SELECT f.id, f.name, f.type, f.path, f.parent_id FROM files f
+       SELECT f.id, f.name, f.type, f.path, f.size, f.parent_id FROM files f
        JOIN sub s ON f.parent_id = s.id
        WHERE f.user_id = $2 AND f.deleted_at IS NULL
      )
-     SELECT id, name, type, path, parent_id FROM sub`,
+     SELECT id, name, type, path, size, parent_id FROM sub`,
     [folderId, userId]
   );
   return res.rows;
