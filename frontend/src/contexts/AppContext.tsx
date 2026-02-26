@@ -105,6 +105,8 @@ export interface AppContextType {
   uploadProgress: UploadProgressItem[];
   setUploadProgress: (progress: UploadProgressItem[] | ((prev: UploadProgressItem[]) => UploadProgressItem[])) => void;
   uploadFileWithProgress: (file: File, onProgress?: (progress: number) => void) => Promise<void>;
+  /** Replace contents of an existing file (same progress UI as upload). */
+  replaceFileWithProgress: (fileId: string, file: File, onProgress?: (progress: number) => void) => Promise<void>;
   uploadFilesBulk: (files: File[]) => Promise<void>;
   /** Upload files from OS clipboard (Electron only). */
   uploadFilesFromClipboard: () => Promise<void>;

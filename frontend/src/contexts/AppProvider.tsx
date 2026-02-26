@@ -918,6 +918,112 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
+  const replaceFileWithProgress = async (fileId: string, file: File, onProgress?: (progress: number) => void) => {
+    return operationQueue.add(async () => {
+      try {
+        const { maxBytes } = await getMaxUploadSizeConfig();
+        if (file.size > maxBytes) {
+          const msg = `This file is too large. Maximum upload size is ${formatBytes(maxBytes)}.`;
+          showToast(msg, 'error');
+          throw new Error(msg);
+        }
+        await checkUploadStorage(file.size);
+      } catch (e) {
+        const msg = e instanceof ApiError ? e.message : 'Storage limit exceeded.';
+        if (!(e instanceof Error && e.message.startsWith('This file is too large'))) {
+          showToast(msg, 'error');
+        }
+        throw e;
+      }
+
+      return new Promise<void>((resolve, reject) => {
+        const uploadId = `${Date.now()}-${Math.random()}`;
+        const xhr = new XMLHttpRequest();
+        const data = new FormData();
+        data.append('file', file);
+
+        setUploadProgress(prev => [
+          ...prev,
+          {
+            id: uploadId,
+            fileName: file.name,
+            fileSize: file.size,
+            progress: 0,
+            status: 'uploading',
+          },
+        ]);
+
+        xhr.upload.addEventListener('progress', e => {
+          if (e.lengthComputable) {
+            const progress = Math.round((e.loaded / e.total) * 100);
+            setUploadProgress(prev => updateUploadProgress(prev, uploadId, { progress }));
+            if (onProgress) {
+              onProgress(progress);
+            }
+          }
+        });
+
+        xhr.addEventListener('load', async () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            setUploadProgress(prev =>
+              updateUploadProgress(prev, uploadId, {
+                progress: 100,
+                status: 'completed',
+              })
+            );
+            debouncedRefreshFiles(false);
+            const dismissTimeout = createAutoDismissTimeout(
+              uploadId,
+              isUploadProgressInteractingRef,
+              setUploadProgress,
+              uploadDismissTimeoutsRef,
+              3000,
+              2000
+            );
+            uploadDismissTimeoutsRef.current.set(uploadId, dismissTimeout);
+            resolve();
+          } else {
+            setUploadProgress(prev => updateUploadProgress(prev, uploadId, { status: 'error' }));
+            const errorMessage = extractXhrErrorMessage(xhr);
+            showToast(errorMessage, 'error');
+            const errorDismissTimeout = createAutoDismissTimeout(
+              uploadId,
+              isUploadProgressInteractingRef,
+              setUploadProgress,
+              uploadDismissTimeoutsRef
+            );
+            uploadDismissTimeoutsRef.current.set(uploadId, errorDismissTimeout);
+            reject(new Error(errorMessage));
+          }
+        });
+
+        xhr.addEventListener('error', () => {
+          setUploadProgress(prev => updateUploadProgress(prev, uploadId, { status: 'error' }));
+          const errorMessage =
+            extractXhrErrorMessage(xhr) || 'Upload failed. Please check your connection and try again.';
+          showToast(errorMessage, 'error');
+          const errorDismissTimeout = createAutoDismissTimeout(
+            uploadId,
+            isUploadProgressInteractingRef,
+            setUploadProgress,
+            uploadDismissTimeoutsRef
+          );
+          uploadDismissTimeoutsRef.current.set(uploadId, errorDismissTimeout);
+          reject(new Error(errorMessage));
+        });
+
+        xhr.addEventListener('abort', () => {
+          setUploadProgress(prev => removeUploadProgress(prev, uploadId));
+          reject(new Error('Upload cancelled'));
+        });
+
+        xhr.open('POST', `/api/files/${fileId}/replace`);
+        xhr.withCredentials = true;
+        xhr.send(data);
+      });
+    });
+  };
+
   const moveFiles = async (ids: string[], parentId: string | null) => {
     return operationQueue.add(async () => {
       const res = await fetch(`/api/files/move`, {
@@ -1408,6 +1514,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         uploadProgress,
         setUploadProgress,
         uploadFileWithProgress,
+        replaceFileWithProgress,
         uploadFilesBulk,
         uploadFilesFromClipboard,
         setIsUploadProgressInteracting,

@@ -16,7 +16,7 @@ const {
   invalidateSearchCache,
   DEFAULT_TTL,
 } = require('../../utils/cache');
-const { buildOrderClause, fillFolderSizes } = require('./file.utils.model');
+const { buildOrderClause, fillFolderSizes, getUniqueDbFileName } = require('./file.utils.model');
 const { encryptFile } = require('../../utils/fileEncryption');
 
 /**
@@ -117,9 +117,10 @@ async function createFile(name, size, mimeType, tempPath, parentId = null, userI
     }
   }
 
+  const uniqueName = await getUniqueDbFileName(name, parentId, userId);
   const result = await pool.query(
     'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id, name, type, size, modified, mime_type AS "mimeType", starred, shared',
-    [id, name, 'file', size, mimeType, storageName, parentId, userId]
+    [id, uniqueName, 'file', size, mimeType, storageName, parentId, userId]
   );
 
   // Invalidate cache
@@ -140,11 +141,12 @@ async function createFile(name, size, mimeType, tempPath, parentId = null, userI
  */
 async function createFileFromStreamedUpload(upload, parentId, userId) {
   const { id, storageName, name, size, mimeType, modified } = upload;
+  const uniqueName = await getUniqueDbFileName(name, parentId, userId);
 
   if (modified != null) {
     const result = await pool.query(
       'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id, modified) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id, name, type, size, modified, mime_type AS "mimeType", starred, shared',
-      [id, name, 'file', size, mimeType, storageName, parentId, userId, modified]
+      [id, uniqueName, 'file', size, mimeType, storageName, parentId, userId, modified]
     );
     await invalidateFileCache(userId, parentId);
     await invalidateSearchCache(userId);
@@ -155,7 +157,7 @@ async function createFileFromStreamedUpload(upload, parentId, userId) {
 
   const result = await pool.query(
     'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id, name, type, size, modified, mime_type AS "mimeType", starred, shared',
-    [id, name, 'file', size, mimeType, storageName, parentId, userId]
+    [id, uniqueName, 'file', size, mimeType, storageName, parentId, userId]
   );
 
   await invalidateFileCache(userId, parentId);

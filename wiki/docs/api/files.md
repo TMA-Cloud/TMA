@@ -167,6 +167,8 @@ Upload a file.
 - The actual MIME type is detected from the file's content (magic bytes).
 - The stored MIME type will always match the actual file content, even if the file extension is different.
 
+**Duplicate names:** If a file with the same name already exists in the parent folder, the server assigns a unique display name (e.g. `document (1).pdf`). The client can instead overwrite the existing file by calling `POST /api/files/:id/replace` with the existing file's ID.
+
 **Response:**
 
 The uploaded file object.
@@ -195,9 +197,11 @@ Upload multiple files at once using `multipart/form-data`.
 - `parent_id` - Parent folder ID (optional)
 - `path` - Target path (optional)
 
+**Duplicate names:** For each file, if a file with the same name already exists in the parent folder, the server assigns a unique display name (e.g. `document (1).pdf`).
+
 **Response:**
 
-An array of the uploaded file objects.
+An array of the uploaded file objects. The response may include a `failed` array for files that could not be uploaded (e.g. validation error).
 
 ```json
 [
@@ -684,7 +688,7 @@ Get basic metadata for a single file or folder.
 
 ### POST `/api/files/:id/replace`
 
-Replace the contents of an existing file. The file ID and name stay the same; size and modified time are updated. Used by the Windows desktop app when syncing edits from Word, Excel, PowerPoint, or other desktop editors.
+Replace the contents of an existing file. The file ID and name stay the same; size and modified time are updated. Used when the user chooses "Replace the File" for a duplicate-name upload, and by the Windows desktop app when syncing edits from Word, Excel, PowerPoint, or other desktop editors.
 
 **Path Parameters:**
 

@@ -226,7 +226,7 @@ async function getUniqueDbFileName(desiredName, parentId, userId) {
 
   while (true) {
     const res = await pool.query(
-      'SELECT id FROM files WHERE name = $1 AND parent_id = $2 AND user_id = $3 AND type = $4 AND deleted_at IS NULL',
+      'SELECT id FROM files WHERE name = $1 AND parent_id IS NOT DISTINCT FROM $2 AND user_id = $3 AND type = $4 AND deleted_at IS NULL',
       [uniqueName, parentId, userId, 'file']
     );
 

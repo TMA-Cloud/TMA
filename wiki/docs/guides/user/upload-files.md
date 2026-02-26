@@ -33,6 +33,15 @@ Learn how to upload and manage files in TMA Cloud.
 - Limit: 200 MB total per action; no single file over 200 MB
 - Folders are not supported; only files; not available in Trash view
 
+### Duplicate file names
+
+When you upload a file and one with the same name already exists in the folder, the app asks before uploading:
+
+- **Replace the File** – overwrites the existing file (same ID and name).
+- **Upload with Renamed** – uploads as a new file with a unique name (e.g. `document (1).pdf`).
+
+You choose an action for each conflicting file; nothing is uploaded until you confirm.
+
 ### Upload Limits
 
 - Per-file size limited by the max upload size setting (default 10 GB, configurable by admin in **Settings** → **Storage**)

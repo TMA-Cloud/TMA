@@ -1,9 +1,24 @@
-import React, { useState, useRef } from 'react';
-import { Upload, X, File, CheckCircle, AlertCircle } from 'lucide-react';
+import React, { useState, useRef, useMemo } from 'react';
+import { Upload, X, File, CheckCircle, AlertCircle, RefreshCw, FilePlus } from 'lucide-react';
 import { Modal } from '../ui/Modal';
 import { useApp } from '../../contexts/AppContext';
 import { formatFileSize } from '../../utils/fileUtils';
 import { useIsMobile } from '../../hooks/useIsMobile';
+
+/** Returns a unique name like "name (1).ext" not in existingNames or usedInBatch. */
+function getUniqueUploadName(originalName: string, existingNames: Set<string>, usedInBatch: Set<string>): string {
+  const lastDot = originalName.lastIndexOf('.');
+  const base = lastDot > 0 ? originalName.slice(0, lastDot) : originalName;
+  const ext = lastDot > 0 ? originalName.slice(lastDot) : '';
+  let n = 1;
+  let candidate: string;
+  do {
+    candidate = `${base} (${n})${ext}`;
+    n += 1;
+  } while (existingNames.has(candidate) || usedInBatch.has(candidate));
+  return candidate;
+}
+
 interface UploadFile {
   id: string;
   file: File;
@@ -12,12 +27,34 @@ interface UploadFile {
 }
 
 export const UploadModal: React.FC = () => {
-  const { uploadModalOpen, setUploadModalOpen, uploadFileWithProgress, uploadFilesBulk, uploadProgress } = useApp();
+  const {
+    uploadModalOpen,
+    setUploadModalOpen,
+    files: contextFiles,
+    uploadFileWithProgress,
+    replaceFileWithProgress,
+    uploadFilesBulk,
+    uploadProgress,
+  } = useApp();
   const [uploadFiles, setUploadFiles] = useState<UploadFile[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [duplicateModalOpen, setDuplicateModalOpen] = useState(false);
+  /** Conflicting upload items (id) and the existing file name. Resolutions stored in duplicateChoices. */
+  const [duplicateConflicts, setDuplicateConflicts] = useState<{ uploadId: string; fileName: string }[]>([]);
+  /** User choice per conflicting upload id: 'replace' | 'rename' */
+  const [duplicateChoices, setDuplicateChoices] = useState<Record<string, 'replace' | 'rename'>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isMobile = useIsMobile();
+
+  const existingFileNames = useMemo(
+    () => new Set(contextFiles.filter(f => f.type === 'file').map(f => f.name)),
+    [contextFiles]
+  );
+  const existingFileByName = useMemo(
+    () => new Map(contextFiles.filter(f => f.type === 'file').map(f => [f.name, f])),
+    [contextFiles]
+  );
 
   const handleFiles = (files: FileList) => {
     const newUploadFiles: UploadFile[] = Array.from(files).map((file, index) => ({
@@ -63,44 +100,135 @@ export const UploadModal: React.FC = () => {
 
   const handleClose = () => {
     setUploadModalOpen(false);
-    // Don't clear files on close - keep them for when user reopens modal
+    setDuplicateModalOpen(false);
   };
 
-  const startUpload = async () => {
-    if (uploadFiles.length === 0) return;
+  const pendingItems = useMemo(
+    () => uploadFiles.filter(f => f.status === 'pending' || f.status === 'error'),
+    [uploadFiles]
+  );
 
-    // Close the modal immediately when upload starts
-    setUploadModalOpen(false);
+  const conflicts = useMemo(
+    () => pendingItems.filter(item => existingFileNames.has(item.file.name)),
+    [pendingItems, existingFileNames]
+  );
 
-    setIsUploading(true);
+  /** Build replace list and new-files list from current pending items and resolutions. */
+  const buildUploadPlan = (resolutions: Record<string, 'replace' | 'rename'>) => {
+    const replaceItems: { fileId: string; file: File }[] = [];
+    const usedInBatch = new Set(existingFileNames);
+    const newFiles: File[] = [];
+
+    for (const item of pendingItems) {
+      const choice = resolutions[item.id];
+      if (!choice) {
+        newFiles.push(item.file);
+        continue;
+      }
+      if (choice === 'replace') {
+        const existing = existingFileByName.get(item.file.name);
+        if (existing?.id) {
+          replaceItems.push({ fileId: existing.id, file: item.file });
+        } else {
+          newFiles.push(item.file);
+        }
+        continue;
+      }
+      if (choice === 'rename') {
+        const newName = getUniqueUploadName(item.file.name, existingFileNames, usedInBatch);
+        usedInBatch.add(newName);
+        const type = item.file.type || 'application/octet-stream';
+        const renamedFile = new (
+          window as Window & { File: new (b: BlobPart[], n: string, o?: FilePropertyBag) => File }
+        ).File([item.file], newName, { type, lastModified: Date.now() });
+        newFiles.push(renamedFile);
+      }
+    }
+    return { replaceItems, newFiles };
+  };
+
+  /** Execute a pre-built upload plan (used after Confirm to avoid closure issues). */
+  const executeUploadPlan = async (plan: { replaceItems: { fileId: string; file: File }[]; newFiles: File[] }) => {
     try {
-      // Get all pending files
-      const pendingFiles = uploadFiles.filter(f => f.status === 'pending' || f.status === 'error').map(f => f.file);
-
-      if (pendingFiles.length === 0) {
-        return;
+      await Promise.all(
+        plan.replaceItems.map(({ fileId, file }) =>
+          replaceFileWithProgress(fileId, file).catch(() => {
+            // Error handled by upload progress UI
+          })
+        )
+      );
+      if (plan.newFiles.length > 0) {
+        if (plan.newFiles.length > 1) {
+          await uploadFilesBulk(plan.newFiles);
+        } else {
+          await uploadFileWithProgress(plan.newFiles[0]!);
+        }
       }
-
-      // Use bulk upload for multiple files, single upload for one file
-      if (pendingFiles.length > 1) {
-        await uploadFilesBulk(pendingFiles).catch(() => {
-          // Error handled by upload progress UI
-        });
-      } else {
-        // TypeScript guard: pendingFiles[0] is guaranteed to exist after length check
-        const firstFile = pendingFiles[0]!;
-        await uploadFileWithProgress(firstFile).catch(() => {
-          // Error handled by upload progress UI
-        });
-      }
-
-      // Clear files that were successfully started (they're now in global uploadProgress)
-      // Keep files with errors so user can retry
       setUploadFiles(prev => prev.filter(f => f.status === 'error'));
+    } catch {
+      setUploadFiles(prev => prev.filter(f => f.status === 'pending' || f.status === 'error'));
     } finally {
       setIsUploading(false);
     }
   };
+
+  /** Run the actual upload after duplicate resolution (or when no conflicts). */
+  const doActualUpload = async (resolutions: Record<string, 'replace' | 'rename'>) => {
+    const plan = buildUploadPlan(resolutions);
+    setIsUploading(true);
+    setUploadModalOpen(false);
+    setDuplicateModalOpen(false);
+    setDuplicateConflicts([]);
+    setDuplicateChoices({});
+    await executeUploadPlan(plan);
+  };
+
+  const startUpload = () => {
+    if (pendingItems.length === 0) return;
+
+    if (conflicts.length > 0) {
+      setDuplicateConflicts(conflicts.map(c => ({ uploadId: c.id, fileName: c.file.name })));
+      setDuplicateChoices(prev => {
+        const next = { ...prev };
+        conflicts.forEach(c => {
+          delete next[c.id];
+        });
+        return next;
+      });
+      setDuplicateModalOpen(true);
+      return;
+    }
+
+    void doActualUpload({});
+  };
+
+  const confirmDuplicateAndUpload = () => {
+    const allChosen = duplicateConflicts.every(c => duplicateChoices[c.uploadId] != null);
+    if (!allChosen) return;
+    const plan = buildUploadPlan(duplicateChoices);
+    setUploadModalOpen(false);
+    setDuplicateModalOpen(false);
+    setDuplicateConflicts([]);
+    setDuplicateChoices({});
+    setIsUploading(true);
+    void executeUploadPlan(plan);
+  };
+
+  /** Preview name for "Upload with Renamed" – use same order as doActualUpload (pendingItems). */
+  const renamedPreview = (uploadId: string): string => {
+    if (duplicateChoices[uploadId] !== 'rename') return '';
+    const usedInBatch = new Set(existingFileNames);
+    for (const item of pendingItems) {
+      if (duplicateChoices[item.id] !== 'rename') continue;
+      const name = getUniqueUploadName(item.file.name, existingFileNames, usedInBatch);
+      usedInBatch.add(name);
+      if (item.id === uploadId) return name;
+    }
+    return '';
+  };
+
+  const allDuplicateChoicesMade =
+    duplicateConflicts.length > 0 && duplicateConflicts.every(c => duplicateChoices[c.uploadId] != null);
 
   return (
     <Modal isOpen={uploadModalOpen} onClose={handleClose} title="Upload Files" size={isMobile ? 'full' : 'lg'}>
@@ -305,6 +433,86 @@ export const UploadModal: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* Duplicate resolution modal – shown before any upload when same-name files exist */}
+      <Modal
+        isOpen={duplicateModalOpen}
+        onClose={() => setDuplicateModalOpen(false)}
+        title="File already exists"
+        size={isMobile ? 'full' : 'lg'}
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            The following file(s) already exist in this folder. Choose an action for each before uploading.
+          </p>
+          <ul className={`space-y-4 ${isMobile ? 'max-h-[60vh]' : 'max-h-[50vh]'} overflow-y-auto pr-1`}>
+            {duplicateConflicts.map(({ uploadId, fileName }) => {
+              const newName = renamedPreview(uploadId);
+              return (
+                <li
+                  key={uploadId}
+                  className="flex flex-col gap-3 p-4 rounded-xl bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600"
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100 break-all">{fileName}</p>
+                    {duplicateChoices[uploadId] === 'rename' && newName && (
+                      <div className="mt-2 py-2 px-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+                        <p className="text-xs font-medium text-blue-700 dark:text-blue-300 uppercase tracking-wide mb-0.5">
+                          New name
+                        </p>
+                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100 break-all">{newName}</p>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setDuplicateChoices(prev => ({ ...prev, [uploadId]: 'replace' }))}
+                      className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                        duplicateChoices[uploadId] === 'replace'
+                          ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200 border-2 border-amber-400 dark:border-amber-600'
+                          : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 border-2 border-transparent'
+                      }`}
+                    >
+                      <RefreshCw className="w-4 h-4 flex-shrink-0" />
+                      Replace the File
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDuplicateChoices(prev => ({ ...prev, [uploadId]: 'rename' }))}
+                      className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                        duplicateChoices[uploadId] === 'rename'
+                          ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-200 border-2 border-blue-400 dark:border-blue-600'
+                          : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 border-2 border-transparent'
+                      }`}
+                    >
+                      <FilePlus className="w-4 h-4 flex-shrink-0" />
+                      Upload with Renamed
+                    </button>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+          <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 pt-2">
+            <button
+              type="button"
+              onClick={() => setDuplicateModalOpen(false)}
+              className="px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={confirmDuplicateAndUpload}
+              disabled={!allDuplicateChoicesMade}
+              className="px-4 py-2 text-sm font-semibold bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Confirm and Upload
+            </button>
+          </div>
+        </div>
+      </Modal>
     </Modal>
   );
 };
