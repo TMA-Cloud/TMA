@@ -54,6 +54,13 @@ The file exceeds the max upload size setting.
 4. Network connectivity
 5. MIME type detection (file content must be readable)
 
+### Folder uploads missing files
+
+- Confirm the browser supports folder upload (Chrome, Edge, and other Chromium-based browsers)
+- Check that the selected folder actually contains the missing files (some apps create links or placeholders that are not real files)
+- Look in **Audit Logs** for `file.upload.bulk` events to see how many files were processed.
+- If only some files failed, check the `failed` entries returned by `POST /api/files/upload/bulk`
+
 ## File Permissions
 
 ### Permission Denied

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState, useRef } from 'react';
-import { AppContext, type FileItem, type FileItemResponse, type ShareExpiry } from './AppContext';
+import { AppContext, type BulkUploadEntry, type FileItem, type FileItemResponse, type ShareExpiry } from './AppContext';
 import { usePromiseQueue, useDebouncedCallback } from '../utils/debounce';
 import {
   downloadFile as downloadFileApi,
@@ -579,7 +579,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const uploadFilesBulk = async (files: File[]) => {
-    if (files.length === 0) return;
+    const entries: BulkUploadEntry[] = files.map(file => ({ file }));
+    return uploadEntriesBulk(entries);
+  };
+
+  const uploadEntriesBulk = async (entries: BulkUploadEntry[]) => {
+    if (entries.length === 0) return;
+
+    const files = entries.map(e => e.file);
 
     return operationQueue.add(async () => {
       try {
@@ -607,16 +614,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const parentId = folderStack[folderStack.length - 1];
         if (parentId) data.append('parentId', parentId);
 
-        // Append all files with the same field name 'files'
-        files.forEach(file => {
-          data.append('files', file);
+        const normalizedEntries = entries.map((entry, index) => {
+          const clientId = entry.clientId || `${uploadId}-${index}`;
+          const relativePath = entry.relativePath || '';
+          return { ...entry, clientId, relativePath };
+        });
+
+        // Append all files with field name 'files' + aligned metadata arrays.
+        normalizedEntries.forEach(entry => {
+          data.append('files', entry.file);
+          data.append('relativePaths', entry.relativePath);
+          data.append('clientIds', entry.clientId);
         });
 
         // Add all files to progress list
-        const fileProgressItems = files.map(file => ({
-          id: `${uploadId}-${file.name}`,
-          fileName: file.name,
-          fileSize: file.size,
+        const fileProgressItems = normalizedEntries.map(entry => ({
+          id: entry.clientId,
+          fileName: entry.relativePath || entry.file.name,
+          fileSize: entry.file.size,
           progress: 0,
           status: 'uploading' as const,
         }));
@@ -640,30 +655,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               const { files: uploadedFiles, failed } = response;
 
               // Mark successful uploads as completed
-              uploadedFiles.forEach((file: { name: string }) => {
-                const item = fileProgressItems.find(i => i.fileName === file.name);
-                if (item) {
+              if (Array.isArray(uploadedFiles)) {
+                uploadedFiles.forEach((file: { clientId?: string }) => {
+                  if (!file?.clientId) return;
+                  setUploadProgress(prev =>
+                    updateUploadProgress(prev, file.clientId!, {
+                      progress: 100,
+                      status: 'completed',
+                    })
+                  );
+                });
+              }
+
+              // Mark failed uploads as error
+              if (failed && failed.length > 0) {
+                failed.forEach((failedFile: { fileName: string; error: string; clientId?: string }) => {
+                  const id = failedFile.clientId;
+                  if (id) {
+                    setUploadProgress(prev => updateUploadProgress(prev, id, { status: 'error' }));
+                  }
+                  showToast(`Failed to upload ${failedFile.fileName}: ${failedFile.error}`, 'error');
+                });
+              }
+
+              // If backend didn't return clientIds (older backend), mark all as completed.
+              if (!Array.isArray(uploadedFiles) || uploadedFiles.every((f: { clientId?: string }) => !f?.clientId)) {
+                fileProgressItems.forEach(item => {
                   setUploadProgress(prev =>
                     updateUploadProgress(prev, item.id, {
                       progress: 100,
                       status: 'completed',
                     })
                   );
-                }
-              });
-
-              // Mark failed uploads as error
-              if (failed && failed.length > 0) {
-                failed.forEach((failedFile: { fileName: string; error: string }) => {
-                  const item = fileProgressItems.find(i => i.fileName === failedFile.fileName);
-                  if (item) {
-                    setUploadProgress(prev =>
-                      updateUploadProgress(prev, item.id, {
-                        status: 'error',
-                      })
-                    );
-                    showToast(`Failed to upload ${failedFile.fileName}: ${failedFile.error}`, 'error');
-                  }
                 });
               }
 
@@ -1516,6 +1539,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         uploadFileWithProgress,
         replaceFileWithProgress,
         uploadFilesBulk,
+        uploadEntriesBulk,
         uploadFilesFromClipboard,
         setIsUploadProgressInteracting,
         onlyOfficeConfigured,

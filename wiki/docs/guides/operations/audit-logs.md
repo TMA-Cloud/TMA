@@ -39,6 +39,7 @@ npm run worker
 ### File Events
 
 - `file.upload` - File uploaded
+- `file.upload.bulk` - Multiple files uploaded in bulk
 - `file.download` - File downloaded
 - `file.delete` - File moved to trash
 - `file.delete.permanent` - File permanently deleted
@@ -112,6 +113,15 @@ SELECT user_id, metadata->>'fileName' as file_name,
 FROM audit_logs
 WHERE event_type = 'file.upload'
   AND (metadata->>'fileSize')::bigint > 10485760
+ORDER BY created_at DESC;
+
+-- Find bulk uploads (e.g. folder uploads)
+SELECT user_id,
+       metadata->>'fileCount' as file_count,
+       metadata->>'parentId'  as parent_id,
+       created_at
+FROM audit_logs
+WHERE event_type = 'file.upload.bulk'
 ORDER BY created_at DESC;
 ```
 

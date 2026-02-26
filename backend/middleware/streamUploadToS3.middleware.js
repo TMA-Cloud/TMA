@@ -37,14 +37,27 @@ function streamUploadToS3(singleOrBulk = 'single') {
           defParamCharset: 'utf8',
         });
         const fields = {};
-        const uploads = [];
+        // Keep uploads in original multipart order (by file part order).
+        // We store each upload at its fileIndex to avoid reordering caused by async S3 uploads finishing out of order.
+        const uploadsByIndex = [];
         let fileCount = 0;
         let finished = false;
         let hadError = false;
         let pending = 0;
+        let fileIndex = 0;
 
         busboy.on('field', (name, value) => {
-          fields[name] = value;
+          // Support repeated fields (e.g. relativePaths, clientIds) by collecting into arrays.
+          if (Object.prototype.hasOwnProperty.call(fields, name)) {
+            const existing = fields[name];
+            if (Array.isArray(existing)) {
+              existing.push(value);
+            } else {
+              fields[name] = [existing, value];
+            }
+          } else {
+            fields[name] = value;
+          }
         });
 
         busboy.on('file', (fieldname, fileStream, info) => {
@@ -60,6 +73,8 @@ function streamUploadToS3(singleOrBulk = 'single') {
 
           fileCount += 1;
           pending += 1;
+          const currentIndex = fileIndex;
+          fileIndex += 1;
           const id = generateId(16);
           const ext = path.extname(filename);
           const storageName = id + ext;
@@ -87,13 +102,14 @@ function streamUploadToS3(singleOrBulk = 'single') {
             .putStream(storageName, encryptStream)
             .then(() => {
               const size = getByteCount();
-              uploads.push({
+              uploadsByIndex[currentIndex] = {
                 id,
                 storageName,
                 name: filename,
                 size,
                 mimeType: mimeType || 'application/octet-stream',
-              });
+                index: currentIndex,
+              };
             })
             .catch(err => {
               hadError = true;
@@ -118,11 +134,11 @@ function streamUploadToS3(singleOrBulk = 'single') {
           if (finished && pending === 0) {
             req.body = fields;
             if (singleOrBulk === 'single') {
-              req.streamedUpload = uploads[0] || null;
-              next(
-                hadError || uploads.length === 0 ? new Error(hadError ? 'Upload failed' : 'No file uploaded') : null
-              );
+              const first = uploadsByIndex.find(Boolean) || null;
+              req.streamedUpload = first;
+              next(hadError || !first ? new Error(hadError ? 'Upload failed' : 'No file uploaded') : null);
             } else {
+              const uploads = uploadsByIndex.filter(Boolean);
               req.streamedUploads = uploads;
               next(uploads.length === 0 ? new Error('All uploads failed') : null);
             }

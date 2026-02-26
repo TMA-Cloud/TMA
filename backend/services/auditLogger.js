@@ -259,6 +259,30 @@ async function fileUploaded(fileId, fileName, fileSize, req) {
 }
 
 /**
+ * Log a bulk file upload event (e.g. folder upload with many files).
+ * Aggregates individual uploads into a single audit row.
+ */
+async function filesUploadedBulk(files, req, extraMetadata = {}) {
+  const fileIds = Array.isArray(files) ? files.map(f => f.id).filter(Boolean) : [];
+  const fileCount = fileIds.length;
+
+  return logAuditEvent(
+    'file.upload.bulk',
+    {
+      status: 'success',
+      resourceType: 'file',
+      resourceId: fileIds[0] || null,
+      metadata: {
+        fileCount,
+        fileIds,
+        ...extraMetadata,
+      },
+    },
+    req
+  );
+}
+
+/**
  * Log a file download event
  */
 async function fileDownloaded(fileId, fileName, req) {
@@ -381,4 +405,5 @@ module.exports = {
   userSignup,
   shareCreated,
   shareAccessed,
+  filesUploadedBulk,
 };

@@ -2,13 +2,14 @@ const { validateAndResolveFile, streamEncryptedFile, streamUnencryptedFile } = r
 const { sendError, sendSuccess } = require('../../utils/response');
 const { createZipArchive, createBulkZipArchive } = require('../../utils/zipArchive');
 const { logger } = require('../../config/logger');
-const { logAuditEvent, fileUploaded, fileDownloaded } = require('../../services/auditLogger');
+const { logAuditEvent, fileUploaded, fileDownloaded, filesUploadedBulk } = require('../../services/auditLogger');
 const { publishFileEvent, EventTypes } = require('../../services/fileEvents');
 const {
   getFiles,
   createFolder,
   createFile,
   createFileFromStreamedUpload,
+  findFolderIdByName,
   getFile,
   getFilesByIds,
   renameFile: renameFileModel,
@@ -21,6 +22,58 @@ const { getUserStorageUsage, getUserStorageLimit } = require('../../models/user.
 const { safeUnlink } = require('../../utils/fileCleanup');
 const { validateMimeType } = require('../../utils/mimeTypeDetection');
 const { checkStorageLimitExceeded } = require('../../utils/storageUtils');
+const storage = require('../../utils/storageDriver');
+
+function normalizeMultipartArray(value) {
+  if (value == null) return [];
+  if (Array.isArray(value)) return value.map(v => (v == null ? '' : String(v)));
+  return [String(value)];
+}
+
+function extractFolderSegmentsFromRelativePath(relativePath, fallbackFileName) {
+  if (!relativePath || typeof relativePath !== 'string') return [];
+  const normalized = relativePath.replace(/\\/g, '/').replace(/^\/+/, '').trim();
+  if (!normalized) return [];
+  const parts = normalized.split('/').filter(Boolean);
+  if (parts.length === 0) return [];
+
+  // Most browsers provide "RootFolder/sub/filename.ext". We only want the folder parts.
+  const last = parts[parts.length - 1];
+  const isLastFile =
+    (fallbackFileName && last === fallbackFileName) ||
+    // fallback heuristic: if it has a dot, treat as a filename
+    (typeof last === 'string' && last.includes('.'));
+
+  return isLastFile ? parts.slice(0, -1) : parts;
+}
+
+async function ensureFolderPath({ userId, baseParentId, folderSegments, folderIdCache }) {
+  let parentId = baseParentId || null;
+  for (const seg of folderSegments) {
+    if (!validateFileName(seg)) {
+      throw new Error(`Invalid folder name: ${seg}`);
+    }
+
+    const cacheKey = `${parentId || 'root'}::${seg}`;
+    const cached = folderIdCache.get(cacheKey);
+    if (cached) {
+      parentId = cached;
+      continue;
+    }
+
+    const existingId = await findFolderIdByName(seg, parentId, userId);
+    if (existingId) {
+      folderIdCache.set(cacheKey, existingId);
+      parentId = existingId;
+      continue;
+    }
+
+    const created = await createFolder(seg, parentId, userId);
+    folderIdCache.set(cacheKey, created.id);
+    parentId = created.id;
+  }
+  return parentId;
+}
 
 /**
  * Check if an upload would exceed storage limit (call before starting upload).
@@ -296,6 +349,10 @@ async function replaceFileContents(req, res) {
  * Bulk upload multiple files (multer disk/local or stream-to-S3 when S3 enabled)
  */
 async function uploadFilesBulk(req, res) {
+  const relativePaths = normalizeMultipartArray(req.body?.relativePaths);
+  const clientIds = normalizeMultipartArray(req.body?.clientIds);
+  const folderIdCache = new Map();
+
   // S3: streamed uploads (no temp files)
   if (req.streamedUploads) {
     const uploads = req.streamedUploads;
@@ -318,31 +375,82 @@ async function uploadFilesBulk(req, res) {
     const successful = [];
     const failed = [];
 
-    for (const upload of uploads) {
+    const orderedUploads = [...uploads].sort((a, b) => {
+      const ai = Number.isFinite(a?.index) ? a.index : 0;
+      const bi = Number.isFinite(b?.index) ? b.index : 0;
+      return ai - bi;
+    });
+
+    for (let i = 0; i < orderedUploads.length; i++) {
+      const upload = orderedUploads[i];
+      const relativePath = relativePaths[i] || null;
+      const clientId = clientIds[i] || null;
+
       try {
+        const folderSegments = extractFolderSegmentsFromRelativePath(relativePath, upload.name);
+        const targetParentId =
+          folderSegments.length > 0
+            ? await ensureFolderPath({
+                userId: req.userId,
+                baseParentId: parentId,
+                folderSegments,
+                folderIdCache,
+              })
+            : parentId;
+
         const file = await userOperationLock(req.userId, () => {
-          return createFileFromStreamedUpload(upload, parentId, req.userId);
+          return createFileFromStreamedUpload(upload, targetParentId, req.userId);
         });
-        await fileUploaded(file.id, file.name, file.size, req);
-        logger.info({ fileId: file.id, fileName: file.name }, 'File uploaded (stream to S3)');
+        // For bulk uploads, avoid per-file audit/info spam; we log a single bulk event below.
+        logger.debug({ fileId: file.id, fileName: file.name }, 'File uploaded (stream to S3, bulk)');
         await publishFileEvent(EventTypes.FILE_UPLOADED, {
           id: file.id,
           name: file.name,
           type: file.type,
           size: file.size,
           mimeType: file.mimeType,
-          parentId,
+          parentId: targetParentId,
           userId: req.userId,
         });
-        successful.push(file);
+        successful.push(clientId ? { ...file, clientId } : file);
       } catch (err) {
-        failed.push({ fileName: upload.name, error: err?.message || 'Upload failed' });
+        // Best-effort cleanup: streamed object is already in S3; delete it if DB creation failed.
+        if (storage.useS3 && upload?.storageName) {
+          storage
+            .deleteObject(upload.storageName)
+            .catch(cleanupErr =>
+              logger.warn(
+                { err: cleanupErr, storageName: upload.storageName },
+                'Failed to delete orphaned S3 object after bulk upload failure'
+              )
+            );
+        }
+        const failure = { fileName: upload.name, error: err?.message || 'Upload failed' };
+        failed.push(clientId ? { ...failure, clientId } : failure);
       }
     }
 
     if (successful.length === 0) {
       return sendError(res, 400, failed[0]?.error || 'All uploads failed');
     }
+
+    // Aggregate audit log for this bulk upload.
+    await filesUploadedBulk(successful, req, {
+      failedCount: failed.length,
+      total: uploads.length,
+      parentId,
+      driver: 's3',
+    });
+    logger.info(
+      {
+        total: uploads.length,
+        successful: successful.length,
+        failedCount: failed.length,
+        parentId,
+        driver: 's3',
+      },
+      'Bulk upload completed (stream to S3)'
+    );
 
     return sendSuccess(res, {
       files: successful,
@@ -398,24 +506,47 @@ async function uploadFilesBulk(req, res) {
     return sendError(res, 500, 'Unable to verify storage limit. Please try again.');
   }
 
-  const uploadPromises = req.files.map(async file => {
-    let actualMimeType = file.mimetype || 'application/octet-stream';
-    const mimeValidation = await validateMimeType(file.path, file.mimetype, file.originalname);
-    if (!mimeValidation.valid) {
-      await safeUnlink(file.path);
-      throw new Error(`Invalid file type: ${file.originalname}`);
-    }
-    actualMimeType = mimeValidation.actualMimeType || file.mimetype || 'application/octet-stream';
+  // IMPORTANT: Process sequentially to avoid race conditions creating the same folder path multiple times.
+  // (Parallel processing can create duplicate folders due to cache/DB check races.)
+  const successful = [];
+  const failed = [];
 
-    validateFileUpload(actualMimeType, file.originalname);
+  for (let index = 0; index < req.files.length; index++) {
+    const file = req.files[index];
+    const relativePath = relativePaths[index] || null;
+    const clientId = clientIds[index] || null;
 
     try {
+      let actualMimeType = file.mimetype || 'application/octet-stream';
+      const mimeValidation = await validateMimeType(file.path, file.mimetype, file.originalname);
+      if (!mimeValidation.valid) {
+        await safeUnlink(file.path);
+        throw new Error(`Invalid file type: ${file.originalname}`);
+      }
+      actualMimeType = mimeValidation.actualMimeType || file.mimetype || 'application/octet-stream';
+
+      validateFileUpload(actualMimeType, file.originalname);
+
+      const folderSegments = extractFolderSegmentsFromRelativePath(relativePath, file.originalname);
+      const targetParentId =
+        folderSegments.length > 0
+          ? await ensureFolderPath({
+              userId: req.userId,
+              baseParentId: parentId,
+              folderSegments,
+              folderIdCache,
+            })
+          : parentId;
+
       const createdFile = await userOperationLock(req.userId, () => {
-        return createFile(file.originalname, file.size, actualMimeType, file.path, parentId, req.userId);
+        return createFile(file.originalname, file.size, actualMimeType, file.path, targetParentId, req.userId);
       });
 
-      await fileUploaded(createdFile.id, createdFile.name, createdFile.size, req);
-      logger.info({ fileId: createdFile.id, fileName: createdFile.name, fileSize: createdFile.size }, 'File uploaded');
+      // For bulk uploads, avoid per-file audit/info spam; we log a single bulk event below.
+      logger.debug(
+        { fileId: createdFile.id, fileName: createdFile.name, fileSize: createdFile.size },
+        'File uploaded (bulk)'
+      );
 
       await publishFileEvent(EventTypes.FILE_UPLOADED, {
         id: createdFile.id,
@@ -423,30 +554,20 @@ async function uploadFilesBulk(req, res) {
         type: createdFile.type,
         size: createdFile.size,
         mimeType: createdFile.mimeType,
-        parentId,
+        parentId: targetParentId,
         userId: req.userId,
       });
 
-      return createdFile;
-    } catch (error) {
-      await safeUnlink(file.path);
-      throw error;
-    }
-  });
-
-  const results = await Promise.allSettled(uploadPromises);
-
-  const successful = [];
-  const failed = [];
-
-  for (let i = 0; i < results.length; i++) {
-    const result = results[i];
-    if (result.status === 'fulfilled') {
-      successful.push(result.value);
-    } else {
+      successful.push(clientId ? { ...createdFile, clientId } : createdFile);
+    } catch (err) {
+      // Ensure we don't leak temp files on failures.
+      if (file?.path) {
+        await safeUnlink(file.path);
+      }
       failed.push({
-        fileName: req.files[i].originalname,
-        error: result.reason?.message || 'Upload failed',
+        fileName: file.originalname,
+        error: err?.message || 'Upload failed',
+        ...(clientId ? { clientId } : {}),
       });
     }
   }
@@ -454,6 +575,24 @@ async function uploadFilesBulk(req, res) {
   if (successful.length === 0) {
     return sendError(res, 400, failed.length > 0 ? failed[0].error : 'All uploads failed');
   }
+
+  // Aggregate audit log + summary log entry for this bulk upload.
+  await filesUploadedBulk(successful, req, {
+    failedCount: failed.length,
+    total: req.files.length,
+    parentId,
+    driver: 'disk',
+  });
+  logger.info(
+    {
+      total: req.files.length,
+      successful: successful.length,
+      failedCount: failed.length,
+      parentId,
+      driver: 'disk',
+    },
+    'Bulk upload completed'
+  );
 
   sendSuccess(res, {
     files: successful,

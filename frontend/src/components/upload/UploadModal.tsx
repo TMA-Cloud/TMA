@@ -4,6 +4,7 @@ import { Modal } from '../ui/Modal';
 import { useApp } from '../../contexts/AppContext';
 import { formatFileSize } from '../../utils/fileUtils';
 import { useIsMobile } from '../../hooks/useIsMobile';
+import { entriesFromDataTransfer, entriesFromFileList } from '../../utils/folderUpload';
 
 /** Returns a unique name like "name (1).ext" not in existingNames or usedInBatch. */
 function getUniqueUploadName(originalName: string, existingNames: Set<string>, usedInBatch: Set<string>): string {
@@ -22,6 +23,7 @@ function getUniqueUploadName(originalName: string, existingNames: Set<string>, u
 interface UploadFile {
   id: string;
   file: File;
+  relativePath?: string;
   progress: number;
   status: 'pending' | 'uploading' | 'completed' | 'error';
 }
@@ -33,7 +35,7 @@ export const UploadModal: React.FC = () => {
     files: contextFiles,
     uploadFileWithProgress,
     replaceFileWithProgress,
-    uploadFilesBulk,
+    uploadEntriesBulk,
     uploadProgress,
   } = useApp();
   const [uploadFiles, setUploadFiles] = useState<UploadFile[]>([]);
@@ -45,6 +47,7 @@ export const UploadModal: React.FC = () => {
   /** User choice per conflicting upload id: 'replace' | 'rename' */
   const [duplicateChoices, setDuplicateChoices] = useState<Record<string, 'replace' | 'rename'>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const folderInputRef = useRef<HTMLInputElement>(null);
   const isMobile = useIsMobile();
 
   const existingFileNames = useMemo(
@@ -56,25 +59,43 @@ export const UploadModal: React.FC = () => {
     [contextFiles]
   );
 
-  const handleFiles = (files: FileList) => {
-    const newUploadFiles: UploadFile[] = Array.from(files).map((file, index) => ({
-      id: `${Date.now()}-${index}`,
-      file,
+  const handleEntries = (entries: { file: File; relativePath?: string }[]) => {
+    const now = Date.now();
+    const newUploadFiles: UploadFile[] = entries.map((entry, index) => ({
+      id: `${now}-${index}`,
+      file: entry.file,
+      relativePath: entry.relativePath,
       progress: 0,
       status: 'pending' as const,
     }));
-
     setUploadFiles(prev => [...prev, ...newUploadFiles]);
+  };
+
+  const handleFiles = (files: FileList) => {
+    handleEntries(Array.from(files).map(file => ({ file })));
+  };
+
+  const handleFolderFiles = (files: FileList) => {
+    const entries = entriesFromFileList(files);
+    handleEntries(entries.map(e => ({ file: e.file, relativePath: e.relativePath })));
   };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragOver(false);
+    void (async () => {
+      const entries = await entriesFromDataTransfer(e.dataTransfer);
+      if (entries.length > 0) {
+        handleEntries(entries.map(en => ({ file: en.file, relativePath: en.relativePath })));
+      }
+    })();
+  };
 
-    const files = e.dataTransfer.files;
-    if (files.length > 0) {
-      handleFiles(files);
-    }
+  const handleDropZoneClick = (e: React.MouseEvent) => {
+    const target = e.target as HTMLElement | null;
+    if (target?.closest('[data-upload-action="true"]')) return;
+    if (target?.closest('input')) return;
+    fileInputRef.current?.click();
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -92,6 +113,15 @@ export const UploadModal: React.FC = () => {
     if (files) {
       handleFiles(files);
     }
+    e.target.value = '';
+  };
+
+  const handleFolderInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files) {
+      handleFolderFiles(files);
+    }
+    e.target.value = '';
   };
 
   const removeFile = (fileId: string) => {
@@ -109,7 +139,9 @@ export const UploadModal: React.FC = () => {
   );
 
   const conflicts = useMemo(
-    () => pendingItems.filter(item => existingFileNames.has(item.file.name)),
+    // Only check duplicates for direct uploads into the current folder.
+    // Folder uploads can contain the same filename in different subfolders.
+    () => pendingItems.filter(item => !item.relativePath && existingFileNames.has(item.file.name)),
     [pendingItems, existingFileNames]
   );
 
@@ -117,12 +149,18 @@ export const UploadModal: React.FC = () => {
   const buildUploadPlan = (resolutions: Record<string, 'replace' | 'rename'>) => {
     const replaceItems: { fileId: string; file: File }[] = [];
     const usedInBatch = new Set(existingFileNames);
-    const newFiles: File[] = [];
+    const newFiles: { file: File; relativePath?: string; clientId: string }[] = [];
 
     for (const item of pendingItems) {
+      const clientId = item.id;
+      if (item.relativePath) {
+        newFiles.push({ file: item.file, relativePath: item.relativePath, clientId });
+        continue;
+      }
+
       const choice = resolutions[item.id];
       if (!choice) {
-        newFiles.push(item.file);
+        newFiles.push({ file: item.file, clientId });
         continue;
       }
       if (choice === 'replace') {
@@ -130,7 +168,7 @@ export const UploadModal: React.FC = () => {
         if (existing?.id) {
           replaceItems.push({ fileId: existing.id, file: item.file });
         } else {
-          newFiles.push(item.file);
+          newFiles.push({ file: item.file, clientId });
         }
         continue;
       }
@@ -141,14 +179,17 @@ export const UploadModal: React.FC = () => {
         const renamedFile = new (
           window as Window & { File: new (b: BlobPart[], n: string, o?: FilePropertyBag) => File }
         ).File([item.file], newName, { type, lastModified: Date.now() });
-        newFiles.push(renamedFile);
+        newFiles.push({ file: renamedFile, clientId });
       }
     }
     return { replaceItems, newFiles };
   };
 
   /** Execute a pre-built upload plan (used after Confirm to avoid closure issues). */
-  const executeUploadPlan = async (plan: { replaceItems: { fileId: string; file: File }[]; newFiles: File[] }) => {
+  const executeUploadPlan = async (plan: {
+    replaceItems: { fileId: string; file: File }[];
+    newFiles: { file: File; relativePath?: string; clientId: string }[];
+  }) => {
     try {
       await Promise.all(
         plan.replaceItems.map(({ fileId, file }) =>
@@ -158,10 +199,17 @@ export const UploadModal: React.FC = () => {
         )
       );
       if (plan.newFiles.length > 0) {
-        if (plan.newFiles.length > 1) {
-          await uploadFilesBulk(plan.newFiles);
+        const entries = plan.newFiles.map(f => ({ file: f.file, relativePath: f.relativePath, clientId: f.clientId }));
+        if (entries.length === 1) {
+          const [first] = entries;
+          if (!first) return;
+          if (!first.relativePath) {
+            await uploadFileWithProgress(first.file);
+          } else {
+            await uploadEntriesBulk(entries);
+          }
         } else {
-          await uploadFileWithProgress(plan.newFiles[0]!);
+          await uploadEntriesBulk(entries);
         }
       }
       setUploadFiles(prev => prev.filter(f => f.status === 'error'));
@@ -231,7 +279,7 @@ export const UploadModal: React.FC = () => {
     duplicateConflicts.length > 0 && duplicateConflicts.every(c => duplicateChoices[c.uploadId] != null);
 
   return (
-    <Modal isOpen={uploadModalOpen} onClose={handleClose} title="Upload Files" size={isMobile ? 'full' : 'lg'}>
+    <Modal isOpen={uploadModalOpen} onClose={handleClose} title="Upload" size={isMobile ? 'full' : 'lg'}>
       <div className={isMobile ? 'space-y-4' : 'space-y-6'}>
         {/* Drop Zone */}
         <div
@@ -244,16 +292,20 @@ export const UploadModal: React.FC = () => {
                 : 'border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500'
             }
           `}
+          onClick={handleDropZoneClick}
           onDrop={handleDrop}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
         >
+          <input ref={fileInputRef} type="file" multiple onChange={handleFileInput} className="hidden" />
           <input
-            ref={fileInputRef}
+            ref={folderInputRef}
             type="file"
             multiple
-            onChange={handleFileInput}
-            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+            webkitdirectory=""
+            directory=""
+            onChange={handleFolderInput}
+            className="hidden"
           />
 
           <div className={`${isMobile ? 'space-y-3' : 'space-y-4'} w-full`}>
@@ -267,11 +319,36 @@ export const UploadModal: React.FC = () => {
 
             <div>
               <p className={`${isMobile ? 'text-base' : 'text-lg'} font-medium text-gray-900 dark:text-gray-100`}>
-                {isMobile ? 'Tap to select files' : 'Drag and drop files here'}
+                {isMobile ? 'Tap to select files or a folder' : 'Drag and drop files or folders here'}
               </p>
               <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-gray-500 dark:text-gray-400 mt-1`}>
                 {isMobile ? 'or browse from your device' : 'or click to browse from your computer'}
               </p>
+            </div>
+
+            <div className="flex items-center justify-center gap-2">
+              <button
+                data-upload-action="true"
+                type="button"
+                onClick={e => {
+                  e.stopPropagation();
+                  folderInputRef.current?.click();
+                }}
+                className="px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
+              >
+                Upload folder
+              </button>
+              <button
+                data-upload-action="true"
+                type="button"
+                onClick={e => {
+                  e.stopPropagation();
+                  fileInputRef.current?.click();
+                }}
+                className="px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
+              >
+                Upload files
+              </button>
             </div>
           </div>
         </div>
@@ -377,7 +454,7 @@ export const UploadModal: React.FC = () => {
                         isMobile ? 'text-xs' : 'text-sm'
                       } font-medium text-gray-900 dark:text-gray-100 truncate`}
                     >
-                      {uploadFile.file.name}
+                      {uploadFile.relativePath || uploadFile.file.name}
                     </p>
                     <p className={`${isMobile ? 'text-[10px]' : 'text-xs'} text-gray-500 dark:text-gray-400`}>
                       {formatFileSize(uploadFile.file.size)}

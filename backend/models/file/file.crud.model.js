@@ -405,11 +405,31 @@ async function replaceFileData(id, size, mimeType, tempPath, userId) {
   return file;
 }
 
+/**
+ * Find an existing folder by name under a parent (or root).
+ * Returns the folder id if found, otherwise null.
+ */
+async function findFolderIdByName(name, parentId = null, userId) {
+  const result = await pool.query(
+    `SELECT id
+     FROM files
+     WHERE user_id = $1
+       AND deleted_at IS NULL
+       AND type = 'folder'
+       AND name = $2
+       AND parent_id IS NOT DISTINCT FROM $3
+     LIMIT 1`,
+    [userId, name, parentId]
+  );
+  return result.rows[0]?.id || null;
+}
+
 module.exports = {
   getFiles,
   createFolder,
   createFile,
   createFileFromStreamedUpload,
+  findFolderIdByName,
   getFile,
   getFilesByIds,
   renameFile,

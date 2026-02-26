@@ -107,7 +107,7 @@ Files are automatically encrypted. Encryption uses AES-256-GCM with authenticate
 - Trash cleanup frees space
 - Orphan file cleanup (S3: paginated listing to avoid loading all keys)
 - Automatic background processes
-- **S3:** Run orphan cleanup frequently; upload validation (e.g. parentId) runs after stream upload, so rejected uploads can leave orphan objects until cleanup.
+- **S3:** Upload validation (e.g. `parentId`) runs after stream upload. The controller deletes failed bulk-upload objects when possible, but some rejected uploads can still leave orphan objects until the cleanup job runs. Keep the orphan cleanup job enabled and scheduled.
 
 ## S3 Bucket Protection (when STORAGE_DRIVER=s3)
 

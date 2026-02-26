@@ -16,6 +16,7 @@ Complete list of audit event types in TMA Cloud.
 ## File Events
 
 - `file.upload` - File uploaded
+- `file.upload.bulk` - Multiple files uploaded in a single bulk operation
 - `file.download` - File downloaded (single)
 - `file.download.bulk` - Multiple files/folders downloaded as ZIP
 - `file.delete` - File moved to trash
@@ -54,7 +55,7 @@ Complete list of audit event types in TMA Cloud.
 
 Each event includes metadata with relevant information:
 
-- **File Events:** `fileId`, `fileName`, `fileSize`, `fileType`
+- **File Events:** `fileId`, `fileName`, `fileSize`, `fileType`. For `file.upload.bulk` and `file.download.bulk`, metadata also includes `fileIds` and `fileCount`.
 - **User Events:** `userId`, `email`, `ipAddress`
 - **Share Events:** `shareLinkId`, `token`, `fileIds`
 

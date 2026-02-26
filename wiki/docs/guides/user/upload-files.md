@@ -7,15 +7,23 @@ Learn how to upload and manage files in TMA Cloud.
 ### Basic Upload
 
 1. Navigate to the folder where you want to upload
-2. Click the **"Upload"** button (or drag and drop)
-3. Select files from your computer
-4. Files will upload automatically
+2. Click the **"Upload"** button
+3. Select **Upload files**
+4. Choose one or more files from your computer
+5. Files upload to the current folder
+
+### Upload a Folder
+
+- Click the **"Upload"** button → **Upload folder**
+- Select a folder from your computer
+- All subfolders and files under that folder are uploaded
+- The folder structure is recreated under the current folder
 
 ### Drag and Drop
 
-- Drag files directly into the file manager
+- Drag files or folders directly into the file manager
 - Drop them in the desired folder
-- Upload progress shown in real-time
+- Upload progress is shown in real-time
 
 ### Paste from Clipboard (Ctrl+V)
 

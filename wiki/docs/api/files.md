@@ -196,34 +196,50 @@ Upload multiple files at once using `multipart/form-data`.
 - `files` - Files to upload (required)
 - `parent_id` - Parent folder ID (optional)
 - `path` - Target path (optional)
+- `relativePaths` - Optional. One value per file, same order as `files`. When present, the server uses these relative paths (e.g. `"MyFolder/sub/file.txt"`) to recreate folder structure under `parent_id`.
+- `clientIds` - Optional. One value per file, same order as `files`. Echoed back in the response for easier client-side matching.
 
 **Duplicate names:** For each file, if a file with the same name already exists in the parent folder, the server assigns a unique display name (e.g. `document (1).pdf`).
 
 **Response:**
 
-An array of the uploaded file objects. The response may include a `failed` array for files that could not be uploaded (e.g. validation error).
+On success, returns a summary object. `files` contains created file records; `failed` contains per-file errors (if any).
 
 ```json
-[
-  {
-    "id": "file_123",
-    "name": "file1.pdf",
-    "type": "file",
-    "size": 1024,
-    "mimeType": "application/pdf",
-    "parentId": null,
-    "modified": "2024-01-01T00:00:00Z"
-  },
-  {
-    "id": "file_456",
-    "name": "file2.jpg",
-    "type": "file",
-    "size": 2048,
-    "mimeType": "image/jpeg",
-    "parentId": null,
-    "modified": "2024-01-01T00:00:00Z"
-  }
-]
+{
+  "files": [
+    {
+      "id": "file_123",
+      "name": "file1.pdf",
+      "type": "file",
+      "size": 1024,
+      "mimeType": "application/pdf",
+      "parentId": null,
+      "modified": "2024-01-01T00:00:00Z",
+      "clientId": "entry-0"
+    },
+    {
+      "id": "file_456",
+      "name": "file2.jpg",
+      "type": "file",
+      "size": 2048,
+      "mimeType": "image/jpeg",
+      "parentId": null,
+      "modified": "2024-01-01T00:00:00Z",
+      "clientId": "entry-1"
+    }
+  ],
+  "failed": [
+    {
+      "fileName": "bad-file.exe",
+      "error": "Invalid file type",
+      "clientId": "entry-2"
+    }
+  ],
+  "total": 3,
+  "successful": 2,
+  "failedCount": 1
+}
 ```
 
 ## Move Files

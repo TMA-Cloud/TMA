@@ -38,6 +38,17 @@ export interface FileItemResponse {
   expiresAt?: string | null;
 }
 
+export interface BulkUploadEntry {
+  file: File;
+  /**
+   * Relative path (e.g. "MyFolder/sub/file.txt") used to recreate folder structure server-side.
+   * When omitted, the file is uploaded into the current folder.
+   */
+  relativePath?: string;
+  /** Client-generated id to map progress updates to backend results. */
+  clientId?: string;
+}
+
 export interface AppContextType {
   currentPath: string[];
   folderStack: (string | null)[];
@@ -108,6 +119,7 @@ export interface AppContextType {
   /** Replace contents of an existing file (same progress UI as upload). */
   replaceFileWithProgress: (fileId: string, file: File, onProgress?: (progress: number) => void) => Promise<void>;
   uploadFilesBulk: (files: File[]) => Promise<void>;
+  uploadEntriesBulk: (entries: BulkUploadEntry[]) => Promise<void>;
   /** Upload files from OS clipboard (Electron only). */
   uploadFilesFromClipboard: () => Promise<void>;
   setIsUploadProgressInteracting: (isInteracting: boolean) => void;
