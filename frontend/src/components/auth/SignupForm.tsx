@@ -55,6 +55,7 @@ export const SignupForm: React.FC<{ onSwitch: () => void }> = ({ onSwitch }) => 
             onChange={e => setEmail(e.target.value)}
             autoComplete="email"
             maxLength={254}
+            autoFocus
           />
         </div>
         <PasswordInput

@@ -33,8 +33,14 @@ export const RenameModal: React.FC = () => {
   const initialDisplayValue = getDisplayFileName(renameTarget.name, renameTarget.type === 'file', hideFileExtensions);
 
   return (
-    <Modal isOpen onClose={handleClose} title="Rename">
-      <div className="space-y-4">
+    <Modal isOpen onClose={handleClose} title="Rename" initialFocusRef={inputRef as React.RefObject<HTMLElement>}>
+      <form
+        className="space-y-4"
+        onSubmit={e => {
+          e.preventDefault();
+          handleRename();
+        }}
+      >
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">New Name</label>
           <input
@@ -43,23 +49,25 @@ export const RenameModal: React.FC = () => {
             defaultValue={initialDisplayValue}
             ref={inputRef}
             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            autoFocus
           />
         </div>
         <div className="flex justify-end space-x-3">
           <button
+            type="button"
             onClick={handleClose}
             className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors duration-200"
           >
             Cancel
           </button>
           <button
-            onClick={handleRename}
+            type="submit"
             className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors duration-200"
           >
             Rename
           </button>
         </div>
-      </div>
+      </form>
     </Modal>
   );
 };
