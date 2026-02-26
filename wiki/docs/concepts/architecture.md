@@ -4,7 +4,10 @@ System architecture and design patterns for TMA Cloud.
 
 ## System Architecture
 
-TMA Cloud uses **Single-Origin Architecture** - backend serves both API and frontend from the same origin.
+TMA Cloud uses **Single-Origin Architecture**:
+
+- **Production:** The Express backend serves both the built frontend and all APIs from the same origin.
+- **Development:** The browser loads the app from the Vite dev server at `http://localhost:5173`, which proxies `/api/*` and `/s/*` to the backend on `http://localhost:3000`.
 
 ### Production Architecture
 

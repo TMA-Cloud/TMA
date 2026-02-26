@@ -54,8 +54,9 @@ export default defineConfig({
         changeOrigin: true,
         secure: false,
       },
-      // Proxy Share routes (from your git diff: app.use('/s', shareRoutes))
-      '/s': {
+      // Proxy Share routes: use '/s/' so we don't accidentally
+      // proxy '/src/*' (which should be handled by Vite itself)
+      '/s/': {
         target: 'http://localhost:3000',
         changeOrigin: true,
         secure: false,
