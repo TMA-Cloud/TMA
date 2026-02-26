@@ -1,6 +1,6 @@
 const path = require('path');
 const fs = require('fs');
-const { BrowserWindow, Menu } = require('electron');
+const { BrowserWindow, Menu, screen } = require('electron');
 const { LOADING_PAGE, serverErrorPage } = require('./config.cjs');
 
 /**
@@ -30,9 +30,15 @@ function createWindow(loadUrl, preloadPath, appRoot) {
           ? iconInBuild
           : null;
 
+  // Size window relative to the current display work area (not full screen).
+  const { width: screenWidth, height: screenHeight } = screen.getPrimaryDisplay().workAreaSize;
+  const targetWidth = Math.round(screenWidth * 0.7);
+  const targetHeight = Math.round(screenHeight * 0.8);
+
   const win = new BrowserWindow({
-    width: 1280,
-    height: 800,
+    width: targetWidth,
+    height: targetHeight,
+    center: true,
     title: 'TMA Cloud',
     show: false,
     ...(iconPath && { icon: iconPath }),
