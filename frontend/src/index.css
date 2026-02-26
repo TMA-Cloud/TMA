@@ -720,10 +720,8 @@ html.dark * {
 
 html {
   scroll-behavior: smooth;
-  /* Global responsive font size:
-     ensures 2wf >= w >= wf where
-     wf = --wf-font-base and w = computed font-size */
-  font-size: clamp(var(--wf-font-base), 0.9vw, var(--wf-font-max));
+  /* Fixed base font size so UI stays compact at any window size (no viewport scaling) */
+  font-size: var(--wf-font-base);
 }
 
 html,
@@ -810,27 +808,28 @@ body {
   }
 }
 
-/* Hover elevation effect - subtle, no bounce/overshoot */
+/* Hover elevation effect - more noticeable, feels alive */
 .hover-lift {
   transition:
-    transform 0.18s ease-out,
-    box-shadow 0.18s ease-out;
+    transform 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .hover-lift:hover {
-  transform: translateY(-1px);
+  transform: translateY(-2px);
   box-shadow:
-    0 4px 12px -2px rgba(0, 0, 0, 0.12),
-    0 2px 6px -2px rgba(0, 0, 0, 0.08);
+    0 8px 24px -4px rgba(0, 0, 0, 0.12),
+    0 4px 12px -2px rgba(0, 0, 0, 0.08);
 }
 
 html.dark .hover-lift:hover {
   box-shadow:
-    0 4px 12px -2px rgba(0, 0, 0, 0.25),
-    0 2px 6px -2px rgba(0, 0, 0, 0.15);
+    0 8px 24px -4px rgba(0, 0, 0, 0.4),
+    0 4px 12px -2px rgba(0, 0, 0, 0.2),
+    0 0 0 1px rgba(59, 130, 246, 0.08);
 }
 
-/* Selection glow effect */
+/* Selection glow effect - more visible, gradient border */
 .selection-glow {
   position: relative;
 }
@@ -840,9 +839,9 @@ html.dark .hover-lift:hover {
   position: absolute;
   inset: -2px;
   border-radius: inherit;
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.3), rgba(168, 85, 247, 0.3));
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.35), rgba(168, 85, 247, 0.35));
   opacity: 0;
-  transition: opacity 0.2s ease;
+  transition: opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   z-index: -1;
 }
 
@@ -850,26 +849,53 @@ html.dark .hover-lift:hover {
   opacity: 1;
 }
 
-/* Muted icons utility */
+.selection-glow.selected {
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.25);
+}
+
+/* Muted icons utility - subtle color shift on hover */
 .icon-muted {
-  opacity: 0.6;
-  transition: opacity 0.2s ease;
+  opacity: 0.7;
+  transition:
+    opacity 0.2s ease,
+    color 0.2s ease;
 }
 
 .icon-muted:hover {
   opacity: 1;
 }
 
-/* Premium card styling */
+/* Primary button glow - makes CTAs feel alive */
+.btn-glow {
+  transition:
+    transform 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.25s ease,
+    filter 0.2s ease;
+}
+
+.btn-glow:hover {
+  box-shadow:
+    0 4px 14px rgba(59, 130, 246, 0.4),
+    0 2px 8px rgba(59, 130, 246, 0.2);
+}
+
+.btn-glow:active {
+  transform: scale(0.98);
+}
+
+/* Premium card styling - depth and hover life */
 .card-premium {
   background: var(--bg-surface-1);
   border: 1px solid var(--border-subtle);
   border-radius: 1rem;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  transition:
+    transform 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 0.25s ease;
 }
 
 html.dark .card-premium {
-  background: var(--bg-surface-1);
+  background: linear-gradient(145deg, var(--bg-surface-1) 0%, rgba(30, 41, 59, 0.97) 100%);
 }
 
 html:not(.dark) .card-premium {
@@ -878,12 +904,16 @@ html:not(.dark) .card-premium {
 }
 
 .card-premium:hover {
-  border-color: var(--border-medium);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  border-color: rgba(59, 130, 246, 0.2);
+  box-shadow:
+    0 8px 24px -4px rgba(0, 0, 0, 0.12),
+    0 0 0 1px rgba(59, 130, 246, 0.06);
 }
 
 html.dark .card-premium:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  box-shadow:
+    0 8px 32px -4px rgba(0, 0, 0, 0.4),
+    0 0 0 1px rgba(59, 130, 246, 0.12);
 }
 
 /* Reduce motion for users who prefer it */

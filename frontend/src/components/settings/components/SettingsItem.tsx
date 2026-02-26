@@ -37,10 +37,10 @@ export const SettingsItem: React.FC<SettingsItemProps> = ({
   loadingStates,
 }) => {
   return (
-    <div className="stagger-item hover-lift flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-2xl bg-gray-50/70 dark:bg-gray-900/60 px-4 py-3 border border-transparent hover:border-blue-500/40 transition-all duration-200">
+    <div className="stagger-item hover-lift flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-2xl bg-gray-50/70 dark:bg-gray-900/60 px-5 py-4 border border-transparent hover:border-blue-500/40 transition-all duration-200">
       <div>
-        <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{label}</p>
-        {description && <p className="text-sm text-gray-500 dark:text-gray-400">{description}</p>}
+        <p className="text-base font-medium text-gray-900 dark:text-gray-100">{label}</p>
+        {description && <p className="text-base text-gray-500 dark:text-gray-400 mt-0.5">{description}</p>}
       </div>
 
       {toggle !== undefined ? (
@@ -49,7 +49,7 @@ export const SettingsItem: React.FC<SettingsItemProps> = ({
             onClick={onToggle}
             disabled={toggleDisabled}
             className={`
-              relative inline-flex h-6 w-12 items-center rounded-full transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500
+              relative inline-flex h-7 w-14 items-center rounded-full transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500
               ${toggleValue ? 'bg-gradient-to-r from-blue-500 to-indigo-500' : 'bg-gray-200 dark:bg-gray-700'}
               ${toggleDisabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
             `}
@@ -57,8 +57,8 @@ export const SettingsItem: React.FC<SettingsItemProps> = ({
           >
             <span
               className={`
-                inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-200
-                ${toggleValue ? 'translate-x-7' : 'translate-x-1'}
+                inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform duration-200
+                ${toggleValue ? 'translate-x-8' : 'translate-x-1'}
               `}
             />
           </button>
@@ -79,7 +79,7 @@ export const SettingsItem: React.FC<SettingsItemProps> = ({
                 onClick={onAction}
                 disabled={isDisabled}
                 className={`
-                  inline-flex items-center gap-2 px-4 py-2 text-sm rounded-2xl transition-all duration-200 border
+                  inline-flex items-center gap-2.5 px-5 py-2.5 text-base rounded-2xl transition-all duration-200 border
                   ${
                     isDisabled
                       ? 'bg-gray-200 dark:bg-gray-700 cursor-not-allowed opacity-70 border-transparent'
@@ -89,14 +89,14 @@ export const SettingsItem: React.FC<SettingsItemProps> = ({
                   }
                 `}
               >
-                {showLoader ? <Loader2 className="w-4 h-4 animate-spin" /> : <ActionIcon className="w-4 h-4" />}
+                {showLoader ? <Loader2 className="w-5 h-5 animate-spin" /> : <ActionIcon className="w-5 h-5" />}
                 <span>{action}</span>
               </button>
             );
           })()}
         </div>
       ) : (
-        <span className="text-base font-semibold text-gray-700 dark:text-gray-200 text-left sm:text-right break-words">
+        <span className="text-lg font-semibold text-gray-700 dark:text-gray-200 text-left sm:text-right break-words">
           {value}
         </span>
       )}

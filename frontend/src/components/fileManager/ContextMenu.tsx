@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Edit3,
   Trash2,
@@ -47,6 +48,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
   onActionComplete,
 }) => {
   const menuRef = useRef<HTMLDivElement>(null);
+  const [placement, setPlacement] = useState<{ x: number; y: number } | null>(null);
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
   const [shareExpiryOpen, setShareExpiryOpen] = useState(false);
@@ -500,48 +502,46 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     electronClipboardAvailable,
   ]);
 
-  // Calculate adjusted position immediately (before render) to prevent "flying" effect
-  const calculateAdjustedPosition = useMemo(() => {
-    if (isMobile || !isOpen) {
-      return { x: position.x, y: position.y };
-    }
+  // Initial position (below-right of cursor); used for first paint so we can measure
+  const cursorOffset = 4;
+  const initialPosition = { x: position.x + cursorOffset, y: position.y + cursorOffset };
 
-    // Estimate menu dimensions (approximate)
-    const estimatedMenuWidth = 192; // min-w-48 = 12rem = 192px
-    const estimatedItemHeight = 40; // py-2.5 = ~40px per item
-    const estimatedHeaderHeight = 40; // header section
-    const estimatedMenuHeight = estimatedHeaderHeight + menuItems.length * estimatedItemHeight;
+  // Measure real menu size and clamp to viewport (runs after first paint)
+  useLayoutEffect(() => {
+    if (isMobile || !isOpen || !menuRef.current) return;
 
-    const viewportWidth = window.innerWidth;
-    const viewportHeight = window.innerHeight;
+    const el = menuRef.current;
+    const rect = el.getBoundingClientRect();
     const padding = 8;
-    const cursorGap = 8; // Gap between cursor and menu when positioned to the left
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
 
-    let adjustedX = position.x;
-    let adjustedY = position.y;
+    let left = position.x + cursorOffset;
+    let top = position.y + cursorOffset;
 
-    // Check right edge overflow - move to left of cursor with spacing
-    if (position.x + estimatedMenuWidth + padding > viewportWidth) {
-      adjustedX = position.x - estimatedMenuWidth - cursorGap;
+    // Horizontal: keep fully in viewport
+    if (left + rect.width > vw - padding) left = vw - rect.width - padding;
+    if (left < padding) left = padding;
+
+    // Vertical: if menu would extend past bottom, open above cursor; then clamp to viewport
+    if (top + rect.height > vh - padding) {
+      top = position.y - rect.height - cursorOffset;
+    }
+    if (top < padding) top = padding;
+    if (top + rect.height > vh - padding) {
+      top = vh - rect.height - padding;
     }
 
-    // Check left edge overflow (if we moved it left)
-    if (adjustedX < padding) {
-      adjustedX = padding;
-    }
+    setPlacement({ x: left, y: top });
+  }, [isOpen, isMobile, position.x, position.y]);
 
-    // Check bottom edge overflow - move above cursor with spacing
-    if (position.y + estimatedMenuHeight + padding > viewportHeight) {
-      adjustedY = position.y - estimatedMenuHeight - cursorGap;
-    }
+  // Reset placement when menu closes so next open re-measures
+  useEffect(() => {
+    if (!isOpen) setPlacement(null);
+  }, [isOpen]);
 
-    // Check top edge overflow (if we moved it up)
-    if (adjustedY < padding) {
-      adjustedY = padding;
-    }
-
-    return { x: adjustedX, y: adjustedY };
-  }, [isOpen, position, isMobile, menuItems.length]);
+  const menuStyle = placement ?? initialPosition;
+  const menuVisible = placement !== null;
 
   useEffect(() => {
     if (!isOpen || isMobile) return;
@@ -723,65 +723,72 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     );
   }
 
-  // Desktop: floating menu near cursor
+  // Desktop: floating menu — position from measure-then-clamp so it always stays on screen
+  const desktopMenu = (
+    <div
+      ref={menuRef}
+      className="fixed z-50 bg-white/95 dark:bg-slate-800/95 backdrop-blur-xl border border-gray-200/50 dark:border-slate-700/50 rounded-2xl shadow-2xl py-2 min-w-48 focus:outline-none"
+      style={{
+        left: `${menuStyle.x}px`,
+        top: `${menuStyle.y}px`,
+        visibility: menuVisible ? 'visible' : 'hidden',
+        opacity: menuVisible ? 1 : 0,
+        animation: menuVisible ? 'menuIn 0.15s cubic-bezier(0.16, 1, 0.3, 1)' : 'none',
+      }}
+      tabIndex={-1}
+      role="menu"
+      aria-label="File actions menu"
+    >
+      <div className="px-4 py-2.5 border-b border-gray-200/30 dark:border-slate-700/30">
+        <p className="text-xs font-medium text-gray-500/80 dark:text-gray-400/80">
+          {selectedCount} item{selectedCount !== 1 ? 's' : ''} selected
+        </p>
+      </div>
+
+      {menuItems.map((item, index) => {
+        const Icon = item.icon;
+        const isFocused = focusedIndex === index;
+        return (
+          <button
+            key={index}
+            onClick={() => {
+              if (!item.disabled) {
+                item.action();
+                onClose();
+              }
+            }}
+            className={`
+              w-full flex items-center space-x-3 px-4 py-2.5 text-left
+              transition-all duration-150
+              rounded-lg
+              focus:outline-none
+              ${
+                item.disabled
+                  ? 'opacity-50 cursor-not-allowed text-gray-400 dark:text-gray-500'
+                  : isFocused
+                    ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                    : item.danger
+                      ? 'text-red-600 dark:text-red-400 hover:bg-red-50/50 dark:hover:bg-red-900/20'
+                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100/80 dark:hover:bg-slate-700/50'
+              }
+            `}
+            disabled={item.disabled}
+            tabIndex={0}
+            role="menuitem"
+            aria-selected={isFocused}
+            onMouseEnter={() => setFocusedIndex(index)}
+          >
+            <Icon className="w-4 h-4 icon-muted" />
+            <span className="text-sm font-medium">{item.label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+
   return (
     <>
-      <div
-        ref={menuRef}
-        className="fixed z-50 bg-white/95 dark:bg-slate-800/95 backdrop-blur-xl border border-gray-200/50 dark:border-slate-700/50 rounded-2xl shadow-2xl py-2 min-w-48 animate-menuIn focus:outline-none"
-        style={{
-          left: `${calculateAdjustedPosition.x}px`,
-          top: `${calculateAdjustedPosition.y}px`,
-        }}
-        tabIndex={-1}
-        role="menu"
-        aria-label="File actions menu"
-      >
-        <div className="px-4 py-2.5 border-b border-gray-200/30 dark:border-slate-700/30">
-          <p className="text-xs font-medium text-gray-500/80 dark:text-gray-400/80">
-            {selectedCount} item{selectedCount !== 1 ? 's' : ''} selected
-          </p>
-        </div>
-
-        {menuItems.map((item, index) => {
-          const Icon = item.icon;
-          const isFocused = focusedIndex === index;
-          return (
-            <button
-              key={index}
-              onClick={() => {
-                if (!item.disabled) {
-                  item.action();
-                  onClose();
-                }
-              }}
-              className={`
-                w-full flex items-center space-x-3 px-4 py-2.5 text-left
-                transition-all duration-150
-                rounded-lg
-                focus:outline-none
-                ${
-                  item.disabled
-                    ? 'opacity-50 cursor-not-allowed text-gray-400 dark:text-gray-500'
-                    : isFocused
-                      ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                      : item.danger
-                        ? 'text-red-600 dark:text-red-400 hover:bg-red-50/50 dark:hover:bg-red-900/20'
-                        : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100/80 dark:hover:bg-slate-700/50'
-                }
-              `}
-              disabled={item.disabled}
-              tabIndex={0}
-              role="menuitem"
-              aria-selected={isFocused}
-              onMouseEnter={() => setFocusedIndex(index)}
-            >
-              <Icon className="w-4 h-4 icon-muted" />
-              <span className="text-sm font-medium">{item.label}</span>
-            </button>
-          );
-        })}
-      </div>
+      {typeof document !== 'undefined' && document.body ? createPortal(desktopMenu, document.body) : desktopMenu}
       {modalElement}
       {shareExpiryElement}
       <FileInfoModal isOpen={infoOpen} onClose={() => setInfoOpen(false)} file={infoFile} currentPath={currentPath} />

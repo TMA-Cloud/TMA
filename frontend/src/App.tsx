@@ -156,7 +156,7 @@ const AppContent: React.FC = () => {
   }
 
   return (
-    <div className="h-screen bg-gray-50 dark:bg-slate-900 flex overflow-hidden">
+    <div className="h-screen bg-gradient-to-br from-gray-50 via-gray-50/98 to-slate-100/80 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800/90 flex overflow-hidden">
       <Sidebar />
 
       <div

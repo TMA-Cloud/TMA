@@ -112,10 +112,10 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
         data-file-id={file.id}
         className={`
           stagger-item group relative rounded-xl border cursor-pointer
-          transition-colors duration-200 ease-out
-          hover:z-20
+          transition-all duration-200 ease-out
+          hover:z-20 hover:shadow-md hover:border-blue-300/40 dark:hover:border-blue-500/30
           active:scale-[0.98]
-          ${isMobile ? 'min-w-0 w-full p-2 select-none' : 'p-4 min-w-0'}
+          min-w-0 w-full p-3 ${isMobile ? 'select-none' : ''}
           overflow-hidden
           ${
             isSelected
@@ -138,23 +138,12 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
         onTouchEnd={handleTouchEnd}
         onTouchMove={handleTouchMove}
       >
-        <div className={`flex flex-col items-center text-center w-full min-w-0 ${isMobile ? 'gap-1' : ''}`}>
-          <div className={`relative ${isMobile ? 'mb-1' : 'mb-2'} flex-shrink-0`}>
-            <FileTypeIcon
-              file={file}
-              className={`${isMobile ? 'w-10 h-10' : 'w-14 h-14'} transition-all duration-200`}
-            />
-            {file.starred && (
-              <Star
-                className={`absolute -top-1 -right-1 ${isMobile ? 'w-3 h-3' : 'w-5 h-5'} text-yellow-400 fill-yellow-400`}
-              />
-            )}
-            {file.shared && !isExpired && (
-              <Share2 className={`absolute -top-1 -left-1 ${isMobile ? 'w-3 h-3' : 'w-5 h-5'} text-green-400`} />
-            )}
-            {isExpired && (
-              <Clock className={`absolute -top-1 -left-1 ${isMobile ? 'w-3 h-3' : 'w-5 h-5'} text-red-400`} />
-            )}
+        <div className="flex flex-col items-center text-center w-full min-w-0 gap-1.5">
+          <div className="relative mb-1.5 flex-shrink-0">
+            <FileTypeIcon file={file} className="w-12 h-12 transition-all duration-200" />
+            {file.starred && <Star className="absolute -top-0.5 -right-0.5 w-4 h-4 text-yellow-400 fill-yellow-400" />}
+            {file.shared && !isExpired && <Share2 className="absolute -top-0.5 -left-0.5 w-4 h-4 text-green-400" />}
+            {isExpired && <Clock className="absolute -top-0.5 -left-0.5 w-4 h-4 text-red-400" />}
             {file.type === 'file' && !isMobile && (
               <button
                 className="absolute -bottom-3 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 scale-90 group-hover:scale-100 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-full p-1.5 shadow-lg hover:shadow-xl hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:border-blue-400 transition-all duration-200"
@@ -173,7 +162,7 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
           <div className="w-full min-w-0 px-1">
             <div className="w-full min-w-0">
               <p
-                className={`${isMobile ? 'text-xs' : 'text-base'} font-semibold text-gray-900 dark:text-gray-100 w-full break-words transition-colors duration-200`}
+                className="text-sm font-semibold text-gray-900 dark:text-gray-100 w-full break-words transition-colors duration-200"
                 style={{
                   display: '-webkit-box',
                   WebkitLineClamp: 2,
@@ -193,9 +182,7 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
             </div>
           </div>
 
-          <div
-            className={`${isMobile ? 'text-[10px]' : 'text-xs'} text-gray-500/80 dark:text-gray-400/80 w-full min-w-0 px-1`}
-          >
+          <div className="text-xs text-gray-500/80 dark:text-gray-400/80 w-full min-w-0 px-1">
             {file.type === 'file' && file.size && <p className="truncate">{formatFileSize(file.size)}</p>}
             <p className="truncate">{formatDate(file.modified)}</p>
             {isExpired && <p className="truncate text-red-400 font-medium">Link expired</p>}
@@ -209,8 +196,9 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
     <div
       data-file-id={file.id}
       className={`
-        stagger-item group flex items-center space-x-3 p-3.5 rounded-lg cursor-pointer
-        transition-colors duration-200 ease-out
+        stagger-item group flex items-center space-x-3 py-2.5 px-3 rounded-lg cursor-pointer
+        transition-all duration-200 ease-out
+        hover:bg-gray-50/90 dark:hover:bg-slate-800/80
         active:scale-[0.99]
         ${isMobile ? 'select-none' : ''}
         ${
@@ -235,9 +223,9 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
     >
       <div className="relative flex-shrink-0">
         <FileTypeIcon file={file} className="w-10 h-10 transition-all duration-200" />
-        {file.starred && <Star className="absolute -top-2 -right-2 w-4 h-4 text-yellow-400 fill-yellow-400" />}
-        {file.shared && !isExpired && <Share2 className="absolute -top-2 -left-2 w-4 h-4 text-green-400" />}
-        {isExpired && <Clock className="absolute -top-2 -left-2 w-4 h-4 text-red-400" />}
+        {file.starred && <Star className="absolute -top-1 -right-1 w-4 h-4 text-yellow-400 fill-yellow-400" />}
+        {file.shared && !isExpired && <Share2 className="absolute -top-1 -left-1 w-4 h-4 text-green-400" />}
+        {isExpired && <Clock className="absolute -top-1 -left-1 w-4 h-4 text-red-400" />}
         {file.type === 'file' && (
           <button
             className="absolute -bottom-3 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 scale-90 group-hover:scale-100 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-full p-1 shadow-lg hover:shadow-xl hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:border-blue-400 transition-all duration-200"
@@ -254,7 +242,7 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
       </div>
 
       <div className="flex-1 min-w-0">
-        <div className={isMobile ? 'w-full min-w-0' : 'w-full min-w-0'}>
+        <div className="w-full min-w-0">
           <p
             className="text-base font-semibold text-gray-900 dark:text-gray-100 transition-colors duration-200 break-words leading-tight"
             style={{

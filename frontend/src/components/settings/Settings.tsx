@@ -103,10 +103,10 @@ export const Settings: React.FC = () => {
   };
 
   return (
-    <div className="p-6 md:p-8 space-y-8 max-w-5xl mx-auto">
+    <div className="w-full max-w-7xl mx-auto p-8 md:p-10 space-y-10">
       <SettingsHeader userName={user?.name} usage={usage ?? undefined} loading={loading} />
       {/* Settings Sections */}
-      <div className="space-y-8">
+      <div className="space-y-10">
         <ProfileSection userName={user?.name} userEmail={user?.email} />
 
         <StorageSection usage={usage ?? undefined} loading={loading} canConfigure={canToggleSignup} />
