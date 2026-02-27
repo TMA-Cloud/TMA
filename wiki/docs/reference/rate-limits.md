@@ -8,10 +8,10 @@ Rate limits are enforced per IP address and/or user for different endpoint types
 
 ## Endpoint Limits
 
-### Strict Authentication Limiter
+### Authentication Limiter
 
-- **Limit:** 5 requests per 15 minutes per IP/email combination.
-- **Purpose:** Prevents brute-force attacks on critical authentication endpoints.
+- **Limit:** 25 requests per 15 minutes per IP/email combination.
+- **Purpose:** Limits login/signup attempts per IP and email.
 - **Endpoints:**
   - `POST /api/login`
   - `POST /api/signup`
@@ -19,8 +19,8 @@ Rate limits are enforced per IP address and/or user for different endpoint types
 
 ### General API Limiter
 
-- **Limit:** 1000 requests per 15 minutes per IP address.
-- **Purpose:** Prevents abuse of general application functionality.
+- **Limit:** 10000 requests per 15 minutes per IP address.
+- **Purpose:** Limits general API usage per IP.
 - **Endpoints:**
   - Public endpoints (e.g. `GET /api/signup-status`).
   - Authenticated auth and profile endpoints (e.g. `/api/profile`, `/api/sessions`, `/api/mfa/*`, `/api/logout`).
@@ -37,11 +37,12 @@ Rate limits are enforced per IP address and/or user for different endpoint types
 
 ### Upload Limiter
 
-- **Limit:** 200 uploads per hour per user/IP.
-- **Purpose:** Prevents storage abuse through rapid file uploads.
+- **Limit:** 20000 uploads per 30 minutes per user (or per IP if unauthenticated).
+- **Purpose:** Limits upload volume per user.
 - **Endpoints:**
   - `POST /api/files/upload`
   - `POST /api/files/upload/bulk`
+  - `POST /api/files/:id/replace`
 
 ### Specialized MFA Limiters
 
@@ -53,8 +54,8 @@ Rate limits are enforced per IP address and/or user for different endpoint types
 
 ### SSE Connection Limiter
 
-- **Limit:** 3 concurrent Server-Sent Events connections per user.
-- **Purpose:** Prevents resource exhaustion from too many real-time connections.
+- **Limit:** 20 concurrent Server-Sent Events connections per user.
+- **Purpose:** Limits real-time event streams per user.
 - **Endpoint:** `GET /api/files/events`
 
 ## Rate Limit Headers

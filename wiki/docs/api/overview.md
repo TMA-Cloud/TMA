@@ -8,7 +8,7 @@ All API endpoints are prefixed with `/api` unless otherwise specified.
 
 ## Authentication
 
-Most endpoints require JWT token sent as httpOnly cookie. Rate limiting: 5 attempts per 15 minutes for auth endpoints.
+Most endpoints require JWT token sent as httpOnly cookie. Rate limiting: 25 attempts per 15 minutes for login/signup.
 
 ## API Sections
 

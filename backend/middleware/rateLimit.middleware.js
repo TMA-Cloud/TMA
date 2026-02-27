@@ -8,11 +8,11 @@ const { ipKeyGenerator } = require('express-rate-limit');
 
 /**
  * Rate limiter for authentication endpoints (stricter)
- * 5 attempts per 15 minutes per IP/email combination
+ * 25 attempts per 15 minutes per IP/email combination
  */
 const authRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // 5 attempts per window
+  max: 25, // 25 attempts per window
   message: { error: 'Too many requests, please try again later' },
   standardHeaders: true, // Return rate limit info in `RateLimit-*` headers
   legacyHeaders: false, // Disable `X-RateLimit-*` headers
@@ -68,11 +68,11 @@ const backupCodeRegenerationRateLimiter = rateLimit({
 
 /**
  * Rate limiter for general API endpoints
- * 1000 requests per 15 minutes per IP
+ * 10000 requests per 15 minutes per IP
  */
 const apiRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 1000, // 1000 requests per window
+  max: 10000, // 10000 requests per window
   message: { error: 'Too many requests, please try again later' },
   standardHeaders: true,
   legacyHeaders: false,
@@ -82,11 +82,11 @@ const apiRateLimiter = rateLimit({
 
 /**
  * Rate limiter for file upload endpoints
- * 200 uploads per hour per user/IP
+ * 20000 uploads per 30 minutes per user/IP
  */
 const uploadRateLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hour
-  max: 200, // 200 uploads per hour
+  windowMs: 30 * 60 * 1000, // 30 minutes
+  max: 20000, // 20000 uploads per 30 minutes
   message: { error: 'Too many uploads, please try again later' },
   standardHeaders: true,
   legacyHeaders: false,
@@ -171,7 +171,7 @@ setInterval(
   5 * 60 * 1000
 ); // Every 5 minutes
 
-const sseConnectionLimiter = createSSEConnectionLimiter(3); // Max 3 concurrent SSE connections per user
+const sseConnectionLimiter = createSSEConnectionLimiter(20); // Max 20 concurrent SSE connections per user
 
 module.exports = {
   authRateLimiter,

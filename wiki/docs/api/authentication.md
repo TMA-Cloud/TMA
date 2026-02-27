@@ -40,7 +40,7 @@ The user object for the created account.
 
 **Note:** The JWT token is set as an httpOnly cookie named `token`.
 
-**Rate limiting:** 5 attempts per 15 minutes.
+**Rate limiting:** 25 attempts per 15 minutes per IP/email.
 
 ## Login
 
@@ -79,7 +79,7 @@ The authenticated user's object.
 
 **Note:** The JWT token is set as an httpOnly cookie named `token`.
 
-**Rate limiting:** 5 attempts per 15 minutes.
+**Rate limiting:** 25 attempts per 15 minutes per IP/email.
 
 ## Logout
 
@@ -95,7 +95,7 @@ Log out the current user by clearing the authentication token cookie.
 }
 ```
 
-**Rate limiting:** General API limit (1000 per 15 minutes per IP).
+**Rate limiting:** General API limit (10000 per 15 minutes per IP).
 
 ### POST `/api/logout-all`
 
@@ -110,7 +110,7 @@ Log out from all devices by invalidating all of the user's active sessions and t
 }
 ```
 
-**Rate limiting:** General API limit (1000 per 15 minutes per IP).
+**Rate limiting:** General API limit (10000 per 15 minutes per IP).
 
 ## Profile
 
@@ -130,7 +130,7 @@ Get the current authenticated user's profile.
 }
 ```
 
-**Rate limiting:** General API limit (1000 per 15 minutes per IP).
+**Rate limiting:** General API limit (10000 per 15 minutes per IP).
 
 ## Google OAuth
 
@@ -154,7 +154,7 @@ Initiate the Google OAuth login flow. This will redirect the user to Google's au
 
 The callback endpoint for Google to redirect to after successful authentication.
 
-**Rate limiting:** 5 attempts per 15 minutes.
+**Rate limiting:** 25 attempts per 15 minutes per IP/email.
 
 ## Multi-Factor Authentication
 
@@ -170,7 +170,7 @@ Get the MFA status for the current authenticated user.
 }
 ```
 
-**Rate limiting:** General API limit (1000 per 15 minutes per IP).
+**Rate limiting:** General API limit (10000 per 15 minutes per IP).
 
 ### POST `/api/mfa/setup`
 
@@ -185,7 +185,7 @@ Generate an MFA secret and a corresponding QR code for setup in an authenticator
 }
 ```
 
-**Rate limiting:** General API limit (1000 per 15 minutes per IP).
+**Rate limiting:** General API limit (10000 per 15 minutes per IP).
 
 ### POST `/api/mfa/verify`
 
@@ -285,7 +285,7 @@ Get the number of remaining unused backup codes for the user.
 }
 ```
 
-**Rate limiting:** General API limit (1000 per 15 minutes per IP).
+**Rate limiting:** General API limit (10000 per 15 minutes per IP).
 
 ## Related Topics
 

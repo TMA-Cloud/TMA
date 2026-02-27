@@ -54,7 +54,7 @@ You choose an action for each conflicting file; nothing is uploaded until you co
 
 - Per-file size limited by the max upload size setting (default 10 GB, configurable by admin in **Settings** → **Storage**)
 - Total upload size limited by your storage quota
-- Upload rate limited to 50 uploads per hour
+- Upload rate limited to 20000 uploads per 30 minutes per user
 - Both limits enforced before upload starts
 
 ## File Management
