@@ -3,8 +3,7 @@
  * Replaces custom implementation with industry-standard package
  */
 
-const rateLimit = require('express-rate-limit');
-const { ipKeyGenerator } = require('express-rate-limit');
+const { rateLimit, ipKeyGenerator } = require('express-rate-limit');
 
 /**
  * Rate limiter for authentication endpoints (stricter)

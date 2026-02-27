@@ -1,4 +1,3 @@
-const { fileTypeFromFile, fileTypeFromBuffer } = require('file-type');
 const mime = require('mime-types');
 const mimeDb = require('mime-db');
 const path = require('path');
@@ -101,6 +100,18 @@ const DETECTION_ALIASES = {
 };
 
 /**
+ * file-type v17+ is ESM-only; load it dynamically and cache for use in CommonJS.
+ * @returns {Promise<{ fileTypeFromFile: Function, fileTypeFromBuffer: Function }>}
+ */
+let fileTypeModulePromise = null;
+async function getFileTypeModule() {
+  if (!fileTypeModulePromise) {
+    fileTypeModulePromise = import('file-type');
+  }
+  return fileTypeModulePromise;
+}
+
+/**
  * Normalize MIME type for comparison (lowercase, remove parameters)
  */
 function normalizeMime(mimeType) {
@@ -115,6 +126,7 @@ function normalizeMime(mimeType) {
  */
 async function detectMimeTypeFromContent(filePath) {
   try {
+    const { fileTypeFromFile } = await getFileTypeModule();
     const fileType = await fileTypeFromFile(filePath);
     return fileType ? fileType.mime : null;
   } catch (error) {
@@ -194,10 +206,8 @@ async function validateMimeTypeFromBuffer(buffer, filename) {
   if (!buffer || buffer.length < 256) {
     return { valid: true, error: null };
   }
-  if (typeof fileTypeFromBuffer !== 'function') {
-    return { valid: true, error: null };
-  }
   try {
+    const { fileTypeFromBuffer } = await getFileTypeModule();
     const fileType = await fileTypeFromBuffer(buffer);
     if (!fileType || !fileType.mime) {
       return { valid: true, error: null };
