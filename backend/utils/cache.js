@@ -277,6 +277,7 @@ const cacheKeys = {
   shareBaseUrlSettings: () => `app:share_base_url_settings`,
   maxUploadSizeSettings: () => `app:max_upload_size_settings`,
   hideFileExtensionsSettings: () => `app:hide_file_extensions`,
+  electronOnlyAccessSettings: () => `app:electron_only_access`,
 
   // Google OAuth cache keys
   userByGoogleId: googleId => `user:google:${googleId}`,

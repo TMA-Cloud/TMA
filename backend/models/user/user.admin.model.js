@@ -553,6 +553,66 @@ async function setHideFileExtensionsSettings(hidden, userId) {
   }
 }
 
+async function getElectronOnlyAccessSettings() {
+  const cacheKey = cacheKeys.electronOnlyAccessSettings();
+  const cached = await getCache(cacheKey);
+  if (cached !== null) {
+    return cached;
+  }
+
+  const result = await pool.query('SELECT require_electron_client FROM app_settings WHERE id = $1', ['app_settings']);
+  const enabled = result.rows.length > 0 && result.rows[0].require_electron_client === true;
+  await setCache(cacheKey, enabled, DEFAULT_TTL);
+  return enabled;
+}
+
+async function setElectronOnlyAccessSettings(enabled, userId) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const settingsResult = await client.query('SELECT first_user_id FROM app_settings WHERE id = $1', ['app_settings']);
+    if (settingsResult.rows.length === 0) {
+      throw new Error('App settings not found');
+    }
+
+    const storedFirstUserId = settingsResult.rows[0].first_user_id;
+
+    if (!storedFirstUserId) {
+      const firstUserResult = await client.query('SELECT id FROM users ORDER BY created_at ASC LIMIT 1 FOR UPDATE');
+      if (firstUserResult.rows.length === 0) {
+        throw new Error('No users exist');
+      }
+      const actualFirstUserId = firstUserResult.rows[0].id;
+      if (actualFirstUserId !== userId) {
+        await client.query('ROLLBACK');
+        throw new Error('Only the first user can configure desktop-only access');
+      }
+      await client.query('UPDATE app_settings SET first_user_id = $1 WHERE id = $2 AND first_user_id IS NULL', [
+        actualFirstUserId,
+        'app_settings',
+      ]);
+    } else if (storedFirstUserId !== userId) {
+      await client.query('ROLLBACK');
+      throw new Error('Only the first user can configure desktop-only access');
+    }
+
+    await client.query('UPDATE app_settings SET require_electron_client = $1, updated_at = NOW() WHERE id = $2', [
+      !!enabled,
+      'app_settings',
+    ]);
+
+    await client.query('COMMIT');
+    await deleteCache(cacheKeys.electronOnlyAccessSettings());
+    logger.info(`[SECURITY] Desktop-only access settings updated by first user (ID: ${userId}), enabled: ${!!enabled}`);
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 /**
  * Handle first user setup: set first_user_id and disable signup atomically
  * This is called after a new user is created to ensure the first user is properly set
@@ -703,4 +763,6 @@ module.exports = {
   handleFirstUserSetup,
   getUserStorageLimit,
   setUserStorageLimit,
+  getElectronOnlyAccessSettings,
+  setElectronOnlyAccessSettings,
 };

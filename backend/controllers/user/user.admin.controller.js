@@ -13,6 +13,8 @@ const {
   getHideFileExtensionsSettings,
   setHideFileExtensionsSettings,
   setUserStorageLimit,
+  getElectronOnlyAccessSettings,
+  setElectronOnlyAccessSettings,
 } = require('../../models/user.model');
 const { sendError, sendSuccess } = require('../../utils/response');
 const { logger } = require('../../config/logger');
@@ -36,9 +38,10 @@ async function _getPublicSignupStatus(req, res) {
  */
 async function _getSignupStatus(req, res) {
   try {
-    const [signupEnabled, hideFileExtensions, userIsFirst] = await Promise.all([
+    const [signupEnabled, hideFileExtensions, electronOnlyAccess, userIsFirst] = await Promise.all([
       getSignupEnabled(),
       getHideFileExtensionsSettings(),
+      getElectronOnlyAccessSettings(),
       isFirstUser(req.userId),
     ]);
     let totalUsers;
@@ -54,6 +57,8 @@ async function _getSignupStatus(req, res) {
       additionalUsers: typeof totalUsers === 'number' ? Math.max(totalUsers - 1, 0) : undefined,
       hideFileExtensions,
       canToggleHideFileExtensions: userIsFirst,
+      electronOnlyAccess,
+      canToggleElectronOnlyAccess: userIsFirst,
     });
   } catch (err) {
     sendError(res, 500, 'Server error', err);
@@ -533,6 +538,79 @@ async function _updateHideFileExtensionsConfig(req, res) {
 }
 
 /**
+ * Get desktop-only access setting (any authenticated user; used by UI for display).
+ * Update is admin-only via _updateElectronOnlyAccessConfig.
+ */
+async function _getElectronOnlyAccessConfig(req, res) {
+  try {
+    const electronOnlyAccess = await getElectronOnlyAccessSettings();
+    sendSuccess(res, { electronOnlyAccess });
+  } catch (err) {
+    logger.error({ err }, 'Failed to get desktop-only access config');
+    sendError(res, 500, 'Server error', err);
+  }
+}
+
+/**
+ * Update desktop-only access setting (admin only)
+ */
+async function _updateElectronOnlyAccessConfig(req, res) {
+  try {
+    const userIsFirst = await isFirstUser(req.userId);
+    if (!userIsFirst) {
+      await logAuditEvent(
+        'admin.settings.update',
+        {
+          status: 'failure',
+          resourceType: 'settings',
+          metadata: { action: 'update_electron_only_access', reason: 'unauthorized' },
+        },
+        req
+      );
+      logger.warn({ userId: req.userId }, 'Unauthorized desktop-only access config update attempt');
+      return sendError(res, 403, 'Only the first user can configure desktop-only access');
+    }
+
+    const { enabled } = req.body;
+
+    await setElectronOnlyAccessSettings(enabled, req.userId);
+
+    await logAuditEvent(
+      'admin.settings.update',
+      {
+        status: 'success',
+        resourceType: 'settings',
+        metadata: { setting: 'electron_only_access', enabled: !!enabled },
+      },
+      req
+    );
+    logger.info(
+      { userId: req.userId, enabled: !!enabled },
+      'Desktop-only access setting updated (require electron client)'
+    );
+
+    const electronOnlyAccess = await getElectronOnlyAccessSettings();
+    sendSuccess(res, { electronOnlyAccess });
+  } catch (err) {
+    if (err.message === 'Only the first user can configure desktop-only access') {
+      await logAuditEvent(
+        'admin.settings.update',
+        {
+          status: 'failure',
+          resourceType: 'settings',
+          errorMessage: err.message,
+          metadata: { action: 'update_electron_only_access' },
+        },
+        req
+      );
+      return sendError(res, 403, err.message);
+    }
+    logger.error({ err }, 'Failed to update desktop-only access settings');
+    sendError(res, 500, 'Server error', err);
+  }
+}
+
+/**
  * Update user storage limit (admin only)
  */
 async function _updateUserStorageLimit(req, res) {
@@ -612,4 +690,6 @@ module.exports = {
   getHideFileExtensionsConfig: _getHideFileExtensionsConfig,
   updateHideFileExtensionsConfig: _updateHideFileExtensionsConfig,
   updateUserStorageLimit: _updateUserStorageLimit,
+  getElectronOnlyAccessConfig: _getElectronOnlyAccessConfig,
+  updateElectronOnlyAccessConfig: _updateElectronOnlyAccessConfig,
 };

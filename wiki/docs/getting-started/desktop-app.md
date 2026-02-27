@@ -123,6 +123,13 @@ The Windows desktop app adds OS-level clipboard support on top of the standard b
 - **Ctrl+Shift+V / Cmd+Shift+V:** Paste from the in-app clipboard into the current folder (same as **Paste in cloud**).
 - **Ctrl+Shift+I / Cmd+Shift+I:** Open **Get Info** for the currently selected file or folder (desktop app only and single selection).
 
+## Desktop-only mode (optional)
+
+- When the administrator enables **Desktop app only access** in **Settings → Administration** from the desktop app, the backend rejects browser access to the main app.
+- The desktop app continues to work because it sends the required HTTP header on its requests.
+- Share links (`/s/*`), `/health`, and `/metrics` still respond as normal.
+- Browsers that open the main URL see a simple page stating that the instance is configured for desktop app access only.
+
 ## Related Topics
 
 - [Architecture — Electron Desktop App](/concepts/architecture#electron-desktop-app) - How the desktop app fits in the system

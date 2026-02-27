@@ -15,6 +15,8 @@ const {
   getHideFileExtensionsConfig,
   updateHideFileExtensionsConfig,
   updateUserStorageLimit,
+  getElectronOnlyAccessConfig,
+  updateElectronOnlyAccessConfig,
 } = require('../controllers/user.controller');
 const { apiRateLimiter } = require('../middleware/rateLimit.middleware');
 const { validate } = require('../middleware/validation.middleware');
@@ -25,6 +27,7 @@ const {
   updateMaxUploadSizeConfigSchema,
   updateHideFileExtensionsConfigSchema,
   updateUserStorageLimitSchema,
+  updateElectronOnlyAccessConfigSchema,
 } = require('../utils/validationSchemas');
 
 const router = express.Router();
@@ -49,6 +52,13 @@ router.put(
   updateHideFileExtensionsConfigSchema,
   validate,
   updateHideFileExtensionsConfig
+);
+router.get('/electron-only-access-config', getElectronOnlyAccessConfig);
+router.put(
+  '/electron-only-access-config',
+  updateElectronOnlyAccessConfigSchema,
+  validate,
+  updateElectronOnlyAccessConfig
 );
 router.put('/storage-limit', updateUserStorageLimitSchema, validate, updateUserStorageLimit);
 

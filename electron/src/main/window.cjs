@@ -3,6 +3,9 @@ const fs = require('fs');
 const { BrowserWindow, Menu, screen } = require('electron');
 const { LOADING_PAGE, serverErrorPage } = require('./config.cjs');
 
+const ELECTRON_HEADER_NAME = 'X-TMA-Desktop-Client';
+const ELECTRON_HEADER_VALUE = 'tma-electron-client-v1';
+
 /**
  * Create and show the main app window.
  * @param {string} loadUrl - URL to load (data: or http(s):)
@@ -55,6 +58,31 @@ function createWindow(loadUrl, preloadPath, appRoot) {
   const isServerUrl = loadUrl && !loadUrl.startsWith('data:');
 
   if (isServerUrl) {
+    // Inject a custom header into all requests from this window to the server URL.
+    // The backend can use this to distinguish Electron desktop traffic from normal browsers.
+    try {
+      const serverOrigin = new URL(loadUrl).origin;
+      const ses = win.webContents.session;
+      ses.webRequest.onBeforeSendHeaders((details, callback) => {
+        try {
+          const urlOrigin = new URL(details.url).origin;
+          if (urlOrigin === serverOrigin) {
+            const requestHeaders = {
+              ...details.requestHeaders,
+              [ELECTRON_HEADER_NAME]: ELECTRON_HEADER_VALUE,
+            };
+            callback({ requestHeaders });
+            return;
+          }
+        } catch {
+          // Ignore invalid URLs
+        }
+        callback({ requestHeaders: details.requestHeaders });
+      });
+    } catch {
+      // If URL parsing fails, skip header injection
+    }
+
     win.webContents.on('did-fail-load', (_event, _errorCode, _errorDescription, validatedURL, isMainFrame) => {
       if (!isMainFrame) return;
       const a = (loadUrl || '').replace(/\/$/, '');

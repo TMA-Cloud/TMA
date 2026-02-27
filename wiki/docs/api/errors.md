@@ -51,6 +51,19 @@ Validation errors (HTTP status `422`) provide additional detail in a `details` a
 - `500 Internal Server Error`: An unexpected condition was encountered on the server.
 - `503 Service Unavailable`: The server is not ready to handle the request.
 
+### Desktop-only instances
+
+When an instance is configured for desktop app access only, browser requests to main app routes return `403 Forbidden` with:
+
+```json
+{
+  "message": "This instance is configured for desktop app access only.",
+  "error": "DESKTOP_ONLY_ACCESS"
+}
+```
+
+Share links (`/s/*`) are not affected.
+
 ## Error Handling Best Practices
 
 - Rely on the HTTP status code to determine the general nature of the error.

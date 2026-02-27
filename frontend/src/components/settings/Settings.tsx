@@ -4,6 +4,7 @@ import { useApp } from '../../contexts/AppContext';
 import { useStorageUsage } from '../../hooks/useStorageUsage';
 import { fetchAllUsers, type UserSummary } from '../../utils/api';
 import { useToast } from '../../hooks/useToast';
+import { isElectron } from '../../utils/electronDesktop';
 
 // Hooks
 import { useSignupStatus } from './hooks/useSignupStatus';
@@ -44,6 +45,10 @@ export const Settings: React.FC = () => {
     canToggleHideFileExtensions,
     togglingHideFileExtensions,
     handleToggleHideFileExtensions,
+    electronOnlyAccess,
+    canToggleElectronOnlyAccess,
+    togglingElectronOnlyAccess,
+    handleToggleElectronOnlyAccess,
   } = useSignupStatus({ onHideFileExtensionsChange: setHideFileExtensions });
 
   // Versions hook
@@ -76,6 +81,8 @@ export const Settings: React.FC = () => {
   const [mfaModalOpen, setMfaModalOpen] = useState(false);
 
   // Data is loaded automatically by hooks on mount
+
+  const runningInElectron = isElectron();
 
   const loadUsersList = async () => {
     try {
@@ -125,6 +132,11 @@ export const Settings: React.FC = () => {
             canToggleHideFileExtensions={canToggleHideFileExtensions}
             togglingHideFileExtensions={togglingHideFileExtensions}
             onToggleHideFileExtensions={handleToggleHideFileExtensions}
+            electronOnlyAccess={electronOnlyAccess}
+            canToggleElectronOnlyAccess={canToggleElectronOnlyAccess}
+            togglingElectronOnlyAccess={togglingElectronOnlyAccess}
+            onToggleElectronOnlyAccess={handleToggleElectronOnlyAccess}
+            showElectronOnlyAccessToggle={runningInElectron}
           />
         )}
 

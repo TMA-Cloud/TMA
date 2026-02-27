@@ -144,6 +144,8 @@ export async function getSignupStatus(): Promise<{
   additionalUsers?: number;
   hideFileExtensions?: boolean;
   canToggleHideFileExtensions?: boolean;
+  electronOnlyAccess?: boolean;
+  canToggleElectronOnlyAccess?: boolean;
 }> {
   try {
     const authenticated = await apiGet<{
@@ -153,6 +155,8 @@ export async function getSignupStatus(): Promise<{
       additionalUsers?: number;
       hideFileExtensions?: boolean;
       canToggleHideFileExtensions?: boolean;
+      electronOnlyAccess?: boolean;
+      canToggleElectronOnlyAccess?: boolean;
     }>('/api/user/signup-status');
     return authenticated;
   } catch (err) {
@@ -160,9 +164,23 @@ export async function getSignupStatus(): Promise<{
       const publicRes = await apiGet<{ signupEnabled: boolean }>('/api/signup-status').catch(() => ({
         signupEnabled: true,
       }));
-      return { ...publicRes, canToggle: false, hideFileExtensions: false, canToggleHideFileExtensions: false };
+      return {
+        ...publicRes,
+        canToggle: false,
+        hideFileExtensions: false,
+        canToggleHideFileExtensions: false,
+        electronOnlyAccess: false,
+        canToggleElectronOnlyAccess: false,
+      };
     }
-    return { signupEnabled: true, canToggle: false, hideFileExtensions: false, canToggleHideFileExtensions: false };
+    return {
+      signupEnabled: true,
+      canToggle: false,
+      hideFileExtensions: false,
+      canToggleHideFileExtensions: false,
+      electronOnlyAccess: false,
+      canToggleElectronOnlyAccess: false,
+    };
   }
 }
 
@@ -181,6 +199,15 @@ export async function toggleSignup(enabled: boolean): Promise<{ signupEnabled: b
 export async function updateHideFileExtensionsConfig(hidden: boolean): Promise<{ hideFileExtensions: boolean }> {
   return await apiPut<{ hideFileExtensions: boolean }>('/api/user/hide-file-extensions-config', {
     hidden,
+  });
+}
+
+/**
+ * Update desktop-only access setting (only for first user). When enabled, only the desktop app can access the instance.
+ */
+export async function updateElectronOnlyAccessConfig(enabled: boolean): Promise<{ electronOnlyAccess: boolean }> {
+  return await apiPut<{ electronOnlyAccess: boolean }>('/api/user/electron-only-access-config', {
+    enabled,
   });
 }
 

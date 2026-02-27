@@ -73,15 +73,16 @@ Junction table linking share links to files.
 
 Application-wide settings.
 
-| Column                  | Type        | Description                                                        |
-| ----------------------- | ----------- | ------------------------------------------------------------------ |
-| `id`                    | TEXT        | Primary key (always 'app_settings')                                |
-| `signup_enabled`        | BOOLEAN     | Default true                                                       |
-| `first_user_id`         | TEXT        | FK → users.id (immutable)                                          |
-| `share_base_url`        | TEXT        | Custom share link base URL (null = use request origin)             |
-| `max_upload_size_bytes` | BIGINT      | Max single-file upload size in bytes (default 10737418240 = 10 GB) |
-| `hide_file_extensions`  | BOOLEAN     | When true, file names are shown without extensions (default false) |
-| `updated_at`            | TIMESTAMPTZ | Default now()                                                      |
+| Column                    | Type        | Description                                                        |
+| ------------------------- | ----------- | ------------------------------------------------------------------ |
+| `id`                      | TEXT        | Primary key (always 'app_settings')                                |
+| `signup_enabled`          | BOOLEAN     | Default true                                                       |
+| `first_user_id`           | TEXT        | FK → users.id (immutable)                                          |
+| `share_base_url`          | TEXT        | Custom share link base URL (null = use request origin)             |
+| `max_upload_size_bytes`   | BIGINT      | Max single-file upload size in bytes (default 10737418240 = 10 GB) |
+| `hide_file_extensions`    | BOOLEAN     | When true, file names are shown without extensions (default false) |
+| `require_electron_client` | BOOLEAN     | When true, only desktop app is allowed to use (default false)      |
+| `updated_at`              | TIMESTAMPTZ | Default now()                                                      |
 
 ### `sessions`
 

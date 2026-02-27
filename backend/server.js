@@ -21,6 +21,7 @@ const errorHandler = require('./middleware/error.middleware');
 // Logging and audit system
 const { requestIdMiddleware } = require('./middleware/requestId.middleware');
 const { blockMainAppOnShareDomain } = require('./middleware/shareDomain.middleware');
+const { requireElectronClientIfEnabled } = require('./middleware/electronClient.middleware');
 const { logger, httpLogger } = require('./config/logger');
 const { initializeAuditQueue, shutdownAuditQueue } = require('./services/auditLogger');
 const { initializeMetrics, metricsEndpoint, startQueueMetricsUpdater } = require('./services/metrics');
@@ -40,6 +41,10 @@ app.use(requestIdMiddleware);
 // Block main app access on share domain (must be very early, before logging and JSON parsing)
 // This stops requests immediately without logging or processing body
 app.use(blockMainAppOnShareDomain);
+
+// Optionally require Electron desktop client based on app_settings (admin/first user toggle)
+// Must run very early so blocked requests are cheap and not logged.
+app.use(requireElectronClientIfEnabled);
 
 // SECOND: HTTP request logging (after requestId so it can use it, after blocking so blocked requests aren't logged)
 app.use(httpLogger);

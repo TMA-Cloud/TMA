@@ -17,6 +17,7 @@ Complete reference for all error codes in TMA Cloud API.
 - `FORBIDDEN` - Insufficient permissions
 - `ADMIN_REQUIRED` - Admin access required
 - `RESOURCE_OWNER_REQUIRED` - Must be resource owner
+- `DESKTOP_ONLY_ACCESS` - Instance is restricted to the desktop app
 
 ## Validation Errors
 

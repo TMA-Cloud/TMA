@@ -1,5 +1,10 @@
 import { useState, useEffect } from 'react';
-import { getSignupStatus, toggleSignup, updateHideFileExtensionsConfig } from '../../../utils/api';
+import {
+  getSignupStatus,
+  toggleSignup,
+  updateHideFileExtensionsConfig,
+  updateElectronOnlyAccessConfig,
+} from '../../../utils/api';
 import { useToast } from '../../../hooks/useToast';
 
 export interface UseSignupStatusOptions {
@@ -19,6 +24,9 @@ export function useSignupStatus(options: UseSignupStatusOptions = {}) {
   const [hideFileExtensions, setHideFileExtensions] = useState(false);
   const [canToggleHideFileExtensions, setCanToggleHideFileExtensions] = useState(false);
   const [togglingHideFileExtensions, setTogglingHideFileExtensions] = useState(false);
+  const [electronOnlyAccess, setElectronOnlyAccess] = useState(false);
+  const [canToggleElectronOnlyAccess, setCanToggleElectronOnlyAccess] = useState(false);
+  const [togglingElectronOnlyAccess, setTogglingElectronOnlyAccess] = useState(false);
 
   const loadSignupStatus = async () => {
     try {
@@ -30,6 +38,8 @@ export function useSignupStatus(options: UseSignupStatusOptions = {}) {
       setAdditionalUsers(typeof status.additionalUsers === 'number' ? status.additionalUsers : null);
       setHideFileExtensions(status.hideFileExtensions === true);
       setCanToggleHideFileExtensions(status.canToggleHideFileExtensions === true);
+      setElectronOnlyAccess(status.electronOnlyAccess === true);
+      setCanToggleElectronOnlyAccess(status.canToggleElectronOnlyAccess === true);
     } catch {
       // Error handled silently - signup toggle will be unavailable
     } finally {
@@ -72,6 +82,28 @@ export function useSignupStatus(options: UseSignupStatusOptions = {}) {
     }
   };
 
+  const handleToggleElectronOnlyAccess = async () => {
+    if (!canToggleElectronOnlyAccess || togglingElectronOnlyAccess) return;
+
+    try {
+      setTogglingElectronOnlyAccess(true);
+      const newEnabled = !electronOnlyAccess;
+      const res = await updateElectronOnlyAccessConfig(newEnabled);
+      const updated = res.electronOnlyAccess;
+      setElectronOnlyAccess(updated);
+      showToast(
+        updated
+          ? 'Web access disabled – this instance now requires the desktop app.'
+          : 'Web access enabled – browsers can access the app again.',
+        'success'
+      );
+    } catch {
+      showToast('Failed to update desktop-only access setting', 'error');
+    } finally {
+      setTogglingElectronOnlyAccess(false);
+    }
+  };
+
   useEffect(() => {
     loadSignupStatus();
   }, []);
@@ -89,5 +121,9 @@ export function useSignupStatus(options: UseSignupStatusOptions = {}) {
     canToggleHideFileExtensions,
     togglingHideFileExtensions,
     handleToggleHideFileExtensions,
+    electronOnlyAccess,
+    canToggleElectronOnlyAccess,
+    togglingElectronOnlyAccess,
+    handleToggleElectronOnlyAccess,
   };
 }

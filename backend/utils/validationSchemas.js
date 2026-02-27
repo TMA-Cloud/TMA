@@ -167,6 +167,8 @@ const updateMaxUploadSizeConfigSchema = [
 
 const updateHideFileExtensionsConfigSchema = [body('hidden').isBoolean().withMessage('Hidden must be a boolean')];
 
+const updateElectronOnlyAccessConfigSchema = [body('enabled').isBoolean().withMessage('Enabled must be a boolean')];
+
 const updateUserStorageLimitSchema = [
   body('targetUserId')
     .notEmpty()
@@ -228,4 +230,5 @@ module.exports = {
   downloadFolderZipSchema,
   downloadSharedItemSchema,
   checkUploadStorageSchema,
+  updateElectronOnlyAccessConfigSchema,
 };

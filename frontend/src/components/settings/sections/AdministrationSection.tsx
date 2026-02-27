@@ -16,6 +16,11 @@ interface AdministrationSectionProps {
   canToggleHideFileExtensions: boolean;
   togglingHideFileExtensions: boolean;
   onToggleHideFileExtensions: () => void;
+  electronOnlyAccess: boolean;
+  canToggleElectronOnlyAccess: boolean;
+  togglingElectronOnlyAccess: boolean;
+  onToggleElectronOnlyAccess: () => void;
+  showElectronOnlyAccessToggle: boolean;
 }
 
 export const AdministrationSection: React.FC<AdministrationSectionProps> = ({
@@ -31,6 +36,11 @@ export const AdministrationSection: React.FC<AdministrationSectionProps> = ({
   canToggleHideFileExtensions,
   togglingHideFileExtensions,
   onToggleHideFileExtensions,
+  electronOnlyAccess,
+  canToggleElectronOnlyAccess,
+  togglingElectronOnlyAccess,
+  onToggleElectronOnlyAccess,
+  showElectronOnlyAccessToggle,
 }) => {
   return (
     <SettingsSection
@@ -81,6 +91,17 @@ export const AdministrationSection: React.FC<AdministrationSectionProps> = ({
         toggleDisabled={!canToggleHideFileExtensions || togglingHideFileExtensions || loadingSignupStatus}
         description="Show file names without extensions in the file manager and rename dialog"
       />
+      {showElectronOnlyAccessToggle && (
+        <SettingsItem
+          label="Desktop app only access"
+          value={electronOnlyAccess ? 'Enabled' : 'Disabled'}
+          toggle={true}
+          toggleValue={electronOnlyAccess}
+          onToggle={onToggleElectronOnlyAccess}
+          toggleDisabled={!canToggleElectronOnlyAccess || togglingElectronOnlyAccess || loadingSignupStatus}
+          description="When enabled, this instance can only be accessed via the desktop app (browsers will be blocked)."
+        />
+      )}
     </SettingsSection>
   );
 };

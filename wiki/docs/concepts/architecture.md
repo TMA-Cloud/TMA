@@ -162,6 +162,8 @@ electron/
 
 **Renderer:** Same React app as web. Detects Electron via `window.electronAPI` and uses it where needed; all API calls go to the same backend via fetch.
 
+Some deployments enable an optional mode where the desktop app is only allowed. In that mode, normal browsers are blocked from the main app while share links continue to work.
+
 ## Data Flow
 
 ### Authentication Flow

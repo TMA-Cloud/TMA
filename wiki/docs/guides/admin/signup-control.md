@@ -24,6 +24,18 @@ Control user registration in TMA Cloud (admin only).
 
 **When off:** File names show with extensions (default).
 
+## Desktop app only access
+
+1. Open the **Desktop app**
+2. Go to **Settings**
+3. Open the **Administration** section (visible only to the first user)
+4. Use the **Desktop app only access** toggle
+5. Changes apply immediately for all users
+
+**When on:** The main app only accepts requests from the desktop app. Only Share links (`/s/*`), `/health`, and `/metrics` stay available
+
+**When off:** Browsers and the desktop app can both access the main app (default)
+
 ## First User
 
 - The first user to sign up is the administrator

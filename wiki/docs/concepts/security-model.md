@@ -85,6 +85,13 @@ All incoming data from clients is strictly validated and sanitized on the backen
 
 The API employs rate limiting to prevent abuse and ensure service stability. Different limits are applied to authentication, file uploads, and general API endpoints. For detailed information, see the [Rate Limits](/reference/rate-limits) reference.
 
+### Desktop app only access (optional)
+
+- Admins can place an instance into a mode where the backend requires a custom HTTP header that only the Electron desktop app sends
+- The middleware checks this header for all main app routes and blocks requests that do not include it
+- Share links (`/s/*`), `/health`, and `/metrics` remain reachable without the header
+- This control is header-based. But yes a client that can replicate the header can bypass it, so cryptographic signing or an HMAC implementation will be added
+
 ## Audit & Logging
 
 ### Audit Trail
