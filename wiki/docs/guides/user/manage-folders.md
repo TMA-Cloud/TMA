@@ -40,7 +40,7 @@ Organize your files with folders in TMA Cloud.
 ### Deleting Folders
 
 - **Delete Option:** Right-click → Delete
-- **Soft Delete:\*\*** Moves to trash (not permanent)
+- **Soft Delete:** Moves to trash (not permanent)
 - **Recursive:** All contents moved to trash
 
 ## Folder Organization

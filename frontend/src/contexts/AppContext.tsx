@@ -49,6 +49,9 @@ export interface BulkUploadEntry {
   clientId?: string;
 }
 
+/** Entry passed when opening the upload modal via drag-and-drop (e.g. from file manager). */
+export type UploadModalInitialEntry = { file: File; relativePath?: string };
+
 export interface AppContextType {
   currentPath: string[];
   folderStack: (string | null)[];
@@ -75,6 +78,12 @@ export interface AppContextType {
   setViewMode: (mode: 'grid' | 'list') => void;
   setSidebarOpen: (open: boolean) => void;
   setUploadModalOpen: (open: boolean) => void;
+  /** Initial entries when opening the modal from a drop (e.g. drag onto file manager). Cleared after modal consumes. */
+  uploadModalInitialEntries: UploadModalInitialEntry[] | null;
+  /** Open upload modal and pre-fill with these entries (from drag-and-drop). */
+  openUploadModalWithEntries: (entries: UploadModalInitialEntry[]) => void;
+  /** Clear initial entries after modal has consumed them. */
+  clearUploadModalInitialEntries: () => void;
   setCreateFolderModalOpen: (open: boolean) => void;
   addSelectedFile: (id: string) => void;
   removeSelectedFile: (id: string) => void;

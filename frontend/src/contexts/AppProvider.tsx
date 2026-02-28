@@ -1,5 +1,12 @@
 import React, { useCallback, useEffect, useState, useRef } from 'react';
-import { AppContext, type BulkUploadEntry, type FileItem, type FileItemResponse, type ShareExpiry } from './AppContext';
+import {
+  AppContext,
+  type BulkUploadEntry,
+  type FileItem,
+  type FileItemResponse,
+  type ShareExpiry,
+  type UploadModalInitialEntry,
+} from './AppContext';
 import { usePromiseQueue, useDebouncedCallback } from '../utils/debounce';
 import {
   downloadFile as downloadFileApi,
@@ -99,6 +106,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
+  const [uploadModalInitialEntries, setUploadModalInitialEntries] = useState<UploadModalInitialEntry[] | null>(null);
   const [createFolderModalOpen, setCreateFolderModalOpen] = useState(false);
   const [imageViewerFile, setImageViewerFile] = useState<FileItem | null>(null);
   const [documentViewerFile, setDocumentViewerFile] = useState<FileItem | null>(null);
@@ -1583,6 +1591,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setViewMode,
         setSidebarOpen,
         setUploadModalOpen,
+        uploadModalInitialEntries,
+        openUploadModalWithEntries: (entries: UploadModalInitialEntry[]) => {
+          setUploadModalInitialEntries(entries);
+          setUploadModalOpen(true);
+        },
+        clearUploadModalInitialEntries: () => setUploadModalInitialEntries(null),
         setCreateFolderModalOpen,
         addSelectedFile,
         removeSelectedFile,

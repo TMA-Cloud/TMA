@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react';
 import { Upload, X, File, CheckCircle, AlertCircle, RefreshCw, FilePlus } from 'lucide-react';
 import { Modal } from '../ui/Modal';
 import { useApp } from '../../contexts/AppContext';
@@ -32,6 +32,8 @@ export const UploadModal: React.FC = () => {
   const {
     uploadModalOpen,
     setUploadModalOpen,
+    uploadModalInitialEntries,
+    clearUploadModalInitialEntries,
     files: contextFiles,
     uploadFileWithProgress,
     replaceFileWithProgress,
@@ -59,7 +61,7 @@ export const UploadModal: React.FC = () => {
     [contextFiles]
   );
 
-  const handleEntries = (entries: { file: File; relativePath?: string }[]) => {
+  const handleEntries = useCallback((entries: { file: File; relativePath?: string }[]) => {
     const now = Date.now();
     const newUploadFiles: UploadFile[] = entries.map((entry, index) => ({
       id: `${now}-${index}`,
@@ -69,7 +71,15 @@ export const UploadModal: React.FC = () => {
       status: 'pending' as const,
     }));
     setUploadFiles(prev => [...prev, ...newUploadFiles]);
-  };
+  }, []);
+
+  // When modal is opened with initial entries (e.g. from drag onto file manager), consume them
+  useEffect(() => {
+    if (!uploadModalOpen || !uploadModalInitialEntries?.length) return;
+    const entries = uploadModalInitialEntries;
+    clearUploadModalInitialEntries();
+    handleEntries(entries);
+  }, [uploadModalOpen, uploadModalInitialEntries, clearUploadModalInitialEntries, handleEntries]);
 
   const handleFiles = (files: FileList) => {
     handleEntries(Array.from(files).map(file => ({ file })));
@@ -100,12 +110,17 @@ export const UploadModal: React.FC = () => {
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
     setIsDragOver(true);
   };
 
   const handleDragLeave = (e: React.DragEvent) => {
     e.preventDefault();
-    setIsDragOver(false);
+    const related = e.relatedTarget as Node | null;
+    const current = e.currentTarget as Node;
+    if (!related || !current.contains(related)) {
+      setIsDragOver(false);
+    }
   };
 
   const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -281,11 +296,11 @@ export const UploadModal: React.FC = () => {
   return (
     <Modal isOpen={uploadModalOpen} onClose={handleClose} title="Upload" size={isMobile ? 'full' : 'xl'}>
       <div className={isMobile ? 'space-y-4' : 'space-y-6'}>
-        {/* Drop Zone */}
+        {/* Drop Zone - full prompt when empty, compact "add more" when files already in list */}
         <div
           className={`
             relative border-2 border-dashed rounded-lg text-center transition-colors duration-200
-            ${isMobile ? 'p-6 min-h-[180px] flex items-center justify-center' : 'p-10 min-h-[320px] flex items-center justify-center'}
+            ${uploadFiles.length > 0 ? 'py-3 px-4 min-h-0 flex items-center justify-center' : isMobile ? 'p-6 min-h-[180px] flex items-center justify-center' : 'p-10 min-h-[320px] flex items-center justify-center'}
             ${
               isDragOver
                 ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
@@ -308,25 +323,9 @@ export const UploadModal: React.FC = () => {
             className="hidden"
           />
 
-          <div className={`${isMobile ? 'space-y-3' : 'space-y-4'} w-full`}>
-            <div
-              className={`mx-auto ${
-                isMobile ? 'w-12 h-12' : 'w-16 h-16'
-              } bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center`}
-            >
-              <Upload className={`${isMobile ? 'w-6 h-6' : 'w-8 h-8'} text-gray-400`} />
-            </div>
-
-            <div>
-              <p className={`${isMobile ? 'text-base' : 'text-lg'} font-medium text-gray-900 dark:text-gray-100`}>
-                {isMobile ? 'Tap to select files or a folder' : 'Drag and drop files or folders here'}
-              </p>
-              <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-gray-500 dark:text-gray-400 mt-1`}>
-                {isMobile ? 'or browse from your device' : 'or click to browse from your computer'}
-              </p>
-            </div>
-
-            <div className="flex items-center justify-center gap-3">
+          {uploadFiles.length > 0 ? (
+            <div className="flex flex-wrap items-center justify-center gap-2 w-full">
+              <span className="text-sm text-gray-500 dark:text-gray-400">Add more:</span>
               <button
                 data-upload-action="true"
                 type="button"
@@ -334,9 +333,9 @@ export const UploadModal: React.FC = () => {
                   e.stopPropagation();
                   folderInputRef.current?.click();
                 }}
-                className="px-5 py-3 text-sm font-semibold text-blue-700 dark:text-blue-200 bg-blue-50 dark:bg-blue-900/40 border-2 border-blue-400 dark:border-blue-500 hover:bg-blue-100 dark:hover:bg-blue-900/60 hover:border-blue-500 dark:hover:border-blue-400 rounded-lg transition-colors shadow-sm"
+                className="px-3 py-1.5 text-sm font-medium text-blue-700 dark:text-blue-200 bg-blue-50 dark:bg-blue-900/40 border border-blue-400 dark:border-blue-500 hover:bg-blue-100 dark:hover:bg-blue-900/60 rounded-lg transition-colors"
               >
-                Upload folder
+                Folder
               </button>
               <button
                 data-upload-action="true"
@@ -345,12 +344,57 @@ export const UploadModal: React.FC = () => {
                   e.stopPropagation();
                   fileInputRef.current?.click();
                 }}
-                className="px-5 py-3 text-sm font-semibold text-blue-700 dark:text-blue-200 bg-blue-50 dark:bg-blue-900/40 border-2 border-blue-400 dark:border-blue-500 hover:bg-blue-100 dark:hover:bg-blue-900/60 hover:border-blue-500 dark:hover:border-blue-400 rounded-lg transition-colors shadow-sm"
+                className="px-3 py-1.5 text-sm font-medium text-blue-700 dark:text-blue-200 bg-blue-50 dark:bg-blue-900/40 border border-blue-400 dark:border-blue-500 hover:bg-blue-100 dark:hover:bg-blue-900/60 rounded-lg transition-colors"
               >
-                Upload files
+                Files
               </button>
+              <span className="text-sm text-gray-400 dark:text-gray-500">or drop here</span>
             </div>
-          </div>
+          ) : (
+            <div className={`${isMobile ? 'space-y-3' : 'space-y-4'} w-full`}>
+              <div
+                className={`mx-auto ${
+                  isMobile ? 'w-12 h-12' : 'w-16 h-16'
+                } bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center`}
+              >
+                <Upload className={`${isMobile ? 'w-6 h-6' : 'w-8 h-8'} text-gray-400`} />
+              </div>
+
+              <div>
+                <p className={`${isMobile ? 'text-base' : 'text-lg'} font-medium text-gray-900 dark:text-gray-100`}>
+                  {isMobile ? 'Tap to select files or a folder' : 'Drag and drop files or folders here'}
+                </p>
+                <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-gray-500 dark:text-gray-400 mt-1`}>
+                  {isMobile ? 'or browse from your device' : 'or click to browse from your computer'}
+                </p>
+              </div>
+
+              <div className="flex items-center justify-center gap-3">
+                <button
+                  data-upload-action="true"
+                  type="button"
+                  onClick={e => {
+                    e.stopPropagation();
+                    folderInputRef.current?.click();
+                  }}
+                  className="px-5 py-3 text-sm font-semibold text-blue-700 dark:text-blue-200 bg-blue-50 dark:bg-blue-900/40 border-2 border-blue-400 dark:border-blue-500 hover:bg-blue-100 dark:hover:bg-blue-900/60 hover:border-blue-500 dark:hover:border-blue-400 rounded-lg transition-colors shadow-sm"
+                >
+                  Upload folder
+                </button>
+                <button
+                  data-upload-action="true"
+                  type="button"
+                  onClick={e => {
+                    e.stopPropagation();
+                    fileInputRef.current?.click();
+                  }}
+                  className="px-5 py-3 text-sm font-semibold text-blue-700 dark:text-blue-200 bg-blue-50 dark:bg-blue-900/40 border-2 border-blue-400 dark:border-blue-500 hover:bg-blue-100 dark:hover:bg-blue-900/60 hover:border-blue-500 dark:hover:border-blue-400 rounded-lg transition-colors shadow-sm"
+                >
+                  Upload files
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Active Uploads from Global State */}

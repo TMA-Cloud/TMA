@@ -24,6 +24,7 @@ import { FileList } from './FileList';
 import { MultiSelectIndicator } from './MultiSelectIndicator';
 import { ShareExpiryModal } from './ShareLinkModal';
 import { FileInfoModal } from './FileInfoModal';
+import { entriesFromDataTransfer } from '../../utils/folderUpload';
 
 export const FileManager: React.FC = () => {
   const {
@@ -73,6 +74,7 @@ export const FileManager: React.FC = () => {
     canGoForward,
     goBack,
     goForward,
+    openUploadModalWithEntries,
   } = useApp();
 
   const { showToast } = useToast();
@@ -82,6 +84,7 @@ export const FileManager: React.FC = () => {
   const [shareExpiryModalOpen, setShareExpiryModalOpen] = useState(false);
   const [infoModalOpen, setInfoModalOpen] = useState(false);
   const [infoModalFile, setInfoModalFile] = useState<FileItem | null>(null);
+  const [isExternalDragOver, setIsExternalDragOver] = useState(false);
 
   const canCreateFolder = currentPath[0] === 'My Files';
   const isTrashView = currentPath[0] === 'Trash';
@@ -631,8 +634,58 @@ export const FileManager: React.FC = () => {
     }
   };
 
+  // Drag-and-drop from OS: open upload modal with dropped files/folders (My Files only)
+  const handleExternalDragOver = useCallback(
+    (e: React.DragEvent) => {
+      if (draggingIds.length > 0) return;
+      if (!isMyFilesView) return;
+      if (!e.dataTransfer.types.includes('Files')) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'copy';
+      setIsExternalDragOver(true);
+    },
+    [draggingIds.length, isMyFilesView]
+  );
+
+  const handleExternalDragLeave = useCallback((e: React.DragEvent) => {
+    const related = e.relatedTarget as Node | null;
+    if (!related || !managerRef.current?.contains(related)) {
+      setIsExternalDragOver(false);
+    }
+  }, []);
+
+  const handleExternalDrop = useCallback(
+    async (e: React.DragEvent) => {
+      if (draggingIds.length > 0) return;
+      if (!e.dataTransfer.files?.length) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setIsExternalDragOver(false);
+      if (!isMyFilesView) return;
+      try {
+        const entries = await entriesFromDataTransfer(e.dataTransfer);
+        if (entries.length > 0) {
+          openUploadModalWithEntries(entries.map(en => ({ file: en.file, relativePath: en.relativePath })));
+        }
+      } catch {
+        // entriesFromDataTransfer can throw; ignore and leave modal closed
+      }
+    },
+    [draggingIds.length, isMyFilesView, openUploadModalWithEntries]
+  );
+
   return (
-    <div className={`${isMobile ? 'p-3' : 'p-6 md:p-8'} space-y-6 md:space-y-8`} ref={managerRef}>
+    <div
+      className={`
+        ${isMobile ? 'p-3' : 'p-6 md:p-8'} relative flex flex-col space-y-6 md:space-y-8
+        ${isMyFilesView ? 'min-h-[calc(100vh-16rem)] pb-28' : ''}
+        ${isExternalDragOver ? 'ring-2 ring-blue-400 ring-inset rounded-xl' : ''}
+      `}
+      ref={managerRef}
+      onDragOver={handleExternalDragOver}
+      onDragLeave={handleExternalDragLeave}
+      onDrop={handleExternalDrop}
+    >
       {/* Multi-Select Mode Indicator (Mobile Only) */}
       {isMobile && multiSelectMode && (
         <MultiSelectIndicator

@@ -137,7 +137,7 @@ const AppContent: React.FC = () => {
       case 'Trash':
       default:
         return (
-          <div className="animate-fadeIn">
+          <div className="animate-fadeIn pb-32">
             <Suspense fallback={<PageLoadingFallback />}>
               <FileManager />
             </Suspense>

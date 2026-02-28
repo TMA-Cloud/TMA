@@ -35,9 +35,15 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
     return 'Upload or create a folder to get started.';
   };
 
+  const isDropZoneContext = canCreateFolder && searchQuery.trim().length === 0;
   return (
-    <div className="flex flex-col items-center justify-center h-64 text-center select-none animate-fadeIn">
-      <svg width="80" height="80" fill="none" viewBox="0 0 80 80" className="mb-4 animate-bounceIn">
+    <div
+      className={`
+        flex flex-col items-center justify-center text-center select-none animate-fadeIn w-full
+        ${isDropZoneContext ? 'min-h-[calc(100vh-18rem)] rounded-2xl border-2 border-dashed border-gray-300 dark:border-gray-600' : 'h-64'}
+      `}
+    >
+      <svg width="80" height="80" fill="none" viewBox="0 0 80 80" className="mb-4 animate-bounceIn flex-shrink-0">
         <rect width="80" height="80" rx="20" fill="#e0e7ef" className="dark:fill-gray-800" />
         <path
           d="M24 56V32a4 4 0 014-4h24a4 4 0 014 4v24"
@@ -50,7 +56,10 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
         <path d="M32 48h16" stroke="#60a5fa" strokeWidth="2" strokeLinecap="round" />
       </svg>
       <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-2">{getTitle()}</h3>
-      <p className="text-gray-500 dark:text-gray-400 mb-4">{getDescription()}</p>
+      <p className="text-gray-500 dark:text-gray-400 mb-1">{getDescription()}</p>
+      {isDropZoneContext && (
+        <p className="text-sm text-gray-400 dark:text-gray-500 mb-4">Drop files or folders anywhere in this area</p>
+      )}
       {canCreateFolder && searchQuery.trim().length === 0 && (
         <button
           className="px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 font-semibold hover:scale-105 active:scale-95 transform animate-bounceIn"

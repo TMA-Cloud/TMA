@@ -21,9 +21,8 @@ Learn how to upload and manage files in TMA Cloud.
 
 ### Drag and Drop
 
-- Drag files or folders directly into the file manager
-- Drop them in the desired folder
-- Upload progress is shown in real-time
+- **In the file manager (My Files):** Drag files or folders from your computer onto the file list and the Upload modal opens with the dropped items then click **Upload** (Folder structure is preserved when supported)
+- **In the Upload modal:** Use the drop zone to add more files or folders. If the list already has items, a compact "Add more" strip is shown
 
 ### Paste from Clipboard (Ctrl+V)
 

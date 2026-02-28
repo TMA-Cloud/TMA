@@ -62,8 +62,8 @@ export const FileList: React.FC<FileListProps> = ({
 
   const containerClassName = `
     ${viewMode === 'grid' ? gridClassName : 'space-y-1'}
-    min-h-[50vh] relative pb-32
-    ${files.length === 0 ? 'flex flex-col items-center justify-center' : ''}
+    relative pb-12
+    ${files.length === 0 ? 'flex flex-col items-center justify-center min-h-[calc(100vh-17rem)]' : 'min-h-[calc(100vh-17rem)]'}
   `;
 
   const handleContainerClick = (e: React.MouseEvent) => {
