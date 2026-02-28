@@ -1,7 +1,8 @@
 const path = require('path');
 const fs = require('fs');
+const fsPromises = require('fs').promises;
 const os = require('os');
-const { ipcMain } = require('electron');
+const { ipcMain, clipboard } = require('electron');
 const { runPowerShell, runPowerShellEnv, escapePathForPowerShellLiteralPath } = require('../utils/powershell.cjs');
 const { PASTE_DIR_PREFIX, sanitizeFileName, setClipboardToPaths, downloadToFile } = require('../utils/file-utils.cjs');
 
@@ -78,6 +79,35 @@ async function readFileDropList() {
   return files;
 }
 
+// Absolute Windows path: C:\... or \\server\...
+const ABS_PATH_REGEX = /^[a-zA-Z]:[\\/]|^\\\\/;
+const MAX_PATHS_FROM_TEXT = 100;
+
+function parsePathsFromText(text) {
+  if (!text || typeof text !== 'string') return [];
+  return text
+    .split(/\r?\n/)
+    .map(line => line.trim().replace(/^["']|["']$/g, ''))
+    .filter(line => line.length > 0 && ABS_PATH_REGEX.test(line))
+    .slice(0, MAX_PATHS_FROM_TEXT);
+}
+
+async function readFilesFromPaths(paths) {
+  const files = [];
+  for (const p of paths) {
+    try {
+      const stat = await fsPromises.stat(p);
+      if (!stat.isFile()) continue;
+      const buf = await fsPromises.readFile(p);
+      const name = path.basename(p);
+      files.push({ name, mime: getMimeForName(name), data: buf.toString('base64') });
+    } catch (_) {
+      // ignore
+    }
+  }
+  return files;
+}
+
 async function readFilesFromClipboard() {
   if (process.platform !== 'win32') return [];
 
@@ -108,6 +138,21 @@ async function readFilesFromClipboard() {
           mime: getMimeForName(f.name),
           data: f.data,
         }));
+      }
+    }
+  } catch (_) {
+    // ignore
+  }
+
+  // 3. Text-as-paths: clipboard text containing file paths (Copy as path, IDEs, etc.)
+  try {
+    const text = clipboard.readText();
+    const paths = parsePathsFromText(text);
+    if (paths.length > 0) {
+      const textFiles = await readFilesFromPaths(paths);
+      if (textFiles.length > 0) {
+        if (CLIPBOARD_DEBUG) console.log('[clipboard] text-as-paths:', textFiles.length, 'files');
+        return textFiles;
       }
     }
   } catch (_) {

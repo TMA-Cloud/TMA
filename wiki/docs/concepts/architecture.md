@@ -156,7 +156,7 @@ electron/
 └── dist-electron/    # Staging for packaging (generated)
 ```
 
-**Main process:** Creates a single BrowserWindow; loads a loading page, then the server URL. Resolves server URL from embedded constant (at build time) or `src/config/build-config.json` (when run from source). Registers IPC handlers used by the renderer (e.g. OS clipboard on Windows). Clipboard: FileDropList first (Explorer), then OLE (Outlook, Snipping Tool); script passed via env var, no temp files.
+**Main process:** Creates a single BrowserWindow; loads a loading page, then the server URL. Resolves server URL from embedded constant (at build time) or `src/config/build-config.json` (when run from source). Registers IPC handlers used by the renderer (e.g. OS clipboard on Windows). Clipboard: FileDropList first (Explorer), then OLE (Outlook, Snipping Tool, other apps), then text-as-paths (Copy as path, IDEs); script passed via env var, no temp files.
 
 **Preload:** contextIsolation: true, nodeIntegration: false. Exposes a small API (e.g. `electronAPI.clipboard`) via contextBridge and ipcRenderer.invoke.
 
