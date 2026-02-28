@@ -279,13 +279,13 @@ export const UploadModal: React.FC = () => {
     duplicateConflicts.length > 0 && duplicateConflicts.every(c => duplicateChoices[c.uploadId] != null);
 
   return (
-    <Modal isOpen={uploadModalOpen} onClose={handleClose} title="Upload" size={isMobile ? 'full' : 'lg'}>
+    <Modal isOpen={uploadModalOpen} onClose={handleClose} title="Upload" size={isMobile ? 'full' : 'xl'}>
       <div className={isMobile ? 'space-y-4' : 'space-y-6'}>
         {/* Drop Zone */}
         <div
           className={`
             relative border-2 border-dashed rounded-lg text-center transition-colors duration-200
-            ${isMobile ? 'p-6 min-h-[180px] flex items-center justify-center' : 'p-8'}
+            ${isMobile ? 'p-6 min-h-[180px] flex items-center justify-center' : 'p-10 min-h-[320px] flex items-center justify-center'}
             ${
               isDragOver
                 ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
@@ -326,7 +326,7 @@ export const UploadModal: React.FC = () => {
               </p>
             </div>
 
-            <div className="flex items-center justify-center gap-2">
+            <div className="flex items-center justify-center gap-3">
               <button
                 data-upload-action="true"
                 type="button"
@@ -334,7 +334,7 @@ export const UploadModal: React.FC = () => {
                   e.stopPropagation();
                   folderInputRef.current?.click();
                 }}
-                className="px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
+                className="px-5 py-3 text-sm font-semibold text-blue-700 dark:text-blue-200 bg-blue-50 dark:bg-blue-900/40 border-2 border-blue-400 dark:border-blue-500 hover:bg-blue-100 dark:hover:bg-blue-900/60 hover:border-blue-500 dark:hover:border-blue-400 rounded-lg transition-colors shadow-sm"
               >
                 Upload folder
               </button>
@@ -345,7 +345,7 @@ export const UploadModal: React.FC = () => {
                   e.stopPropagation();
                   fileInputRef.current?.click();
                 }}
-                className="px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
+                className="px-5 py-3 text-sm font-semibold text-blue-700 dark:text-blue-200 bg-blue-50 dark:bg-blue-900/40 border-2 border-blue-400 dark:border-blue-500 hover:bg-blue-100 dark:hover:bg-blue-900/60 hover:border-blue-500 dark:hover:border-blue-400 rounded-lg transition-colors shadow-sm"
               >
                 Upload files
               </button>
