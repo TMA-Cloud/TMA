@@ -144,6 +144,9 @@ export const UploadModal: React.FC = () => {
   };
 
   const handleClose = () => {
+    setUploadFiles([]);
+    setDuplicateConflicts([]);
+    setDuplicateChoices({});
     setUploadModalOpen(false);
     setDuplicateModalOpen(false);
   };
