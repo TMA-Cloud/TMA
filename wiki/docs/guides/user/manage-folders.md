@@ -55,7 +55,7 @@ Organize your files with folders in TMA Cloud.
 ### Navigation
 
 - **Breadcrumbs:** Navigate up folder hierarchy
-- **Back Button:** Return to previous folder
+- **Back/Forward:** Back and Forward buttons in the file manager header move through folder history. Mouse back/forward (side buttons) do the same when on file manager. See [Desktop App — Folder navigation](/getting-started/desktop-app#folder-navigation-backforward).
 - **Search:** Find folders by name
 
 ## Folder Sharing

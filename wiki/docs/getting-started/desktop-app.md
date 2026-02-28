@@ -124,6 +124,15 @@ The Windows desktop app adds OS-level clipboard support on top of the standard b
 - **Ctrl+Shift+V / Cmd+Shift+V:** Paste from the in-app clipboard into the current folder (same as **Paste in cloud**).
 - **Ctrl+Shift+I / Cmd+Shift+I:** Open **Get Info** for the currently selected file or folder (desktop app only and single selection).
 
+## Folder navigation (back/forward)
+
+In the Windows desktop app, the file manager supports back/forward folder navigation.
+
+- **Toolbar:** Back and Forward buttons appear in the file manager header (left of the breadcrumbs). They move through the folder history.
+- **Mouse:** Mouse back/forward (side buttons, e.g. typical browser back/forward) trigger folder back/forward when the file manager is in use. They are ignored when the pointer is over an input, textarea, select, or a dialog.
+
+Navigation history is updated when you open a folder, click a breadcrumb, or go to **My Files**. Forward history is cleared when you navigate to a new folder.
+
 ## Desktop-only mode (optional)
 
 - When the administrator enables **Desktop app only access** in **Settings → Administration** from the desktop app, the backend rejects browser access to the main app.
@@ -134,4 +143,5 @@ The Windows desktop app adds OS-level clipboard support on top of the standard b
 ## Related Topics
 
 - [Architecture — Electron Desktop App](/concepts/architecture#electron-desktop-app) - How the desktop app fits in the system
+- [Manage Folders](/guides/user/manage-folders) - Folders and navigation (breadcrumbs, back/forward)
 - [Upload Files](/guides/user/upload-files) - Upload, copy to computer, and clipboard usage

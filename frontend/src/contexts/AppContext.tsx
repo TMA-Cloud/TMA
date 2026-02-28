@@ -99,6 +99,11 @@ export interface AppContextType {
   setPasteProgress: (p: number | null) => void;
   openFolder: (folder: FileItem) => void;
   navigateTo: (index: number) => void;
+  /** Folder navigation history (Electron: back/forward). */
+  canGoBack: boolean;
+  canGoForward: boolean;
+  goBack: () => void;
+  goForward: () => void;
   sortBy: 'name' | 'size' | 'modified' | 'deletedAt';
   sortOrder: 'asc' | 'desc';
   setSortBy: (s: 'name' | 'size' | 'modified' | 'deletedAt') => void;

@@ -19,19 +19,19 @@ export const Breadcrumbs: React.FC = () => {
 
   return (
     <nav
-      className={`flex items-center ${isMobile ? 'overflow-x-auto scrollbar-hide flex-1 min-w-0' : 'space-x-1'} text-sm`}
+      className={`flex items-center ${isMobile ? 'overflow-x-auto scrollbar-hide flex-1 min-w-0' : 'gap-1.5'} text-base min-h-10`}
     >
       <button
         onClick={() => setCurrentPath(['My Files'], [null])}
-        className={`flex items-center ${isMobile ? 'flex-shrink-0' : 'space-x-1'} text-gray-500/80 hover:text-gray-700 dark:text-gray-400/80 dark:hover:text-gray-200 transition-colors duration-200`}
+        className={`flex items-center justify-center min-w-[2.25rem] min-h-[2.25rem] rounded-lg ${isMobile ? 'flex-shrink-0' : ''} text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors duration-200`}
       >
-        <Home className="w-4 h-4 icon-muted" />
+        <Home className="w-5 h-5" strokeWidth={2} />
       </button>
 
       {shouldTruncate && (
         <>
-          <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" />
-          <span className="text-gray-400 dark:text-gray-500 px-1 flex-shrink-0">...</span>
+          <ChevronRight className="w-5 h-5 text-gray-500 dark:text-gray-400 flex-shrink-0" />
+          <span className="text-gray-500 dark:text-gray-400 px-0.5 flex-shrink-0 text-sm">...</span>
         </>
       )}
 
@@ -40,16 +40,17 @@ export const Breadcrumbs: React.FC = () => {
 
         return (
           <React.Fragment key={index}>
-            <ChevronRight className={`w-4 h-4 text-gray-400/60 icon-muted ${isMobile ? 'flex-shrink-0' : ''}`} />
+            <ChevronRight className="w-5 h-5 text-gray-500 dark:text-gray-400 flex-shrink-0" />
             <button
               onClick={() => handleNavigation(actualIndex)}
               className={`
                 ${isMobile ? 'flex-shrink-0 whitespace-nowrap' : ''}
-                hover:text-gray-700 dark:hover:text-gray-200 transition-colors duration-200
+                py-1.5 px-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700/50
+                hover:text-gray-800 dark:hover:text-gray-100 transition-colors duration-200
                 ${
                   actualIndex === currentPath.length - 1
                     ? 'text-gray-900 dark:text-gray-100 font-semibold'
-                    : 'text-gray-500/80 dark:text-gray-400/80'
+                    : 'text-gray-600 dark:text-gray-300'
                 }
               `}
             >

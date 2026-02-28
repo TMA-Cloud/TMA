@@ -1,6 +1,8 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { useApp, type FileItem, type ShareExpiry } from '../../contexts/AppContext';
 import { Breadcrumbs } from './Breadcrumbs';
+import { Tooltip } from '../ui/Tooltip';
 import { ContextMenu } from './ContextMenu';
 import { PasteProgress } from './PasteProgress';
 import { DownloadProgress } from './DownloadProgress';
@@ -67,6 +69,10 @@ export const FileManager: React.FC = () => {
     editFileWithDesktop,
     uploadFilesFromClipboard,
     copyFilesToPc,
+    canGoBack,
+    canGoForward,
+    goBack,
+    goForward,
   } = useApp();
 
   const { showToast } = useToast();
@@ -115,6 +121,28 @@ export const FileManager: React.FC = () => {
     document.addEventListener('paste', onPaste);
     return () => document.removeEventListener('paste', onPaste);
   }, [isMyFilesView, uploadFile, uploadFilesBulk]);
+
+  // Mouse back/forward (e.g. G502 X side buttons): button 3 = back, button 4 = forward
+  useEffect(() => {
+    const onMouseUp = (e: MouseEvent) => {
+      if (e.button !== 3 && e.button !== 4) return;
+      const target = e.target as HTMLElement;
+      if (target?.closest('input, textarea, select, [contenteditable="true"]') || target?.closest('[role="dialog"]')) {
+        return;
+      }
+      if (e.button === 3 && canGoBack) {
+        e.preventDefault();
+        e.stopPropagation();
+        goBack();
+      } else if (e.button === 4 && canGoForward) {
+        e.preventDefault();
+        e.stopPropagation();
+        goForward();
+      }
+    };
+    window.addEventListener('mouseup', onMouseUp, { capture: true });
+    return () => window.removeEventListener('mouseup', onMouseUp, { capture: true });
+  }, [canGoBack, canGoForward, goBack, goForward]);
 
   const openInfoModalForSelection = useCallback(() => {
     if (isTrashView) return;
@@ -621,8 +649,36 @@ export const FileManager: React.FC = () => {
         ref={headerRef}
         className={`${isMobile ? 'flex-col space-y-3 px-3 py-3' : 'flex items-center justify-between px-6 py-4'} rounded-xl card-premium mb-4 transition-all duration-200 animate-slideDown sticky top-0 z-30`}
       >
-        <div className={`${isMobile ? 'w-full' : 'flex-1 min-w-0'}`}>
-          <Breadcrumbs />
+        <div className={`${isMobile ? 'w-full' : 'flex-1 min-w-0'} flex items-center gap-3`}>
+          {isElectron() && (
+            <div className="flex items-center flex-shrink-0 rounded-xl bg-gray-100/90 dark:bg-gray-700/60 p-1 shadow-sm ring-1 ring-gray-200/60 dark:ring-gray-600/50">
+              <Tooltip text="Back">
+                <button
+                  type="button"
+                  onClick={goBack}
+                  disabled={!canGoBack}
+                  className="p-2.5 rounded-lg text-gray-700 dark:text-gray-200 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200/80 dark:hover:bg-gray-600/60 disabled:opacity-40 disabled:pointer-events-none transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50"
+                  aria-label="Back"
+                >
+                  <ArrowLeft className="w-6 h-6" strokeWidth={2.25} />
+                </button>
+              </Tooltip>
+              <Tooltip text="Forward">
+                <button
+                  type="button"
+                  onClick={goForward}
+                  disabled={!canGoForward}
+                  className="p-2.5 rounded-lg text-gray-700 dark:text-gray-200 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200/80 dark:hover:bg-gray-600/60 disabled:opacity-40 disabled:pointer-events-none transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50"
+                  aria-label="Forward"
+                >
+                  <ArrowRight className="w-6 h-6" strokeWidth={2.25} />
+                </button>
+              </Tooltip>
+            </div>
+          )}
+          <div className={`${isMobile ? 'flex-1 min-w-0' : 'min-w-0'} flex-1`}>
+            <Breadcrumbs />
+          </div>
         </div>
 
         <FileManagerToolbar

@@ -126,6 +126,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     electron?: string;
   } | null>(null);
   const [hasCheckedUpdates, setHasCheckedUpdates] = useState(false);
+  /** Folder navigation history for back/forward (used in Electron). */
+  type NavEntry = { path: string[]; ids: (string | null)[]; shared: boolean[] };
+  const [navHistory, setNavHistory] = useState<{ entries: NavEntry[]; index: number }>(() => ({
+    entries: [{ path: ['My Files'], ids: [null], shared: [false] }],
+    index: 0,
+  }));
   const isUploadProgressInteractingRef = useRef(false);
   const uploadDismissTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const searchQueryRef = useRef<string>(''); // Track current search query to ignore stale results
@@ -134,6 +140,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const sseRefreshTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null); // For debouncing SSE refresh
   const currentPathRef = useRef<string[]>(currentPath); // Track current path for SSE relevance check
   const folderStackRef = useRef<(string | null)[]>(folderStack); // Track folder stack for SSE relevance check
+  const folderSharedStackRef = useRef<boolean[]>(folderSharedStack); // For nav history (back/forward)
   const refreshFilesRef = useRef<((skipSearchCheck?: boolean) => Promise<void>) | null>(null); // Track refreshFiles function for SSE
 
   const operationQueue = usePromiseQueue();
@@ -199,6 +206,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     folderStackRef.current = folderStack;
   }, [folderStack]);
+
+  useEffect(() => {
+    folderSharedStackRef.current = folderSharedStack;
+  }, [folderSharedStack]);
 
   // Helper to extract share URLs from backend response.
   // Backend already provides full URLs in `links` - just return them as-is.
@@ -1263,14 +1274,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const setCurrentPath = (path: string[], ids?: (string | null)[]) => {
+    const newIds = ids ?? Array(path.length).fill(null);
+    const newShared = Array(path.length).fill(false);
+    setNavHistory(prev => {
+      const currentEntry = prev.entries[prev.index];
+      if (
+        currentEntry &&
+        currentEntry.path.length === path.length &&
+        JSON.stringify(currentEntry.ids) === JSON.stringify(newIds)
+      ) {
+        return prev;
+      }
+      const entries = prev.index < prev.entries.length - 1 ? prev.entries.slice(0, prev.index + 1) : prev.entries;
+      return {
+        entries: [...entries, { path, ids: newIds, shared: newShared }],
+        index: entries.length,
+      };
+    });
     setCurrentPathState(path);
-    if (ids) {
-      setFolderStack(ids);
-      setFolderSharedStack(Array(path.length).fill(false));
-    } else {
-      setFolderStack(Array(path.length).fill(null));
-      setFolderSharedStack(Array(path.length).fill(false));
-    }
+    setFolderStack(newIds);
+    setFolderSharedStack(newShared);
   };
 
   const openFolder = (folder: FileItem) => {
@@ -1278,15 +1301,74 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (searchQuery.trim().length > 0) {
       setSearchQuery('');
     }
-    setCurrentPathState(p => [...p, folder.name]);
-    setFolderStack(p => [...p, folder.id]);
-    setFolderSharedStack(p => [...p, !!folder.shared]);
+    const newPath = [...currentPathRef.current, folder.name];
+    const newIds = [...folderStackRef.current, folder.id];
+    const newShared = [...folderSharedStackRef.current, !!folder.shared];
+    setNavHistory(prev => {
+      const currentEntry = prev.entries[prev.index];
+      if (
+        currentEntry &&
+        currentEntry.path.length === newPath.length &&
+        JSON.stringify(currentEntry.ids) === JSON.stringify(newIds)
+      ) {
+        return prev;
+      }
+      const entries = prev.index < prev.entries.length - 1 ? prev.entries.slice(0, prev.index + 1) : prev.entries;
+      return {
+        entries: [...entries, { path: newPath, ids: newIds, shared: newShared }],
+        index: entries.length,
+      };
+    });
+    setCurrentPathState(newPath);
+    setFolderStack(newIds);
+    setFolderSharedStack(newShared);
   };
 
   const navigateTo = (index: number) => {
-    setCurrentPathState(p => p.slice(0, index + 1));
-    setFolderStack(p => p.slice(0, index + 1));
-    setFolderSharedStack(p => p.slice(0, index + 1));
+    const newPath = currentPathRef.current.slice(0, index + 1);
+    const newIds = folderStackRef.current.slice(0, index + 1);
+    const newShared = folderSharedStackRef.current.slice(0, index + 1);
+    setNavHistory(prev => {
+      const currentEntry = prev.entries[prev.index];
+      if (
+        currentEntry &&
+        currentEntry.path.length === newPath.length &&
+        JSON.stringify(currentEntry.ids) === JSON.stringify(newIds)
+      ) {
+        return prev;
+      }
+      const entries = prev.index < prev.entries.length - 1 ? prev.entries.slice(0, prev.index + 1) : prev.entries;
+      return {
+        entries: [...entries, { path: newPath, ids: newIds, shared: newShared }],
+        index: entries.length,
+      };
+    });
+    setCurrentPathState(newPath);
+    setFolderStack(newIds);
+    setFolderSharedStack(newShared);
+  };
+
+  const canGoBack = navHistory.index > 0;
+  const canGoForward = navHistory.index < navHistory.entries.length - 1;
+
+  const goBack = () => {
+    if (!canGoBack) return;
+    const entry = navHistory.entries[navHistory.index - 1];
+    if (!entry) return;
+    setNavHistory(prev => ({ ...prev, index: prev.index - 1 }));
+    setCurrentPathState(entry.path);
+    setFolderStack(entry.ids);
+    setFolderSharedStack(entry.shared);
+  };
+
+  const goForward = () => {
+    if (!canGoForward) return;
+    const entry = navHistory.entries[navHistory.index + 1];
+    if (!entry) return;
+    setNavHistory(prev => ({ ...prev, index: prev.index + 1 }));
+    setCurrentPathState(entry.path);
+    setFolderStack(entry.ids);
+    setFolderSharedStack(entry.shared);
   };
 
   const downloadFiles = async (ids: string[]) => {
@@ -1525,6 +1607,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setPasteProgress,
         openFolder,
         navigateTo,
+        canGoBack,
+        canGoForward,
+        goBack,
+        goForward,
         sortBy,
         sortOrder,
         setSortBy,
