@@ -457,9 +457,9 @@ export const FileManager: React.FC = () => {
     } else {
       const mime = (file.mimeType || '').toLowerCase();
 
-      // In the Electron desktop app, open images and videos directly
+      // In the Electron desktop app, open images, videos, and audio directly
       // in the system default application.
-      if (isElectron() && (mime.startsWith('image/') || mime.startsWith('video/'))) {
+      if (isElectron() && (mime.startsWith('image/') || mime.startsWith('video/') || mime.startsWith('audio/'))) {
         void editFileWithDesktop(file.id);
       } else if (mime.startsWith('image/')) {
         setImageViewerFile(file);
