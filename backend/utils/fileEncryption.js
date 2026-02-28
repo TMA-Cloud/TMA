@@ -2,7 +2,7 @@ const crypto = require('crypto');
 const fs = require('fs').promises;
 const { createReadStream, createWriteStream } = require('fs');
 const { pipeline } = require('stream/promises');
-const { Transform } = require('stream');
+const { Transform, Readable } = require('stream');
 const { logger } = require('../config/logger');
 
 // AES-256-GCM configuration
@@ -237,11 +237,12 @@ async function decryptFile(inputPath, outputPath) {
   const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
   decipher.setAuthTag(tag);
 
-  // Stream encrypted data (excluding IV and TAG)
-  const input = createReadStream(inputPath, {
-    start: IV_LENGTH,
-    end: fileSize - TAG_LENGTH - 1, // -1 because end is inclusive
-  });
+  // Stream encrypted data (excluding IV and TAG); empty file = no ciphertext bytes
+  const ciphertextEnd = fileSize - TAG_LENGTH - 1; // inclusive
+  const input =
+    ciphertextEnd >= IV_LENGTH
+      ? createReadStream(inputPath, { start: IV_LENGTH, end: ciphertextEnd })
+      : Readable.from([Buffer.alloc(0)]);
   const output = createWriteStream(outputPath);
 
   // Stream decrypt: input -> decipher -> output
@@ -290,11 +291,12 @@ async function createDecryptStream(encryptedPath) {
     },
   });
 
-  // Start reading from after the IV, and stop before the TAG
-  const fileStream = createReadStream(encryptedPath, {
-    start: IV_LENGTH,
-    end: fileSize - TAG_LENGTH - 1, // -1 because end is inclusive
-  });
+  // Start reading from after the IV, and stop before the TAG; empty file = no ciphertext bytes
+  const ciphertextEnd = fileSize - TAG_LENGTH - 1; // inclusive
+  const fileStream =
+    ciphertextEnd >= IV_LENGTH
+      ? createReadStream(encryptedPath, { start: IV_LENGTH, end: ciphertextEnd })
+      : Readable.from([Buffer.alloc(0)]);
 
   // Use pipeline for proper backpressure handling and error propagation
   // But we need to return the stream, so we'll handle errors manually
@@ -336,10 +338,11 @@ async function copyEncryptedFile(sourceEncryptedPath, destEncryptedPath) {
   const destIv = crypto.randomBytes(IV_LENGTH);
   const cipher = crypto.createCipheriv(ALGORITHM, key, destIv);
 
-  const sourceStream = createReadStream(sourceEncryptedPath, {
-    start: IV_LENGTH,
-    end: fileSize - TAG_LENGTH - 1, // -1 because end is inclusive
-  });
+  const ciphertextEnd = fileSize - TAG_LENGTH - 1; // inclusive
+  const sourceStream =
+    ciphertextEnd >= IV_LENGTH
+      ? createReadStream(sourceEncryptedPath, { start: IV_LENGTH, end: ciphertextEnd })
+      : Readable.from([Buffer.alloc(0)]);
   const destStream = createWriteStream(destEncryptedPath);
 
   // Write destination IV first
