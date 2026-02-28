@@ -77,6 +77,7 @@ You choose an action for each conflicting file; nothing is uploaded until you co
 - **Paste in cloud:** Right-click → Paste in cloud to paste from the in-app clipboard
 - **Delete:** Right-click → Delete (moves to trash)
 - **Star:** Mark files as favorites
+- **Select all (desktop app):** Press **Ctrl+A** / **Cmd+A** in the file list to select all items in the current folder
 
 ## File Types
 

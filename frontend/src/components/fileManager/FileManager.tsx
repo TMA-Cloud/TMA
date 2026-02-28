@@ -134,6 +134,7 @@ export const FileManager: React.FC = () => {
   // - Ctrl+Shift+C / Cmd+Shift+C: Cloud copy (internal clipboard)
   // - Ctrl+Shift+V / Cmd+Shift+V: Cloud paste (from internal clipboard)
   // - Ctrl+Shift+I / Cmd+Shift+I: Show "Get Info" for selected item
+  // - Ctrl+A / Cmd+A: select all files (Electron only)
   useEffect(() => {
     if (!isElectron()) return;
 
@@ -151,6 +152,14 @@ export const FileManager: React.FC = () => {
       }
 
       const key = e.key.toLowerCase();
+
+      if (key === 'a') {
+        e.preventDefault();
+        if (!files.length) return;
+        const allIds = files.map(f => f.id);
+        setSelectedFiles(allIds);
+        return;
+      }
 
       if (key === 'c') {
         if (!selectedFiles.length) return;
@@ -195,13 +204,15 @@ export const FileManager: React.FC = () => {
   }, [
     clipboard,
     copyFilesToPc,
+    files,
     folderStack,
+    openInfoModalForSelection,
     pasteClipboard,
     selectedFiles,
     setClipboard,
+    setSelectedFiles,
     showToast,
     uploadFilesFromClipboard,
-    openInfoModalForSelection,
   ]);
 
   const handleEmptyTrash = async () => {

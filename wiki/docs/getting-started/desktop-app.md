@@ -117,6 +117,7 @@ The Windows desktop app adds OS-level clipboard support on top of the standard b
 
 ### Keyboard Shortcuts
 
+- **Ctrl+A / Cmd+A:** Select all files and folders in the current view.
 - **Ctrl+C / Cmd+C:** Copy selected files to the Windows clipboard (same as context menu **Copy** in the desktop app).
 - **Ctrl+V / Cmd+V:** Upload files from the Windows clipboard into the current folder (same as context menu **Paste** in the desktop app).
 - **Ctrl+Shift+C / Cmd+Shift+C:** Copy selected items using the in-app clipboard (same as **Copy in cloud**).
