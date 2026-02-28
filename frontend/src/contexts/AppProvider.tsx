@@ -764,7 +764,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const uploadFilesFromClipboard = async () => {
     const files = await getFilesFromElectronClipboard();
-    if (files.length === 0) return;
+    if (files.length === 0) {
+      showToast('No files on clipboard.', 'info');
+      return;
+    }
     await uploadFilesBulk(files);
   };
 

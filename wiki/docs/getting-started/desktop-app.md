@@ -111,7 +111,7 @@ The Windows desktop app adds OS-level clipboard support on top of the standard b
 ### Context Menu
 
 - **Copy:** Right-click one or more files → **Copy** to place them on the Windows clipboard, then paste in Explorer to save them (200 MB total limit; folders not supported; not available in Trash).
-- **Paste:** Right-click in a folder → **Paste** to upload files from the Windows clipboard into the current folder (same upload limits as regular uploads).
+- **Paste:** Right-click in a folder → **Paste** to upload files from the Windows clipboard into the current folder (same upload limits as regular uploads). Supports Explorer copy, Outlook attachments, Snipping Tool, and similar sources.
 - **Copy in cloud:** Uses the in-app clipboard to copy items between folders inside TMA Cloud.
 - **Paste in cloud:** Pastes from the in-app clipboard into the current folder.
 
