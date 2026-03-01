@@ -3,8 +3,9 @@ const { body, param } = require('express-validator');
 const MAX_EMAIL_LENGTH = 254;
 const MAX_PASSWORD_LENGTH = 128;
 const MAX_NAME_LENGTH = 100;
-// Allow letters, numbers, underscore, dot, hyphen, and spaces (no path/control chars)
-const FILE_NAME_REGEX = /^[a-zA-Z0-9_.\s-]+$/;
+// Allow letters (including Unicode), numbers, and special characters; forbid path/control and Windows-reserved
+// eslint-disable-next-line no-control-regex -- Intentional: exclude control chars for security
+const FILE_NAME_REGEX = /^[^\x00-\x1F\x7F/\\:*?"<>|]+$/;
 
 const signupSchema = [
   body('email')
@@ -44,7 +45,7 @@ const addFolderSchema = [
     .notEmpty()
     .withMessage('Folder name is required')
     .matches(FILE_NAME_REGEX)
-    .withMessage('Invalid folder name')
+    .withMessage('Invalid folder name (forbidden: / \\ : * ? " < > |)')
     .isLength({ max: MAX_NAME_LENGTH })
     .withMessage(`Folder name must not exceed ${MAX_NAME_LENGTH} characters`),
   body('parentId').optional({ nullable: true }).isString().withMessage('Parent ID must be a string'),
@@ -57,7 +58,7 @@ const renameFileSchema = [
     .notEmpty()
     .withMessage('New name is required')
     .matches(FILE_NAME_REGEX)
-    .withMessage('Invalid file name')
+    .withMessage('Invalid file name (forbidden: / \\ : * ? " < > |)')
     .isLength({ max: MAX_NAME_LENGTH })
     .withMessage(`File name must not exceed ${MAX_NAME_LENGTH} characters`),
 ];
