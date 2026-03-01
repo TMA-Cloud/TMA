@@ -35,11 +35,11 @@ export const SignupForm: React.FC<{ onSwitch: () => void }> = ({ onSwitch }) => 
   };
 
   return (
-    <div className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-md rounded-2xl p-8 border border-gray-200 dark:border-gray-700 w-96 shadow-2xl">
+    <div className="bg-[#dfe3ea]/98 dark:bg-gray-900/80 backdrop-blur-md rounded-2xl p-8 border border-gray-200 dark:border-gray-700 w-96 shadow-2xl">
       <form className="space-y-6" onSubmit={handleSubmit}>
         <div>
           <input
-            className="border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-3 w-full bg-gray-50/80 dark:bg-gray-800/80 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm transition-all duration-200 text-base"
+            className="border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-3 w-full bg-[#d4d9e1] dark:bg-gray-800/80 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm transition-all duration-200 text-base"
             placeholder="Name"
             value={name}
             onChange={e => setName(e.target.value)}
@@ -49,7 +49,7 @@ export const SignupForm: React.FC<{ onSwitch: () => void }> = ({ onSwitch }) => 
         </div>
         <div>
           <input
-            className="border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-3 w-full bg-gray-50/80 dark:bg-gray-800/80 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm transition-all duration-200 text-base"
+            className="border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-3 w-full bg-[#d4d9e1] dark:bg-gray-800/80 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm transition-all duration-200 text-base"
             placeholder="Email"
             value={email}
             onChange={e => setEmail(e.target.value)}

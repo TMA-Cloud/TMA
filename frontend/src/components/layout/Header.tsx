@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Menu, Search, Upload, LogOut, X, ChevronDown } from 'lucide-react';
 import { useApp } from '../../contexts/AppContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { ThemeToggle } from './ThemeToggle';
 
 export const Header: React.FC = () => {
   const { sidebarOpen, setSidebarOpen, setUploadModalOpen, searchQuery, setSearchQuery, isSearching } = useApp();
@@ -45,7 +46,7 @@ export const Header: React.FC = () => {
 
   return (
     <header
-      className={`bg-white/95 dark:bg-slate-900/90 border-b border-gray-200/50 dark:border-slate-700/50 px-4 sm:px-8 py-4 backdrop-blur-xl transition-all duration-300 sticky top-0 z-40 ${scrolled ? 'shadow-lg dark:shadow-black/20' : 'shadow-sm'}`}
+      className={`bg-[#dfe3ea]/98 dark:bg-slate-900/90 border-b border-black/[0.06] dark:border-slate-700/50 backdrop-blur-xl px-4 sm:px-8 py-4 backdrop-blur-xl transition-all duration-300 sticky top-0 z-40 ${scrolled ? 'shadow-lg dark:shadow-black/20' : 'shadow-sm'}`}
     >
       <div className="flex items-center justify-between">
         {/* Left section */}
@@ -66,7 +67,7 @@ export const Header: React.FC = () => {
               placeholder="Search files and folders..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-10 py-2 bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-300 text-gray-900 dark:text-gray-100 placeholder-gray-400 hover:shadow-md hover:border-gray-300 dark:hover:border-gray-600 focus:shadow-lg focus:bg-white dark:focus:bg-gray-800 focus:shadow-blue-500/10"
+              className="w-full pl-10 pr-10 py-2 bg-[#d4d9e1] dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-300 text-gray-900 dark:text-gray-100 placeholder-gray-400 hover:shadow-md hover:border-gray-300 dark:hover:border-gray-600 focus:shadow-lg focus:bg-[#dfe3ea] dark:focus:bg-gray-800 focus:shadow-blue-500/10"
             />
             {searchQuery && (
               <button
@@ -87,6 +88,7 @@ export const Header: React.FC = () => {
 
         {/* Right section */}
         <div className="flex items-center space-x-1 sm:space-x-2">
+          <ThemeToggle />
           <button
             onClick={() => setUploadModalOpen(true)}
             className="ripple btn-glow flex items-center space-x-2 px-5 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-500 text-white rounded-xl shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 hover-lift font-semibold"
@@ -127,7 +129,7 @@ export const Header: React.FC = () => {
                   onClick={() => setDropdownOpen(false)}
                 />
                 {/* Dropdown */}
-                <div className="absolute right-0 mt-2 w-48 bg-white/95 dark:bg-slate-800/95 backdrop-blur-xl rounded-xl shadow-2xl border border-gray-200/50 dark:border-slate-700/50 py-1 z-50 overflow-hidden animate-menuIn">
+                <div className="absolute right-0 mt-2 w-48 bg-[#dfe3ea]/98 dark:bg-slate-800/95 backdrop-blur-xl rounded-xl shadow-2xl border border-gray-200/50 dark:border-slate-700/50 py-1 z-50 overflow-hidden animate-menuIn">
                   <button
                     onClick={() => {
                       logout();

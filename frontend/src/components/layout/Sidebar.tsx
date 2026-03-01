@@ -42,8 +42,8 @@ export const Sidebar: React.FC = () => {
       {/* Sidebar */}
       <div
         className={`
-        fixed lg:static inset-y-0 left-0 z-50 w-64 bg-white dark:bg-gradient-to-b from-slate-900 to-slate-800/95 backdrop-blur-xl
-        border-r border-gray-200/50 dark:border-slate-700/50 shadow-2xl lg:shadow-none rounded-r-3xl lg:rounded-none
+        fixed lg:static inset-y-0 left-0 z-50 w-64 bg-[#dfe3ea] dark:bg-gradient-to-b from-slate-900 to-slate-800/95 backdrop-blur-xl
+        border-r border-black/[0.06] dark:border-slate-700/50 shadow-2xl lg:shadow-none rounded-r-3xl lg:rounded-none
         transform transition-all duration-300 ease-out
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
         ${!sidebarOpen ? 'lg:w-0 lg:overflow-hidden' : ''}
@@ -88,7 +88,7 @@ export const Sidebar: React.FC = () => {
                     ${
                       active
                         ? 'bg-blue-500/20 dark:bg-blue-500/25 text-blue-700 dark:text-blue-200 font-semibold shadow-lg shadow-blue-500/10 dark:shadow-blue-400/10 border-l-4 border-blue-500 dark:border-blue-400'
-                        : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100/80 dark:hover:bg-slate-700/50 hover:text-gray-900 dark:hover:text-gray-100'
+                        : 'text-gray-600 dark:text-gray-400 hover:bg-black/10 dark:hover:bg-slate-700/50 hover:text-gray-900 dark:hover:text-gray-100'
                     }
                   `}
                   aria-current={active ? 'page' : undefined}
@@ -139,7 +139,7 @@ export const Sidebar: React.FC = () => {
                 ${
                   isActive(['Settings'])
                     ? 'bg-blue-500/20 dark:bg-blue-500/25 text-blue-700 dark:text-blue-200 font-semibold shadow-lg shadow-blue-500/10 dark:shadow-blue-400/10 border-l-4 border-blue-500 dark:border-blue-400'
-                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100/80 dark:hover:bg-slate-700/50 hover:text-gray-900 dark:hover:text-gray-100'
+                    : 'text-gray-600 dark:text-gray-400 hover:bg-black/10 dark:hover:bg-slate-700/50 hover:text-gray-900 dark:hover:text-gray-100'
                 }
               `}
               aria-current={isActive(['Settings']) ? 'page' : undefined}

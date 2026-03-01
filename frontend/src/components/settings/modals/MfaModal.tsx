@@ -402,7 +402,7 @@ Go to: Account Settings → Security → Multi-Factor Authentication
                     <button
                       onClick={handleRegenerateBackupCodes}
                       disabled={regenerating || (cooldownRemaining !== null && cooldownRemaining > 0)}
-                      className="w-full px-4 py-3 border-2 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl transition-colors font-medium text-gray-700 dark:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                      className="w-full px-4 py-3 border-2 border-gray-300 dark:border-gray-600 hover:bg-[#d4d9e1] dark:hover:bg-gray-800 rounded-xl transition-colors font-medium text-gray-700 dark:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                     >
                       {regenerating ? (
                         <>
@@ -462,7 +462,7 @@ Go to: Account Settings → Security → Multi-Factor Authentication
                 Scan this QR code with your authenticator app:
               </p>
               {qrCode && (
-                <div className="flex justify-center p-4 bg-white dark:bg-gray-900 rounded-xl border-2 border-gray-200 dark:border-gray-700">
+                <div className="flex justify-center p-4 bg-[#dfe3ea] dark:bg-gray-900 rounded-xl border-2 border-gray-200 dark:border-gray-700">
                   <img src={qrCode} alt="MFA QR Code" className="w-56 h-56" />
                 </div>
               )}
@@ -470,7 +470,7 @@ Go to: Account Settings → Security → Multi-Factor Authentication
                 <div className="space-y-2">
                   <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">Or enter this code manually:</p>
                   <div className="flex items-center gap-2">
-                    <code className="flex-1 px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-xl text-xs font-mono text-gray-900 dark:text-gray-100 break-all">
+                    <code className="flex-1 px-4 py-3 bg-[#d4d9e1] dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-xl text-xs font-mono text-gray-900 dark:text-gray-100 break-all">
                       {secret}
                     </code>
                     <button
@@ -501,7 +501,7 @@ Go to: Account Settings → Security → Multi-Factor Authentication
                 maxLength={6}
                 value={verificationCode}
                 onChange={e => setVerificationCode(e.target.value.replace(/\D/g, ''))}
-                className="w-full px-4 py-4 border-2 border-gray-300 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-center text-3xl tracking-[0.5em] font-mono font-semibold"
+                className="w-full px-4 py-4 border-2 border-gray-300 dark:border-gray-600 rounded-xl bg-[#d4d9e1] dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-center text-3xl tracking-[0.5em] font-mono font-semibold"
                 placeholder="000000"
                 autoFocus
               />
@@ -516,7 +516,7 @@ Go to: Account Settings → Security → Multi-Factor Authentication
                   setStep('status');
                   setVerificationCode('');
                 }}
-                className="flex-1 px-4 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors font-medium text-gray-700 dark:text-gray-300"
+                className="flex-1 px-4 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-xl hover:bg-[#d4d9e1] dark:hover:bg-gray-800 transition-colors font-medium text-gray-700 dark:text-gray-300"
               >
                 Cancel
               </button>
@@ -564,7 +564,7 @@ Go to: Account Settings → Security → Multi-Factor Authentication
                   const withoutDashes = filtered.replace(/-/g, '');
                   setVerificationCode(withoutDashes);
                 }}
-                className="w-full px-4 py-4 border-2 border-gray-300 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 text-center text-2xl tracking-[0.3em] font-mono font-semibold uppercase"
+                className="w-full px-4 py-4 border-2 border-gray-300 dark:border-gray-600 rounded-xl bg-[#d4d9e1] dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 text-center text-2xl tracking-[0.3em] font-mono font-semibold uppercase"
                 placeholder="000000 or ABCD-EFGH"
                 autoFocus
               />
@@ -580,7 +580,7 @@ Go to: Account Settings → Security → Multi-Factor Authentication
                   setStep('status');
                   setVerificationCode('');
                 }}
-                className="flex-1 px-4 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors font-medium text-gray-700 dark:text-gray-300"
+                className="flex-1 px-4 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-xl hover:bg-[#d4d9e1] dark:hover:bg-gray-800 transition-colors font-medium text-gray-700 dark:text-gray-300"
               >
                 Cancel
               </button>
@@ -620,7 +620,7 @@ Go to: Account Settings → Security → Multi-Factor Authentication
               <button
                 onClick={handleSkipSessions}
                 disabled={revokingSessions}
-                className="flex-1 px-4 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors font-medium text-gray-700 dark:text-gray-300 disabled:opacity-50"
+                className="flex-1 px-4 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-xl hover:bg-[#d4d9e1] dark:hover:bg-gray-800 transition-colors font-medium text-gray-700 dark:text-gray-300 disabled:opacity-50"
               >
                 Skip
               </button>
@@ -668,7 +668,7 @@ Go to: Account Settings → Security → Multi-Factor Authentication
             <button
               onClick={() => setShowConfirmDialog(false)}
               disabled={regenerating}
-              className="flex-1 px-4 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors font-medium text-gray-700 dark:text-gray-300 disabled:opacity-50"
+              className="flex-1 px-4 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-xl hover:bg-[#d4d9e1] dark:hover:bg-gray-800 transition-colors font-medium text-gray-700 dark:text-gray-300 disabled:opacity-50"
             >
               Cancel
             </button>

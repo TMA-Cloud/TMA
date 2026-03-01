@@ -212,9 +212,9 @@ export const DocumentViewerModal: React.FC = () => {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-      <div className="bg-white dark:bg-gray-900 w-[95vw] h-[90vh] rounded-xl shadow-2xl overflow-hidden flex flex-col">
+      <div className="bg-[#dfe3ea] dark:bg-gray-900 w-[95vw] h-[90vh] rounded-xl shadow-2xl overflow-hidden flex flex-col">
         {/* Header bar with close button */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 flex-shrink-0">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-[#d4d9e1] dark:bg-gray-800 flex-shrink-0">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 truncate flex-1 mr-4">
             {documentViewerFile.name}
           </h3>
@@ -244,12 +244,12 @@ export const DocumentViewerModal: React.FC = () => {
         {/* Editor container */}
         <div className="flex-1 relative overflow-hidden">
           {loading && (
-            <div className="absolute inset-0 flex items-center justify-center bg-white dark:bg-gray-900 z-20">
+            <div className="absolute inset-0 flex items-center justify-center bg-[#dfe3ea] dark:bg-gray-900 z-20">
               <div className="text-gray-600 dark:text-gray-400">Loading…</div>
             </div>
           )}
           {error && (
-            <div className="absolute inset-0 flex items-center justify-center text-red-600 dark:text-red-400 z-20 bg-white dark:bg-gray-900">
+            <div className="absolute inset-0 flex items-center justify-center text-red-600 dark:text-red-400 z-20 bg-[#dfe3ea] dark:bg-gray-900">
               {error}
             </div>
           )}

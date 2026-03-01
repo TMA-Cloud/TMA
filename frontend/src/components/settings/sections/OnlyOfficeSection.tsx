@@ -282,7 +282,7 @@ export const OnlyOfficeSection: React.FC<OnlyOfficeSectionProps> = ({ canConfigu
                     </p>
                   </div>
                 )}
-                <div className="stagger-item hover-lift flex flex-col gap-2 rounded-2xl bg-gray-50/70 dark:bg-gray-900/60 px-4 py-3 border border-transparent hover:border-blue-500/40 transition-all duration-200">
+                <div className="stagger-item hover-lift flex flex-col gap-2 rounded-2xl bg-[#dfe3ea]/95 dark:bg-gray-900/60 px-4 py-3 border border-transparent hover:border-blue-500/40 transition-all duration-200">
                   <label htmlFor="onlyoffice-url" className="text-sm font-medium text-gray-900 dark:text-gray-100">
                     OnlyOffice Document Server URL
                   </label>
@@ -303,11 +303,11 @@ export const OnlyOfficeSection: React.FC<OnlyOfficeSectionProps> = ({ canConfigu
                     data-1p-ignore="true"
                     data-bwignore="true"
                     data-form-type="other"
-                    className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-[#dfe3ea] dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
                   />
                 </div>
 
-                <div className="stagger-item hover-lift flex flex-col gap-2 rounded-2xl bg-gray-50/70 dark:bg-gray-900/60 px-4 py-3 border border-transparent hover:border-blue-500/40 transition-all duration-200">
+                <div className="stagger-item hover-lift flex flex-col gap-2 rounded-2xl bg-[#dfe3ea]/95 dark:bg-gray-900/60 px-4 py-3 border border-transparent hover:border-blue-500/40 transition-all duration-200">
                   <label
                     htmlFor="onlyoffice-jwt-secret"
                     className="text-sm font-medium text-gray-900 dark:text-gray-100"
@@ -347,7 +347,7 @@ export const OnlyOfficeSection: React.FC<OnlyOfficeSectionProps> = ({ canConfigu
                       data-form-type="other"
                       role="textbox"
                       inputMode="text"
-                      className="mt-1 w-full px-3 py-2 pr-10 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed font-mono"
+                      className="mt-1 w-full px-3 py-2 pr-10 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-[#dfe3ea] dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed font-mono"
                     />
                     <button
                       type="button"
@@ -365,7 +365,7 @@ export const OnlyOfficeSection: React.FC<OnlyOfficeSectionProps> = ({ canConfigu
                   <button
                     onClick={handleCancel}
                     disabled={loading || saving}
-                    className="px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+                    className="px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 bg-[#dfe3ea] dark:bg-gray-800 hover:bg-[#d4d9e1] dark:hover:bg-gray-700 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
                   >
                     Cancel
                   </button>
@@ -380,7 +380,7 @@ export const OnlyOfficeSection: React.FC<OnlyOfficeSectionProps> = ({ canConfigu
               </>
             ) : (
               <>
-                <div className="stagger-item hover-lift flex flex-col gap-2 rounded-2xl bg-gray-50/70 dark:bg-gray-900/60 px-4 py-3 border border-transparent hover:border-blue-500/40 transition-all duration-200">
+                <div className="stagger-item hover-lift flex flex-col gap-2 rounded-2xl bg-[#dfe3ea]/95 dark:bg-gray-900/60 px-4 py-3 border border-transparent hover:border-blue-500/40 transition-all duration-200">
                   <label className="text-sm font-medium text-gray-900 dark:text-gray-100">
                     OnlyOffice Document Server URL
                   </label>
@@ -398,7 +398,7 @@ export const OnlyOfficeSection: React.FC<OnlyOfficeSectionProps> = ({ canConfigu
                   </div>
                 </div>
 
-                <div className="stagger-item hover-lift flex flex-col gap-2 rounded-2xl bg-gray-50/70 dark:bg-gray-900/60 px-4 py-3 border border-transparent hover:border-blue-500/40 transition-all duration-200">
+                <div className="stagger-item hover-lift flex flex-col gap-2 rounded-2xl bg-[#dfe3ea]/95 dark:bg-gray-900/60 px-4 py-3 border border-transparent hover:border-blue-500/40 transition-all duration-200">
                   <label className="text-sm font-medium text-gray-900 dark:text-gray-100">JWT Secret</label>
                   <p className="text-xs text-gray-500 dark:text-gray-400">Secret key for signing OnlyOffice requests</p>
                   <div className="mt-1 px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-800/50 text-gray-900 dark:text-gray-100">

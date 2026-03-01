@@ -37,7 +37,7 @@ export const SettingsItem: React.FC<SettingsItemProps> = ({
   loadingStates,
 }) => {
   return (
-    <div className="stagger-item hover-lift flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-2xl bg-gray-50/70 dark:bg-gray-900/60 px-5 py-4 border border-transparent hover:border-blue-500/40 transition-all duration-200">
+    <div className="stagger-item hover-lift flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-2xl bg-[#d4d9e1] dark:bg-gray-900/60 border border-black/[0.08] dark:border-transparent px-5 py-4 border border-transparent hover:border-blue-500/40 transition-all duration-200">
       <div>
         <p className="text-base font-medium text-gray-900 dark:text-gray-100">{label}</p>
         {description && <p className="text-base text-gray-500 dark:text-gray-400 mt-0.5">{description}</p>}
@@ -57,7 +57,7 @@ export const SettingsItem: React.FC<SettingsItemProps> = ({
           >
             <span
               className={`
-                inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform duration-200
+                inline-block h-5 w-5 transform rounded-full bg-[#d4d9e1] shadow-sm transition-transform duration-200
                 ${toggleValue ? 'translate-x-8' : 'translate-x-1'}
               `}
             />

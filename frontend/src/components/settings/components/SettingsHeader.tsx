@@ -20,7 +20,7 @@ export const SettingsHeader: React.FC<SettingsHeaderProps> = ({ userName, usage,
 
   return (
     <div
-      className="relative overflow-hidden card-premium hover-lift spacing-card"
+      className="relative overflow-hidden card-premium hover-lift spacing-card bg-[#c8ced8] dark:bg-transparent border border-black/[0.1] dark:border-transparent"
       style={{ animation: 'fadeIn 0.45s ease both' }}
     >
       <div className="relative flex flex-col gap-8 md:flex-row md:items-center md:justify-between">

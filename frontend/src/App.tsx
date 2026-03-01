@@ -1,5 +1,6 @@
 import React, { useState, Suspense, lazy } from 'react';
 import { ThemeProvider } from './contexts/ThemeProvider';
+import { ThemeToggle } from './components/layout/ThemeToggle';
 import { AppProvider } from './contexts/AppProvider';
 import { useApp } from './contexts/AppContext';
 import { AuthProvider } from './contexts/AuthProvider';
@@ -156,7 +157,7 @@ const AppContent: React.FC = () => {
   }
 
   return (
-    <div className="h-screen bg-gradient-to-br from-gray-50 via-gray-50/98 to-slate-100/80 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800/90 flex overflow-hidden">
+    <div className="h-screen bg-gradient-to-br from-[#d6dbe2] via-[#d9dee5] to-[#d2d7e0] dark:from-slate-900 dark:via-slate-900 dark:to-slate-800/90 flex overflow-hidden">
       <Sidebar />
 
       <div
@@ -217,7 +218,7 @@ const AuthGate: React.FC = () => {
 
   if (loading || loadingSignupStatus) {
     return (
-      <div className="h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-950">
+      <div className="h-screen flex items-center justify-center bg-gradient-to-br from-[#d6dbe2] to-[#d2d7e0] dark:from-gray-900 dark:to-gray-950">
         <div className="text-center animate-fadeIn">
           <div className="w-16 h-16 mx-auto mb-4 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
           <p className="text-lg font-semibold text-gray-700 dark:text-gray-300 animate-pulse">Loading...</p>
@@ -228,7 +229,10 @@ const AuthGate: React.FC = () => {
 
   if (!user) {
     return (
-      <div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+      <div className="h-screen flex items-center justify-center bg-[#d6dbe2] dark:bg-gray-900 relative">
+        <div className="absolute top-4 right-4 z-50">
+          <ThemeToggle />
+        </div>
         {error && (
           <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-red-500 text-white px-4 py-2 rounded-lg shadow-lg z-50">
             {error}

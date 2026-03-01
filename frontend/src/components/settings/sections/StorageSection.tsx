@@ -175,7 +175,7 @@ export const StorageSection: React.FC<StorageSectionProps> = ({ usage, loading, 
         {canConfigure && (
           <>
             {hasLoadedMaxUpload && !isEditingMaxUpload && (
-              <div className="stagger-item hover-lift flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-2xl bg-gray-50/70 dark:bg-gray-900/60 px-4 py-3 border border-transparent hover:border-blue-500/40 transition-all duration-200">
+              <div className="stagger-item hover-lift flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-2xl bg-[#dfe3ea]/95 dark:bg-gray-900/60 px-4 py-3 border border-transparent hover:border-blue-500/40 transition-all duration-200">
                 <div>
                   <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Max upload size</p>
                   <p className="text-sm text-gray-500 dark:text-gray-400">
@@ -204,7 +204,7 @@ export const StorageSection: React.FC<StorageSectionProps> = ({ usage, loading, 
             {isEditingMaxUpload && (
               <form autoComplete="off" onSubmit={e => e.preventDefault()}>
                 <div className="space-y-4">
-                  <div className="stagger-item hover-lift flex flex-col gap-2 rounded-2xl bg-gray-50/70 dark:bg-gray-900/60 px-4 py-3 border border-transparent hover:border-blue-500/40 transition-all duration-200">
+                  <div className="stagger-item hover-lift flex flex-col gap-2 rounded-2xl bg-[#dfe3ea]/95 dark:bg-gray-900/60 px-4 py-3 border border-transparent hover:border-blue-500/40 transition-all duration-200">
                     <label
                       htmlFor="max-upload-size-value"
                       className="text-sm font-medium text-gray-900 dark:text-gray-100"
@@ -226,14 +226,14 @@ export const StorageSection: React.FC<StorageSectionProps> = ({ usage, loading, 
                         disabled={maxUploadLoading || saving}
                         autoComplete="off"
                         data-form-type="other"
-                        className="flex-1 min-w-0 px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="flex-1 min-w-0 px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-[#dfe3ea] dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
                       />
                       <select
                         aria-label="Unit"
                         value={sizeUnit}
                         onChange={e => handleUnitChange(e.target.value as SizeUnit)}
                         disabled={maxUploadLoading || saving}
-                        className="px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-[#dfe3ea] dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <option value="MB">MB</option>
                         <option value="GB">GB</option>
@@ -245,7 +245,7 @@ export const StorageSection: React.FC<StorageSectionProps> = ({ usage, loading, 
                       type="button"
                       onClick={handleCancelMaxUpload}
                       disabled={maxUploadLoading || saving}
-                      className="px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+                      className="px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 bg-[#dfe3ea] dark:bg-gray-800 hover:bg-[#d4d9e1] dark:hover:bg-gray-700 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
                     >
                       Cancel
                     </button>

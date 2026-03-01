@@ -704,7 +704,7 @@ export const FileManager: React.FC = () => {
       >
         <div className={`${isMobile ? 'w-full' : 'flex-1 min-w-0'} flex items-center gap-3`}>
           {isElectron() && (
-            <div className="flex items-center flex-shrink-0 rounded-xl bg-gray-100/90 dark:bg-gray-700/60 p-1 shadow-sm ring-1 ring-gray-200/60 dark:ring-gray-600/50">
+            <div className="flex items-center flex-shrink-0 rounded-xl bg-[#d4d9e1] dark:bg-gray-700/60 p-1 shadow-sm ring-1 ring-gray-200/60 dark:ring-gray-600/50">
               <Tooltip text="Back">
                 <button
                   type="button"

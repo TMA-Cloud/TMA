@@ -23,7 +23,7 @@ export const PasswordInput: React.FC<PasswordInputProps> = ({
   return (
     <div className="relative">
       <input
-        className="border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-3 w-full bg-gray-50/80 dark:bg-gray-800/80 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm transition-all duration-200 text-base pr-12"
+        className="border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-3 w-full bg-[#d4d9e1] dark:bg-gray-800/80 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm transition-all duration-200 text-base pr-12"
         type={showPassword ? 'text' : 'password'}
         placeholder={placeholder}
         value={value}

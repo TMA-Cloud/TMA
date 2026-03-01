@@ -120,7 +120,7 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
           ${
             isSelected
               ? 'border-blue-500 dark:border-blue-400 bg-blue-50/80 dark:bg-blue-900/30 shadow-lg ring-2 ring-blue-500/30 dark:ring-blue-400/30'
-              : 'border-gray-200/50 dark:border-slate-700/50 bg-white dark:bg-slate-800/50 hover:border-blue-300/50 dark:hover:border-blue-600/50 hover:bg-gray-50/80 dark:hover:bg-slate-800/80'
+              : 'border-gray-200/50 dark:border-slate-700/50 bg-[#dfe3ea] dark:bg-slate-800/50 hover:border-blue-300/50 dark:hover:border-blue-600/50 hover:bg-[#d4d9e1]/80 dark:hover:bg-slate-800/80'
           }
           ${isDragOver ? 'ring-4 ring-blue-400 ring-offset-2 scale-105' : ''}
         `}
@@ -146,7 +146,7 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
             {isExpired && <Clock className="absolute -top-0.5 -left-0.5 w-4 h-4 text-red-400" />}
             {file.type === 'file' && !isMobile && (
               <button
-                className="absolute -bottom-3 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 scale-90 group-hover:scale-100 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-full p-1.5 shadow-lg hover:shadow-xl hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:border-blue-400 transition-all duration-200"
+                className="absolute -bottom-3 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 scale-90 group-hover:scale-100 bg-[#dfe3ea] dark:bg-gray-900 border border-black/[0.06] dark:border-gray-700 rounded-full p-1.5 shadow-lg hover:shadow-xl hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:border-blue-400 transition-all duration-200"
                 tabIndex={-1}
                 title="Quick preview"
                 onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
@@ -198,13 +198,13 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
       className={`
         stagger-item group flex items-center space-x-3 py-2.5 px-3 rounded-lg cursor-pointer
         transition-all duration-200 ease-out
-        hover:bg-gray-50/90 dark:hover:bg-slate-800/80
+        hover:bg-[#d4d9e1] dark:hover:bg-slate-800/80
         active:scale-[0.99]
         ${isMobile ? 'select-none' : ''}
         ${
           isSelected
             ? 'bg-blue-50/90 dark:bg-blue-900/30 shadow-md border-l-4 border-blue-500 dark:border-blue-400 ring-2 ring-blue-500/20 dark:ring-blue-400/20'
-            : 'hover:bg-gray-50/80 dark:hover:bg-slate-800/60 border-l-4 border-transparent'
+            : 'hover:bg-[#d4d9e1]/80 dark:hover:bg-slate-800/60 border-l-4 border-transparent'
         }
         ${isDragOver ? 'ring-4 ring-blue-400 ring-offset-2 scale-[1.02]' : ''}
       `}
@@ -228,7 +228,7 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
         {isExpired && <Clock className="absolute -top-1 -left-1 w-4 h-4 text-red-400" />}
         {file.type === 'file' && (
           <button
-            className="absolute -bottom-3 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 scale-90 group-hover:scale-100 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-full p-1 shadow-lg hover:shadow-xl hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:border-blue-400 transition-all duration-200"
+            className="absolute -bottom-3 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 scale-90 group-hover:scale-100 bg-[#dfe3ea] dark:bg-gray-900 border border-black/[0.06] dark:border-gray-700 rounded-full p-1 shadow-lg hover:shadow-xl hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:border-blue-400 transition-all duration-200"
             tabIndex={-1}
             title="Quick preview"
             onClick={(e: React.MouseEvent<HTMLButtonElement>) => {

@@ -91,7 +91,7 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
           onMouseDown={e => e.stopPropagation()}
           onClick={e => e.stopPropagation()}
           className={`
-          relative z-10 bg-white dark:bg-gray-800 shadow-2xl
+          relative z-10 bg-[#dfe3ea] dark:bg-gray-800 shadow-2xl
           ${sizeClasses[size]} w-full ${
             size === 'full' ? 'h-full max-h-full rounded-none' : 'rounded-2xl max-h-[90vh]'
           } overflow-hidden
@@ -100,7 +100,7 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
         `}
         >
           <div
-            className={`flex items-center justify-between border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-gray-50 to-white dark:from-gray-800 dark:to-gray-900 ${
+            className={`flex items-center justify-between border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-[#dfe3ea] to-[#d4d9e1] dark:from-gray-800 dark:to-gray-900 ${
               size === 'full' ? 'p-4' : 'p-6'
             }`}
           >

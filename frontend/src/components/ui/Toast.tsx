@@ -66,7 +66,7 @@ export const Toast: React.FC<ToastProps> = ({ id, message, type = 'info', durati
       className={`
         transform transition-all duration-300 ease-in-out
         ${isVisible ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'}
-        bg-white/80 dark:bg-gray-900/80 backdrop-blur-md rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700
+        bg-[#dfe3ea]/98 dark:bg-gray-900/80 backdrop-blur-md rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700
         p-4 flex items-center space-x-3 min-w-80 animate-toastIn mb-2
       `}
       style={{

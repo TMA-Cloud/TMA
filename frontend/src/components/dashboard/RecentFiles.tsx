@@ -19,7 +19,7 @@ export const RecentFiles: React.FC<RecentFilesProps> = ({ files }) => {
         {files.slice(0, 5).map(file => (
           <div
             key={file.id}
-            className="flex items-center space-x-3 p-3.5 rounded-lg hover:bg-gray-50/80 dark:hover:bg-slate-800/60 cursor-pointer group transition-all duration-200 hover-lift"
+            className="flex items-center space-x-3 p-3.5 rounded-lg hover:bg-[#d4d9e1]/80 dark:hover:bg-slate-800/60 cursor-pointer group transition-all duration-200 hover-lift"
           >
             <div className="flex-shrink-0">
               <FileTypeIcon file={file} className="w-8 h-8 transition-opacity duration-200 group-hover:opacity-100" />

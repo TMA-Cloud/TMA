@@ -140,7 +140,7 @@ export const Dashboard: React.FC = () => {
   }, [fileCount, folderCount, sharedCount, starredCount]);
 
   return (
-    <div className="p-6 md:p-8 bg-gradient-to-br from-gray-50 to-white dark:from-slate-900 dark:to-slate-950 min-h-screen">
+    <div className="p-6 md:p-8 bg-gradient-to-br from-[#dfe3ea] to-[#d4d9e1] dark:from-slate-900 dark:to-slate-950 min-h-screen">
       <div className="space-y-8 max-w-6xl mx-auto">
         {/* Welcome section */}
         <div>
@@ -185,7 +185,7 @@ export const Dashboard: React.FC = () => {
                   group p-4 md:p-5 rounded-xl transition-all duration-200
                   flex flex-col items-center space-y-2
                   border border-gray-300/30 dark:border-gray-700/50
-                  bg-white dark:bg-slate-800
+                  bg-[#dfe3ea] dark:bg-slate-800
                   text-gray-900 dark:text-gray-100
                   hover-lift
                   focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:ring-offset-2 focus:ring-offset-transparent

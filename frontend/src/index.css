@@ -1,5 +1,8 @@
 @import 'tailwindcss';
 
+/* Class-based dark mode so theme toggle controls all dark: styles (default is OS preference) */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   /* Custom Keyframes - Standardized timings for smoother UX */
   --animate-fadeIn: fadeIn 0.3s ease-in-out;
@@ -274,9 +277,9 @@
   animation-delay: 0.26s;
 }
 
-/* Skeleton loader animation */
+/* Skeleton loader animation - light: clearly gray */
 .skeleton {
-  background: linear-gradient(90deg, #e0e7ef 0%, #f3f4f6 50%, #e0e7ef 100%);
+  background: linear-gradient(90deg, #d4d9e1 0%, #c8ced8 50%, #d4d9e1 100%);
   background-size: 1000px 100%;
   animation: shimmer 1.5s ease-in-out infinite;
   border-radius: 0.5rem;
@@ -690,7 +693,7 @@ body.is-dragging [role='tooltip'] {
   height: 8px;
 }
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1; /* slate-200 */
+  background: #a8b2c0;
   border-radius: 8px;
   transition: background 0.2s;
 }
@@ -712,7 +715,7 @@ html.dark ::-webkit-scrollbar-thumb:hover {
 /* Firefox */
 * {
   scrollbar-width: thin;
-  scrollbar-color: #cbd5e1 transparent;
+  scrollbar-color: #a8b2c0 transparent;
 }
 html.dark * {
   scrollbar-color: #334155 transparent;
@@ -730,6 +733,13 @@ body,
   height: 100%;
   min-height: 100%;
   width: 100%;
+}
+
+/* Smooth theme transition for a polished feel */
+html {
+  transition:
+    background-color 0.25s ease,
+    color 0.2s ease;
 }
 
 /* Improve text rendering */
@@ -759,11 +769,17 @@ body {
     /* Surface 3 - lightest for active/highlight */
     --bg-surface-3: #475569; /* slate-600 */
 
-    /* Light mode backgrounds */
-    --bg-primary-light: #f8fafc; /* slate-50 */
-    --bg-surface-1-light: #ffffff; /* white */
-    --bg-surface-2-light: #f1f5f9; /* slate-100 */
-    --bg-surface-3-light: #e2e8f0; /* slate-200 */
+    /* Light mode - clearly gray (no white), subtle blue tint so it feels alive */
+    --bg-primary-light: #d6dbe2;
+    --bg-surface-1-light: #dfe3ea;
+    --bg-surface-2-light: #d4d9e1;
+    --bg-surface-3-light: #c8ced8;
+
+    /* Soft but visible shadows - enough depth so UI doesn't look flat */
+    --shadow-soft: 0 1px 3px rgba(0, 0, 0, 0.06), 0 2px 10px rgba(0, 0, 0, 0.06);
+    --shadow-soft-md: 0 4px 12px rgba(0, 0, 0, 0.07), 0 2px 4px rgba(0, 0, 0, 0.05);
+    --shadow-soft-lg: 0 6px 16px rgba(0, 0, 0, 0.08), 0 2px 6px rgba(0, 0, 0, 0.05);
+    --shadow-soft-hover: 0 10px 24px rgba(0, 0, 0, 0.08), 0 4px 8px rgba(0, 0, 0, 0.05);
 
     /* Accent colors - only for interactions */
     --accent-blue: #3b82f6;
@@ -782,10 +798,12 @@ body {
     --text-secondary-light: #475569; /* slate-600 */
     --text-tertiary-light: #64748b; /* slate-500 */
 
-    /* Borders - softer */
+    /* Borders - softer (light mode uses very subtle borders) */
     --border-subtle: rgba(148, 163, 184, 0.1);
     --border-medium: rgba(148, 163, 184, 0.2);
     --border-strong: rgba(148, 163, 184, 0.3);
+    --border-light: rgba(15, 23, 42, 0.06);
+    --border-light-medium: rgba(15, 23, 42, 0.08);
   }
 }
 
@@ -817,9 +835,10 @@ body {
 
 .hover-lift:hover {
   transform: translateY(-2px);
-  box-shadow:
-    0 8px 24px -4px rgba(0, 0, 0, 0.12),
-    0 4px 12px -2px rgba(0, 0, 0, 0.08);
+}
+
+html:not(.dark) .hover-lift:hover {
+  box-shadow: var(--shadow-soft-hover);
 }
 
 html.dark .hover-lift:hover {
@@ -900,14 +919,20 @@ html.dark .card-premium {
 
 html:not(.dark) .card-premium {
   background: var(--bg-surface-1-light);
-  border-color: var(--border-medium);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow:
+    var(--shadow-soft),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(8px);
 }
 
 .card-premium:hover {
-  border-color: rgba(59, 130, 246, 0.2);
-  box-shadow:
-    0 8px 24px -4px rgba(0, 0, 0, 0.12),
-    0 0 0 1px rgba(59, 130, 246, 0.06);
+  border-color: rgba(59, 130, 246, 0.15);
+}
+
+html:not(.dark) .card-premium:hover {
+  box-shadow: var(--shadow-soft-md);
+  border-color: rgba(59, 130, 246, 0.12);
 }
 
 html.dark .card-premium:hover {

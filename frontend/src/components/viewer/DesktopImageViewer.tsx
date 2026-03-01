@@ -296,7 +296,7 @@ export const DesktopImageViewer: React.FC<DesktopImageViewerProps> = ({ imageVie
         </div>
 
         {/* Zoom controls */}
-        <div className="absolute bottom-4 right-4 flex items-center space-x-2 bg-white/80 dark:bg-gray-800/80 px-3 py-2 rounded-md shadow-md">
+        <div className="absolute bottom-4 right-4 flex items-center space-x-2 bg-[#dfe3ea]/95 dark:bg-gray-800/80 px-3 py-2 rounded-md shadow-md">
           <button
             onClick={zoomOutHandler}
             className="p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700"

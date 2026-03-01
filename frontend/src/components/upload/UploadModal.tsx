@@ -483,7 +483,7 @@ export const UploadModal: React.FC = () => {
                   key={uploadFile.id}
                   className={`flex items-center ${
                     isMobile ? 'space-x-2 p-2' : 'space-x-3 p-3'
-                  } bg-gray-50 dark:bg-gray-700 rounded-lg`}
+                  } bg-[#d4d9e1] dark:bg-gray-700 rounded-lg`}
                 >
                   <div className="flex-shrink-0">
                     {uploadFile.status === 'completed' ? (
@@ -575,7 +575,7 @@ export const UploadModal: React.FC = () => {
               return (
                 <li
                   key={uploadId}
-                  className="flex flex-col gap-3 p-4 rounded-xl bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600"
+                  className="flex flex-col gap-3 p-4 rounded-xl bg-[#d4d9e1] dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600"
                 >
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-gray-900 dark:text-gray-100 break-all">{fileName}</p>

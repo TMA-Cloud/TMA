@@ -127,7 +127,7 @@ export const MobileAppContent: React.FC = () => {
   }, [dropdownOpen]);
 
   return (
-    <div className="h-screen w-screen flex flex-col bg-gray-50 dark:bg-slate-900">
+    <div className="h-screen w-screen flex flex-col bg-[#d6dbe2] dark:bg-slate-900">
       {/* Backdrop - covers entire screen when dropdown is open */}
       {dropdownOpen && (
         <div
@@ -137,7 +137,7 @@ export const MobileAppContent: React.FC = () => {
       )}
 
       {/* Compact top bar */}
-      <header className="relative px-4 py-3 flex items-center justify-between bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-b border-gray-200/50 dark:border-slate-800/50 shadow-sm z-[9999]">
+      <header className="relative px-4 py-3 flex items-center justify-between bg-[#dfe3ea]/98 dark:bg-slate-900/95 backdrop-blur-xl border-b border-gray-200/50 dark:border-slate-800/50 shadow-sm z-[9999]">
         <div className="flex items-center space-x-2">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-lg transition-all duration-200">
             <HardDrive className="w-5 h-5 text-white" />
@@ -175,7 +175,7 @@ export const MobileAppContent: React.FC = () => {
 
             {/* Dropdown Menu */}
             {dropdownOpen && (
-              <div className="absolute right-0 mt-2 w-40 bg-white/95 dark:bg-slate-800/95 backdrop-blur-xl rounded-xl shadow-2xl border border-gray-200/50 dark:border-slate-700/50 py-1 z-[10002] overflow-hidden animate-menuIn">
+              <div className="absolute right-0 mt-2 w-40 bg-[#dfe3ea]/98 dark:bg-slate-800/95 backdrop-blur-xl rounded-xl shadow-2xl border border-gray-200/50 dark:border-slate-700/50 py-1 z-[10002] overflow-hidden animate-menuIn">
                 <button
                   onClick={() => {
                     logout();
@@ -198,7 +198,7 @@ export const MobileAppContent: React.FC = () => {
       </main>
 
       {/* Bottom navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-t border-gray-200/50 dark:border-slate-800/50 shadow-2xl">
+      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-[#dfe3ea]/98 dark:bg-slate-900/95 backdrop-blur-xl border-t border-gray-200/50 dark:border-slate-800/50 shadow-2xl">
         <div className="flex justify-around py-1.5 px-1">
           {navItems.map(item => {
             const Icon = item.icon;

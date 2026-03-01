@@ -672,7 +672,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
         >
           <div
             ref={menuRef}
-            className="bg-white/95 dark:bg-slate-800/95 backdrop-blur-xl rounded-t-2xl shadow-2xl pt-3 pb-4 px-4 max-h-[70vh] overflow-y-auto animate-slideUp"
+            className="bg-[#dfe3ea]/98 dark:bg-slate-800/95 backdrop-blur-xl rounded-t-2xl shadow-2xl pt-3 pb-4 px-4 max-h-[70vh] overflow-y-auto animate-slideUp"
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-center mb-3">
@@ -728,7 +728,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
   const desktopMenu = (
     <div
       ref={menuRef}
-      className="fixed z-50 bg-white/95 dark:bg-slate-800/95 backdrop-blur-xl border border-gray-200/50 dark:border-slate-700/50 rounded-2xl shadow-2xl py-2 min-w-48 focus:outline-none"
+      className="fixed z-50 bg-[#dfe3ea]/98 dark:bg-slate-800/95 backdrop-blur-xl border border-gray-200/50 dark:border-slate-700/50 rounded-2xl shadow-2xl py-2 min-w-48 focus:outline-none"
       style={{
         left: `${menuStyle.x}px`,
         top: `${menuStyle.y}px`,

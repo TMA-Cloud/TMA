@@ -98,7 +98,7 @@ export const UploadProgress: React.FC<UploadProgressProps> = ({ uploads, onDismi
         {uploads.map((upload, index) => (
           <div
             key={upload.id}
-            className={`bg-white dark:bg-gray-900 border border-gray-200/50 dark:border-gray-700/50 rounded-xl shadow-xl backdrop-blur-xl transition-all duration-300 ease-out animate-fadeIn ${
+            className={`bg-[#dfe3ea] dark:bg-gray-900 border border-gray-200/50 dark:border-gray-700/50 rounded-xl shadow-xl backdrop-blur-xl transition-all duration-300 ease-out animate-fadeIn ${
               isMobile ? 'p-3' : 'p-4 hover:shadow-2xl'
             }`}
             style={{
@@ -216,7 +216,7 @@ export const UploadProgress: React.FC<UploadProgressProps> = ({ uploads, onDismi
       }}
     >
       <div
-        className={`bg-white dark:bg-gray-900 border border-gray-200/50 dark:border-gray-700/50 rounded-xl shadow-xl backdrop-blur-xl transition-all duration-300 ease-out animate-fadeIn overflow-hidden ${
+        className={`bg-[#dfe3ea] dark:bg-gray-900 border border-gray-200/50 dark:border-gray-700/50 rounded-xl shadow-xl backdrop-blur-xl transition-all duration-300 ease-out animate-fadeIn overflow-hidden ${
           isMobile ? '' : 'hover:shadow-2xl'
         }`}
         style={{
@@ -318,7 +318,7 @@ export const UploadProgress: React.FC<UploadProgressProps> = ({ uploads, onDismi
               key={upload.id}
               className={`${
                 isMobile ? 'px-3 py-2' : 'px-5 py-3'
-              } border-b border-gray-100 dark:border-gray-800/50 last:border-b-0 hover:bg-gray-50/50 dark:hover:bg-gray-800/30 transition-all duration-200 ease-out`}
+              } border-b border-gray-100 dark:border-gray-800/50 last:border-b-0 hover:bg-[#dfe3ea]/50 dark:hover:bg-gray-800/30 transition-all duration-200 ease-out`}
               style={{
                 animationDelay: `${index * 30}ms`,
               }}
@@ -407,7 +407,7 @@ export const UploadProgress: React.FC<UploadProgressProps> = ({ uploads, onDismi
             <div
               className={`${isMobile ? 'px-3 py-2' : 'px-5 py-3'} text-center ${
                 isMobile ? 'text-[10px]' : 'text-xs'
-              } font-medium text-gray-500 dark:text-gray-400 bg-gray-50/50 dark:bg-gray-800/30`}
+              } font-medium text-gray-500 dark:text-gray-400 bg-[#dfe3ea]/50 dark:bg-gray-800/30`}
             >
               +{remainingCount} more file{remainingCount !== 1 ? 's' : ''}
             </div>
@@ -428,7 +428,7 @@ export const UploadProgress: React.FC<UploadProgressProps> = ({ uploads, onDismi
           }}
           className={`w-full ${isMobile ? 'px-3 py-2.5' : 'px-5 py-3'} ${
             isMobile ? 'text-xs' : 'text-sm'
-          } font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-all duration-200 flex items-center justify-center space-x-2 border-t border-gray-100 dark:border-gray-800/50 active:scale-95 touch-manipulation`}
+          } font-medium text-gray-700 dark:text-gray-300 hover:bg-[#dfe3ea] dark:hover:bg-gray-800/50 transition-all duration-200 flex items-center justify-center space-x-2 border-t border-gray-100 dark:border-gray-800/50 active:scale-95 touch-manipulation`}
         >
           {isExpanded ? (
             <>

@@ -17,7 +17,7 @@ export const SettingsSection: React.FC<SettingsSectionProps> = ({
 }) => {
   return (
     <div
-      className="relative overflow-hidden card-premium hover-lift spacing-card"
+      className="relative overflow-hidden card-premium hover-lift spacing-card bg-[#c8ced8] dark:bg-transparent border border-black/[0.1] dark:border-transparent"
       style={{
         animation: 'slideUp 0.45s cubic-bezier(0.16, 1, 0.3, 1) both',
         animationDelay: `${index * 80}ms`,
