@@ -29,6 +29,7 @@ function getClient() {
       secretAccessKey: s3Config.secretAccessKey,
     },
     forcePathStyle: s3Config.forcePathStyle,
+    responseChecksumValidation: 'WHEN_REQUIRED',
   });
   return s3Client;
 }
