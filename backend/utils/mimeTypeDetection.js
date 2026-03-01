@@ -38,12 +38,14 @@ const DETECTION_ALIASES = {
   csv: ['text/plain', 'application/csv', 'application/x-csv'],
 
   // --- Microsoft Word formats ---
+  // .doc (Word 97-2003) is CFB/OLE; file-type reports application/x-cfb
   doc: [
     'application/msword',
     'application/x-msword',
     'application/vnd.ms-word',
     'application/vnd.ms-word.document.macroEnabled.12',
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/x-cfb',
   ],
   docx: [
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -51,7 +53,7 @@ const DETECTION_ALIASES = {
     'application/vnd.ms-word.document.macroEnabled.12',
   ],
   docm: ['application/vnd.ms-word.document.macroEnabled.12'],
-  dot: ['application/msword', 'application/x-msword'],
+  dot: ['application/msword', 'application/x-msword', 'application/x-cfb'],
   dotx: ['application/vnd.openxmlformats-officedocument.wordprocessingml.template'],
   dotm: ['application/vnd.ms-word.template.macroEnabled.12'],
 
@@ -59,6 +61,7 @@ const DETECTION_ALIASES = {
   rtf: ['application/rtf', 'text/rtf'],
 
   // --- Microsoft Excel formats ---
+  // .xls (Excel 97-2003) is CFB/OLE; file-type reports application/x-cfb
   xls: [
     'application/vnd.ms-excel',
     'application/msexcel',
@@ -68,6 +71,7 @@ const DETECTION_ALIASES = {
     'application/x-dos_ms_excel',
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     'application/vnd.ms-excel.sheet.macroEnabled.12',
+    'application/x-cfb',
   ],
   xlsx: ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-excel'],
   xlsm: ['application/vnd.ms-excel.sheet.macroEnabled.12'],
@@ -76,19 +80,22 @@ const DETECTION_ALIASES = {
   xltm: ['application/vnd.ms-excel.template.macroEnabled.12'],
 
   // --- Microsoft PowerPoint formats ---
+  // .ppt / .pps (PowerPoint 97-2003) are CFB/OLE; file-type reports application/x-cfb
   ppt: [
     'application/vnd.ms-powerpoint',
     'application/mspowerpoint',
     'application/vnd.openxmlformats-officedocument.presentationml.presentation',
     'application/vnd.ms-powerpoint.presentation.macroEnabled.12',
+    'application/x-cfb',
   ],
   pptx: ['application/vnd.openxmlformats-officedocument.presentationml.presentation', 'application/vnd.ms-powerpoint'],
   pptm: ['application/vnd.ms-powerpoint.presentation.macroEnabled.12'],
-  pps: ['application/vnd.ms-powerpoint'],
+  pps: ['application/vnd.ms-powerpoint', 'application/x-cfb'],
   ppsx: ['application/vnd.openxmlformats-officedocument.presentationml.slideshow'],
   ppsm: ['application/vnd.ms-powerpoint.slideshow.macroEnabled.12'],
   potx: ['application/vnd.openxmlformats-officedocument.presentationml.template'],
   potm: ['application/vnd.ms-powerpoint.template.macroEnabled.12'],
+  pot: ['application/vnd.ms-powerpoint', 'application/x-cfb'],
 
   // --- OpenDocument formats (also commonly edited in Office) ---
   odt: ['application/vnd.oasis.opendocument.text'],
