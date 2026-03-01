@@ -77,28 +77,28 @@ export const Dashboard: React.FC = () => {
       title: 'Upload Files',
       icon: Upload,
       isPrimary: true,
-      hoverColor: 'hover:border-blue-500/50 hover:bg-blue-500/10 dark:hover:bg-blue-500/20',
+      hoverColor: 'hover:border-[#5b8def]/30 hover:bg-[#5b8def]/10 dark:hover:bg-[#5b8def]/20',
       onClick: () => setUploadModalOpen(true),
     },
     {
       title: 'Create Folder',
       icon: FolderPlus,
       isPrimary: false,
-      hoverColor: 'hover:border-green-500/50 hover:bg-green-500/10 dark:hover:bg-green-500/20',
+      hoverColor: 'hover:border-emerald-400/30 hover:bg-emerald-500/10 dark:hover:bg-emerald-500/20',
       onClick: () => setCreateFolderModalOpen(true),
     },
     {
       title: 'Share Files',
       icon: Share2,
       isPrimary: false,
-      hoverColor: 'hover:border-purple-500/50 hover:bg-purple-500/10 dark:hover:bg-purple-500/20',
+      hoverColor: 'hover:border-violet-400/30 hover:bg-violet-500/10 dark:hover:bg-violet-500/20',
       onClick: () => setCurrentPath(['Shared']),
     },
     {
       title: 'Starred Items',
       icon: Star,
       isPrimary: false,
-      hoverColor: 'hover:border-yellow-500/50 hover:bg-yellow-500/10 dark:hover:bg-yellow-500/20',
+      hoverColor: 'hover:border-amber-400/30 hover:bg-amber-500/10 dark:hover:bg-amber-500/20',
       onClick: () => setCurrentPath(['Starred']),
     },
   ];
@@ -140,15 +140,15 @@ export const Dashboard: React.FC = () => {
   }, [fileCount, folderCount, sharedCount, starredCount]);
 
   return (
-    <div className="p-6 md:p-8 bg-gradient-to-br from-[#dfe3ea] to-[#d4d9e1] dark:from-slate-900 dark:to-slate-950 min-h-screen">
+    <div className="p-6 md:p-8 min-h-screen bg-gradient-to-br from-[#e8ecf1] via-[#eef2f6] to-[#e2e7ee] dark:from-[#0f172a] dark:via-[#1e293b] dark:to-[#1a2332]">
       <div className="space-y-8 max-w-6xl mx-auto">
         {/* Welcome section */}
         <div>
-          <h1 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-gray-100 mb-2 tracking-tight">
-            Welcome back!
+          <h1 className="text-3xl md:text-4xl font-bold text-slate-800 dark:text-slate-100 mb-2 tracking-tight">
+            Welcome back
           </h1>
-          <p className="text-sm md:text-base text-gray-600/80 dark:text-gray-400/80">
-            Here's what's happening with your files today!
+          <p className="text-sm md:text-base text-slate-600 dark:text-slate-400">
+            Here's what's happening with your files today.
           </p>
         </div>
 
@@ -157,12 +157,12 @@ export const Dashboard: React.FC = () => {
           {statsData.map((stat, index) => (
             <div
               key={index}
-              className="card-premium hover-lift flex flex-col items-center justify-center p-4 md:p-5 animate-fadeIn"
+              className="card-premium hover-lift flex flex-col items-center justify-center p-5 md:p-6 animate-fadeIn rounded-2xl"
             >
-              <p className="text-2xl md:text-3xl font-semibold text-gray-700/90 dark:text-gray-300/90 transition-all duration-200 mb-1.5">
+              <p className="text-2xl md:text-3xl font-semibold text-slate-700 dark:text-slate-200 transition-all duration-300 mb-1.5">
                 {animatedStats[index]}
               </p>
-              <p className="text-xs text-gray-500/70 dark:text-gray-400/70 font-medium uppercase tracking-wide">
+              <p className="text-xs text-slate-500 dark:text-slate-400 font-medium uppercase tracking-wide">
                 {stat.label}
               </p>
             </div>
@@ -171,7 +171,7 @@ export const Dashboard: React.FC = () => {
 
         {/* Quick Actions */}
         <div>
-          <h2 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4 tracking-tight">
+          <h2 className="text-xl md:text-2xl font-bold text-slate-800 dark:text-slate-100 mb-4 tracking-tight">
             Quick Actions
           </h2>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -182,27 +182,27 @@ export const Dashboard: React.FC = () => {
                   key={index}
                   onClick={action.onClick}
                   className={`
-                  group p-4 md:p-5 rounded-xl transition-all duration-200
-                  flex flex-col items-center space-y-2
-                  border border-gray-300/30 dark:border-gray-700/50
-                  bg-[#dfe3ea] dark:bg-slate-800
-                  text-gray-900 dark:text-gray-100
+                  group p-5 md:p-6 rounded-2xl transition-all duration-300 ease-out
+                  flex flex-col items-center gap-2
+                  border border-slate-200/60 dark:border-slate-700/50
+                  bg-[#f0f3f7] dark:bg-slate-800/80
+                  text-slate-800 dark:text-slate-100
                   hover-lift
-                  focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:ring-offset-2 focus:ring-offset-transparent
-                  active:scale-95
+                  focus:outline-none focus:ring-2 focus:ring-[#5b8def]/40 focus:ring-offset-2 focus:ring-offset-transparent
+                  active:scale-[0.98]
                   ${
                     action.isPrimary
-                      ? 'border-blue-500/30 bg-blue-50/50 dark:bg-blue-900/20 dark:border-blue-500/30'
+                      ? 'border-[#5b8def]/25 bg-[#5b8def]/8 dark:bg-[#5b8def]/15 dark:border-[#5b8def]/30'
                       : ''
                   }
                   ${action.hoverColor}
                 `}
                 >
                   <Icon
-                    className={`w-6 h-6 md:w-7 md:h-7 transition-colors duration-200 ${
+                    className={`w-6 h-6 md:w-7 md:h-7 transition-colors duration-300 ${
                       action.isPrimary
-                        ? 'text-blue-600 dark:text-blue-400'
-                        : 'text-gray-600 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-gray-100'
+                        ? 'text-[#4a7edb] dark:text-blue-400'
+                        : 'text-slate-500 dark:text-slate-400 group-hover:text-slate-700 dark:group-hover:text-slate-200'
                     }`}
                   />
                   <span className="text-sm font-semibold tracking-tight">{action.title}</span>
@@ -211,7 +211,6 @@ export const Dashboard: React.FC = () => {
             })}
           </div>
         </div>
-        {/* Main content */}
         <div>
           <RecentFiles files={files} />
         </div>

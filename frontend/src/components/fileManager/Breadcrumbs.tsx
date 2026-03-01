@@ -23,15 +23,15 @@ export const Breadcrumbs: React.FC = () => {
     >
       <button
         onClick={() => setCurrentPath(['My Files'], [null])}
-        className={`flex items-center justify-center min-w-[2.25rem] min-h-[2.25rem] rounded-lg ${isMobile ? 'flex-shrink-0' : ''} text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors duration-200`}
+        className={`flex items-center justify-center min-w-[2.25rem] min-h-[2.25rem] rounded-xl ${isMobile ? 'flex-shrink-0' : ''} text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-100 hover:bg-slate-200/50 dark:hover:bg-slate-700/50 transition-all duration-300 ease-out`}
       >
         <Home className="w-5 h-5" strokeWidth={2} />
       </button>
 
       {shouldTruncate && (
         <>
-          <ChevronRight className="w-5 h-5 text-gray-500 dark:text-gray-400 flex-shrink-0" />
-          <span className="text-gray-500 dark:text-gray-400 px-0.5 flex-shrink-0 text-sm">...</span>
+          <ChevronRight className="w-5 h-5 text-slate-400 dark:text-slate-500 flex-shrink-0" />
+          <span className="text-slate-400 dark:text-slate-500 px-0.5 flex-shrink-0 text-sm">...</span>
         </>
       )}
 
@@ -40,17 +40,17 @@ export const Breadcrumbs: React.FC = () => {
 
         return (
           <React.Fragment key={index}>
-            <ChevronRight className="w-5 h-5 text-gray-500 dark:text-gray-400 flex-shrink-0" />
+            <ChevronRight className="w-5 h-5 text-slate-400 dark:text-slate-500 flex-shrink-0" />
             <button
               onClick={() => handleNavigation(actualIndex)}
               className={`
                 ${isMobile ? 'flex-shrink-0 whitespace-nowrap' : ''}
-                py-1.5 px-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700/50
-                hover:text-gray-800 dark:hover:text-gray-100 transition-colors duration-200
+                py-1.5 px-2 rounded-xl hover:bg-slate-200/50 dark:hover:bg-slate-700/50
+                hover:text-slate-800 dark:hover:text-slate-100 transition-all duration-300 ease-out
                 ${
                   actualIndex === currentPath.length - 1
-                    ? 'text-gray-900 dark:text-gray-100 font-semibold'
-                    : 'text-gray-600 dark:text-gray-300'
+                    ? 'text-slate-800 dark:text-slate-100 font-semibold'
+                    : 'text-slate-500 dark:text-slate-400'
                 }
               `}
             >

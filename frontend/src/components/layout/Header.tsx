@@ -46,54 +46,54 @@ export const Header: React.FC = () => {
 
   return (
     <header
-      className={`bg-[#dfe3ea]/98 dark:bg-slate-900/90 border-b border-black/[0.06] dark:border-slate-700/50 backdrop-blur-xl px-4 sm:px-8 py-4 backdrop-blur-xl transition-all duration-300 sticky top-0 z-40 ${scrolled ? 'shadow-lg dark:shadow-black/20' : 'shadow-sm'}`}
+      className={`bg-[#f0f3f7]/90 dark:bg-slate-900/90 border-b border-slate-200/70 dark:border-slate-800/70 backdrop-blur-xl px-4 sm:px-6 py-3 transition-all duration-300 sticky top-0 z-40 ${scrolled ? 'shadow-soft' : ''}`}
     >
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-4">
         {/* Left section */}
-        <div className="flex items-center space-x-2 sm:space-x-4">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="ripple text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 transition-all duration-300 rounded-lg p-2 hover:bg-gray-100 dark:hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-400 hover:scale-110 active:scale-95"
+            className="ripple p-2 rounded-2xl text-slate-500 hover:text-[#4a7edb] dark:hover:text-blue-400 hover:bg-slate-200/50 dark:hover:bg-slate-700/50 transition-all duration-300 ease-out focus:outline-none focus:ring-2 focus:ring-[#5b8def]/40 active:scale-95 flex-shrink-0"
             aria-label="Open sidebar"
           >
-            <Menu className="w-6 h-6 transition-transform duration-300" />
+            <Menu className="w-5 h-5" />
           </button>
 
           {/* Search */}
-          <div className="relative hidden md:block w-48 sm:w-80 lg:w-96">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 pointer-events-none transition-colors duration-300" />
+          <div className="relative hidden md:block w-44 sm:w-72 lg:w-80 flex-1 max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none transition-colors duration-300" />
             <input
               type="text"
               placeholder="Search files and folders..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-10 py-2 bg-[#d4d9e1] dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-300 text-gray-900 dark:text-gray-100 placeholder-gray-400 hover:shadow-md hover:border-gray-300 dark:hover:border-gray-600 focus:shadow-lg focus:bg-[#dfe3ea] dark:focus:bg-gray-800 focus:shadow-blue-500/10"
+              className="w-full pl-9 pr-9 py-2.5 bg-slate-100/80 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#5b8def]/35 focus:border-[#5b8def]/40 text-slate-800 dark:text-slate-100 placeholder-slate-400 transition-all duration-300 ease-out text-sm"
             />
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery('')}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 p-1 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-all duration-300 hover:scale-110 active:scale-95 animate-scaleIn"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1.5 rounded-xl hover:bg-slate-200/60 dark:hover:bg-slate-600/50 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-all duration-300 ease-out animate-scaleIn"
                 aria-label="Clear search"
               >
                 <X className="w-4 h-4" />
               </button>
             )}
             {isSearching && searchQuery && (
-              <div className="absolute right-10 top-1/2 transform -translate-y-1/2">
-                <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+              <div className="absolute right-9 top-1/2 -translate-y-1/2">
+                <div className="w-4 h-4 border-2 border-slate-300 dark:border-slate-600 border-t-[#5b8def] dark:border-t-blue-400 rounded-full animate-spin" />
               </div>
             )}
           </div>
         </div>
 
         {/* Right section */}
-        <div className="flex items-center space-x-1 sm:space-x-2">
+        <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
           <ThemeToggle />
           <button
             onClick={() => setUploadModalOpen(true)}
-            className="ripple btn-glow flex items-center space-x-2 px-5 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-500 text-white rounded-xl shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 hover-lift font-semibold"
+            className="ripple btn-glow flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-[#5b8def] to-[#4a7edb] hover:from-[#4a7edb] hover:to-[#3d6ec7] text-white rounded-2xl shadow-soft focus:outline-none focus:ring-2 focus:ring-[#5b8def]/40 hover-lift font-semibold text-sm transition-all duration-300 ease-out"
           >
-            <Upload className="w-4 h-4 transition-transform duration-200" />
+            <Upload className="w-4 h-4" />
             <span className="hidden sm:inline">Upload</span>
           </button>
 
@@ -101,44 +101,38 @@ export const Header: React.FC = () => {
           <div className="relative" ref={dropdownRef}>
             <button
               onClick={() => setDropdownOpen(!dropdownOpen)}
-              className="flex items-center space-x-2 p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2"
+              className="flex items-center gap-2 p-2 rounded-2xl hover:bg-slate-200/50 dark:hover:bg-slate-700/50 cursor-pointer transition-all duration-300 ease-out focus:outline-none focus:ring-2 focus:ring-[#5b8def]/40"
             >
-              {/* Avatar: If you add avatarUrl to user in the future, use it here. For now, always show initials. */}
-              <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center shadow-lg text-white font-bold text-base transition-all duration-200 hover:shadow-xl">
+              <div className="w-8 h-8 bg-gradient-to-br from-[#5b8def] to-[#4a7edb] rounded-full flex items-center justify-center shadow-soft text-white font-semibold text-sm transition-all duration-300 ease-out">
                 {getInitials(user?.name) || 'U'}
               </div>
-              <div className="hidden sm:block text-left">
-                <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+              <div className="hidden sm:block text-left min-w-0">
+                <p className="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate">
                   {user?.name || 'Personal Cloud'}
                 </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">{user?.email || 'Your Files'}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{user?.email || 'Your Files'}</p>
               </div>
               <ChevronDown
-                className={`w-4 h-4 text-gray-500 dark:text-gray-400 transition-transform duration-300 ease-in-out ${
-                  dropdownOpen ? 'rotate-180' : ''
-                }`}
+                className={`w-4 h-4 text-slate-500 dark:text-slate-400 transition-transform duration-300 ease-out flex-shrink-0 ${dropdownOpen ? 'rotate-180' : ''}`}
               />
             </button>
 
-            {/* Dropdown Menu */}
             {dropdownOpen && (
               <>
-                {/* Backdrop */}
                 <div
-                  className="fixed inset-0 z-40 bg-black/5 dark:bg-black/20 animate-fadeIn"
+                  className="fixed inset-0 z-40 bg-slate-900/10 dark:bg-black/15 backdrop-blur-[2px] animate-fadeIn"
                   onClick={() => setDropdownOpen(false)}
                 />
-                {/* Dropdown */}
-                <div className="absolute right-0 mt-2 w-48 bg-[#dfe3ea]/98 dark:bg-slate-800/95 backdrop-blur-xl rounded-xl shadow-2xl border border-gray-200/50 dark:border-slate-700/50 py-1 z-50 overflow-hidden animate-menuIn">
+                <div className="absolute right-0 mt-2 w-48 bg-[#f0f3f7]/98 dark:bg-slate-800/98 backdrop-blur-xl rounded-2xl shadow-soft-lg border border-slate-200/60 dark:border-slate-700/60 py-1.5 z-50 overflow-hidden animate-menuIn">
                   <button
                     onClick={() => {
                       logout();
                       setDropdownOpen(false);
                     }}
-                    className="w-full flex items-center space-x-3 px-4 py-2.5 text-left text-gray-700 dark:text-gray-300 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 dark:hover:text-red-400 transition-all duration-200 group rounded-lg mx-1"
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-left text-slate-700 dark:text-slate-300 hover:bg-red-50/80 dark:hover:bg-red-900/20 hover:text-red-600 dark:hover:text-red-400 transition-all duration-300 ease-out rounded-xl mx-1.5 group"
                   >
-                    <LogOut className="w-4 h-4 transition-transform duration-200 group-hover:scale-110 group-hover:-translate-x-0.5" />
-                    <span className="text-sm font-medium transition-colors duration-200">Log out</span>
+                    <LogOut className="w-4 h-4 flex-shrink-0 transition-transform duration-300 group-hover:-translate-x-0.5" />
+                    <span className="text-sm font-medium">Log out</span>
                   </button>
                 </div>
               </>

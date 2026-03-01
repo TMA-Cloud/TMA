@@ -40,7 +40,7 @@ export const SortMenu: React.FC<SortMenuProps> = ({ sortBy, sortOrder, onSortCha
       <Tooltip text="Sort">
         <button
           ref={sortButtonRef}
-          className="p-2.5 rounded-xl text-gray-500/80 hover:text-purple-600 dark:text-gray-400/80 dark:hover:text-purple-400 transition-all duration-200 hover-lift hover:bg-purple-50/50 dark:hover:bg-purple-900/20"
+          className="p-2.5 rounded-2xl text-slate-500 dark:text-slate-400 hover:text-violet-500 dark:hover:text-violet-400 transition-all duration-300 ease-out hover-lift hover:bg-violet-500/10 dark:hover:bg-violet-500/20"
           aria-label="Sort"
           onClick={() => {
             if (!showSortMenu && sortButtonRef.current) {
@@ -67,7 +67,7 @@ export const SortMenu: React.FC<SortMenuProps> = ({ sortBy, sortOrder, onSortCha
             {/* Sort menu */}
             <div
               ref={sortMenuRef}
-              className="fixed w-48 bg-white/95 dark:bg-slate-800/95 backdrop-blur-xl border border-gray-200/50 dark:border-slate-700/50 rounded-xl shadow-2xl z-[9999] animate-menuIn"
+              className="fixed w-48 bg-[#f0f3f7]/98 dark:bg-slate-800/98 backdrop-blur-xl border border-slate-200/60 dark:border-slate-700/50 rounded-2xl shadow-soft-lg z-[9999] animate-menuIn"
               style={{
                 top: `${sortMenuPos.top}px`,
                 right: `${sortMenuPos.right}px`,
@@ -82,10 +82,10 @@ export const SortMenu: React.FC<SortMenuProps> = ({ sortBy, sortOrder, onSortCha
                     onSortChange(opt.by, opt.order);
                     setShowSortMenu(false);
                   }}
-                  className={`flex items-center w-full px-4 py-2.5 text-sm text-left transition-all duration-200 rounded-lg mx-1 ${
+                  className={`flex items-center w-full px-4 py-2.5 text-sm text-left transition-all duration-300 ease-out rounded-xl mx-1.5 ${
                     sortBy === opt.by && sortOrder === opt.order
-                      ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-semibold'
-                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100/80 dark:hover:bg-slate-700/50'
+                      ? 'bg-[#5b8def]/15 dark:bg-[#5b8def]/25 text-[#4a7edb] dark:text-blue-300 font-semibold'
+                      : 'text-slate-700 dark:text-slate-300 hover:bg-slate-200/50 dark:hover:bg-slate-700/50'
                   }`}
                 >
                   {sortBy === opt.by && sortOrder === opt.order && <Check className="w-4 h-4 mr-2" />}

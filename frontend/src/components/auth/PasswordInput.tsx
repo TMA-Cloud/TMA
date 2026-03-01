@@ -23,7 +23,7 @@ export const PasswordInput: React.FC<PasswordInputProps> = ({
   return (
     <div className="relative">
       <input
-        className="border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-3 w-full bg-[#d4d9e1] dark:bg-gray-800/80 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm transition-all duration-200 text-base pr-12"
+        className="border border-slate-200/80 dark:border-slate-600/80 rounded-2xl px-4 py-3 w-full bg-white/70 dark:bg-slate-700/50 focus:outline-none focus:ring-2 focus:ring-[#5b8def]/35 focus:border-[#5b8def]/40 text-slate-800 dark:text-slate-100 placeholder-slate-400 transition-all duration-300 ease-out text-base pr-12"
         type={showPassword ? 'text' : 'password'}
         placeholder={placeholder}
         value={value}
@@ -33,7 +33,7 @@ export const PasswordInput: React.FC<PasswordInputProps> = ({
       />
       <button
         type="button"
-        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-blue-500 focus:outline-none"
+        className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-xl text-slate-400 hover:text-[#5b8def] dark:hover:text-blue-400 focus:outline-none transition-colors duration-300"
         tabIndex={-1}
         onClick={onTogglePassword}
         aria-label={showPassword ? 'Hide password' : 'Show password'}

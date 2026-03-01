@@ -20,7 +20,7 @@ export const SocialAuthButtons: React.FC<SocialAuthButtonsProps> = ({ googleEnab
           window.location.href = `/api/google/login`;
         }}
         disabled={!googleEnabled}
-        className="flex items-center justify-center gap-2 w-full px-4 py-2 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-700 dark:text-gray-300 font-medium hover:bg-gray-200 dark:hover:bg-gray-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+        className="flex items-center justify-center gap-2 w-full px-4 py-2.5 bg-white/70 dark:bg-slate-700/50 border border-slate-200/80 dark:border-slate-600/80 rounded-2xl text-slate-700 dark:text-slate-300 font-medium hover:bg-slate-100/80 dark:hover:bg-slate-600/50 transition-all duration-300 ease-out disabled:opacity-50 disabled:cursor-not-allowed"
       >
         Continue with Google
       </button>

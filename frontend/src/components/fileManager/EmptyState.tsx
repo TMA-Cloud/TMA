@@ -40,29 +40,29 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
     <div
       className={`
         flex flex-col items-center justify-center text-center select-none animate-fadeIn w-full
-        ${isDropZoneContext ? 'min-h-[calc(100vh-18rem)] rounded-2xl border-2 border-dashed border-gray-300 dark:border-gray-600' : 'h-64'}
+        ${isDropZoneContext ? 'min-h-[calc(100vh-18rem)] rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-600' : 'h-64'}
       `}
     >
       <svg width="80" height="80" fill="none" viewBox="0 0 80 80" className="mb-4 animate-bounceIn flex-shrink-0">
-        <rect width="80" height="80" rx="20" fill="#e0e7ef" className="dark:fill-gray-800" />
+        <rect width="80" height="80" rx="20" fill="#e2e7ee" className="dark:fill-slate-800" />
         <path
           d="M24 56V32a4 4 0 014-4h24a4 4 0 014 4v24"
-          stroke="#60a5fa"
+          stroke="#5b8def"
           strokeWidth="2"
           strokeLinecap="round"
           strokeLinejoin="round"
         />
-        <path d="M32 40h16" stroke="#60a5fa" strokeWidth="2" strokeLinecap="round" />
-        <path d="M32 48h16" stroke="#60a5fa" strokeWidth="2" strokeLinecap="round" />
+        <path d="M32 40h16" stroke="#5b8def" strokeWidth="2" strokeLinecap="round" />
+        <path d="M32 48h16" stroke="#5b8def" strokeWidth="2" strokeLinecap="round" />
       </svg>
-      <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-2">{getTitle()}</h3>
-      <p className="text-gray-500 dark:text-gray-400 mb-1">{getDescription()}</p>
+      <h3 className="text-lg font-semibold text-slate-700 dark:text-slate-300 mb-2">{getTitle()}</h3>
+      <p className="text-slate-500 dark:text-slate-400 mb-1">{getDescription()}</p>
       {isDropZoneContext && (
-        <p className="text-sm text-gray-400 dark:text-gray-500 mb-4">Drop files or folders anywhere in this area</p>
+        <p className="text-sm text-slate-400 dark:text-slate-500 mb-4">Drop files or folders anywhere in this area</p>
       )}
       {canCreateFolder && searchQuery.trim().length === 0 && (
         <button
-          className="px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 font-semibold hover:scale-105 active:scale-95 transform animate-bounceIn"
+          className="px-6 py-3 bg-gradient-to-r from-[#5b8def] to-[#4a7edb] hover:from-[#4a7edb] hover:to-[#3d6ec7] text-white rounded-2xl shadow-soft hover:shadow-soft-md transition-all duration-300 ease-out font-semibold active:scale-[0.98] animate-bounceIn"
           onClick={onCreateFolder}
         >
           Create Folder

@@ -94,8 +94,8 @@ const SignupForm = lazy(() =>
 const PageLoadingFallback: React.FC = () => (
   <div className="flex items-center justify-center h-full min-h-[400px]">
     <div className="text-center">
-      <div className="w-12 h-12 mx-auto mb-4 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-      <p className="text-sm text-gray-600 dark:text-gray-400">Loading...</p>
+      <div className="w-11 h-11 mx-auto mb-3 border-[3px] border-slate-200 dark:border-slate-700 border-t-[#5b8def] dark:border-t-blue-400 rounded-full animate-spin"></div>
+      <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">Loading...</p>
     </div>
   </div>
 );
@@ -157,7 +157,7 @@ const AppContent: React.FC = () => {
   }
 
   return (
-    <div className="h-screen bg-gradient-to-br from-[#d6dbe2] via-[#d9dee5] to-[#d2d7e0] dark:from-slate-900 dark:via-slate-900 dark:to-slate-800/90 flex overflow-hidden">
+    <div className="h-screen bg-gradient-to-br from-[#e8ecf1] via-[#eef2f6] to-[#e2e7ee] dark:from-[#0f172a] dark:via-[#1e293b] dark:to-[#1a2332] flex overflow-hidden">
       <Sidebar />
 
       <div
@@ -218,10 +218,10 @@ const AuthGate: React.FC = () => {
 
   if (loading || loadingSignupStatus) {
     return (
-      <div className="h-screen flex items-center justify-center bg-gradient-to-br from-[#d6dbe2] to-[#d2d7e0] dark:from-gray-900 dark:to-gray-950">
+      <div className="h-screen flex items-center justify-center bg-gradient-to-br from-[#e8ecf1] via-[#eef2f6] to-[#e2e7ee] dark:from-[#0f172a] dark:via-[#1e293b] dark:to-[#1a2332]">
         <div className="text-center animate-fadeIn">
-          <div className="w-16 h-16 mx-auto mb-4 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-lg font-semibold text-gray-700 dark:text-gray-300 animate-pulse">Loading...</p>
+          <div className="w-14 h-14 mx-auto mb-4 border-[3px] border-[#d5dbe4] dark:border-slate-700 border-t-[#5b8def] dark:border-t-blue-400 rounded-full animate-spin"></div>
+          <p className="text-base font-medium text-slate-600 dark:text-slate-400">Loading...</p>
         </div>
       </div>
     );
@@ -229,12 +229,12 @@ const AuthGate: React.FC = () => {
 
   if (!user) {
     return (
-      <div className="h-screen flex items-center justify-center bg-[#d6dbe2] dark:bg-gray-900 relative">
-        <div className="absolute top-4 right-4 z-50">
+      <div className="h-screen flex items-center justify-center bg-gradient-to-br from-[#e8ecf1] via-[#eef2f6] to-[#e2e7ee] dark:from-[#0f172a] dark:via-[#1e293b] dark:to-[#1a2332] relative">
+        <div className="absolute top-5 right-5 z-50">
           <ThemeToggle />
         </div>
         {error && (
-          <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-red-500 text-white px-4 py-2 rounded-lg shadow-lg z-50">
+          <div className="absolute top-5 left-1/2 -translate-x-1/2 bg-red-500/95 text-white px-5 py-2.5 rounded-2xl shadow-soft-md z-50 text-sm font-medium backdrop-blur-sm">
             {error}
           </div>
         )}

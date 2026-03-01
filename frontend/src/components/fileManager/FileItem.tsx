@@ -111,18 +111,18 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
       <div
         data-file-id={file.id}
         className={`
-          stagger-item group relative rounded-xl border cursor-pointer
-          transition-all duration-200 ease-out
-          hover:z-20 hover:shadow-md hover:border-blue-300/40 dark:hover:border-blue-500/30
+          stagger-item group relative rounded-2xl border cursor-pointer
+          transition-all duration-300 ease-out
+          hover:z-20 hover:shadow-soft hover:border-[#5b8def]/30 dark:hover:border-[#5b8def]/40
           active:scale-[0.98]
           min-w-0 w-full p-3 ${isMobile ? 'select-none' : ''}
           overflow-hidden
           ${
             isSelected
-              ? 'border-blue-500 dark:border-blue-400 bg-blue-50/80 dark:bg-blue-900/30 shadow-lg ring-2 ring-blue-500/30 dark:ring-blue-400/30'
-              : 'border-gray-200/50 dark:border-slate-700/50 bg-[#dfe3ea] dark:bg-slate-800/50 hover:border-blue-300/50 dark:hover:border-blue-600/50 hover:bg-[#d4d9e1]/80 dark:hover:bg-slate-800/80'
+              ? 'border-[#5b8def]/50 dark:border-[#5b8def]/50 bg-[#5b8def]/10 dark:bg-[#5b8def]/20 shadow-soft ring-2 ring-[#5b8def]/25 dark:ring-[#5b8def]/30'
+              : 'border-slate-200/60 dark:border-slate-700/50 bg-[#f0f3f7] dark:bg-slate-800/50 hover:border-[#5b8def]/25 dark:hover:border-[#5b8def]/35 hover:bg-slate-200/40 dark:hover:bg-slate-700/50'
           }
-          ${isDragOver ? 'ring-4 ring-blue-400 ring-offset-2 scale-105' : ''}
+          ${isDragOver ? 'ring-4 ring-[#5b8def]/40 ring-offset-2 scale-[1.02]' : ''}
         `}
         style={{ maxWidth: '100%' }}
         onClick={handleClickWrapped}
@@ -146,7 +146,7 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
             {isExpired && <Clock className="absolute -top-0.5 -left-0.5 w-4 h-4 text-red-400" />}
             {file.type === 'file' && !isMobile && (
               <button
-                className="absolute -bottom-3 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 scale-90 group-hover:scale-100 bg-[#dfe3ea] dark:bg-gray-900 border border-black/[0.06] dark:border-gray-700 rounded-full p-1.5 shadow-lg hover:shadow-xl hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:border-blue-400 transition-all duration-200"
+                className="absolute -bottom-3 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 scale-90 group-hover:scale-100 bg-[#f0f3f7] dark:bg-slate-800 border border-slate-200/60 dark:border-slate-600 rounded-full p-1.5 shadow-soft hover:shadow-soft-md hover:bg-[#5b8def]/15 dark:hover:bg-[#5b8def]/25 hover:border-[#5b8def]/30 transition-all duration-300 ease-out"
                 tabIndex={-1}
                 title="Quick preview"
                 onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
@@ -154,7 +154,7 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
                   onDoubleClick();
                 }}
               >
-                <Eye className="w-4 h-4 text-blue-500 transition-colors duration-200" />
+                <Eye className="w-4 h-4 text-[#5b8def] dark:text-blue-400 transition-colors duration-300" />
               </button>
             )}
           </div>
@@ -162,7 +162,7 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
           <div className="w-full min-w-0 px-1">
             <div className="w-full min-w-0">
               <p
-                className="text-sm font-semibold text-gray-900 dark:text-gray-100 w-full break-words transition-colors duration-200"
+                className="text-sm font-semibold text-slate-800 dark:text-slate-100 w-full break-words transition-colors duration-300"
                 style={{
                   display: '-webkit-box',
                   WebkitLineClamp: 2,
@@ -182,7 +182,7 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
             </div>
           </div>
 
-          <div className="text-xs text-gray-500/80 dark:text-gray-400/80 w-full min-w-0 px-1">
+          <div className="text-xs text-slate-500 dark:text-slate-400 w-full min-w-0 px-1">
             {file.type === 'file' && file.size && <p className="truncate">{formatFileSize(file.size)}</p>}
             <p className="truncate">{formatDate(file.modified)}</p>
             {isExpired && <p className="truncate text-red-400 font-medium">Link expired</p>}
@@ -196,17 +196,17 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
     <div
       data-file-id={file.id}
       className={`
-        stagger-item group flex items-center space-x-3 py-2.5 px-3 rounded-lg cursor-pointer
-        transition-all duration-200 ease-out
-        hover:bg-[#d4d9e1] dark:hover:bg-slate-800/80
+        stagger-item group flex items-center gap-3 py-2.5 px-3 rounded-2xl cursor-pointer
+        transition-all duration-300 ease-out
+        hover:bg-slate-200/40 dark:hover:bg-slate-700/50
         active:scale-[0.99]
         ${isMobile ? 'select-none' : ''}
         ${
           isSelected
-            ? 'bg-blue-50/90 dark:bg-blue-900/30 shadow-md border-l-4 border-blue-500 dark:border-blue-400 ring-2 ring-blue-500/20 dark:ring-blue-400/20'
-            : 'hover:bg-[#d4d9e1]/80 dark:hover:bg-slate-800/60 border-l-4 border-transparent'
+            ? 'bg-[#5b8def]/10 dark:bg-[#5b8def]/20 shadow-soft border-l-4 border-[#5b8def] dark:border-[#5b8def] ring-2 ring-[#5b8def]/20 dark:ring-[#5b8def]/25'
+            : 'border-l-4 border-transparent'
         }
-        ${isDragOver ? 'ring-4 ring-blue-400 ring-offset-2 scale-[1.02]' : ''}
+        ${isDragOver ? 'ring-4 ring-[#5b8def]/40 ring-offset-2 scale-[1.01]' : ''}
       `}
       onClick={handleClickWrapped}
       onDoubleClick={onDoubleClick}
@@ -228,7 +228,7 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
         {isExpired && <Clock className="absolute -top-1 -left-1 w-4 h-4 text-red-400" />}
         {file.type === 'file' && (
           <button
-            className="absolute -bottom-3 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 scale-90 group-hover:scale-100 bg-[#dfe3ea] dark:bg-gray-900 border border-black/[0.06] dark:border-gray-700 rounded-full p-1 shadow-lg hover:shadow-xl hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:border-blue-400 transition-all duration-200"
+            className="absolute -bottom-3 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 scale-90 group-hover:scale-100 bg-[#f0f3f7] dark:bg-slate-800 border border-slate-200/60 dark:border-slate-600 rounded-full p-1 shadow-soft hover:shadow-soft-md hover:bg-[#5b8def]/15 dark:hover:bg-[#5b8def]/25 hover:border-[#5b8def]/30 transition-all duration-300 ease-out"
             tabIndex={-1}
             title="Quick preview"
             onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
@@ -236,7 +236,7 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
               onDoubleClick();
             }}
           >
-            <Eye className="w-4 h-4 text-blue-500 transition-colors duration-200" />
+            <Eye className="w-4 h-4 text-[#5b8def] dark:text-blue-400 transition-colors duration-300" />
           </button>
         )}
       </div>
@@ -244,7 +244,7 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
       <div className="flex-1 min-w-0">
         <div className="w-full min-w-0">
           <p
-            className="text-base font-semibold text-gray-900 dark:text-gray-100 transition-colors duration-200 break-words leading-tight"
+            className="text-base font-semibold text-slate-800 dark:text-slate-100 transition-colors duration-300 break-words leading-tight"
             style={{
               wordBreak: 'break-word',
               overflowWrap: 'break-word',
@@ -255,7 +255,7 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
             {displayName}
           </p>
         </div>
-        <p className="text-xs text-gray-500/80 dark:text-gray-400/80 transition-colors duration-200">
+        <p className="text-xs text-slate-500 dark:text-slate-400 transition-colors duration-300">
           {file.type === 'file' && file.size && `${formatFileSize(file.size)} • `}
           {formatDate(file.modified)}
           {isExpired && <span className="ml-2 text-red-400 font-medium">Link expired</span>}
