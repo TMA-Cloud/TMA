@@ -136,6 +136,51 @@ async function downloadPostToFile(url, jsonBody, filePath) {
   });
 }
 
+async function getFileInfoFromBackend(base, fileId) {
+  const url = `${base}/api/files/${encodeURIComponent(String(fileId))}/info`;
+
+  let cookieHeader = '';
+  try {
+    const cookies = await session.defaultSession.cookies.get({ url: base });
+    cookieHeader = cookies.map(c => `${c.name}=${c.value}`).join('; ');
+  } catch {
+    cookieHeader = '';
+  }
+
+  return new Promise((resolve, reject) => {
+    const request = net.request({ url });
+    if (cookieHeader) {
+      request.setHeader('Cookie', cookieHeader);
+    }
+
+    let body = '';
+
+    request.on('response', response => {
+      response.on('data', chunk => {
+        body += chunk.toString('utf8');
+      });
+
+      response.on('end', () => {
+        if (response.statusCode < 200 || response.statusCode >= 300) {
+          const status = response.statusCode || 0;
+          return reject(new Error(body ? `File info failed (${status}): ${body}` : `File info failed (${status})`));
+        }
+        try {
+          const data = body ? JSON.parse(body) : {};
+          resolve(data);
+        } catch (err) {
+          reject(err);
+        }
+      });
+
+      response.on('error', reject);
+    });
+
+    request.on('error', reject);
+    request.end();
+  });
+}
+
 function setClipboardToPaths(writtenPaths) {
   const safePaths = (writtenPaths || []).filter(p => typeof p === 'string' && p.length > 0 && !/[\r\n\0]/.test(p));
   if (safePaths.length === 0) return Promise.resolve();
@@ -352,6 +397,7 @@ module.exports = {
   createTempDir,
   downloadToFile,
   downloadPostToFile,
+  getFileInfoFromBackend,
   setClipboardToPaths,
   cleanTempDirsByPrefix,
   cleanTempClipboardDirs,

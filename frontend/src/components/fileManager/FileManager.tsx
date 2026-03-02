@@ -6,6 +6,7 @@ import { Tooltip } from '../ui/Tooltip';
 import { ContextMenu } from './ContextMenu';
 import { PasteProgress } from './PasteProgress';
 import { DownloadProgress } from './DownloadProgress';
+import { DesktopOpenProgress } from './DesktopOpenProgress';
 import { ONLYOFFICE_EXTS, getExt, validateOnlyOfficeMimeType } from '../../utils/fileUtils';
 import { isElectron } from '../../utils/electronDesktop';
 import { useIsMobile } from '../../hooks/useIsMobile';
@@ -75,6 +76,7 @@ export const FileManager: React.FC = () => {
     goBack,
     goForward,
     openUploadModalWithEntries,
+    desktopOpenProgress,
   } = useApp();
 
   const { showToast } = useToast();
@@ -821,6 +823,7 @@ export const FileManager: React.FC = () => {
       />
 
       <PasteProgress progress={pasteProgress} />
+      {desktopOpenProgress.length > 0 && <DesktopOpenProgress items={desktopOpenProgress} />}
       <DownloadProgress
         isDownloading={isDownloading}
         hasFolders={selectedFiles.some(id => files.find(f => f.id === id)?.type === 'folder')}

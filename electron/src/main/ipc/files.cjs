@@ -14,6 +14,15 @@ const {
 
 const SAVE_DIALOG_TITLE = 'TMA Cloud';
 
+// Minimum file size (in bytes) to consider caching between edit sessions (~6 MB).
+const EDIT_CACHE_MIN_BYTES = 6 * 1024 * 1024;
+
+// In-memory cache of large files that have already been downloaded for desktop editing.
+// Keyed by file id.
+// NOTE: This cache only lives for the lifetime of the Electron process and is always
+// revalidated against fresh backend metadata (size + modified) before reuse.
+const editCache = new Map();
+
 function registerEditWithDesktopHandler() {
   ipcMain.handle('files:editWithDesktop', async (_event, payload) => {
     if (process.platform !== 'win32') {
@@ -29,10 +38,61 @@ function registerEditWithDesktopHandler() {
 
       const base = origin.replace(/\/$/, '');
       const win = BrowserWindow.fromWebContents(_event.sender);
-      const downloadUrl = `${base}/api/files/${encodeURIComponent(String(item.id))}/download`;
+      const fileId = String(item.id);
+      const downloadUrl = `${base}/api/files/${encodeURIComponent(fileId)}/download`;
 
-      const editDir = createTempDir(EDIT_DIR_PREFIX);
-      const filePath = path.join(editDir, sanitizeFileName(String(item.name)));
+      let remoteInfo = null;
+      try {
+        // Fetch latest backend metadata so we can safely decide whether a cached
+        // temp file is still identical to the cloud version.
+        remoteInfo = await require('../utils/file-utils.cjs').getFileInfoFromBackend(base, fileId);
+      } catch {
+        remoteInfo = null;
+      }
+
+      const remoteSize = remoteInfo && remoteInfo.size != null ? Number(remoteInfo.size) || 0 : null;
+      const remoteModifiedMs =
+        remoteInfo && remoteInfo.modified != null ? new Date(remoteInfo.modified).getTime() : null;
+
+      let editDir;
+      let filePath;
+
+      const cacheKey = fileId;
+      const cached = editCache.get(cacheKey);
+
+      const canReuseFromCache =
+        cached &&
+        typeof remoteSize === 'number' &&
+        remoteSize >= EDIT_CACHE_MIN_BYTES &&
+        cached.remoteSize === remoteSize &&
+        cached.remoteModifiedMs === remoteModifiedMs &&
+        fs.existsSync(cached.filePath);
+
+      if (canReuseFromCache) {
+        editDir = cached.editDir;
+        filePath = cached.filePath;
+      } else {
+        editDir = createTempDir(EDIT_DIR_PREFIX);
+        filePath = path.join(editDir, sanitizeFileName(String(item.name)));
+
+        try {
+          await downloadToFile(downloadUrl, filePath);
+        } catch (e) {
+          return {
+            ok: false,
+            error: e && e.message ? e.message : 'Failed to download file',
+          };
+        }
+
+        if (typeof remoteSize === 'number' && remoteSize >= EDIT_CACHE_MIN_BYTES) {
+          editCache.set(cacheKey, {
+            editDir,
+            filePath,
+            remoteSize,
+            remoteModifiedMs,
+          });
+        }
+      }
 
       let lastHash = null;
       let lastUploadTime = 0;
@@ -44,17 +104,9 @@ function registerEditWithDesktopHandler() {
       let uploadInProgress = false;
 
       try {
-        await downloadToFile(downloadUrl, filePath);
-        try {
-          lastHash = await hashFile(filePath);
-        } catch {
-          lastHash = null;
-        }
-      } catch (e) {
-        return {
-          ok: false,
-          error: e && e.message ? e.message : 'Failed to download file',
-        };
+        lastHash = await hashFile(filePath);
+      } catch {
+        lastHash = null;
       }
 
       async function uploadIfChangedThrottled() {

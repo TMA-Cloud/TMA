@@ -672,6 +672,7 @@ Get basic metadata for a single file or folder.
   "name": "document.pdf",
   "type": "file",
   "size": 1024,
+  "modified": "2024-01-01T00:00:00Z",
   "parentId": "folder_456"
 }
 ```

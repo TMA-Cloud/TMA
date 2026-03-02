@@ -149,6 +149,31 @@ export interface AppContextType {
     backend?: string;
     electron?: string;
   } | null;
+  /** Progress for opening files on the desktop (Electron). One entry per file. */
+  desktopOpenProgress: {
+    fileId: string;
+    fileName: string;
+    percent: number;
+  }[];
+  setDesktopOpenProgress: (
+    progress:
+      | {
+          fileId: string;
+          fileName: string;
+          percent: number;
+        }[]
+      | ((
+          prev: {
+            fileId: string;
+            fileName: string;
+            percent: number;
+          }[]
+        ) => {
+          fileId: string;
+          fileName: string;
+          percent: number;
+        }[])
+  ) => void;
 }
 
 export const AppContext = createContext<AppContextType | undefined>(undefined);

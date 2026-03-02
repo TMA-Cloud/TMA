@@ -150,6 +150,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const folderStackRef = useRef<(string | null)[]>(folderStack); // Track folder stack for SSE relevance check
   const folderSharedStackRef = useRef<boolean[]>(folderSharedStack); // For nav history (back/forward)
   const refreshFilesRef = useRef<((skipSearchCheck?: boolean) => Promise<void>) | null>(null); // Track refreshFiles function for SSE
+  const desktopEditInProgressRef = useRef<Set<string>>(new Set()); // Track files currently opening on desktop to prevent double-click spam
+  const [desktopOpenProgress, setDesktopOpenProgress] = useState<
+    { fileId: string; fileName: string; percent: number }[]
+  >([]);
 
   const operationQueue = usePromiseQueue();
 
@@ -872,6 +876,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const editFileWithDesktop = async (id: string) => {
+    if (desktopEditInProgressRef.current.has(id)) {
+      showToast('Already opening this file on desktop. Please wait...', 'info');
+      return;
+    }
+
     const file = files.find(f => f.id === id);
     if (!file || String(file.type || '').toLowerCase() === 'folder') {
       showToast('Select a single file to open on desktop.', 'error');
@@ -883,18 +892,96 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return;
     }
 
-    const result = await editFileWithDesktopElectron({
-      id: file.id,
-      name: file.name,
-      mimeType: file.mimeType,
+    desktopEditInProgressRef.current.add(id);
+
+    const sizeBytes = Number(file.size ?? 0);
+    const LARGE_FILE_BYTES = 50 * 1024 * 1024; // 50MB threshold for "large" files
+    const isLarge = sizeBytes >= LARGE_FILE_BYTES;
+    const progressFileId = file.id;
+    const progressFileName = file.name;
+    let succeeded = false;
+    const BASE_DURATION_MS = isLarge ? 20000 : 8000;
+    const MAX_BASE_PERCENT = 90;
+    const TICK_MS = 300;
+    const startTime = Date.now();
+
+    // Add or reset this file's progress entry
+    setDesktopOpenProgress(prev => {
+      const existingIndex = prev.findIndex(p => p.fileId === progressFileId);
+      const baseItem = { fileId: progressFileId, fileName: progressFileName, percent: 5 };
+      if (existingIndex === -1) return [...prev, baseItem];
+      const next = [...prev];
+      next[existingIndex] = baseItem;
+      return next;
     });
 
-    if (!result.ok) {
-      showToast(result.error ?? 'Failed to open or edit file on desktop.', 'error');
-      return;
-    }
+    const tick = () => {
+      if (!desktopEditInProgressRef.current.has(id)) return;
+      const elapsed = Date.now() - startTime;
+      const raw = (elapsed / BASE_DURATION_MS) * MAX_BASE_PERCENT;
+      const percent = Math.max(5, Math.min(MAX_BASE_PERCENT, Math.round(raw)));
 
-    showToast('File opened on desktop. Changes will be auto-synced.', 'success');
+      setDesktopOpenProgress(prev => {
+        const index = prev.findIndex(p => p.fileId === progressFileId);
+        if (index === -1) return prev;
+        const next = [...prev];
+        const current = next[index]!;
+        next[index] = {
+          fileId: current.fileId,
+          fileName: current.fileName,
+          percent,
+        };
+        return next;
+      });
+
+      if (percent < MAX_BASE_PERCENT) {
+        setTimeout(tick, TICK_MS);
+      }
+    };
+
+    setTimeout(tick, TICK_MS);
+
+    try {
+      const result = await editFileWithDesktopElectron({
+        id: file.id,
+        name: file.name,
+        mimeType: file.mimeType,
+      });
+
+      if (!result.ok) {
+        showToast(result.error ?? 'Failed to open or edit file on desktop.', 'error');
+        return;
+      }
+
+      succeeded = true;
+
+      // Snap to 100% for this file, then clear its entry after a short delay
+      setDesktopOpenProgress(prev => {
+        const index = prev.findIndex(p => p.fileId === progressFileId);
+        if (index === -1) return prev;
+        const next = [...prev];
+        const current = next[index]!;
+        next[index] = {
+          fileId: current.fileId,
+          fileName: current.fileName,
+          percent: 100,
+        };
+        return next;
+      });
+
+      setTimeout(() => {
+        setDesktopOpenProgress(prev => prev.filter(p => p.fileId !== progressFileId));
+      }, 800);
+
+      showToast('File opened on desktop. Changes will be auto-synced.', 'success');
+    } finally {
+      desktopEditInProgressRef.current.delete(id);
+
+      // On error/failure, remove this file's progress entry
+      if (!succeeded) {
+        setDesktopOpenProgress(prev => prev.filter(p => p.fileId !== progressFileId));
+      }
+    }
   };
 
   const uploadFileWithProgress = async (file: File, onProgress?: (progress: number) => void) => {
@@ -1705,6 +1792,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         hideFileExtensions,
         setHideFileExtensions,
         updatesAvailable,
+        desktopOpenProgress,
+        setDesktopOpenProgress,
       }}
     >
       {children}

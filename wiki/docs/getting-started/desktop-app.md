@@ -93,16 +93,19 @@ When you run the Windows desktop app, you can open supported files in their desk
 - Double-click behavior in the desktop app:
   - Office/OnlyOffice-supported files open in the default desktop application
   - Image and video files open in the default viewer for that type
+- A progress indicator (e.g. "Opening file… X%") appears while the file is prepared. Clicking the same file again while it is opening shows "Already opening this file on desktop. Please wait...".
 
 ### How Sync Works
 
-- The desktop app downloads an encrypted copy of the file to a temporary location.
+- The desktop app downloads an encrypted copy of the file to a temporary location (or reuses a copy for large files when the cloud version is unchanged).
 - The file is opened using the default application registered in Windows (for example, Word, Excel, PowerPoint, or another associated editor).
 - While the file is open, the desktop app watches it for changes.
 - When you press **Save** in the desktop editor, the updated content is uploaded back to TMA Cloud in the background.
 - The same file entry is updated (ID stays the same); the modified time and size reflect the new version.
 
 If you open a document and close it without saving, no upload is performed and the stored version is unchanged.
+
+- **Caching for large files:** For files of about 6 MB or more, the desktop app may reuse a previously downloaded copy from the same session instead of re-downloading. Before reuse, it checks the current file size and modification time from the server and the copy is reused only if both match. If the file was changed on the server (for example by another device or user), it is re-downloaded.
 
 ### Save As / Export (derived files)
 
