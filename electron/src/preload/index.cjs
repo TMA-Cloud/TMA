@@ -17,6 +17,24 @@ const { contextBridge, ipcRenderer } = require('electron');
         editWithDesktop: payload => ipcRenderer.invoke('files:editWithDesktop', payload),
         saveFile: payload => ipcRenderer.invoke('files:saveFile', payload),
         saveFilesBulk: payload => ipcRenderer.invoke('files:saveFilesBulk', payload),
+        /**
+         * Subscribe to status updates for derived uploads (e.g. exported PDFs).
+         * Returns an unsubscribe function.
+         */
+        onDerivedUploadStatus: callback => {
+          if (typeof callback !== 'function') return () => {};
+          const listener = (_event, payload) => {
+            try {
+              callback(payload);
+            } catch (err) {
+              console.error('[Electron preload] Error in onDerivedUploadStatus callback:', err);
+            }
+          };
+          ipcRenderer.on('files:derivedUploadStatus', listener);
+          return () => {
+            ipcRenderer.removeListener('files:derivedUploadStatus', listener);
+          };
+        },
       },
     };
     contextBridge.exposeInMainWorld('electronAPI', api);

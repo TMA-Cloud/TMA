@@ -346,6 +346,153 @@ async function replaceFileContents(req, res) {
 }
 
 /**
+ * Upload a new file derived from an existing one (e.g. desktop "Save as PDF").
+ * The new file is created in the same parent folder as the original file.
+ */
+async function uploadDerivedFile(req, res) {
+  const fileId = req.params.id;
+
+  try {
+    const existing = await getFile(fileId, req.userId);
+    if (!existing) {
+      return sendError(res, 404, 'File not found');
+    }
+
+    // S3 path: streamUploadToS3 middleware sets req.streamedUpload
+    if (req.streamedUpload) {
+      const upload = req.streamedUpload;
+      if (!upload) {
+        return sendError(res, 400, 'No file uploaded');
+      }
+
+      if (!validateFileName(upload.name)) {
+        return sendError(res, 400, 'Invalid file name');
+      }
+
+      // Validate by MIME + extension (content has already passed magic-byte checks in streamUploadToS3)
+      validateFileUpload(upload.mimeType, upload.name);
+
+      try {
+        const used = await getUserStorageUsage(req.userId);
+        const userStorageLimit = await getUserStorageLimit(req.userId);
+        const checkResult = await checkStorageLimitExceeded({
+          fileSize: upload.size,
+          used,
+          userStorageLimit,
+        });
+
+        if (checkResult.exceeded) {
+          return sendError(res, 413, checkResult.message);
+        }
+      } catch (storageError) {
+        logger.error({ err: storageError, userId: req.userId }, 'Error checking storage limit (derived upload, S3)');
+        return sendError(res, 500, 'Unable to verify storage limit. Please try again.');
+      }
+
+      const newFile = await userOperationLock(req.userId, () => {
+        return createFileFromStreamedUpload(upload, existing.parentId || null, req.userId);
+      });
+
+      await fileUploaded(newFile.id, newFile.name, newFile.size, req);
+      logger.info(
+        { fileId: newFile.id, fileName: newFile.name, fileSize: newFile.size, derivedFrom: existing.id },
+        'Derived file uploaded (S3)'
+      );
+
+      await publishFileEvent(EventTypes.FILE_UPLOADED, {
+        id: newFile.id,
+        name: newFile.name,
+        type: newFile.type,
+        size: newFile.size,
+        mimeType: newFile.mimeType,
+        parentId: newFile.parentId || existing.parentId || null,
+        userId: req.userId,
+      });
+
+      return sendSuccess(res, newFile);
+    }
+
+    // Local disk path (no S3)
+    if (!req.file) {
+      return sendError(res, 400, 'No file uploaded');
+    }
+
+    if (!validateFileName(req.file.originalname)) {
+      await safeUnlink(req.file.path);
+      return sendError(res, 400, 'Invalid file name');
+    }
+
+    let actualMimeType = req.file.mimetype || 'application/octet-stream';
+    const mimeValidation = await validateMimeType(req.file.path, req.file.mimetype, req.file.originalname);
+    if (!mimeValidation.valid) {
+      await safeUnlink(req.file.path);
+      return sendError(res, 400, mimeValidation.error || 'Invalid file type');
+    }
+    actualMimeType = mimeValidation.actualMimeType || req.file.mimetype || 'application/octet-stream';
+
+    validateFileUpload(actualMimeType, req.file.originalname);
+
+    try {
+      const used = await getUserStorageUsage(req.userId);
+      const userStorageLimit = await getUserStorageLimit(req.userId);
+      const checkResult = await checkStorageLimitExceeded({
+        fileSize: req.file.size,
+        used,
+        userStorageLimit,
+      });
+
+      if (checkResult.exceeded) {
+        await safeUnlink(req.file.path);
+        return sendError(res, 413, checkResult.message);
+      }
+    } catch (storageError) {
+      logger.error({ err: storageError, userId: req.userId }, 'Error checking storage limit (derived upload)');
+      await safeUnlink(req.file.path);
+      return sendError(res, 500, 'Unable to verify storage limit. Please try again.');
+    }
+
+    const newFile = await userOperationLock(req.userId, () => {
+      return createFile(
+        req.file.originalname,
+        req.file.size,
+        actualMimeType,
+        req.file.path,
+        existing.parentId || null,
+        req.userId
+      );
+    });
+
+    await fileUploaded(newFile.id, newFile.name, newFile.size, req);
+    logger.info(
+      { fileId: newFile.id, fileName: newFile.name, fileSize: newFile.size, derivedFrom: existing.id },
+      'Derived file uploaded'
+    );
+
+    await publishFileEvent(EventTypes.FILE_UPLOADED, {
+      id: newFile.id,
+      name: newFile.name,
+      type: newFile.type,
+      size: newFile.size,
+      mimeType: newFile.mimeType,
+      parentId: newFile.parentId || existing.parentId || null,
+      userId: req.userId,
+    });
+
+    return sendSuccess(res, newFile);
+  } catch (err) {
+    logger.error({ err, fileId }, 'Error uploading derived file');
+    if (req.file?.path) {
+      try {
+        await safeUnlink(req.file.path);
+      } catch (_) {
+        // ignore
+      }
+    }
+    return sendError(res, 500, 'Failed to upload derived file');
+  }
+}
+
+/**
  * Bulk upload multiple files (multer disk/local or stream-to-S3 when S3 enabled)
  */
 async function uploadFilesBulk(req, res) {
@@ -789,4 +936,5 @@ module.exports = {
   downloadFilesBulk,
   renameFile,
   replaceFileContents,
+  uploadDerivedFile,
 };

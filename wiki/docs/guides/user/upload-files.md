@@ -91,6 +91,7 @@ You choose an action for each conflicting file; nothing is uploaded until you co
 
 - **OnlyOffice Integration (browser):** Edit `.docx`, `.xlsx`, `.pptx` files in the browser when OnlyOffice is configured
 - **Desktop Editing (desktop app):** In the electron app, open supported documents on your computer (Word, Excel, PowerPoint, and other associated editors) and changes sync back automatically when you save
+- **Export / Save As (desktop app):** When a document is opened via **Open on desktop** in the Windows app and you use Save As / Export to create a new file in the temporary folder opened by the desktop app (for example a `.pdf`, `.docx`, `.xlsx`, `.pptx`, `.csv`, or `.rtf`), the new file is uploaded automatically as a separate file in the same cloud folder. If you save the new file to another location (for example Desktop or Documents), it is not uploaded automatically.
 - **Image Viewing (browser):** View images with zoom in the built-in viewer
 - **Image, Video, and Audio (desktop app):** In the Electron app, double-clicking images, videos, or audio files opens them in the default desktop application
 

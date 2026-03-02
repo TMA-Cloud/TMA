@@ -243,6 +243,81 @@ async function uploadFileToReplace(base, fileId, filePath, fileName) {
   });
 }
 
+/**
+ * Upload a new file derived from an existing one (e.g. "Save as PDF" from Word)
+ * into the same parent folder as the original.
+ *
+ * Backend route: POST /api/files/:id/derived
+ * Body: multipart/form-data with single "file" field (same as regular upload).
+ */
+async function uploadDerivedFile(base, fileId, filePath, fileName) {
+  const url = `${base}/api/files/${encodeURIComponent(fileId)}/derived`;
+
+  let cookieHeader = '';
+  try {
+    const cookies = await session.defaultSession.cookies.get({ url: base });
+    cookieHeader = cookies.map(c => `${c.name}=${c.value}`).join('; ');
+  } catch {
+    cookieHeader = '';
+  }
+
+  const boundary = `----ElectronFormBoundary${crypto.randomBytes(16).toString('hex')}`;
+  const dispositionName = 'file';
+  const safeFileName = String(fileName).replace(/"/g, '\\"');
+
+  const preamble =
+    `--${boundary}\r\n` +
+    `Content-Disposition: form-data; name="${dispositionName}"; filename="${safeFileName}"\r\n` +
+    `Content-Type: application/octet-stream\r\n\r\n`;
+  const closing = `\r\n--${boundary}--\r\n`;
+
+  return new Promise((resolve, reject) => {
+    const request = net.request({ method: 'POST', url });
+    request.setHeader('Content-Type', `multipart/form-data; boundary=${boundary}`);
+    if (cookieHeader) {
+      request.setHeader('Cookie', cookieHeader);
+    }
+
+    request.on('response', response => {
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        const status = response.statusCode || 0;
+        let body = '';
+        response.on('data', chunk => {
+          if (body.length < 4096) {
+            body += chunk.toString('utf8');
+          }
+        });
+        response.on('end', () => {
+          reject(new Error(body ? `Upload failed (${status}): ${body}` : `Upload failed (${status})`));
+        });
+        response.on('error', reject);
+        return;
+      }
+
+      response.on('data', () => {});
+      response.on('end', () => resolve());
+      response.on('error', reject);
+    });
+
+    request.on('error', reject);
+
+    request.write(preamble);
+
+    const fileStream = fs.createReadStream(filePath);
+    fileStream.on('data', chunk => {
+      request.write(chunk);
+    });
+    fileStream.on('end', () => {
+      request.write(closing);
+      request.end();
+    });
+    fileStream.on('error', err => {
+      request.destroy();
+      reject(err);
+    });
+  });
+}
+
 function hashFile(filePath) {
   return new Promise((resolve, reject) => {
     const hash = crypto.createHash('sha256');
@@ -282,5 +357,6 @@ module.exports = {
   cleanTempClipboardDirs,
   cleanTempEditDirs,
   uploadFileToReplace,
+  uploadDerivedFile,
   hashFile,
 };

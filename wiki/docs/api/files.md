@@ -741,6 +741,56 @@ The updated file object.
 - `404` - File not found or not owned by the user
 - `400` - No file in request or invalid file type
 
+## Upload Derived File (e.g. Exported Document/PDF)
+
+### POST `/api/files/:id/derived`
+
+Upload a new file that is derived from an existing one while keeping the original file unchanged. This is used by the Windows desktop app when a user opens a document via **Open on desktop** and then uses **Save As** or **Export** (for example, exporting a Word document to PDF or saving a copy as `.docx`, `.xlsx`, or `.pptx`).
+
+The new file is created as a separate entry in the same folder as the original file.
+
+**Path Parameters:**
+
+- `id` - Source file ID (required). The new file is created as a sibling of this file.
+
+**Form Data (local / non-S3 deployments):**
+
+- `file` - Derived file content (required). Single file in `multipart/form-data`.
+
+**S3-backed deployments:**
+
+- When `STORAGE_DRIVER=s3`, uploads are streamed and `streamUploadToS3` sets `req.streamedUpload`. The desktop client sends the same `multipart/form-data` request; the server handles streaming and metadata creation.
+
+**Validation:**
+
+- The source file must exist and belong to the authenticated user.
+- The derived file name must be a valid file name.
+- MIME type is detected from file content and stored accordingly.
+- Storage quota and max upload size checks apply in the same way as for normal uploads.
+
+**Response:**
+
+The created file object for the derived file. Common use cases include exported PDFs and alternate Office document formats saved from Word, Excel, or PowerPoint.
+
+```json
+{
+  "id": "file_derived_123",
+  "name": "document.pdf",
+  "type": "file",
+  "size": 4096,
+  "mimeType": "application/pdf",
+  "parentId": "folder_456",
+  "starred": false,
+  "modified": "2024-01-01T12:05:00Z"
+}
+```
+
+**Errors:**
+
+- `404` - Source file not found or not owned by the user
+- `400` - No file in request or invalid file type
+- `413` - Storage limit exceeded
+
 ## Bulk Download Files
 
 ### POST `/api/files/download/bulk`

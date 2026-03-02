@@ -412,6 +412,60 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [searchQuery, debouncedSearch, cancelSearch, refreshFiles]);
 
+  // Electron desktop: show status for auto-uploaded derived files (e.g. "Save as PDF" from Office)
+  useEffect(() => {
+    if (!isElectron()) return;
+    const api = window.electronAPI;
+    const filesApi = api?.files;
+    if (!filesApi?.onDerivedUploadStatus) return;
+
+    const unsubscribe = filesApi.onDerivedUploadStatus(
+      (payload: {
+        state: 'started' | 'completed' | 'error';
+        fileName: string;
+        size?: number;
+        originalId?: string;
+        error?: string;
+      }) => {
+        const formatDerivedFileNameForToast = (name: string): string => {
+          const MAX_LENGTH = 65;
+          const DOTS = '......';
+          if (!name || name.length <= MAX_LENGTH) return name;
+
+          const extIndex = name.lastIndexOf('.');
+          const hasExt = extIndex > 0 && extIndex < name.length - 1;
+          const ext = hasExt ? name.slice(extIndex) : '';
+
+          const baseMax = MAX_LENGTH - DOTS.length - ext.length;
+          if (baseMax <= 0) {
+            return name.slice(0, MAX_LENGTH - DOTS.length) + DOTS;
+          }
+          const base = name.slice(0, baseMax);
+          return `${base}${DOTS}${ext}`;
+        };
+
+        const displayName = formatDerivedFileNameForToast(payload.fileName);
+
+        if (payload.state === 'started') {
+          const sizeText = payload.size != null ? ` (${formatBytes(payload.size)})` : '';
+          showToast(`Saving exported file "${displayName}"${sizeText}.`, 'info');
+        } else if (payload.state === 'completed') {
+          showToast(`Exported file "${displayName}".`, 'success');
+          // Trigger a debounced refresh so the new file appears without the user reloading.
+          debouncedRefreshFiles(true);
+        } else if (payload.state === 'error') {
+          showToast(payload.error || `Failed to save exported file "${displayName}". Please try again.`, 'error');
+        }
+      }
+    );
+
+    return () => {
+      if (typeof unsubscribe === 'function') {
+        unsubscribe();
+      }
+    };
+  }, [debouncedRefreshFiles, showToast]);
+
   // Helper function to check if event is relevant (uses refs, no dependencies)
   const isEventRelevant = (
     eventType: string,

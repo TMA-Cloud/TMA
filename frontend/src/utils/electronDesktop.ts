@@ -42,6 +42,15 @@ declare global {
           canceled?: boolean;
           error?: string;
         }>;
+        onDerivedUploadStatus?: (
+          callback: (payload: {
+            state: 'started' | 'completed' | 'error';
+            fileName: string;
+            size?: number;
+            originalId?: string;
+            error?: string;
+          }) => void
+        ) => () => void;
       };
     };
   }

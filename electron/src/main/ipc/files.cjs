@@ -8,6 +8,7 @@ const {
   downloadToFile,
   downloadPostToFile,
   uploadFileToReplace,
+  uploadDerivedFile,
   hashFile,
 } = require('../utils/file-utils.cjs');
 
@@ -27,6 +28,7 @@ function registerEditWithDesktopHandler() {
       }
 
       const base = origin.replace(/\/$/, '');
+      const win = BrowserWindow.fromWebContents(_event.sender);
       const downloadUrl = `${base}/api/files/${encodeURIComponent(String(item.id))}/download`;
 
       const editDir = createTempDir(EDIT_DIR_PREFIX);
@@ -36,6 +38,9 @@ function registerEditWithDesktopHandler() {
       let lastUploadTime = 0;
       const THROTTLE_MS = 5000;
       let watcher = null;
+      let dirWatcher = null;
+      const derivedDebounceTimers = new Map();
+      const derivedUploadsInProgress = new Set();
       let uploadInProgress = false;
 
       try {
@@ -96,6 +101,109 @@ function registerEditWithDesktopHandler() {
         });
       } catch {
         watcher = null;
+      }
+
+      // Auto-upload derived files saved in the same temp edit directory (e.g. "Save as", "Export" from Office)
+      try {
+        dirWatcher = fs.watch(editDir, (_eventType, changedFileName) => {
+          if (!changedFileName) return;
+          const name = String(changedFileName);
+          const ext = path.extname(name).toLowerCase();
+          // Ignore Office lock/temporary files (e.g. "~$document.docx")
+          if (name.startsWith('~$')) return;
+
+          const allowedDerivedExts = new Set([
+            '.pdf',
+            '.docx',
+            '.doc',
+            '.docm',
+            '.rtf',
+            '.odt',
+            '.txt',
+            '.html',
+            '.mht',
+            '.xlsx',
+            '.xls',
+            '.xlsm',
+            '.csv',
+            '.pptx',
+            '.ppt',
+            '.pptm',
+            '.odp',
+          ]);
+          if (!allowedDerivedExts.has(ext)) return;
+
+          const derivedPath = path.join(editDir, name);
+
+          // Debounce uploads per derived file to avoid multiple triggers from fs.watch.
+          // Only start the upload after the file has been stable for a short period.
+          const key = derivedPath;
+          const existingTimer = derivedDebounceTimers.get(key);
+          if (existingTimer) {
+            clearTimeout(existingTimer);
+          }
+
+          const DEBOUNCE_MS = 1500;
+          const timer = setTimeout(async () => {
+            derivedDebounceTimers.delete(key);
+
+            // Avoid double uploads if one is already running for this file
+            if (derivedUploadsInProgress.has(key)) {
+              return;
+            }
+            derivedUploadsInProgress.add(key);
+
+            try {
+              // Wait a bit more to reduce chances of reading a still-writing file
+              await new Promise(resolve => setTimeout(resolve, 50));
+
+              const stats = await fs.promises.stat(derivedPath).catch(() => null);
+              const size = stats?.size;
+
+              if (win && !win.isDestroyed()) {
+                win.webContents.send('files:derivedUploadStatus', {
+                  state: 'started',
+                  fileName: name,
+                  size,
+                  originalId: String(item.id),
+                });
+              }
+
+              await uploadDerivedFile(base, String(item.id), derivedPath, name);
+
+              if (win && !win.isDestroyed()) {
+                win.webContents.send('files:derivedUploadStatus', {
+                  state: 'completed',
+                  fileName: name,
+                  size,
+                  originalId: String(item.id),
+                });
+              }
+            } catch (err) {
+              if (win && !win.isDestroyed()) {
+                win.webContents.send('files:derivedUploadStatus', {
+                  state: 'error',
+                  fileName: name,
+                  originalId: String(item.id),
+                  error: err && err.message ? err.message : 'Failed to upload derived file',
+                });
+              }
+            } finally {
+              derivedUploadsInProgress.delete(key);
+            }
+          }, DEBOUNCE_MS);
+
+          derivedDebounceTimers.set(key, timer);
+        });
+        dirWatcher.on('error', () => {
+          try {
+            dirWatcher.close();
+          } catch {
+            /* ignore */
+          }
+        });
+      } catch {
+        dirWatcher = null;
       }
 
       try {

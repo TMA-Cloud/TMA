@@ -104,6 +104,17 @@ When you run the Windows desktop app, you can open supported files in their desk
 
 If you open a document and close it without saving, no upload is performed and the stored version is unchanged.
 
+### Save As / Export (derived files)
+
+When you use **Save As** or **Export** in a desktop editor (for example, Word → Export to PDF or save a copy as `.docx`) while the file was opened via **Open on desktop**:
+
+- If the new file (for example, `report.pdf` or `report-copy.docx`) is saved into the same temporary folder that the desktop app used for the original file, the desktop app:
+  - Detects the new file (supported document and export formats such as `.pdf`, `.docx`, `.xlsx`, `.pptx`, `.csv`, `.rtf`, and similar).
+  - Uploads it as a **new file** in the same cloud folder as the original document.
+  - Shows a status toast such as `Saving exported file "report......pdf" (12.3 MB)` and `Exported file "report......pdf"` when complete.
+- Large exports may take time and the file list updates automatically when the upload finishes.
+- If you choose a different location (for example, Desktop or Documents) in the Save As dialog, the file is saved **only** on your computer and is **not** uploaded automatically.
+
 ## Clipboard Integration (Windows desktop app)
 
 The Windows desktop app adds OS-level clipboard support on top of the standard browser behavior.
