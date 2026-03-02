@@ -226,6 +226,33 @@ async function validateMimeTypeFromBuffer(buffer, filename) {
     }
     const normalizedExpected = expected.map(normalizeMime);
     const normalizedActual = normalizeMime(fileType.mime);
+
+    // Workaround: some valid Office Open XML documents (.docx/.xlsx/.pptx)
+    // are occasionally detected by file-type as generic ZIP archives.
+    // To avoid false positives, if we see a ZIP MIME for these extensions,
+    // inspect the buffered content for common OOXML markers before
+    // treating it as spoofed.
+    if (
+      (normalizedActual === 'application/zip' || normalizedActual === 'application/x-zip-compressed') &&
+      (ext === 'docx' || ext === 'xlsx' || ext === 'pptx')
+    ) {
+      try {
+        const asciiSlice = buffer.toString('utf8', 0, Math.min(buffer.length, MIME_CHECK_BUFFER_SIZE));
+        const hasOfficeMarkers =
+          asciiSlice.includes('[Content_Types].xml') ||
+          asciiSlice.includes('word/') ||
+          asciiSlice.includes('ppt/') ||
+          asciiSlice.includes('xl/');
+
+        if (hasOfficeMarkers) {
+          // Treat as valid OOXML document despite generic ZIP MIME
+          return { valid: true, error: null };
+        }
+      } catch (error) {
+        logger.debug({ filename, err: error.message }, 'Failed OOXML ZIP heuristic during MIME validation from buffer');
+      }
+    }
+
     if (!normalizedExpected.includes(normalizedActual)) {
       logger.warn(
         { filename, detected: fileType.mime, expected },
