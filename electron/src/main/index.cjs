@@ -8,6 +8,26 @@ const { registerAppHandlers } = require('./ipc/app.cjs');
 const { registerEditWithDesktopHandler, registerSaveFileHandlers } = require('./ipc/files.cjs');
 const { cleanTempClipboardDirs, cleanTempEditDirs } = require('./utils/file-utils.cjs');
 
+// Ensure a stable identity + storage location on Windows so auth cookies persist across
+// upgrades/reinstalls (and don't vary with install directory / portable location).
+// Must run before app.whenReady().
+if (process.platform === 'win32') {
+  try {
+    app.setAppUserModelId('com.tmacloud.app');
+  } catch (_) {
+    /* ignore */
+  }
+}
+
+// app.getPath('userData') is derived from app name + platform-specific appData.
+// Being explicit here prevents "login reset" when name/path resolution changes.
+try {
+  const stableUserData = path.join(app.getPath('appData'), 'TMA Cloud');
+  app.setPath('userData', stableUserData);
+} catch (_) {
+  /* ignore */
+}
+
 // Single instance: if another instance is already running, focus it and quit this one
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
