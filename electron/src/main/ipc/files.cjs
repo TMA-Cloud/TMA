@@ -102,6 +102,7 @@ function registerEditWithDesktopHandler() {
       const derivedDebounceTimers = new Map();
       const derivedUploadsInProgress = new Set();
       let uploadInProgress = false;
+      const originalBaseName = path.basename(filePath);
 
       try {
         lastHash = await hashFile(filePath);
@@ -163,6 +164,10 @@ function registerEditWithDesktopHandler() {
           const ext = path.extname(name).toLowerCase();
           // Ignore Office lock/temporary files (e.g. "~$document.docx")
           if (name.startsWith('~$')) return;
+          // The main file (originalBaseName) is handled by the file-specific watcher above,
+          // which correctly calls the replace endpoint. Here we only want truly "derived"
+          // files such as exports or "Save As" with a different name.
+          if (name === originalBaseName) return;
 
           const allowedDerivedExts = new Set([
             '.pdf',
