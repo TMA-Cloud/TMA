@@ -75,6 +75,55 @@ async function ensureFolderPath({ userId, baseParentId, folderSegments, folderId
   return parentId;
 }
 
+async function enforceStorageLimitForUpload({ res, userId, fileSize, cleanup, logMessage }) {
+  try {
+    const used = await getUserStorageUsage(userId);
+    const userStorageLimit = await getUserStorageLimit(userId);
+    const checkResult = await checkStorageLimitExceeded({
+      fileSize,
+      used,
+      userStorageLimit,
+    });
+
+    if (checkResult.exceeded) {
+      if (cleanup) await cleanup();
+      sendError(res, 413, checkResult.message);
+      return false;
+    }
+    return true;
+  } catch (storageError) {
+    logger.error({ err: storageError, userId }, logMessage);
+    if (cleanup) await cleanup();
+    sendError(res, 500, 'Unable to verify storage limit. Please try again.');
+    return false;
+  }
+}
+
+async function validateDiskUploadOrRespond({ res, file }) {
+  if (!file) {
+    sendError(res, 400, 'No file uploaded');
+    return null;
+  }
+
+  if (!validateFileName(file.originalname)) {
+    await safeUnlink(file.path);
+    sendError(res, 400, 'Invalid file name');
+    return null;
+  }
+
+  const fallbackMimeType = file.mimetype || 'application/octet-stream';
+  const mimeValidation = await validateMimeType(file.path, file.mimetype, file.originalname);
+  if (!mimeValidation.valid) {
+    await safeUnlink(file.path);
+    sendError(res, 400, mimeValidation.error || 'Invalid file type');
+    return null;
+  }
+  const actualMimeType = mimeValidation.actualMimeType || fallbackMimeType;
+
+  validateFileUpload(actualMimeType, file.originalname);
+  return actualMimeType;
+}
+
 /**
  * Check if an upload would exceed storage limit (call before starting upload).
  * Returns 200 { allowed: true } or 413 with message so the client can show error without uploading.
@@ -139,7 +188,6 @@ async function addFolder(req, res) {
   const { name, parentId } = req.body;
   const folder = await createFolder(name, parentId, req.userId);
 
-  // Log folder creation
   await logAuditEvent(
     'folder.create',
     {
@@ -203,19 +251,8 @@ async function uploadFile(req, res) {
     return sendError(res, 400, 'No file uploaded');
   }
 
-  if (!validateFileName(req.file.originalname)) {
-    return sendError(res, 400, 'Invalid file name');
-  }
-
-  let actualMimeType = req.file.mimetype || 'application/octet-stream';
-  const mimeValidation = await validateMimeType(req.file.path, req.file.mimetype, req.file.originalname);
-  if (!mimeValidation.valid) {
-    await safeUnlink(req.file.path);
-    return sendError(res, 400, mimeValidation.error || 'Invalid file type');
-  }
-  actualMimeType = mimeValidation.actualMimeType || req.file.mimetype || 'application/octet-stream';
-
-  validateFileUpload(actualMimeType, req.file.originalname);
+  const actualMimeType = await validateDiskUploadOrRespond({ res, file: req.file });
+  if (!actualMimeType) return;
 
   const { valid, parentId, error } = validateParentId(req);
   if (!valid) {
@@ -223,24 +260,14 @@ async function uploadFile(req, res) {
     return sendError(res, 400, error);
   }
 
-  try {
-    const used = await getUserStorageUsage(req.userId);
-    const userStorageLimit = await getUserStorageLimit(req.userId);
-    const checkResult = await checkStorageLimitExceeded({
-      fileSize: req.file.size,
-      used,
-      userStorageLimit,
-    });
-
-    if (checkResult.exceeded) {
-      await safeUnlink(req.file.path);
-      return sendError(res, 413, checkResult.message);
-    }
-  } catch (storageError) {
-    logger.error({ err: storageError, userId: req.userId }, 'Error checking storage limit');
-    await safeUnlink(req.file.path);
-    return sendError(res, 500, 'Unable to verify storage limit. Please try again.');
-  }
+  const storageOk = await enforceStorageLimitForUpload({
+    res,
+    userId: req.userId,
+    fileSize: req.file.size,
+    cleanup: () => safeUnlink(req.file.path),
+    logMessage: 'Error checking storage limit',
+  });
+  if (!storageOk) return;
 
   const file = await userOperationLock(req.userId, () => {
     return createFile(req.file.originalname, req.file.size, actualMimeType, req.file.path, parentId, req.userId);
@@ -372,22 +399,14 @@ async function uploadDerivedFile(req, res) {
       // Validate by MIME + extension (content has already passed magic-byte checks in streamUploadToS3)
       validateFileUpload(upload.mimeType, upload.name);
 
-      try {
-        const used = await getUserStorageUsage(req.userId);
-        const userStorageLimit = await getUserStorageLimit(req.userId);
-        const checkResult = await checkStorageLimitExceeded({
-          fileSize: upload.size,
-          used,
-          userStorageLimit,
-        });
-
-        if (checkResult.exceeded) {
-          return sendError(res, 413, checkResult.message);
-        }
-      } catch (storageError) {
-        logger.error({ err: storageError, userId: req.userId }, 'Error checking storage limit (derived upload, S3)');
-        return sendError(res, 500, 'Unable to verify storage limit. Please try again.');
-      }
+      const storageOk = await enforceStorageLimitForUpload({
+        res,
+        userId: req.userId,
+        fileSize: upload.size,
+        cleanup: null,
+        logMessage: 'Error checking storage limit (derived upload, S3)',
+      });
+      if (!storageOk) return;
 
       const newFile = await userOperationLock(req.userId, () => {
         return createFileFromStreamedUpload(upload, existing.parentId || null, req.userId);
@@ -413,43 +432,17 @@ async function uploadDerivedFile(req, res) {
     }
 
     // Local disk path (no S3)
-    if (!req.file) {
-      return sendError(res, 400, 'No file uploaded');
-    }
+    const actualMimeType = await validateDiskUploadOrRespond({ res, file: req.file });
+    if (!actualMimeType) return;
 
-    if (!validateFileName(req.file.originalname)) {
-      await safeUnlink(req.file.path);
-      return sendError(res, 400, 'Invalid file name');
-    }
-
-    let actualMimeType = req.file.mimetype || 'application/octet-stream';
-    const mimeValidation = await validateMimeType(req.file.path, req.file.mimetype, req.file.originalname);
-    if (!mimeValidation.valid) {
-      await safeUnlink(req.file.path);
-      return sendError(res, 400, mimeValidation.error || 'Invalid file type');
-    }
-    actualMimeType = mimeValidation.actualMimeType || req.file.mimetype || 'application/octet-stream';
-
-    validateFileUpload(actualMimeType, req.file.originalname);
-
-    try {
-      const used = await getUserStorageUsage(req.userId);
-      const userStorageLimit = await getUserStorageLimit(req.userId);
-      const checkResult = await checkStorageLimitExceeded({
-        fileSize: req.file.size,
-        used,
-        userStorageLimit,
-      });
-
-      if (checkResult.exceeded) {
-        await safeUnlink(req.file.path);
-        return sendError(res, 413, checkResult.message);
-      }
-    } catch (storageError) {
-      logger.error({ err: storageError, userId: req.userId }, 'Error checking storage limit (derived upload)');
-      await safeUnlink(req.file.path);
-      return sendError(res, 500, 'Unable to verify storage limit. Please try again.');
-    }
+    const storageOk = await enforceStorageLimitForUpload({
+      res,
+      userId: req.userId,
+      fileSize: req.file.size,
+      cleanup: () => safeUnlink(req.file.path),
+      logMessage: 'Error checking storage limit (derived upload)',
+    });
+    if (!storageOk) return;
 
     const newFile = await userOperationLock(req.userId, () => {
       return createFile(
@@ -630,28 +623,18 @@ async function uploadFilesBulk(req, res) {
   }
 
   const totalSize = req.files.reduce((sum, file) => sum + file.size, 0);
-  try {
-    const used = await getUserStorageUsage(req.userId);
-    const userStorageLimit = await getUserStorageLimit(req.userId);
-    const checkResult = await checkStorageLimitExceeded({
-      fileSize: totalSize,
-      used,
-      userStorageLimit,
-    });
-
-    if (checkResult.exceeded) {
+  const storageOk = await enforceStorageLimitForUpload({
+    res,
+    userId: req.userId,
+    fileSize: totalSize,
+    cleanup: async () => {
       for (const file of req.files) {
         await safeUnlink(file.path);
       }
-      return sendError(res, 413, checkResult.message);
-    }
-  } catch (storageError) {
-    logger.error({ err: storageError, userId: req.userId }, 'Error checking storage limit');
-    for (const file of req.files) {
-      await safeUnlink(file.path);
-    }
-    return sendError(res, 500, 'Unable to verify storage limit. Please try again.');
-  }
+    },
+    logMessage: 'Error checking storage limit',
+  });
+  if (!storageOk) return;
 
   // IMPORTANT: Process sequentially to avoid race conditions creating the same folder path multiple times.
   // (Parallel processing can create duplicate folders due to cache/DB check races.)

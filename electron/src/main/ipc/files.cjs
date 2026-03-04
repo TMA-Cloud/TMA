@@ -23,6 +23,10 @@ const EDIT_CACHE_MIN_BYTES = 6 * 1024 * 1024;
 // revalidated against fresh backend metadata (size + modified) before reuse.
 const editCache = new Map();
 
+// Recently uploaded derived files keyed by "originalId|size" to avoid duplicate uploads
+// when multiple watchers or rapid fs events fire for the same exported document.
+const recentDerivedUploads = new Map();
+
 function registerEditWithDesktopHandler() {
   ipcMain.handle('files:editWithDesktop', async (_event, payload) => {
     if (process.platform !== 'win32') {
@@ -216,6 +220,18 @@ function registerEditWithDesktopHandler() {
 
               const stats = await fs.promises.stat(derivedPath).catch(() => null);
               const size = stats?.size;
+
+              // Deduplicate very recent derived uploads for the same original file and size.
+              // This protects against multiple fs.watch events or leaked watchers causing
+              // the same export to be uploaded multiple times in quick succession.
+              const dedupeKey = `${item.id}|${size || 0}`;
+              const now = Date.now();
+              const lastUpload = recentDerivedUploads.get(dedupeKey);
+              const DEDUPE_WINDOW_MS = 5000;
+              if (lastUpload && now - lastUpload < DEDUPE_WINDOW_MS) {
+                return;
+              }
+              recentDerivedUploads.set(dedupeKey, now);
 
               if (win && !win.isDestroyed()) {
                 win.webContents.send('files:derivedUploadStatus', {

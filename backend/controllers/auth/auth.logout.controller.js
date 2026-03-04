@@ -3,8 +3,7 @@ const { deleteAllUserSessions, deleteSession } = require('../../models/session.m
 const { sendError, sendSuccess } = require('../../utils/response');
 const { logger } = require('../../config/logger');
 const { logAuditEvent } = require('../../services/auditLogger');
-
-const JWT_SECRET = process.env.JWT_SECRET;
+const { extractTokenFromRequest } = require('../../utils/tokenExtractor');
 
 /**
  * Logout from current session
@@ -15,26 +14,10 @@ async function logout(req, res) {
     let sessionId = null;
 
     // Try to get userId and sessionId from token (logout may not use authMiddleware)
-    try {
-      const jwt = require('jsonwebtoken');
-      let token;
-      if (req.headers.cookie) {
-        const cookies = req.headers.cookie.split(';').map(c => c.trim());
-        const t = cookies.find(c => c.startsWith('token='));
-        if (t) token = t.slice('token='.length);
-      }
-      if (!token && req.headers.authorization) {
-        token = req.headers.authorization.split(' ')[1];
-      }
-
-      if (token) {
-        const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] });
-        userId = decoded.id || userId;
-        sessionId = decoded.sid || null;
-      }
-    } catch (err) {
-      // If token decode fails, continue without session ID (token might be expired/invalid)
-      logger.debug({ err }, 'Could not decode token during logout');
+    const decoded = extractTokenFromRequest(req);
+    if (decoded) {
+      userId = decoded.id || userId;
+      sessionId = decoded.sid || null;
     }
 
     // Revoke the current session if session ID is available

@@ -11,27 +11,29 @@ const {
 const pool = require('../../config/db');
 const { userOperationLock } = require('../../utils/mutex');
 const { publishFileEventsBatch, EventTypes } = require('../../services/fileEvents');
-/**
- * Move files or folders to a different location
- */
-async function moveFilesController(req, res) {
+
+async function getPasteContext(req) {
   const { ids, parentId: requestedParentId } = req.body;
 
-  // Resolve the actual parent folder ID for the paste operation
   const actualParentId = await resolveTargetFolderId(requestedParentId, req.userId);
-
-  // Get file info for audit logging
   const fileInfo = await getFileInfo(ids, req.userId);
   const fileNames = fileInfo.map(f => f.name);
   const fileTypes = fileInfo.map(f => f.type);
 
   const targetFolderName = await getTargetFolderName(actualParentId, req.userId);
 
+  return { ids, actualParentId, fileInfo, fileNames, fileTypes, targetFolderName };
+}
+/**
+ * Move files or folders to a different location
+ */
+async function moveFilesController(req, res) {
+  const { ids, actualParentId, fileInfo, fileNames, fileTypes, targetFolderName } = await getPasteContext(req);
+
   await userOperationLock(req.userId, async () => {
     await moveFiles(ids, actualParentId, req.userId);
   });
 
-  // Log file move with details
   await logAuditEvent(
     'file.move',
     {
@@ -51,7 +53,6 @@ async function moveFilesController(req, res) {
   );
   logger.info({ fileIds: ids, fileNames, targetFolderName }, 'Files moved');
 
-  // Publish file moved events in batch (optimized)
   await publishFileEventsBatch(
     fileInfo.map(file => ({
       eventType: EventTypes.FILE_MOVED,
@@ -73,23 +74,12 @@ async function moveFilesController(req, res) {
  * Copy files or folders to a different location
  */
 async function copyFilesController(req, res) {
-  const { ids, parentId: requestedParentId } = req.body;
-
-  // Resolve the actual parent folder ID for the paste operation
-  const actualParentId = await resolveTargetFolderId(requestedParentId, req.userId);
-
-  // Get file info for audit logging
-  const fileInfo = await getFileInfo(ids, req.userId);
-  const fileNames = fileInfo.map(f => f.name);
-  const fileTypes = fileInfo.map(f => f.type);
-
-  const targetFolderName = await getTargetFolderName(actualParentId, req.userId);
+  const { ids, actualParentId, fileNames, fileTypes, targetFolderName } = await getPasteContext(req);
 
   await userOperationLock(req.userId, async () => {
     await copyFiles(ids, actualParentId, req.userId);
   });
 
-  // Log file copy with details
   await logAuditEvent(
     'file.copy',
     {
@@ -109,14 +99,11 @@ async function copyFilesController(req, res) {
   );
   logger.info({ fileIds: ids, fileNames, targetFolderName }, 'Files copied');
 
-  // Query for newly created files (copies) to get their IDs
-  // We find them by matching name, type, and parentId, and created after the copy operation
   const newFilesResult = await pool.query(
     'SELECT id, name, type FROM files WHERE name = ANY($1) AND type = ANY($2) AND parent_id = $3 AND user_id = $4 ORDER BY modified DESC LIMIT $5',
     [fileNames, fileTypes, actualParentId, req.userId, ids.length]
   );
 
-  // Publish file copied events in batch (optimized)
   await publishFileEventsBatch(
     newFilesResult.rows.map(file => ({
       eventType: EventTypes.FILE_COPIED,

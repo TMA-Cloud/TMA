@@ -62,11 +62,40 @@ function readBytes(stream, n) {
 function createAppendTagStream(cipher) {
   return new Transform({
     transform(chunk, encoding, cb) {
-      cb(null, chunk); // Pass data through
+      cb(null, chunk);
     },
     flush(cb) {
-      this.push(cipher.getAuthTag()); // Append tag when stream ends
+      this.push(cipher.getAuthTag());
       cb();
+    },
+  });
+}
+
+function createTagBufferedDecipherTransform(decipher) {
+  return new Transform({
+    transform(chunk, encoding, callback) {
+      this._tail = Buffer.concat([this._tail || Buffer.alloc(0), chunk]);
+      while (this._tail.length > TAG_LENGTH) {
+        const out = this._tail.subarray(0, this._tail.length - TAG_LENGTH);
+        this._tail = this._tail.subarray(this._tail.length - TAG_LENGTH);
+        try {
+          const dec = decipher.update(out);
+          if (dec.length > 0) this.push(dec);
+        } catch (err) {
+          return callback(err);
+        }
+      }
+      callback();
+    },
+    flush(callback) {
+      try {
+        decipher.setAuthTag(this._tail || Buffer.alloc(0));
+        const final = decipher.final();
+        if (final.length > 0) this.push(final);
+        callback();
+      } catch (err) {
+        callback(err);
+      }
     },
   });
 }
@@ -368,32 +397,7 @@ async function createDecryptStreamFromStream(encryptedStream) {
   const key = getEncryptionKey();
   const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
 
-  const bufferTagTransform = new Transform({
-    transform(chunk, encoding, callback) {
-      this._tail = Buffer.concat([this._tail || Buffer.alloc(0), chunk]);
-      while (this._tail.length > TAG_LENGTH) {
-        const out = this._tail.subarray(0, this._tail.length - TAG_LENGTH);
-        this._tail = this._tail.subarray(this._tail.length - TAG_LENGTH);
-        try {
-          const dec = decipher.update(out);
-          if (dec.length > 0) this.push(dec);
-        } catch (err) {
-          return callback(err);
-        }
-      }
-      callback();
-    },
-    flush(callback) {
-      try {
-        decipher.setAuthTag(this._tail || Buffer.alloc(0));
-        const final = decipher.final();
-        if (final.length > 0) this.push(final);
-        callback();
-      } catch (err) {
-        callback(err);
-      }
-    },
-  });
+  const bufferTagTransform = createTagBufferedDecipherTransform(decipher);
 
   encryptedStream.on('error', err => bufferTagTransform.destroy(err));
   encryptedStream.pipe(bufferTagTransform);
@@ -426,32 +430,7 @@ async function copyEncryptedFileStreams(sourceEncryptedStream, destEncryptedStre
   const destIv = crypto.randomBytes(IV_LENGTH);
   const cipher = crypto.createCipheriv(ALGORITHM, key, destIv);
 
-  const bufferTagTransform = new Transform({
-    transform(chunk, encoding, callback) {
-      this._tail = Buffer.concat([this._tail || Buffer.alloc(0), chunk]);
-      while (this._tail.length > TAG_LENGTH) {
-        const out = this._tail.subarray(0, this._tail.length - TAG_LENGTH);
-        this._tail = this._tail.subarray(this._tail.length - TAG_LENGTH);
-        try {
-          const dec = decipher.update(out);
-          if (dec.length > 0) this.push(dec);
-        } catch (err) {
-          return callback(err);
-        }
-      }
-      callback();
-    },
-    flush(callback) {
-      try {
-        decipher.setAuthTag(this._tail || Buffer.alloc(0));
-        const final = decipher.final();
-        if (final.length > 0) this.push(final);
-        callback();
-      } catch (err) {
-        callback(err);
-      }
-    },
-  });
+  const bufferTagTransform = createTagBufferedDecipherTransform(decipher);
 
   destEncryptedStream.write(destIv);
   const appendTagStream = createAppendTagStream(cipher);

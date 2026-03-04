@@ -18,7 +18,6 @@ const { startAuditCleanup } = require('./services/auditCleanup');
 const { startOrphanFileCleanup } = require('./services/orphanCleanup');
 const { startShareCleanup } = require('./services/shareCleanup');
 const errorHandler = require('./middleware/error.middleware');
-// Logging and audit system
 const { requestIdMiddleware } = require('./middleware/requestId.middleware');
 const { blockMainAppOnShareDomain } = require('./middleware/shareDomain.middleware');
 const { requireElectronClientIfEnabled } = require('./middleware/electronClient.middleware');
@@ -32,7 +31,6 @@ const app = express();
 // Metrics endpoint IP whitelist
 const METRICS_ALLOWED_IPS = (process.env.METRICS_ALLOWED_IPS || '127.0.0.1').split(',').map(ip => ip.trim());
 
-// Import OnlyOffice origin cache utility
 const { getCachedOnlyOfficeOrigin } = require('./utils/onlyofficeOriginCache');
 
 // FIRST: Request ID middleware (must be first for proper context propagation)
@@ -62,8 +60,6 @@ app.use((req, res, next) => {
   let connectSrc = "connect-src 'self'";
   let frameSrc = "frame-src 'self'";
 
-  // Get OnlyOffice origin from in-memory cache (synchronous, 60s TTL)
-  // Uses stale-while-revalidate pattern: returns cached value immediately, refreshes in background if expired
   const onlyofficeOrigin = getCachedOnlyOfficeOrigin();
   if (onlyofficeOrigin) {
     scriptSrc += ` ${onlyofficeOrigin}`;
@@ -71,7 +67,6 @@ app.use((req, res, next) => {
     frameSrc += ` ${onlyofficeOrigin}`;
   }
 
-  // Content Security Policy - allow only necessary sources
   const csp = [
     "default-src 'self'",
     scriptSrc, // unsafe-inline/eval needed for some frameworks

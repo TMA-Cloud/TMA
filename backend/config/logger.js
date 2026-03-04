@@ -49,7 +49,6 @@ function maskJWT(token) {
 function maskCookie(cookieStr) {
   if (!cookieStr || typeof cookieStr !== 'string') return '[REDACTED]';
 
-  // Common Set-Cookie options (these should not be masked)
   const cookieOptions = [
     'path',
     'domain',
@@ -62,30 +61,23 @@ function maskCookie(cookieStr) {
     'priority',
   ];
 
-  // Split by semicolon and process each part
   const parts = cookieStr.split(';').map(part => part.trim());
 
   const maskedParts = parts.map(part => {
-    // Check if this part contains an equals sign
     const equalsIndex = part.indexOf('=');
 
     if (equalsIndex === -1) {
-      // No equals sign - this is a flag option like "HttpOnly" or "Secure"
       return part;
     }
 
     const name = part.slice(0, equalsIndex).trim();
     const value = part.slice(equalsIndex + 1).trim();
-
-    // Check if this is a known cookie option (case-insensitive)
     const isOption = cookieOptions.includes(name.toLowerCase());
 
     if (isOption) {
-      // This is an option like "Path=/", "Max-Age=604800" - don't mask
       return part;
     }
 
-    // This is a cookie value - mask it
     if (!value) return part;
 
     const maskedValue = value.includes('.') ? maskJWT(value) : maskSecret(value);
@@ -111,6 +103,57 @@ function maskAuthorization(authHeader) {
   }
 
   return maskSecret(authHeader);
+}
+
+function serializeReq(req) {
+  const headers = { ...req.headers };
+
+  if (headers.authorization) {
+    headers.authorization = maskAuthorization(headers.authorization);
+  }
+  if (headers.cookie) {
+    headers.cookie = maskCookie(headers.cookie);
+  }
+  if (headers['x-api-key']) {
+    headers['x-api-key'] = maskSecret(headers['x-api-key']);
+  }
+  if (headers['x-auth-token']) {
+    headers['x-auth-token'] = maskSecret(headers['x-auth-token']);
+  }
+  if (headers['api-key']) {
+    headers['api-key'] = maskSecret(headers['api-key']);
+  }
+
+  return {
+    id: req.id,
+    method: req.method,
+    url: req.url,
+    query: req.query,
+    params: req.params,
+    headers,
+    remoteAddress: req.ip || req.socket?.remoteAddress,
+    remotePort: req.socket?.remotePort,
+  };
+}
+
+function serializeRes(res) {
+  const headers = res.getHeaders ? { ...res.getHeaders() } : {};
+
+  if (headers['set-cookie']) {
+    if (Array.isArray(headers['set-cookie'])) {
+      headers['set-cookie'] = headers['set-cookie'].map(maskCookie);
+    } else {
+      headers['set-cookie'] = maskCookie(headers['set-cookie']);
+    }
+  }
+  if (headers.authorization) {
+    headers.authorization = maskAuthorization(headers.authorization);
+  }
+
+  return {
+    statusCode: res.statusCode,
+    headers,
+  };
 }
 
 /**
@@ -186,58 +229,8 @@ const baseLoggerOptions = {
 
   // Custom serializers for request/response objects with sensitive data masking
   serializers: {
-    req: req => {
-      const headers = { ...req.headers };
-
-      // Mask sensitive request headers
-      if (headers.authorization) {
-        headers.authorization = maskAuthorization(headers.authorization);
-      }
-      if (headers.cookie) {
-        headers.cookie = maskCookie(headers.cookie);
-      }
-      if (headers['x-api-key']) {
-        headers['x-api-key'] = maskSecret(headers['x-api-key']);
-      }
-      if (headers['x-auth-token']) {
-        headers['x-auth-token'] = maskSecret(headers['x-auth-token']);
-      }
-      if (headers['api-key']) {
-        headers['api-key'] = maskSecret(headers['api-key']);
-      }
-
-      return {
-        id: req.id,
-        method: req.method,
-        url: req.url,
-        query: req.query,
-        params: req.params,
-        headers,
-        remoteAddress: req.ip || req.socket?.remoteAddress,
-        remotePort: req.socket?.remotePort,
-      };
-    },
-    res: res => {
-      const headers = res.getHeaders ? { ...res.getHeaders() } : {};
-
-      // Mask sensitive response headers
-      if (headers['set-cookie']) {
-        // set-cookie can be an array or string
-        if (Array.isArray(headers['set-cookie'])) {
-          headers['set-cookie'] = headers['set-cookie'].map(maskCookie);
-        } else {
-          headers['set-cookie'] = maskCookie(headers['set-cookie']);
-        }
-      }
-      if (headers.authorization) {
-        headers.authorization = maskAuthorization(headers.authorization);
-      }
-
-      return {
-        statusCode: res.statusCode,
-        headers,
-      };
-    },
+    req: serializeReq,
+    res: serializeRes,
     err: pino.stdSerializers.err,
   },
 
@@ -284,58 +277,8 @@ const httpLogger = pinoHttp({
 
   // Custom serializers for pino-http (overrides default serializers)
   serializers: {
-    req: req => {
-      const headers = { ...req.headers };
-
-      // Mask sensitive request headers
-      if (headers.authorization) {
-        headers.authorization = maskAuthorization(headers.authorization);
-      }
-      if (headers.cookie) {
-        headers.cookie = maskCookie(headers.cookie);
-      }
-      if (headers['x-api-key']) {
-        headers['x-api-key'] = maskSecret(headers['x-api-key']);
-      }
-      if (headers['x-auth-token']) {
-        headers['x-auth-token'] = maskSecret(headers['x-auth-token']);
-      }
-      if (headers['api-key']) {
-        headers['api-key'] = maskSecret(headers['api-key']);
-      }
-
-      return {
-        id: req.id,
-        method: req.method,
-        url: req.url,
-        query: req.query,
-        params: req.params,
-        headers,
-        remoteAddress: req.ip || req.socket?.remoteAddress,
-        remotePort: req.socket?.remotePort,
-      };
-    },
-    res: res => {
-      const headers = res.getHeaders ? { ...res.getHeaders() } : {};
-
-      // Mask sensitive response headers
-      if (headers['set-cookie']) {
-        // set-cookie can be an array or string
-        if (Array.isArray(headers['set-cookie'])) {
-          headers['set-cookie'] = headers['set-cookie'].map(maskCookie);
-        } else {
-          headers['set-cookie'] = maskCookie(headers['set-cookie']);
-        }
-      }
-      if (headers.authorization) {
-        headers.authorization = maskAuthorization(headers.authorization);
-      }
-
-      return {
-        statusCode: res.statusCode,
-        headers,
-      };
-    },
+    req: serializeReq,
+    res: serializeRes,
     err: pino.stdSerializers.err,
   },
 

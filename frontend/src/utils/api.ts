@@ -1,32 +1,14 @@
 /**
- * API utility functions
+ * API utility functions (relative URLs; same origin as backend).
  */
 import { ApiError } from './errorUtils';
 
-/**
- * Request options with additional configuration
- */
 interface ApiRequestOptions extends RequestInit {
-  /**
-   * If true, 401 errors will be handled silently (no console errors)
-   * Useful for authentication checks where 401 is expected
-   *
-   * Note: Currently only returns the response without throwing; doesn't suppress
-   * console logs by itself. Consider removing if not used elsewhere.
-   */
-  silentAuth?: boolean;
-  /**
-   * AbortSignal for request cancellation
-   */
   signal?: AbortSignal;
 }
 
-/**
- * Make a fetch request with default options and enhanced error handling
- * Using relative URLs since frontend and backend are served from the same origin
- */
 async function apiRequest(endpoint: string, options: ApiRequestOptions = {}): Promise<Response> {
-  const { silentAuth = false, ...fetchOptions } = options;
+  const fetchOptions = options;
 
   const defaultOptions: RequestInit = {
     credentials: 'include',
@@ -37,42 +19,26 @@ async function apiRequest(endpoint: string, options: ApiRequestOptions = {}): Pr
     ...fetchOptions,
   };
 
-  try {
-    const response = await fetch(endpoint, defaultOptions);
-
-    // Handle 401 silently if requested (for auth checks)
-    if (response.status === 401 && silentAuth) {
-      // Return response without throwing - let caller handle it
-      return response;
-    }
-
-    return response;
-  } catch (error) {
-    // Only log network errors if not in silent mode
-    if (!silentAuth && error instanceof TypeError) {
-      // Network errors are real failures, but we'll let the caller decide
-      throw error;
-    }
-    throw error;
-  }
+  return await fetch(endpoint, defaultOptions);
 }
 
-/**
- * Make a GET request
- */
+async function throwApiErrorWithDetails(res: Response): Promise<never> {
+  const errorData = await res.json().catch(() => ({ message: res.statusText }));
+  const { message, error, ...rest } = (errorData ?? {}) as Record<string, unknown> & {
+    message?: string;
+    error?: string;
+  };
+  throw new ApiError(message || error || res.statusText, res.status, Object.keys(rest).length > 0 ? rest : undefined);
+}
+
 export async function apiGet<T = unknown>(endpoint: string, options?: ApiRequestOptions): Promise<T> {
   const res = await apiRequest(endpoint, { method: 'GET', ...options });
   if (!res.ok) {
-    const errorData = await res.json().catch(() => ({ message: res.statusText }));
-    const { message, error, ...rest } = errorData;
-    throw new ApiError(message || error || res.statusText, res.status, Object.keys(rest).length > 0 ? rest : undefined);
+    await throwApiErrorWithDetails(res);
   }
   return res.json();
 }
 
-/**
- * Make a POST request
- */
 export async function apiPost<T = unknown>(endpoint: string, data?: unknown, options?: ApiRequestOptions): Promise<T> {
   const res = await apiRequest(endpoint, {
     method: 'POST',
@@ -80,16 +46,11 @@ export async function apiPost<T = unknown>(endpoint: string, data?: unknown, opt
     ...options,
   });
   if (!res.ok) {
-    const errorData = await res.json().catch(() => ({ message: res.statusText }));
-    const { message, error, ...rest } = errorData;
-    throw new ApiError(message || error || res.statusText, res.status, Object.keys(rest).length > 0 ? rest : undefined);
+    await throwApiErrorWithDetails(res);
   }
   return res.json();
 }
 
-/**
- * Make a PUT request
- */
 export async function apiPut<T = unknown>(endpoint: string, data?: unknown, options?: ApiRequestOptions): Promise<T> {
   const res = await apiRequest(endpoint, {
     method: 'PUT',
@@ -103,26 +64,18 @@ export async function apiPut<T = unknown>(endpoint: string, data?: unknown, opti
   return res.json();
 }
 
-/**
- * Make a POST request with FormData (for file uploads)
- */
 export async function apiPostForm<T = unknown>(endpoint: string, formData: FormData): Promise<T> {
   const res = await apiRequest(endpoint, {
     method: 'POST',
     body: formData,
-    headers: {}, // Don't set Content-Type, let browser set it with boundary
+    headers: {},
   });
   if (!res.ok) {
-    const errorData = await res.json().catch(() => ({ message: res.statusText }));
-    const { message, error, ...rest } = errorData;
-    throw new ApiError(message || error || res.statusText, res.status, Object.keys(rest).length > 0 ? rest : undefined);
+    await throwApiErrorWithDetails(res);
   }
   return res.json();
 }
 
-/**
- * Check if Google auth is enabled
- */
 export async function checkGoogleAuthEnabled(): Promise<boolean> {
   try {
     const data = await apiGet<{ enabled: boolean }>('/api/google/enabled');
@@ -132,11 +85,7 @@ export async function checkGoogleAuthEnabled(): Promise<boolean> {
   }
 }
 
-/**
- * Get signup status and whether current user can toggle it.
- * When logged in, uses GET /api/user/signup-status (returns canToggle, totalUsers, hideFileExtensions, etc.).
- * When not logged in, falls back to GET /api/signup-status (public, signupEnabled only).
- */
+/** When logged in: GET /api/user/signup-status; when not: GET /api/signup-status (public). */
 export async function getSignupStatus(): Promise<{
   signupEnabled: boolean;
   canToggle: boolean;
@@ -184,27 +133,18 @@ export async function getSignupStatus(): Promise<{
   }
 }
 
-/**
- * Toggle signup enabled/disabled (only for first user)
- */
 export async function toggleSignup(enabled: boolean): Promise<{ signupEnabled: boolean }> {
   return await apiPost<{ signupEnabled: boolean }>('/api/user/signup-toggle', {
     enabled,
   });
 }
 
-/**
- * Update hide file extensions setting (only for first user). When true, file names are shown without extensions.
- */
 export async function updateHideFileExtensionsConfig(hidden: boolean): Promise<{ hideFileExtensions: boolean }> {
   return await apiPut<{ hideFileExtensions: boolean }>('/api/user/hide-file-extensions-config', {
     hidden,
   });
 }
 
-/**
- * Update desktop-only access setting (only for first user). When enabled, only the desktop app can access the instance.
- */
 export async function updateElectronOnlyAccessConfig(enabled: boolean): Promise<{ electronOnlyAccess: boolean }> {
   return await apiPut<{ electronOnlyAccess: boolean }>('/api/user/electron-only-access-config', {
     enabled,
@@ -228,9 +168,6 @@ export async function fetchAllUsers(): Promise<{
   return await apiGet<{ users: UserSummary[] }>('/api/user/all');
 }
 
-/**
- * Update user storage limit (admin only)
- */
 export async function updateUserStorageLimit(
   targetUserId: string,
   storageLimit: number | null
@@ -241,18 +178,12 @@ export async function updateUserStorageLimit(
   });
 }
 
-/**
- * Check if OnlyOffice is configured (all authenticated users)
- */
 export async function checkOnlyOfficeConfigured(): Promise<{
   configured: boolean;
 }> {
   return await apiGet<{ configured: boolean }>('/api/user/onlyoffice-configured');
 }
 
-/**
- * Get OnlyOffice configuration (admin only)
- */
 export async function getOnlyOfficeConfig(signal?: AbortSignal): Promise<{
   jwtSecretSet: boolean;
   url: string | null;
@@ -260,9 +191,6 @@ export async function getOnlyOfficeConfig(signal?: AbortSignal): Promise<{
   return await apiGet<{ jwtSecretSet: boolean; url: string | null }>('/api/user/onlyoffice-config', { signal });
 }
 
-/**
- * Update OnlyOffice configuration (admin only)
- */
 export async function updateOnlyOfficeConfig(
   jwtSecret: string | null,
   url: string | null
@@ -270,42 +198,26 @@ export async function updateOnlyOfficeConfig(
   return await apiPut<{ jwtSecretSet: boolean; url: string | null }>('/api/user/onlyoffice-config', { jwtSecret, url });
 }
 
-/**
- * Get share base URL configuration (admin only)
- */
 export async function getShareBaseUrlConfig(signal?: AbortSignal): Promise<{
   url: string | null;
 }> {
   return await apiGet<{ url: string | null }>('/api/user/share-base-url-config', { signal });
 }
 
-/**
- * Update share base URL configuration (admin only)
- */
 export async function updateShareBaseUrlConfig(url: string | null): Promise<{ url: string | null }> {
   return await apiPut<{ url: string | null }>('/api/user/share-base-url-config', { url });
 }
 
-/**
- * Get max upload size config (any authenticated user; used for display and validation).
- */
 export async function getMaxUploadSizeConfig(signal?: AbortSignal): Promise<{
   maxBytes: number;
 }> {
   return await apiGet<{ maxBytes: number }>('/api/user/max-upload-size-config', { signal });
 }
 
-/**
- * Update max upload size config (admin only)
- */
 export async function updateMaxUploadSizeConfig(maxBytes: number): Promise<{ maxBytes: number }> {
   return await apiPut<{ maxBytes: number }>('/api/user/max-upload-size-config', { maxBytes });
 }
 
-/**
- * Logout from all devices by invalidating all tokens
- * This will log out the user from every device/browser
- */
 export async function logoutAllDevices(): Promise<{
   message: string;
   sessionsInvalidated: boolean;
@@ -324,18 +236,12 @@ export interface ActiveSession {
   isCurrent?: boolean;
 }
 
-/**
- * Get all active sessions for the current user
- */
 export async function getActiveSessions(): Promise<{
   sessions: ActiveSession[];
 }> {
   return await apiGet<{ sessions: ActiveSession[] }>('/api/sessions');
 }
 
-/**
- * Make a DELETE request
- */
 export async function apiDelete<T = unknown>(endpoint: string, options?: ApiRequestOptions): Promise<T> {
   const res = await apiRequest(endpoint, { method: 'DELETE', ...options });
   if (!res.ok) {
@@ -345,18 +251,12 @@ export async function apiDelete<T = unknown>(endpoint: string, options?: ApiRequ
   return res.json();
 }
 
-/**
- * Revoke a specific session
- */
 export async function revokeSession(sessionId: string): Promise<{
   message: string;
 }> {
   return await apiDelete<{ message: string }>(`/api/sessions/${sessionId}`);
 }
 
-/**
- * Revoke all other sessions (except current one)
- */
 export async function revokeOtherSessions(): Promise<{
   message: string;
   deletedCount: number;
@@ -364,20 +264,10 @@ export async function revokeOtherSessions(): Promise<{
   return await apiPost<{ message: string; deletedCount: number }>('/api/sessions/revoke-others');
 }
 
-/**
- * MFA (Multi-Factor Authentication) API functions
- */
-
-/**
- * Get MFA status for current user
- */
 export async function getMfaStatus(): Promise<{ enabled: boolean }> {
   return await apiGet<{ enabled: boolean }>('/api/mfa/status');
 }
 
-/**
- * Setup MFA - generate secret and QR code
- */
 export async function setupMfa(): Promise<{
   secret: string;
   qrCode: string;
@@ -388,9 +278,6 @@ export async function setupMfa(): Promise<{
   }>('/api/mfa/setup');
 }
 
-/**
- * Verify and enable MFA
- */
 export async function verifyAndEnableMfa(code: string): Promise<{
   message: string;
   backupCodes?: string[];
@@ -403,9 +290,6 @@ export async function verifyAndEnableMfa(code: string): Promise<{
   }>('/api/mfa/verify', { code });
 }
 
-/**
- * Disable MFA
- */
 export async function disableMfa(code: string): Promise<{
   message: string;
   shouldPromptSessions?: boolean;
@@ -413,18 +297,12 @@ export async function disableMfa(code: string): Promise<{
   return await apiPost<{ message: string; shouldPromptSessions?: boolean }>('/api/mfa/disable', { code });
 }
 
-/**
- * Regenerate backup codes
- */
 export async function regenerateBackupCodes(): Promise<{
   backupCodes: string[];
 }> {
   return await apiPost<{ backupCodes: string[] }>('/api/mfa/backup-codes/regenerate');
 }
 
-/**
- * Get remaining backup codes count
- */
 export async function getBackupCodesCount(): Promise<{ count: number }> {
   return await apiGet<{ count: number }>('/api/mfa/backup-codes/count');
 }
@@ -435,10 +313,6 @@ export interface VersionInfo {
   electron?: string;
 }
 
-/**
- * Get currently deployed versions for frontend and backend.
- * Backend version comes from server, frontend version is embedded at build time.
- */
 export async function getCurrentVersions(): Promise<VersionInfo> {
   const backendVersions = await apiGet<{ backend: string }>('/api/version');
 
@@ -450,31 +324,14 @@ export async function getCurrentVersions(): Promise<VersionInfo> {
   };
 }
 
-/**
- * Fetch the latest published versions from the update feed
- * Uses backend proxy to avoid CORS issues
- */
 export async function fetchLatestVersions(): Promise<VersionInfo> {
   return apiGet<VersionInfo>('/api/version/latest');
 }
 
-/**
- * Check if an upload of the given size would exceed storage limit.
- * Call before starting upload so the user sees an error without uploading.
- * @param fileSize - Size in bytes (single file or total for bulk)
- * @throws ApiError with status 413 and message if would exceed
- */
 export async function checkUploadStorage(fileSize: number): Promise<{ allowed: true }> {
   return apiPost<{ allowed: true }>('/api/files/upload/check', { fileSize });
 }
 
-/**
- * Download a file or folder
- * For files: triggers direct download
- * For folders: fetches zip and triggers download
- * @param id - File or folder ID
- * @param fallbackFilename - Fallback filename to use if Content-Disposition header is missing or invalid
- */
 export async function downloadFile(id: string, fallbackFilename?: string): Promise<void> {
   const url = `/api/files/${id}/download`;
   const response = await fetch(url, {
@@ -483,29 +340,22 @@ export async function downloadFile(id: string, fallbackFilename?: string): Promi
   });
 
   if (!response.ok) {
-    // Extract error message from response
     let errorMessage = response.statusText;
     try {
       const data = await response.json();
       errorMessage = data.message || data.error || response.statusText;
     } catch {
-      // If JSON parsing fails, use statusText
+      // ignore
     }
     const error = new Error(errorMessage || `Download failed: ${response.statusText}`);
-    // Attach status code to error for caller
     (error as { status?: number }).status = response.status;
     throw error;
   }
 
-  // Get the filename from Content-Disposition header or use fallback
   const contentDisposition = response.headers.get('Content-Disposition');
   let filename: string | null = null;
 
   if (contentDisposition) {
-    // Try to extract filename from Content-Disposition header
-    // Handle both quoted and unquoted filenames, and RFC 5987 encoded filenames (filename*=UTF-8''...)
-
-    // First try RFC 5987 encoding (filename*=UTF-8''...)
     const rfc5987Match = contentDisposition.match(/filename\*=UTF-8''([^;,\s]+)/i);
     if (rfc5987Match && rfc5987Match[1]) {
       try {
@@ -514,36 +364,28 @@ export async function downloadFile(id: string, fallbackFilename?: string): Promi
         filename = rfc5987Match[1];
       }
     } else {
-      // Fallback to standard filename parameter
-      // Try quoted filename first: filename="name.ext"
       const quotedMatch = contentDisposition.match(/filename="([^"]+)"/);
       if (quotedMatch && quotedMatch[1]) {
         filename = quotedMatch[1];
       } else {
-        // Try unquoted filename: filename=name.ext
         const unquotedMatch = contentDisposition.match(/filename=([^;,\s]+)/);
         if (unquotedMatch && unquotedMatch[1]) {
           filename = unquotedMatch[1].trim();
-          // Decode URI component if needed
           try {
             filename = decodeURIComponent(filename);
           } catch {
-            // If decoding fails, use as is
+            // use as is
           }
         }
       }
     }
   }
 
-  // Use extracted filename if available, otherwise use fallback
   if (!filename || filename.trim() === '') {
     filename = fallbackFilename || 'download';
   }
 
-  // Get the blob
   const blob = await response.blob();
-
-  // Create a download link and trigger download
   const downloadUrl = window.URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = downloadUrl;
@@ -554,70 +396,46 @@ export async function downloadFile(id: string, fallbackFilename?: string): Promi
   window.URL.revokeObjectURL(downloadUrl);
 }
 
-/**
- * Auth state management using localStorage
- * Used as an optimization hint to avoid unnecessary API calls on first visit.
- * Includes cross-tab synchronization via storage events.
- */
 export const AUTH_STATE_KEY = 'tma_cloud_auth_state';
-const AUTH_STATE_MAX_AGE = 7 * 24 * 60 * 60 * 1000; // 7 days (matches token expiry)
+const AUTH_STATE_MAX_AGE = 7 * 24 * 60 * 60 * 1000;
 
 interface AuthState {
   timestamp: number;
-  version: number; // For future compatibility
+  version: number;
 }
 
 const AUTH_STATE_VERSION = 1;
 
-/**
- * Set authentication state with timestamp
- * Triggers storage event for cross-tab synchronization
- * Only updates if state actually changes to prevent infinite loops
- */
 export function setAuthState(authenticated: boolean): void {
   try {
     if (authenticated) {
-      // Check if auth state already exists and is valid
-      // Only update if it doesn't exist or is invalid to prevent infinite loops
       const existing = localStorage.getItem(AUTH_STATE_KEY);
       if (existing) {
         try {
           const existingState: AuthState = JSON.parse(existing);
-          // If state exists, is valid version, and timestamp is recent (within 1 hour),
-          // don't update to avoid triggering unnecessary storage events
-          if (
-            existingState.version === AUTH_STATE_VERSION &&
-            Date.now() - existingState.timestamp < 60 * 60 * 1000 // 1 hour
-          ) {
-            // State is already valid and recent, no need to update
+          if (existingState.version === AUTH_STATE_VERSION && Date.now() - existingState.timestamp < 60 * 60 * 1000) {
             return;
           }
         } catch {
-          // Invalid existing state, proceed to update
+          // invalid state, overwrite
         }
       }
 
-      // Update auth state with fresh timestamp
       const state: AuthState = {
         timestamp: Date.now(),
         version: AUTH_STATE_VERSION,
       };
       localStorage.setItem(AUTH_STATE_KEY, JSON.stringify(state));
     } else {
-      // Only remove if it exists to avoid unnecessary storage events
       if (localStorage.getItem(AUTH_STATE_KEY)) {
         localStorage.removeItem(AUTH_STATE_KEY);
       }
     }
   } catch {
-    // Ignore localStorage errors (e.g., private browsing mode)
+    // ignore (e.g. private browsing)
   }
 }
 
-/**
- * Check if we have a valid authentication state
- * Validates timestamp to avoid using stale data
- */
 export function hasAuthState(): boolean {
   try {
     const stored = localStorage.getItem(AUTH_STATE_KEY);
@@ -627,51 +445,30 @@ export function hasAuthState(): boolean {
     try {
       state = JSON.parse(stored);
     } catch {
-      // Invalid JSON, clear it
       localStorage.removeItem(AUTH_STATE_KEY);
       return false;
     }
 
-    // Validate version
     if (state.version !== AUTH_STATE_VERSION) {
       localStorage.removeItem(AUTH_STATE_KEY);
       return false;
     }
 
-    // Validate timestamp is reasonable (not in future, not too old)
     const now = Date.now();
     const age = now - state.timestamp;
 
-    // Reject if timestamp is in the future
-    if (age < 0) {
+    if (age < 0 || age > AUTH_STATE_MAX_AGE) {
       localStorage.removeItem(AUTH_STATE_KEY);
       return false;
     }
-
-    // Reject if timestamp is too old (beyond token expiry period)
-    if (age > AUTH_STATE_MAX_AGE) {
-      localStorage.removeItem(AUTH_STATE_KEY);
-      return false;
-    }
-
-    // State is valid
     return true;
   } catch {
     return false;
   }
 }
 
-/**
- * Check if we might be coming from an OAuth callback
- * Uses sessionStorage flag set when OAuth flow is initiated
- *
- * Note: sessionStorage is per-tab, so if OAuth redirects to a new tab/window
- * or browser restores a different session context, the flag may not carry over.
- * This is a best-effort hint, not a guarantee.
- */
 function mightBeAuthCallback(): boolean {
   try {
-    // Check sessionStorage for OAuth indicator (set by OAuth button click)
     if (sessionStorage.getItem('oauth_initiated') === 'true') {
       sessionStorage.removeItem('oauth_initiated');
       return true;
@@ -682,84 +479,49 @@ function mightBeAuthCallback(): boolean {
   }
 }
 
-/**
- * Silent authentication check
- *
- * Returns null if not authenticated, or {user, authenticated: true} if authenticated.
- *
- * Uses localStorage as an optimization hint to avoid unnecessary API calls on first visit.
- * Always makes API call when there's evidence of previous auth (validated state or OAuth flow).
- * Treats 401 responses as expected (not logged as errors).
- *
- * Note: Uses raw fetch() instead of apiRequest() for direct control over abort signal handling.
- * The apiRequest() function also supports signal, so we could unify later to reduce code duplication.
- * Current approach is simpler and works well for this specific use case.
- *
- * @param signal - Optional AbortSignal to cancel the request
- * @returns null if not authenticated, or {user, authenticated: true} if authenticated
- */
+/** Returns null if not authenticated, or { user, authenticated: true } if authenticated. Uses localStorage hint to skip API when no prior auth. */
 export async function checkAuthSilently(signal?: AbortSignal): Promise<{
   user: unknown;
   authenticated: boolean;
 } | null> {
-  // Check if we have a valid auth state (optimization hint)
   const hasValidAuthState = hasAuthState();
   const mightBeOAuth = mightBeAuthCallback();
-
-  // Only skip API call if we have no valid auth state AND no OAuth indicators
-  // This prevents console errors on genuine first visits
   if (!hasValidAuthState && !mightBeOAuth) {
     return null;
   }
 
   try {
-    // Make the API call to verify token is still valid
     const response = await fetch('/api/profile', {
       method: 'GET',
       credentials: 'include',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      signal, // Pass abort signal to actually cancel the request
+      headers: { 'Content-Type': 'application/json' },
+      signal,
     });
 
-    // If fetch returns, it usually didn't abort (abort throws AbortError)
-    // AbortError is handled in catch block below
-
     if (response.status === 401) {
-      // Expected: user is not authenticated (token expired or invalid)
-      // Clear auth state and return null (401 is expected, not an error)
       setAuthState(false);
       return null;
     }
 
     if (response.ok) {
       const data = await response.json();
-      // Only update auth state if it doesn't already exist or is stale
-      // This prevents infinite loops from storage events
       setAuthState(true);
       return { user: data, authenticated: true };
     }
 
-    // Unexpected error status (not 401) - only log in development
     if (import.meta.env.DEV) {
       console.warn(`[Auth] Unexpected status ${response.status} from /api/profile: ${response.statusText}`);
     }
     return null;
   } catch (error) {
-    // Handle abort errors silently
     if (error instanceof Error && error.name === 'AbortError') {
       return null;
     }
-
-    // Handle network errors gracefully
-    // Only log in development mode for debugging
     if (import.meta.env.DEV) {
       if (error instanceof TypeError && error.message.includes('fetch')) {
         console.warn('[Auth] Network error during auth check:', error);
       }
     }
-    // Return null on any error - treat as unauthenticated
     return null;
   }
 }
