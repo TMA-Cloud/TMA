@@ -28,7 +28,9 @@ export const DesktopOpenProgress: React.FC<DesktopOpenProgressProps> = ({ items 
               <Monitor className="w-4 h-4 text-gray-500 dark:text-gray-400" />
               <div className="flex-1">
                 <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Opening file… {safePercent}%</p>
-                <p className="text-xs text-gray-600 dark:text-gray-400 truncate">{item.fileName}</p>
+                <p className="text-xs text-gray-600 dark:text-gray-400 break-all" title={item.fileName}>
+                  {item.fileName}
+                </p>
               </div>
             </div>
             <div className="bg-gray-200 dark:bg-gray-600 rounded-full h-2">
