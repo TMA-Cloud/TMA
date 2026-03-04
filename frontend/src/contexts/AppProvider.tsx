@@ -1663,9 +1663,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     void refreshOnlyOfficeConfig();
   }, [refreshOnlyOfficeConfig]);
 
-  // One-time background update check when app opens (admin only).
+  // One-time background update check when app opens
   useEffect(() => {
-    if (!canConfigureOnlyOffice || hasCheckedUpdates) return;
+    if (hasCheckedUpdates) return;
 
     const checkForUpdatesOnce = async () => {
       try {
@@ -1702,7 +1702,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     void checkForUpdatesOnce();
-  }, [canConfigureOnlyOffice, hasCheckedUpdates]);
+  }, [hasCheckedUpdates]);
 
   return (
     <AppContext.Provider

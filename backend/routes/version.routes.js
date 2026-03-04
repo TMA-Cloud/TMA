@@ -3,8 +3,6 @@ const fs = require('fs');
 const path = require('path');
 const https = require('https');
 const auth = require('../middleware/auth.middleware');
-const { isFirstUser } = require('../models/user.model');
-const { sendError } = require('../utils/response');
 const { logger } = require('../config/logger');
 const { apiRateLimiter } = require('../middleware/rateLimit.middleware');
 
@@ -12,21 +10,6 @@ const router = express.Router();
 
 router.use(auth);
 router.use(apiRateLimiter);
-
-// Middleware to check if user is admin (first user)
-async function requireAdmin(req, res, next) {
-  try {
-    const userIsFirst = await isFirstUser(req.userId);
-    if (!userIsFirst) {
-      logger.warn({ userId: req.userId }, 'Unauthorized version check attempt');
-      return sendError(res, 403, 'Only the admin can check for updates');
-    }
-    next();
-  } catch (err) {
-    logger.error({ err }, 'Failed to check admin status');
-    return sendError(res, 500, 'Server error');
-  }
-}
 
 function readPackageVersion(packagePath) {
   try {
@@ -51,8 +34,8 @@ router.get('/', (_req, res) => {
 });
 
 // Proxy endpoint to fetch latest versions from GitHub (avoids CORS issues)
-// Only admin (first user) can check for updates
-router.get('/latest', requireAdmin, (req, res) => {
+// Any authenticated user can check for updates
+router.get('/latest', (req, res) => {
   const url = 'https://tma-cloud.github.io/updates/versions.json';
   let responseSent = false;
 

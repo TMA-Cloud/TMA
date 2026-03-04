@@ -54,7 +54,7 @@ Get currently deployed backend version. Requires authentication.
 
 ### GET `/api/version/latest`
 
-Fetch latest versions from update feed. Admin only (first user).
+Fetch latest versions from update feed.
 
 **Rate limiting:** General API limit (1000 per 15 minutes per IP).
 

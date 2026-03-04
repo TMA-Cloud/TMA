@@ -77,7 +77,7 @@ The server URL is embedded at build time only. No config file is needed after in
 
 - The desktop app version comes from `electron/package.json` and is shown under **Settings → Updates → Desktop app**.
 - The app uses the same update feed as the web UI (`/api/version/latest`), which returns `frontend`, `backend`, and `electron` versions.
-- When an admin user opens the app, a one-time background check compares the current versions to the feed.
+- When any signed-in user opens the app (web or desktop), a one-time background check compares the current versions to the feed.
 - If any component is outdated, an **Updates Available** notice appears in the left sidebar above **Settings**, listing the latest versions for backend, frontend, and Electron.
 
 ## Desktop Editing and Open on Desktop (Windows)
