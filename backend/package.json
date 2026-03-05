@@ -1,6 +1,6 @@
 {
   "name": "tma-cloud-backend",
-  "version": "2.0.11",
+  "version": "2.0.12",
   "description": "Backend for TMA Cloud",
   "main": "server.js",
   "scripts": {
