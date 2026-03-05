@@ -112,6 +112,50 @@ Log out from all devices by invalidating all of the user's active sessions and t
 
 **Rate limiting:** General API limit (10000 per 15 minutes per IP).
 
+## Change Password
+
+### POST `/api/change-password`
+
+Change the current authenticated user's password.
+
+This endpoint:
+
+- Requires authentication.
+- Is only available when password change is enabled by the first user (admin).
+- Only works for accounts that have a local email/password (not Google-only accounts).
+
+**Request Body:**
+
+```json
+{
+  "oldPassword": "current-password",
+  "newPassword": "new-password"
+}
+```
+
+**Validation:**
+
+- `oldPassword`: Required. String, 1–128 characters.
+- `newPassword`: Required. String, 6–128 characters. Must be different from `oldPassword`.
+
+**Response (success):**
+
+```json
+{
+  "message": "Password changed successfully. Please log in again."
+}
+```
+
+On success, all existing sessions and tokens are invalidated. The user must log in again with the new password.
+
+**Error cases (examples):**
+
+- `401 Not authenticated`
+- `403 Password change is currently disabled by the administrator`
+- `400 Current password is incorrect`
+
+**Rate limiting:** Auth rate limit (same as login/signup: 25 attempts per 15 minutes per IP/email).
+
 ## Profile
 
 ### GET `/api/profile`

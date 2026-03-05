@@ -44,6 +44,7 @@ TMA Cloud supports multiple authentication methods:
 - **Token Versioning:** Invalidate all tokens on logout-all
 - **Rate Limiting:** 25 login/signup attempts per 15 minutes per IP/email; MFA verify/disable 5 attempts per minute; backup code regeneration 3 attempts per 10 minutes with 5-minute cooldown
 - **Audit Logging:** All authentication events logged
+- **Password Change:** When enabled, users can change their own password from Settings → Security and password change will invalidate all active sessions
 
 ## First User Privileges
 

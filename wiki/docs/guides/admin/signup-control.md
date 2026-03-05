@@ -24,6 +24,17 @@ Control user registration in TMA Cloud (admin only).
 
 **When off:** File names show with extensions (default).
 
+## Password Change
+
+1. Go to **Settings**
+2. Open the **Administration** section (visible only to the first user)
+3. Use the **Allow password change** toggle
+4. Changes apply immediately for all users
+
+**When on:** Users see a **Change password** option in **Settings** → **Security** and can change their password. Password changes log out all sessions and require login again.
+
+**When off:** The change password option is hidden and `/api/change-password` returns 403 for all users.
+
 ## Desktop app only access
 
 1. Open the **Desktop app**

@@ -17,6 +17,8 @@ const {
   updateUserStorageLimit,
   getElectronOnlyAccessConfig,
   updateElectronOnlyAccessConfig,
+  getPasswordChangeConfig,
+  updatePasswordChangeConfig,
 } = require('../controllers/user.controller');
 const { apiRateLimiter } = require('../middleware/rateLimit.middleware');
 const { validate } = require('../middleware/validation.middleware');
@@ -28,6 +30,7 @@ const {
   updateHideFileExtensionsConfigSchema,
   updateUserStorageLimitSchema,
   updateElectronOnlyAccessConfigSchema,
+  updatePasswordChangeConfigSchema,
 } = require('../utils/validationSchemas');
 
 const router = express.Router();
@@ -60,6 +63,8 @@ router.put(
   validate,
   updateElectronOnlyAccessConfig
 );
+router.get('/password-change-config', getPasswordChangeConfig);
+router.put('/password-change-config', updatePasswordChangeConfigSchema, validate, updatePasswordChangeConfig);
 router.put('/storage-limit', updateUserStorageLimitSchema, validate, updateUserStorageLimit);
 
 module.exports = router;

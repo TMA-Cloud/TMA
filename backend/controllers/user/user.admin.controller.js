@@ -15,6 +15,8 @@ const {
   setUserStorageLimit,
   getElectronOnlyAccessSettings,
   setElectronOnlyAccessSettings,
+  getPasswordChangeSettings,
+  setPasswordChangeSettings,
 } = require('../../models/user.model');
 const { sendError, sendSuccess } = require('../../utils/response');
 const { logger } = require('../../config/logger');
@@ -38,12 +40,14 @@ async function _getPublicSignupStatus(req, res) {
  */
 async function _getSignupStatus(req, res) {
   try {
-    const [signupEnabled, hideFileExtensions, electronOnlyAccess, userIsFirst] = await Promise.all([
-      getSignupEnabled(),
-      getHideFileExtensionsSettings(),
-      getElectronOnlyAccessSettings(),
-      isFirstUser(req.userId),
-    ]);
+    const [signupEnabled, hideFileExtensions, electronOnlyAccess, passwordChangeEnabled, userIsFirst] =
+      await Promise.all([
+        getSignupEnabled(),
+        getHideFileExtensionsSettings(),
+        getElectronOnlyAccessSettings(),
+        getPasswordChangeSettings(),
+        isFirstUser(req.userId),
+      ]);
     let totalUsers;
 
     if (userIsFirst) {
@@ -59,6 +63,8 @@ async function _getSignupStatus(req, res) {
       canToggleHideFileExtensions: userIsFirst,
       electronOnlyAccess,
       canToggleElectronOnlyAccess: userIsFirst,
+      allowPasswordChange: passwordChangeEnabled,
+      canToggleAllowPasswordChange: userIsFirst,
     });
   } catch (err) {
     sendError(res, 500, 'Server error', err);
@@ -611,6 +617,79 @@ async function _updateElectronOnlyAccessConfig(req, res) {
 }
 
 /**
+ * Get password change setting (any authenticated user; used by UI for display).
+ * Update is admin-only via _updatePasswordChangeConfig.
+ */
+async function _getPasswordChangeConfig(req, res) {
+  try {
+    const allowPasswordChange = await getPasswordChangeSettings();
+    sendSuccess(res, { allowPasswordChange });
+  } catch (err) {
+    logger.error({ err }, 'Failed to get password change config');
+    sendError(res, 500, 'Server error', err);
+  }
+}
+
+/**
+ * Update password change setting (admin only)
+ */
+async function _updatePasswordChangeConfig(req, res) {
+  try {
+    const userIsFirst = await isFirstUser(req.userId);
+    if (!userIsFirst) {
+      await logAuditEvent(
+        'admin.settings.update',
+        {
+          status: 'failure',
+          resourceType: 'settings',
+          metadata: { action: 'update_password_change', reason: 'unauthorized' },
+        },
+        req
+      );
+      logger.warn({ userId: req.userId }, 'Unauthorized password change config update attempt');
+      return sendError(res, 403, 'Only the first user can configure password change');
+    }
+
+    const { enabled } = req.body;
+
+    await setPasswordChangeSettings(enabled, req.userId);
+
+    await logAuditEvent(
+      'admin.settings.update',
+      {
+        status: 'success',
+        resourceType: 'settings',
+        metadata: { setting: 'allow_password_change', enabled: !!enabled },
+      },
+      req
+    );
+    logger.info(
+      { userId: req.userId, enabled: !!enabled },
+      'Password change setting updated (allow users to change passwords)'
+    );
+
+    const allowPasswordChange = await getPasswordChangeSettings();
+    sendSuccess(res, { allowPasswordChange });
+  } catch (err) {
+    if (err.message === 'Only the first user can configure password change') {
+      await logAuditEvent(
+        'admin.settings.update',
+        {
+          status: 'failure',
+          resourceType: 'settings',
+          errorMessage: err.message,
+          metadata: { action: 'update_password_change' },
+        },
+        req
+      );
+      return sendError(res, 403, err.message);
+    }
+    logger.error({ err }, 'Failed to update password change settings');
+    sendError(res, 500, 'Server error', err);
+  }
+}
+
+/**
  * Update user storage limit (admin only)
  */
 async function _updateUserStorageLimit(req, res) {
@@ -692,4 +771,6 @@ module.exports = {
   updateUserStorageLimit: _updateUserStorageLimit,
   getElectronOnlyAccessConfig: _getElectronOnlyAccessConfig,
   updateElectronOnlyAccessConfig: _updateElectronOnlyAccessConfig,
+  getPasswordChangeConfig: _getPasswordChangeConfig,
+  updatePasswordChangeConfig: _updatePasswordChangeConfig,
 };

@@ -25,6 +25,7 @@ import { SecuritySection } from './sections/SecuritySection';
 import { UsersModal } from './modals/UsersModal';
 import { SessionsModal } from './modals/SessionsModal';
 import { MfaModal } from './modals/MfaModal';
+import { ChangePasswordModal } from './modals/ChangePasswordModal';
 
 export const Settings: React.FC = () => {
   const { user } = useAuth();
@@ -49,6 +50,10 @@ export const Settings: React.FC = () => {
     canToggleElectronOnlyAccess,
     togglingElectronOnlyAccess,
     handleToggleElectronOnlyAccess,
+    allowPasswordChange,
+    canToggleAllowPasswordChange,
+    togglingAllowPasswordChange,
+    handleToggleAllowPasswordChange,
   } = useSignupStatus({ onHideFileExtensionsChange: setHideFileExtensions });
 
   // Versions hook
@@ -79,6 +84,7 @@ export const Settings: React.FC = () => {
   const [usersListError, setUsersListError] = useState<string | null>(null);
   const [sessionsModalOpen, setSessionsModalOpen] = useState(false);
   const [mfaModalOpen, setMfaModalOpen] = useState(false);
+  const [changePasswordModalOpen, setChangePasswordModalOpen] = useState(false);
 
   // Data is loaded automatically by hooks on mount
 
@@ -137,6 +143,10 @@ export const Settings: React.FC = () => {
             togglingElectronOnlyAccess={togglingElectronOnlyAccess}
             onToggleElectronOnlyAccess={handleToggleElectronOnlyAccess}
             showElectronOnlyAccessToggle={runningInElectron}
+            allowPasswordChange={allowPasswordChange}
+            canToggleAllowPasswordChange={canToggleAllowPasswordChange}
+            togglingAllowPasswordChange={togglingAllowPasswordChange}
+            onToggleAllowPasswordChange={handleToggleAllowPasswordChange}
           />
         )}
 
@@ -162,6 +172,8 @@ export const Settings: React.FC = () => {
           onShowSessions={handleShowSessions}
           onLogoutAllDevices={handleLogoutAllDevices}
           onShowMfa={() => setMfaModalOpen(true)}
+          passwordChangeEnabled={allowPasswordChange}
+          onShowChangePassword={() => setChangePasswordModalOpen(true)}
         />
       </div>
 
@@ -188,6 +200,7 @@ export const Settings: React.FC = () => {
       />
 
       <MfaModal isOpen={mfaModalOpen} onClose={() => setMfaModalOpen(false)} />
+      <ChangePasswordModal isOpen={changePasswordModalOpen} onClose={() => setChangePasswordModalOpen(false)} />
     </div>
   );
 };

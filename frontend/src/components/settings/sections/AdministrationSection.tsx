@@ -21,6 +21,10 @@ interface AdministrationSectionProps {
   togglingElectronOnlyAccess: boolean;
   onToggleElectronOnlyAccess: () => void;
   showElectronOnlyAccessToggle: boolean;
+  allowPasswordChange: boolean;
+  canToggleAllowPasswordChange: boolean;
+  togglingAllowPasswordChange: boolean;
+  onToggleAllowPasswordChange: () => void;
 }
 
 export const AdministrationSection: React.FC<AdministrationSectionProps> = ({
@@ -41,6 +45,10 @@ export const AdministrationSection: React.FC<AdministrationSectionProps> = ({
   togglingElectronOnlyAccess,
   onToggleElectronOnlyAccess,
   showElectronOnlyAccessToggle,
+  allowPasswordChange,
+  canToggleAllowPasswordChange,
+  togglingAllowPasswordChange,
+  onToggleAllowPasswordChange,
 }) => {
   return (
     <SettingsSection
@@ -91,6 +99,15 @@ export const AdministrationSection: React.FC<AdministrationSectionProps> = ({
         toggleDisabled={!canToggleHideFileExtensions || togglingHideFileExtensions || loadingSignupStatus}
         description="Show file names without extensions in the file manager and rename dialog"
       />
+      <SettingsItem
+        label="Allow password change"
+        value={allowPasswordChange ? 'Enabled' : 'Disabled'}
+        toggle={true}
+        toggleValue={allowPasswordChange}
+        onToggle={onToggleAllowPasswordChange}
+        toggleDisabled={!canToggleAllowPasswordChange || togglingAllowPasswordChange || loadingSignupStatus}
+        description="Allow users to change their account password from the Security settings"
+      />
       {showElectronOnlyAccessToggle && (
         <SettingsItem
           label="Desktop app only access"
@@ -99,7 +116,7 @@ export const AdministrationSection: React.FC<AdministrationSectionProps> = ({
           toggleValue={electronOnlyAccess}
           onToggle={onToggleElectronOnlyAccess}
           toggleDisabled={!canToggleElectronOnlyAccess || togglingElectronOnlyAccess || loadingSignupStatus}
-          description="When enabled, this instance can only be accessed via the desktop app (browsers will be blocked)."
+          description="When enabled, this instance can only be accessed via the desktop app (browsers will be blocked)"
         />
       )}
     </SettingsSection>

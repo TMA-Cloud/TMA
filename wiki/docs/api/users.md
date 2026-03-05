@@ -104,7 +104,11 @@ Requires authentication. Returns signup status, hide file extensions setting, an
   "signupEnabled": true,
   "canToggle": false,
   "hideFileExtensions": false,
-  "canToggleHideFileExtensions": false
+  "canToggleHideFileExtensions": false,
+  "electronOnlyAccess": false,
+  "canToggleElectronOnlyAccess": false,
+  "allowPasswordChange": false,
+  "canToggleAllowPasswordChange": false
 }
 ```
 
@@ -117,7 +121,11 @@ Requires authentication. Returns signup status, hide file extensions setting, an
   "totalUsers": 3,
   "additionalUsers": 2,
   "hideFileExtensions": false,
-  "canToggleHideFileExtensions": true
+  "canToggleHideFileExtensions": true,
+  "electronOnlyAccess": false,
+  "canToggleElectronOnlyAccess": true,
+  "allowPasswordChange": true,
+  "canToggleAllowPasswordChange": true
 }
 ```
 
@@ -318,6 +326,44 @@ Update the hide file extensions setting (admin only). When true, file names are 
 ```json
 {
   "hideFileExtensions": true
+}
+```
+
+## Password Change Configuration
+
+### GET `/api/user/password-change-config`
+
+Get the current password change setting. Accessible to any authenticated user (used by the frontend for display).
+
+**Response:**
+
+```json
+{
+  "allowPasswordChange": true
+}
+```
+
+### PUT `/api/user/password-change-config`
+
+Update the password change setting (admin only). When enabled, users can change their password from **Settings** → **Security**.
+
+**Request Body:**
+
+```json
+{
+  "enabled": true
+}
+```
+
+**Validation:**
+
+- `enabled`: Required. Must be a boolean.
+
+**Response:**
+
+```json
+{
+  "allowPasswordChange": true
 }
 ```
 

@@ -746,6 +746,66 @@ async function setUserStorageLimit(userId, targetUserId, storageLimit) {
   }
 }
 
+async function getPasswordChangeSettings() {
+  const cacheKey = cacheKeys.passwordChangeSettings();
+  const cached = await getCache(cacheKey);
+  if (cached !== null) {
+    return cached;
+  }
+
+  const result = await pool.query('SELECT allow_password_change FROM app_settings WHERE id = $1', ['app_settings']);
+  const enabled = result.rows.length > 0 && result.rows[0].allow_password_change === true;
+  await setCache(cacheKey, enabled, DEFAULT_TTL);
+  return enabled;
+}
+
+async function setPasswordChangeSettings(enabled, userId) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const settingsResult = await client.query('SELECT first_user_id FROM app_settings WHERE id = $1', ['app_settings']);
+    if (settingsResult.rows.length === 0) {
+      throw new Error('App settings not found');
+    }
+
+    const storedFirstUserId = settingsResult.rows[0].first_user_id;
+
+    if (!storedFirstUserId) {
+      const firstUserResult = await client.query('SELECT id FROM users ORDER BY created_at ASC LIMIT 1 FOR UPDATE');
+      if (firstUserResult.rows.length === 0) {
+        throw new Error('No users exist');
+      }
+      const actualFirstUserId = firstUserResult.rows[0].id;
+      if (actualFirstUserId !== userId) {
+        await client.query('ROLLBACK');
+        throw new Error('Only the first user can configure password change');
+      }
+      await client.query('UPDATE app_settings SET first_user_id = $1 WHERE id = $2 AND first_user_id IS NULL', [
+        actualFirstUserId,
+        'app_settings',
+      ]);
+    } else if (storedFirstUserId !== userId) {
+      await client.query('ROLLBACK');
+      throw new Error('Only the first user can configure password change');
+    }
+
+    await client.query('UPDATE app_settings SET allow_password_change = $1, updated_at = NOW() WHERE id = $2', [
+      !!enabled,
+      'app_settings',
+    ]);
+
+    await client.query('COMMIT');
+    await deleteCache(cacheKeys.passwordChangeSettings());
+    logger.info(`[SECURITY] Password change setting updated by first user (ID: ${userId}), enabled: ${!!enabled}`);
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 module.exports = {
   isFirstUser,
   getSignupEnabled,
@@ -765,4 +825,6 @@ module.exports = {
   setUserStorageLimit,
   getElectronOnlyAccessSettings,
   setElectronOnlyAccessSettings,
+  getPasswordChangeSettings,
+  setPasswordChangeSettings,
 };

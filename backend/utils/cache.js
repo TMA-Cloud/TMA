@@ -278,6 +278,7 @@ const cacheKeys = {
   maxUploadSizeSettings: () => `app:max_upload_size_settings`,
   hideFileExtensionsSettings: () => `app:hide_file_extensions`,
   electronOnlyAccessSettings: () => `app:electron_only_access`,
+  passwordChangeSettings: () => `app:password_change`,
 
   // Google OAuth cache keys
   userByGoogleId: googleId => `user:google:${googleId}`,

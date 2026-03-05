@@ -56,6 +56,16 @@ async function getUserById(id) {
   return user;
 }
 
+async function getUserByIdWithPassword(id) {
+  const result = await pool.query('SELECT id, email, password, name, google_id FROM users WHERE id = $1', [id]);
+  return result.rows[0];
+}
+
+async function updateUserPassword(userId, hashedPassword) {
+  await pool.query('UPDATE users SET password = $1 WHERE id = $2', [hashedPassword, userId]);
+  await deleteCache(cacheKeys.userById(userId));
+}
+
 async function getUserByGoogleId(googleId) {
   // Try to get from cache first
   const cacheKey = cacheKeys.userByGoogleId(googleId);
@@ -125,7 +135,9 @@ module.exports = {
   createUser,
   getUserByEmail,
   getUserById,
+  getUserByIdWithPassword,
   getUserByGoogleId,
   createUserWithGoogle,
   updateGoogleId,
+  updateUserPassword,
 };

@@ -95,6 +95,8 @@ export async function getSignupStatus(): Promise<{
   canToggleHideFileExtensions?: boolean;
   electronOnlyAccess?: boolean;
   canToggleElectronOnlyAccess?: boolean;
+  allowPasswordChange?: boolean;
+  canToggleAllowPasswordChange?: boolean;
 }> {
   try {
     const authenticated = await apiGet<{
@@ -106,6 +108,8 @@ export async function getSignupStatus(): Promise<{
       canToggleHideFileExtensions?: boolean;
       electronOnlyAccess?: boolean;
       canToggleElectronOnlyAccess?: boolean;
+      allowPasswordChange?: boolean;
+      canToggleAllowPasswordChange?: boolean;
     }>('/api/user/signup-status');
     return authenticated;
   } catch (err) {
@@ -129,6 +133,8 @@ export async function getSignupStatus(): Promise<{
       canToggleHideFileExtensions: false,
       electronOnlyAccess: false,
       canToggleElectronOnlyAccess: false,
+      allowPasswordChange: false,
+      canToggleAllowPasswordChange: false,
     };
   }
 }
@@ -147,6 +153,12 @@ export async function updateHideFileExtensionsConfig(hidden: boolean): Promise<{
 
 export async function updateElectronOnlyAccessConfig(enabled: boolean): Promise<{ electronOnlyAccess: boolean }> {
   return await apiPut<{ electronOnlyAccess: boolean }>('/api/user/electron-only-access-config', {
+    enabled,
+  });
+}
+
+export async function updatePasswordChangeConfig(enabled: boolean): Promise<{ allowPasswordChange: boolean }> {
+  return await apiPut<{ allowPasswordChange: boolean }>('/api/user/password-change-config', {
     enabled,
   });
 }
@@ -301,6 +313,15 @@ export async function regenerateBackupCodes(): Promise<{
   backupCodes: string[];
 }> {
   return await apiPost<{ backupCodes: string[] }>('/api/mfa/backup-codes/regenerate');
+}
+
+export async function changePassword(
+  oldPassword: string,
+  newPassword: string
+): Promise<{
+  message: string;
+}> {
+  return await apiPost<{ message: string }>('/api/change-password', { oldPassword, newPassword });
 }
 
 export async function getBackupCodesCount(): Promise<{ count: number }> {

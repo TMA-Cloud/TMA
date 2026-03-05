@@ -17,6 +17,7 @@ const logoutControllers = require('./auth/auth.logout.controller');
 const profileControllers = require('./auth/auth.profile.controller');
 const sessionsControllers = require('./auth/auth.sessions.controller');
 const mfaControllers = require('./auth/auth.mfa.controller');
+const passwordControllers = require('./auth/auth.password.controller');
 
 module.exports = {
   ...signupControllers,
@@ -25,4 +26,5 @@ module.exports = {
   ...profileControllers,
   ...sessionsControllers,
   ...mfaControllers,
+  ...passwordControllers,
 };

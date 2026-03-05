@@ -39,6 +39,19 @@ const loginSchema = [
     .withMessage(`Password must not exceed ${MAX_PASSWORD_LENGTH} characters`),
 ];
 
+const changePasswordSchema = [
+  body('oldPassword')
+    .isString()
+    .withMessage('Current password is required')
+    .isLength({ min: 1, max: MAX_PASSWORD_LENGTH })
+    .withMessage(`Current password must not exceed ${MAX_PASSWORD_LENGTH} characters`),
+  body('newPassword')
+    .isString()
+    .withMessage('New password is required')
+    .isLength({ min: 6, max: MAX_PASSWORD_LENGTH })
+    .withMessage(`New password must be between 6 and ${MAX_PASSWORD_LENGTH} characters`),
+];
+
 const addFolderSchema = [
   body('name')
     .trim()
@@ -170,6 +183,8 @@ const updateHideFileExtensionsConfigSchema = [body('hidden').isBoolean().withMes
 
 const updateElectronOnlyAccessConfigSchema = [body('enabled').isBoolean().withMessage('Enabled must be a boolean')];
 
+const updatePasswordChangeConfigSchema = [body('enabled').isBoolean().withMessage('Enabled must be a boolean')];
+
 const updateUserStorageLimitSchema = [
   body('targetUserId')
     .notEmpty()
@@ -207,6 +222,7 @@ const checkUploadStorageSchema = [
 module.exports = {
   signupSchema,
   loginSchema,
+  changePasswordSchema,
   addFolderSchema,
   renameFileSchema,
   downloadFileSchema,
@@ -232,4 +248,5 @@ module.exports = {
   downloadSharedItemSchema,
   checkUploadStorageSchema,
   updateElectronOnlyAccessConfigSchema,
+  updatePasswordChangeConfigSchema,
 };

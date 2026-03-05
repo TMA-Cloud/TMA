@@ -18,6 +18,7 @@ const {
   getMfaStatusController,
   regenerateBackupCodes,
   getBackupCodesCount,
+  changePassword,
 } = require('../controllers/auth.controller');
 const authMiddleware = require('../middleware/auth.middleware');
 const {
@@ -27,7 +28,7 @@ const {
   apiRateLimiter,
 } = require('../middleware/rateLimit.middleware');
 const { validate } = require('../middleware/validation.middleware');
-const { signupSchema, loginSchema } = require('../utils/validationSchemas');
+const { signupSchema, loginSchema, changePasswordSchema } = require('../utils/validationSchemas');
 
 router.post('/signup', authRateLimiter, signupSchema, validate, signup);
 router.post('/login', authRateLimiter, loginSchema, validate, login);
@@ -44,6 +45,7 @@ router.get('/profile', authMiddleware, apiRateLimiter, profile);
 router.get('/sessions', authMiddleware, apiRateLimiter, getSessions);
 router.delete('/sessions/:sessionId', authMiddleware, apiRateLimiter, revokeSession);
 router.post('/sessions/revoke-others', authMiddleware, apiRateLimiter, revokeOtherSessions);
+router.post('/change-password', authMiddleware, authRateLimiter, changePasswordSchema, validate, changePassword);
 
 // MFA routes
 router.get('/mfa/status', authMiddleware, apiRateLimiter, getMfaStatusController);

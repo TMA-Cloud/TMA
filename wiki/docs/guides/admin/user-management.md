@@ -46,6 +46,10 @@ Manage users in TMA Cloud (admin only).
 - Cannot disable user MFA (user must do it)
 - Monitor MFA adoption
 
+### Passwords
+
+- When **Allow password change** is enabled in **Settings** → **Administration**, users can change their password.
+
 ## User Operations
 
 ### Viewing User Files

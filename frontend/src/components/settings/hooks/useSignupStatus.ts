@@ -4,6 +4,7 @@ import {
   toggleSignup,
   updateHideFileExtensionsConfig,
   updateElectronOnlyAccessConfig,
+  updatePasswordChangeConfig,
 } from '../../../utils/api';
 import { useToast } from '../../../hooks/useToast';
 
@@ -27,6 +28,9 @@ export function useSignupStatus(options: UseSignupStatusOptions = {}) {
   const [electronOnlyAccess, setElectronOnlyAccess] = useState(false);
   const [canToggleElectronOnlyAccess, setCanToggleElectronOnlyAccess] = useState(false);
   const [togglingElectronOnlyAccess, setTogglingElectronOnlyAccess] = useState(false);
+  const [allowPasswordChange, setAllowPasswordChange] = useState(false);
+  const [canToggleAllowPasswordChange, setCanToggleAllowPasswordChange] = useState(false);
+  const [togglingAllowPasswordChange, setTogglingAllowPasswordChange] = useState(false);
 
   const loadSignupStatus = async () => {
     try {
@@ -40,6 +44,8 @@ export function useSignupStatus(options: UseSignupStatusOptions = {}) {
       setCanToggleHideFileExtensions(status.canToggleHideFileExtensions === true);
       setElectronOnlyAccess(status.electronOnlyAccess === true);
       setCanToggleElectronOnlyAccess(status.canToggleElectronOnlyAccess === true);
+      setAllowPasswordChange(status.allowPasswordChange === true);
+      setCanToggleAllowPasswordChange(status.canToggleAllowPasswordChange === true);
     } catch {
       // Error handled silently - signup toggle will be unavailable
     } finally {
@@ -104,6 +110,26 @@ export function useSignupStatus(options: UseSignupStatusOptions = {}) {
     }
   };
 
+  const handleToggleAllowPasswordChange = async () => {
+    if (!canToggleAllowPasswordChange || togglingAllowPasswordChange) return;
+
+    try {
+      setTogglingAllowPasswordChange(true);
+      const newEnabled = !allowPasswordChange;
+      const res = await updatePasswordChangeConfig(newEnabled);
+      const updated = res.allowPasswordChange;
+      setAllowPasswordChange(updated);
+      showToast(
+        updated ? 'Users can now change their passwords.' : 'Users can no longer change their passwords.',
+        'success'
+      );
+    } catch {
+      showToast('Failed to update password change setting', 'error');
+    } finally {
+      setTogglingAllowPasswordChange(false);
+    }
+  };
+
   useEffect(() => {
     loadSignupStatus();
   }, []);
@@ -125,5 +151,9 @@ export function useSignupStatus(options: UseSignupStatusOptions = {}) {
     canToggleElectronOnlyAccess,
     togglingElectronOnlyAccess,
     handleToggleElectronOnlyAccess,
+    allowPasswordChange,
+    canToggleAllowPasswordChange,
+    togglingAllowPasswordChange,
+    handleToggleAllowPasswordChange,
   };
 }
