@@ -22,10 +22,13 @@ Useful for development or testing without building an installer.
 2. Set the server URL. Create `electron/src/config/build-config.json` (copy from `src/config/build-config.example.json` if present) with:
 
    ```json
-   { "serverUrl": "https://your-tma-cloud.example.com" }
+   {
+     "serverUrl": "https://your-tma-cloud.example.com",
+     "updatorUrl": ""
+   }
    ```
 
-   Replace with your actual TMA Cloud URL.
+   Replace `serverUrl` with your TMA Cloud URL. `updatorUrl` is optional. Set it to the base URL where installers are hosted so the app can download updates (installer URL: `<updatorUrl>/v<version>`).
 
 3. Start the app:
 
@@ -41,7 +44,7 @@ Builds a Windows installer with the server URL embedded so users do not need a c
 
 **Admin privilege required:** Run your terminal (or IDE) **as Administrator** when building.
 
-1. In `electron/`, ensure `src/config/build-config.json` exists and contains your `serverUrl` (same format as above).
+1. In `electron/`, ensure `src/config/build-config.json` exists and contains your `serverUrl`. Set `updatorUrl` to the base URL for installer downloads if you want the packaged app to offer in-app desktop updates.
 
 2. Run the build:
 
@@ -79,6 +82,7 @@ The server URL is embedded at build time only. No config file is needed after in
 - The app uses the same update feed as the web UI (`/api/version/latest`), which returns `frontend`, `backend`, and `electron` versions.
 - When any signed-in user opens the app (web or desktop), a one-time background check compares the current versions to the feed.
 - If any component is outdated, an **Updates Available** notice appears in the left sidebar above **Settings**, listing the latest versions for backend, frontend, and Electron.
+- **Desktop (Electron) updates:** When the Electron version is outdated and `updatorUrl` was set at build time, a download icon appears next to **Electron** in that section. Any signed-in user can click it to download the update. After the download finishes, the installer is launched and the app quits so the user can complete setup. If `updatorUrl` is not configured, the sidebar still shows the latest version but the download action is not available.
 
 ## Desktop Editing and Open on Desktop (Windows)
 

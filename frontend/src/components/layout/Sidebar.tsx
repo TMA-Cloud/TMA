@@ -1,6 +1,12 @@
-import React from 'react';
-import { Home, FolderOpen, Share2, Star, Trash2, Settings, HardDrive, X } from 'lucide-react';
+import React, { useCallback, useRef, useState } from 'react';
+import { Home, FolderOpen, Share2, Star, Trash2, Settings, HardDrive, X, Download, Loader2 } from 'lucide-react';
 import { useApp } from '../../contexts/AppContext';
+import { useToast } from '../../hooks/useToast';
+import {
+  isElectron,
+  downloadAndInstallElectronUpdate,
+  subscribeToUpdateDownloadProgress,
+} from '../../utils/electronDesktop';
 
 const navigationItems = [
   { id: 'dashboard', label: 'Dashboard', icon: Home, path: ['Dashboard'] },
@@ -17,6 +23,32 @@ const navigationItems = [
 
 export const Sidebar: React.FC = () => {
   const { currentPath, setCurrentPath, sidebarOpen, setSidebarOpen, updatesAvailable } = useApp();
+  const { showToast } = useToast();
+  const [installingElectron, setInstallingElectron] = useState(false);
+  const [downloadPercent, setDownloadPercent] = useState<number | null>(null);
+  const installingElectronRef = useRef(false);
+
+  const onInstallElectronUpdate = useCallback(async () => {
+    if (!updatesAvailable?.electron) return;
+    if (installingElectronRef.current) return;
+    installingElectronRef.current = true;
+    setInstallingElectron(true);
+    setDownloadPercent(null);
+    const unsubscribe = subscribeToUpdateDownloadProgress(setDownloadPercent);
+    try {
+      const result = await downloadAndInstallElectronUpdate(updatesAvailable.electron);
+      if (result.ok) {
+        showToast('Installer launched. Complete the setup to update the desktop app.', 'success');
+      } else {
+        showToast(result.error ?? 'Failed to download or launch installer', 'error');
+      }
+    } finally {
+      installingElectronRef.current = false;
+      unsubscribe();
+      setDownloadPercent(null);
+      setInstallingElectron(false);
+    }
+  }, [updatesAvailable?.electron, showToast]);
 
   const handleNavigation = (path: string[]) => {
     setCurrentPath(path);
@@ -104,7 +136,7 @@ export const Sidebar: React.FC = () => {
             })}
           </nav>
 
-          {/* Updates banner (admin only) */}
+          {/* Updates banner */}
           {updatesAvailable && (
             <div className="px-3 pb-2">
               <div className="rounded-2xl border border-amber-300/50 dark:border-amber-600/30 bg-amber-50/80 dark:bg-amber-900/15 px-3.5 py-2.5 shadow-soft">
@@ -112,7 +144,29 @@ export const Sidebar: React.FC = () => {
                 <ul className="text-xs text-amber-700 dark:text-amber-100/90 space-y-0.5">
                   {updatesAvailable.backend && <li>Backend ⟶ {updatesAvailable.backend}</li>}
                   {updatesAvailable.frontend && <li>Frontend ⟶ {updatesAvailable.frontend}</li>}
-                  {updatesAvailable.electron && <li>Electron ⟶ {updatesAvailable.electron}</li>}
+                  {updatesAvailable.electron && (
+                    <li className="flex items-center gap-1.5">
+                      <span>Electron ⟶ {updatesAvailable.electron}</span>
+                      {isElectron() && (
+                        <button
+                          type="button"
+                          onClick={onInstallElectronUpdate}
+                          disabled={installingElectron}
+                          className="inline-flex items-center gap-1 p-0.5 rounded text-amber-700 dark:text-amber-200 hover:bg-amber-200/50 dark:hover:bg-amber-700/30 focus:outline-none focus:ring-1 focus:ring-amber-500 disabled:opacity-50"
+                          aria-label="Download and install Electron update"
+                        >
+                          {installingElectron ? (
+                            <>
+                              <Loader2 className="w-3.5 h-3.5 animate-spin flex-shrink-0" />
+                              {downloadPercent !== null && <span className="tabular-nums">{downloadPercent}%</span>}
+                            </>
+                          ) : (
+                            <Download className="w-3.5 h-3.5" />
+                          )}
+                        </button>
+                      )}
+                    </li>
+                  )}
                 </ul>
               </div>
             </div>

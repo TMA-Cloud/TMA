@@ -3,24 +3,31 @@ const fs = require('fs');
 const { app } = require('electron');
 
 const EMBEDDED_SERVER_URL = '';
+const EMBEDDED_UPDATOR_URL = '';
 
-/**
- * Resolve the server URL: embedded build value, or src/config/build-config.json when running from source.
- * Uses app.getAppPath() so it works in both development and packaged app.
- */
+function readBuildConfig() {
+  const buildConfigPath = path.join(app.getAppPath(), 'src', 'config', 'build-config.json');
+  if (!fs.existsSync(buildConfigPath)) return null;
+  try {
+    return JSON.parse(fs.readFileSync(buildConfigPath, 'utf8'));
+  } catch (_) {
+    return null;
+  }
+}
+
+/** Server URL: embedded value or build-config.json (dev/source). */
 function getServerUrl() {
   if (EMBEDDED_SERVER_URL) return EMBEDDED_SERVER_URL;
-  const appRoot = app.getAppPath();
-  const buildConfigPath = path.join(appRoot, 'src', 'config', 'build-config.json');
-  if (fs.existsSync(buildConfigPath)) {
-    try {
-      const data = JSON.parse(fs.readFileSync(buildConfigPath, 'utf8'));
-      if (data.serverUrl) return data.serverUrl;
-    } catch (_) {
-      /* ignore */
-    }
-  }
-  return null;
+  const data = readBuildConfig();
+  return data?.serverUrl || null;
+}
+
+/** Updator URL for installer download: embedded value or build-config.json. */
+function getUpdatorUrl() {
+  if (EMBEDDED_UPDATOR_URL) return EMBEDDED_UPDATOR_URL;
+  const data = readBuildConfig();
+  const url = data?.updatorUrl;
+  return typeof url === 'string' ? url.trim() : null;
 }
 
 const NO_SERVER_URL_PAGE =
@@ -47,7 +54,9 @@ function serverErrorPage(serverUrl) {
 
 module.exports = {
   EMBEDDED_SERVER_URL,
+  EMBEDDED_UPDATOR_URL,
   getServerUrl,
+  getUpdatorUrl,
   NO_SERVER_URL_PAGE,
   LOADING_PAGE,
   serverErrorPage,

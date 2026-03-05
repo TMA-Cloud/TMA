@@ -8,10 +8,12 @@ const distDir = path.join(electronDir, 'dist-electron');
 const srcDir = path.join(electronDir, 'src');
 
 let serverUrl = '';
+let updatorUrl = '';
 if (fs.existsSync(buildConfigPath)) {
   try {
     const data = JSON.parse(fs.readFileSync(buildConfigPath, 'utf8'));
     if (data.serverUrl) serverUrl = data.serverUrl;
+    if (data.updatorUrl && typeof data.updatorUrl === 'string') updatorUrl = data.updatorUrl.trim();
   } catch (_) {
     // ignore
   }
@@ -48,11 +50,13 @@ if (fs.existsSync(iconSrc)) {
   fs.copyFileSync(iconSrc, path.join(distDir, 'icon.png'));
 }
 
-// Embed server URL in main process config (packaged app uses this; dev uses src/config/build-config.json)
+// Embed server URL and updator URL in main process config
 const configPath = path.join(distDir, 'main', 'config.cjs');
 let config = fs.readFileSync(configPath, 'utf8');
-const escaped = serverUrl.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-config = config.replace(/const EMBEDDED_SERVER_URL = '';/, `const EMBEDDED_SERVER_URL = '${escaped}';`);
+const escapedServer = serverUrl.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+const escapedUpdator = updatorUrl.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+config = config.replace(/const EMBEDDED_SERVER_URL = '';/, `const EMBEDDED_SERVER_URL = '${escapedServer}';`);
+config = config.replace(/const EMBEDDED_UPDATOR_URL = '';/, `const EMBEDDED_UPDATOR_URL = '${escapedUpdator}';`);
 fs.writeFileSync(configPath, config, 'utf8');
 
-console.log('Client build staging done. serverUrl from src/config/build-config.json embedded in main/config.cjs.');
+console.log('Client build staging done. serverUrl and updatorUrl from build-config.json embedded.');

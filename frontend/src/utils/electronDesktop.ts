@@ -13,6 +13,8 @@ declare global {
       platform?: string;
       app?: {
         getVersion?: () => Promise<{ version: string | null; error?: string }>;
+        downloadAndInstallUpdate?: (version: string) => Promise<{ ok: boolean; error?: string }>;
+        onUpdateDownloadProgress?: (callback: (percent: number) => void) => () => void;
       };
       clipboard: {
         readFiles: () => Promise<{
@@ -84,6 +86,35 @@ export async function getElectronAppVersion(): Promise<string | null> {
     return typeof res?.version === 'string' && res.version.length > 0 ? res.version : null;
   } catch {
     return null;
+  }
+}
+
+/**
+ * Subscribe to download progress (0–100) while the Electron update installer is downloading.
+ * Returns an unsubscribe function.
+ */
+export function subscribeToUpdateDownloadProgress(callback: (percent: number) => void): () => void {
+  const api = typeof window !== 'undefined' ? window.electronAPI : undefined;
+  if (!isElectron() || !api?.app?.onUpdateDownloadProgress) return () => {};
+  return api.app.onUpdateDownloadProgress(callback);
+}
+
+/**
+ * Download the installer from &lt;updatorUrl&gt;/v&lt;version&gt; and launch it.
+ * Requires updatorUrl to be set in electron build-config.json.
+ */
+export async function downloadAndInstallElectronUpdate(
+  latestVersion: string
+): Promise<{ ok: boolean; error?: string }> {
+  const api = typeof window !== 'undefined' ? window.electronAPI : undefined;
+  if (!isElectron() || !api?.app?.downloadAndInstallUpdate) {
+    return { ok: false, error: 'Not available' };
+  }
+  try {
+    return await api.app.downloadAndInstallUpdate(latestVersion);
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    return { ok: false, error: message };
   }
 }
 

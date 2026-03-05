@@ -6,6 +6,13 @@ const { contextBridge, ipcRenderer } = require('electron');
       platform: process.platform,
       app: {
         getVersion: () => ipcRenderer.invoke('app:getVersion'),
+        downloadAndInstallUpdate: version => ipcRenderer.invoke('app:downloadAndInstallUpdate', version),
+        onUpdateDownloadProgress: callback => {
+          if (typeof callback !== 'function') return () => {};
+          const listener = (_e, percent) => callback(percent);
+          ipcRenderer.on('app:updateDownloadProgress', listener);
+          return () => ipcRenderer.removeListener('app:updateDownloadProgress', listener);
+        },
       },
       clipboard: {
         readFiles: () => ipcRenderer.invoke('clipboard:readFiles'),
