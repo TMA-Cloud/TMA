@@ -15,10 +15,12 @@ Get all active sessions for authenticated user.
   "sessions": [
     {
       "id": "session_123",
-      "userAgent": "Mozilla/5.0...",
-      "ipAddress": "192.168.1.1",
-      "createdAt": "2024-01-01T00:00:00Z",
-      "lastActivity": "2024-01-01T12:00:00Z",
+      "user_id": "user_123",
+      "token_version": 1,
+      "user_agent": "Mozilla/5.0...",
+      "ip_address": "192.168.1.1",
+      "created_at": "2024-01-01T00:00:00Z",
+      "last_activity": "2024-01-01T12:00:00Z",
       "isCurrent": true
     }
   ]

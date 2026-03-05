@@ -2,11 +2,7 @@
  * Authentication utility functions
  */
 
-const crypto = require('crypto');
 const { logger } = require('../config/logger');
-
-// Session binding: when enabled, tokens are bound to client fingerprint
-const SESSION_BINDING_ENABLED = process.env.SESSION_BINDING !== 'false';
 
 /** True when production is served over HTTP (BACKEND_URL starts with http:// or FORCE_INSECURE_COOKIES) */
 function isProductionOverHttp() {
@@ -68,33 +64,18 @@ function isValidPassword(password, minLength = 6) {
 }
 
 /**
- * Generate a client fingerprint hash from request headers
- * This helps detect if a token is being used from a different device/browser
- * @param {Object} req - Express request object
- * @returns {string} Fingerprint hash
- */
-function generateClientFingerprint(req) {
-  const userAgent = req.headers['user-agent'] || '';
-  // Note: We don't include IP address as it changes frequently (mobile networks, VPNs)
-  // User-Agent provides reasonable device binding without causing logout issues
-  const fingerprint = `${userAgent}`;
-  return crypto.createHash('sha256').update(fingerprint).digest('hex').slice(0, 16);
-}
-
-/**
  * Generate JWT authentication token for a user
  * @param {string} userId - User ID to encode in the token
  * @param {string} jwtSecret - JWT secret key
  * @param {Object} options - Additional options
  * @param {number} options.tokenVersion - User's current token version
  * @param {string} options.sessionId - Session ID to bind token to
- * @param {Object} options.req - Express request object for fingerprinting
  * @param {string} options.expiresIn - Token expiration (default: '7d')
  * @returns {string} JWT token
  */
 function generateAuthToken(userId, jwtSecret, options = {}) {
   const jwt = require('jsonwebtoken');
-  const { tokenVersion = 1, sessionId = null, req = null, expiresIn = '7d' } = options;
+  const { tokenVersion = 1, sessionId = null, expiresIn = '7d' } = options;
 
   const payload = {
     id: userId,
@@ -106,31 +87,8 @@ function generateAuthToken(userId, jwtSecret, options = {}) {
     payload.sid = sessionId;
   }
 
-  // Add client fingerprint if request is available and binding is enabled
-  if (SESSION_BINDING_ENABLED && req) {
-    payload.fp = generateClientFingerprint(req);
-  }
-
   // Explicitly specify algorithm to prevent algorithm confusion attacks
   return jwt.sign(payload, jwtSecret, { expiresIn, algorithm: 'HS256' });
-}
-
-/**
- * Validate client fingerprint from token against current request
- * @param {string} tokenFingerprint - Fingerprint stored in token
- * @param {Object} req - Current Express request object
- * @returns {boolean} True if fingerprint matches or binding is disabled
- */
-function validateClientFingerprint(tokenFingerprint, req) {
-  if (!SESSION_BINDING_ENABLED) {
-    return true;
-  }
-  if (!tokenFingerprint) {
-    // Token was issued before fingerprinting was enabled - allow it
-    return true;
-  }
-  const currentFingerprint = generateClientFingerprint(req);
-  return tokenFingerprint === currentFingerprint;
 }
 
 module.exports = {
@@ -138,7 +96,4 @@ module.exports = {
   isValidEmail,
   isValidPassword,
   generateAuthToken,
-  generateClientFingerprint,
-  validateClientFingerprint,
-  SESSION_BINDING_ENABLED,
 };

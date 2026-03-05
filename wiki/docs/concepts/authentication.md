@@ -11,7 +11,6 @@ TMA Cloud supports multiple authentication methods:
 - Secure password hashing with bcrypt
 - JWT token-based sessions
 - httpOnly cookies for token storage
-- Session binding (browser fingerprint)
 
 ### Google OAuth (Optional)
 
@@ -32,7 +31,6 @@ TMA Cloud supports multiple authentication methods:
 
 - JWT tokens with expiration
 - Token versioning for revocation
-- Session binding to prevent hijacking
 
 ### Active Sessions
 
@@ -43,7 +41,6 @@ TMA Cloud supports multiple authentication methods:
 
 ## Security Features
 
-- **Session Binding:** Browser fingerprint prevents token theft
 - **Token Versioning:** Invalidate all tokens on logout-all
 - **Rate Limiting:** 25 login/signup attempts per 15 minutes per IP/email; MFA verify/disable 5 attempts per minute; backup code regeneration 3 attempts per 10 minutes with 5-minute cooldown
 - **Audit Logging:** All authentication events logged

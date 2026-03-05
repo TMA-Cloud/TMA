@@ -40,7 +40,6 @@ Complete reference for all environment variables in TMA Cloud.
 | Variable                 | Required | Default | Description                                               |
 | ------------------------ | -------- | ------- | --------------------------------------------------------- |
 | `JWT_SECRET`             | Yes      | -       | Secret key for JWT tokens                                 |
-| `SESSION_BINDING`        | No       | `true`  | Enable session binding (browser fingerprint)              |
 | `FORCE_INSECURE_COOKIES` | No       | `false` | If `true`, auth cookie has no `Secure` flag in production |
 
 ## Google OAuth (Optional)

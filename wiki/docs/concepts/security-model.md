@@ -19,8 +19,6 @@ Overall security architecture and practices in TMA Cloud.
 
 ### Session Security
 
-- **Session Binding:** Browser fingerprint matching
-- **Token Theft Protection:** Invalid tokens on mismatch
 - **Active Session Management:** View and revoke sessions
 - **Logout All:** Invalidate all tokens
 
