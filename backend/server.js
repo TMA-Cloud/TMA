@@ -70,9 +70,9 @@ app.use((req, res, next) => {
   const csp = [
     "default-src 'self'",
     scriptSrc, // unsafe-inline/eval needed for some frameworks
-    "style-src 'self' 'unsafe-inline'",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "img-src 'self' data: blob:",
-    "font-src 'self' data:",
+    "font-src 'self' data: https://fonts.gstatic.com",
     connectSrc,
     frameSrc,
     "frame-ancestors 'none'",
