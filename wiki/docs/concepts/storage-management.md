@@ -5,7 +5,7 @@ Storage limits and management in TMA Cloud.
 ## Storage Driver
 
 - **Local:** Files stored on disk under `UPLOAD_DIR`. Paths stored in database.
-- **S3:** Files stored in S3-compatible object storage (e.g. AWS S3/RustFS). Object keys stored in database.
+- **S3:** Files stored in S3-compatible object storage. Object keys stored in database.
 - Set `STORAGE_DRIVER=local` (default) or `STORAGE_DRIVER=s3`. When S3, set endpoint, bucket, and credentials (see [Environment Variables](/reference/environment-variables)).
 - Upload, download, copy, rename, delete, and share work the same for both; implementation uses streaming for S3 (no temp files).
 
@@ -111,7 +111,7 @@ Files are automatically encrypted. Encryption uses AES-256-GCM with authenticate
 
 ## S3 Bucket Protection (when STORAGE_DRIVER=s3)
 
-Backend scripts apply bucket settings using the project S3 config (RUSTFS*\* or AWS*\* env vars). Run from backend directory.
+Backend scripts apply bucket settings using the project S3 config. Run from backend directory.
 
 ### Apply all protections
 

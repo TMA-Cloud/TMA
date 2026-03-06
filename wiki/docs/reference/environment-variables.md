@@ -64,6 +64,23 @@ Complete reference for all environment variables in TMA Cloud.
 
 ## S3-compatible (when STORAGE_DRIVER=s3)
 
+Supported: **Cloudflare R2** (R2*), **RustFS / other S3** (RUSTFS*), **AWS S3** (AWS\_). Use one set of vars.
+
+### Cloudflare R2
+
+| Setting    | Required | Default | Env var                    |
+| ---------- | -------- | ------- | -------------------------- |
+| Account ID | Yes\*    | -       | `R2_ACCOUNT_ID`            |
+| Bucket     | Yes\*    | -       | `R2_BUCKET`                |
+| Access key | Yes\*    | -       | `R2_ACCESS_KEY_ID`         |
+| Secret key | Yes\*    | -       | `R2_SECRET_ACCESS_KEY`     |
+| Endpoint   | No       | derived | `R2_ENDPOINT` (optional)   |
+| Public URL | No       | -       | `R2_PUBLIC_URL` (optional) |
+
+\*Required when using R2. Endpoint is `https://<R2_ACCOUNT_ID>.r2.cloudflarestorage.com` unless `R2_ENDPOINT` is set. Region is set to `auto` for R2.
+
+### Other S3-compatible (RustFS, AWS, etc.)
+
 | Setting    | Required | Default     | Env var (either name)                              |
 | ---------- | -------- | ----------- | -------------------------------------------------- |
 | Endpoint   | Yes\*    | -           | `RUSTFS_ENDPOINT` or `AWS_S3_ENDPOINT`             |
@@ -73,7 +90,7 @@ Complete reference for all environment variables in TMA Cloud.
 | Region     | No       | `us-east-1` | `RUSTFS_REGION` or `AWS_REGION`                    |
 | Path style | No       | `true`      | `RUSTFS_FORCE_PATH_STYLE` (set `false` to disable) |
 
-\*Required when `STORAGE_DRIVER=s3`. Use one set of names consistently (e.g. all AWS*\* or all RUSTFS*\*).
+\*Required when `STORAGE_DRIVER=s3` and not using R2. Use one set of names consistently.
 
 **Note:** From backend, `npm run s3:protect-all` applies bucket protections (public access block, HTTPS-only policy, versioning, optional encryption, lifecycle). Lifecycle aborts incomplete multipart after 1 day and deletes noncurrent versions after 7 days. Run orphan cleanup frequently; see [Storage Management](/concepts/storage-management).
 

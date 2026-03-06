@@ -66,7 +66,7 @@ Check code formatting without making changes.
 
 ### S3 bucket (when STORAGE_DRIVER=s3)
 
-Run from backend directory. Uses project S3 config (RUSTFS*\* or AWS*\* env vars).
+Run from backend directory. Uses project S3 config.
 
 ```bash
 npm run s3:protect-all
