@@ -151,7 +151,6 @@ const config: Config = {
           ],
         },
       ],
-      copyright: `© ${new Date().getFullYear()} TMA Cloud, All rights reserved.`,
     },
     prism: {
       theme: prismThemes.github,
