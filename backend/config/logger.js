@@ -1,7 +1,9 @@
-const pino = require('pino');
-const pinoHttp = require('pino-http');
-const { getRequestId, getUserId } = require('../middleware/requestId.middleware');
-const os = require('os');
+import os from 'os';
+
+import pino from 'pino';
+import pinoHttp from 'pino-http';
+
+import { getRequestId, getUserId } from '../middleware/requestId.middleware.js';
 
 const isDevelopment = process.env.NODE_ENV !== 'production';
 // Default to 'info' in all envs so development is not spammy; set LOG_LEVEL=debug if needed
@@ -334,13 +336,4 @@ function createRequestLogger(bindings = {}) {
   return logger.child(bindings);
 }
 
-module.exports = {
-  logger,
-  httpLogger,
-  createRequestLogger,
-  // Export masking utilities for reuse
-  maskSecret,
-  maskJWT,
-  maskCookie,
-  maskAuthorization,
-};
+export { logger, httpLogger, createRequestLogger, maskSecret, maskJWT, maskCookie, maskAuthorization };

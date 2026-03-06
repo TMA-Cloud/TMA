@@ -1,4 +1,4 @@
-const { logger } = require('../config/logger');
+import { logger } from '../config/logger.js';
 
 /**
  * Generic cleanup scheduler utility
@@ -36,4 +36,4 @@ function createPeriodicCleanup(cleanupFn, name, intervalHours = 24) {
   return { start, runCleanup };
 }
 
-module.exports = { createPeriodicCleanup };
+export { createPeriodicCleanup };

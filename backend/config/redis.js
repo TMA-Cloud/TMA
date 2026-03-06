@@ -1,5 +1,6 @@
-const { createClient } = require('redis');
-const { logger } = require('./logger');
+import { createClient } from 'redis';
+
+import { logger } from './logger.js';
 
 // Redis configuration
 const redisConfig = {
@@ -76,9 +77,4 @@ function isRedisConnected() {
   return isConnected && redisClient.isReady;
 }
 
-module.exports = {
-  redisClient,
-  connectRedis,
-  disconnectRedis,
-  isRedisConnected,
-};
+export { redisClient, connectRedis, disconnectRedis, isRedisConnected };

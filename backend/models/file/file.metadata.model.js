@@ -1,13 +1,13 @@
-const pool = require('../../config/db');
-const {
+import pool from '../../config/db.js';
+import {
   invalidateFileCache,
   deleteCache,
   deleteCachePattern,
   cacheKeys,
   getCache,
   setCache,
-} = require('../../utils/cache');
-const { fillFolderSizes, buildOrderClause } = require('./file.utils.model');
+} from '../../utils/cache.js';
+import { fillFolderSizes, buildOrderClause } from './file.utils.model.js';
 
 /**
  * Set starred status for files
@@ -150,11 +150,4 @@ async function getFolderTree(folderId, userId) {
   return res.rows;
 }
 
-module.exports = {
-  setStarred,
-  getStarredFiles,
-  setShared,
-  getSharedFiles,
-  getRecursiveIds,
-  getFolderTree,
-};
+export { setStarred, getStarredFiles, setShared, getSharedFiles, getRecursiveIds, getFolderTree };

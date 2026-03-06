@@ -3,12 +3,13 @@
  * Use this module for all file storage operations.
  */
 
-const { useS3 } = require('../config/storage');
-const s3Storage = require('./s3Storage');
-const localStorage = require('./localStorage');
+import { useS3 as useS3Enabled } from '../config/storage.js';
+
+import * as localStorage from './localStorage.js';
+import * as s3Storage from './s3Storage.js';
 
 function getDriver() {
-  return useS3 ? s3Storage : localStorage;
+  return useS3Enabled ? s3Storage : localStorage;
 }
 
 async function exists(key) {
@@ -66,12 +67,31 @@ function listKeysPaginated(pageSize = 1000) {
 
 /** For local driver only: resolve key to absolute path (for encryption/decryption that need paths) */
 function resolveKeyToPath(key) {
-  if (useS3) return null;
+  if (useS3Enabled) return null;
   return localStorage.resolveKey(key);
 }
 
-module.exports = {
-  useS3: () => useS3,
+function useS3() {
+  return useS3Enabled;
+}
+
+export {
+  useS3,
+  exists,
+  getReadStream,
+  putFromPath,
+  putBuffer,
+  putStream,
+  deleteObject,
+  copyObject,
+  listKeys,
+  listKeysPaginated,
+  resolveKeyToPath,
+  getDriver,
+};
+
+export default {
+  useS3,
   exists,
   getReadStream,
   putFromPath,

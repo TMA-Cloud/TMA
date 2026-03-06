@@ -1,4 +1,4 @@
-const { body, param } = require('express-validator');
+import { body, param } from 'express-validator';
 
 const MAX_EMAIL_LENGTH = 254;
 const MAX_PASSWORD_LENGTH = 128;
@@ -219,7 +219,7 @@ const checkUploadStorageSchema = [
   body('fileSize').isInt({ min: 0 }).withMessage('fileSize must be a non-negative integer').toInt(),
 ];
 
-module.exports = {
+export {
   signupSchema,
   loginSchema,
   changePasswordSchema,

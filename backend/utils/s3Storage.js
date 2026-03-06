@@ -2,19 +2,20 @@
  * S3-compatible storage driver (e.g. AWS S3/RustFS). Uses @aws-sdk/client-s3.
  */
 
-const {
-  S3Client,
-  GetObjectCommand,
-  PutObjectCommand,
-  DeleteObjectCommand,
-  HeadObjectCommand,
+import {
   CopyObjectCommand,
+  DeleteObjectCommand,
+  GetObjectCommand,
+  HeadObjectCommand,
   ListObjectsV2Command,
-} = require('@aws-sdk/client-s3');
-const { Upload } = require('@aws-sdk/lib-storage');
-const { createReadStream } = require('fs');
-const { logger } = require('../config/logger');
-const { useS3, s3: s3Config } = require('../config/storage');
+  PutObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
+import { Upload } from '@aws-sdk/lib-storage';
+import fs from 'fs';
+
+import { logger } from '../config/logger.js';
+import { s3 as s3Config, useS3 } from '../config/storage.js';
 
 let s3Client = null;
 
@@ -83,7 +84,7 @@ async function getReadStream(key) {
 async function putFromPath(key, localPath) {
   const client = getClient();
   if (!client) throw new Error('S3 client not configured');
-  const body = createReadStream(localPath);
+  const body = fs.createReadStream(localPath);
   await client.send(
     new PutObjectCommand({
       Bucket: s3Config.bucket,
@@ -231,7 +232,11 @@ async function* listKeysPaginated(pageSize = 1000) {
   } while (continuationToken);
 }
 
-module.exports = {
+function isEnabled() {
+  return useS3;
+}
+
+export {
   exists,
   getReadStream,
   putFromPath,
@@ -241,5 +246,5 @@ module.exports = {
   copyObject,
   listKeys,
   listKeysPaginated,
-  isEnabled: () => useS3,
+  isEnabled,
 };

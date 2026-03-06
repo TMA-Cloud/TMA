@@ -8,10 +8,5 @@
  * - share.download.controller.js - Download operations (downloadFolderZip, downloadSharedItem)
  */
 
-const accessControllers = require('./share/share.access.controller');
-const downloadControllers = require('./share/share.download.controller');
-
-module.exports = {
-  ...accessControllers,
-  ...downloadControllers,
-};
+export * from './share/share.access.controller.js';
+export * from './share/share.download.controller.js';

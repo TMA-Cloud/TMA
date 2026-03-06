@@ -1,6 +1,6 @@
-const { getUserStorageUsage, getUserStorageLimit } = require('../models/user.model');
-const { checkStorageLimitExceeded } = require('../utils/storageUtils');
-const { logger } = require('../config/logger');
+import { logger } from '../config/logger.js';
+import { getUserStorageLimit, getUserStorageUsage } from '../models/user.model.js';
+import { checkStorageLimitExceeded } from '../utils/storageUtils.js';
 
 /**
  * Middleware to check storage limits before file upload.
@@ -49,6 +49,4 @@ async function checkStorageLimit(req, res, next) {
   }
 }
 
-module.exports = {
-  checkStorageLimit,
-};
+export { checkStorageLimit };

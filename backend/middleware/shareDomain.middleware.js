@@ -1,5 +1,5 @@
-const { logger } = require('../config/logger');
-const { getRequestHost, getShareBaseHost } = require('../utils/shareLink');
+import { logger } from '../config/logger.js';
+import { getRequestHost, getShareBaseHost } from '../utils/shareLink.js';
 
 /**
  * Middleware to block access to the main app on the share domain.
@@ -47,4 +47,4 @@ async function blockMainAppOnShareDomain(req, res, next) {
   return res.status(404).send('Not Found');
 }
 
-module.exports = { blockMainAppOnShareDomain };
+export { blockMainAppOnShareDomain };

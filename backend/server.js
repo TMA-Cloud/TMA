@@ -1,37 +1,42 @@
-// Load environment variables FIRST before any other imports
-const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+import './config/env.js';
 
-const express = require('express');
-const fs = require('fs');
-const pool = require('./config/db');
-const authRoutes = require('./routes/auth.routes');
-const fileRoutes = require('./routes/file.routes');
-const shareRoutes = require('./routes/share.routes');
-const onlyofficeRoutes = require('./routes/onlyoffice.routes');
-const userRoutes = require('./routes/user.routes');
-const versionRoutes = require('./routes/version.routes');
-const publicRoutes = require('./routes/public.routes');
-const { startTrashCleanup } = require('./services/trashCleanup');
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
 
-const { startAuditCleanup } = require('./services/auditCleanup');
-const { startOrphanFileCleanup } = require('./services/orphanCleanup');
-const { startShareCleanup } = require('./services/shareCleanup');
-const errorHandler = require('./middleware/error.middleware');
-const { requestIdMiddleware } = require('./middleware/requestId.middleware');
-const { blockMainAppOnShareDomain } = require('./middleware/shareDomain.middleware');
-const { requireElectronClientIfEnabled } = require('./middleware/electronClient.middleware');
-const { logger, httpLogger } = require('./config/logger');
-const { initializeAuditQueue, shutdownAuditQueue } = require('./services/auditLogger');
-const { initializeMetrics, metricsEndpoint, startQueueMetricsUpdater } = require('./services/metrics');
-const { connectRedis, disconnectRedis } = require('./config/redis');
+import express from 'express';
+
+import pool from './config/db.js';
+import authRoutes from './routes/auth.routes.js';
+import fileRoutes from './routes/file.routes.js';
+import shareRoutes from './routes/share.routes.js';
+import onlyofficeRoutes from './routes/onlyoffice.routes.js';
+import userRoutes from './routes/user.routes.js';
+import versionRoutes from './routes/version.routes.js';
+import publicRoutes from './routes/public.routes.js';
+
+import { startTrashCleanup } from './services/trashCleanup.js';
+import { startAuditCleanup } from './services/auditCleanup.js';
+import { startOrphanFileCleanup } from './services/orphanCleanup.js';
+import { startShareCleanup } from './services/shareCleanup.js';
+import errorHandler from './middleware/error.middleware.js';
+import { requestIdMiddleware } from './middleware/requestId.middleware.js';
+import { blockMainAppOnShareDomain } from './middleware/shareDomain.middleware.js';
+import { requireElectronClientIfEnabled } from './middleware/electronClient.middleware.js';
+import { logger, httpLogger } from './config/logger.js';
+import { initializeAuditQueue, shutdownAuditQueue } from './services/auditLogger.js';
+import { initializeMetrics, metricsEndpoint, startQueueMetricsUpdater } from './services/metrics.js';
+import { connectRedis, disconnectRedis } from './config/redis.js';
+
+import { getCachedOnlyOfficeOrigin } from './utils/onlyofficeOriginCache.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 
 // Metrics endpoint IP whitelist
 const METRICS_ALLOWED_IPS = (process.env.METRICS_ALLOWED_IPS || '127.0.0.1').split(',').map(ip => ip.trim());
-
-const { getCachedOnlyOfficeOrigin } = require('./utils/onlyofficeOriginCache');
 
 // FIRST: Request ID middleware (must be first for proper context propagation)
 app.use(requestIdMiddleware);

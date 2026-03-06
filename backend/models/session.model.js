@@ -1,7 +1,8 @@
-const pool = require('../config/db');
-const { generateId } = require('../utils/id');
-const { logger } = require('../config/logger');
-const { getCache, setCache, deleteCache, deleteCachePattern, cacheKeys, DEFAULT_TTL } = require('../utils/cache');
+import pool from '../config/db.js';
+import { logger } from '../config/logger.js';
+
+import { generateId } from '../utils/id.js';
+import { getCache, setCache, deleteCache, deleteCachePattern, cacheKeys, DEFAULT_TTL } from '../utils/cache.js';
 
 /**
  * Create a new session record
@@ -190,7 +191,7 @@ async function cleanupOldSessions(daysOld = 30) {
   return deletedCount;
 }
 
-module.exports = {
+export {
   createSession,
   sessionExists,
   getActiveSessions,

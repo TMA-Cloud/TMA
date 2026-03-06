@@ -10,16 +10,8 @@
  * - file.search.controller.js - Search and stats
  */
 
-const crudControllers = require('./file/file.crud.controller');
-const operationsControllers = require('./file/file.operations.controller');
-const metadataControllers = require('./file/file.metadata.controller');
-const trashControllers = require('./file/file.trash.controller');
-const searchControllers = require('./file/file.search.controller');
-
-module.exports = {
-  ...crudControllers,
-  ...operationsControllers,
-  ...metadataControllers,
-  ...trashControllers,
-  ...searchControllers,
-};
+export * from './file/file.crud.controller.js';
+export * from './file/file.operations.controller.js';
+export * from './file/file.metadata.controller.js';
+export * from './file/file.trash.controller.js';
+export * from './file/file.search.controller.js';

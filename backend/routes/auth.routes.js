@@ -1,6 +1,6 @@
-const express = require('express');
-const router = express.Router();
-const {
+import express from 'express';
+
+import {
   signup,
   login,
   googleLogin,
@@ -19,16 +19,18 @@ const {
   regenerateBackupCodes,
   getBackupCodesCount,
   changePassword,
-} = require('../controllers/auth.controller');
-const authMiddleware = require('../middleware/auth.middleware');
-const {
+} from '../controllers/auth.controller.js';
+import authMiddleware from '../middleware/auth.middleware.js';
+import {
   authRateLimiter,
   mfaRateLimiter,
   backupCodeRegenerationRateLimiter,
   apiRateLimiter,
-} = require('../middleware/rateLimit.middleware');
-const { validate } = require('../middleware/validation.middleware');
-const { signupSchema, loginSchema, changePasswordSchema } = require('../utils/validationSchemas');
+} from '../middleware/rateLimit.middleware.js';
+import { validate } from '../middleware/validation.middleware.js';
+import { signupSchema, loginSchema, changePasswordSchema } from '../utils/validationSchemas.js';
+
+const router = express.Router();
 
 router.post('/signup', authRateLimiter, signupSchema, validate, signup);
 router.post('/login', authRateLimiter, loginSchema, validate, login);
@@ -55,4 +57,4 @@ router.post('/mfa/disable', authMiddleware, mfaRateLimiter, disableMfaController
 router.post('/mfa/backup-codes/regenerate', authMiddleware, backupCodeRegenerationRateLimiter, regenerateBackupCodes);
 router.get('/mfa/backup-codes/count', authMiddleware, apiRateLimiter, getBackupCodesCount);
 
-module.exports = router;
+export default router;

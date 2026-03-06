@@ -13,20 +13,10 @@
  * - file.info.model.js - File info query utilities
  */
 
-const crudModels = require('./file/file.crud.model');
-const operationsModels = require('./file/file.operations.model');
-const metadataModels = require('./file/file.metadata.model');
-const trashModels = require('./file/file.trash.model');
-const cleanupModels = require('./file/file.cleanup.model');
-const searchModels = require('./file/file.search.model');
-const infoModels = require('./file/file.info.model');
-
-module.exports = {
-  ...crudModels,
-  ...operationsModels,
-  ...metadataModels,
-  ...trashModels,
-  ...cleanupModels,
-  ...searchModels,
-  ...infoModels,
-};
+export * from './file/file.crud.model.js';
+export * from './file/file.operations.model.js';
+export * from './file/file.metadata.model.js';
+export * from './file/file.trash.model.js';
+export * from './file/file.cleanup.model.js';
+export * from './file/file.search.model.js';
+export * from './file/file.info.model.js';

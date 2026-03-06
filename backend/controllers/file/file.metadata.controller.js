@@ -1,27 +1,27 @@
-const { sendError, sendSuccess } = require('../../utils/response');
-const { logger } = require('../../config/logger');
-const { logAuditEvent } = require('../../services/auditLogger');
-const {
-  setStarred,
-  getStarredFiles,
-  setShared,
-  getSharedFiles,
-  getRecursiveIds,
+import pool from '../../config/db.js';
+import { logger } from '../../config/logger.js';
+import { logAuditEvent } from '../../services/auditLogger.js';
+import { EventTypes, publishFileEventsBatch } from '../../services/fileEvents.js';
+import {
   getFileInfo,
   getFolderTree,
-} = require('../../models/file.model');
-const {
-  createShareLink,
-  getShareLinks,
-  deleteShareLinks,
+  getRecursiveIds,
+  getSharedFiles,
+  getStarredFiles,
+  setShared,
+  setStarred,
+} from '../../models/file.model.js';
+import {
   addFilesToShare,
+  createShareLink,
+  deleteShareLinks,
+  getShareLinks,
   removeFilesFromShares,
   updateShareExpiry,
-} = require('../../models/share.model');
-const pool = require('../../config/db');
-const { validateSortBy, validateSortOrder } = require('../../utils/validation');
-const { buildShareLink } = require('../../utils/shareLink');
-const { publishFileEventsBatch, EventTypes } = require('../../services/fileEvents');
+} from '../../models/share.model.js';
+import { buildShareLink } from '../../utils/shareLink.js';
+import { sendError, sendSuccess } from '../../utils/response.js';
+import { validateSortBy, validateSortOrder } from '../../utils/validation.js';
 /**
  * Get basic info for a single file or folder (for "Get Info" UI).
  */
@@ -389,12 +389,18 @@ async function linkParentShareController(req, res) {
   sendSuccess(res, { links });
 }
 
-module.exports = {
-  getFileInfo: getFileInfoController,
-  starFiles: starFilesController,
+const getFileInfoControllerExport = getFileInfoController;
+const starFiles = starFilesController;
+const shareFiles = shareFilesController;
+const getShareLinksControllerExport = getShareLinksController;
+const linkParentShare = linkParentShareController;
+
+export {
+  getFileInfoControllerExport as getFileInfo,
+  starFiles,
   listStarred,
-  shareFiles: shareFilesController,
+  shareFiles,
   listShared,
-  getShareLinks: getShareLinksController,
-  linkParentShare: linkParentShareController,
+  getShareLinksControllerExport as getShareLinks,
+  linkParentShare,
 };

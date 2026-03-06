@@ -3,10 +3,10 @@
  * Uses UPLOAD_DIR; key is the relative path (e.g. "abc123.pdf").
  */
 
-const fs = require('fs');
-const path = require('path');
-const { createReadStream } = require('fs');
-const { UPLOAD_DIR } = require('../config/paths');
+import fs from 'fs';
+import path from 'path';
+
+import { UPLOAD_DIR } from '../config/paths.js';
 
 function resolveKey(key) {
   if (!key) throw new Error('Storage key is required');
@@ -31,7 +31,7 @@ async function exists(key) {
 
 async function getReadStream(key) {
   const p = resolveKey(key);
-  return createReadStream(p);
+  return fs.createReadStream(p);
 }
 
 async function putFromPath(key, localPath) {
@@ -49,7 +49,7 @@ async function putBuffer(key, buffer) {
 async function putStream(key, stream) {
   const dest = resolveKey(key);
   await fs.promises.mkdir(path.dirname(dest), { recursive: true });
-  const writeStream = require('fs').createWriteStream(dest);
+  const writeStream = fs.createWriteStream(dest);
   await new Promise((resolve, reject) => {
     stream.pipe(writeStream);
     writeStream.on('finish', resolve);
@@ -70,13 +70,4 @@ async function copyObject(sourceKey, destKey) {
   await fs.promises.copyFile(src, dest);
 }
 
-module.exports = {
-  exists,
-  getReadStream,
-  putFromPath,
-  putBuffer,
-  putStream,
-  deleteObject,
-  copyObject,
-  resolveKey,
-};
+export { exists, getReadStream, putFromPath, putBuffer, putStream, deleteObject, copyObject, resolveKey };

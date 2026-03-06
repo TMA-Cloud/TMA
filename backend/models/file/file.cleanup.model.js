@@ -1,10 +1,11 @@
-const pool = require('../../config/db');
-const fs = require('fs');
-const path = require('path');
-const { UPLOAD_DIR } = require('../../config/paths');
-const { resolveFilePath } = require('../../utils/filePath');
-const { logger } = require('../../config/logger');
-const storage = require('../../utils/storageDriver');
+import fs from 'fs';
+import path from 'path';
+
+import pool from '../../config/db.js';
+import { logger } from '../../config/logger.js';
+import { UPLOAD_DIR } from '../../config/paths.js';
+import { resolveFilePath } from '../../utils/filePath.js';
+import storage from '../../utils/storageDriver.js';
 
 /**
  * Cleanup expired trash files (older than 15 days)
@@ -114,7 +115,4 @@ async function cleanupOrphanFiles() {
   }
 }
 
-module.exports = {
-  cleanupExpiredTrash,
-  cleanupOrphanFiles,
-};
+export { cleanupExpiredTrash, cleanupOrphanFiles };

@@ -1,10 +1,12 @@
-const express = require('express');
+import express from 'express';
+
+import { callback, getConfig, getViewerPage, serveFile } from '../controllers/onlyoffice.controller.js';
+import auth from '../middleware/auth.middleware.js';
+import { apiRateLimiter } from '../middleware/rateLimit.middleware.js';
+import { validate } from '../middleware/validation.middleware.js';
+import { getOnlyOfficeConfigSchema } from '../utils/validationSchemas.js';
+
 const router = express.Router();
-const auth = require('../middleware/auth.middleware');
-const { getConfig, serveFile, callback, getViewerPage } = require('../controllers/onlyoffice.controller');
-const { apiRateLimiter } = require('../middleware/rateLimit.middleware');
-const { validate } = require('../middleware/validation.middleware');
-const { getOnlyOfficeConfigSchema } = require('../utils/validationSchemas');
 
 // Authenticated: get editor config for a file
 router.get('/config/:id', auth, apiRateLimiter, getOnlyOfficeConfigSchema, validate, getConfig);
@@ -30,4 +32,4 @@ router.options('/callback', (req, res) => {
   res.status(200).end();
 });
 
-module.exports = router;
+export default router;

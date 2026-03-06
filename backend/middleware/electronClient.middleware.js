@@ -1,5 +1,5 @@
-const { logger } = require('../config/logger');
-const { getElectronOnlyAccessSettings } = require('../models/user.model');
+import { logger } from '../config/logger.js';
+import { getElectronOnlyAccessSettings } from '../models/user.model.js';
 
 const ELECTRON_HEADER_NAME = 'X-TMA-Desktop-Client';
 const ELECTRON_HEADER_EXPECTED_VALUE = 'tma-electron-client-v1';
@@ -149,8 +149,4 @@ async function requireElectronClientIfEnabled(req, res, next) {
   }
 }
 
-module.exports = {
-  requireElectronClientIfEnabled,
-  ELECTRON_HEADER_NAME,
-  ELECTRON_HEADER_EXPECTED_VALUE,
-};
+export { requireElectronClientIfEnabled, ELECTRON_HEADER_NAME, ELECTRON_HEADER_EXPECTED_VALUE };

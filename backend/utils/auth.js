@@ -2,7 +2,9 @@
  * Authentication utility functions
  */
 
-const { logger } = require('../config/logger');
+import jwt from 'jsonwebtoken';
+
+import { logger } from '../config/logger.js';
 
 /** True when production is served over HTTP (BACKEND_URL starts with http:// or FORCE_INSECURE_COOKIES) */
 function isProductionOverHttp() {
@@ -74,7 +76,6 @@ function isValidPassword(password, minLength = 6) {
  * @returns {string} JWT token
  */
 function generateAuthToken(userId, jwtSecret, options = {}) {
-  const jwt = require('jsonwebtoken');
   const { tokenVersion = 1, sessionId = null, expiresIn = '7d' } = options;
 
   const payload = {
@@ -91,9 +92,4 @@ function generateAuthToken(userId, jwtSecret, options = {}) {
   return jwt.sign(payload, jwtSecret, { expiresIn, algorithm: 'HS256' });
 }
 
-module.exports = {
-  getCookieOptions,
-  isValidEmail,
-  isValidPassword,
-  generateAuthToken,
-};
+export { getCookieOptions, isValidEmail, isValidPassword, generateAuthToken };

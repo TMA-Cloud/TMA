@@ -21,7 +21,7 @@ async function refreshCache() {
   const now = Date.now();
 
   try {
-    const { getOnlyOfficeConfig } = require('../controllers/onlyoffice/onlyoffice.utils');
+    const { getOnlyOfficeConfig } = await import('../controllers/onlyoffice/onlyoffice.utils.js');
     const onlyOfficeConfig = await getOnlyOfficeConfig();
 
     if (onlyOfficeConfig.url) {
@@ -113,7 +113,4 @@ function invalidateOnlyOfficeOriginCache() {
   }
 }
 
-module.exports = {
-  getCachedOnlyOfficeOrigin,
-  invalidateOnlyOfficeOriginCache,
-};
+export { getCachedOnlyOfficeOrigin, invalidateOnlyOfficeOriginCache };

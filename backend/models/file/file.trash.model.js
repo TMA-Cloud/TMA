@@ -1,18 +1,20 @@
-const pool = require('../../config/db');
-const path = require('path');
-const fs = require('fs');
-const {
+import fs from 'fs';
+import path from 'path';
+
+import pool from '../../config/db.js';
+import { logger } from '../../config/logger.js';
+import {
   invalidateFileCache,
   invalidateSearchCache,
   deleteCache,
   deleteCachePattern,
   cacheKeys,
-} = require('../../utils/cache');
-const { buildOrderClause, fillFolderSizes } = require('./file.utils.model');
-const { getRecursiveIds } = require('./file.metadata.model');
-const storage = require('../../utils/storageDriver');
-const { resolveFilePath } = require('../../utils/filePath');
-const { logger } = require('../../config/logger');
+} from '../../utils/cache.js';
+import { resolveFilePath } from '../../utils/filePath.js';
+import storage from '../../utils/storageDriver.js';
+
+import { getRecursiveIds } from './file.metadata.model.js';
+import { buildOrderClause, fillFolderSizes } from './file.utils.model.js';
 
 /**
  * Delete files (soft delete - move to trash)
@@ -251,9 +253,4 @@ async function permanentlyDeleteFiles(ids, userId) {
   await deleteCache(cacheKeys.userStorage(userId)); // Invalidate storage usage cache
 }
 
-module.exports = {
-  deleteFiles,
-  getTrashFiles,
-  restoreFiles,
-  permanentlyDeleteFiles,
-};
+export { deleteFiles, getTrashFiles, restoreFiles, permanentlyDeleteFiles };

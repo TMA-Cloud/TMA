@@ -1,9 +1,10 @@
-const bcrypt = require('bcryptjs');
-const { createUser, getUserByEmail, getSignupEnabled, handleFirstUserSetup } = require('../../models/user.model');
-const { sendError } = require('../../utils/response');
-const { logger } = require('../../config/logger');
-const { loginFailure, userSignup } = require('../../services/auditLogger');
-const { createSessionAndToken, setAuthCookieAndRespond } = require('../../utils/authSession');
+import bcrypt from 'bcryptjs';
+
+import { logger } from '../../config/logger.js';
+import { createUser, getUserByEmail, getSignupEnabled, handleFirstUserSetup } from '../../models/user.model.js';
+import { loginFailure, userSignup } from '../../services/auditLogger.js';
+import { createSessionAndToken, setAuthCookieAndRespond } from '../../utils/authSession.js';
+import { sendError } from '../../utils/response.js';
 
 /**
  * User signup
@@ -43,6 +44,4 @@ async function signup(req, res) {
   }
 }
 
-module.exports = {
-  signup,
-};
+export { signup };

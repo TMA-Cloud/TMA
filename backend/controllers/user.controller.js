@@ -7,10 +7,5 @@
  * - user.admin.controller.js - Admin operations (signup, user management)
  */
 
-const storageControllers = require('./user/user.storage.controller');
-const adminControllers = require('./user/user.admin.controller');
-
-module.exports = {
-  ...storageControllers,
-  ...adminControllers,
-};
+export * from './user/user.storage.controller.js';
+export * from './user/user.admin.controller.js';

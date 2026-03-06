@@ -1,5 +1,8 @@
-const { logger } = require('../config/logger');
-const { getShareBaseUrlOrigin } = require('../services/shareBaseUrl.service');
+import { logger } from '../config/logger.js';
+import {
+  getShareBaseHost as getShareBaseHostFromService,
+  getShareBaseUrlOrigin,
+} from '../services/shareBaseUrl.service.js';
 
 /**
  * Get share base URL origin from service
@@ -84,13 +87,7 @@ function getRequestHost(req) {
 // Get the host from share base URL if configured (async for middleware)
 // For multi-instance support, this checks Redis cache directly via service
 async function getShareBaseHost() {
-  const { getShareBaseHost: getHostFromService } = require('../services/shareBaseUrl.service');
-  return getHostFromService();
+  return getShareBaseHostFromService();
 }
 
-module.exports = {
-  getShareBaseUrl,
-  buildShareLink,
-  getRequestHost,
-  getShareBaseHost,
-};
+export { getShareBaseUrl, buildShareLink, getRequestHost, getShareBaseHost };

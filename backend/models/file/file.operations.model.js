@@ -1,15 +1,18 @@
-const pool = require('../../config/db');
-const path = require('path');
-const { PassThrough } = require('stream');
-const { safeUnlink } = require('../../utils/fileCleanup');
-const { generateId } = require('../../utils/id');
-const { UPLOAD_DIR } = require('../../config/paths');
-const { resolveFilePath, isFilePathEncrypted } = require('../../utils/filePath');
-const { logger } = require('../../config/logger');
-const { invalidateFileCache, invalidateSearchCache, deleteCache, cacheKeys } = require('../../utils/cache');
-const storage = require('../../utils/storageDriver');
-const { getUniqueDbFileName } = require('./file.utils.model');
-const { copyEncryptedFile, copyEncryptedFileStreams } = require('../../utils/fileEncryption');
+import fs from 'fs';
+import path from 'path';
+import { PassThrough } from 'stream';
+
+import pool from '../../config/db.js';
+import { logger } from '../../config/logger.js';
+import { UPLOAD_DIR } from '../../config/paths.js';
+import { invalidateFileCache, invalidateSearchCache, deleteCache, cacheKeys } from '../../utils/cache.js';
+import { safeUnlink } from '../../utils/fileCleanup.js';
+import { copyEncryptedFile, copyEncryptedFileStreams } from '../../utils/fileEncryption.js';
+import { isFilePathEncrypted, resolveFilePath } from '../../utils/filePath.js';
+import { generateId } from '../../utils/id.js';
+import storage from '../../utils/storageDriver.js';
+
+import { getUniqueDbFileName } from './file.utils.model.js';
 
 /**
  * Move files to a different parent folder
@@ -99,7 +102,6 @@ async function copyEntry(id, parentId, userId, client = null) {
         if (isSourceEncrypted) {
           await copyEncryptedFile(sourcePath, destPath);
         } else {
-          const fs = require('fs');
           await fs.promises.copyFile(sourcePath, destPath);
         }
       }
@@ -265,7 +267,6 @@ async function copyEntryWithFile(file, parentId, userId, client) {
         if (isSourceEncrypted) {
           await copyEncryptedFile(sourcePath, destPath);
         } else {
-          const fs = require('fs');
           await fs.promises.copyFile(sourcePath, destPath);
         }
       }
@@ -349,7 +350,4 @@ async function copyEntryWithFile(file, parentId, userId, client) {
   return newId;
 }
 
-module.exports = {
-  moveFiles,
-  copyFiles,
-};
+export { moveFiles, copyFiles };

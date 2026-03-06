@@ -1,6 +1,6 @@
-const pool = require('../../config/db');
-const { getCache, setCache, cacheKeys, DEFAULT_TTL } = require('../../utils/cache');
-const { fillFolderSizes } = require('./file.utils.model');
+import pool from '../../config/db.js';
+import { getCache, setCache, cacheKeys, DEFAULT_TTL } from '../../utils/cache.js';
+import { fillFolderSizes } from './file.utils.model.js';
 
 /**
  * Search files and folders using optimized trigram similarity
@@ -153,7 +153,4 @@ async function getFileStats(userId) {
   return stats;
 }
 
-module.exports = {
-  searchFiles,
-  getFileStats,
-};
+export { searchFiles, getFileStats };

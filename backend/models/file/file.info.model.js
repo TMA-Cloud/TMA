@@ -3,7 +3,7 @@
  * Common patterns for querying file information
  */
 
-const pool = require('../../config/db');
+import pool from '../../config/db.js';
 
 /**
  * Get file information for multiple files
@@ -78,8 +78,4 @@ async function resolveTargetFolderId(targetId, userId) {
   }
 }
 
-module.exports = {
-  getFileInfo,
-  getTargetFolderName,
-  resolveTargetFolderId,
-};
+export { getFileInfo, getTargetFolderName, resolveTargetFolderId };

@@ -1,6 +1,14 @@
-const pool = require('../../config/db');
-const { logger } = require('../../config/logger');
-const { getCache, setCache, deleteCache, cacheKeys, DEFAULT_TTL } = require('../../utils/cache');
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+import pool from '../../config/db.js';
+import { logger } from '../../config/logger.js';
+import { useS3 } from '../../config/storage.js';
+import { getCache, setCache, deleteCache, cacheKeys, DEFAULT_TTL } from '../../utils/cache.js';
+import { getActualDiskSize, formatFileSize } from '../../utils/storageUtils.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 async function isFirstUser(userId) {
   // Use stored first_user_id as source of truth (immutable, cannot be manipulated)
@@ -711,9 +719,7 @@ async function setUserStorageLimit(userId, targetUserId, storageLimit) {
       }
 
       // When using local disk, cap limit by actual VM disk space. When using S3, skip this (S3 capacity is independent).
-      const { useS3 } = require('../../config/storage');
       if (!useS3) {
-        const { getActualDiskSize, formatFileSize } = require('../../utils/storageUtils');
         const basePath = process.env.UPLOAD_DIR || __dirname;
         const actualDiskSize = await getActualDiskSize(basePath);
         if (limit > actualDiskSize) {
@@ -806,7 +812,7 @@ async function setPasswordChangeSettings(enabled, userId) {
   }
 }
 
-module.exports = {
+export {
   isFirstUser,
   getSignupEnabled,
   setSignupEnabled,

@@ -1,19 +1,22 @@
-const bcrypt = require('bcryptjs');
-const { OAuth2Client } = require('google-auth-library');
-const {
+import bcrypt from 'bcryptjs';
+import { OAuth2Client } from 'google-auth-library';
+
+import { logger } from '../../config/logger.js';
+import {
+  createUserWithGoogle,
+  getMfaStatus,
+  getSignupEnabled,
   getUserByEmail,
   getUserByGoogleId,
-  createUserWithGoogle,
+  handleFirstUserSetup,
   updateGoogleId,
-  getSignupEnabled,
-  getMfaStatus,
-} = require('../../models/user.model');
-const { sendError } = require('../../utils/response');
-const { logger } = require('../../config/logger');
-const { loginSuccess, loginFailure, userSignup } = require('../../services/auditLogger');
-const { handleFirstUserSetup } = require('../../models/user.model');
-const { createSessionAndToken, setAuthCookieAndRespond } = require('../../utils/authSession');
-const { verifyMfaCode } = require('./auth.mfa.controller');
+} from '../../models/user.model.js';
+import { loginFailure, loginSuccess, userSignup } from '../../services/auditLogger.js';
+import { getCookieOptions } from '../../utils/auth.js';
+import { createSessionAndToken, setAuthCookieAndRespond } from '../../utils/authSession.js';
+import { sendError } from '../../utils/response.js';
+
+import { verifyMfaCode } from './auth.mfa.controller.js';
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
@@ -167,7 +170,7 @@ async function googleCallback(req, res) {
     // Create session and generate token
     const { token } = await createSessionAndToken(user.id, req);
 
-    res.cookie('token', token, require('../../utils/auth').getCookieOptions());
+    res.cookie('token', token, getCookieOptions());
     res.redirect('/');
   } catch (err) {
     logger.error({ err }, 'Google OAuth authentication failed');
@@ -175,9 +178,6 @@ async function googleCallback(req, res) {
   }
 }
 
-module.exports = {
-  login,
-  googleLogin,
-  googleCallback,
-  googleAuthEnabled: !!GOOGLE_AUTH_ENABLED,
-};
+const googleAuthEnabled = !!GOOGLE_AUTH_ENABLED;
+
+export { login, googleLogin, googleCallback, googleAuthEnabled };

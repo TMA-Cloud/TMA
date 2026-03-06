@@ -1,6 +1,7 @@
-const pool = require('../../config/db');
-const { generateId } = require('../../utils/id');
-const { getCache, setCache, deleteCache, cacheKeys, DEFAULT_TTL } = require('../../utils/cache');
+import pool from '../../config/db.js';
+
+import { generateId } from '../../utils/id.js';
+import { getCache, setCache, deleteCache, invalidateEmailCache, cacheKeys, DEFAULT_TTL } from '../../utils/cache.js';
 
 async function createUser(email, password, name) {
   const id = generateId(16);
@@ -126,12 +127,11 @@ async function updateGoogleId(userId, googleId) {
   await deleteCache(cacheKeys.userById(userId));
   // Invalidate email cache if email exists
   if (email) {
-    const { invalidateEmailCache } = require('../../utils/cache');
     await invalidateEmailCache(email);
   }
 }
 
-module.exports = {
+export {
   createUser,
   getUserByEmail,
   getUserById,

@@ -1,9 +1,10 @@
-const crypto = require('crypto');
-const fs = require('fs').promises;
-const { createReadStream, createWriteStream } = require('fs');
-const { pipeline } = require('stream/promises');
-const { Transform, Readable } = require('stream');
-const { logger } = require('../config/logger');
+import crypto from 'crypto';
+import fs from 'fs/promises';
+import { createReadStream, createWriteStream } from 'fs';
+import { Transform, Readable } from 'stream';
+import { pipeline } from 'stream/promises';
+
+import { logger } from '../config/logger.js';
 
 // AES-256-GCM configuration
 const ALGORITHM = 'aes-256-gcm';
@@ -462,7 +463,7 @@ async function isFileEncrypted(filePath) {
   }
 }
 
-module.exports = {
+export {
   encryptFile,
   decryptFile,
   createDecryptStream,

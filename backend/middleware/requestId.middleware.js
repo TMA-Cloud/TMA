@@ -1,5 +1,5 @@
-const { createNamespace } = require('cls-hooked');
-const { nanoid } = require('nanoid');
+import { createNamespace } from 'cls-hooked';
+import { nanoid } from 'nanoid';
 
 // Create a continuation-local-storage namespace for request context
 const requestContext = createNamespace('request-context');
@@ -70,10 +70,4 @@ function getNamespace() {
   return requestContext;
 }
 
-module.exports = {
-  requestIdMiddleware,
-  getRequestId,
-  getUserId,
-  setUserId,
-  getNamespace,
-};
+export { requestIdMiddleware, getRequestId, getUserId, setUserId, getNamespace };

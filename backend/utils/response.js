@@ -1,7 +1,7 @@
 /**
  * Response utility functions for consistent error handling
  */
-const { logger } = require('../config/logger');
+import { logger } from '../config/logger.js';
 
 /**
  * Send error response with consistent format
@@ -32,7 +32,4 @@ function sendSuccess(res, data, status = 200) {
   res.status(status).json(data);
 }
 
-module.exports = {
-  sendError,
-  sendSuccess,
-};
+export { sendError, sendSuccess };

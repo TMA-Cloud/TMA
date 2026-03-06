@@ -1,10 +1,12 @@
-const path = require('path');
-const archiver = require('archiver');
-const { resolveFilePath, isValidPath, isFilePathEncrypted } = require('./filePath');
-const { createDecryptStream, createDecryptStreamFromStream } = require('./fileEncryption');
-const { contentDispositionValue } = require('./fileDownload');
-const { logger } = require('../config/logger');
-const storage = require('./storageDriver');
+import path from 'path';
+
+import archiver from 'archiver';
+
+import { logger } from '../config/logger.js';
+import { isFilePathEncrypted, isValidPath, resolveFilePath } from './filePath.js';
+import { createDecryptStream, createDecryptStreamFromStream } from './fileEncryption.js';
+import { contentDispositionValue } from './fileDownload.js';
+import storage from './storageDriver.js';
 
 function setZipHeaders(res, archiveName) {
   res.setHeader('Content-Type', 'application/zip');
@@ -170,4 +172,4 @@ async function createBulkZipArchive(res, archiveName, allEntries, rootIds, onSuc
   }
 }
 
-module.exports = { createZipArchive, createBulkZipArchive };
+export { createZipArchive, createBulkZipArchive };

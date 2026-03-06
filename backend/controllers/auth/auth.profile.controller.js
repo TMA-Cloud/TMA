@@ -1,5 +1,5 @@
-const { getUserById } = require('../../models/user.model');
-const { sendError, sendSuccess } = require('../../utils/response');
+import { getUserById } from '../../models/user.model.js';
+import { sendError, sendSuccess } from '../../utils/response.js';
 
 /**
  * Get user profile
@@ -16,6 +16,4 @@ async function profile(req, res) {
   }
 }
 
-module.exports = {
-  profile,
-};
+export { profile };

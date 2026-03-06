@@ -1,6 +1,6 @@
-const pool = require('../config/db');
-const { createPeriodicCleanup } = require('../utils/cleanupScheduler');
-const { logger } = require('../config/logger');
+import pool from '../config/db.js';
+import { logger } from '../config/logger.js';
+import { createPeriodicCleanup } from '../utils/cleanupScheduler.js';
 
 /**
  * Clean up old audit logs
@@ -38,4 +38,4 @@ function startAuditCleanup() {
   auditCleanupTask.start();
 }
 
-module.exports = { startAuditCleanup, cleanupOldAuditLogs };
+export { startAuditCleanup, cleanupOldAuditLogs };

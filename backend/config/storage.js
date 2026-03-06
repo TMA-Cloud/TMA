@@ -26,16 +26,22 @@ const S3_FORCE_PATH_STYLE = isR2 ? false : process.env.RUSTFS_FORCE_PATH_STYLE !
 
 const useS3 = STORAGE_DRIVER === 's3' && S3_ENDPOINT && S3_BUCKET && S3_ACCESS_KEY && S3_SECRET_KEY;
 
-module.exports = {
+const s3 = {
+  endpoint: S3_ENDPOINT,
+  bucket: S3_BUCKET,
+  accessKeyId: S3_ACCESS_KEY,
+  secretAccessKey: S3_SECRET_KEY,
+  region: S3_REGION,
+  forcePathStyle: S3_FORCE_PATH_STYLE,
+};
+
+const r2PublicUrl = R2_PUBLIC_URL;
+
+export { STORAGE_DRIVER, useS3, s3, r2PublicUrl };
+
+export default {
   STORAGE_DRIVER,
   useS3,
-  s3: {
-    endpoint: S3_ENDPOINT,
-    bucket: S3_BUCKET,
-    accessKeyId: S3_ACCESS_KEY,
-    secretAccessKey: S3_SECRET_KEY,
-    region: S3_REGION,
-    forcePathStyle: S3_FORCE_PATH_STYLE,
-  },
-  r2PublicUrl: R2_PUBLIC_URL,
+  s3,
+  r2PublicUrl,
 };

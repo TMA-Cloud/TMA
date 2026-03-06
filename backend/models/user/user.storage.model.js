@@ -1,5 +1,5 @@
-const pool = require('../../config/db');
-const { getCache, setCache, cacheKeys } = require('../../utils/cache');
+import pool from '../../config/db.js';
+import { getCache, setCache, cacheKeys } from '../../utils/cache.js';
 
 /**
  * Get total storage usage for a user (sum of file sizes in DB).
@@ -23,6 +23,4 @@ async function getUserStorageUsage(userId) {
   return usage;
 }
 
-module.exports = {
-  getUserStorageUsage,
-};
+export { getUserStorageUsage };

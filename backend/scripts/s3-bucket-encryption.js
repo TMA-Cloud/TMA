@@ -7,17 +7,11 @@
  *   node scripts/s3-bucket-encryption.js
  */
 
-const path = require('path');
-const dotenv = require('dotenv');
+import '../config/env.js';
 
-const scriptDir = __dirname;
-const backendDir = path.join(scriptDir, '..');
-const projectRoot = path.join(backendDir, '..');
-dotenv.config({ path: path.join(projectRoot, '.env') });
-dotenv.config({ path: path.join(backendDir, '.env') });
+import { PutBucketEncryptionCommand, S3Client } from '@aws-sdk/client-s3';
 
-const { S3Client, PutBucketEncryptionCommand } = require('@aws-sdk/client-s3');
-const { useS3, s3: s3Config } = require('../config/storage');
+import { s3 as s3Config, useS3 } from '../config/storage.js';
 
 async function enableEncryption() {
   if (!useS3) {

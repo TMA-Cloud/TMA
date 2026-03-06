@@ -1,6 +1,8 @@
-const pool = require('../config/db');
-const { generateId } = require('../utils/id');
-const {
+import pool from '../config/db.js';
+import { logger } from '../config/logger.js';
+
+import { generateId } from '../utils/id.js';
+import {
   getCache,
   setCache,
   deleteCache,
@@ -9,8 +11,7 @@ const {
   invalidateShareCache,
   invalidateFileCache,
   DEFAULT_TTL,
-} = require('../utils/cache');
-const { logger } = require('../config/logger');
+} from '../utils/cache.js';
 
 async function createShareLink(fileId, userId, fileIds = [fileId], expiresAt = null) {
   const id = generateId(16);
@@ -378,7 +379,7 @@ async function cleanupExpiredShareLinks() {
   }
 }
 
-module.exports = {
+export {
   createShareLink,
   getShareLink,
   getShareLinks,

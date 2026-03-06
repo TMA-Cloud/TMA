@@ -1,5 +1,8 @@
-const { Pool } = require('pg');
-const { logger } = require('./logger');
+import pg from 'pg';
+
+import { logger } from './logger.js';
+
+const { Pool } = pg;
 
 const pool = new Pool({
   host: process.env.DB_HOST || 'localhost',
@@ -32,4 +35,4 @@ pool.connect((err, client, release) => {
   });
 });
 
-module.exports = pool;
+export default pool;

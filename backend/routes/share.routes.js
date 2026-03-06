@@ -1,9 +1,11 @@
-const express = require('express');
-const { handleShared, downloadFolderZip, downloadSharedItem } = require('../controllers/share.controller');
-const { apiRateLimiter } = require('../middleware/rateLimit.middleware');
+import express from 'express';
+
+import { downloadFolderZip, downloadSharedItem, handleShared } from '../controllers/share.controller.js';
+import { apiRateLimiter } from '../middleware/rateLimit.middleware.js';
+import { validate } from '../middleware/validation.middleware.js';
+import { downloadFolderZipSchema, downloadSharedItemSchema, handleSharedSchema } from '../utils/validationSchemas.js';
+
 const router = express.Router();
-const { validate } = require('../middleware/validation.middleware');
-const { handleSharedSchema, downloadFolderZipSchema, downloadSharedItemSchema } = require('../utils/validationSchemas');
 
 router.use(apiRateLimiter);
 
@@ -11,4 +13,4 @@ router.get('/:token/file/:id', downloadSharedItemSchema, validate, downloadShare
 router.get('/:token/zip', downloadFolderZipSchema, validate, downloadFolderZip);
 router.get('/:token', handleSharedSchema, validate, handleShared);
 
-module.exports = router;
+export default router;

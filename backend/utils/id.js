@@ -3,7 +3,7 @@
  * Replaces custom base58 implementation with faster, more robust nanoid
  */
 
-const { customAlphabet } = require('nanoid');
+import { customAlphabet } from 'nanoid';
 
 /**
  * Generate a random ID
@@ -18,4 +18,4 @@ function generateId(length = 16) {
   return nanoid();
 }
 
-module.exports = { generateId };
+export { generateId };

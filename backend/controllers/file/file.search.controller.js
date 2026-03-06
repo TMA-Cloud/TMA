@@ -1,6 +1,6 @@
-const { sendError, sendSuccess } = require('../../utils/response');
-const { searchFiles, getFileStats } = require('../../models/file.model');
-const { validateSearchQuery, validateLimit } = require('../../utils/validation');
+import { getFileStats, searchFiles } from '../../models/file.model.js';
+import { sendError, sendSuccess } from '../../utils/response.js';
+import { validateLimit, validateSearchQuery } from '../../utils/validation.js';
 
 /**
  * Search for files
@@ -25,7 +25,7 @@ async function getFileStatsController(req, res) {
   sendSuccess(res, stats);
 }
 
-module.exports = {
-  searchFiles: searchFilesController,
-  getFileStats: getFileStatsController,
-};
+const searchFilesExport = searchFilesController;
+const getFileStatsExport = getFileStatsController;
+
+export { searchFilesExport as searchFiles, getFileStatsExport as getFileStats };

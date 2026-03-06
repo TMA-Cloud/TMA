@@ -12,24 +12,18 @@
  *   node scripts/s3-bucket-protect-all.js
  */
 
-const path = require('path');
-const dotenv = require('dotenv');
+import '../config/env.js';
 
-const scriptDir = __dirname;
-const backendDir = path.join(scriptDir, '..');
-const projectRoot = path.join(backendDir, '..');
-dotenv.config({ path: path.join(projectRoot, '.env') });
-dotenv.config({ path: path.join(backendDir, '.env') });
-
-const {
-  S3Client,
-  PutPublicAccessBlockCommand,
-  PutBucketPolicyCommand,
-  PutBucketVersioningCommand,
+import {
   PutBucketEncryptionCommand,
   PutBucketLifecycleConfigurationCommand,
-} = require('@aws-sdk/client-s3');
-const { useS3, s3: s3Config } = require('../config/storage');
+  PutBucketPolicyCommand,
+  PutBucketVersioningCommand,
+  PutPublicAccessBlockCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
+
+import { s3 as s3Config, useS3 } from '../config/storage.js';
 
 const DAYS_AFTER_INITIATION = 1;
 const NONCURRENT_DAYS = 7;

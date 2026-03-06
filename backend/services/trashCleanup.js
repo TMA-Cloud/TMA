@@ -1,5 +1,5 @@
-const { cleanupExpiredTrash } = require('../models/file.model');
-const { createPeriodicCleanup } = require('../utils/cleanupScheduler');
+import { cleanupExpiredTrash } from '../models/file/file.cleanup.model.js';
+import { createPeriodicCleanup } from '../utils/cleanupScheduler.js';
 
 const trashCleanupTask = createPeriodicCleanup(cleanupExpiredTrash, 'Trash cleanup', 24);
 
@@ -7,4 +7,4 @@ function startTrashCleanup() {
   trashCleanupTask.start();
 }
 
-module.exports = { startTrashCleanup };
+export { startTrashCleanup };

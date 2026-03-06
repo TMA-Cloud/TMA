@@ -1,8 +1,9 @@
 /**
  * File cleanup utility functions
  */
-const fs = require('fs').promises;
-const { logger } = require('../config/logger');
+import fs from 'fs/promises';
+
+import { logger } from '../config/logger.js';
 
 /**
  * Safely delete a file, ignoring errors
@@ -25,6 +26,4 @@ async function safeUnlink(filePath, options = {}) {
   }
 }
 
-module.exports = {
-  safeUnlink,
-};
+export { safeUnlink };

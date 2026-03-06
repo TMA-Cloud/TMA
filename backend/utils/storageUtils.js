@@ -2,6 +2,10 @@
  * Storage utility functions
  */
 
+import checkDiskSpaceModule from 'check-disk-space';
+
+const checkDiskSpace = checkDiskSpaceModule?.default || checkDiskSpaceModule;
+
 /**
  * Format bytes to human-readable string
  * @param {number} bytes - Size in bytes
@@ -21,7 +25,6 @@ function formatFileSize(bytes) {
  * @returns {Promise<number>} Total disk size in bytes
  */
 async function getActualDiskSize(basePath) {
-  const checkDiskSpace = require('check-disk-space').default;
   const { size } = await checkDiskSpace(basePath);
   return size;
 }
@@ -55,8 +58,4 @@ async function checkStorageLimitExceeded({ fileSize, used, userStorageLimit }) {
   return { exceeded: false };
 }
 
-module.exports = {
-  formatFileSize,
-  getActualDiskSize,
-  checkStorageLimitExceeded,
-};
+export { formatFileSize, getActualDiskSize, checkStorageLimitExceeded };

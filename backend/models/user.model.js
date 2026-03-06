@@ -10,16 +10,8 @@
  * - user.mfa.model.js - MFA operations (getMfaStatus, enableMfa, disableMfa, getMfaSecret)
  */
 
-const crudModels = require('./user/user.crud.model');
-const authModels = require('./user/user.auth.model');
-const storageModels = require('./user/user.storage.model');
-const adminModels = require('./user/user.admin.model');
-const mfaModels = require('./user/user.mfa.model');
-
-module.exports = {
-  ...crudModels,
-  ...authModels,
-  ...storageModels,
-  ...adminModels,
-  ...mfaModels,
-};
+export * from './user/user.crud.model.js';
+export * from './user/user.auth.model.js';
+export * from './user/user.storage.model.js';
+export * from './user/user.admin.model.js';
+export * from './user/user.mfa.model.js';

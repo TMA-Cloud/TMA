@@ -1,37 +1,38 @@
-const express = require('express');
-const auth = require('../middleware/auth.middleware');
-const {
+import express from 'express';
+
+import {
+  checkOnlyOfficeConfigured,
+  getElectronOnlyAccessConfig,
+  getHideFileExtensionsConfig,
+  getMaxUploadSizeConfig,
+  getOnlyOfficeConfig,
+  getPasswordChangeConfig,
+  getShareBaseUrlConfig,
   getSignupStatus,
-  toggleSignup,
   listUsers,
   storageUsage,
-  checkOnlyOfficeConfigured,
-  getOnlyOfficeConfig,
-  updateOnlyOfficeConfig,
-  getShareBaseUrlConfig,
-  updateShareBaseUrlConfig,
-  getMaxUploadSizeConfig,
-  updateMaxUploadSizeConfig,
-  getHideFileExtensionsConfig,
-  updateHideFileExtensionsConfig,
-  updateUserStorageLimit,
-  getElectronOnlyAccessConfig,
+  toggleSignup,
   updateElectronOnlyAccessConfig,
-  getPasswordChangeConfig,
+  updateHideFileExtensionsConfig,
+  updateMaxUploadSizeConfig,
+  updateOnlyOfficeConfig,
   updatePasswordChangeConfig,
-} = require('../controllers/user.controller');
-const { apiRateLimiter } = require('../middleware/rateLimit.middleware');
-const { validate } = require('../middleware/validation.middleware');
-const {
+  updateShareBaseUrlConfig,
+  updateUserStorageLimit,
+} from '../controllers/user.controller.js';
+import auth from '../middleware/auth.middleware.js';
+import { apiRateLimiter } from '../middleware/rateLimit.middleware.js';
+import { validate } from '../middleware/validation.middleware.js';
+import {
   toggleSignupSchema,
-  updateOnlyOfficeConfigSchema,
-  updateShareBaseUrlConfigSchema,
-  updateMaxUploadSizeConfigSchema,
-  updateHideFileExtensionsConfigSchema,
-  updateUserStorageLimitSchema,
   updateElectronOnlyAccessConfigSchema,
+  updateHideFileExtensionsConfigSchema,
+  updateMaxUploadSizeConfigSchema,
+  updateOnlyOfficeConfigSchema,
   updatePasswordChangeConfigSchema,
-} = require('../utils/validationSchemas');
+  updateShareBaseUrlConfigSchema,
+  updateUserStorageLimitSchema,
+} from '../utils/validationSchemas.js';
 
 const router = express.Router();
 
@@ -67,4 +68,4 @@ router.get('/password-change-config', getPasswordChangeConfig);
 router.put('/password-change-config', updatePasswordChangeConfigSchema, validate, updatePasswordChangeConfig);
 router.put('/storage-limit', updateUserStorageLimitSchema, validate, updateUserStorageLimit);
 
-module.exports = router;
+export default router;

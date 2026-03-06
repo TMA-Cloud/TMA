@@ -4,7 +4,7 @@ import prettier from 'eslint-plugin-prettier';
 import prettierConfig from 'eslint-config-prettier';
 
 /**
- * ESLint 9 flat config for Node.js backend (CommonJS)
+ * ESLint 9 flat config for Node.js backend (ESM)
  * @see https://eslint.org/docs/latest/use/configure/configuration-files-new
  * @see https://github.com/prettier/eslint-plugin-prettier#options
  */
@@ -25,10 +25,9 @@ export default [
     files: ['**/*.js'],
     languageOptions: {
       ecmaVersion: 2024,
-      sourceType: 'commonjs',
+      sourceType: 'module',
       globals: {
         ...globals.node,
-        ...globals.commonjs,
       },
     },
     plugins: {

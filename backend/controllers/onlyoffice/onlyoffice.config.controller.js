@@ -1,19 +1,20 @@
-const { getFile } = require('../../models/file.model');
-const { logger } = require('../../config/logger');
-const { validateAndResolveFile } = require('../../utils/fileDownload');
-const { validateOnlyOfficeMimeType } = require('../../utils/mimeTypeDetection');
-const {
-  getOnlyOfficeConfig,
-  getUserName,
-  buildSignedFileToken,
-  buildOnlyofficeUrls,
-  isMobileDevice,
+import { logger } from '../../config/logger.js';
+import { getFile } from '../../models/file.model.js';
+import { registerOpenDocument } from '../../services/onlyofficeAutoSave.js';
+import { validateAndResolveFile } from '../../utils/fileDownload.js';
+import { validateOnlyOfficeMimeType } from '../../utils/mimeTypeDetection.js';
+
+import {
   buildOnlyofficeConfig,
-  signConfigToken,
+  buildOnlyofficeUrls,
+  buildSignedFileToken,
+  getOnlyOfficeConfig,
   getOnlyofficeJsUrl,
+  getUserName,
+  isMobileDevice,
+  signConfigToken,
   validateFileForOnlyOffice,
-} = require('./onlyoffice.utils');
-const { registerOpenDocument } = require('../../services/onlyofficeAutoSave');
+} from './onlyoffice.utils.js';
 
 /**
  * Get ONLYOFFICE editor configuration for a file
@@ -58,6 +59,4 @@ async function getConfig(req, res) {
   }
 }
 
-module.exports = {
-  getConfig,
-};
+export { getConfig };

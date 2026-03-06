@@ -1,15 +1,15 @@
-const { sendError, sendSuccess } = require('../../utils/response');
-const { logger } = require('../../config/logger');
-const { logAuditEvent } = require('../../services/auditLogger');
-const {
+import { logger } from '../../config/logger.js';
+import { logAuditEvent } from '../../services/auditLogger.js';
+import { EventTypes, publishFileEventsBatch } from '../../services/fileEvents.js';
+import {
   deleteFiles,
-  getTrashFiles,
-  restoreFiles,
-  permanentlyDeleteFiles,
   getFileInfo,
-} = require('../../models/file.model');
-const { validateSortBy, validateSortOrder } = require('../../utils/validation');
-const { publishFileEventsBatch, EventTypes } = require('../../services/fileEvents');
+  getTrashFiles,
+  permanentlyDeleteFiles,
+  restoreFiles,
+} from '../../models/file.model.js';
+import { sendError, sendSuccess } from '../../utils/response.js';
+import { validateSortBy, validateSortOrder } from '../../utils/validation.js';
 /**
  * Delete files/folders (move to trash)
  */
@@ -211,10 +211,9 @@ async function emptyTrashController(req, res) {
   sendSuccess(res, { message: `Deleted ${allIds.length} file(s) from trash` });
 }
 
-module.exports = {
-  deleteFiles: deleteFilesController,
-  listTrash,
-  restoreFiles: restoreFilesController,
-  deleteForever: deleteForeverController,
-  emptyTrash: emptyTrashController,
-};
+const deleteFilesExport = deleteFilesController;
+const restoreFilesExport = restoreFilesController;
+const deleteForever = deleteForeverController;
+const emptyTrash = emptyTrashController;
+
+export { deleteFilesExport as deleteFiles, listTrash, restoreFilesExport as restoreFiles, deleteForever, emptyTrash };

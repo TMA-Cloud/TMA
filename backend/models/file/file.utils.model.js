@@ -1,7 +1,8 @@
-const pool = require('../../config/db');
-const fs = require('fs');
-const path = require('path');
-const { getCache, setCache, cacheKeys, DEFAULT_TTL } = require('../../utils/cache');
+import fs from 'fs';
+import path from 'path';
+
+import pool from '../../config/db.js';
+import { getCache, setCache, cacheKeys, DEFAULT_TTL } from '../../utils/cache.js';
 
 const SORT_FIELDS = {
   name: 'name',
@@ -244,7 +245,7 @@ async function getUniqueDbFileName(desiredName, parentId, userId) {
   return uniqueName;
 }
 
-module.exports = {
+export {
   SORT_FIELDS,
   buildOrderClause,
   calculateFolderSize,

@@ -3,7 +3,7 @@
  * Replaces custom implementation with industry-standard package
  */
 
-const { rateLimit, ipKeyGenerator } = require('express-rate-limit');
+import { rateLimit, ipKeyGenerator } from 'express-rate-limit';
 
 /**
  * Rate limiter for authentication endpoints (stricter)
@@ -172,7 +172,7 @@ setInterval(
 
 const sseConnectionLimiter = createSSEConnectionLimiter(20); // Max 20 concurrent SSE connections per user
 
-module.exports = {
+export {
   authRateLimiter,
   mfaRateLimiter,
   backupCodeRegenerationRateLimiter,

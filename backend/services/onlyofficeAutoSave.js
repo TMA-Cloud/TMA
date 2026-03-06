@@ -1,9 +1,9 @@
-const https = require('https');
-const http = require('http');
-const { URL } = require('url');
-const jwt = require('jsonwebtoken');
-const { logger } = require('../config/logger');
-const { getOnlyOfficeConfig } = require('../controllers/onlyoffice/onlyoffice.utils');
+import http from 'http';
+import https from 'https';
+import jwt from 'jsonwebtoken';
+
+import { logger } from '../config/logger.js';
+import { getOnlyOfficeConfig } from '../controllers/onlyoffice/onlyoffice.utils.js';
 
 // Track open documents: Map<documentKey, { fileId, userId }>
 const openDocuments = new Map();
@@ -106,7 +106,4 @@ async function triggerAutoSaves() {
   }
 }
 
-module.exports = {
-  registerOpenDocument,
-  unregisterOpenDocument,
-};
+export { registerOpenDocument, unregisterOpenDocument };

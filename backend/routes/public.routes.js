@@ -1,6 +1,7 @@
-const express = require('express');
-const { getPublicSignupStatus } = require('../controllers/user.controller');
-const { apiRateLimiter } = require('../middleware/rateLimit.middleware');
+import express from 'express';
+
+import { getPublicSignupStatus } from '../controllers/user.controller.js';
+import { apiRateLimiter } from '../middleware/rateLimit.middleware.js';
 
 const router = express.Router();
 
@@ -8,4 +9,4 @@ router.use(apiRateLimiter); // Apply rate limiting to public routes too
 
 router.get('/signup-status', getPublicSignupStatus);
 
-module.exports = router;
+export default router;

@@ -3,7 +3,7 @@
  * Uses a Map of mutexes to support per-key locking
  */
 
-const { Mutex } = require('async-mutex');
+import { Mutex } from 'async-mutex';
 
 // Map of keys to mutex instances
 const mutexMap = new Map();
@@ -42,7 +42,4 @@ const userOperationLock = async (userId, operation) => {
   return mutex.runExclusive(operation);
 };
 
-module.exports = {
-  fileOperationLock,
-  userOperationLock,
-};
+export { fileOperationLock, userOperationLock };

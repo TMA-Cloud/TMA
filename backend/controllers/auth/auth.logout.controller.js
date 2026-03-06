@@ -1,9 +1,9 @@
-const { invalidateAllSessions } = require('../../models/user.model');
-const { deleteAllUserSessions, deleteSession } = require('../../models/session.model');
-const { sendError, sendSuccess } = require('../../utils/response');
-const { logger } = require('../../config/logger');
-const { logAuditEvent } = require('../../services/auditLogger');
-const { extractTokenFromRequest } = require('../../utils/tokenExtractor');
+import { logger } from '../../config/logger.js';
+import { deleteAllUserSessions, deleteSession } from '../../models/session.model.js';
+import { invalidateAllSessions } from '../../models/user.model.js';
+import { logAuditEvent } from '../../services/auditLogger.js';
+import { extractTokenFromRequest } from '../../utils/tokenExtractor.js';
+import { sendError, sendSuccess } from '../../utils/response.js';
 
 /**
  * Logout from current session
@@ -95,7 +95,4 @@ async function logoutAllDevices(req, res) {
   }
 }
 
-module.exports = {
-  logout,
-  logoutAllDevices,
-};
+export { logout, logoutAllDevices };

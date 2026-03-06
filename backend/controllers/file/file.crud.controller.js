@@ -1,28 +1,29 @@
-const { validateAndResolveFile, streamEncryptedFile, streamUnencryptedFile } = require('../../utils/fileDownload');
-const { sendError, sendSuccess } = require('../../utils/response');
-const { createZipArchive, createBulkZipArchive } = require('../../utils/zipArchive');
-const { logger } = require('../../config/logger');
-const { logAuditEvent, fileUploaded, fileDownloaded, filesUploadedBulk } = require('../../services/auditLogger');
-const { publishFileEvent, EventTypes } = require('../../services/fileEvents');
-const {
-  getFiles,
-  createFolder,
+import { logger } from '../../config/logger.js';
+import { fileDownloaded, fileUploaded, filesUploadedBulk, logAuditEvent } from '../../services/auditLogger.js';
+import { EventTypes, publishFileEvent } from '../../services/fileEvents.js';
+import {
   createFile,
   createFileFromStreamedUpload,
+  createFolder,
   findFolderIdByName,
   getFile,
+  getFiles,
   getFilesByIds,
-  renameFile: renameFileModel,
   getFolderTree,
-} = require('../../models/file.model');
-const { userOperationLock } = require('../../utils/mutex');
-const { validateSortBy, validateSortOrder, validateFileUpload, validateFileName } = require('../../utils/validation');
-const { validateParentId } = require('../../utils/controllerHelpers');
-const { getUserStorageUsage, getUserStorageLimit } = require('../../models/user.model');
-const { safeUnlink } = require('../../utils/fileCleanup');
-const { validateMimeType } = require('../../utils/mimeTypeDetection');
-const { checkStorageLimitExceeded } = require('../../utils/storageUtils');
-const storage = require('../../utils/storageDriver');
+  renameFile as renameFileModel,
+  replaceFileData,
+} from '../../models/file.model.js';
+import { getUserStorageLimit, getUserStorageUsage } from '../../models/user.model.js';
+import { validateParentId } from '../../utils/controllerHelpers.js';
+import { safeUnlink } from '../../utils/fileCleanup.js';
+import { streamEncryptedFile, streamUnencryptedFile, validateAndResolveFile } from '../../utils/fileDownload.js';
+import { userOperationLock } from '../../utils/mutex.js';
+import { validateMimeType } from '../../utils/mimeTypeDetection.js';
+import { sendError, sendSuccess } from '../../utils/response.js';
+import storage from '../../utils/storageDriver.js';
+import { checkStorageLimitExceeded } from '../../utils/storageUtils.js';
+import { validateFileName, validateFileUpload, validateSortBy, validateSortOrder } from '../../utils/validation.js';
+import { createBulkZipArchive, createZipArchive } from '../../utils/zipArchive.js';
 
 function normalizeMultipartArray(value) {
   if (value == null) return [];
@@ -321,13 +322,7 @@ async function replaceFileContents(req, res) {
 
     validateFileUpload(actualMimeType, existing.name);
 
-    const updated = await require('../../models/file.model').replaceFileData(
-      fileId,
-      req.file.size,
-      actualMimeType,
-      req.file.path,
-      req.userId
-    );
+    const updated = await replaceFileData(fileId, req.file.size, actualMimeType, req.file.path, req.userId);
 
     if (!updated) {
       return sendError(res, 404, 'File not found');
@@ -909,7 +904,7 @@ async function downloadFilesBulk(req, res) {
   }
 }
 
-module.exports = {
+export {
   listFiles,
   addFolder,
   checkUploadStorage,

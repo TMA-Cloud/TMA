@@ -1,6 +1,9 @@
-const path = require('path');
-const jwt = require('jsonwebtoken');
-const { getUserById, getOnlyOfficeSettings } = require('../../models/user.model');
+import path from 'path';
+
+import jwt from 'jsonwebtoken';
+
+import { getOnlyOfficeSettings, getUserById } from '../../models/user.model.js';
+import storage from '../../utils/storageDriver.js';
 
 const BACKEND_URL = process.env.BACKEND_URL;
 
@@ -179,7 +182,6 @@ async function validateFileForOnlyOffice(file, validateAndResolveFile, validateO
   }
 
   const pathOrKey = filePath || storageKey;
-  const storage = require('../../utils/storageDriver');
   const skipContentDetection = storage.useS3(); // S3 key is not a filesystem path
   const mimeValidation = await validateOnlyOfficeMimeType(
     pathOrKey,
@@ -195,7 +197,7 @@ async function validateFileForOnlyOffice(file, validateAndResolveFile, validateO
   return { valid: true, filePath: pathOrKey, isEncrypted };
 }
 
-module.exports = {
+export {
   BACKEND_URL,
   getOnlyOfficeConfig,
   isOnlyOfficeSupported,

@@ -10,14 +10,7 @@
  * - onlyoffice.callback.controller.js - Callback handling
  */
 
-const configControllers = require('./onlyoffice/onlyoffice.config.controller');
-const fileControllers = require('./onlyoffice/onlyoffice.file.controller');
-const viewerControllers = require('./onlyoffice/onlyoffice.viewer.controller');
-const callbackControllers = require('./onlyoffice/onlyoffice.callback.controller');
-
-module.exports = {
-  ...configControllers,
-  ...fileControllers,
-  ...viewerControllers,
-  ...callbackControllers,
-};
+export * from './onlyoffice/onlyoffice.config.controller.js';
+export * from './onlyoffice/onlyoffice.file.controller.js';
+export * from './onlyoffice/onlyoffice.viewer.controller.js';
+export * from './onlyoffice/onlyoffice.callback.controller.js';

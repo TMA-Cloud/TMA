@@ -1,5 +1,6 @@
-const { validationResult } = require('express-validator');
-const { sendError } = require('../utils/response');
+import { validationResult } from 'express-validator';
+
+import { sendError } from '../utils/response.js';
 
 const validate = (req, res, next) => {
   const errors = validationResult(req);
@@ -12,6 +13,4 @@ const validate = (req, res, next) => {
   return sendError(res, 422, 'Validation failed', null, { details: extractedErrors });
 };
 
-module.exports = {
-  validate,
-};
+export { validate };

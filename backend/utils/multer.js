@@ -1,7 +1,9 @@
-const multer = require('multer');
-const path = require('path');
-const { UPLOAD_DIR } = require('../config/paths');
-const { getMaxUploadSizeSettings } = require('../models/user.model');
+import path from 'path';
+
+import multer from 'multer';
+
+import { UPLOAD_DIR } from '../config/paths.js';
+import { getMaxUploadSizeSettings } from '../models/user.model.js';
 
 /**
  * Disk storage engine - stores uploaded files in UPLOAD_DIR
@@ -84,10 +86,12 @@ function uploadArrayWithDynamicLimit() {
   };
 }
 
-module.exports = multer({
+const upload = multer({
   storage,
   fileFilter,
   limits: { fileSize: 10 * 1024 * 1024 * 1024 }, // fallback if not using dynamic
 });
-module.exports.uploadSingleWithDynamicLimit = uploadSingleWithDynamicLimit;
-module.exports.uploadArrayWithDynamicLimit = uploadArrayWithDynamicLimit;
+
+export { uploadSingleWithDynamicLimit, uploadArrayWithDynamicLimit };
+
+export default upload;

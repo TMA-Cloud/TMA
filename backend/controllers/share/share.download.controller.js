@@ -1,11 +1,12 @@
-const { validateAndResolveFile, streamEncryptedFile, streamUnencryptedFile } = require('../../utils/fileDownload');
-const { sendError } = require('../../utils/response');
-const { createZipArchive } = require('../../utils/zipArchive');
-const { getFileByToken, isFileShared, getSharedTree } = require('../../models/share.model');
-const pool = require('../../config/db');
-const { logger } = require('../../config/logger');
-const { logAuditEvent } = require('../../services/auditLogger');
-const { renderErrorPage } = require('./share.utils');
+import pool from '../../config/db.js';
+import { logger } from '../../config/logger.js';
+import { getFileByToken, getSharedTree, isFileShared } from '../../models/share.model.js';
+import { logAuditEvent } from '../../services/auditLogger.js';
+import { validateAndResolveFile, streamEncryptedFile, streamUnencryptedFile } from '../../utils/fileDownload.js';
+import { sendError } from '../../utils/response.js';
+import { createZipArchive } from '../../utils/zipArchive.js';
+
+import { renderErrorPage } from './share.utils.js';
 
 /**
  * Download shared folder as ZIP
@@ -115,7 +116,4 @@ async function downloadSharedItem(req, res) {
   }
 }
 
-module.exports = {
-  downloadFolderZip,
-  downloadSharedItem,
-};
+export { downloadFolderZip, downloadSharedItem };

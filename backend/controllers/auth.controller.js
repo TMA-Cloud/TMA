@@ -11,20 +11,10 @@
  * - auth.mfa.controller.js - MFA operations (setup, enable, disable, verify)
  */
 
-const signupControllers = require('./auth/auth.signup.controller');
-const loginControllers = require('./auth/auth.login.controller');
-const logoutControllers = require('./auth/auth.logout.controller');
-const profileControllers = require('./auth/auth.profile.controller');
-const sessionsControllers = require('./auth/auth.sessions.controller');
-const mfaControllers = require('./auth/auth.mfa.controller');
-const passwordControllers = require('./auth/auth.password.controller');
-
-module.exports = {
-  ...signupControllers,
-  ...loginControllers,
-  ...logoutControllers,
-  ...profileControllers,
-  ...sessionsControllers,
-  ...mfaControllers,
-  ...passwordControllers,
-};
+export * from './auth/auth.signup.controller.js';
+export * from './auth/auth.login.controller.js';
+export * from './auth/auth.logout.controller.js';
+export * from './auth/auth.profile.controller.js';
+export * from './auth/auth.sessions.controller.js';
+export * from './auth/auth.mfa.controller.js';
+export * from './auth/auth.password.controller.js';

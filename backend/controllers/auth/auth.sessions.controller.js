@@ -1,9 +1,9 @@
-const { getUserById } = require('../../models/user.model');
-const { getActiveSessions, deleteSession, deleteOtherUserSessions } = require('../../models/session.model');
-const { sendError, sendSuccess } = require('../../utils/response');
-const { logger } = require('../../config/logger');
-const { logAuditEvent } = require('../../services/auditLogger');
-const { getSessionIdFromRequest } = require('../../utils/tokenExtractor');
+import { logger } from '../../config/logger.js';
+import { deleteOtherUserSessions, deleteSession, getActiveSessions } from '../../models/session.model.js';
+import { getUserById } from '../../models/user.model.js';
+import { logAuditEvent } from '../../services/auditLogger.js';
+import { getSessionIdFromRequest } from '../../utils/tokenExtractor.js';
+import { sendError, sendSuccess } from '../../utils/response.js';
 
 /**
  * Get all active sessions for the current user
@@ -121,8 +121,4 @@ async function revokeOtherSessions(req, res) {
   }
 }
 
-module.exports = {
-  getSessions,
-  revokeSession,
-  revokeOtherSessions,
-};
+export { getSessions, revokeSession, revokeOtherSessions };

@@ -1,7 +1,10 @@
-const { getUserStorageUsage, getUserStorageLimit } = require('../../models/user.model');
-const checkDiskSpace = require('check-disk-space').default;
-const { sendSuccess } = require('../../utils/response');
-const { useS3 } = require('../../config/storage');
+import checkDiskSpaceModule from 'check-disk-space';
+
+import { useS3 } from '../../config/storage.js';
+import { getUserStorageLimit, getUserStorageUsage } from '../../models/user.model.js';
+import { sendSuccess } from '../../utils/response.js';
+
+const checkDiskSpace = checkDiskSpaceModule?.default || checkDiskSpaceModule;
 
 /**
  * Get storage usage information for the current user.
@@ -28,6 +31,4 @@ async function storageUsage(req, res) {
   sendSuccess(res, { used, total, free });
 }
 
-module.exports = {
-  storageUsage,
-};
+export { storageUsage };

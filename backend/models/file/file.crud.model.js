@@ -1,13 +1,10 @@
-const pool = require('../../config/db');
-const fs = require('fs');
-const path = require('path');
-const { safeUnlink } = require('../../utils/fileCleanup');
-const { generateId } = require('../../utils/id');
-const { UPLOAD_DIR } = require('../../config/paths');
-const { resolveFilePath } = require('../../utils/filePath');
-const storage = require('../../utils/storageDriver');
-const { logger } = require('../../config/logger');
-const {
+import fs from 'fs';
+import path from 'path';
+
+import pool from '../../config/db.js';
+import { logger } from '../../config/logger.js';
+import { UPLOAD_DIR } from '../../config/paths.js';
+import {
   getCache,
   setCache,
   deleteCache,
@@ -15,9 +12,14 @@ const {
   invalidateFileCache,
   invalidateSearchCache,
   DEFAULT_TTL,
-} = require('../../utils/cache');
-const { buildOrderClause, fillFolderSizes, getUniqueDbFileName } = require('./file.utils.model');
-const { encryptFile } = require('../../utils/fileEncryption');
+} from '../../utils/cache.js';
+import { safeUnlink } from '../../utils/fileCleanup.js';
+import { createEncryptStream, encryptFile } from '../../utils/fileEncryption.js';
+import { resolveFilePath } from '../../utils/filePath.js';
+import { generateId } from '../../utils/id.js';
+import storage from '../../utils/storageDriver.js';
+
+import { buildOrderClause, fillFolderSizes, getUniqueDbFileName } from './file.utils.model.js';
 
 /**
  * Get files in a directory
@@ -352,7 +354,6 @@ async function replaceFileData(id, size, mimeType, tempPath, userId) {
 
   if (storage.useS3()) {
     const readStream = fs.createReadStream(tempPath);
-    const { createEncryptStream } = require('../../utils/fileEncryption');
     const encryptStream = createEncryptStream();
     readStream.pipe(encryptStream);
     try {
@@ -424,7 +425,7 @@ async function findFolderIdByName(name, parentId = null, userId) {
   return result.rows[0]?.id || null;
 }
 
-module.exports = {
+export {
   getFiles,
   createFolder,
   createFile,

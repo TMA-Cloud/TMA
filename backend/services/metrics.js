@@ -1,6 +1,7 @@
-const promClient = require('prom-client');
-const { logger } = require('../config/logger');
-const pool = require('../config/db');
+import promClient from 'prom-client';
+
+import { logger } from '../config/logger.js';
+import pool from '../config/db.js';
 
 // Create a registry for metrics
 const register = new promClient.Registry();
@@ -212,13 +213,11 @@ async function metricsEndpoint(req, res) {
   }
 }
 
-module.exports = {
+export {
   register,
   initializeMetrics,
   metricsEndpoint,
   startQueueMetricsUpdater,
-
-  // Metric update functions
   incrementEventsQueued,
   incrementEventsProcessed,
   incrementEventsFailed,

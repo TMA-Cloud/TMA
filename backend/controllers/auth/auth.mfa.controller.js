@@ -1,21 +1,22 @@
-const speakeasy = require('speakeasy');
-const QRCode = require('qrcode');
-const {
-  getMfaStatus,
-  setMfaSecret,
-  enableMfa,
-  disableMfa,
-  getMfaSecret,
-  getUserById,
-  generateBackupCodes,
-  verifyAndConsumeBackupCode,
-  getRemainingBackupCodesCount,
-  deleteBackupCodes,
+import QRCode from 'qrcode';
+import speakeasy from 'speakeasy';
+
+import { logger } from '../../config/logger.js';
+import {
   canRegenerateBackupCodes,
+  deleteBackupCodes,
+  disableMfa,
+  enableMfa,
+  generateBackupCodes,
+  getMfaSecret,
+  getMfaStatus,
+  getRemainingBackupCodesCount,
+  getUserById,
+  setMfaSecret,
   updateLastBackupCodeRegeneration,
-} = require('../../models/user.model');
-const { sendError, sendSuccess } = require('../../utils/response');
-const { logger } = require('../../config/logger');
+  verifyAndConsumeBackupCode,
+} from '../../models/user.model.js';
+import { sendError, sendSuccess } from '../../utils/response.js';
 
 /**
  * Generate MFA secret and QR code for setup
@@ -257,7 +258,7 @@ async function getBackupCodesCount(req, res) {
   }
 }
 
-module.exports = {
+export {
   setupMfa,
   verifyAndEnableMfa,
   disableMfaController,

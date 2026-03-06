@@ -1,9 +1,11 @@
-const crypto = require('crypto');
-const bcrypt = require('bcryptjs');
-const pool = require('../../config/db');
-const { logger } = require('../../config/logger');
-const { deleteCache, cacheKeys } = require('../../utils/cache');
-const { generateId } = require('../../utils/id');
+import crypto from 'crypto';
+
+import bcrypt from 'bcryptjs';
+
+import pool from '../../config/db.js';
+import { logger } from '../../config/logger.js';
+import { deleteCache, cacheKeys } from '../../utils/cache.js';
+import { generateId } from '../../utils/id.js';
 
 // Cooldown period for backup code regeneration (5 minutes in milliseconds)
 const BACKUP_CODE_REGENERATION_COOLDOWN_MS = 5 * 60 * 1000;
@@ -225,7 +227,7 @@ async function updateLastBackupCodeRegeneration(userId) {
   await deleteCache(cacheKeys.userById(userId));
 }
 
-module.exports = {
+export {
   getMfaStatus,
   setMfaSecret,
   enableMfa,

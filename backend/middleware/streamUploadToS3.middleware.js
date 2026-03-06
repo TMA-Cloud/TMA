@@ -8,14 +8,16 @@
  * until cleanupOrphanFiles runs — run that job frequently.
  */
 
-const Busboy = require('busboy');
-const path = require('path');
-const { logger } = require('../config/logger');
-const storage = require('../utils/storageDriver');
-const { createEncryptStream, createByteCountStream } = require('../utils/fileEncryption');
-const { createMimeCheckStream } = require('../utils/mimeTypeDetection');
-const { generateId } = require('../utils/id');
-const { getMaxUploadSizeSettings } = require('../models/user.model');
+import path from 'path';
+
+import Busboy from 'busboy';
+
+import { logger } from '../config/logger.js';
+import { getMaxUploadSizeSettings } from '../models/user.model.js';
+import { createByteCountStream, createEncryptStream } from '../utils/fileEncryption.js';
+import { generateId } from '../utils/id.js';
+import { createMimeCheckStream } from '../utils/mimeTypeDetection.js';
+import storage from '../utils/storageDriver.js';
 
 /**
  * Single file: stream one file to S3, set req.streamedUpload and req.body (parentId etc).
@@ -168,6 +170,4 @@ function streamUploadToS3(singleOrBulk = 'single') {
   };
 }
 
-module.exports = {
-  streamUploadToS3,
-};
+export { streamUploadToS3 };

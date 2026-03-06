@@ -1,27 +1,27 @@
-const {
-  isFirstUser,
-  getSignupEnabled,
-  setSignupEnabled,
-  getTotalUserCount,
+import { logger } from '../../config/logger.js';
+import {
   getAllUsersBasic,
-  getOnlyOfficeSettings,
-  setOnlyOfficeSettings,
-  getShareBaseUrlSettings,
-  setShareBaseUrlSettings,
-  getMaxUploadSizeSettings,
-  setMaxUploadSizeSettings,
-  getHideFileExtensionsSettings,
-  setHideFileExtensionsSettings,
-  setUserStorageLimit,
   getElectronOnlyAccessSettings,
-  setElectronOnlyAccessSettings,
+  getHideFileExtensionsSettings,
+  getMaxUploadSizeSettings,
+  getOnlyOfficeSettings,
   getPasswordChangeSettings,
+  getShareBaseUrlSettings,
+  getSignupEnabled,
+  getTotalUserCount,
+  isFirstUser,
+  setElectronOnlyAccessSettings,
+  setHideFileExtensionsSettings,
+  setMaxUploadSizeSettings,
+  setOnlyOfficeSettings,
   setPasswordChangeSettings,
-} = require('../../models/user.model');
-const { sendError, sendSuccess } = require('../../utils/response');
-const { logger } = require('../../config/logger');
-const { logAuditEvent } = require('../../services/auditLogger');
-const { invalidateOnlyOfficeOriginCache } = require('../../utils/onlyofficeOriginCache');
+  setShareBaseUrlSettings,
+  setSignupEnabled,
+  setUserStorageLimit,
+} from '../../models/user.model.js';
+import { logAuditEvent } from '../../services/auditLogger.js';
+import { invalidateOnlyOfficeOriginCache } from '../../utils/onlyofficeOriginCache.js';
+import { sendError, sendSuccess } from '../../utils/response.js';
 
 /**
  * Get public signup status (no auth). Returns only signupEnabled for login page.
@@ -754,23 +754,23 @@ async function _updateUserStorageLimit(req, res) {
   }
 }
 
-module.exports = {
-  getPublicSignupStatus: _getPublicSignupStatus,
-  getSignupStatus: _getSignupStatus,
-  toggleSignup: _toggleSignup,
-  listUsers: _listUsers,
-  checkOnlyOfficeConfigured: _checkOnlyOfficeConfigured,
-  getOnlyOfficeConfig: _getOnlyOfficeConfig,
-  updateOnlyOfficeConfig: _updateOnlyOfficeConfig,
-  getShareBaseUrlConfig: _getShareBaseUrlConfig,
-  updateShareBaseUrlConfig: _updateShareBaseUrlConfig,
-  getMaxUploadSizeConfig: _getMaxUploadSizeConfig,
-  updateMaxUploadSizeConfig: _updateMaxUploadSizeConfig,
-  getHideFileExtensionsConfig: _getHideFileExtensionsConfig,
-  updateHideFileExtensionsConfig: _updateHideFileExtensionsConfig,
-  updateUserStorageLimit: _updateUserStorageLimit,
-  getElectronOnlyAccessConfig: _getElectronOnlyAccessConfig,
-  updateElectronOnlyAccessConfig: _updateElectronOnlyAccessConfig,
-  getPasswordChangeConfig: _getPasswordChangeConfig,
-  updatePasswordChangeConfig: _updatePasswordChangeConfig,
+export {
+  _getPublicSignupStatus as getPublicSignupStatus,
+  _getSignupStatus as getSignupStatus,
+  _toggleSignup as toggleSignup,
+  _listUsers as listUsers,
+  _checkOnlyOfficeConfigured as checkOnlyOfficeConfigured,
+  _getOnlyOfficeConfig as getOnlyOfficeConfig,
+  _updateOnlyOfficeConfig as updateOnlyOfficeConfig,
+  _getShareBaseUrlConfig as getShareBaseUrlConfig,
+  _updateShareBaseUrlConfig as updateShareBaseUrlConfig,
+  _getMaxUploadSizeConfig as getMaxUploadSizeConfig,
+  _updateMaxUploadSizeConfig as updateMaxUploadSizeConfig,
+  _getHideFileExtensionsConfig as getHideFileExtensionsConfig,
+  _updateHideFileExtensionsConfig as updateHideFileExtensionsConfig,
+  _updateUserStorageLimit as updateUserStorageLimit,
+  _getElectronOnlyAccessConfig as getElectronOnlyAccessConfig,
+  _updateElectronOnlyAccessConfig as updateElectronOnlyAccessConfig,
+  _getPasswordChangeConfig as getPasswordChangeConfig,
+  _updatePasswordChangeConfig as updatePasswordChangeConfig,
 };

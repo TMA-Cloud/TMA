@@ -1,9 +1,10 @@
-// pg-boss v12 is ESM; normalize constructor for CommonJS
-const PgBossModule = require('pg-boss');
-const PgBoss = PgBossModule?.default || PgBossModule?.PgBoss || PgBossModule;
-const { Pool } = require('pg');
-const { logger } = require('../config/logger');
-const { getRequestId, getUserId } = require('../middleware/requestId.middleware');
+import { PgBoss } from 'pg-boss';
+import pg from 'pg';
+
+import { logger } from '../config/logger.js';
+import { getRequestId, getUserId } from '../middleware/requestId.middleware.js';
+
+const { Pool } = pg;
 
 let boss = null;
 let isInitialized = false;
@@ -391,12 +392,11 @@ async function shareAccessed(shareId, req) {
   );
 }
 
-module.exports = {
+export {
   initializeAuditQueue,
   shutdownAuditQueue,
   getBoss,
   logAuditEvent,
-  // Convenience methods
   fileUploaded,
   fileDownloaded,
   fileDeleted,

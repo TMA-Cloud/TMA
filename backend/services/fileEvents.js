@@ -1,5 +1,5 @@
-const { redisClient, isRedisConnected } = require('../config/redis');
-const { logger } = require('../config/logger');
+import { logger } from '../config/logger.js';
+import { redisClient, isRedisConnected } from '../config/redis.js';
 
 /**
  * Event types for file operations
@@ -281,7 +281,7 @@ function getConnectionStats() {
   };
 }
 
-module.exports = {
+export {
   EventTypes,
   publishFileEvent,
   publishFileEventsBatch,

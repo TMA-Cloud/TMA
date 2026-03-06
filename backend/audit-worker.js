@@ -18,15 +18,15 @@
  *   AUDIT_WORKER_CONCURRENCY - Number of concurrent jobs to process (default: 5)
  *   LOG_LEVEL - Logging level (default: info)
  */
+import './config/env.js';
 
-const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
-// pg-boss v12 is ESM; normalize constructor for CommonJS
-const PgBossModule = require('pg-boss');
-const PgBoss = PgBossModule?.default || PgBossModule?.PgBoss || PgBossModule;
-const { Pool } = require('pg');
-const pino = require('pino');
-const { incrementEventsProcessed, incrementEventsFailed, recordProcessingDuration } = require('./services/metrics');
+import { PgBoss } from 'pg-boss';
+import pg from 'pg';
+import pino from 'pino';
+
+import { incrementEventsProcessed, incrementEventsFailed, recordProcessingDuration } from './services/metrics.js';
+
+const { Pool } = pg;
 
 const isDevelopment = process.env.NODE_ENV !== 'production';
 const logLevel = process.env.LOG_LEVEL || 'info';

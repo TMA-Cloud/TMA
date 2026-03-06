@@ -3,7 +3,7 @@
  * Common patterns used across controllers
  */
 
-const { validateId, validateIdArray } = require('./validation');
+import { validateId, validateIdArray } from './validation.js';
 
 /**
  * Validate and get parent ID from request body or query
@@ -62,8 +62,4 @@ function validateSingleId(req, paramName = 'id', source = 'params') {
   return { valid: true, id: validatedId, error: null };
 }
 
-module.exports = {
-  validateParentId,
-  validateFileIds,
-  validateSingleId,
-};
+export { validateParentId, validateFileIds, validateSingleId };

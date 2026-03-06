@@ -1,7 +1,8 @@
-const path = require('path');
-const { UPLOAD_DIR } = require('../config/paths');
-const { useS3 } = require('./storageDriver');
-const localStorage = require('./localStorage');
+import path from 'path';
+
+import { UPLOAD_DIR } from '../config/paths.js';
+import { useS3 } from './storageDriver.js';
+import * as localStorage from './localStorage.js';
 
 /**
  * Resolves a file path from the database to an absolute file system path (local only).
@@ -62,9 +63,4 @@ function isFilePathEncrypted(dbPath) {
   return true;
 }
 
-module.exports = {
-  resolveFilePath,
-  resolveFilePathIfLocal,
-  isValidPath,
-  isFilePathEncrypted,
-};
+export { resolveFilePath, resolveFilePathIfLocal, isValidPath, isFilePathEncrypted };

@@ -9,17 +9,11 @@
  *   node scripts/s3-lifecycle-incomplete-multipart.js
  */
 
-const path = require('path');
-const dotenv = require('dotenv');
+import '../config/env.js';
 
-const scriptDir = __dirname;
-const backendDir = path.join(scriptDir, '..');
-const projectRoot = path.join(backendDir, '..');
-dotenv.config({ path: path.join(projectRoot, '.env') });
-dotenv.config({ path: path.join(backendDir, '.env') });
+import { PutBucketLifecycleConfigurationCommand, S3Client } from '@aws-sdk/client-s3';
 
-const { S3Client, PutBucketLifecycleConfigurationCommand } = require('@aws-sdk/client-s3');
-const { useS3, s3: s3Config } = require('../config/storage');
+import { s3 as s3Config, useS3 } from '../config/storage.js';
 
 const DAYS_AFTER_INITIATION = 1;
 const NONCURRENT_DAYS = 7;

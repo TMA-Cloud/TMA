@@ -1,21 +1,22 @@
-const { getFile } = require('../../models/file.model');
-const { validateSingleId } = require('../../utils/controllerHelpers');
-const { logger } = require('../../config/logger');
-const { logAuditEvent } = require('../../services/auditLogger');
-const { validateAndResolveFile } = require('../../utils/fileDownload');
-const { validateOnlyOfficeMimeType } = require('../../utils/mimeTypeDetection');
-const {
-  getOnlyOfficeConfig,
-  getUserName,
-  buildSignedFileToken,
-  buildOnlyofficeUrls,
-  isMobileDevice,
+import { logger } from '../../config/logger.js';
+import { getFile } from '../../models/file.model.js';
+import { logAuditEvent } from '../../services/auditLogger.js';
+import { registerOpenDocument } from '../../services/onlyofficeAutoSave.js';
+import { validateSingleId } from '../../utils/controllerHelpers.js';
+import { validateAndResolveFile } from '../../utils/fileDownload.js';
+import { validateOnlyOfficeMimeType } from '../../utils/mimeTypeDetection.js';
+
+import {
   buildOnlyofficeConfig,
-  signConfigToken,
+  buildOnlyofficeUrls,
+  buildSignedFileToken,
+  getOnlyOfficeConfig,
   getOnlyofficeJsUrl,
+  getUserName,
+  isMobileDevice,
+  signConfigToken,
   validateFileForOnlyOffice,
-} = require('./onlyoffice.utils');
-const { registerOpenDocument } = require('../../services/onlyofficeAutoSave');
+} from './onlyoffice.utils.js';
 
 /**
  * Get standalone viewer HTML page for document editing/viewing
@@ -243,6 +244,4 @@ async function getViewerPage(req, res) {
   }
 }
 
-module.exports = {
-  getViewerPage,
-};
+export { getViewerPage };

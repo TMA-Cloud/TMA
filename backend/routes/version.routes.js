@@ -1,10 +1,16 @@
-const express = require('express');
-const fs = require('fs');
-const path = require('path');
-const https = require('https');
-const auth = require('../middleware/auth.middleware');
-const { logger } = require('../config/logger');
-const { apiRateLimiter } = require('../middleware/rateLimit.middleware');
+import fs from 'fs';
+import https from 'https';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+import express from 'express';
+
+import { logger } from '../config/logger.js';
+import auth from '../middleware/auth.middleware.js';
+import { apiRateLimiter } from '../middleware/rateLimit.middleware.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const router = express.Router();
 
@@ -96,4 +102,4 @@ router.get('/latest', (req, res) => {
   });
 });
 
-module.exports = router;
+export default router;

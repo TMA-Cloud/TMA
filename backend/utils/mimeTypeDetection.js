@@ -1,8 +1,10 @@
-const mime = require('mime-types');
-const mimeDb = require('mime-db');
-const path = require('path');
-const { Transform } = require('stream');
-const { logger } = require('../config/logger');
+import path from 'path';
+import { Transform } from 'stream';
+
+import mime from 'mime-types';
+import mimeDb from 'mime-db';
+
+import { logger } from '../config/logger.js';
 
 const MIME_CHECK_BUFFER_SIZE = 8192;
 
@@ -446,7 +448,7 @@ async function validateOnlyOfficeMimeType(
   };
 }
 
-module.exports = {
+export {
   detectMimeTypeFromContent,
   validateMimeType,
   validateMimeTypeFromBuffer,

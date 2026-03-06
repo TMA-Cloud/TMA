@@ -1,23 +1,27 @@
-const fs = require('fs');
-const http = require('http');
-const https = require('https');
-const { Readable } = require('stream');
-const { validateId } = require('../../utils/validation');
-const { resolveFilePath } = require('../../utils/filePath');
-const { logger } = require('../../config/logger');
-const storage = require('../../utils/storageDriver');
-const { createEncryptStream } = require('../../utils/fileEncryption');
-const { logAuditEvent } = require('../../services/auditLogger');
-const { getOnlyOfficeConfig } = require('./onlyoffice.utils');
-const {
+import fs from 'fs';
+import http from 'http';
+import https from 'https';
+import { Readable } from 'stream';
+
+import db from '../../config/db.js';
+import { logger } from '../../config/logger.js';
+import { logAuditEvent } from '../../services/auditLogger.js';
+import { unregisterOpenDocument } from '../../services/onlyofficeAutoSave.js';
+import { EventTypes, publishFileEvent } from '../../services/fileEvents.js';
+import storage from '../../utils/storageDriver.js';
+import {
   invalidateFileCache,
+  invalidateSearchCache,
+  cacheKeys,
   deleteCache,
   deleteCachePattern,
-  cacheKeys,
-  invalidateSearchCache,
-} = require('../../utils/cache');
-const { publishFileEvent, EventTypes } = require('../../services/fileEvents');
-const { unregisterOpenDocument } = require('../../services/onlyofficeAutoSave');
+} from '../../utils/cache.js';
+import { safeUnlink } from '../../utils/fileCleanup.js';
+import { createEncryptStream, encryptFile } from '../../utils/fileEncryption.js';
+import { isFilePathEncrypted, resolveFilePath } from '../../utils/filePath.js';
+import { validateId } from '../../utils/validation.js';
+
+import { getOnlyOfficeConfig } from './onlyoffice.utils.js';
 
 /**
  * Download file from URL
@@ -206,7 +210,6 @@ async function callback(req, res) {
       }
 
       // Strict DB permission: only accept callback when file belongs to user in key (User A cannot overwrite User B's file)
-      const db = require('../../config/db');
       const fileResult = await db.query(
         'SELECT id, name, path, user_id, parent_id, size FROM files WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL',
         [validatedFileId, validatedUserId]
@@ -235,10 +238,6 @@ async function callback(req, res) {
         logger.error('[ONLYOFFICE] Failed to download document:', error);
         return res.status(200).json({ error: 0 });
       }
-
-      const { isFilePathEncrypted } = require('../../utils/filePath');
-      const { encryptFile } = require('../../utils/fileEncryption');
-      const { safeUnlink } = require('../../utils/fileCleanup');
 
       if (storage.useS3()) {
         const plainStream = Readable.from(fileBuffer);
@@ -334,6 +333,4 @@ async function callback(req, res) {
   }
 }
 
-module.exports = {
-  callback,
-};
+export { callback };

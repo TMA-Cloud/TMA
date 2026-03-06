@@ -1,16 +1,16 @@
-const { sendSuccess } = require('../../utils/response');
-const { logger } = require('../../config/logger');
-const { logAuditEvent } = require('../../services/auditLogger');
-const {
-  moveFiles,
-  copyFiles,
+import pool from '../../config/db.js';
+import { logger } from '../../config/logger.js';
+import { logAuditEvent } from '../../services/auditLogger.js';
+import { EventTypes, publishFileEventsBatch } from '../../services/fileEvents.js';
+import {
+  copyFiles as copyFilesModel,
   getFileInfo,
   getTargetFolderName,
+  moveFiles as moveFilesModel,
   resolveTargetFolderId,
-} = require('../../models/file.model');
-const pool = require('../../config/db');
-const { userOperationLock } = require('../../utils/mutex');
-const { publishFileEventsBatch, EventTypes } = require('../../services/fileEvents');
+} from '../../models/file.model.js';
+import { userOperationLock } from '../../utils/mutex.js';
+import { sendSuccess } from '../../utils/response.js';
 
 async function getPasteContext(req) {
   const { ids, parentId: requestedParentId } = req.body;
@@ -31,7 +31,7 @@ async function moveFilesController(req, res) {
   const { ids, actualParentId, fileInfo, fileNames, fileTypes, targetFolderName } = await getPasteContext(req);
 
   await userOperationLock(req.userId, async () => {
-    await moveFiles(ids, actualParentId, req.userId);
+    await moveFilesModel(ids, actualParentId, req.userId);
   });
 
   await logAuditEvent(
@@ -77,7 +77,7 @@ async function copyFilesController(req, res) {
   const { ids, actualParentId, fileNames, fileTypes, targetFolderName } = await getPasteContext(req);
 
   await userOperationLock(req.userId, async () => {
-    await copyFiles(ids, actualParentId, req.userId);
+    await copyFilesModel(ids, actualParentId, req.userId);
   });
 
   await logAuditEvent(
@@ -121,7 +121,7 @@ async function copyFilesController(req, res) {
   sendSuccess(res, { message: 'Files copied successfully.' });
 }
 
-module.exports = {
-  moveFiles: moveFilesController,
-  copyFiles: copyFilesController,
-};
+const moveFiles = moveFilesController;
+const copyFiles = copyFilesController;
+
+export { moveFiles, copyFiles };

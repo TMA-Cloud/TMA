@@ -1,5 +1,5 @@
-const { subscribeToFileEvents, unsubscribeFromFileEvents } = require('../../services/fileEvents');
-const { logger } = require('../../config/logger');
+import { logger } from '../../config/logger.js';
+import { subscribeToFileEvents, unsubscribeFromFileEvents } from '../../services/fileEvents.js';
 
 // Configuration
 const KEEPALIVE_INTERVAL = 30000; // 30 seconds
@@ -238,6 +238,4 @@ async function streamFileEvents(req, res) {
   });
 }
 
-module.exports = {
-  streamFileEvents,
-};
+export { streamFileEvents };

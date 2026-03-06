@@ -1,14 +1,16 @@
-const jwt = require('jsonwebtoken');
-const {
-  validateAndResolveFile,
+import jwt from 'jsonwebtoken';
+
+import { logger } from '../../config/logger.js';
+import { getFile } from '../../models/file.model.js';
+import { validateSingleId } from '../../utils/controllerHelpers.js';
+import {
+  contentDispositionValue,
   streamEncryptedFile,
   streamUnencryptedFile,
-  contentDispositionValue,
-} = require('../../utils/fileDownload');
-const { validateSingleId } = require('../../utils/controllerHelpers');
-const { logger } = require('../../config/logger');
-const { getOnlyOfficeConfig } = require('./onlyoffice.utils');
-const { getFile } = require('../../models/file.model');
+  validateAndResolveFile,
+} from '../../utils/fileDownload.js';
+
+import { getOnlyOfficeConfig } from './onlyoffice.utils.js';
 
 /**
  * Serve file to ONLYOFFICE server
@@ -88,6 +90,4 @@ async function serveFile(req, res) {
   }
 }
 
-module.exports = {
-  serveFile,
-};
+export { serveFile };

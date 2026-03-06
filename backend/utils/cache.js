@@ -1,6 +1,7 @@
-const { redisClient, isRedisConnected } = require('../config/redis');
-const { logger } = require('../config/logger');
-const crypto = require('crypto');
+import crypto from 'crypto';
+
+import { logger } from '../config/logger.js';
+import { redisClient, isRedisConnected } from '../config/redis.js';
 
 // Default TTL in seconds
 const DEFAULT_TTL = 300; // 5 minutes
@@ -296,7 +297,7 @@ const cacheKeys = {
   fileShared: (token, fileId) => `share:check:${token}:${fileId}`,
 };
 
-module.exports = {
+export {
   getCache,
   setCache,
   deleteCache,

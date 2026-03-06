@@ -1,39 +1,41 @@
-const express = require('express');
-const {
-  listFiles,
+import express from 'express';
+
+import {
   addFolder,
   checkUploadStorage,
-  uploadFile,
-  uploadFilesBulk,
-  moveFiles,
   copyFiles,
+  deleteFiles,
+  deleteForever,
   downloadFile,
   downloadFilesBulk,
-  renameFile,
-  starFiles,
-  listStarred,
-  shareFiles,
-  getShareLinks,
-  listShared,
-  linkParentShare,
-  deleteFiles,
-  listTrash,
-  restoreFiles,
-  deleteForever,
   emptyTrash,
-  searchFiles,
-  getFileStats,
   getFileInfo,
+  getFileStats,
+  getShareLinks,
+  linkParentShare,
+  listFiles,
+  listShared,
+  listStarred,
+  listTrash,
+  moveFiles,
+  renameFile,
   replaceFileContents,
+  restoreFiles,
+  searchFiles,
+  shareFiles,
+  starFiles,
   uploadDerivedFile,
-} = require('../controllers/file.controller');
-const { streamFileEvents } = require('../controllers/file/file.events.controller');
-const auth = require('../middleware/auth.middleware');
-const { uploadSingleWithDynamicLimit, uploadArrayWithDynamicLimit } = require('../utils/multer');
-const { streamUploadToS3 } = require('../middleware/streamUploadToS3.middleware');
-const storage = require('../utils/storageDriver');
-const { apiRateLimiter, uploadRateLimiter, sseConnectionLimiter } = require('../middleware/rateLimit.middleware');
-const { checkStorageLimit } = require('../middleware/storageLimit.middleware');
+  uploadFile,
+  uploadFilesBulk,
+} from '../controllers/file.controller.js';
+import { streamFileEvents } from '../controllers/file/file.events.controller.js';
+import auth from '../middleware/auth.middleware.js';
+import { streamUploadToS3 } from '../middleware/streamUploadToS3.middleware.js';
+import { apiRateLimiter, sseConnectionLimiter, uploadRateLimiter } from '../middleware/rateLimit.middleware.js';
+import { checkStorageLimit } from '../middleware/storageLimit.middleware.js';
+import { validate } from '../middleware/validation.middleware.js';
+import { uploadArrayWithDynamicLimit, uploadSingleWithDynamicLimit } from '../utils/multer.js';
+import storage from '../utils/storageDriver.js';
 
 /** When S3: stream directly to bucket (no temp dir). Otherwise use multer disk with admin-configurable max file size. */
 function uploadSingle() {
@@ -42,24 +44,24 @@ function uploadSingle() {
 function uploadBulk() {
   return storage.useS3() ? streamUploadToS3('bulk') : uploadArrayWithDynamicLimit();
 }
-const router = express.Router();
-const { validate } = require('../middleware/validation.middleware');
-const {
+import {
   addFolderSchema,
-  renameFileSchema,
+  checkUploadStorageSchema,
+  copyFilesSchema,
+  deleteFilesSchema,
+  deleteForeverSchema,
   downloadFileSchema,
   downloadFilesBulkSchema,
-  moveFilesSchema,
-  copyFilesSchema,
-  starFilesSchema,
-  shareFilesSchema,
   getShareLinksSchema,
   linkParentShareSchema,
-  deleteFilesSchema,
+  moveFilesSchema,
+  renameFileSchema,
   restoreFilesSchema,
-  deleteForeverSchema,
-  checkUploadStorageSchema,
-} = require('../utils/validationSchemas');
+  shareFilesSchema,
+  starFilesSchema,
+} from '../utils/validationSchemas.js';
+
+const router = express.Router();
 
 router.use(auth);
 router.use(apiRateLimiter);
@@ -95,4 +97,4 @@ router.post('/:id/replace', uploadRateLimiter, uploadSingleWithDynamicLimit(), r
 // When S3 is enabled this uses streamUploadToS3, otherwise multer disk upload.
 router.post('/:id/derived', uploadRateLimiter, uploadSingle(), uploadDerivedFile);
 
-module.exports = router;
+export default router;

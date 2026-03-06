@@ -1,4 +1,4 @@
-const { logger } = require('../config/logger');
+import { logger } from '../config/logger.js';
 
 /**
  * Input validation utilities to prevent injection attacks and validate user input
@@ -253,7 +253,7 @@ function validateFileUpload(mimeType, filename) {
   };
 }
 
-module.exports = {
+export {
   validateString,
   validateEmail,
   validateFileName,

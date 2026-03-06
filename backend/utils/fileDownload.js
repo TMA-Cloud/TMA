@@ -1,9 +1,10 @@
-const fs = require('fs');
-const path = require('path');
-const { resolveFilePath, isValidPath, isFilePathEncrypted } = require('./filePath');
-const { createDecryptStream, createDecryptStreamFromStream } = require('./fileEncryption');
-const { logger } = require('../config/logger');
-const storage = require('./storageDriver');
+import fs from 'fs';
+import path from 'path';
+
+import { logger } from '../config/logger.js';
+import { isFilePathEncrypted, isValidPath, resolveFilePath } from './filePath.js';
+import { createDecryptStream, createDecryptStreamFromStream } from './fileEncryption.js';
+import storage from './storageDriver.js';
 
 /**
  * Build a Content-Disposition header value that is safe for Node's setHeader (ASCII-only).
@@ -182,9 +183,4 @@ async function streamUnencryptedFile(res, filePathOrKey, filename, mimeType, att
   stream.pipe(res);
 }
 
-module.exports = {
-  validateAndResolveFile,
-  streamEncryptedFile,
-  streamUnencryptedFile,
-  contentDispositionValue,
-};
+export { validateAndResolveFile, streamEncryptedFile, streamUnencryptedFile, contentDispositionValue };

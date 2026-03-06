@@ -3,14 +3,14 @@
  * Extracted common patterns for session creation and token generation
  */
 
-const { createSession } = require('../models/session.model');
-const { getUserTokenVersion } = require('../models/user.model');
-const { generateAuthToken, getCookieOptions } = require('./auth');
+import { logger } from '../config/logger.js';
+import { createSession } from '../models/session.model.js';
+import { getUserTokenVersion } from '../models/user.model.js';
+import { generateAuthToken, getCookieOptions } from './auth.js';
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
 if (!JWT_SECRET) {
-  const { logger } = require('../config/logger');
   logger.error('JWT_SECRET environment variable is required');
   process.exit(1);
 }
@@ -66,8 +66,4 @@ function setAuthCookieAndRespond(res, token, data, status = 200) {
   res.status(status).json(data);
 }
 
-module.exports = {
-  extractRequestInfo,
-  createSessionAndToken,
-  setAuthCookieAndRespond,
-};
+export { extractRequestInfo, createSessionAndToken, setAuthCookieAndRespond };

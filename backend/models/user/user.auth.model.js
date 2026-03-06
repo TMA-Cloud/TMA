@@ -1,6 +1,6 @@
-const pool = require('../../config/db');
-const { logger } = require('../../config/logger');
-const { getCache, setCache, deleteCache, cacheKeys, DEFAULT_TTL } = require('../../utils/cache');
+import pool from '../../config/db.js';
+import { logger } from '../../config/logger.js';
+import { getCache, setCache, deleteCache, cacheKeys, DEFAULT_TTL } from '../../utils/cache.js';
 
 /**
  * Get user's current token version for validation
@@ -53,7 +53,4 @@ async function invalidateAllSessions(userId) {
   return result.rows[0].token_version;
 }
 
-module.exports = {
-  getUserTokenVersion,
-  invalidateAllSessions,
-};
+export { getUserTokenVersion, invalidateAllSessions };

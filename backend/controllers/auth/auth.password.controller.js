@@ -1,14 +1,15 @@
-const bcrypt = require('bcryptjs');
-const {
-  getUserByIdWithPassword,
-  updateUserPassword,
+import bcrypt from 'bcryptjs';
+
+import { logger } from '../../config/logger.js';
+import { deleteAllUserSessions } from '../../models/session.model.js';
+import {
   getPasswordChangeSettings,
+  getUserByIdWithPassword,
   invalidateAllSessions,
-} = require('../../models/user.model');
-const { deleteAllUserSessions } = require('../../models/session.model');
-const { sendError, sendSuccess } = require('../../utils/response');
-const { logger } = require('../../config/logger');
-const { logAuditEvent } = require('../../services/auditLogger');
+  updateUserPassword,
+} from '../../models/user.model.js';
+import { logAuditEvent } from '../../services/auditLogger.js';
+import { sendError, sendSuccess } from '../../utils/response.js';
 
 /**
  * Change current user's password
@@ -77,6 +78,4 @@ async function changePassword(req, res) {
   }
 }
 
-module.exports = {
-  changePassword,
-};
+export { changePassword };

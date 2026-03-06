@@ -1,5 +1,5 @@
-const { cleanupOrphanFiles } = require('../models/file.model');
-const { createPeriodicCleanup } = require('../utils/cleanupScheduler');
+import { cleanupOrphanFiles } from '../models/file/file.cleanup.model.js';
+import { createPeriodicCleanup } from '../utils/cleanupScheduler.js';
 
 const orphanCleanupTask = createPeriodicCleanup(cleanupOrphanFiles, 'Orphan cleanup', 24);
 
@@ -7,4 +7,4 @@ function startOrphanFileCleanup() {
   orphanCleanupTask.start();
 }
 
-module.exports = { startOrphanFileCleanup };
+export { startOrphanFileCleanup };

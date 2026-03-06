@@ -2,17 +2,11 @@
  * Check current bucket lifecycle configuration.
  * Usage: node scripts/check-s3-lifecycle.js
  */
-const path = require('path');
-const dotenv = require('dotenv');
+import '../config/env.js';
 
-const scriptDir = __dirname;
-const backendDir = path.join(scriptDir, '..');
-const projectRoot = path.join(backendDir, '..');
-dotenv.config({ path: path.join(projectRoot, '.env') });
-dotenv.config({ path: path.join(backendDir, '.env') });
+import { GetBucketLifecycleConfigurationCommand, S3Client } from '@aws-sdk/client-s3';
 
-const { S3Client, GetBucketLifecycleConfigurationCommand } = require('@aws-sdk/client-s3');
-const { s3: s3Config } = require('../config/storage');
+import { s3 as s3Config } from '../config/storage.js';
 
 const client = new S3Client({
   endpoint: s3Config.endpoint,

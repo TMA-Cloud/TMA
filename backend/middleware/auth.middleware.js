@@ -1,8 +1,9 @@
-const jwt = require('jsonwebtoken');
-const { setUserId } = require('./requestId.middleware');
-const { logger } = require('../config/logger');
-const { getUserTokenVersion } = require('../models/user.model');
-const { sessionExists, updateSessionActivity } = require('../models/session.model');
+import jwt from 'jsonwebtoken';
+
+import { setUserId } from './requestId.middleware.js';
+import { logger } from '../config/logger.js';
+import { getUserTokenVersion } from '../models/user.model.js';
+import { sessionExists, updateSessionActivity } from '../models/session.model.js';
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -11,7 +12,7 @@ if (!JWT_SECRET) {
   process.exit(1);
 }
 
-module.exports = async function (req, res, next) {
+export default async function authMiddleware(req, res, next) {
   let token;
   if (req.headers.cookie) {
     const cookies = req.headers.cookie.split(';').map(c => c.trim());
@@ -88,4 +89,4 @@ module.exports = async function (req, res, next) {
     logger.warn({ err }, 'Invalid token provided');
     return res.status(401).json({ message: 'Invalid token' });
   }
-};
+}

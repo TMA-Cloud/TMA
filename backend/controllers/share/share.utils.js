@@ -2,7 +2,7 @@
  * HTML escaping function to prevent XSS
  * Uses escape-html package for better performance and correctness
  */
-const escapeHtml = require('escape-html');
+import escapeHtml from 'escape-html';
 
 /**
  * Minimal, self-contained HTML error page for public share endpoints.
@@ -21,7 +21,4 @@ function renderErrorPage(res, status, title, message) {
   res.status(status).send(html);
 }
 
-module.exports = {
-  escapeHtml,
-  renderErrorPage,
-};
+export { escapeHtml, renderErrorPage };

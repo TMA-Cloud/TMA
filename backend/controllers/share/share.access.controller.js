@@ -1,9 +1,10 @@
-const { validateAndResolveFile, streamEncryptedFile, streamUnencryptedFile } = require('../../utils/fileDownload');
-const { sendError } = require('../../utils/response');
-const { getFileByToken, getFolderContentsByShare } = require('../../models/share.model');
-const { logger } = require('../../config/logger');
-const { shareAccessed } = require('../../services/auditLogger');
-const { escapeHtml, renderErrorPage } = require('./share.utils');
+import { logger } from '../../config/logger.js';
+import { getFileByToken, getFolderContentsByShare } from '../../models/share.model.js';
+import { shareAccessed } from '../../services/auditLogger.js';
+import { validateAndResolveFile, streamEncryptedFile, streamUnencryptedFile } from '../../utils/fileDownload.js';
+import { sendError } from '../../utils/response.js';
+
+import { escapeHtml, renderErrorPage } from './share.utils.js';
 
 /**
  * Handle shared file/folder access
@@ -62,6 +63,4 @@ async function handleShared(req, res) {
   }
 }
 
-module.exports = {
-  handleShared,
-};
+export { handleShared };

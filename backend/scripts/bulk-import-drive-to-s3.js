@@ -28,30 +28,26 @@
  * Preserves file and folder modification times (mtime) from the source drive.
  */
 
-const path = require('path');
-const fs = require('fs').promises;
-const { createReadStream } = require('fs');
-const dotenv = require('dotenv');
+import '../config/env.js';
 
-const scriptDir = __dirname;
-const backendDir = path.join(scriptDir, '..');
-const projectRoot = path.join(backendDir, '..');
-dotenv.config({ path: path.join(projectRoot, '.env') });
-dotenv.config({ path: path.join(backendDir, '.env') });
+import path from 'path';
+import fs from 'fs/promises';
+import { createReadStream } from 'fs';
+
+import mime from 'mime-types';
+
+import pool from '../config/db.js';
+import { getMaxUploadSizeSettings } from '../models/user.model.js';
+import { createFolder, createFileFromStreamedUpload } from '../models/file/file.crud.model.js';
+import { invalidateUserCache } from '../utils/cache.js';
+import { createByteCountStream, createEncryptStream } from '../utils/fileEncryption.js';
+import { generateId } from '../utils/id.js';
+import storage from '../utils/storageDriver.js';
+import { checkStorageLimitExceeded } from '../utils/storageUtils.js';
+import { validateFileName } from '../utils/validation.js';
 
 if (!process.env.DOCKER && process.env.DB_HOST === 'postgres') process.env.DB_HOST = 'localhost';
 if (!process.env.DOCKER && process.env.REDIS_HOST === 'redis') process.env.REDIS_HOST = 'localhost';
-
-const storage = require('../utils/storageDriver');
-const { createEncryptStream, createByteCountStream } = require('../utils/fileEncryption');
-const { generateId } = require('../utils/id');
-const { createFolder, createFileFromStreamedUpload } = require('../models/file/file.crud.model');
-const { validateFileName } = require('../utils/validation');
-const { checkStorageLimitExceeded } = require('../utils/storageUtils');
-const pool = require('../config/db');
-const mime = require('mime-types');
-const { getMaxUploadSizeSettings } = require('../models/user.model');
-const { invalidateUserCache } = require('../utils/cache');
 
 let MAX_FILE_SIZE;
 

@@ -1,6 +1,6 @@
-const pool = require('../config/db');
-const { getCache, setCache, cacheKeys, DEFAULT_TTL } = require('../utils/cache');
-const { logger } = require('../config/logger');
+import pool from '../config/db.js';
+import { logger } from '../config/logger.js';
+import { getCache, setCache, cacheKeys, DEFAULT_TTL } from '../utils/cache.js';
 
 /**
  * Get share base URL settings from database
@@ -67,8 +67,4 @@ async function getShareBaseHost() {
   }
 }
 
-module.exports = {
-  getShareBaseUrlSettings,
-  getShareBaseUrlOrigin,
-  getShareBaseHost,
-};
+export { getShareBaseUrlSettings, getShareBaseUrlOrigin, getShareBaseHost };
