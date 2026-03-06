@@ -101,7 +101,8 @@ const PageLoadingFallback: React.FC = () => (
 );
 
 const AppContent: React.FC = () => {
-  const { currentPath, sidebarOpen, uploadProgress, setUploadProgress, setIsUploadProgressInteracting } = useApp();
+  const { currentPath, sidebarOpen, uploadProgress, setUploadProgress, setIsUploadProgressInteracting, cancelUpload } =
+    useApp();
   const isMobile = useIsMobile();
   const mainRef = React.useRef<HTMLElement | null>(null);
 
@@ -183,6 +184,7 @@ const AppContent: React.FC = () => {
             setUploadProgress(prev => prev.filter(item => item.id !== id));
           }}
           onInteractionChange={setIsUploadProgressInteracting}
+          onCancel={cancelUpload}
         />
       </Suspense>
     </div>

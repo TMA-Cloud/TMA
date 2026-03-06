@@ -72,6 +72,17 @@ async function ensureFolderPath({ userId, baseParentId, folderSegments, folderId
     const created = await createFolder(seg, parentId, userId);
     folderIdCache.set(cacheKey, created.id);
     parentId = created.id;
+
+    // Ensure newly created folders from bulk/folder uploads are visible in
+    // the UI without requiring a manual refresh by publishing the same
+    // event used by the explicit "create folder" endpoint.
+    await publishFileEvent(EventTypes.FOLDER_CREATED, {
+      id: created.id,
+      name: created.name,
+      type: created.type,
+      parentId,
+      userId,
+    });
   }
   return parentId;
 }

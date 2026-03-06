@@ -142,6 +142,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }));
   const isUploadProgressInteractingRef = useRef(false);
   const uploadDismissTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const uploadXhrRef = useRef<Map<string, XMLHttpRequest>>(new Map());
   const searchQueryRef = useRef<string>(''); // Track current search query to ignore stale results
   const abortControllerRef = useRef<AbortController | null>(null); // For cancelling fetch requests
   const eventSourceRef = useRef<EventSource | null>(null); // For SSE connection
@@ -684,79 +685,121 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         throw e;
       }
 
-      return new Promise<void>((resolve, reject) => {
-        const uploadId = `bulk-${Date.now()}-${Math.random()}`;
-        const xhr = new XMLHttpRequest();
-        const data = new FormData();
-        const parentId = folderStack[folderStack.length - 1];
-        if (parentId) data.append('parentId', parentId);
+      const parentId = folderStack[folderStack.length - 1];
+      const hasRelativePaths = entries.some(e => e.relativePath);
 
-        const normalizedEntries = entries.map((entry, index) => {
-          const clientId = entry.clientId || `${uploadId}-${index}`;
-          const relativePath = entry.relativePath || '';
-          return { ...entry, clientId, relativePath };
-        });
+      // Folder uploads (entries with relativePath) must be sent as a single bulk
+      // request so the backend can safely and sequentially build folder trees
+      // without creating duplicate folders. In this mode, individual files
+      // cannot be cancelled without cancelling the whole batch.
+      if (hasRelativePaths) {
+        return new Promise<void>((resolve, reject) => {
+          const batchGroupId = entries.length > 1 ? `bulk-${Date.now()}-${Math.random()}` : undefined;
+          const uploadId = batchGroupId || `bulk-${Date.now()}-${Math.random()}`;
+          const xhr = new XMLHttpRequest();
+          const data = new FormData();
+          if (parentId) data.append('parentId', parentId);
 
-        // Append all files with field name 'files' + aligned metadata arrays.
-        normalizedEntries.forEach(entry => {
-          data.append('files', entry.file);
-          data.append('relativePaths', entry.relativePath);
-          data.append('clientIds', entry.clientId);
-        });
+          const normalizedEntries = entries.map((entry, index) => {
+            const clientId = entry.clientId || `${uploadId}-${index}`;
+            const relativePath = entry.relativePath || '';
+            return { ...entry, clientId, relativePath };
+          });
 
-        // Add all files to progress list
-        const fileProgressItems = normalizedEntries.map(entry => ({
-          id: entry.clientId,
-          fileName: entry.relativePath || entry.file.name,
-          fileSize: entry.file.size,
-          progress: 0,
-          status: 'uploading' as const,
-        }));
+          // Append all files with field name 'files' + aligned metadata arrays.
+          normalizedEntries.forEach(entry => {
+            data.append('files', entry.file);
+            data.append('relativePaths', entry.relativePath);
+            data.append('clientIds', entry.clientId);
+          });
 
-        setUploadProgress(prev => [...prev, ...fileProgressItems]);
+          // Add all files to progress list (all share the same groupId for "Cancel all").
+          const fileProgressItems = normalizedEntries.map(entry => ({
+            id: entry.clientId,
+            fileName: entry.relativePath || entry.file.name,
+            fileSize: entry.file.size,
+            progress: 0,
+            status: 'uploading' as const,
+            groupId: batchGroupId,
+          }));
 
-        xhr.upload.addEventListener('progress', e => {
-          if (e.lengthComputable) {
-            const progress = Math.round((e.loaded / e.total) * 100);
-            // Update progress for all files proportionally
-            fileProgressItems.forEach(item => {
-              setUploadProgress(prev => updateUploadProgress(prev, item.id, { progress }));
-            });
-          }
-        });
+          setUploadProgress(prev => [...prev, ...fileProgressItems]);
 
-        xhr.addEventListener('load', async () => {
-          if (xhr.status >= 200 && xhr.status < 300) {
-            try {
-              const response = JSON.parse(xhr.responseText);
-              const { files: uploadedFiles, failed } = response;
+          // Track XHR for each file so group cancel can abort the whole request.
+          fileProgressItems.forEach(item => {
+            uploadXhrRef.current.set(item.id, xhr);
+          });
 
-              // Mark successful uploads as completed
-              if (Array.isArray(uploadedFiles)) {
-                uploadedFiles.forEach((file: { clientId?: string }) => {
-                  if (!file?.clientId) return;
-                  setUploadProgress(prev =>
-                    updateUploadProgress(prev, file.clientId!, {
-                      progress: 100,
-                      status: 'completed',
-                    })
+          xhr.upload.addEventListener('progress', e => {
+            if (e.lengthComputable) {
+              const progress = Math.round((e.loaded / e.total) * 100);
+              fileProgressItems.forEach(item => {
+                setUploadProgress(prev => updateUploadProgress(prev, item.id, { progress }));
+              });
+            }
+          });
+
+          xhr.addEventListener('load', () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+              try {
+                const response = JSON.parse(xhr.responseText);
+                const { files: uploadedFiles, failed } = response;
+
+                // Mark successful uploads as completed
+                if (Array.isArray(uploadedFiles)) {
+                  uploadedFiles.forEach((file: { clientId?: string }) => {
+                    if (!file?.clientId) return;
+                    setUploadProgress(prev =>
+                      updateUploadProgress(prev, file.clientId!, {
+                        progress: 100,
+                        status: 'completed',
+                      })
+                    );
+                  });
+                }
+
+                // Mark failed uploads as error
+                if (failed && failed.length > 0) {
+                  failed.forEach((failedFile: { fileName: string; error: string; clientId?: string }) => {
+                    const id = failedFile.clientId;
+                    if (id) {
+                      setUploadProgress(prev => updateUploadProgress(prev, id, { status: 'error' }));
+                    }
+                    showToast(`Failed to upload ${failedFile.fileName}: ${failedFile.error}`, 'error');
+                  });
+                }
+
+                // If backend didn't return clientIds (older backend), mark all as completed.
+                if (!Array.isArray(uploadedFiles) || uploadedFiles.every((f: { clientId?: string }) => !f?.clientId)) {
+                  fileProgressItems.forEach(item => {
+                    setUploadProgress(prev =>
+                      updateUploadProgress(prev, item.id, {
+                        progress: 100,
+                        status: 'completed',
+                      })
+                    );
+                  });
+                }
+
+                // Use debounced refresh to batch multiple upload completions
+                debouncedRefreshFiles(false);
+
+                // Auto-dismiss successful uploads after 3 seconds
+                fileProgressItems.forEach(item => {
+                  const dismissTimeout = createAutoDismissTimeout(
+                    item.id,
+                    isUploadProgressInteractingRef,
+                    setUploadProgress,
+                    uploadDismissTimeoutsRef,
+                    3000,
+                    2000
                   );
+                  uploadDismissTimeoutsRef.current.set(item.id, dismissTimeout);
                 });
-              }
 
-              // Mark failed uploads as error
-              if (failed && failed.length > 0) {
-                failed.forEach((failedFile: { fileName: string; error: string; clientId?: string }) => {
-                  const id = failedFile.clientId;
-                  if (id) {
-                    setUploadProgress(prev => updateUploadProgress(prev, id, { status: 'error' }));
-                  }
-                  showToast(`Failed to upload ${failedFile.fileName}: ${failedFile.error}`, 'error');
-                });
-              }
-
-              // If backend didn't return clientIds (older backend), mark all as completed.
-              if (!Array.isArray(uploadedFiles) || uploadedFiles.every((f: { clientId?: string }) => !f?.clientId)) {
+                resolve();
+              } catch {
+                // If response parsing fails, mark all as completed (backend might have succeeded)
                 fileProgressItems.forEach(item => {
                   setUploadProgress(prev =>
                     updateUploadProgress(prev, item.id, {
@@ -765,77 +808,159 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                     })
                   );
                 });
-              }
-
-              // Use debounced refresh to batch multiple upload completions
-              debouncedRefreshFiles(false);
-
-              // Auto-dismiss successful uploads after 3 seconds
-              fileProgressItems.forEach(item => {
-                const dismissTimeout = createAutoDismissTimeout(
-                  item.id,
-                  isUploadProgressInteractingRef,
-                  setUploadProgress,
-                  uploadDismissTimeoutsRef,
-                  3000,
-                  2000
-                );
-                uploadDismissTimeoutsRef.current.set(item.id, dismissTimeout);
-              });
-
-              if (failed && failed.length > 0) {
-                // Some files failed, but don't reject the promise
-                resolve();
-              } else {
+                debouncedRefreshFiles(false);
                 resolve();
               }
-            } catch {
-              // If response parsing fails, mark all as completed (backend might have succeeded)
+            } else {
+              // Mark all as error
               fileProgressItems.forEach(item => {
-                setUploadProgress(prev =>
-                  updateUploadProgress(prev, item.id, {
-                    progress: 100,
-                    status: 'completed',
-                  })
-                );
+                setUploadProgress(prev => updateUploadProgress(prev, item.id, { status: 'error' }));
               });
-              debouncedRefreshFiles(false);
-              resolve();
+
+              const errorMessage = extractXhrErrorMessage(xhr);
+              showToast(errorMessage || 'Bulk upload failed', 'error');
+              reject(new Error(errorMessage || 'Bulk upload failed'));
             }
-          } else {
-            // Mark all as error
+
+            // Cleanup XHR references after completion or error
+            fileProgressItems.forEach(item => {
+              uploadXhrRef.current.delete(item.id);
+            });
+          });
+
+          xhr.addEventListener('error', () => {
             fileProgressItems.forEach(item => {
               setUploadProgress(prev => updateUploadProgress(prev, item.id, { status: 'error' }));
             });
 
-            const errorMessage = extractXhrErrorMessage(xhr);
-            showToast(errorMessage || 'Bulk upload failed', 'error');
-            reject(new Error(errorMessage || 'Bulk upload failed'));
-          }
-        });
+            const errorMessage =
+              extractXhrErrorMessage(xhr) || 'Upload failed. Please check your connection and try again.';
+            showToast(errorMessage, 'error');
+            reject(new Error(errorMessage));
 
-        xhr.addEventListener('error', () => {
-          fileProgressItems.forEach(item => {
-            setUploadProgress(prev => updateUploadProgress(prev, item.id, { status: 'error' }));
+            fileProgressItems.forEach(item => {
+              uploadXhrRef.current.delete(item.id);
+            });
           });
 
-          const errorMessage =
-            extractXhrErrorMessage(xhr) || 'Upload failed. Please check your connection and try again.';
-          showToast(errorMessage, 'error');
-          reject(new Error(errorMessage));
-        });
+          xhr.addEventListener('abort', () => {
+            fileProgressItems.forEach(item => {
+              setUploadProgress(prev => removeUploadProgress(prev, item.id));
+            });
+            reject(new Error('Upload cancelled'));
 
-        xhr.addEventListener('abort', () => {
-          fileProgressItems.forEach(item => {
-            setUploadProgress(prev => removeUploadProgress(prev, item.id));
+            fileProgressItems.forEach(item => {
+              uploadXhrRef.current.delete(item.id);
+            });
           });
-          reject(new Error('Upload cancelled'));
-        });
 
-        xhr.open('POST', `/api/files/upload/bulk`);
-        xhr.withCredentials = true;
-        xhr.send(data);
-      });
+          xhr.open('POST', `/api/files/upload/bulk`);
+          xhr.withCredentials = true;
+          xhr.send(data);
+        });
+      }
+
+      // Flat multi-file uploads (no relative paths): keep the one-XHR-per-file
+      // behavior so each file can be cancelled independently without affecting
+      // others and without folder tree concurrency issues.
+      await Promise.all(
+        entries.map(
+          (entry, index) =>
+            new Promise<void>((resolve, reject) => {
+              const xhr = new XMLHttpRequest();
+              const data = new FormData();
+              if (parentId) data.append('parentId', parentId);
+
+              const clientId = entry.clientId || `file-${Date.now()}-${index}`;
+              data.append('files', entry.file);
+              data.append('clientIds', clientId);
+
+              const uploadId = clientId;
+
+              setUploadProgress(prev => [
+                ...prev,
+                {
+                  id: uploadId,
+                  fileName: entry.file.name,
+                  fileSize: entry.file.size,
+                  progress: 0,
+                  status: 'uploading',
+                  // No groupId -> per-file cancel only, no "Cancel all" for flat files.
+                },
+              ]);
+
+              uploadXhrRef.current.set(uploadId, xhr);
+
+              xhr.upload.addEventListener('progress', e => {
+                if (e.lengthComputable) {
+                  const progress = Math.round((e.loaded / e.total) * 100);
+                  setUploadProgress(prev => updateUploadProgress(prev, uploadId, { progress }));
+                }
+              });
+
+              xhr.addEventListener('load', () => {
+                if (xhr.status >= 200 && xhr.status < 300) {
+                  setUploadProgress(prev =>
+                    updateUploadProgress(prev, uploadId, {
+                      progress: 100,
+                      status: 'completed',
+                    })
+                  );
+                  debouncedRefreshFiles(false);
+                  const dismissTimeout = createAutoDismissTimeout(
+                    uploadId,
+                    isUploadProgressInteractingRef,
+                    setUploadProgress,
+                    uploadDismissTimeoutsRef,
+                    3000,
+                    2000
+                  );
+                  uploadDismissTimeoutsRef.current.set(uploadId, dismissTimeout);
+                  resolve();
+                } else {
+                  setUploadProgress(prev => updateUploadProgress(prev, uploadId, { status: 'error' }));
+                  const errorMessage = extractXhrErrorMessage(xhr) || 'Upload failed';
+                  showToast(errorMessage, 'error');
+                  const errorDismissTimeout = createAutoDismissTimeout(
+                    uploadId,
+                    isUploadProgressInteractingRef,
+                    setUploadProgress,
+                    uploadDismissTimeoutsRef
+                  );
+                  uploadDismissTimeoutsRef.current.set(uploadId, errorDismissTimeout);
+                  reject(new Error(errorMessage));
+                }
+                uploadXhrRef.current.delete(uploadId);
+              });
+
+              xhr.addEventListener('error', () => {
+                setUploadProgress(prev => updateUploadProgress(prev, uploadId, { status: 'error' }));
+                const errorMessage =
+                  extractXhrErrorMessage(xhr) || 'Upload failed. Please check your connection and try again.';
+                showToast(errorMessage, 'error');
+                const errorDismissTimeout = createAutoDismissTimeout(
+                  uploadId,
+                  isUploadProgressInteractingRef,
+                  setUploadProgress,
+                  uploadDismissTimeoutsRef
+                );
+                uploadDismissTimeoutsRef.current.set(uploadId, errorDismissTimeout);
+                uploadXhrRef.current.delete(uploadId);
+                reject(new Error(errorMessage));
+              });
+
+              xhr.addEventListener('abort', () => {
+                setUploadProgress(prev => removeUploadProgress(prev, uploadId));
+                uploadXhrRef.current.delete(uploadId);
+                reject(new Error('Upload cancelled'));
+              });
+
+              xhr.open('POST', `/api/files/upload/bulk`);
+              xhr.withCredentials = true;
+              xhr.send(data);
+            })
+        )
+      );
     });
   };
 
@@ -1022,6 +1147,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           },
         ]);
 
+        // Track XHR so we can cancel by uploadId
+        uploadXhrRef.current.set(uploadId, xhr);
+
         xhr.upload.addEventListener('progress', e => {
           if (e.lengthComputable) {
             const progress = Math.round((e.loaded / e.total) * 100);
@@ -1072,6 +1200,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             uploadDismissTimeoutsRef.current.set(uploadId, errorDismissTimeout);
             reject(new Error(errorMessage));
           }
+          // Cleanup XHR reference after completion or error
+          uploadXhrRef.current.delete(uploadId);
         });
 
         xhr.addEventListener('error', () => {
@@ -1090,11 +1220,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           );
           uploadDismissTimeoutsRef.current.set(uploadId, errorDismissTimeout);
           reject(new Error(errorMessage));
+          uploadXhrRef.current.delete(uploadId);
         });
 
         xhr.addEventListener('abort', () => {
           setUploadProgress(prev => removeUploadProgress(prev, uploadId));
           reject(new Error('Upload cancelled'));
+          uploadXhrRef.current.delete(uploadId);
         });
 
         xhr.open('POST', `/api/files/upload`);
@@ -1139,6 +1271,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           },
         ]);
 
+        // Track XHR so we can cancel by uploadId
+        uploadXhrRef.current.set(uploadId, xhr);
+
         xhr.upload.addEventListener('progress', e => {
           if (e.lengthComputable) {
             const progress = Math.round((e.loaded / e.total) * 100);
@@ -1181,6 +1316,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             uploadDismissTimeoutsRef.current.set(uploadId, errorDismissTimeout);
             reject(new Error(errorMessage));
           }
+          uploadXhrRef.current.delete(uploadId);
         });
 
         xhr.addEventListener('error', () => {
@@ -1196,11 +1332,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           );
           uploadDismissTimeoutsRef.current.set(uploadId, errorDismissTimeout);
           reject(new Error(errorMessage));
+          uploadXhrRef.current.delete(uploadId);
         });
 
         xhr.addEventListener('abort', () => {
           setUploadProgress(prev => removeUploadProgress(prev, uploadId));
           reject(new Error('Upload cancelled'));
+          uploadXhrRef.current.delete(uploadId);
         });
 
         xhr.open('POST', `/api/files/${fileId}/replace`);
@@ -1677,6 +1815,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     void refreshOnlyOfficeConfig();
   }, [refreshOnlyOfficeConfig]);
 
+  const cancelUpload = (uploadId: string) => {
+    const xhr = uploadXhrRef.current.get(uploadId);
+    if (xhr) {
+      xhr.abort();
+      // abort handler will clean up uploadProgress and XHR refs
+      return;
+    }
+    // If we don't find an XHR (e.g., already completed), just remove from UI
+    setUploadProgress(prev => removeUploadProgress(prev, uploadId));
+  };
+
+  const cancelUploadGroup = (groupId: string) => {
+    const idsToCancel = uploadProgress.filter(item => item.groupId === groupId).map(item => item.id);
+    if (idsToCancel.length === 0) return;
+    idsToCancel.forEach(id => {
+      const xhr = uploadXhrRef.current.get(id);
+      if (xhr) {
+        xhr.abort();
+      } else {
+        setUploadProgress(prev => removeUploadProgress(prev, id));
+      }
+    });
+    // After cancelling a bulk folder upload, refresh the current folder so any
+    // files/folders that were successfully created before the cancel are visible
+    // without requiring a manual page reload.
+    debouncedRefreshFiles(true);
+  };
+
   // One-time background update check when app opens
   useEffect(() => {
     if (hasCheckedUpdates) return;
@@ -1796,6 +1962,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setUploadProgress,
         uploadFileWithProgress,
         replaceFileWithProgress,
+        cancelUpload,
+        cancelUploadGroup,
         uploadFilesBulk,
         uploadEntriesBulk,
         uploadFilesFromClipboard,

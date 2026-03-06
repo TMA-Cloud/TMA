@@ -15,12 +15,18 @@ interface UploadProgressProps {
   uploads: UploadProgressItem[];
   onDismiss: (id: string) => void;
   onInteractionChange?: (isInteracting: boolean) => void;
+  onCancel?: (id: string) => void;
 }
 
 const MAX_INDIVIDUAL_ITEMS = 2; // Show individual cards for 1-2 files
 const MAX_VISIBLE_IN_EXPANDED = 5; // Max items to show in expanded view
 
-export const UploadProgress: React.FC<UploadProgressProps> = ({ uploads, onDismiss, onInteractionChange }) => {
+export const UploadProgress: React.FC<UploadProgressProps> = ({
+  uploads,
+  onDismiss,
+  onInteractionChange,
+  onCancel,
+}) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   const [isScrolling, setIsScrolling] = useState(false);
@@ -195,6 +201,18 @@ export const UploadProgress: React.FC<UploadProgressProps> = ({ uploads, onDismi
                   </p>
                 )}
               </div>
+              {upload.status === 'uploading' && onCancel && (
+                <button
+                  type="button"
+                  onClick={() => onCancel(upload.id)}
+                  className={`flex-shrink-0 ${
+                    isMobile ? 'w-7 h-7' : 'w-8 h-8'
+                  } rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200 active:scale-95`}
+                  title="Cancel upload"
+                >
+                  <X className={`${isMobile ? 'w-3.5 h-3.5' : 'w-4 h-4'}`} />
+                </button>
+              )}
             </div>
           </div>
         ))}
@@ -399,6 +417,18 @@ export const UploadProgress: React.FC<UploadProgressProps> = ({ uploads, onDismi
                     </div>
                   )}
                 </div>
+                {upload.status === 'uploading' && onCancel && (
+                  <button
+                    type="button"
+                    onClick={() => onCancel(upload.id)}
+                    className={`ml-2 flex-shrink-0 ${
+                      isMobile ? 'w-7 h-7' : 'w-8 h-8'
+                    } rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200 active:scale-95`}
+                    title="Cancel upload"
+                  >
+                    <X className={`${isMobile ? 'w-3.5 h-3.5' : 'w-4 h-4'}`} />
+                  </button>
+                )}
               </div>
             </div>
           ))}

@@ -10,6 +10,8 @@ export type UploadProgressItem = {
   fileSize: number;
   progress: number;
   status: 'uploading' | 'completed' | 'error';
+  /** Optional group identifier for bulk uploads (multiple files/folders in one batch). */
+  groupId?: string;
 };
 
 /**

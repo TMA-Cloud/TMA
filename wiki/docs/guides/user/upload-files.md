@@ -18,11 +18,13 @@ Learn how to upload and manage files in TMA Cloud.
 - Select a folder from your computer
 - All subfolders and files under that folder are uploaded
 - The folder structure is recreated under the current folder
+- In the Upload modal, folder uploads show as **Folders to Upload** with one row per root folder (folder icon, name, item count, total size)
 
 ### Drag and Drop
 
 - **In the file manager (My Files):** Drag files or folders from your computer onto the file list and the Upload modal opens with the dropped items then click **Upload** (Folder structure is preserved when supported)
 - **In the Upload modal:** Use the drop zone to add more files or folders. If the list already has items, a compact "Add more" strip is shown
+- **Queue display:** File uploads show **Files to Upload** with one row per file and Folder uploads show **Folders to Upload** with one row per root folder (folder icon, name, item count, total size)
 
 ### Paste from Clipboard (Ctrl+V)
 
@@ -55,6 +57,14 @@ You choose an action for each conflicting file; nothing is uploaded until you co
 - Total upload size limited by your storage quota
 - Upload rate limited to 20000 uploads per 30 minutes per user
 - Both limits enforced before upload starts
+
+### Upload Progress and Cancel
+
+- A floating progress panel shows active uploads (single file or bulk)
+- **Single file / flat multi-file uploads:** Each file has its own **Cancel upload** button
+- **Folder uploads (bulk):** All files in the folder are sent as one batch. A **Cancel all** button appears in the Upload modal
+- **Remove:** Before upload starts, use **Remove** in the queue to drop a file or folder from the list
+- **After cancel:** Files and folders already created before cancel appear in the file list
 
 ## File Management
 

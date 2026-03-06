@@ -36,6 +36,7 @@ Complete reference for all error codes in TMA Cloud API.
 - `INVALID_FILE_TYPE` - Unsupported file type
 - `FILE_TOO_LARGE` - File exceeds size limit
 - `DUPLICATE_FILE` - File with same name exists
+- `REQUEST_ABORTED` - Upload cancelled by client (HTTP 499)
 
 ## Share Errors
 

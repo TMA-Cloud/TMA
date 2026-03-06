@@ -132,6 +132,16 @@ function streamUploadToS3(singleOrBulk = 'single') {
           });
         });
 
+        // If the client aborts the request, stop processing further and let existing streams unwind.
+        req.on('aborted', () => {
+          logger.warn('[StreamUpload] Request aborted by client');
+          try {
+            busboy.destroy(new Error('Request aborted by client'));
+          } catch {
+            // ignore destroy errors
+          }
+        });
+
         function checkDone() {
           if (finished && pending === 0) {
             req.body = fields;

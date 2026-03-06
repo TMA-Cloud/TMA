@@ -1,5 +1,5 @@
 import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react';
-import { Upload, X, File, CheckCircle, AlertCircle, RefreshCw, FilePlus } from 'lucide-react';
+import { Upload, File, Folder, CheckCircle, AlertCircle, RefreshCw, FilePlus } from 'lucide-react';
 import { Modal } from '../ui/Modal';
 import { useApp } from '../../contexts/AppContext';
 import { formatFileSize } from '../../utils/fileUtils';
@@ -39,10 +39,13 @@ export const UploadModal: React.FC = () => {
     replaceFileWithProgress,
     uploadEntriesBulk,
     uploadProgress,
+    cancelUpload,
+    cancelUploadGroup,
   } = useApp();
   const [uploadFiles, setUploadFiles] = useState<UploadFile[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [hasStartedUpload, setHasStartedUpload] = useState(false);
   const [duplicateModalOpen, setDuplicateModalOpen] = useState(false);
   /** Conflicting upload items (id) and the existing file name. Resolutions stored in duplicateChoices. */
   const [duplicateConflicts, setDuplicateConflicts] = useState<{ uploadId: string; fileName: string }[]>([]);
@@ -60,6 +63,50 @@ export const UploadModal: React.FC = () => {
     () => new Map(contextFiles.filter(f => f.type === 'file').map(f => [f.name, f])),
     [contextFiles]
   );
+
+  const isFolderUploadOnly = useMemo(
+    () => uploadFiles.length > 0 && uploadFiles.every(f => !!f.relativePath),
+    [uploadFiles]
+  );
+
+  const folderUploadGroups = useMemo(() => {
+    if (!isFolderUploadOnly) return [];
+    const map = new Map<
+      string,
+      {
+        id: string;
+        name: string;
+        totalSize: number;
+        fileCount: number;
+      }
+    >();
+
+    const getRootFolderName = (relativePath: string | undefined, fallbackName: string): string => {
+      if (!relativePath) return fallbackName;
+      const normalized = relativePath.replace(/\\/g, '/').replace(/^\/+/, '').trim();
+      if (!normalized) return fallbackName;
+      const parts = normalized.split('/').filter(Boolean);
+      return parts[0] || fallbackName;
+    };
+
+    for (const item of uploadFiles) {
+      const rootName = getRootFolderName(item.relativePath, item.file.name);
+      const existing = map.get(rootName);
+      if (existing) {
+        existing.totalSize += item.file.size;
+        existing.fileCount += 1;
+      } else {
+        map.set(rootName, {
+          id: rootName,
+          name: rootName,
+          totalSize: item.file.size,
+          fileCount: 1,
+        });
+      }
+    }
+
+    return Array.from(map.values());
+  }, [isFolderUploadOnly, uploadFiles]);
 
   const handleEntries = useCallback((entries: { file: File; relativePath?: string }[]) => {
     const now = Date.now();
@@ -147,6 +194,7 @@ export const UploadModal: React.FC = () => {
     setUploadFiles([]);
     setDuplicateConflicts([]);
     setDuplicateChoices({});
+    setHasStartedUpload(false);
     setUploadModalOpen(false);
     setDuplicateModalOpen(false);
   };
@@ -232,6 +280,7 @@ export const UploadModal: React.FC = () => {
       }
       setUploadFiles(prev => prev.filter(f => f.status === 'error'));
     } catch {
+      // On errors, keep pending/error items so user can retry
       setUploadFiles(prev => prev.filter(f => f.status === 'pending' || f.status === 'error'));
     } finally {
       setIsUploading(false);
@@ -265,6 +314,7 @@ export const UploadModal: React.FC = () => {
       return;
     }
 
+    setHasStartedUpload(true);
     void doActualUpload({});
   };
 
@@ -272,6 +322,7 @@ export const UploadModal: React.FC = () => {
     const allChosen = duplicateConflicts.every(c => duplicateChoices[c.uploadId] != null);
     if (!allChosen) return;
     const plan = buildUploadPlan(duplicateChoices);
+    setHasStartedUpload(true);
     setUploadModalOpen(false);
     setDuplicateModalOpen(false);
     setDuplicateConflicts([]);
@@ -295,6 +346,24 @@ export const UploadModal: React.FC = () => {
 
   const allDuplicateChoicesMade =
     duplicateConflicts.length > 0 && duplicateConflicts.every(c => duplicateChoices[c.uploadId] != null);
+
+  // Derive current uploading items and detect if there's a bulk group (multiple items sharing the same groupId).
+  const uploadingProgressItems = uploadProgress.filter(u => u.status === 'uploading');
+  let bulkGroupId: string | null = null;
+  if (uploadingProgressItems.length > 1) {
+    const groupCounts = new Map<string, number>();
+    for (const item of uploadingProgressItems) {
+      if (!item.groupId) continue;
+      const current = groupCounts.get(item.groupId) ?? 0;
+      groupCounts.set(item.groupId, current + 1);
+    }
+    for (const [gid, count] of groupCounts.entries()) {
+      if (count > 1) {
+        bulkGroupId = gid;
+        break;
+      }
+    }
+  }
 
   return (
     <Modal isOpen={uploadModalOpen} onClose={handleClose} title="Upload" size={isMobile ? 'full' : 'xl'}>
@@ -401,98 +470,51 @@ export const UploadModal: React.FC = () => {
         </div>
 
         {/* Active Uploads from Global State */}
-        {uploadProgress.filter(u => u.status === 'uploading').length > 0 && (
+        {uploadingProgressItems.length > 0 && (
           <div className={isMobile ? 'space-y-2' : 'space-y-3'}>
-            <h4 className={`${isMobile ? 'text-sm' : 'text-base'} font-semibold text-gray-900 dark:text-gray-100`}>
-              Uploading ({uploadProgress.filter(u => u.status === 'uploading').length})
-            </h4>
-            <div className={`space-y-2 ${isMobile ? 'max-h-32' : 'max-h-48'} overflow-y-auto`}>
-              {uploadProgress
-                .filter(u => u.status === 'uploading')
-                .map(upload => (
-                  <div
-                    key={upload.id}
-                    className={`flex items-center ${
-                      isMobile ? 'space-x-2 p-2' : 'space-x-3 p-3'
-                    } bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800`}
-                  >
-                    <div className="flex-shrink-0">
-                      <div
-                        className={`${
-                          isMobile ? 'w-7 h-7' : 'w-8 h-8'
-                        } rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center`}
-                      >
-                        <Upload
-                          className={`${
-                            isMobile ? 'w-3.5 h-3.5' : 'w-4 h-4'
-                          } text-blue-600 dark:text-blue-400 animate-pulse`}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="flex-1 min-w-0">
-                      <p
-                        className={`${
-                          isMobile ? 'text-xs' : 'text-sm'
-                        } font-medium text-gray-900 dark:text-gray-100 truncate`}
-                      >
-                        {upload.fileName}
-                      </p>
-                      <div className="flex items-center justify-between mt-0.5">
-                        <p className={`${isMobile ? 'text-[10px]' : 'text-xs'} text-gray-500 dark:text-gray-400`}>
-                          {formatFileSize(upload.fileSize)}
-                        </p>
-                        <p
-                          className={`${
-                            isMobile ? 'text-[10px]' : 'text-xs'
-                          } font-semibold text-blue-600 dark:text-blue-400`}
-                        >
-                          {upload.progress}%
-                        </p>
-                      </div>
-                      <div className={isMobile ? 'mt-1.5' : 'mt-2'}>
-                        <div
-                          className={`bg-gray-200 dark:bg-gray-700 rounded-full ${
-                            isMobile ? 'h-1' : 'h-1.5'
-                          } overflow-hidden`}
-                        >
-                          <div
-                            className={`bg-gradient-to-r from-blue-500 to-blue-600 ${
-                              isMobile ? 'h-1' : 'h-1.5'
-                            } rounded-full transition-all duration-500 ease-out`}
-                            style={{ width: `${upload.progress}%` }}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+            <div className="flex items-center justify-between">
+              <h4 className={`${isMobile ? 'text-sm' : 'text-base'} font-semibold text-gray-900 dark:text-gray-100`}>
+                Uploading ({uploadingProgressItems.length})
+              </h4>
+              {bulkGroupId && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    cancelUploadGroup(bulkGroupId!);
+                    // Clear all staged files in the modal for this bulk upload.
+                    setUploadFiles([]);
+                    setHasStartedUpload(false);
+                    setDuplicateConflicts([]);
+                    setDuplicateChoices({});
+                  }}
+                  className={`px-2.5 py-1 rounded-full text-[10px] ${
+                    isMobile ? '' : 'text-xs'
+                  } font-medium text-red-700 dark:text-red-200 bg-red-50 dark:bg-red-900/30 hover:bg-red-100 dark:hover:bg-red-900/50 border border-red-200 dark:border-red-700 transition-colors duration-150 active:scale-95`}
+                >
+                  Cancel all
+                </button>
+              )}
             </div>
-          </div>
-        )}
-
-        {/* Pending Files List */}
-        {uploadFiles.length > 0 && (
-          <div className={isMobile ? 'space-y-2' : 'space-y-3'}>
-            <h4 className={`${isMobile ? 'text-sm' : 'text-base'} font-semibold text-gray-900 dark:text-gray-100`}>
-              Files to Upload ({uploadFiles.length})
-            </h4>
             <div className={`space-y-2 ${isMobile ? 'max-h-32' : 'max-h-48'} overflow-y-auto`}>
-              {uploadFiles.map(uploadFile => (
+              {uploadingProgressItems.map(upload => (
                 <div
-                  key={uploadFile.id}
+                  key={upload.id}
                   className={`flex items-center ${
                     isMobile ? 'space-x-2 p-2' : 'space-x-3 p-3'
-                  } bg-[#d4d9e1] dark:bg-gray-700 rounded-lg`}
+                  } bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800`}
                 >
                   <div className="flex-shrink-0">
-                    {uploadFile.status === 'completed' ? (
-                      <CheckCircle className={`${isMobile ? 'w-5 h-5' : 'w-6 h-6'} text-green-500`} />
-                    ) : uploadFile.status === 'error' ? (
-                      <AlertCircle className={`${isMobile ? 'w-5 h-5' : 'w-6 h-6'} text-red-500`} />
-                    ) : (
-                      <File className={`${isMobile ? 'w-5 h-5' : 'w-6 h-6'} text-gray-400`} />
-                    )}
+                    <div
+                      className={`${
+                        isMobile ? 'w-7 h-7' : 'w-8 h-8'
+                      } rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center`}
+                    >
+                      <Upload
+                        className={`${
+                          isMobile ? 'w-3.5 h-3.5' : 'w-4 h-4'
+                        } text-blue-600 dark:text-blue-400 animate-pulse`}
+                      />
+                    </div>
                   </div>
 
                   <div className="flex-1 min-w-0">
@@ -501,37 +523,168 @@ export const UploadModal: React.FC = () => {
                         isMobile ? 'text-xs' : 'text-sm'
                       } font-medium text-gray-900 dark:text-gray-100 truncate`}
                     >
-                      {uploadFile.relativePath || uploadFile.file.name}
+                      {upload.fileName}
                     </p>
-                    <p className={`${isMobile ? 'text-[10px]' : 'text-xs'} text-gray-500 dark:text-gray-400`}>
-                      {formatFileSize(uploadFile.file.size)}
-                    </p>
-
-                    {uploadFile.status === 'uploading' && (
-                      <div className={isMobile ? 'mt-1' : 'mt-1'}>
-                        <div className={`bg-gray-200 dark:bg-gray-600 rounded-full ${isMobile ? 'h-1' : 'h-1'}`}>
-                          <div
-                            className={`bg-blue-500 ${
-                              isMobile ? 'h-1' : 'h-1'
-                            } rounded-full transition-all duration-300`}
-                            style={{ width: `${uploadFile.progress}%` }}
-                          />
-                        </div>
+                    <div className="flex items-center justify-between mt-0.5">
+                      <p className={`${isMobile ? 'text-[10px]' : 'text-xs'} text-gray-500 dark:text-gray-400`}>
+                        {formatFileSize(upload.fileSize)}
+                      </p>
+                      <p
+                        className={`${
+                          isMobile ? 'text-[10px]' : 'text-xs'
+                        } font-semibold text-blue-600 dark:text-blue-400`}
+                      >
+                        {upload.progress}%
+                      </p>
+                    </div>
+                    <div className={isMobile ? 'mt-1.5' : 'mt-2'}>
+                      <div
+                        className={`bg-gray-200 dark:bg-gray-700 rounded-full ${
+                          isMobile ? 'h-1' : 'h-1.5'
+                        } overflow-hidden`}
+                      >
+                        <div
+                          className={`bg-gradient-to-r from-blue-500 to-blue-600 ${
+                            isMobile ? 'h-1' : 'h-1.5'
+                          } rounded-full transition-all duration-500 ease-out`}
+                          style={{ width: `${upload.progress}%` }}
+                        />
                       </div>
-                    )}
+                    </div>
                   </div>
 
-                  <button
-                    onClick={() => removeFile(uploadFile.id)}
-                    className={`flex-shrink-0 ${
-                      isMobile ? 'p-1.5' : ''
-                    } text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors active:scale-95`}
-                    aria-label="Remove file"
-                  >
-                    <X className={`${isMobile ? 'w-4 h-4' : 'w-4 h-4'}`} />
-                  </button>
+                  {!upload.groupId && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        cancelUpload(upload.id);
+                        setUploadFiles(prev => prev.filter(f => f.id !== upload.id));
+                      }}
+                      className={`ml-2 flex-shrink-0 px-2.5 py-1 rounded-full text-[10px] ${
+                        isMobile ? '' : 'text-xs'
+                      } font-medium text-blue-700 dark:text-blue-200 bg-blue-100/80 dark:bg-blue-900/40 hover:bg-blue-200 dark:hover:bg-blue-800/70 border border-blue-300/80 dark:border-blue-700/80 transition-colors duration-150 active:scale-95`}
+                    >
+                      Cancel upload
+                    </button>
+                  )}
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* Pending Files / Folders List */}
+        {uploadFiles.length > 0 && (
+          <div className={isMobile ? 'space-y-2' : 'space-y-3'}>
+            <h4 className={`${isMobile ? 'text-sm' : 'text-base'} font-semibold text-gray-900 dark:text-gray-100`}>
+              {isFolderUploadOnly
+                ? `Folders to Upload (${folderUploadGroups.length})`
+                : `Files to Upload (${uploadFiles.length})`}
+            </h4>
+            <div className={`space-y-2 ${isMobile ? 'max-h-32' : 'max-h-48'} overflow-y-auto`}>
+              {isFolderUploadOnly
+                ? folderUploadGroups.map(group => (
+                    <div
+                      key={group.id}
+                      className={`flex items-center ${
+                        isMobile ? 'space-x-2 p-2' : 'space-x-3 p-3'
+                      } bg-[#d4d9e1] dark:bg-gray-700 rounded-lg`}
+                    >
+                      <div className="flex-shrink-0">
+                        <Folder className={`${isMobile ? 'w-5 h-5' : 'w-6 h-6'} text-yellow-500`} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p
+                          className={`${
+                            isMobile ? 'text-xs' : 'text-sm'
+                          } font-medium text-gray-900 dark:text-gray-100 truncate`}
+                        >
+                          {group.name}
+                        </p>
+                        <p className={`${isMobile ? 'text-[10px]' : 'text-xs'} text-gray-500 dark:text-gray-400`}>
+                          {group.fileCount} item{group.fileCount !== 1 ? 's' : ''} • {formatFileSize(group.totalSize)}
+                        </p>
+                      </div>
+                      {!hasStartedUpload && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setUploadFiles(prev =>
+                              prev.filter(uploadFile => {
+                                const normalized = (uploadFile.relativePath || '')
+                                  .replace(/\\/g, '/')
+                                  .replace(/^\/+/, '')
+                                  .trim();
+                                const root = normalized.split('/').filter(Boolean)[0] || uploadFile.file.name;
+                                return root !== group.name;
+                              })
+                            );
+                          }}
+                          className={`flex-shrink-0 px-2.5 py-1 rounded-full text-[10px] ${
+                            isMobile ? '' : 'text-xs'
+                          } font-medium text-gray-700 dark:text-gray-200 bg-gray-200/80 dark:bg-gray-600/80 hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors duration-150 active:scale-95`}
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                  ))
+                : uploadFiles.map(uploadFile => (
+                    <div
+                      key={uploadFile.id}
+                      className={`flex items-center ${
+                        isMobile ? 'space-x-2 p-2' : 'space-x-3 p-3'
+                      } bg-[#d4d9e1] dark:bg-gray-700 rounded-lg`}
+                    >
+                      <div className="flex-shrink-0">
+                        {uploadFile.status === 'completed' ? (
+                          <CheckCircle className={`${isMobile ? 'w-5 h-5' : 'w-6 h-6'} text-green-500`} />
+                        ) : uploadFile.status === 'error' ? (
+                          <AlertCircle className={`${isMobile ? 'w-5 h-5' : 'w-6 h-6'} text-red-500`} />
+                        ) : (
+                          <File className={`${isMobile ? 'w-5 h-5' : 'w-6 h-6'} text-gray-400`} />
+                        )}
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <p
+                          className={`${
+                            isMobile ? 'text-xs' : 'text-sm'
+                          } font-medium text-gray-900 dark:text-gray-100 truncate`}
+                        >
+                          {uploadFile.relativePath || uploadFile.file.name}
+                        </p>
+                        <p className={`${isMobile ? 'text-[10px]' : 'text-xs'} text-gray-500 dark:text-gray-400`}>
+                          {formatFileSize(uploadFile.file.size)}
+                        </p>
+
+                        {uploadFile.status === 'uploading' && (
+                          <div className={isMobile ? 'mt-1' : 'mt-1'}>
+                            <div className={`bg-gray-200 dark:bg-gray-600 rounded-full ${isMobile ? 'h-1' : 'h-1'}`}>
+                              <div
+                                className={`bg-blue-500 ${
+                                  isMobile ? 'h-1' : 'h-1'
+                                } rounded-full transition-all duration-300`}
+                                style={{ width: `${uploadFile.progress}%` }}
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {!hasStartedUpload && (
+                        <button
+                          type="button"
+                          onClick={() => removeFile(uploadFile.id)}
+                          className={`flex-shrink-0 px-2.5 py-1 rounded-full text-[10px] ${
+                            isMobile ? '' : 'text-xs'
+                          } font-medium text-gray-700 dark:text-gray-200 bg-gray-200/80 dark:bg-gray-600/80 hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors duration-150 active:scale-95`}
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                  ))}
             </div>
           </div>
         )}

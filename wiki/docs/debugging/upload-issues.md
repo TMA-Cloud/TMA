@@ -54,6 +54,10 @@ The file exceeds the max upload size setting.
 4. Network connectivity
 5. MIME type detection (file content must be readable)
 
+### "Upload cancelled by client" (499 REQUEST_ABORTED)
+
+Returned when the user cancels an upload. The request is aborted before completion. Partial temp files on disk will be removed by the system. This is expected behavior, not an error
+
 ### Folder uploads missing files
 
 - Confirm the browser supports folder upload (Chrome, Edge, and other Chromium-based browsers)

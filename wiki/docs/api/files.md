@@ -173,6 +173,8 @@ Upload a file.
 
 The uploaded file object.
 
+**Client abort:** If the client cancels the request, the server returns HTTP 499 with `error: "REQUEST_ABORTED"` and `message: "Upload cancelled by client"`
+
 ```json
 {
   "id": "file_123",
@@ -204,6 +206,8 @@ Upload multiple files at once using `multipart/form-data`.
 **Response:**
 
 On success, returns a summary object. `files` contains created file records; `failed` contains per-file errors (if any).
+
+**Client abort:** If the client cancels the request (e.g. user clicks Cancel upload), the server returns HTTP 499 with `error: "REQUEST_ABORTED"` and `message: "Upload cancelled by client"`
 
 ```json
 {

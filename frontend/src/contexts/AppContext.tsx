@@ -132,6 +132,10 @@ export interface AppContextType {
   uploadFileWithProgress: (file: File, onProgress?: (progress: number) => void) => Promise<void>;
   /** Replace contents of an existing file (same progress UI as upload). */
   replaceFileWithProgress: (fileId: string, file: File, onProgress?: (progress: number) => void) => Promise<void>;
+  /** Cancel an in-progress upload by its client-side id. */
+  cancelUpload: (uploadId: string) => void;
+  /** Cancel all in-progress uploads that belong to the same bulk group. */
+  cancelUploadGroup: (groupId: string) => void;
   uploadFilesBulk: (files: File[]) => Promise<void>;
   uploadEntriesBulk: (entries: BulkUploadEntry[]) => Promise<void>;
   /** Upload files from OS clipboard (Electron only). */

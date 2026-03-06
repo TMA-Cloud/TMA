@@ -1,4 +1,5 @@
 import { logger } from '../config/logger.js';
+import { safeUnlink } from '../utils/fileCleanup.js';
 
 const errorHandler = (err, req, res, _next) => {
   // Multer errors
@@ -13,6 +14,44 @@ const errorHandler = (err, req, res, _next) => {
     return res.status(400).json({
       message: 'Unexpected file field',
       error: 'UNEXPECTED_FILE',
+    });
+  }
+
+  // Request explicitly aborted by client (e.g. user clicked "Cancel upload").
+  // Treat this as a cancelled request, not a server error, and best-effort
+  // cleanup any temp files that may have been written by multer.
+  if (err.message === 'Request aborted') {
+    (async () => {
+      try {
+        if (Array.isArray(req.files)) {
+          for (const file of req.files) {
+            if (file?.path) {
+              await safeUnlink(file.path);
+            }
+          }
+        } else if (req.files && typeof req.files === 'object') {
+          // Multer can also expose files as an object of arrays keyed by fieldname
+          for (const value of Object.values(req.files)) {
+            const arr = Array.isArray(value) ? value : [value];
+            for (const file of arr) {
+              if (file?.path) {
+                await safeUnlink(file.path);
+              }
+            }
+          }
+        }
+        if (req.file?.path) {
+          await safeUnlink(req.file.path);
+        }
+      } catch {
+        // Ignore cleanup errors; they're non-fatal in this context.
+      }
+    })();
+
+    logger.info({ path: req.path, method: req.method }, 'Request aborted by client');
+    return res.status(499).json({
+      message: 'Upload cancelled by client',
+      error: 'REQUEST_ABORTED',
     });
   }
 
