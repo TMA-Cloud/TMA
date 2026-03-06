@@ -1243,7 +1243,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       credentials: 'include',
       body: JSON.stringify({ id, name }),
     });
-    if (!res.ok) throw new Error(await extractResponseError(res));
+
+    if (!res.ok) {
+      const errorMessage = await extractResponseError(res);
+      showToast(errorMessage || 'Failed to rename item!!', 'error');
+      throw new Error(errorMessage || 'Failed to rename item');
+    }
+
+    try {
+      const updated: FileItemResponse = await res.json();
+      const displayName = updated.name || name;
+      showToast(`Renamed to "${displayName}"`, 'success');
+    } catch {
+      showToast('Item renamed successfully', 'success');
+    }
+
     await refreshFiles();
   };
 

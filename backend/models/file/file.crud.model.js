@@ -262,58 +262,11 @@ async function renameFile(id, name, userId) {
   const oldFile = fileResult.rows[0];
   const parentId = oldFile.parent_id || null;
 
-  if (oldFile.path) {
-    if (storage.useS3()) {
-      const newKey = name;
-      try {
-        const keyExists = await storage.exists(newKey);
-        if (keyExists) {
-          throw new Error('File or folder with this name already exists');
-        }
-        await storage.copyObject(oldFile.path, newKey);
-        await storage.deleteObject(oldFile.path);
-        await pool.query('UPDATE files SET name = $1, path = $2 WHERE id = $3 AND user_id = $4', [
-          name,
-          newKey,
-          id,
-          userId,
-        ]);
-      } catch (err) {
-        if (err.message && err.message.includes('already exists')) throw err;
-        logger.warn({ err, id, path: oldFile.path }, '[File] S3 rename failed, updating name only');
-        await pool.query('UPDATE files SET name = $1 WHERE id = $2 AND user_id = $3', [name, id, userId]);
-      }
-    } else {
-      const oldPath = resolveFilePath(oldFile.path);
-      const newPath = path.join(path.dirname(oldPath), name);
-
-      try {
-        const targetExists = await fs.promises
-          .access(newPath)
-          .then(() => true)
-          .catch(() => false);
-        if (targetExists) {
-          throw new Error('File or folder with this name already exists');
-        }
-        await fs.promises.rename(oldPath, newPath);
-        const newPathForDb = path.basename(newPath);
-        await pool.query('UPDATE files SET name = $1, path = $2 WHERE id = $3 AND user_id = $4', [
-          name,
-          newPathForDb,
-          id,
-          userId,
-        ]);
-      } catch (err) {
-        if (err.code === 'ENOENT') {
-          await pool.query('UPDATE files SET name = $1 WHERE id = $2 AND user_id = $3', [name, id, userId]);
-        } else {
-          throw err;
-        }
-      }
-    }
-  } else {
-    await pool.query('UPDATE files SET name = $1 WHERE id = $2 AND user_id = $3', [name, id, userId]);
-  }
+  // For both S3 and local storage, keep the underlying storage key/path stable
+  // and only update the logical metadata. This ensures we don't leak real file
+  // names via bucket object keys or disk paths, and that the "modified"
+  // timestamp reflects the rename operation.
+  await pool.query('UPDATE files SET name = $1, modified = NOW() WHERE id = $2 AND user_id = $3', [name, id, userId]);
 
   // Get updated file info
   const result = await pool.query(
