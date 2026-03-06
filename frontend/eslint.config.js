@@ -20,7 +20,9 @@ export default defineConfig([
     languageOptions: {
       ecmaVersion: 2024,
       sourceType: 'module',
-      globals: globals.browser,
+      globals: {
+        ...globals.browser,
+      },
       parserOptions: {
         projectService: true,
       },

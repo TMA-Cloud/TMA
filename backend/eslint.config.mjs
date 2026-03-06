@@ -1,14 +1,15 @@
+import { defineConfig } from 'eslint/config';
 import js from '@eslint/js';
 import globals from 'globals';
 import prettier from 'eslint-plugin-prettier';
 import prettierConfig from 'eslint-config-prettier';
 
 /**
- * ESLint 9 flat config for Node.js backend (ESM)
+ * ESLint 10 flat config for Node.js backend (ESM)
  * @see https://eslint.org/docs/latest/use/configure/configuration-files-new
  * @see https://github.com/prettier/eslint-plugin-prettier#options
  */
-export default [
+export default defineConfig([
   // Ignore patterns
   {
     ignores: ['node_modules/**', 'uploads/**', 'coverage/**', 'dist/**', '*.min.js'],
@@ -105,4 +106,4 @@ export default [
       'no-new-func': 'error',
     },
   },
-];
+]);

@@ -1,3 +1,4 @@
+import { defineConfig } from 'eslint/config';
 import js from '@eslint/js';
 import globals from 'globals';
 import prettier from 'eslint-plugin-prettier';
@@ -7,7 +8,7 @@ import prettierConfig from 'eslint-config-prettier';
  * ESLint 10 flat config for Electron (Node, CommonJS).
  * @see https://eslint.org/docs/latest/use/configure/configuration-files
  */
-export default [
+export default defineConfig([
   {
     ignores: ['node_modules/**', 'dist-electron/**', 'dist-client/**', '**/*.min.js'],
   },
@@ -60,4 +61,4 @@ export default [
       'no-implied-eval': 'error',
     },
   },
-];
+]);
