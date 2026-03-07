@@ -801,7 +801,6 @@ export const FileManager: React.FC = () => {
         onClearSelection={handleClearSelection}
         onMarqueeSelection={handleMarqueeSelection}
         onSelectingChange={handleSelectingChange}
-        onCreateFolder={() => setCreateFolderModalOpen(true)}
       />
 
       {/* Context Menu */}

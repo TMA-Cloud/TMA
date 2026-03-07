@@ -29,7 +29,6 @@ interface FileListProps {
   onClearSelection: () => void;
   onMarqueeSelection: (selectedIds: string[], additive: boolean) => void;
   onSelectingChange: (selecting: boolean) => void;
-  onCreateFolder: () => void;
 }
 
 export const FileList: React.FC<FileListProps> = ({
@@ -56,7 +55,6 @@ export const FileList: React.FC<FileListProps> = ({
   onClearSelection,
   onMarqueeSelection,
   onSelectingChange,
-  onCreateFolder,
 }) => {
   const gridClassName = `grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3`;
 
@@ -86,7 +84,6 @@ export const FileList: React.FC<FileListProps> = ({
           isSearching={isSearching}
           currentPath={currentPath}
           canCreateFolder={canCreateFolder}
-          onCreateFolder={onCreateFolder}
         />
       ) : isSearching ? (
         <FileSkeleton viewMode={viewMode} count={viewMode === 'grid' ? 12 : 8} />
