@@ -1,7 +1,7 @@
 export type FolderUploadEntry = {
   file: File;
-  /** Relative path including the selected/dropped folder name. */
-  relativePath: string;
+  /** Relative path including the selected/dropped folder name. Omit for top-level files (e.g. dropped files). */
+  relativePath?: string;
 };
 
 type FileSystemEntryLike = {
@@ -42,7 +42,9 @@ async function traverseEntry(entry: FileSystemEntryLike, prefix: string): Promis
     const file = await new Promise<File>((resolve, reject) => {
       entry.file?.(resolve, reject);
     });
-    return [{ file, relativePath: `${prefix}${file.name}` }];
+    // Only set relativePath when inside a dropped folder (prefix !== '') so the UI shows "Files to Upload" for top-level dropped files
+    const relativePath = prefix ? `${prefix}${file.name}` : undefined;
+    return [{ file, ...(relativePath != null ? { relativePath } : {}) }];
   }
 
   if (entry.isDirectory) {
@@ -91,6 +93,6 @@ export async function entriesFromDataTransfer(dt: DataTransfer): Promise<FolderU
     return results;
   }
 
-  // Fallback: no folder structure available.
-  return Array.from(dt.files || []).map(file => ({ file, relativePath: file.name }));
+  // Fallback: no folder structure available; treat as plain files (no relativePath).
+  return Array.from(dt.files || []).map(file => ({ file }));
 }
