@@ -22,13 +22,23 @@ async function apiRequest(endpoint: string, options: ApiRequestOptions = {}): Pr
   return await fetch(endpoint, defaultOptions);
 }
 
+interface ErrorResponseBody {
+  message?: string;
+  error?: string;
+  [key: string]: unknown;
+}
+
+function isErrorResponseBody(data: unknown): data is ErrorResponseBody {
+  return typeof data === 'object' && data !== null && !Array.isArray(data);
+}
+
 async function throwApiErrorWithDetails(res: Response): Promise<never> {
-  const errorData = await res.json().catch(() => ({ message: res.statusText }));
-  const { message, error, ...rest } = (errorData ?? {}) as Record<string, unknown> & {
-    message?: string;
-    error?: string;
-  };
-  throw new ApiError(message || error || res.statusText, res.status, Object.keys(rest).length > 0 ? rest : undefined);
+  const raw = await res.json().catch(() => null);
+  const errorData: ErrorResponseBody = isErrorResponseBody(raw) ? raw : { message: res.statusText };
+  const { message, error, ...rest } = errorData;
+  const errorMessage =
+    (typeof message === 'string' && message) || (typeof error === 'string' && error) || res.statusText;
+  throw new ApiError(errorMessage, res.status, Object.keys(rest).length > 0 ? rest : undefined);
 }
 
 export async function apiGet<T = unknown>(endpoint: string, options?: ApiRequestOptions): Promise<T> {
@@ -58,8 +68,7 @@ export async function apiPut<T = unknown>(endpoint: string, data?: unknown, opti
     ...options,
   });
   if (!res.ok) {
-    const errorData = await res.json().catch(() => ({ message: res.statusText }));
-    throw new ApiError(errorData.message || errorData.error || res.statusText, res.status);
+    await throwApiErrorWithDetails(res);
   }
   return res.json();
 }
@@ -257,8 +266,7 @@ export async function getActiveSessions(): Promise<{
 export async function apiDelete<T = unknown>(endpoint: string, options?: ApiRequestOptions): Promise<T> {
   const res = await apiRequest(endpoint, { method: 'DELETE', ...options });
   if (!res.ok) {
-    const errorData = await res.json().catch(() => ({ message: res.statusText }));
-    throw new ApiError(errorData.message || errorData.error || res.statusText, res.status);
+    await throwApiErrorWithDetails(res);
   }
   return res.json();
 }

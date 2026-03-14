@@ -98,13 +98,41 @@ async function deleteCachePattern(pattern) {
       return 0;
     }
 
-    // Delete keys in batches to avoid overwhelming Redis
     const batchSize = 100;
+    const maxRetries = 2;
     let totalDeleted = 0;
+    const failedKeys = [];
+
     for (let i = 0; i < keys.length; i += batchSize) {
       const batch = keys.slice(i, i + batchSize);
-      const deleted = await redisClient.del(batch);
-      totalDeleted += deleted;
+      if (batch.length === 0) continue;
+
+      let deleted = 0;
+      let lastErr = null;
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+          deleted = await redisClient.del(batch);
+          lastErr = null;
+          break;
+        } catch (err) {
+          lastErr = err;
+          if (attempt < maxRetries) {
+            await new Promise(r => {
+              setTimeout(r, 50 * (attempt + 1));
+            });
+          }
+        }
+      }
+      if (lastErr) {
+        logger.warn({ err: lastErr, batchSize: batch.length, pattern }, 'Batch deletion failed after retries');
+        failedKeys.push(...batch);
+      } else {
+        totalDeleted += deleted;
+      }
+    }
+
+    if (failedKeys.length > 0) {
+      logger.warn({ pattern, failedCount: failedKeys.length, totalDeleted }, 'Partial cache pattern deletion');
     }
 
     return totalDeleted;

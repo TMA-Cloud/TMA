@@ -71,8 +71,10 @@ export class PromiseQueue {
       const operation = this.queue.shift()!;
       try {
         await operation();
-      } catch {
-        // Error is propagated to caller via promise rejection
+      } catch (error) {
+        // Wrapped operations in add() handle their own errors via reject(),
+        // so this should only fire for unexpected failures in the wrapper itself.
+        console.error('[PromiseQueue] Unexpected error in queue processor:', error);
       }
     }
 

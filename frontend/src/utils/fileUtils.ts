@@ -67,11 +67,13 @@ export const getFileIcon = (file: FileItem) => {
  * @returns Formatted size string (e.g., "1.5 MB")
  */
 export const formatFileSize = (size?: number | string | null): string => {
-  if (!size || size === null || size === undefined) return '';
-  // Convert to number if it's a string
+  if (size === null || size === undefined) return '';
   const numSize = typeof size === 'string' ? Number(size) : size;
-  if (isNaN(numSize) || numSize <= 0) return '';
-  return bytes(numSize, { decimalPlaces: 1 }) ?? '';
+  if (!Number.isFinite(numSize) || numSize < 0) return '';
+  if (numSize === 0) return '0 B';
+  const formatted = bytes(numSize, { decimalPlaces: 1 });
+  if (formatted === null || formatted === undefined) return `${numSize} B`;
+  return formatted;
 };
 
 /**

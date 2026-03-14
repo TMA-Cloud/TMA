@@ -24,11 +24,15 @@ pool.connect((err, client, release) => {
     logger.error({ err }, 'Failed to acquire database client');
     return;
   }
+  if (!client) {
+    logger.error('Database client is null after successful connect');
+    return;
+  }
   logger.info('Database connected successfully');
-  client.query('SELECT NOW()', (err, _result) => {
+  client.query('SELECT NOW()', (queryErr, _result) => {
     release();
-    if (err) {
-      logger.error({ err }, 'Database query test failed');
+    if (queryErr) {
+      logger.error({ err: queryErr }, 'Database query test failed');
       return;
     }
     logger.debug('Database query test successful');

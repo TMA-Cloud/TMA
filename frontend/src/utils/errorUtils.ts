@@ -91,10 +91,18 @@ export function getErrorMessage(error: unknown, fallback = 'An error occurred'):
  */
 export async function extractResponseError(res: Response): Promise<string> {
   try {
-    const data = await res.json();
-    return data.message || data.error || res.statusText;
+    const text = await res.text();
+    if (!text || text.trim().length === 0) {
+      return `${res.statusText} (empty response body)`;
+    }
+    try {
+      const data = JSON.parse(text);
+      return data.message || data.error || res.statusText;
+    } catch {
+      return text.length < 500 ? text.trim() : `${res.statusText} (non-JSON response)`;
+    }
   } catch {
-    return res.statusText;
+    return res.statusText || `HTTP ${res.status}`;
   }
 }
 

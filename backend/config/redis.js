@@ -38,6 +38,7 @@ redisClient.on('reconnecting', () => {
 
 // Connect to Redis
 let isConnected = false;
+let connectionError = null;
 
 async function connectRedis() {
   if (isConnected) {
@@ -47,14 +48,19 @@ async function connectRedis() {
   try {
     await redisClient.connect();
     isConnected = true;
+    connectionError = null;
     logger.info('Redis connected successfully');
     return redisClient;
   } catch (err) {
-    logger.error({ err }, 'Failed to connect to Redis');
-    // Don't throw - allow app to continue without Redis (graceful degradation)
+    logger.error({ err }, 'Failed to connect to Redis — running in degraded mode (no caching)');
     isConnected = false;
+    connectionError = err;
     return null;
   }
+}
+
+function getConnectionError() {
+  return connectionError;
 }
 
 // Disconnect from Redis
@@ -77,4 +83,4 @@ function isRedisConnected() {
   return isConnected && redisClient.isReady;
 }
 
-export { redisClient, connectRedis, disconnectRedis, isRedisConnected };
+export { redisClient, connectRedis, disconnectRedis, isRedisConnected, getConnectionError };

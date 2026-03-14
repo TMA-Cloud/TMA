@@ -76,11 +76,18 @@ function isValidPassword(password, minLength = 6) {
  * @returns {string} JWT token
  */
 function generateAuthToken(userId, jwtSecret, options = {}) {
+  if (!userId || typeof userId !== 'string') {
+    throw new Error('generateAuthToken: userId must be a non-empty string');
+  }
+  if (!jwtSecret || typeof jwtSecret !== 'string') {
+    throw new Error('generateAuthToken: jwtSecret must be a non-empty string');
+  }
+
   const { tokenVersion = 1, sessionId = null, expiresIn = '7d' } = options;
 
   const payload = {
     id: userId,
-    v: tokenVersion, // Token version for session invalidation
+    v: tokenVersion,
   };
 
   // Add session ID if provided (for individual session revocation)
