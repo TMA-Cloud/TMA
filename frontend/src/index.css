@@ -962,6 +962,13 @@ html.dark .card-premium:hover {
   }
 }
 
+/* Hide tooltips during drag operations (is-dragging set by FileManager) */
+.is-dragging .drag-hide-tooltip {
+  opacity: 0 !important;
+  scale: 0.95 !important;
+  pointer-events: none !important;
+}
+
 /* Hide scrollbar for mobile breadcrumbs */
 .scrollbar-hide {
   -ms-overflow-style: none;

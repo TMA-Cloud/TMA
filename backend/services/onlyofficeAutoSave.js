@@ -70,8 +70,7 @@ async function triggerAutoSaves() {
               'Content-Length': Buffer.byteLength(postData),
             },
             timeout: 5000,
-            // Allow self-signed certificates (common for OnlyOffice Docker setups)
-            rejectUnauthorized: false,
+            rejectUnauthorized: process.env.ONLYOFFICE_REJECT_UNAUTHORIZED !== 'false',
           },
           res => {
             let data = '';

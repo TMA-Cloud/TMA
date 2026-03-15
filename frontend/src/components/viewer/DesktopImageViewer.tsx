@@ -127,15 +127,10 @@ export const DesktopImageViewer: React.FC<DesktopImageViewerProps> = ({ imageVie
     }
   };
 
-  const handlePointerDown = (e: React.PointerEvent) => {
-    e.preventDefault();
-    setDragging(true);
-    dragOrigin.current = { x: e.clientX, y: e.clientY };
-    window.addEventListener('pointermove', handlePointerMove);
-    window.addEventListener('pointerup', handlePointerUp);
-  };
+  const pointerMoveRef = useRef<((e: PointerEvent) => void) | null>(null);
+  const pointerUpRef = useRef<(() => void) | null>(null);
 
-  const handlePointerMove = (e: PointerEvent) => {
+  pointerMoveRef.current = (e: PointerEvent) => {
     lastMousePos.current = { x: e.clientX, y: e.clientY };
     if (!dragOrigin.current) return;
 
@@ -145,36 +140,42 @@ export const DesktopImageViewer: React.FC<DesktopImageViewerProps> = ({ imageVie
     offset.current.x += dx;
     offset.current.y += dy;
 
-    // Cancel any pending animation frame
     if (rafId.current !== null) {
       cancelAnimationFrame(rafId.current);
     }
 
-    // Use requestAnimationFrame for smooth updates
     rafId.current = requestAnimationFrame(() => {
-      // Skip clamping during drag for better performance
       applyTransform(zoom, true);
       rafId.current = null;
     });
   };
 
-  const handlePointerUp = () => {
+  const stablePointerMove = useCallback((e: PointerEvent) => pointerMoveRef.current?.(e), []);
+  const stablePointerUp = useCallback(() => pointerUpRef.current?.(), []);
+
+  pointerUpRef.current = () => {
     setDragging(false);
     dragOrigin.current = null;
 
-    // Cancel any pending animation frame
     if (rafId.current !== null) {
       cancelAnimationFrame(rafId.current);
       rafId.current = null;
     }
 
-    // Clamp offset after drag ends
     requestAnimationFrame(() => {
       applyTransform(zoom, false);
     });
 
-    window.removeEventListener('pointermove', handlePointerMove);
-    window.removeEventListener('pointerup', handlePointerUp);
+    window.removeEventListener('pointermove', stablePointerMove);
+    window.removeEventListener('pointerup', stablePointerUp);
+  };
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    e.preventDefault();
+    setDragging(true);
+    dragOrigin.current = { x: e.clientX, y: e.clientY };
+    window.addEventListener('pointermove', stablePointerMove);
+    window.addEventListener('pointerup', stablePointerUp);
   };
 
   const handleWheel = useCallback((e: WheelEvent) => {
@@ -246,13 +247,14 @@ export const DesktopImageViewer: React.FC<DesktopImageViewerProps> = ({ imageVie
     container.addEventListener('wheel', handleWheel, { passive: false });
     return () => {
       container.removeEventListener('wheel', handleWheel);
-      // Clean up any pending animation frames
+      window.removeEventListener('pointermove', stablePointerMove);
+      window.removeEventListener('pointerup', stablePointerUp);
       if (rafId.current !== null) {
         cancelAnimationFrame(rafId.current);
         rafId.current = null;
       }
     };
-  }, [handleWheel]);
+  }, [handleWheel, stablePointerMove, stablePointerUp]);
 
   if (!imageViewerFile) return null;
 

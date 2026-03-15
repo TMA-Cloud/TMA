@@ -68,134 +68,14 @@ async function moveFiles(ids, parentId = null, userId) {
 }
 
 /**
- * Copy a single file or folder entry (recursive for folders)
+ * Copy a single file or folder entry (recursive for folders).
+ * Fetches the file from DB then delegates to copyEntryWithFile.
  */
 async function copyEntry(id, parentId, userId, client = null) {
   const dbClient = client || pool;
   const res = await dbClient.query('SELECT * FROM files WHERE id = $1 AND user_id = $2', [id, userId]);
   if (res.rows.length === 0) return null;
-  const file = res.rows[0];
-  const newId = generateId(16);
-  let storageName;
-  let newPath;
-
-  if (file.type === 'file') {
-    const ext = path.extname(file.name);
-    storageName = newId + ext;
-    const isSourceEncrypted = isFilePathEncrypted(file.path);
-
-    try {
-      if (storage.useS3()) {
-        const destKey = storageName;
-        if (isSourceEncrypted) {
-          const passThrough = new PassThrough();
-          const uploadPromise = storage.putStream(destKey, passThrough);
-          await copyEncryptedFileStreams(await storage.getReadStream(file.path), passThrough);
-          await uploadPromise;
-        } else {
-          const stream = await storage.getReadStream(file.path);
-          await storage.putStream(destKey, stream);
-        }
-      } else {
-        const sourcePath = resolveFilePath(file.path);
-        const destPath = path.join(UPLOAD_DIR, storageName);
-        if (isSourceEncrypted) {
-          await copyEncryptedFile(sourcePath, destPath);
-        } else {
-          await fs.promises.copyFile(sourcePath, destPath);
-        }
-      }
-    } catch (error) {
-      logger.error('Failed to copy file:', error);
-      if (!storage.useS3()) {
-        try {
-          const destPath = path.join(UPLOAD_DIR, storageName);
-          await safeUnlink(destPath);
-          await safeUnlink(destPath + '.tmp');
-        } catch (_cleanupError) {
-          // Ignore
-        }
-      }
-      throw new Error('File copy operation failed', { cause: error });
-    }
-    newPath = storageName;
-
-    const insertResult = await dbClient.query(
-      'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id, starred, shared, modified) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING modified',
-      [
-        newId,
-        file.name,
-        file.type,
-        file.size,
-        file.mime_type,
-        newPath,
-        parentId,
-        userId,
-        file.starred,
-        file.shared,
-        file.modified,
-      ]
-    );
-
-    // Explicitly compare and update modified timestamp if the database overrode it (e.g., via trigger)
-    const insertedModified = insertResult.rows[0].modified;
-    const originalModified = new Date(file.modified);
-    const actualModified = new Date(insertedModified);
-
-    if (Math.abs(originalModified.getTime() - actualModified.getTime()) > 1000) {
-      logger.warn(
-        {
-          fileId: newId,
-          originalModified: originalModified.toISOString(),
-          actualModified: actualModified.toISOString(),
-        },
-        'Modified timestamp was updated by DB on copy, explicitly setting to original'
-      );
-      await dbClient.query('UPDATE files SET modified = $1 WHERE id = $2', [originalModified, newId]);
-    }
-  } else if (file.type === 'folder') {
-    // Regular folder (no path stored)
-    const insertResult = await dbClient.query(
-      'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id, starred, shared, modified) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING modified',
-      [
-        newId,
-        file.name,
-        file.type,
-        file.size,
-        file.mime_type,
-        null,
-        parentId,
-        userId,
-        file.starred,
-        file.shared,
-        file.modified,
-      ]
-    );
-
-    // Explicitly compare and update modified timestamp if the database overrode it (e.g., via trigger)
-    const insertedModified = insertResult.rows[0].modified;
-    const originalModified = new Date(file.modified);
-    const actualModified = new Date(insertedModified);
-
-    if (Math.abs(originalModified.getTime() - actualModified.getTime()) > 1000) {
-      logger.warn(
-        {
-          fileId: newId,
-          originalModified: originalModified.toISOString(),
-          actualModified: actualModified.toISOString(),
-        },
-        'Modified timestamp was updated by DB on copy, explicitly setting to original'
-      );
-      await dbClient.query('UPDATE files SET modified = $1 WHERE id = $2', [originalModified, newId]);
-    }
-
-    // Recursively copy folder contents
-    const children = await dbClient.query('SELECT id FROM files WHERE parent_id = $1 AND user_id = $2', [id, userId]);
-    for (const child of children.rows) {
-      await copyEntry(child.id, newId, userId, client);
-    }
-  }
-  return newId;
+  return copyEntryWithFile(res.rows[0], parentId, userId, dbClient);
 }
 
 /**

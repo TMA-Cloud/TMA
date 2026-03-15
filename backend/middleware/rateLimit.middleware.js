@@ -129,28 +129,20 @@ function createSSEConnectionLimiter(maxConnectionsPerUser = 3) {
     // Increment connection count
     sseConnectionTracker.set(userId, currentConnections + 1);
 
-    // Track connection cleanup
-    const originalEnd = res.end;
-    res.end = function (...args) {
-      // Decrement on connection close
+    // Track connection cleanup (single handler to avoid double-decrement)
+    let decremented = false;
+    const decrement = () => {
+      if (decremented) return;
+      decremented = true;
       const count = sseConnectionTracker.get(userId) || 0;
-      if (count > 0) {
+      if (count > 1) {
         sseConnectionTracker.set(userId, count - 1);
       } else {
         sseConnectionTracker.delete(userId);
       }
-      return originalEnd.apply(this, args);
     };
 
-    // Also handle connection errors
-    req.on('close', () => {
-      const count = sseConnectionTracker.get(userId) || 0;
-      if (count > 0) {
-        sseConnectionTracker.set(userId, count - 1);
-      } else {
-        sseConnectionTracker.delete(userId);
-      }
-    });
+    res.on('close', decrement);
 
     next();
   };

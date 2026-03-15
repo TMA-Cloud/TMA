@@ -10,6 +10,38 @@ import { getActualDiskSize, formatFileSize } from '../../utils/storageUtils.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+/**
+ * Verify the requesting user is the first user (admin) within a transaction.
+ * Sets first_user_id atomically if not yet stored.
+ * @param {import('pg').PoolClient} client - Active DB transaction client
+ * @param {string} userId - Requesting user ID
+ * @param {string} actionLabel - Human-readable action name for error messages
+ */
+async function verifyFirstUser(client, userId, actionLabel = 'perform this action') {
+  const settingsResult = await client.query('SELECT first_user_id FROM app_settings WHERE id = $1', ['app_settings']);
+  if (settingsResult.rows.length === 0) {
+    throw new Error('App settings not found');
+  }
+
+  const storedFirstUserId = settingsResult.rows[0].first_user_id;
+
+  if (!storedFirstUserId) {
+    const firstUserResult = await client.query('SELECT id FROM users ORDER BY created_at ASC LIMIT 1 FOR UPDATE');
+    if (firstUserResult.rows.length === 0) {
+      throw new Error('No users exist');
+    }
+    if (firstUserResult.rows[0].id !== userId) {
+      throw new Error(`Only the first user can ${actionLabel}`);
+    }
+    await client.query('UPDATE app_settings SET first_user_id = $1 WHERE id = $2 AND first_user_id IS NULL', [
+      firstUserResult.rows[0].id,
+      'app_settings',
+    ]);
+  } else if (storedFirstUserId !== userId) {
+    throw new Error(`Only the first user can ${actionLabel}`);
+  }
+}
+
 async function isFirstUser(userId) {
   // Use stored first_user_id as source of truth (immutable, cannot be manipulated)
   const result = await pool.query('SELECT first_user_id FROM app_settings WHERE id = $1', ['app_settings']);
@@ -88,101 +120,18 @@ async function getTotalUserCount() {
 }
 
 async function getAllUsersBasic() {
-  // Try to get from cache first (without emails for security)
-  const cacheKey = cacheKeys.allUsers();
-  const cached = await getCache(cacheKey);
-
-  if (cached !== null) {
-    // Cache hit - fetch emails, MFA, and storage_limit from database (emails not cached for security)
-    const freshResult = await pool.query(
-      'SELECT id, email, mfa_enabled, storage_limit FROM users ORDER BY created_at ASC'
-    );
-    const freshMap = new Map(
-      freshResult.rows.map(row => [
-        row.id,
-        {
-          email: row.email,
-          mfa_enabled: row.mfa_enabled || false,
-          storage_limit: row.storage_limit != null ? Number(row.storage_limit) : null,
-        },
-      ])
-    );
-
-    return cached.map(user => {
-      const fresh = freshMap.get(user.id);
-      return {
-        ...user,
-        email: fresh?.email ?? null,
-        mfa_enabled: fresh?.mfa_enabled ?? false,
-        storage_limit: fresh?.storage_limit ?? null,
-      };
-    });
-  }
-
-  // Cache miss - query database
+  // Admin-only endpoint — query DB directly; cache invalidation key kept for consistency
   const result = await pool.query(
     'SELECT id, email, name, created_at, mfa_enabled, storage_limit FROM users ORDER BY created_at ASC'
   );
-  const users = result.rows;
-
-  // Cache users WITHOUT emails for security (emails are sensitive PII)
-  const usersWithoutEmails = users.map(user => ({
-    id: user.id,
-    name: user.name,
-    created_at: user.created_at,
-    mfa_enabled: user.mfa_enabled || false,
-    storage_limit: user.storage_limit != null ? Number(user.storage_limit) : null,
-  }));
-  await setCache(cacheKey, usersWithoutEmails, 120);
-
-  // Return full data with emails (from database, not cache)
-  return users;
+  return result.rows;
 }
 
 async function setSignupEnabled(enabled, userId) {
-  // Use transaction to ensure atomicity and verify user is first user
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-
-    // Verify user is the first user using stored first_user_id
-    const settingsResult = await client.query('SELECT first_user_id FROM app_settings WHERE id = $1', ['app_settings']);
-
-    if (settingsResult.rows.length === 0) {
-      throw new Error('App settings not found');
-    }
-
-    const storedFirstUserId = settingsResult.rows[0].first_user_id;
-
-    // If first_user_id is not set yet, set it now (should only happen once)
-    if (!storedFirstUserId) {
-      // Get the actual first user
-      const firstUserResult = await client.query('SELECT id FROM users ORDER BY created_at ASC LIMIT 1 FOR UPDATE');
-
-      if (firstUserResult.rows.length === 0) {
-        throw new Error('No users exist');
-      }
-
-      const actualFirstUserId = firstUserResult.rows[0].id;
-
-      // Only allow if the requesting user is the actual first user
-      if (actualFirstUserId !== userId) {
-        await client.query('ROLLBACK');
-        throw new Error('Only the first user can toggle signup');
-      }
-
-      // Set the first_user_id (immutable after this point)
-      await client.query('UPDATE app_settings SET first_user_id = $1 WHERE id = $2 AND first_user_id IS NULL', [
-        actualFirstUserId,
-        'app_settings',
-      ]);
-    } else if (storedFirstUserId !== userId) {
-      // Verify the requesting user matches the stored first user ID
-      await client.query('ROLLBACK');
-      throw new Error('Only the first user can toggle signup');
-    }
-
-    // Update signup enabled status
+    await verifyFirstUser(client, userId, 'toggle signup');
     await client.query('UPDATE app_settings SET signup_enabled = $1, updated_at = NOW() WHERE id = $2', [
       enabled,
       'app_settings',
@@ -233,47 +182,10 @@ async function getOnlyOfficeSettings() {
 }
 
 async function setOnlyOfficeSettings(jwtSecret, url, userId) {
-  // Use transaction to ensure atomicity and verify user is first user
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-
-    // Verify user is the first user using stored first_user_id
-    const settingsResult = await client.query('SELECT first_user_id FROM app_settings WHERE id = $1', ['app_settings']);
-
-    if (settingsResult.rows.length === 0) {
-      throw new Error('App settings not found');
-    }
-
-    const storedFirstUserId = settingsResult.rows[0].first_user_id;
-
-    // If first_user_id is not set yet, set it now (should only happen once)
-    if (!storedFirstUserId) {
-      // Get the actual first user
-      const firstUserResult = await client.query('SELECT id FROM users ORDER BY created_at ASC LIMIT 1 FOR UPDATE');
-
-      if (firstUserResult.rows.length === 0) {
-        throw new Error('No users exist');
-      }
-
-      const actualFirstUserId = firstUserResult.rows[0].id;
-
-      // Only allow if the requesting user is the actual first user
-      if (actualFirstUserId !== userId) {
-        await client.query('ROLLBACK');
-        throw new Error('Only the first user can configure OnlyOffice');
-      }
-
-      // Set the first_user_id (immutable after this point)
-      await client.query('UPDATE app_settings SET first_user_id = $1 WHERE id = $2 AND first_user_id IS NULL', [
-        actualFirstUserId,
-        'app_settings',
-      ]);
-    } else if (storedFirstUserId !== userId) {
-      // Verify the requesting user matches the stored first user ID
-      await client.query('ROLLBACK');
-      throw new Error('Only the first user can configure OnlyOffice');
-    }
+    await verifyFirstUser(client, userId, 'configure OnlyOffice');
 
     // Enforce "both or none" - both fields must be provided together or both must be null
     const hasJwtSecret = jwtSecret !== null;
@@ -315,73 +227,14 @@ async function setOnlyOfficeSettings(jwtSecret, url, userId) {
   }
 }
 
-async function getShareBaseUrlSettings() {
-  // Try to get from cache first
-  const cacheKey = cacheKeys.shareBaseUrlSettings();
-  const cached = await getCache(cacheKey);
-  if (cached !== null) {
-    return cached;
-  }
-
-  // Cache miss - query database
-  const result = await pool.query('SELECT share_base_url FROM app_settings WHERE id = $1', ['app_settings']);
-
-  const settings = {
-    url: null,
-  };
-
-  if (result.rows.length > 0) {
-    settings.url = result.rows[0].share_base_url || null;
-  }
-
-  // Cache the result (5 minutes TTL)
-  await setCache(cacheKey, settings, DEFAULT_TTL);
-
-  return settings;
-}
+// Re-export from the canonical service to avoid duplication
+import { getShareBaseUrlSettings } from '../../services/shareBaseUrl.service.js';
 
 async function setShareBaseUrlSettings(url, userId) {
-  // Use transaction to ensure atomicity and verify user is first user
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-
-    // Verify user is the first user using stored first_user_id
-    const settingsResult = await client.query('SELECT first_user_id FROM app_settings WHERE id = $1', ['app_settings']);
-
-    if (settingsResult.rows.length === 0) {
-      throw new Error('App settings not found');
-    }
-
-    const storedFirstUserId = settingsResult.rows[0].first_user_id;
-
-    // If first_user_id is not set yet, set it now (should only happen once)
-    if (!storedFirstUserId) {
-      // Get the actual first user
-      const firstUserResult = await client.query('SELECT id FROM users ORDER BY created_at ASC LIMIT 1 FOR UPDATE');
-
-      if (firstUserResult.rows.length === 0) {
-        throw new Error('No users exist');
-      }
-
-      const actualFirstUserId = firstUserResult.rows[0].id;
-
-      // Only allow if the requesting user is the actual first user
-      if (actualFirstUserId !== userId) {
-        await client.query('ROLLBACK');
-        throw new Error('Only the first user can configure share base URL');
-      }
-
-      // Set the first_user_id (immutable after this point)
-      await client.query('UPDATE app_settings SET first_user_id = $1 WHERE id = $2 AND first_user_id IS NULL', [
-        actualFirstUserId,
-        'app_settings',
-      ]);
-    } else if (storedFirstUserId !== userId) {
-      // Verify the requesting user matches the stored first user ID
-      await client.query('ROLLBACK');
-      throw new Error('Only the first user can configure share base URL');
-    }
+    await verifyFirstUser(client, userId, 'configure share base URL');
 
     // Validate URL format if provided
     if (url !== null) {
@@ -452,32 +305,7 @@ async function setMaxUploadSizeSettings(maxBytes, userId) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-
-    const settingsResult = await client.query('SELECT first_user_id FROM app_settings WHERE id = $1', ['app_settings']);
-    if (settingsResult.rows.length === 0) {
-      throw new Error('App settings not found');
-    }
-
-    const storedFirstUserId = settingsResult.rows[0].first_user_id;
-
-    if (!storedFirstUserId) {
-      const firstUserResult = await client.query('SELECT id FROM users ORDER BY created_at ASC LIMIT 1 FOR UPDATE');
-      if (firstUserResult.rows.length === 0) {
-        throw new Error('No users exist');
-      }
-      const actualFirstUserId = firstUserResult.rows[0].id;
-      if (actualFirstUserId !== userId) {
-        await client.query('ROLLBACK');
-        throw new Error('Only the first user can configure max upload size');
-      }
-      await client.query('UPDATE app_settings SET first_user_id = $1 WHERE id = $2 AND first_user_id IS NULL', [
-        actualFirstUserId,
-        'app_settings',
-      ]);
-    } else if (storedFirstUserId !== userId) {
-      await client.query('ROLLBACK');
-      throw new Error('Only the first user can configure max upload size');
-    }
+    await verifyFirstUser(client, userId, 'configure max upload size');
 
     const val = Number(maxBytes);
     if (!Number.isInteger(val) || val < MIN_MAX_UPLOAD_BYTES || val > MAX_MAX_UPLOAD_BYTES) {
@@ -518,32 +346,7 @@ async function setHideFileExtensionsSettings(hidden, userId) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-
-    const settingsResult = await client.query('SELECT first_user_id FROM app_settings WHERE id = $1', ['app_settings']);
-    if (settingsResult.rows.length === 0) {
-      throw new Error('App settings not found');
-    }
-
-    const storedFirstUserId = settingsResult.rows[0].first_user_id;
-
-    if (!storedFirstUserId) {
-      const firstUserResult = await client.query('SELECT id FROM users ORDER BY created_at ASC LIMIT 1 FOR UPDATE');
-      if (firstUserResult.rows.length === 0) {
-        throw new Error('No users exist');
-      }
-      const actualFirstUserId = firstUserResult.rows[0].id;
-      if (actualFirstUserId !== userId) {
-        await client.query('ROLLBACK');
-        throw new Error('Only the first user can configure hide file extensions');
-      }
-      await client.query('UPDATE app_settings SET first_user_id = $1 WHERE id = $2 AND first_user_id IS NULL', [
-        actualFirstUserId,
-        'app_settings',
-      ]);
-    } else if (storedFirstUserId !== userId) {
-      await client.query('ROLLBACK');
-      throw new Error('Only the first user can configure hide file extensions');
-    }
+    await verifyFirstUser(client, userId, 'configure hide file extensions');
 
     await client.query('UPDATE app_settings SET hide_file_extensions = $1, updated_at = NOW() WHERE id = $2', [
       !!hidden,
@@ -578,32 +381,7 @@ async function setElectronOnlyAccessSettings(enabled, userId) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-
-    const settingsResult = await client.query('SELECT first_user_id FROM app_settings WHERE id = $1', ['app_settings']);
-    if (settingsResult.rows.length === 0) {
-      throw new Error('App settings not found');
-    }
-
-    const storedFirstUserId = settingsResult.rows[0].first_user_id;
-
-    if (!storedFirstUserId) {
-      const firstUserResult = await client.query('SELECT id FROM users ORDER BY created_at ASC LIMIT 1 FOR UPDATE');
-      if (firstUserResult.rows.length === 0) {
-        throw new Error('No users exist');
-      }
-      const actualFirstUserId = firstUserResult.rows[0].id;
-      if (actualFirstUserId !== userId) {
-        await client.query('ROLLBACK');
-        throw new Error('Only the first user can configure desktop-only access');
-      }
-      await client.query('UPDATE app_settings SET first_user_id = $1 WHERE id = $2 AND first_user_id IS NULL', [
-        actualFirstUserId,
-        'app_settings',
-      ]);
-    } else if (storedFirstUserId !== userId) {
-      await client.query('ROLLBACK');
-      throw new Error('Only the first user can configure desktop-only access');
-    }
+    await verifyFirstUser(client, userId, 'configure desktop-only access');
 
     await client.query('UPDATE app_settings SET require_electron_client = $1, updated_at = NOW() WHERE id = $2', [
       !!enabled,
@@ -682,18 +460,7 @@ async function setUserStorageLimit(userId, targetUserId, storageLimit) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-
-    // Verify requesting user is first user
-    const settingsResult = await client.query('SELECT first_user_id FROM app_settings WHERE id = $1', ['app_settings']);
-    if (settingsResult.rows.length === 0) {
-      throw new Error('App settings not found');
-    }
-
-    const storedFirstUserId = settingsResult.rows[0].first_user_id;
-    if (!storedFirstUserId || storedFirstUserId !== userId) {
-      await client.query('ROLLBACK');
-      throw new Error('Only the first user can set storage limits');
-    }
+    await verifyFirstUser(client, userId, 'set storage limits');
 
     // Validate storage limit (must be positive integer or null)
     if (storageLimit !== null) {
@@ -769,32 +536,7 @@ async function setPasswordChangeSettings(enabled, userId) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-
-    const settingsResult = await client.query('SELECT first_user_id FROM app_settings WHERE id = $1', ['app_settings']);
-    if (settingsResult.rows.length === 0) {
-      throw new Error('App settings not found');
-    }
-
-    const storedFirstUserId = settingsResult.rows[0].first_user_id;
-
-    if (!storedFirstUserId) {
-      const firstUserResult = await client.query('SELECT id FROM users ORDER BY created_at ASC LIMIT 1 FOR UPDATE');
-      if (firstUserResult.rows.length === 0) {
-        throw new Error('No users exist');
-      }
-      const actualFirstUserId = firstUserResult.rows[0].id;
-      if (actualFirstUserId !== userId) {
-        await client.query('ROLLBACK');
-        throw new Error('Only the first user can configure password change');
-      }
-      await client.query('UPDATE app_settings SET first_user_id = $1 WHERE id = $2 AND first_user_id IS NULL', [
-        actualFirstUserId,
-        'app_settings',
-      ]);
-    } else if (storedFirstUserId !== userId) {
-      await client.query('ROLLBACK');
-      throw new Error('Only the first user can configure password change');
-    }
+    await verifyFirstUser(client, userId, 'configure password change');
 
     await client.query('UPDATE app_settings SET allow_password_change = $1, updated_at = NOW() WHERE id = $2', [
       !!enabled,

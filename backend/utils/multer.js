@@ -86,12 +86,4 @@ function uploadArrayWithDynamicLimit() {
   };
 }
 
-const upload = multer({
-  storage,
-  fileFilter,
-  limits: { fileSize: 10 * 1024 * 1024 * 1024 }, // fallback if not using dynamic
-});
-
 export { uploadSingleWithDynamicLimit, uploadArrayWithDynamicLimit };
-
-export default upload;

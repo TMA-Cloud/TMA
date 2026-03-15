@@ -78,14 +78,14 @@ export const FileList: React.FC<FileListProps> = ({
       onClick={handleContainerClick}
       onContextMenu={e => onContextMenu(e)}
     >
-      {files.length === 0 ? (
+      {files.length === 0 && !isSearching ? (
         <EmptyState
           searchQuery={searchQuery}
           isSearching={isSearching}
           currentPath={currentPath}
           canCreateFolder={canCreateFolder}
         />
-      ) : isSearching ? (
+      ) : files.length === 0 && isSearching ? (
         <FileSkeleton viewMode={viewMode} count={viewMode === 'grid' ? 12 : 8} />
       ) : (
         <>

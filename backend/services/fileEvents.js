@@ -117,8 +117,9 @@ async function publishFileEventsBatch(events) {
   logger.debug({ eventCount: events.length, userCount: eventsByUser.size }, 'Batch file events published');
 }
 
-// Track active subscriptions for connection management
-const activeSubscriptions = new Map(); // userId -> subscriber client
+// Track active subscriptions for connection management (userId -> Set of subscriber clients)
+const activeSubscriptions = new Map();
+let totalActiveConnections = 0;
 const MAX_CONNECTIONS = 10000; // Maximum concurrent SSE connections
 
 /**
@@ -139,9 +140,8 @@ async function subscribeToFileEvents(userId, callback) {
     return null;
   }
 
-  // Check connection limit
-  if (activeSubscriptions.size >= MAX_CONNECTIONS) {
-    logger.warn({ activeConnections: activeSubscriptions.size }, 'Maximum SSE connections reached');
+  if (totalActiveConnections >= MAX_CONNECTIONS) {
+    logger.warn({ activeConnections: totalActiveConnections }, 'Maximum SSE connections reached');
     return null;
   }
 
@@ -162,28 +162,32 @@ async function subscribeToFileEvents(userId, callback) {
       }
     });
 
-    // Track active subscription
-    activeSubscriptions.set(userId, subscriber);
+    if (!activeSubscriptions.has(userId)) {
+      activeSubscriptions.set(userId, new Set());
+    }
+    activeSubscriptions.get(userId).add(subscriber);
+    totalActiveConnections++;
 
-    // Handle subscriber errors
+    const removeSubscriber = () => {
+      const subs = activeSubscriptions.get(userId);
+      if (subs && subs.delete(subscriber)) {
+        totalActiveConnections--;
+        if (subs.size === 0) activeSubscriptions.delete(userId);
+      }
+    };
+
     subscriber.on('error', err => {
       logger.error({ err, userId, channel }, 'Subscriber client error');
-      // Remove from tracking on error
-      if (activeSubscriptions.get(userId) === subscriber) {
-        activeSubscriptions.delete(userId);
-      }
+      removeSubscriber();
     });
 
-    // Handle subscriber disconnect
     subscriber.on('end', () => {
       logger.debug({ userId, channel }, 'Subscriber client disconnected');
-      if (activeSubscriptions.get(userId) === subscriber) {
-        activeSubscriptions.delete(userId);
-      }
+      removeSubscriber();
     });
 
     logger.debug(
-      { channel, userId, activeConnections: activeSubscriptions.size },
+      { channel, userId, activeConnections: activeSubscriptions.get(userId)?.size ?? 0 },
       'Subscribed to user file events channel'
     );
     return subscriber;
@@ -204,10 +208,11 @@ async function unsubscribeFromFileEvents(subscriber, userId = null) {
     return;
   }
 
-  // Remove from tracking first
   if (userId && activeSubscriptions.has(userId)) {
-    if (activeSubscriptions.get(userId) === subscriber) {
-      activeSubscriptions.delete(userId);
+    const subs = activeSubscriptions.get(userId);
+    if (subs.delete(subscriber)) {
+      totalActiveConnections--;
+      if (subs.size === 0) activeSubscriptions.delete(userId);
     }
   }
 
@@ -276,7 +281,7 @@ async function unsubscribeFromFileEvents(subscriber, userId = null) {
  */
 function getConnectionStats() {
   return {
-    activeConnections: activeSubscriptions.size,
+    activeConnections: totalActiveConnections,
     maxConnections: MAX_CONNECTIONS,
   };
 }

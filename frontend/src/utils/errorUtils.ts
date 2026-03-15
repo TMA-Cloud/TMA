@@ -18,11 +18,8 @@ export class ApiError extends Error {
 
 /**
  * Extract error message from unknown error type
- * @param error - Error of unknown type
- * @param fallback - Fallback message if error message cannot be extracted
- * @returns Error message string
  */
-export function extractErrorMessage(error: unknown, fallback = 'An error occurred'): string {
+export function getErrorMessage(error: unknown, fallback = 'An error occurred'): string {
   if (error instanceof Error) {
     return error.message;
   }
@@ -74,16 +71,6 @@ export function extractXhrErrorMessage(xhr: XMLHttpRequest): string {
   }
 
   return errorMessage;
-}
-
-/**
- * Get error message from unknown error type (alias for extractErrorMessage for backward compatibility)
- * @param error - Error of unknown type
- * @param fallback - Fallback message if error message cannot be extracted
- * @returns Error message string
- */
-export function getErrorMessage(error: unknown, fallback = 'An error occurred'): string {
-  return extractErrorMessage(error, fallback);
 }
 
 /**

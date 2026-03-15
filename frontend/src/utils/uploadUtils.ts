@@ -52,19 +52,17 @@ export function createAutoDismissTimeout(
   delay: number = 10000,
   retryDelay: number = 5000
 ): ReturnType<typeof setTimeout> {
-  return setTimeout(() => {
-    if (!isInteractingRef.current) {
-      setUploadProgress(prev => removeUploadProgress(prev, uploadId));
-      uploadDismissTimeoutsRef.current.delete(uploadId);
-    } else {
-      // If user is interacting, retry after retryDelay
-      const retryTimeout = setTimeout(() => {
-        if (!isInteractingRef.current) {
-          setUploadProgress(prev => removeUploadProgress(prev, uploadId));
-        }
+  const schedule = (ms: number): ReturnType<typeof setTimeout> => {
+    const timeout = setTimeout(() => {
+      if (!isInteractingRef.current) {
+        setUploadProgress(prev => removeUploadProgress(prev, uploadId));
         uploadDismissTimeoutsRef.current.delete(uploadId);
-      }, retryDelay);
-      uploadDismissTimeoutsRef.current.set(uploadId, retryTimeout);
-    }
-  }, delay);
+      } else {
+        uploadDismissTimeoutsRef.current.set(uploadId, schedule(retryDelay));
+      }
+    }, ms);
+    return timeout;
+  };
+
+  return schedule(delay);
 }

@@ -117,6 +117,7 @@ export const Dashboard: React.FC = () => {
 
   const [animatedStats, setAnimatedStats] = useState([0, 0, 0, 0]);
   useEffect(() => {
+    const timeoutIds: ReturnType<typeof setTimeout>[] = [];
     const durations = [600, 700, 800, 900] as const;
     const values = [fileCount, folderCount, sharedCount, starredCount];
     durations.forEach((duration, i) => {
@@ -133,10 +134,11 @@ export const Dashboard: React.FC = () => {
           copy[i] = start;
           return copy;
         });
-        if (start < end) setTimeout(animate, 16);
+        if (start < end) timeoutIds.push(setTimeout(animate, 16));
       };
       animate();
     });
+    return () => timeoutIds.forEach(clearTimeout);
   }, [fileCount, folderCount, sharedCount, starredCount]);
 
   return (

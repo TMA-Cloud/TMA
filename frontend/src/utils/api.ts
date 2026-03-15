@@ -8,18 +8,18 @@ interface ApiRequestOptions extends RequestInit {
 }
 
 async function apiRequest(endpoint: string, options: ApiRequestOptions = {}): Promise<Response> {
-  const fetchOptions = options;
+  const { headers: customHeaders, ...restOptions } = options;
 
   const defaultOptions: RequestInit = {
     credentials: 'include',
+    ...restOptions,
     headers: {
       'Content-Type': 'application/json',
-      ...fetchOptions.headers,
+      ...customHeaders,
     },
-    ...fetchOptions,
   };
 
-  return await fetch(endpoint, defaultOptions);
+  return fetch(endpoint, defaultOptions);
 }
 
 interface ErrorResponseBody {
@@ -133,6 +133,8 @@ export async function getSignupStatus(): Promise<{
         canToggleHideFileExtensions: false,
         electronOnlyAccess: false,
         canToggleElectronOnlyAccess: false,
+        allowPasswordChange: false,
+        canToggleAllowPasswordChange: false,
       };
     }
     return {
@@ -149,7 +151,7 @@ export async function getSignupStatus(): Promise<{
 }
 
 export async function toggleSignup(enabled: boolean): Promise<{ signupEnabled: boolean }> {
-  return await apiPost<{ signupEnabled: boolean }>('/api/user/signup-toggle', {
+  return apiPost<{ signupEnabled: boolean }>('/api/user/signup-toggle', {
     enabled,
   });
 }
@@ -186,7 +188,7 @@ export interface UserSummary {
 export async function fetchAllUsers(): Promise<{
   users: UserSummary[];
 }> {
-  return await apiGet<{ users: UserSummary[] }>('/api/user/all');
+  return apiGet<{ users: UserSummary[] }>('/api/user/all');
 }
 
 export async function updateUserStorageLimit(
@@ -422,7 +424,7 @@ export async function downloadFile(id: string, fallbackFilename?: string): Promi
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
-  window.URL.revokeObjectURL(downloadUrl);
+  setTimeout(() => window.URL.revokeObjectURL(downloadUrl), 1000);
 }
 
 export const AUTH_STATE_KEY = 'tma_cloud_auth_state';

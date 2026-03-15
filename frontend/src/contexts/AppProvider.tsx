@@ -1070,7 +1070,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const result = await editFileWithDesktopElectron({
         id: file.id,
         name: file.name,
-        mimeType: file.mimeType,
       });
 
       if (!result.ok) {

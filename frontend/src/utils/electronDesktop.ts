@@ -139,17 +139,6 @@ export async function getFilesFromElectronClipboard(): Promise<File[]> {
   }
 }
 
-/** Write file paths to OS clipboard (paste in Explorer). */
-export async function writeFilesToElectronClipboard(paths: string[]): Promise<boolean> {
-  if (!isElectron() || !window.electronAPI?.clipboard || !paths.length) return false;
-  try {
-    const result = await window.electronAPI.clipboard.writeFiles(paths);
-    return result?.ok === true;
-  } catch {
-    return false;
-  }
-}
-
 /** Fetch files and put on OS clipboard so user can paste in Explorer. */
 export async function copyFilesToPcClipboard(
   items: { id: string; name: string }[]
@@ -169,7 +158,7 @@ export async function copyFilesToPcClipboard(
   }
 }
 
-export async function editFileWithDesktopElectron(payload: { id: string; name: string; mimeType: string }): Promise<{
+export async function editFileWithDesktopElectron(payload: { id: string; name: string }): Promise<{
   ok: boolean;
   error?: string;
 }> {

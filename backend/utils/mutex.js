@@ -1,17 +1,15 @@
 /**
  * Mutex utility for key-based locking
- * Uses a Map of mutexes to support per-key locking
+ * Uses a Map of mutexes to support per-key locking, with automatic cleanup.
  */
 
 import { Mutex } from 'async-mutex';
 
-// Map of keys to mutex instances
 const mutexMap = new Map();
 
 /**
- * Get or create a mutex for a specific key
- * @param {string} key - Lock key
- * @returns {Mutex} Mutex instance for the key
+ * Get or create a mutex for a specific key.
+ * Automatically removes the mutex after the lock is released and no waiters remain.
  */
 function getMutex(key) {
   if (!mutexMap.has(key)) {
@@ -20,26 +18,23 @@ function getMutex(key) {
   return mutexMap.get(key);
 }
 
-/**
- * File operation locks to prevent concurrent modifications
- * @param {string} fileId - File ID to lock
- * @param {Function} operation - Operation to execute
- * @returns {Promise<any>} Result of the operation
- */
+async function runWithMutex(key, operation) {
+  const mutex = getMutex(key);
+  try {
+    return await mutex.runExclusive(operation);
+  } finally {
+    if (!mutex.isLocked()) {
+      mutexMap.delete(key);
+    }
+  }
+}
+
 const fileOperationLock = async (fileId, operation) => {
-  const mutex = getMutex(`file:${fileId}`);
-  return mutex.runExclusive(operation);
+  return runWithMutex(`file:${fileId}`, operation);
 };
 
-/**
- * User operation locks to prevent concurrent user-level operations
- * @param {string} userId - User ID to lock
- * @param {Function} operation - Operation to execute
- * @returns {Promise<any>} Result of the operation
- */
 const userOperationLock = async (userId, operation) => {
-  const mutex = getMutex(`user:${userId}`);
-  return mutex.runExclusive(operation);
+  return runWithMutex(`user:${userId}`, operation);
 };
 
 export { fileOperationLock, userOperationLock };

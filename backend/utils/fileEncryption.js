@@ -214,8 +214,12 @@ function getEncryptionKey() {
     }
   }
 
-  // Development fallback - generate a deterministic key from a default value
-  // WARNING: This is NOT secure for production!
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(
+      'FILE_ENCRYPTION_KEY is required in production. Set a secure 32-byte key (base64 or hex encoded) in your environment.'
+    );
+  }
+
   logger.warn('[Encryption] FILE_ENCRYPTION_KEY not set, using development default key');
   return crypto.pbkdf2Sync(
     'development-key-change-in-production',
@@ -448,16 +452,19 @@ async function copyEncryptedFileStreams(sourceEncryptedStream, destEncryptedStre
 async function isFileEncrypted(filePath) {
   try {
     const stats = await fs.stat(filePath);
-    // Encrypted files must be at least IV_LENGTH + TAG_LENGTH bytes
     if (stats.size < IV_LENGTH + TAG_LENGTH) {
       return false;
     }
 
-    // Try to read and parse the file structure
-    const buffer = await fs.readFile(filePath, { start: 0, end: IV_LENGTH + TAG_LENGTH - 1 });
-    // If we can read the header, assume it's encrypted (simple heuristic)
-    // In practice, we could add a magic number or check the database
-    return buffer.length === IV_LENGTH + TAG_LENGTH;
+    // Read only the first IV_LENGTH + TAG_LENGTH bytes using a file handle
+    const fd = await fs.open(filePath, 'r');
+    try {
+      const buffer = Buffer.alloc(IV_LENGTH + TAG_LENGTH);
+      const { bytesRead } = await fd.read(buffer, 0, IV_LENGTH + TAG_LENGTH, 0);
+      return bytesRead === IV_LENGTH + TAG_LENGTH;
+    } finally {
+      await fd.close();
+    }
   } catch (_error) {
     return false;
   }

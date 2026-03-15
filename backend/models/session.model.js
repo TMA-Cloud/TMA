@@ -181,8 +181,8 @@ async function deleteAllUserSessions(userId) {
 async function cleanupOldSessions(daysOld = 30) {
   const result = await pool.query(
     `DELETE FROM sessions
-     WHERE created_at < NOW() - INTERVAL '${daysOld} days'`,
-    []
+     WHERE created_at < NOW() - INTERVAL '1 day' * $1`,
+    [daysOld]
   );
   const deletedCount = result.rowCount || 0;
   if (deletedCount > 0) {

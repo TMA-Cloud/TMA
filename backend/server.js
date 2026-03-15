@@ -36,7 +36,9 @@ const __dirname = path.dirname(__filename);
 const app = express();
 
 // Metrics endpoint IP whitelist
-const METRICS_ALLOWED_IPS = (process.env.METRICS_ALLOWED_IPS || '127.0.0.1').split(',').map(ip => ip.trim());
+const METRICS_ALLOWED_IPS = (process.env.METRICS_ALLOWED_IPS || '127.0.0.1,::ffff:127.0.0.1,::1')
+  .split(',')
+  .map(ip => ip.trim());
 
 // FIRST: Request ID middleware (must be first for proper context propagation)
 app.use(requestIdMiddleware);
