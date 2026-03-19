@@ -106,6 +106,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
+  const [uploadModalProcessing, setUploadModalProcessing] = useState(false);
+  const [uploadModalProcessingRequestId, setUploadModalProcessingRequestId] = useState<string | null>(null);
   const [uploadModalInitialEntries, setUploadModalInitialEntries] = useState<UploadModalInitialEntry[] | null>(null);
   const [createFolderModalOpen, setCreateFolderModalOpen] = useState(false);
   const [imageViewerFile, setImageViewerFile] = useState<FileItem | null>(null);
@@ -1894,6 +1896,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         viewMode,
         sidebarOpen,
         uploadModalOpen,
+        uploadModalProcessing,
+        setUploadModalProcessing,
+        uploadModalProcessingRequestId,
+        setUploadModalProcessingRequestId,
         createFolderModalOpen,
         imageViewerFile,
         setImageViewerFile,

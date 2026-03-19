@@ -61,6 +61,8 @@ export interface AppContextType {
   viewMode: 'grid' | 'list';
   sidebarOpen: boolean;
   uploadModalOpen: boolean;
+  uploadModalProcessing: boolean;
+  uploadModalProcessingRequestId: string | null;
   createFolderModalOpen: boolean;
   imageViewerFile: FileItem | null;
   setImageViewerFile: (file: FileItem | null) => void;
@@ -78,6 +80,8 @@ export interface AppContextType {
   setViewMode: (mode: 'grid' | 'list') => void;
   setSidebarOpen: (open: boolean) => void;
   setUploadModalOpen: (open: boolean) => void;
+  setUploadModalProcessing: (processing: boolean) => void;
+  setUploadModalProcessingRequestId: (id: string | null) => void;
   /** Initial entries when opening the modal from a drop (e.g. drag onto file manager). Cleared after modal consumes. */
   uploadModalInitialEntries: UploadModalInitialEntry[] | null;
   /** Open upload modal and pre-fill with these entries (from drag-and-drop). */

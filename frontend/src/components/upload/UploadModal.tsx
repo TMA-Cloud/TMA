@@ -1,5 +1,5 @@
 import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react';
-import { Upload, File, Folder, CheckCircle, AlertCircle, RefreshCw, FilePlus } from 'lucide-react';
+import { Upload, File, Folder, CheckCircle, AlertCircle, RefreshCw, FilePlus, Loader2 } from 'lucide-react';
 import { Modal } from '../ui/Modal';
 import { useApp } from '../../contexts/AppContext';
 import { formatFileSize } from '../../utils/fileUtils';
@@ -32,6 +32,9 @@ export const UploadModal: React.FC = () => {
   const {
     uploadModalOpen,
     setUploadModalOpen,
+    uploadModalProcessing,
+    setUploadModalProcessing,
+    setUploadModalProcessingRequestId,
     uploadModalInitialEntries,
     clearUploadModalInitialEntries,
     files: contextFiles,
@@ -126,7 +129,18 @@ export const UploadModal: React.FC = () => {
     const entries = uploadModalInitialEntries;
     clearUploadModalInitialEntries();
     handleEntries(entries);
-  }, [uploadModalOpen, uploadModalInitialEntries, clearUploadModalInitialEntries, handleEntries]);
+    // Stop the "processing" UI as soon as we've staged the scanned entries
+    // (even if they later end up being removed/filtered elsewhere).
+    setUploadModalProcessing(false);
+    setUploadModalProcessingRequestId(null);
+  }, [
+    uploadModalOpen,
+    uploadModalInitialEntries,
+    clearUploadModalInitialEntries,
+    handleEntries,
+    setUploadModalProcessing,
+    setUploadModalProcessingRequestId,
+  ]);
 
   const handleFiles = (files: FileList) => {
     handleEntries(Array.from(files).map(file => ({ file })));
@@ -138,6 +152,7 @@ export const UploadModal: React.FC = () => {
   };
 
   const handleDrop = (e: React.DragEvent) => {
+    if (uploadModalProcessing) return;
     e.preventDefault();
     setIsDragOver(false);
     void (async () => {
@@ -149,6 +164,7 @@ export const UploadModal: React.FC = () => {
   };
 
   const handleDropZoneClick = (e: React.MouseEvent) => {
+    if (uploadModalProcessing) return;
     const target = e.target as HTMLElement | null;
     if (target?.closest('[data-upload-action="true"]')) return;
     if (target?.closest('input')) return;
@@ -156,6 +172,7 @@ export const UploadModal: React.FC = () => {
   };
 
   const handleDragOver = (e: React.DragEvent) => {
+    if (uploadModalProcessing) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = 'copy';
     setIsDragOver(true);
@@ -196,7 +213,10 @@ export const UploadModal: React.FC = () => {
     setDuplicateChoices({});
     setHasStartedUpload(false);
     setUploadModalOpen(false);
+    setUploadModalProcessing(false);
+    setUploadModalProcessingRequestId(null);
     setDuplicateModalOpen(false);
+    clearUploadModalInitialEntries();
   };
 
   const pendingItems = useMemo(
@@ -395,7 +415,25 @@ export const UploadModal: React.FC = () => {
             className="hidden"
           />
 
-          {uploadFiles.length > 0 ? (
+          {uploadModalProcessing ? (
+            <div className={`w-full flex flex-col items-center justify-center text-center space-y-3`}>
+              <div
+                className={`mx-auto ${
+                  isMobile ? 'w-10 h-10' : 'w-12 h-12'
+                } bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center`}
+              >
+                <Loader2 className={`${isMobile ? 'w-5 h-5' : 'w-6 h-6'} text-gray-500 animate-spin`} />
+              </div>
+              <div className="space-y-1">
+                <p className={`${isMobile ? 'text-base' : 'text-lg'} font-semibold text-gray-900 dark:text-gray-100`}>
+                  Processing to Upload...
+                </p>
+                <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-gray-500 dark:text-gray-400`}>
+                  Preparing files from your folder (this can take a moment for large folder trees)
+                </p>
+              </div>
+            </div>
+          ) : uploadFiles.length > 0 ? (
             <div className="flex flex-wrap items-center justify-center gap-2 w-full">
               <span className="text-sm text-gray-500 dark:text-gray-400">Add more:</span>
               <button
@@ -701,12 +739,16 @@ export const UploadModal: React.FC = () => {
           </button>
           <button
             onClick={startUpload}
-            disabled={isUploading || !uploadFiles.some(f => f.status === 'pending' || f.status === 'error')}
+            disabled={
+              uploadModalProcessing ||
+              isUploading ||
+              !uploadFiles.some(f => f.status === 'pending' || f.status === 'error')
+            }
             className={`${
               isMobile ? 'w-full px-4 py-3 text-base font-semibold' : 'px-4 py-2 text-sm'
             } bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95`}
           >
-            {isUploading ? 'Uploading...' : 'Upload'}
+            {uploadModalProcessing ? 'Preparing…' : isUploading ? 'Uploading...' : 'Upload'}
           </button>
         </div>
       </div>

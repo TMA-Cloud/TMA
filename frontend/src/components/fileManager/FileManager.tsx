@@ -76,6 +76,12 @@ export const FileManager: React.FC = () => {
     goBack,
     goForward,
     openUploadModalWithEntries,
+    setUploadModalOpen,
+    uploadModalProcessing,
+    setUploadModalProcessing,
+    uploadModalProcessingRequestId,
+    setUploadModalProcessingRequestId,
+    clearUploadModalInitialEntries,
     desktopOpenProgress,
   } = useApp();
 
@@ -87,6 +93,11 @@ export const FileManager: React.FC = () => {
   const [infoModalOpen, setInfoModalOpen] = useState(false);
   const [infoModalFile, setInfoModalFile] = useState<FileItem | null>(null);
   const [isExternalDragOver, setIsExternalDragOver] = useState(false);
+
+  const activeUploadProcessingRequestIdRef = React.useRef<string | null>(uploadModalProcessingRequestId);
+  useEffect(() => {
+    activeUploadProcessingRequestIdRef.current = uploadModalProcessingRequestId;
+  }, [uploadModalProcessingRequestId]);
 
   const canCreateFolder = currentPath[0] === 'My Files';
   const isTrashView = currentPath[0] === 'Trash';
@@ -660,20 +671,50 @@ export const FileManager: React.FC = () => {
     async (e: React.DragEvent) => {
       if (draggingIds.length > 0) return;
       if (!e.dataTransfer.files?.length) return;
+      if (uploadModalProcessing) return; // Prevent duplicate drops while we are still scanning folders.
       e.preventDefault();
       e.stopPropagation();
       setIsExternalDragOver(false);
       if (!isMyFilesView) return;
+      const requestId = `${Date.now()}-${Math.random()}`;
       try {
+        // Open the modal immediately so users get feedback for large folder scans.
+        setUploadModalOpen(true);
+        setUploadModalProcessing(true);
+        setUploadModalProcessingRequestId(requestId);
+        clearUploadModalInitialEntries();
+
         const entries = await entriesFromDataTransfer(e.dataTransfer);
+        // User might have closed the modal while we were scanning.
+        if (activeUploadProcessingRequestIdRef.current !== requestId) return;
+
         if (entries.length > 0) {
           openUploadModalWithEntries(entries.map(en => ({ file: en.file, relativePath: en.relativePath })));
+          // We keep the modal in "processing" state until the modal consumes the initial entries.
+        } else {
+          setUploadModalProcessing(false);
+          setUploadModalOpen(false);
+          showToast('No files/folders found in the drop.', 'info');
         }
       } catch {
-        // entriesFromDataTransfer can throw; ignore and leave modal closed
+        if (activeUploadProcessingRequestIdRef.current !== requestId) return;
+        // entriesFromDataTransfer can throw; reset state and close modal (matches previous behavior).
+        setUploadModalProcessing(false);
+        setUploadModalOpen(false);
+        showToast('Failed to process selected folder. Please try again.', 'error');
       }
     },
-    [draggingIds.length, isMyFilesView, openUploadModalWithEntries]
+    [
+      draggingIds.length,
+      isMyFilesView,
+      openUploadModalWithEntries,
+      setUploadModalOpen,
+      uploadModalProcessing,
+      setUploadModalProcessing,
+      setUploadModalProcessingRequestId,
+      clearUploadModalInitialEntries,
+      showToast,
+    ]
   );
 
   return (
