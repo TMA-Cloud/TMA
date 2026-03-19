@@ -3,6 +3,7 @@ import {
   invalidateFileCache,
   deleteCache,
   deleteCachePattern,
+  invalidateSearchCache,
   cacheKeys,
   getCache,
   setCache,
@@ -21,6 +22,9 @@ async function setStarred(ids, starred, userId) {
   await deleteCache(cacheKeys.userStorage(userId)); // Invalidate storage usage cache
   // Invalidate starred files cache
   await deleteCachePattern(`files:${userId}:starred:*`);
+  // Search results are cached too and include `starred/shared` flags
+  // Without invalidation, search can show stale icon states for up to TTL
+  await invalidateSearchCache(userId);
 }
 
 /**
@@ -72,6 +76,9 @@ async function setShared(ids, shared, userId) {
   await deleteCache(cacheKeys.userStorage(userId)); // Invalidate storage usage cache
   // Invalidate shared files cache
   await deleteCachePattern(`files:${userId}:shared:*`);
+  // Search results are cached too and include `starred/shared` flags
+  // Without invalidation, search can show stale icon states for up to TTL
+  await invalidateSearchCache(userId);
 
   return res.rows.map(r => r.id);
 }

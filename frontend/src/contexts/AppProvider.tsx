@@ -147,6 +147,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const uploadXhrRef = useRef<Map<string, XMLHttpRequest>>(new Map());
   const searchQueryRef = useRef<string>(''); // Track current search query to ignore stale results
   const abortControllerRef = useRef<AbortController | null>(null); // For cancelling fetch requests
+  const filesRef = useRef<FileItem[]>(files); // Keep latest files for search pre-image restore
+  const filesBeforeSearchRef = useRef<FileItem[] | null>(null); // Restore non-search listing when leaving file manager
+  const didSavePreSearchRef = useRef<boolean>(false); // Avoid overwriting pre-search listing mid-search
   const eventSourceRef = useRef<EventSource | null>(null); // For SSE connection
   const sseRefreshTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null); // For debouncing SSE refresh
   const currentPathRef = useRef<string[]>(currentPath); // Track current path for SSE relevance check
@@ -213,6 +216,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     searchQueryRef.current = searchQuery;
   }, [searchQuery]);
+
+  useEffect(() => {
+    filesRef.current = files;
+  }, [files]);
 
   useEffect(() => {
     currentPathRef.current = currentPath;
@@ -400,6 +407,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   useEffect(() => {
     if (searchQuery.trim().length > 0) {
+      // Save the listing before search overwrites `files` so we can restore it
+      // if the user navigates away (e.g., to `Dashboard`).
+      if (!didSavePreSearchRef.current) {
+        filesBeforeSearchRef.current = filesRef.current;
+        didSavePreSearchRef.current = true;
+      }
       // Trigger debounced search
       debouncedSearch(searchQuery);
     } else {
@@ -414,8 +427,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       // Clear search and refresh normal files immediately
       setIsSearching(false);
-      // Use skipSearchCheck to force refresh even if searchQuery is being cleared
-      void refreshFiles(true);
+      const currentPage = currentPathRef.current[0];
+      const isFileManagerPage =
+        currentPage === 'My Files' || currentPage === 'Shared' || currentPage === 'Starred' || currentPage === 'Trash';
+
+      // If we're leaving the file manager (e.g. to Dashboard), restoring the pre-search
+      // listing prevents the Dashboard "Recent Files" from showing search results
+      if (!isFileManagerPage && filesBeforeSearchRef.current) {
+        setFiles(filesBeforeSearchRef.current);
+      } else {
+        // Use skipSearchCheck to force refresh even if searchQuery is being cleared
+        void refreshFiles(true);
+      }
+
+      filesBeforeSearchRef.current = null;
+      didSavePreSearchRef.current = false;
     }
   }, [searchQuery, debouncedSearch, cancelSearch, refreshFiles]);
 
@@ -1430,7 +1456,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     const data = await res.json();
     const links = buildShareUrlMap(data);
-    await refreshFiles();
+    // If a search is active, `refreshFiles()` intentionally bails out
+    // Re-run the search so starred/shared icons update in the search results list
+    const activeQuery = searchQueryRef.current.trim();
+    if (activeQuery) {
+      await searchFilesApi(activeQuery);
+    } else {
+      await refreshFiles();
+    }
     return links;
   };
 
@@ -1459,7 +1492,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const errorMessage = await extractResponseError(res);
       throw new Error(errorMessage || 'Failed to update star status');
     }
-    await refreshFiles();
+    // If a search is active, `refreshFiles()` intentionally bails out
+    // Re-run the search so starred icons update in the search results list
+    const activeQuery = searchQueryRef.current.trim();
+    if (activeQuery) {
+      await searchFilesApi(activeQuery);
+    } else {
+      await refreshFiles();
+    }
   };
 
   const deleteFilesApi = async (ids: string[]) => {
@@ -1576,6 +1616,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const setCurrentPath = (path: string[], ids?: (string | null)[]) => {
+    // If the user is navigating via Sidebar/Dashboard/Mobile nav, discard any active search
+    if (searchQuery.trim().length > 0) {
+      setSearchQuery('');
+    }
+
     const newIds = ids ?? Array(path.length).fill(null);
     const newShared = Array(path.length).fill(false);
     setNavHistory(prev => {
