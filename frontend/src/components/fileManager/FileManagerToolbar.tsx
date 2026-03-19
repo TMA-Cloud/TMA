@@ -10,8 +10,6 @@ interface FileManagerToolbarProps {
   sortOrder: 'asc' | 'desc';
   selectedFiles: string[];
   isTrashView: boolean;
-  isSharedView: boolean;
-  isStarredView: boolean;
   hasTrashFiles: boolean;
   canCreateFolder: boolean;
   allShared: boolean;
@@ -37,8 +35,6 @@ export const FileManagerToolbar: React.FC<FileManagerToolbarProps> = ({
   sortOrder,
   selectedFiles,
   isTrashView,
-  isSharedView,
-  isStarredView,
   hasTrashFiles,
   canCreateFolder,
   allShared,
@@ -65,41 +61,37 @@ export const FileManagerToolbar: React.FC<FileManagerToolbarProps> = ({
     <div className={`flex items-center ${isMobile ? 'justify-end w-full flex-wrap gap-2' : 'gap-1.5'}`}>
       {selectedFiles.length > 0 && !isTrashView && !isMobile && (
         <>
-          {!isSharedView && (
-            <Tooltip text={allShared ? 'Remove from Shared' : 'Add to Share'}>
-              <button
-                className={`${btnBase} ${
-                  allShared
-                    ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-500/20'
-                    : `${btnMuted} hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-500/10 dark:hover:bg-emerald-500/20`
-                }`}
-                onClick={() => onShare()}
-                aria-label={allShared ? 'Remove from Shared' : 'Add to Share'}
-              >
-                <Share2
-                  className={`w-5 h-5 icon-muted ${allShared ? 'fill-emerald-600 dark:fill-emerald-400 opacity-100' : ''}`}
-                />
-              </button>
-            </Tooltip>
-          )}
+          <Tooltip text={allShared ? 'Remove from Shared' : 'Add to Share'}>
+            <button
+              className={`${btnBase} ${
+                allShared
+                  ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-500/20'
+                  : `${btnMuted} hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-500/10 dark:hover:bg-emerald-500/20`
+              }`}
+              onClick={() => onShare()}
+              aria-label={allShared ? 'Remove from Shared' : 'Add to Share'}
+            >
+              <Share2
+                className={`w-5 h-5 icon-muted ${allShared ? 'fill-emerald-600 dark:fill-emerald-400 opacity-100' : ''}`}
+              />
+            </button>
+          </Tooltip>
 
-          {!isStarredView && (
-            <Tooltip text={allStarred ? 'Remove from Starred' : 'Add to Starred'}>
-              <button
-                className={`${btnBase} ${
-                  allStarred
-                    ? 'text-amber-500 dark:text-amber-400 bg-amber-500/10 dark:bg-amber-500/20'
-                    : `${btnMuted} hover:text-amber-500 dark:hover:text-amber-400 hover:bg-amber-500/10 dark:hover:bg-amber-500/20`
-                }`}
-                onClick={() => onStar()}
-                aria-label={allStarred ? 'Remove from Starred' : 'Add to Starred'}
-              >
-                <Star
-                  className={`w-5 h-5 icon-muted ${allStarred ? 'fill-amber-500 dark:fill-amber-400 opacity-100' : ''}`}
-                />
-              </button>
-            </Tooltip>
-          )}
+          <Tooltip text={allStarred ? 'Remove from Starred' : 'Add to Starred'}>
+            <button
+              className={`${btnBase} ${
+                allStarred
+                  ? 'text-amber-500 dark:text-amber-400 bg-amber-500/10 dark:bg-amber-500/20'
+                  : `${btnMuted} hover:text-amber-500 dark:hover:text-amber-400 hover:bg-amber-500/10 dark:hover:bg-amber-500/20`
+              }`}
+              onClick={() => onStar()}
+              aria-label={allStarred ? 'Remove from Starred' : 'Add to Starred'}
+            >
+              <Star
+                className={`w-5 h-5 icon-muted ${allStarred ? 'fill-amber-500 dark:fill-amber-400 opacity-100' : ''}`}
+              />
+            </button>
+          </Tooltip>
 
           <Tooltip text="Download">
             <button

@@ -101,8 +101,6 @@ export const FileManager: React.FC = () => {
 
   const canCreateFolder = currentPath[0] === 'My Files';
   const isTrashView = currentPath[0] === 'Trash';
-  const isSharedView = currentPath[0] === 'Shared';
-  const isStarredView = currentPath[0] === 'Starred';
   const hasTrashFiles = isTrashView && files.length > 0;
   const isMyFilesView = currentPath[0] === 'My Files';
 
@@ -784,8 +782,6 @@ export const FileManager: React.FC = () => {
           sortOrder={sortOrder}
           selectedFiles={selectedFiles}
           isTrashView={isTrashView}
-          isSharedView={isSharedView}
-          isStarredView={isStarredView}
           hasTrashFiles={hasTrashFiles}
           canCreateFolder={canCreateFolder}
           allShared={allShared}
