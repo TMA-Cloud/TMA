@@ -159,6 +159,41 @@ node scripts/bulk-import-drive-to-s3.js --source-dir "D:\MyDrive" --user-id YOUR
 - Enforces per-user storage limit and max file size (checked before any upload).
 - Preserves file and folder modification times (mtime). On first error, S3 script rolls back created folders and uploaded files.
 
+### Rotate FILE_ENCRYPTION_KEY (re-encrypt existing data)
+
+Use when you change `FILE_ENCRYPTION_KEY` and need existing encrypted files to remain decryptable.
+
+The scripts:
+
+- Re-encrypt the existing encrypted objects/files with the **new** `FILE_ENCRYPTION_KEY` from `.env`
+- Ask you for the **old** `FILE_ENCRYPTION_KEY` to decrypt current data
+- Print progress while running
+- Use a fixed concurrency of **10** workers/objects at a time
+
+From the **backend** directory:
+
+#### Rotate local storage
+
+```bash
+node scripts/rotate-file-encryption-local.js
+```
+
+Notes:
+
+- Runs only when `STORAGE_DRIVER=local`
+- For each file, writes a temporary file next to the encrypted file and then replaces the original file after re-encryption
+
+#### Rotate S3 storage
+
+```bash
+node scripts/rotate-file-encryption-s3.js
+```
+
+Notes:
+
+- Runs only when `STORAGE_DRIVER=s3`
+- Downloads each encrypted object, re-encrypts it, and uploads it back to the same object key (no per-object temp objects created)
+
 ## Docker Commands
 
 ### Using Prebuilt Images (Recommended)

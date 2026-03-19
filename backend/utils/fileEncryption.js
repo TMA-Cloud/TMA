@@ -480,4 +480,6 @@ export {
   copyEncryptedFile,
   copyEncryptedFileStreams,
   isFileEncrypted,
+  getEncryptionKey,
+  readEncryptionMetadata,
 };

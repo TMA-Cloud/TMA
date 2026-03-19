@@ -74,6 +74,12 @@ Files are automatically encrypted. Encryption uses AES-256-GCM with authenticate
 - Key can be base64, hex, or string (derived with PBKDF2)
 - Development fallback key used if not set (not secure for production)
 
+### Key Rotation
+
+- `FILE_ENCRYPTION_KEY` is used for both encryption and decryption
+- Changing `FILE_ENCRYPTION_KEY` without re-encrypting existing encrypted data will break decryption for those existing files/objects
+- Use `rotate-file-encryption-local.js` or `rotate-file-encryption-s3.js` to re-encrypt existing data. See [CLI Commands](/reference/cli-commands)
+
 ## Disk Space Monitoring (Local only)
 
 ### System-Level

@@ -70,6 +70,7 @@ File system architecture and organization in TMA Cloud.
 - Encryption key configured via `FILE_ENCRYPTION_KEY` environment variable
 - Files stored in format: `[IV][ENCRYPTED_DATA][TAG]`
 - Automatic decryption on download
+- If `FILE_ENCRYPTION_KEY` changes, existing encrypted files will not decrypt with the new key unless you re-encrypt them using the rotation scripts documented in [CLI Commands](/reference/cli-commands)
 
 ### Storage Limits
 
