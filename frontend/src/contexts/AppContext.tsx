@@ -127,6 +127,12 @@ export interface AppContextType {
   isSearching: boolean;
   searchFiles: (query: string) => Promise<void>;
   isDownloading: boolean;
+  isDeleting: boolean;
+  deleteProgress: {
+    itemCount: number;
+    percent: number;
+    label: string;
+  } | null;
   downloadFiles: (ids: string[]) => Promise<void>;
   /** Copy selected files to OS clipboard so user can paste in Explorer (Electron only). */
   copyFilesToPc: (ids: string[]) => Promise<void>;

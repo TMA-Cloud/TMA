@@ -7,6 +7,7 @@ import { ContextMenu } from './ContextMenu';
 import { PasteProgress } from './PasteProgress';
 import { DownloadProgress } from './DownloadProgress';
 import { DesktopOpenProgress } from './DesktopOpenProgress';
+import { DeleteProgress } from './DeleteProgress';
 import { ONLYOFFICE_EXTS, getExt, validateOnlyOfficeMimeType } from '../../utils/fileUtils';
 import { isElectron } from '../../utils/electronDesktop';
 import { useIsMobile } from '../../hooks/useIsMobile';
@@ -55,6 +56,8 @@ export const FileManager: React.FC = () => {
     searchQuery,
     isSearching,
     isDownloading,
+    isDeleting,
+    deleteProgress,
     emptyTrash,
     shareFiles,
     starFiles,
@@ -269,6 +272,7 @@ export const FileManager: React.FC = () => {
   };
 
   const handleDelete = async () => {
+    if (isDeleting) return;
     setDeleteModalOpen(false);
     try {
       await deleteFiles(selectedFiles);
@@ -281,6 +285,7 @@ export const FileManager: React.FC = () => {
   };
 
   const handleDeleteForever = async () => {
+    if (isDeleting) return;
     setDeleteForeverModalOpen(false);
     try {
       await deleteForever(selectedFiles);
@@ -406,6 +411,7 @@ export const FileManager: React.FC = () => {
 
       if (!selectedFiles.length) return;
       if (isTrashView) return;
+      if (isDeleting) return;
 
       e.preventDefault();
       setDeleteModalOpen(true);
@@ -413,7 +419,7 @@ export const FileManager: React.FC = () => {
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [isTrashView, selectedFiles.length, setDeleteModalOpen]);
+  }, [isTrashView, isDeleting, selectedFiles.length, setDeleteModalOpen]);
 
   const handleFileClick = (fileId: string, e: React.MouseEvent) => {
     if (dragSelectingRef.current) return;
@@ -787,6 +793,7 @@ export const FileManager: React.FC = () => {
           allShared={allShared}
           allStarred={allStarred}
           isDownloading={isDownloading}
+          isDeleting={isDeleting}
           onViewModeChange={setViewMode}
           onSortChange={(by, order) => {
             setSortBy(by as 'name' | 'size' | 'modified' | 'deletedAt');
@@ -806,9 +813,15 @@ export const FileManager: React.FC = () => {
             }
           }}
           onRename={handleRename}
-          onDelete={() => setDeleteModalOpen(true)}
+          onDelete={() => {
+            if (isDeleting) return;
+            setDeleteModalOpen(true);
+          }}
           onRestore={handleRestore}
-          onDeleteForever={() => setDeleteForeverModalOpen(true)}
+          onDeleteForever={() => {
+            if (isDeleting) return;
+            setDeleteForeverModalOpen(true);
+          }}
           onEmptyTrash={() => setEmptyTrashModalOpen(true)}
         />
       </div>
@@ -860,6 +873,7 @@ export const FileManager: React.FC = () => {
 
       <PasteProgress progress={pasteProgress} />
       {desktopOpenProgress.length > 0 && <DesktopOpenProgress items={desktopOpenProgress} />}
+      <DeleteProgress progress={deleteProgress} />
       <DownloadProgress
         isDownloading={isDownloading}
         hasFolders={selectedFiles.some(id => files.find(f => f.id === id)?.type === 'folder')}
@@ -874,16 +888,24 @@ export const FileManager: React.FC = () => {
 
       <DeleteModal
         isOpen={deleteModalOpen}
-        onClose={() => setDeleteModalOpen(false)}
+        onClose={() => {
+          if (isDeleting) return;
+          setDeleteModalOpen(false);
+        }}
         onConfirm={handleDelete}
         fileCount={selectedFiles.length}
+        isLoading={isDeleting}
       />
 
       <DeleteForeverModal
         isOpen={deleteForeverModalOpen}
-        onClose={() => setDeleteForeverModalOpen(false)}
+        onClose={() => {
+          if (isDeleting) return;
+          setDeleteForeverModalOpen(false);
+        }}
         onConfirm={handleDeleteForever}
         fileCount={selectedFiles.length}
+        isLoading={isDeleting}
       />
 
       <ShareExpiryModal

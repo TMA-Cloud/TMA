@@ -77,6 +77,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     deleteFiles,
     restoreFiles,
     deleteForever,
+    isDeleting,
     setShareLinkModalOpen,
     currentPath,
     downloadFiles,
@@ -134,6 +135,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
 
   const handleConfirmDelete = async () => {
     if (!pendingAction) return;
+    if (isDeleting) return;
 
     setConfirmModalOpen(false);
     const { type, files } = pendingAction;
@@ -198,7 +200,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
         {
           icon: Trash2,
           label: 'Delete Forever',
-          disabled: false,
+          disabled: isDeleting,
           action: () => {
             setPendingAction({ type: 'deleteForever', files: selectedFiles });
             setConfirmModalOpen(true);
@@ -455,7 +457,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
       {
         icon: Trash2,
         label: 'Delete',
-        disabled: false,
+        disabled: isDeleting,
         action: () => {
           setPendingAction({ type: 'delete', files: selectedFiles });
           setConfirmModalOpen(true);
@@ -501,6 +503,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     handleRestore,
     onActionComplete,
     electronClipboardAvailable,
+    isDeleting,
   ]);
 
   // Initial position (below-right of cursor); used for first paint so we can measure
@@ -631,9 +634,10 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
           </button>
           <button
             onClick={handleConfirmDelete}
-            className="px-4 py-2 rounded-lg text-white bg-red-600 hover:bg-red-700 dark:bg-red-500 dark:hover:bg-red-600 transition-colors duration-200"
+            disabled={isDeleting}
+            className="px-4 py-2 rounded-lg text-white bg-red-600 hover:bg-red-700 dark:bg-red-500 dark:hover:bg-red-600 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {pendingAction?.type === 'deleteForever' ? 'Delete Forever' : 'Delete'}
+            {isDeleting ? 'Deleting...' : pendingAction?.type === 'deleteForever' ? 'Delete Forever' : 'Delete'}
           </button>
         </div>
       </div>

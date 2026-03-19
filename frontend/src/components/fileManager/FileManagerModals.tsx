@@ -39,9 +39,16 @@ interface DeleteModalProps {
   onClose: () => void;
   onConfirm: () => void;
   fileCount: number;
+  isLoading?: boolean;
 }
 
-export const DeleteModal: React.FC<DeleteModalProps> = ({ isOpen, onClose, onConfirm, fileCount }) => {
+export const DeleteModal: React.FC<DeleteModalProps> = ({
+  isOpen,
+  onClose,
+  onConfirm,
+  fileCount,
+  isLoading = false,
+}) => {
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Delete" size="sm">
       <div className="space-y-4">
@@ -51,16 +58,21 @@ export const DeleteModal: React.FC<DeleteModalProps> = ({ isOpen, onClose, onCon
         </p>
         <div className="flex justify-end space-x-3 pt-4">
           <button
-            onClick={onClose}
-            className="px-4 py-2 rounded-lg text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors duration-200"
+            onClick={() => {
+              if (isLoading) return;
+              onClose();
+            }}
+            disabled={isLoading}
+            className="px-4 py-2 rounded-lg text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Cancel
           </button>
           <button
             onClick={onConfirm}
-            className="px-4 py-2 rounded-lg text-white bg-red-600 hover:bg-red-700 dark:bg-red-500 dark:hover:bg-red-600 transition-colors duration-200"
+            disabled={isLoading}
+            className="px-4 py-2 rounded-lg text-white bg-red-600 hover:bg-red-700 dark:bg-red-500 dark:hover:bg-red-600 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Delete
+            {isLoading ? 'Deleting...' : 'Delete'}
           </button>
         </div>
       </div>
@@ -73,9 +85,16 @@ interface DeleteForeverModalProps {
   onClose: () => void;
   onConfirm: () => void;
   fileCount: number;
+  isLoading?: boolean;
 }
 
-export const DeleteForeverModal: React.FC<DeleteForeverModalProps> = ({ isOpen, onClose, onConfirm, fileCount }) => {
+export const DeleteForeverModal: React.FC<DeleteForeverModalProps> = ({
+  isOpen,
+  onClose,
+  onConfirm,
+  fileCount,
+  isLoading = false,
+}) => {
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Delete Forever" size="sm">
       <div className="space-y-4">
@@ -85,16 +104,21 @@ export const DeleteForeverModal: React.FC<DeleteForeverModalProps> = ({ isOpen, 
         </p>
         <div className="flex justify-end space-x-3 pt-4">
           <button
-            onClick={onClose}
-            className="px-4 py-2 rounded-lg text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors duration-200"
+            onClick={() => {
+              if (isLoading) return;
+              onClose();
+            }}
+            disabled={isLoading}
+            className="px-4 py-2 rounded-lg text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Cancel
           </button>
           <button
             onClick={onConfirm}
-            className="px-4 py-2 rounded-lg text-white bg-red-600 hover:bg-red-700 dark:bg-red-500 dark:hover:bg-red-600 transition-colors duration-200"
+            disabled={isLoading}
+            className="px-4 py-2 rounded-lg text-white bg-red-600 hover:bg-red-700 dark:bg-red-500 dark:hover:bg-red-600 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Delete Forever
+            {isLoading ? 'Deleting...' : 'Delete Forever'}
           </button>
         </div>
       </div>

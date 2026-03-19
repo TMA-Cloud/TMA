@@ -15,6 +15,7 @@ interface FileManagerToolbarProps {
   allShared: boolean;
   allStarred: boolean;
   isDownloading: boolean;
+  isDeleting: boolean;
   onViewModeChange: (mode: 'grid' | 'list') => void;
   onSortChange: (by: string, order: 'asc' | 'desc') => void;
   onCreateFolder: () => void;
@@ -40,6 +41,7 @@ export const FileManagerToolbar: React.FC<FileManagerToolbarProps> = ({
   allShared,
   allStarred,
   isDownloading,
+  isDeleting,
   onViewModeChange,
   onSortChange,
   onCreateFolder,
@@ -139,8 +141,20 @@ export const FileManagerToolbar: React.FC<FileManagerToolbarProps> = ({
 
           <Tooltip text="Delete">
             <button
-              className={`${btnBase} ${btnMuted} hover:text-red-500 dark:hover:text-red-400 hover:bg-red-500/10 dark:hover:bg-red-500/20`}
-              onClick={() => onDelete()}
+              className={`${btnBase} ${
+                isDeleting
+                  ? 'opacity-50 cursor-not-allowed pointer-events-none text-slate-400'
+                  : `${btnMuted} hover:text-red-500 dark:hover:text-red-400 hover:bg-red-500/10 dark:hover:bg-red-500/20`
+              }`}
+              onClick={e => {
+                if (isDeleting) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  return;
+                }
+                onDelete();
+              }}
+              disabled={isDeleting}
               aria-label="Delete"
             >
               <Trash2 className="w-5 h-5 icon-muted" />
@@ -163,8 +177,20 @@ export const FileManagerToolbar: React.FC<FileManagerToolbarProps> = ({
               </Tooltip>
               <Tooltip text="Delete Forever">
                 <button
-                  className={`${btnBase} ${btnMuted} hover:text-red-500 dark:hover:text-red-400 hover:bg-red-500/10 dark:hover:bg-red-500/20`}
-                  onClick={() => onDeleteForever()}
+                  className={`${btnBase} ${
+                    isDeleting
+                      ? 'opacity-50 cursor-not-allowed pointer-events-none text-slate-400'
+                      : `${btnMuted} hover:text-red-500 dark:hover:text-red-400 hover:bg-red-500/10 dark:hover:bg-red-500/20`
+                  }`}
+                  onClick={e => {
+                    if (isDeleting) {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      return;
+                    }
+                    onDeleteForever();
+                  }}
+                  disabled={isDeleting}
                   aria-label="Delete Forever"
                 >
                   <Trash2 className="w-5 h-5" />

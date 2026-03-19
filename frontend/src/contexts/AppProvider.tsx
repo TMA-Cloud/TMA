@@ -132,6 +132,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isSearching, setIsSearching] = useState<boolean>(false);
   const [isDownloading, setIsDownloading] = useState<boolean>(false);
+  const [isDeleting, setIsDeleting] = useState<boolean>(false);
+  const [deleteProgress, setDeleteProgress] = useState<{
+    itemCount: number;
+    percent: number;
+    label: string;
+  } | null>(null);
   const [uploadProgress, setUploadProgress] = useState<UploadProgressItem[]>([]);
   const [isUploadProgressInteracting, setIsUploadProgressInteracting] = useState(false);
   const [onlyOfficeConfigured, setOnlyOfficeConfigured] = useState(false);
@@ -164,6 +170,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const folderSharedStackRef = useRef<boolean[]>(folderSharedStack); // For nav history (back/forward)
   const refreshFilesRef = useRef<((skipSearchCheck?: boolean) => Promise<void>) | null>(null); // Track refreshFiles function for SSE
   const desktopEditInProgressRef = useRef<Set<string>>(new Set()); // Track files currently opening on desktop to prevent double-click spam
+  const deleteInProgressRef = useRef(false); // Client-side lock against double delete clicks
+  const deleteProgressDismissTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [desktopOpenProgress, setDesktopOpenProgress] = useState<
     { fileId: string; fileName: string; percent: number }[]
   >([]);
@@ -1510,14 +1518,63 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteFilesApi = async (ids: string[]) => {
-    const res = await fetch(`/api/files/delete`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ ids }),
+    if (!ids.length) return;
+    if (deleteInProgressRef.current) {
+      throw new Error('Delete already in progress. Please wait.');
+    }
+
+    const itemCount = ids.length;
+    const expectedDurationMs = Math.min(30000, Math.max(3000, itemCount * 20));
+    const startedAt = Date.now();
+
+    deleteInProgressRef.current = true;
+    if (deleteProgressDismissTimeoutRef.current) {
+      clearTimeout(deleteProgressDismissTimeoutRef.current);
+      deleteProgressDismissTimeoutRef.current = null;
+    }
+    setIsDeleting(true);
+    setDeleteProgress({
+      itemCount,
+      percent: 5,
+      label: itemCount === 1 ? 'Deleting 1 item...' : `Deleting ${itemCount} items...`,
     });
-    if (!res.ok) throw new Error(await extractResponseError(res));
-    await refreshFiles();
+
+    const progressTimer = setInterval(() => {
+      const elapsed = Date.now() - startedAt;
+      const smoothPercent = Math.min(95, Math.max(5, Math.round((elapsed / expectedDurationMs) * 90) + 5));
+      setDeleteProgress(prev =>
+        prev
+          ? {
+              ...prev,
+              percent: smoothPercent,
+            }
+          : prev
+      );
+    }, 250);
+
+    try {
+      const res = await fetch(`/api/files/delete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ ids }),
+      });
+      if (!res.ok) throw new Error(await extractResponseError(res));
+
+      // Stop smooth timer immediately so it can't overwrite the final 100% value.
+      clearInterval(progressTimer);
+      setDeleteProgress(prev => (prev ? { ...prev, percent: 100, label: 'Finalizing delete...' } : prev));
+      await refreshFiles();
+      await new Promise(resolve => setTimeout(resolve, 450));
+    } finally {
+      clearInterval(progressTimer);
+      deleteInProgressRef.current = false;
+      setIsDeleting(false);
+      deleteProgressDismissTimeoutRef.current = setTimeout(() => {
+        setDeleteProgress(null);
+        deleteProgressDismissTimeoutRef.current = null;
+      }, 1500);
+    }
   };
 
   const restoreFilesApi = async (ids: string[]) => {
@@ -1537,14 +1594,63 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteForeverApi = async (ids: string[]) => {
-    const res = await fetch(`/api/files/trash/delete`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ ids }),
+    if (!ids.length) return;
+    if (deleteInProgressRef.current) {
+      throw new Error('Delete already in progress. Please wait.');
+    }
+
+    const itemCount = ids.length;
+    const expectedDurationMs = Math.min(30000, Math.max(3000, itemCount * 20));
+    const startedAt = Date.now();
+
+    deleteInProgressRef.current = true;
+    if (deleteProgressDismissTimeoutRef.current) {
+      clearTimeout(deleteProgressDismissTimeoutRef.current);
+      deleteProgressDismissTimeoutRef.current = null;
+    }
+    setIsDeleting(true);
+    setDeleteProgress({
+      itemCount,
+      percent: 5,
+      label: itemCount === 1 ? 'Permanently deleting 1 item...' : `Permanently deleting ${itemCount} items...`,
     });
-    if (!res.ok) throw new Error(await extractResponseError(res));
-    await refreshFiles();
+
+    const progressTimer = setInterval(() => {
+      const elapsed = Date.now() - startedAt;
+      const smoothPercent = Math.min(95, Math.max(5, Math.round((elapsed / expectedDurationMs) * 90) + 5));
+      setDeleteProgress(prev =>
+        prev
+          ? {
+              ...prev,
+              percent: smoothPercent,
+            }
+          : prev
+      );
+    }, 250);
+
+    try {
+      const res = await fetch(`/api/files/trash/delete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ ids }),
+      });
+      if (!res.ok) throw new Error(await extractResponseError(res));
+
+      // Stop smooth timer immediately so it can't overwrite the final 100% value.
+      clearInterval(progressTimer);
+      setDeleteProgress(prev => (prev ? { ...prev, percent: 100, label: 'Finalizing delete...' } : prev));
+      await refreshFiles();
+      await new Promise(resolve => setTimeout(resolve, 450));
+    } finally {
+      clearInterval(progressTimer);
+      deleteInProgressRef.current = false;
+      setIsDeleting(false);
+      deleteProgressDismissTimeoutRef.current = setTimeout(() => {
+        setDeleteProgress(null);
+        deleteProgressDismissTimeoutRef.current = null;
+      }, 1500);
+    }
   };
 
   const emptyTrashApi = async () => {
@@ -2012,6 +2118,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isSearching,
         searchFiles: searchFilesApi,
         isDownloading,
+        isDeleting,
+        deleteProgress,
         downloadFiles,
         copyFilesToPc,
         editFileWithDesktop,
