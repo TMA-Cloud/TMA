@@ -15,6 +15,7 @@ export interface FileItem {
   type: 'file' | 'folder';
   size?: number;
   modified: Date;
+  locationPath?: string[];
   mimeType?: string;
   selected?: boolean;
   starred?: boolean;

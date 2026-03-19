@@ -81,6 +81,9 @@ export const FileInfoModal: React.FC<FileInfoModalProps> = ({ isOpen, onClose, f
   const folderInfo: FolderInfo | undefined = effectiveItem.folderInfo;
   const hasFolderSize = folderInfo && typeof folderInfo.totalSize === 'number';
   const hasItemSize = effectiveItem.size != null;
+  const locationSegments = Array.isArray(effectiveItem.locationPath)
+    ? effectiveItem.locationPath
+    : currentPath.slice(1);
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Get Info" size="sm">
@@ -118,7 +121,7 @@ export const FileInfoModal: React.FC<FileInfoModalProps> = ({ isOpen, onClose, f
         )}
         <div>
           <p className="font-semibold">Location</p>
-          <p className="mt-0.5 break-all">{['Home', ...currentPath.slice(1)].join(' / ')}</p>
+          <p className="mt-0.5 break-all">{['Home', ...locationSegments].join(' / ')}</p>
         </div>
         <div className="grid grid-cols-1 gap-4">
           <div>

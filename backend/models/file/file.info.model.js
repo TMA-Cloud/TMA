@@ -32,6 +32,38 @@ async function getFileInfo(fileIds, userId, includeDeleted = false) {
 }
 
 /**
+ * Get folder name segments for the given folder id, from root -> folder.
+ * Used for the "Location" UI (e.g. "Home / FolderA / FolderB").
+ *
+ * Note: folderId is a folder (parent of the item). When folderId is null, it
+ * represents the root and returns an empty segment list.
+ */
+async function getFolderPathSegments(folderId, userId) {
+  if (!folderId) return [];
+
+  const result = await pool.query(
+    `
+      WITH RECURSIVE chain AS (
+        SELECT id, name, parent_id, 0 AS depth
+        FROM files
+        WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL
+        UNION ALL
+        SELECT f.id, f.name, f.parent_id, chain.depth + 1 AS depth
+        FROM files f
+        JOIN chain ON chain.parent_id = f.id
+        WHERE f.user_id = $2 AND f.deleted_at IS NULL
+      )
+      SELECT name
+      FROM chain
+      ORDER BY depth DESC;
+    `,
+    [folderId, userId]
+  );
+
+  return result.rows.map(r => r.name);
+}
+
+/**
  * Get target folder name for a given folder ID
  * @param {string} folderId - Folder ID (can be null for root)
  * @param {string} userId - User ID
@@ -78,4 +110,4 @@ async function resolveTargetFolderId(targetId, userId) {
   }
 }
 
-export { getFileInfo, getTargetFolderName, resolveTargetFolderId };
+export { getFileInfo, getFolderPathSegments, getTargetFolderName, resolveTargetFolderId };

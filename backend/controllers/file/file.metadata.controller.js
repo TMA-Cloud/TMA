@@ -4,6 +4,7 @@ import { logAuditEvent } from '../../services/auditLogger.js';
 import { EventTypes, publishFileEventsBatch } from '../../services/fileEvents.js';
 import {
   getFileInfo,
+  getFolderPathSegments,
   getFolderTree,
   getRecursiveIds,
   getSharedFiles,
@@ -34,6 +35,11 @@ async function getFileInfoController(req, res) {
   }
   const file = files[0];
 
+  // Build UI-visible location from the real parent chain.
+  // This is more reliable than using the frontend's currentPath,
+  // especially when the user opens "Get Info" from search results.
+  const locationPath = await getFolderPathSegments(file.parentId, req.userId);
+
   // When it's a folder, also return recursive counts and total size
   if (file.type === 'folder') {
     const tree = await getFolderTree(id, req.userId);
@@ -55,6 +61,7 @@ async function getFileInfoController(req, res) {
 
     return sendSuccess(res, {
       ...file,
+      locationPath,
       folderInfo: {
         totalSize,
         fileCount,
@@ -63,7 +70,7 @@ async function getFileInfoController(req, res) {
     });
   }
 
-  return sendSuccess(res, file);
+  return sendSuccess(res, { ...file, locationPath });
 }
 
 /**
