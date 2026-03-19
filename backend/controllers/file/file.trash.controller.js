@@ -49,7 +49,9 @@ async function deleteFilesController(req, res) {
 async function listTrash(req, res) {
   const sortBy = validateSortBy(req.query.sortBy) || 'deletedAt';
   const order = validateSortOrder(req.query.order) || 'DESC';
-  const files = await getTrashFiles(req.userId, sortBy, order);
+  // In the UI, we don't want to render every child row of a deleted folder
+  // Return only top-level trashed items (hide items whose parent is also trashed)
+  const files = await getTrashFiles(req.userId, sortBy, order, true);
   sendSuccess(res, files);
 }
 

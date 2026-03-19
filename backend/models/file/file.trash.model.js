@@ -57,10 +57,32 @@ async function deleteFiles(ids, userId) {
 /**
  * Get files in trash
  */
-async function getTrashFiles(userId, sortBy = 'deletedAt', order = 'DESC') {
-  const orderClause = sortBy === 'size' ? '' : buildOrderClause(sortBy, order);
+async function getTrashFiles(userId, sortBy = 'deletedAt', order = 'DESC', topLevelOnly = false) {
+  const orderClause = sortBy === 'size' ? '' : buildOrderClause(sortBy, order, 'f');
+
+  // When listing trash, we usually don't want to render thousands of child rows
+  // for a single deleted folder. Instead, show only "top-level" items where:
+  // - the item has no parent, OR
+  // - its parent is NOT also in trash.
+  //
+  const topLevelFilter = topLevelOnly
+    ? ` AND (
+          f.parent_id IS NULL
+          OR NOT EXISTS (
+            SELECT 1 FROM files p
+            WHERE p.id = f.parent_id
+              AND p.user_id = $1
+              AND p.deleted_at IS NOT NULL
+          )
+        )`
+    : '';
+
   const res = await pool.query(
-    `SELECT id, name, type, size, modified, mime_type AS "mimeType", starred, shared, deleted_at AS "deletedAt", parent_id AS "parentId" FROM files WHERE user_id = $1 AND deleted_at IS NOT NULL ${orderClause}`,
+    `SELECT f.id, f.name, f.type, f.size, f.modified, f.mime_type AS "mimeType", f.starred, f.shared, f.deleted_at AS "deletedAt", f.parent_id AS "parentId"
+     FROM files f
+     WHERE f.user_id = $1
+       AND f.deleted_at IS NOT NULL${topLevelFilter}
+     ${orderClause}`,
     [userId]
   );
   const files = res.rows;
@@ -109,11 +131,39 @@ async function restoreFiles(ids, userId) {
       [allIds, userId]
     );
 
-    // Process files in order: restore parents first, then children
-    // Sort by parent_id nulls first, then by id to ensure consistent ordering
+    // Process files in parent-first order (by depth within the restore set).
+    // This prevents children from being restored before their parent,
+    // which would otherwise cause us to restore them to root (and create duplicates).
+    const idsSet = new Set(allIds);
+    const parentById = new Map(filesToRestore.rows.map(f => [f.id, f.parent_id]));
+    const depthMemo = new Map();
+
+    const visiting = new Set();
+    const getDepth = id => {
+      const cached = depthMemo.get(id);
+      if (cached != null) return cached;
+
+      // Defensive: if there is an unexpected cycle in the DB,
+      // avoid infinite recursion/stack overflow.
+      if (visiting.has(id)) {
+        depthMemo.set(id, 0);
+        return 0;
+      }
+
+      visiting.add(id);
+
+      const parentId = parentById.get(id);
+      const depth = !parentId || !idsSet.has(parentId) ? 0 : getDepth(parentId) + 1;
+
+      visiting.delete(id);
+      depthMemo.set(id, depth);
+      return depth;
+    };
+
     const sortedFiles = filesToRestore.rows.sort((a, b) => {
-      if (a.parent_id === null && b.parent_id !== null) return -1;
-      if (a.parent_id !== null && b.parent_id === null) return 1;
+      const da = getDepth(a.id);
+      const db = getDepth(b.id);
+      if (da !== db) return da - db;
       return a.id.localeCompare(b.id);
     });
 
@@ -172,7 +222,9 @@ async function restoreFiles(ids, userId) {
 
       // Restore file: clear deleted_at and update parent_id
       await client.query(
-        'UPDATE files SET deleted_at = NULL, parent_id = $1, modified = NOW() WHERE id = $2 AND user_id = $3',
+        // Preserve original metadata timestamps/values (e.g. `modified`)
+        // and only "undelete" + reattach to the correct parent.
+        'UPDATE files SET deleted_at = NULL, parent_id = $1 WHERE id = $2 AND user_id = $3',
         [targetParentId, file.id, userId]
       );
     }
