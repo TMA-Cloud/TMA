@@ -96,6 +96,13 @@ function sortFilesWithFoldersFirst(
   });
 }
 
+// Keep progress below 100 while request is still "uploading"
+// 100 is reserved for completed server responses
+const getInFlightUploadProgress = (loaded: number, total: number): number => {
+  const raw = Math.round((loaded / total) * 100);
+  return Math.min(raw, 99);
+};
+
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { showToast } = useToast();
   const [currentPath, setCurrentPathState] = useState<string[]>(['My Files']);
@@ -760,7 +767,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
           xhr.upload.addEventListener('progress', e => {
             if (e.lengthComputable) {
-              const progress = Math.round((e.loaded / e.total) * 100);
+              const progress = getInFlightUploadProgress(e.loaded, e.total);
               fileProgressItems.forEach(item => {
                 setUploadProgress(prev => updateUploadProgress(prev, item.id, { progress }));
               });
@@ -921,7 +928,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
               xhr.upload.addEventListener('progress', e => {
                 if (e.lengthComputable) {
-                  const progress = Math.round((e.loaded / e.total) * 100);
+                  const progress = getInFlightUploadProgress(e.loaded, e.total);
                   setUploadProgress(prev => updateUploadProgress(prev, uploadId, { progress }));
                 }
               });
@@ -1179,7 +1186,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
         xhr.upload.addEventListener('progress', e => {
           if (e.lengthComputable) {
-            const progress = Math.round((e.loaded / e.total) * 100);
+            const progress = getInFlightUploadProgress(e.loaded, e.total);
             setUploadProgress(prev => updateUploadProgress(prev, uploadId, { progress }));
             if (onProgress) {
               onProgress(progress);
@@ -1303,7 +1310,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
         xhr.upload.addEventListener('progress', e => {
           if (e.lengthComputable) {
-            const progress = Math.round((e.loaded / e.total) * 100);
+            const progress = getInFlightUploadProgress(e.loaded, e.total);
             setUploadProgress(prev => updateUploadProgress(prev, uploadId, { progress }));
             if (onProgress) {
               onProgress(progress);

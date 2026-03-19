@@ -498,6 +498,7 @@ async function uploadFilesBulk(req, res) {
   const relativePaths = normalizeMultipartArray(req.body?.relativePaths);
   const clientIds = normalizeMultipartArray(req.body?.clientIds);
   const folderIdCache = new Map();
+  const mimeFallbackWarnings = [];
 
   // S3: streamed uploads (no temp files)
   if (req.streamedUploads) {
@@ -654,7 +655,12 @@ async function uploadFilesBulk(req, res) {
 
     try {
       let actualMimeType = file.mimetype || 'application/octet-stream';
-      const mimeValidation = await validateMimeType(file.path, file.mimetype, file.originalname);
+      const mimeValidation = await validateMimeType(file.path, file.mimetype, file.originalname, {
+        suppressFallbackWarning: true,
+        onFallback: warning => {
+          mimeFallbackWarnings.push(warning);
+        },
+      });
       if (!mimeValidation.valid) {
         await safeUnlink(file.path);
         throw new Error(`Invalid file type: ${file.originalname}`);
@@ -706,6 +712,26 @@ async function uploadFilesBulk(req, res) {
         ...(clientId ? { clientId } : {}),
       });
     }
+  }
+
+  if (mimeFallbackWarnings.length > 0) {
+    const SAMPLE_LIMIT = 20;
+    const sampled = mimeFallbackWarnings.slice(0, SAMPLE_LIMIT);
+    const byDeclaredMimeType = mimeFallbackWarnings.reduce((acc, item) => {
+      const key = item?.declaredMimeType || 'unknown';
+      acc[key] = (acc[key] || 0) + 1;
+      return acc;
+    }, {});
+    logger.warn(
+      {
+        totalFiles: req.files.length,
+        fallbackCount: mimeFallbackWarnings.length,
+        sampledFiles: sampled.map(item => item.filename),
+        sampleTruncated: mimeFallbackWarnings.length > SAMPLE_LIMIT,
+        byDeclaredMimeType,
+      },
+      'Bulk upload MIME detection fallback summary (per-file warnings suppressed)'
+    );
   }
 
   if (successful.length === 0) {

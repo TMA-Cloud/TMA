@@ -152,15 +152,21 @@ async function detectMimeTypeFromContent(filePath) {
  * @param {string} filename - Original filename
  * @returns {Promise<Object>} { valid: boolean, actualMimeType: string|null, error: string|null }
  */
-async function validateMimeType(filePath, declaredMimeType, filename) {
+async function validateMimeType(filePath, declaredMimeType, filename, options = {}) {
+  const { suppressFallbackWarning = false, onFallback = null } = options;
   const actualMimeType = await detectMimeTypeFromContent(filePath);
 
   if (!actualMimeType) {
-    logger.warn(
-      { declaredMimeType, filename },
-      'Could not detect MIME type from file content, using declared MIME type'
-    );
-    return { valid: true, actualMimeType: declaredMimeType, error: null };
+    if (typeof onFallback === 'function') {
+      onFallback({ declaredMimeType, filename });
+    }
+    if (!suppressFallbackWarning) {
+      logger.warn(
+        { declaredMimeType, filename },
+        'Could not detect MIME type from file content, using declared MIME type'
+      );
+    }
+    return { valid: true, actualMimeType: declaredMimeType, error: null, usedDeclaredFallback: true };
   }
 
   const normalizedActual = normalizeMime(actualMimeType);
@@ -176,7 +182,7 @@ async function validateMimeType(filePath, declaredMimeType, filename) {
     logger.warn({ declaredMimeType, actualMimeType, filename }, '[SECURITY] MIME type mismatch detected');
   }
 
-  return { valid: true, actualMimeType, error: null };
+  return { valid: true, actualMimeType, error: null, usedDeclaredFallback: false };
 }
 
 /**
