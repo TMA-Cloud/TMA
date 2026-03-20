@@ -10,7 +10,7 @@ import type { Props } from "@theme/Navbar/MobileSidebar/Layout";
 function inertProps(inert: boolean) {
   const isBeforeReact19 = parseInt(version!.split(".")[0]!, 10) < 19;
   if (isBeforeReact19) {
-    return { inert: inert ? "" : undefined };
+    return { inert: inert ? true : undefined };
   }
   return { inert };
 }

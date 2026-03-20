@@ -781,3 +781,160 @@ a:hover {
 [data-theme="dark"] .main-wrapper {
   background-color: var(--wiki-bg-base);
 }
+
+/* ============================================
+   Dynamic Changelog UI (dark theme)
+   ============================================ */
+.changelogContainer {
+  max-width: 980px;
+  margin: 0 auto;
+}
+
+.changelogContainer h2 {
+  margin-top: 0;
+  color: var(--ifm-heading-color);
+  font-weight: 700;
+}
+
+.changelogContainer h3 {
+  margin: 0 0 0.75rem;
+  color: var(--ifm-heading-color);
+  font-weight: 600;
+}
+
+.changelogLabel {
+  display: block;
+  margin-bottom: 0.375rem;
+  font-weight: 600;
+}
+
+.changelogSelect {
+  width: 100%;
+  padding: 0.75rem 0.9rem;
+  border-radius: 10px;
+  border: 1px solid var(--ifm-border-color);
+  background-color: var(--ifm-background-surface-color);
+  color: var(--ifm-font-color-base);
+  font-size: 0.95rem;
+  outline: none;
+  box-sizing: border-box;
+  transition:
+    border-color var(--ifm-transition-fast),
+    box-shadow var(--ifm-transition-fast);
+}
+
+.changelogSelect:focus {
+  border-color: var(--ifm-color-primary);
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.22);
+}
+
+.changelogSelect:hover {
+  border-color: var(--ifm-color-primary);
+}
+
+.changelogSelect option {
+  /* Make the dropdown menu area translucent */
+  background-color: rgba(51, 65, 85, 0.45);
+  color: var(--ifm-font-color-base);
+}
+
+[data-theme="dark"] .changelogSelect option {
+  background-color: rgba(15, 23, 42, 0.55);
+}
+
+[data-theme="light"] .changelogSelect option {
+  background-color: rgba(241, 245, 249, 0.65);
+}
+
+.changelogList {
+  margin: 0.75rem 0 0;
+  padding-left: 1.25rem;
+}
+
+/* Custom dropdown (for changelog versions) */
+.changelogDropdownWrapper {
+  position: relative;
+  width: 100%;
+}
+
+.changelogDropdownButton {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+
+  padding: 0.75rem 0.9rem;
+  border-radius: 10px;
+  border: 1px solid var(--ifm-border-color);
+  background-color: var(--ifm-background-surface-color);
+  color: var(--ifm-font-color-base);
+  font-size: 0.95rem;
+
+  cursor: pointer;
+  box-sizing: border-box;
+  transition:
+    border-color var(--ifm-transition-fast),
+    box-shadow var(--ifm-transition-fast);
+}
+
+.changelogDropdownButton:focus {
+  outline: none;
+  border-color: var(--ifm-color-primary);
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.22);
+}
+
+.changelogDropdownCaret {
+  width: 10px;
+  height: 10px;
+  flex-shrink: 0;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg);
+  margin-top: -2px;
+  opacity: 0.85;
+}
+
+.changelogDropdownMenu {
+  position: absolute;
+  z-index: 999;
+  left: 0;
+  right: 0;
+  top: calc(100% + 8px);
+
+  border-radius: 10px;
+  border: 1px solid var(--ifm-border-color);
+  box-shadow: var(--ifm-global-shadow-md);
+
+  max-height: 260px;
+  overflow: auto;
+
+  /* translucent background */
+  background-color: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+[data-theme="light"] .changelogDropdownMenu {
+  background-color: rgba(241, 245, 249, 0.72);
+}
+
+.changelogDropdownItem {
+  padding: 0.65rem 0.9rem;
+  cursor: pointer;
+  color: var(--ifm-font-color-base);
+  transition:
+    background-color var(--ifm-transition-fast),
+    color var(--ifm-transition-fast);
+}
+
+.changelogDropdownItem:hover {
+  background-color: rgba(96, 165, 250, 0.12);
+  color: var(--ifm-color-primary-lighter);
+}
+
+.changelogDropdownItem--active {
+  background-color: rgba(96, 165, 250, 0.18);
+  color: var(--ifm-color-primary-lightest);
+  font-weight: 600;
+}
