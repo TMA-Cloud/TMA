@@ -21,7 +21,7 @@ export const OnlyOfficeSection: React.FC<OnlyOfficeSectionProps> = ({ canConfigu
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(true);
   const [hasLoadedSettings, setHasLoadedSettings] = useState(false);
   const [showJwtSecret, setShowJwtSecret] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -57,10 +57,7 @@ export const OnlyOfficeSection: React.FC<OnlyOfficeSectionProps> = ({ canConfigu
       setOriginalUrl(urlValue);
       setIsEditing(false);
       setHasLoadedSettings(true);
-      // Collapse if settings exist
-      if (config.jwtSecretSet || urlValue) {
-        setIsCollapsed(true);
-      }
+      setIsCollapsed(true);
     } catch (error) {
       // Ignore abort errors (expected when cancelling requests)
       if (error instanceof Error && error.name === 'AbortError') {
@@ -225,7 +222,7 @@ export const OnlyOfficeSection: React.FC<OnlyOfficeSectionProps> = ({ canConfigu
             )}
           </div>
           <p className="text-sm text-gray-500/80 dark:text-gray-400/80">
-            Configure OnlyOffice Document Server for document editing and viewing.
+            Configure OnlyOffice Document Server for document editing and viewing
             {isCollapsed && hasLoadedSettings && !StatusIcon && (
               <span className={`ml-2 ${statusInfo.color}`}>{statusInfo.text}</span>
             )}
@@ -278,7 +275,7 @@ export const OnlyOfficeSection: React.FC<OnlyOfficeSectionProps> = ({ canConfigu
                 {isConfigured && (
                   <div className="stagger-item rounded-2xl bg-blue-50 dark:bg-blue-900/20 px-4 py-3 border border-blue-200 dark:border-blue-800">
                     <p className="text-sm text-blue-700 dark:text-blue-300">
-                      To change settings, re-enter both URL and JWT secret. To clear, clear both fields.
+                      To update, re-enter both URL and JWT secret or to unset, clear both fields
                     </p>
                   </div>
                 )}
@@ -287,8 +284,7 @@ export const OnlyOfficeSection: React.FC<OnlyOfficeSectionProps> = ({ canConfigu
                     OnlyOffice Document Server URL
                   </label>
                   <p className="text-xs text-gray-500 dark:text-gray-400">
-                    Base URL of your OnlyOffice Document Server (e.g., http://localhost or
-                    https://documentserver.example.com)
+                    Base URL of your OnlyOffice Document Server
                   </p>
                   <input
                     id="onlyoffice-url"
@@ -297,7 +293,7 @@ export const OnlyOfficeSection: React.FC<OnlyOfficeSectionProps> = ({ canConfigu
                     value={url}
                     onChange={e => setUrl(e.target.value)}
                     disabled={loading || saving}
-                    placeholder="http://localhost"
+                    placeholder="http://documentserver.example.com"
                     autoComplete="off"
                     data-lpignore="true"
                     data-1p-ignore="true"
@@ -314,10 +310,7 @@ export const OnlyOfficeSection: React.FC<OnlyOfficeSectionProps> = ({ canConfigu
                   >
                     JWT Secret
                   </label>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    Secret key for signing OnlyOffice requests. Must match the secret configured in your OnlyOffice
-                    Document Server.
-                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Secret key for signing OnlyOffice requests</p>
                   <div className="relative">
                     <input
                       id="onlyoffice-jwt-secret"
