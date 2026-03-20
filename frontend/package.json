@@ -1,7 +1,7 @@
 {
   "name": "tma-cloud-frontend",
   "private": true,
-  "version": "2.0.14",
+  "version": "2.0.15",
   "description": "Frontend for TMA Cloud",
   "keywords": [
     "tma-cloud",
