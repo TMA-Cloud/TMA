@@ -78,6 +78,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     restoreFiles,
     deleteForever,
     isDeleting,
+    isRestoring,
     setShareLinkModalOpen,
     currentPath,
     downloadFiles,
@@ -122,6 +123,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
   const electronClipboardAvailable = hasElectronClipboard();
 
   const handleRestore = useCallback(async () => {
+    if (isRestoring) return;
     try {
       await restoreFiles(selectedFiles);
       const count = selectedFiles.length;
@@ -131,7 +133,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     } catch (error: unknown) {
       showToast(getErrorMessage(error, 'Failed to restore files. Please try again.'), 'error');
     }
-  }, [restoreFiles, selectedFiles, clearSelection, showToast, onActionComplete]);
+  }, [restoreFiles, selectedFiles, clearSelection, showToast, onActionComplete, isRestoring]);
 
   const handleConfirmDelete = async () => {
     if (!pendingAction) return;
@@ -191,7 +193,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
         {
           icon: RotateCcw,
           label: 'Restore',
-          disabled: false,
+          disabled: isRestoring,
           action: () => {
             handleRestore();
             onClose();
@@ -504,6 +506,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     onActionComplete,
     electronClipboardAvailable,
     isDeleting,
+    isRestoring,
   ]);
 
   // Initial position (below-right of cursor); used for first paint so we can measure

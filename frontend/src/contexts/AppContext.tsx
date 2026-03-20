@@ -128,7 +128,13 @@ export interface AppContextType {
   searchFiles: (query: string) => Promise<void>;
   isDownloading: boolean;
   isDeleting: boolean;
+  isRestoring: boolean;
   deleteProgress: {
+    itemCount: number;
+    percent: number;
+    label: string;
+  } | null;
+  restoreProgress: {
     itemCount: number;
     percent: number;
     label: string;

@@ -8,6 +8,7 @@ import { PasteProgress } from './PasteProgress';
 import { DownloadProgress } from './DownloadProgress';
 import { DesktopOpenProgress } from './DesktopOpenProgress';
 import { DeleteProgress } from './DeleteProgress';
+import { RestoreProgress } from './RestoreProgress';
 import { ONLYOFFICE_EXTS, getExt, validateOnlyOfficeMimeType } from '../../utils/fileUtils';
 import { isElectron } from '../../utils/electronDesktop';
 import { useIsMobile } from '../../hooks/useIsMobile';
@@ -57,7 +58,9 @@ export const FileManager: React.FC = () => {
     isSearching,
     isDownloading,
     isDeleting,
+    isRestoring,
     deleteProgress,
+    restoreProgress,
     emptyTrash,
     shareFiles,
     starFiles,
@@ -298,6 +301,7 @@ export const FileManager: React.FC = () => {
   };
 
   const handleRestore = async () => {
+    if (isRestoring) return;
     try {
       const result = await restoreFiles(selectedFiles);
       const count = selectedFiles.length;
@@ -794,6 +798,7 @@ export const FileManager: React.FC = () => {
           allStarred={allStarred}
           isDownloading={isDownloading}
           isDeleting={isDeleting}
+          isRestoring={isRestoring}
           onViewModeChange={setViewMode}
           onSortChange={(by, order) => {
             setSortBy(by as 'name' | 'size' | 'modified' | 'deletedAt');
@@ -874,6 +879,7 @@ export const FileManager: React.FC = () => {
       <PasteProgress progress={pasteProgress} />
       {desktopOpenProgress.length > 0 && <DesktopOpenProgress items={desktopOpenProgress} />}
       <DeleteProgress progress={deleteProgress} />
+      <RestoreProgress progress={restoreProgress} />
       <DownloadProgress
         isDownloading={isDownloading}
         hasFolders={selectedFiles.some(id => files.find(f => f.id === id)?.type === 'folder')}

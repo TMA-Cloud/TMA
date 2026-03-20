@@ -133,7 +133,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isSearching, setIsSearching] = useState<boolean>(false);
   const [isDownloading, setIsDownloading] = useState<boolean>(false);
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
+  const [isRestoring, setIsRestoring] = useState<boolean>(false);
   const [deleteProgress, setDeleteProgress] = useState<{
+    itemCount: number;
+    percent: number;
+    label: string;
+  } | null>(null);
+  const [restoreProgress, setRestoreProgress] = useState<{
     itemCount: number;
     percent: number;
     label: string;
@@ -172,6 +178,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const desktopEditInProgressRef = useRef<Set<string>>(new Set()); // Track files currently opening on desktop to prevent double-click spam
   const deleteInProgressRef = useRef(false); // Client-side lock against double delete clicks
   const deleteProgressDismissTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const restoreInProgressRef = useRef(false); // Client-side lock against double restore clicks
+  const restoreProgressDismissTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [desktopOpenProgress, setDesktopOpenProgress] = useState<
     { fileId: string; fileName: string; percent: number }[]
   >([]);
@@ -1578,19 +1586,68 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const restoreFilesApi = async (ids: string[]) => {
-    const res = await fetch(`/api/files/trash/restore`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ ids }),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      const errorMessage = data.message || 'Failed to restore files';
-      throw new Error(errorMessage);
+    if (!ids.length) return { success: true } as const;
+    if (restoreInProgressRef.current) {
+      throw new Error('Restore already in progress. Please wait.');
     }
-    await refreshFiles();
-    return data;
+
+    const itemCount = ids.length;
+    const expectedDurationMs = Math.min(30000, Math.max(3000, itemCount * 20));
+    const startedAt = Date.now();
+
+    restoreInProgressRef.current = true;
+    if (restoreProgressDismissTimeoutRef.current) {
+      clearTimeout(restoreProgressDismissTimeoutRef.current);
+      restoreProgressDismissTimeoutRef.current = null;
+    }
+    setIsRestoring(true);
+    setRestoreProgress({
+      itemCount,
+      percent: 5,
+      label: itemCount === 1 ? 'Restoring 1 item...' : `Restoring ${itemCount} items...`,
+    });
+
+    const progressTimer = setInterval(() => {
+      const elapsed = Date.now() - startedAt;
+      const smoothPercent = Math.min(95, Math.max(5, Math.round((elapsed / expectedDurationMs) * 90) + 5));
+      setRestoreProgress(prev =>
+        prev
+          ? {
+              ...prev,
+              percent: smoothPercent,
+            }
+          : prev
+      );
+    }, 250);
+
+    try {
+      const res = await fetch(`/api/files/trash/restore`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ ids }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        const errorMessage = data.message || 'Failed to restore files';
+        throw new Error(errorMessage);
+      }
+
+      // Stop smooth timer immediately so it can't overwrite the final 100% value.
+      clearInterval(progressTimer);
+      setRestoreProgress(prev => (prev ? { ...prev, percent: 100, label: 'Finalizing restore...' } : prev));
+      await refreshFiles();
+      await new Promise(resolve => setTimeout(resolve, 450));
+      return data;
+    } finally {
+      clearInterval(progressTimer);
+      restoreInProgressRef.current = false;
+      setIsRestoring(false);
+      restoreProgressDismissTimeoutRef.current = setTimeout(() => {
+        setRestoreProgress(null);
+        restoreProgressDismissTimeoutRef.current = null;
+      }, 1500);
+    }
   };
 
   const deleteForeverApi = async (ids: string[]) => {
@@ -2119,7 +2176,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         searchFiles: searchFilesApi,
         isDownloading,
         isDeleting,
+        isRestoring,
         deleteProgress,
+        restoreProgress,
         downloadFiles,
         copyFilesToPc,
         editFileWithDesktop,

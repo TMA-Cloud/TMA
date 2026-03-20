@@ -16,6 +16,7 @@ interface FileManagerToolbarProps {
   allStarred: boolean;
   isDownloading: boolean;
   isDeleting: boolean;
+  isRestoring: boolean;
   onViewModeChange: (mode: 'grid' | 'list') => void;
   onSortChange: (by: string, order: 'asc' | 'desc') => void;
   onCreateFolder: () => void;
@@ -42,6 +43,7 @@ export const FileManagerToolbar: React.FC<FileManagerToolbarProps> = ({
   allStarred,
   isDownloading,
   isDeleting,
+  isRestoring,
   onViewModeChange,
   onSortChange,
   onCreateFolder,
@@ -168,8 +170,20 @@ export const FileManagerToolbar: React.FC<FileManagerToolbarProps> = ({
             <>
               <Tooltip text="Restore">
                 <button
-                  className={`${btnBase} ${btnMuted} hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-500/10 dark:hover:bg-emerald-500/20`}
-                  onClick={() => onRestore()}
+                  className={`${btnBase} ${
+                    isRestoring
+                      ? 'opacity-50 cursor-not-allowed pointer-events-none text-slate-400'
+                      : `${btnMuted} hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-500/10 dark:hover:bg-emerald-500/20`
+                  }`}
+                  onClick={e => {
+                    if (isRestoring) {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      return;
+                    }
+                    onRestore();
+                  }}
+                  disabled={isRestoring}
                   aria-label="Restore"
                 >
                   <RotateCcw className="w-5 h-5" />
