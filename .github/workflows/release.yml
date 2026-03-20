@@ -76,7 +76,7 @@ jobs:
             ```
 
             ### Changes
-            See [CHANGELOG](https://github.com/${{ github.repository }}/compare/${{ steps.prev_tag.outputs.tag }}...${{ steps.version.outputs.tag }}) for details.
+            See [Full Changelog](https://tma-cloud.github.io/TMA/changelog/overview) for details
           draft: false
           prerelease: ${{ contains(steps.version.outputs.tag, '-') }}
         env:
