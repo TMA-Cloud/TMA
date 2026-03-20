@@ -38,6 +38,24 @@ import {
 } from '../utils/electronDesktop';
 import { formatBytes } from '../utils/storageUtils';
 
+// Constants & Pure Helpers
+
+const FILE_MANAGER_PAGES = new Set(['My Files', 'Shared', 'Starred', 'Trash']);
+
+const isFileManagerPage = (page: string | undefined) => !!page && FILE_MANAGER_PAGES.has(page);
+
+const naturalCompare = (a: string, b: string) => a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true });
+
+const mapFileResponse = (f: FileItemResponse): FileItem => ({
+  ...f,
+  modified: new Date(f.modified),
+  deletedAt: f.deletedAt ? new Date(f.deletedAt) : undefined,
+  expiresAt: f.expiresAt ? new Date(f.expiresAt) : f.expiresAt === null ? null : undefined,
+});
+
+const getInFlightUploadProgress = (loaded: number, total: number): number =>
+  Math.min(Math.round((loaded / total) * 100), 99);
+
 function sortFilesWithFoldersFirst(
   items: FileItem[],
   sortBy: 'name' | 'size' | 'modified' | 'deletedAt',
@@ -46,45 +64,22 @@ function sortFilesWithFoldersFirst(
   const direction = sortOrder === 'desc' ? -1 : 1;
 
   const compareCore = (a: FileItem, b: FileItem): number => {
+    const byName = () => naturalCompare(a.name, b.name);
     switch (sortBy) {
       case 'name':
-        return a.name.localeCompare(b.name, undefined, {
-          sensitivity: 'base',
-          numeric: true,
-        });
+        return byName();
       case 'size': {
-        const aSize = a.size ?? 0;
-        const bSize = b.size ?? 0;
-        if (aSize === bSize) {
-          return a.name.localeCompare(b.name, undefined, {
-            sensitivity: 'base',
-            numeric: true,
-          });
-        }
-        return aSize < bSize ? -1 : 1;
+        const diff = (a.size ?? 0) - (b.size ?? 0);
+        return diff !== 0 ? (diff < 0 ? -1 : 1) : byName();
       }
       case 'deletedAt': {
-        const aDate = a.deletedAt ? a.deletedAt.getTime() : 0;
-        const bDate = b.deletedAt ? b.deletedAt.getTime() : 0;
-        if (aDate === bDate) {
-          return a.name.localeCompare(b.name, undefined, {
-            sensitivity: 'base',
-            numeric: true,
-          });
-        }
-        return aDate < bDate ? -1 : 1;
+        const diff = (a.deletedAt?.getTime() ?? 0) - (b.deletedAt?.getTime() ?? 0);
+        return diff !== 0 ? (diff < 0 ? -1 : 1) : byName();
       }
       case 'modified':
       default: {
-        const aDate = a.modified ? a.modified.getTime() : 0;
-        const bDate = b.modified ? b.modified.getTime() : 0;
-        if (aDate === bDate) {
-          return a.name.localeCompare(b.name, undefined, {
-            sensitivity: 'base',
-            numeric: true,
-          });
-        }
-        return aDate < bDate ? -1 : 1;
+        const diff = (a.modified?.getTime() ?? 0) - (b.modified?.getTime() ?? 0);
+        return diff !== 0 ? (diff < 0 ? -1 : 1) : byName();
       }
     }
   };
@@ -96,15 +91,34 @@ function sortFilesWithFoldersFirst(
   });
 }
 
-// Keep progress below 100 while request is still "uploading"
-// 100 is reserved for completed server responses
-const getInFlightUploadProgress = (loaded: number, total: number): number => {
-  const raw = Math.round((loaded / total) * 100);
-  return Math.min(raw, 99);
-};
+function parseContentDispositionFilename(header: string | null, fallback: string): string {
+  if (!header) return fallback;
+  const rfc5987 = header.match(/filename\*=UTF-8''([^;,\s]+)/i);
+  if (rfc5987?.[1]) {
+    try {
+      return decodeURIComponent(rfc5987[1]);
+    } catch {
+      return rfc5987[1];
+    }
+  }
+  const quoted = header.match(/filename="([^"]+)"/);
+  if (quoted?.[1]) return quoted[1];
+  const unquoted = header.match(/filename=([^;,\s]+)/);
+  return unquoted?.[1] ?? fallback;
+}
+
+// Types
+
+type NavEntry = { path: string[]; ids: (string | null)[]; shared: boolean[] };
+type ProgressState = { itemCount: number; percent: number; label: string };
+
+// Provider
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { showToast } = useToast();
+
+  // State
+
   const [currentPath, setCurrentPathState] = useState<string[]>(['My Files']);
   const [folderStack, setFolderStack] = useState<(string | null)[]>([null]);
   const [folderSharedStack, setFolderSharedStack] = useState<boolean[]>([false]);
@@ -122,28 +136,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [shareLinkModalOpen, setShareLinkModalOpenState] = useState(false);
   const [shareLinks, setShareLinks] = useState<string[]>([]);
   const [renameTarget, setRenameTarget] = useState<FileItem | null>(null);
-  const [clipboard, setClipboard] = useState<{
-    ids: string[];
-    action: 'copy' | 'cut';
-  } | null>(null);
+  const [clipboard, setClipboard] = useState<{ ids: string[]; action: 'copy' | 'cut' } | null>(null);
   const [pasteProgress, setPasteProgress] = useState<number | null>(null);
   const [sortBy, setSortBy] = useState<'name' | 'size' | 'modified' | 'deletedAt'>('name');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
-  const [searchQuery, setSearchQuery] = useState<string>('');
-  const [isSearching, setIsSearching] = useState<boolean>(false);
-  const [isDownloading, setIsDownloading] = useState<boolean>(false);
-  const [isDeleting, setIsDeleting] = useState<boolean>(false);
-  const [isRestoring, setIsRestoring] = useState<boolean>(false);
-  const [deleteProgress, setDeleteProgress] = useState<{
-    itemCount: number;
-    percent: number;
-    label: string;
-  } | null>(null);
-  const [restoreProgress, setRestoreProgress] = useState<{
-    itemCount: number;
-    percent: number;
-    label: string;
-  } | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(false);
+  const [deleteProgress, setDeleteProgress] = useState<ProgressState | null>(null);
+  const [restoreProgress, setRestoreProgress] = useState<ProgressState | null>(null);
   const [uploadProgress, setUploadProgress] = useState<UploadProgressItem[]>([]);
   const [isUploadProgressInteracting, setIsUploadProgressInteracting] = useState(false);
   const [onlyOfficeConfigured, setOnlyOfficeConfigured] = useState(false);
@@ -155,265 +158,139 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     electron?: string;
   } | null>(null);
   const [hasCheckedUpdates, setHasCheckedUpdates] = useState(false);
-  /** Folder navigation history for back/forward (used in Electron). */
-  type NavEntry = { path: string[]; ids: (string | null)[]; shared: boolean[] };
   const [navHistory, setNavHistory] = useState<{ entries: NavEntry[]; index: number }>(() => ({
     entries: [{ path: ['My Files'], ids: [null], shared: [false] }],
     index: 0,
   }));
-  const isUploadProgressInteractingRef = useRef(false);
-  const uploadDismissTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
-  const uploadXhrRef = useRef<Map<string, XMLHttpRequest>>(new Map());
-  const searchQueryRef = useRef<string>(''); // Track current search query to ignore stale results
-  const abortControllerRef = useRef<AbortController | null>(null); // For cancelling fetch requests
-  const filesRef = useRef<FileItem[]>(files); // Keep latest files for search pre-image restore
-  const filesBeforeSearchRef = useRef<FileItem[] | null>(null); // Restore non-search listing when leaving file manager
-  const didSavePreSearchRef = useRef<boolean>(false); // Avoid overwriting pre-search listing mid-search
-  const eventSourceRef = useRef<EventSource | null>(null); // For SSE connection
-  const sseRefreshTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null); // For debouncing SSE refresh
-  const currentPathRef = useRef<string[]>(currentPath); // Track current path for SSE relevance check
-  const folderStackRef = useRef<(string | null)[]>(folderStack); // Track folder stack for SSE relevance check
-  const folderSharedStackRef = useRef<boolean[]>(folderSharedStack); // For nav history (back/forward)
-  const refreshFilesRef = useRef<((skipSearchCheck?: boolean) => Promise<void>) | null>(null); // Track refreshFiles function for SSE
-  const desktopEditInProgressRef = useRef<Set<string>>(new Set()); // Track files currently opening on desktop to prevent double-click spam
-  const deleteInProgressRef = useRef(false); // Client-side lock against double delete clicks
-  const deleteProgressDismissTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const restoreInProgressRef = useRef(false); // Client-side lock against double restore clicks
-  const restoreProgressDismissTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [desktopOpenProgress, setDesktopOpenProgress] = useState<
     { fileId: string; fileName: string; percent: number }[]
   >([]);
 
+  // Refs
+
+  const isUploadProgressInteractingRef = useRef(false);
+  const uploadDismissTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const uploadXhrRef = useRef<Map<string, XMLHttpRequest>>(new Map());
+  const searchQueryRef = useRef('');
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const filesRef = useRef<FileItem[]>(files);
+  const filesBeforeSearchRef = useRef<FileItem[] | null>(null);
+  const didSavePreSearchRef = useRef(false);
+  const eventSourceRef = useRef<EventSource | null>(null);
+  const sseRefreshTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const currentPathRef = useRef<string[]>(currentPath);
+  const folderStackRef = useRef<(string | null)[]>(folderStack);
+  const folderSharedStackRef = useRef<boolean[]>(folderSharedStack);
+  const refreshFilesRef = useRef<((skipSearchCheck?: boolean) => Promise<void>) | null>(null);
+  const desktopEditInProgressRef = useRef<Set<string>>(new Set());
+  const deleteInProgressRef = useRef(false);
+  const deleteProgressDismissTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const restoreInProgressRef = useRef(false);
+  const restoreProgressDismissTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const operationQueue = usePromiseQueue();
 
-  // Keep ref in sync with state
+  // Ref-sync effects
+
   useEffect(() => {
     isUploadProgressInteractingRef.current = isUploadProgressInteracting;
   }, [isUploadProgressInteracting]);
-
-  // When user stops interacting, dismiss completed items after a short delay
-  useEffect(() => {
-    if (!isUploadProgressInteracting) {
-      // User stopped interacting, wait 2 seconds then dismiss completed items
-      const checkTimeout = setTimeout(() => {
-        // Double-check that user is still not interacting
-        if (!isUploadProgressInteractingRef.current) {
-          // Dismiss all completed and error items (errors after longer delay)
-          setUploadProgress(prev => {
-            const itemsToKeep = prev.filter(item => {
-              if (item.status === 'completed') {
-                // Clean up any pending timeouts for dismissed items
-                const timeout = uploadDismissTimeoutsRef.current.get(item.id);
-                if (timeout) {
-                  clearTimeout(timeout);
-                  uploadDismissTimeoutsRef.current.delete(item.id);
-                }
-                return false; // Dismiss completed items
-              }
-              if (item.status === 'error') {
-                // Dismiss error items too (they've been visible long enough)
-                const timeout = uploadDismissTimeoutsRef.current.get(item.id);
-                if (timeout) {
-                  clearTimeout(timeout);
-                  uploadDismissTimeoutsRef.current.delete(item.id);
-                }
-                return false; // Dismiss error items
-              }
-              return true; // Keep uploading items
-            });
-            return itemsToKeep;
-          });
-        }
-      }, 2000); // Wait 2 seconds after user stops interacting
-      return () => clearTimeout(checkTimeout);
-    } else {
-      // User started interacting, cancel any pending dismissals
-      uploadDismissTimeoutsRef.current.forEach(timeout => {
-        clearTimeout(timeout);
-      });
-      uploadDismissTimeoutsRef.current.clear();
-    }
-  }, [isUploadProgressInteracting]);
-
-  // Keep refs in sync with state
   useEffect(() => {
     searchQueryRef.current = searchQuery;
   }, [searchQuery]);
-
   useEffect(() => {
     filesRef.current = files;
   }, [files]);
-
   useEffect(() => {
     currentPathRef.current = currentPath;
   }, [currentPath]);
-
   useEffect(() => {
     folderStackRef.current = folderStack;
   }, [folderStack]);
-
   useEffect(() => {
     folderSharedStackRef.current = folderSharedStack;
   }, [folderSharedStack]);
 
-  // Helper to extract share URLs from backend response.
-  // Backend already provides full URLs in `links` - just return them as-is.
-  const buildShareUrlMap = useCallback((data: { links?: Record<string, string> }) => {
-    return data?.links || {};
-  }, []);
+  // Core data functions
 
   const refreshFiles = useCallback(
     async (skipSearchCheck = false) => {
       try {
-        // If searching, don't refresh normally - search handles its own file updates
-        // skipSearchCheck is used when we explicitly want to refresh (e.g., when clearing search)
-        if (!skipSearchCheck && searchQuery.trim().length > 0) {
-          return;
-        }
-
-        // Only fetch files if we're on a file manager page
-        const currentPage = currentPath[0];
-        const isFileManagerPage =
-          currentPage === 'My Files' ||
-          currentPage === 'Shared' ||
-          currentPage === 'Starred' ||
-          currentPage === 'Trash';
-
-        if (!isFileManagerPage) {
-          return;
-        }
+        if (!skipSearchCheck && searchQuery.trim().length > 0) return;
+        if (!isFileManagerPage(currentPath[0])) return;
 
         const parentId = folderStack[folderStack.length - 1];
-        let urlPath = `/api/files`;
-        if (currentPath[0] === 'Starred' && folderStack.length === 1) {
-          urlPath = `/api/files/starred`;
-        } else if (currentPath[0] === 'Shared' && folderStack.length === 1) {
-          urlPath = `/api/files/shared`;
-        } else if (currentPath[0] === 'Trash' && folderStack.length === 1) {
-          urlPath = `/api/files/trash`;
+        let urlPath = '/api/files';
+        if (folderStack.length === 1) {
+          if (currentPath[0] === 'Starred') urlPath = '/api/files/starred';
+          else if (currentPath[0] === 'Shared') urlPath = '/api/files/shared';
+          else if (currentPath[0] === 'Trash') urlPath = '/api/files/trash';
         }
 
         const url = new URL(urlPath, window.location.origin);
         if (parentId) url.searchParams.append('parentId', parentId);
         url.searchParams.append('sortBy', sortBy);
-        // Only append order if it has a valid value
-        // Backend will validate and convert to uppercase
-        if (sortOrder && sortOrder.trim()) {
-          url.searchParams.append('order', sortOrder);
-        }
-        const res = await fetch(url.toString(), {
-          credentials: 'include',
-        });
+        if (sortOrder?.trim()) url.searchParams.append('order', sortOrder);
+
+        const res = await fetch(url.toString(), { credentials: 'include' });
         const data: FileItemResponse[] = await res.json();
-        const mapped: FileItem[] = data.map(f => ({
-          ...f,
-          modified: new Date(f.modified),
-          deletedAt: f.deletedAt ? new Date(f.deletedAt) : undefined,
-          expiresAt: f.expiresAt ? new Date(f.expiresAt) : f.expiresAt === null ? null : undefined,
-        }));
-        setFiles(sortFilesWithFoldersFirst(mapped, sortBy, sortOrder));
+        setFiles(sortFilesWithFoldersFirst(data.map(mapFileResponse), sortBy, sortOrder));
       } catch {
-        // Silently handle file loading errors - UI will show empty state
+        // UI will show empty state
       }
     },
     [folderStack, currentPath, sortBy, sortOrder, searchQuery]
   );
 
-  // Debounced refresh for uploads - batches multiple upload completions into a single refresh
-  const [debouncedRefreshFiles] = useDebouncedCallback(
-    (...args: unknown[]) => {
-      const skipSearchCheck = (args[0] as boolean | undefined) ?? false;
-      void refreshFiles(skipSearchCheck);
-    },
-    500 // 500ms delay - batches upload completions that happen close together
-  );
+  const [debouncedRefreshFiles] = useDebouncedCallback((...args: unknown[]) => {
+    void refreshFiles((args[0] as boolean | undefined) ?? false);
+  }, 500);
 
-  // Keep refreshFiles ref in sync (after refreshFiles is declared)
   useEffect(() => {
     refreshFilesRef.current = refreshFiles;
   }, [refreshFiles]);
 
   const searchFilesApi = useCallback(
     async (query: string) => {
-      const trimmedQuery = query.trim();
+      const trimmed = query.trim();
+      if (searchQueryRef.current.trim() !== trimmed) return;
 
-      // Check if this search result is still relevant (query hasn't changed)
-      if (searchQueryRef.current.trim() !== trimmedQuery) {
-        // Query has changed, ignore this result
-        return;
-      }
-
-      if (!trimmedQuery || trimmedQuery.length === 0) {
-        // If search is cleared, refresh normal files
+      if (!trimmed) {
         setIsSearching(false);
-        await refreshFiles(true); // Force refresh by skipping search check
+        await refreshFiles(true);
         return;
       }
 
-      // Cancel any previous search request
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
-
-      // Create new AbortController for this search
-      const abortController = new AbortController();
-      abortControllerRef.current = abortController;
+      if (abortControllerRef.current) abortControllerRef.current.abort();
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
 
       setIsSearching(true);
       try {
-        const url = new URL(`/api/files/search`, window.location.origin);
-        url.searchParams.append('q', trimmedQuery);
+        const url = new URL('/api/files/search', window.location.origin);
+        url.searchParams.append('q', trimmed);
         url.searchParams.append('limit', '100');
 
         const res = await fetch(url.toString(), {
           credentials: 'include',
-          signal: abortController.signal, // Enable request cancellation
+          signal: controller.signal,
         });
 
-        // Check if request was aborted
-        if (abortController.signal.aborted) {
-          return;
-        }
-
-        if (!res.ok) {
-          throw new Error('Search failed');
-        }
-
-        // Double-check query hasn't changed while fetching
-        if (searchQueryRef.current.trim() !== trimmedQuery) {
-          // Query changed during fetch, ignore this result
-          return;
-        }
+        if (controller.signal.aborted || searchQueryRef.current.trim() !== trimmed) return;
+        if (!res.ok) throw new Error('Search failed');
+        if (searchQueryRef.current.trim() !== trimmed) return;
 
         const data: FileItemResponse[] = await res.json();
+        if (searchQueryRef.current.trim() !== trimmed) return;
 
-        // Final check before updating state
-        if (searchQueryRef.current.trim() !== trimmedQuery) {
-          return;
-        }
-
-        const mapped: FileItem[] = data.map(f => ({
-          ...f,
-          modified: new Date(f.modified),
-          deletedAt: f.deletedAt ? new Date(f.deletedAt) : undefined,
-          expiresAt: f.expiresAt == null ? f.expiresAt : new Date(f.expiresAt),
-        }));
-
-        setFiles(sortFilesWithFoldersFirst(mapped, sortBy, sortOrder));
+        setFiles(sortFilesWithFoldersFirst(data.map(mapFileResponse), sortBy, sortOrder));
       } catch (e) {
-        // Ignore abort errors (expected when cancelling)
-        if (e instanceof Error && e.name === 'AbortError') {
-          return;
-        }
-
-        // Only update state if query is still relevant and not aborted
-        if (searchQueryRef.current.trim() === trimmedQuery && !abortController.signal.aborted) {
-          // Silently handle search errors - UI will show empty results
+        if (e instanceof Error && e.name === 'AbortError') return;
+        if (searchQueryRef.current.trim() === trimmed && !controller.signal.aborted) {
           setFiles([]);
         }
       } finally {
-        // Only update searching state if query is still relevant and controller wasn't replaced
-        if (searchQueryRef.current.trim() === trimmedQuery && abortControllerRef.current === abortController) {
+        if (searchQueryRef.current.trim() === trimmed && abortControllerRef.current === controller) {
           setIsSearching(false);
           abortControllerRef.current = null;
         }
@@ -422,57 +299,273 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     [refreshFiles, sortBy, sortOrder]
   );
 
-  // Debounced search function with cancellation support
   const [debouncedSearch, cancelSearch] = useDebouncedCallback(
     ((query: string) => searchFilesApi(query)) as (...args: unknown[]) => unknown,
     300
   );
 
+  // Internal helpers (use component scope, called only from event handlers)
+
+  const validateUploadSize = async (filesToValidate: File[]) => {
+    const { maxBytes } = await getMaxUploadSizeConfig();
+    const oversized = filesToValidate.find(f => f.size > maxBytes);
+    if (oversized) {
+      const msg =
+        filesToValidate.length === 1
+          ? `This file is too large. Maximum upload size is ${formatBytes(maxBytes)}.`
+          : `"${oversized.name}" is too large. Maximum upload size is ${formatBytes(maxBytes)}.`;
+      showToast(msg, 'error');
+      throw new Error(msg);
+    }
+    const totalSize = filesToValidate.reduce((sum, f) => sum + f.size, 0);
+    try {
+      await checkUploadStorage(totalSize);
+    } catch (e) {
+      const msg = e instanceof ApiError ? e.message : 'Storage limit exceeded.';
+      showToast(msg, 'error');
+      throw e;
+    }
+  };
+
+  const executeXhrUpload = (config: {
+    url: string;
+    formData: FormData;
+    uploadId: string;
+    fileName: string;
+    fileSize: number;
+    groupId?: string;
+    onProgress?: (progress: number) => void;
+  }): Promise<void> => {
+    const { url, formData, uploadId, fileName, fileSize, groupId, onProgress } = config;
+    return new Promise<void>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+
+      setUploadProgress(prev => [
+        ...prev,
+        {
+          id: uploadId,
+          fileName,
+          fileSize,
+          progress: 0,
+          status: 'uploading' as const,
+          ...(groupId ? { groupId } : {}),
+        },
+      ]);
+      uploadXhrRef.current.set(uploadId, xhr);
+
+      xhr.upload.addEventListener('progress', e => {
+        if (e.lengthComputable) {
+          const progress = getInFlightUploadProgress(e.loaded, e.total);
+          setUploadProgress(prev => updateUploadProgress(prev, uploadId, { progress }));
+          onProgress?.(progress);
+        }
+      });
+
+      const scheduleAutoDismiss = (isSuccess: boolean) => {
+        const timeout = isSuccess
+          ? createAutoDismissTimeout(
+              uploadId,
+              isUploadProgressInteractingRef,
+              setUploadProgress,
+              uploadDismissTimeoutsRef,
+              3000,
+              2000
+            )
+          : createAutoDismissTimeout(
+              uploadId,
+              isUploadProgressInteractingRef,
+              setUploadProgress,
+              uploadDismissTimeoutsRef
+            );
+        uploadDismissTimeoutsRef.current.set(uploadId, timeout);
+      };
+
+      const handleError = (fallbackMsg: string) => {
+        setUploadProgress(prev => updateUploadProgress(prev, uploadId, { status: 'error' }));
+        const errorMessage = extractXhrErrorMessage(xhr) || fallbackMsg;
+        showToast(errorMessage, 'error');
+        scheduleAutoDismiss(false);
+        uploadXhrRef.current.delete(uploadId);
+        reject(new Error(errorMessage));
+      };
+
+      xhr.addEventListener('load', () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          setUploadProgress(prev => updateUploadProgress(prev, uploadId, { progress: 100, status: 'completed' }));
+          debouncedRefreshFiles(false);
+          scheduleAutoDismiss(true);
+          uploadXhrRef.current.delete(uploadId);
+          resolve();
+        } else {
+          handleError('Upload failed');
+        }
+      });
+
+      xhr.addEventListener('error', () => handleError('Upload failed. Please check your connection and try again.'));
+
+      xhr.addEventListener('abort', () => {
+        setUploadProgress(prev => removeUploadProgress(prev, uploadId));
+        uploadXhrRef.current.delete(uploadId);
+        reject(new Error('Upload cancelled'));
+      });
+
+      xhr.open('POST', url);
+      xhr.withCredentials = true;
+      xhr.send(formData);
+    });
+  };
+
+  const runProgressOperation = async (opts: {
+    ids: string[];
+    lockRef: React.MutableRefObject<boolean>;
+    dismissRef: React.MutableRefObject<ReturnType<typeof setTimeout> | null>;
+    setActive: (v: boolean) => void;
+    setProgress: React.Dispatch<React.SetStateAction<ProgressState | null>>;
+    actionLabel: string;
+    finalizeLabel: string;
+    url: string;
+    onFetch?: (res: Response) => Promise<void>;
+  }) => {
+    const { ids, lockRef, dismissRef, setActive, setProgress, actionLabel, finalizeLabel, url, onFetch } = opts;
+
+    if (lockRef.current) {
+      throw new Error(`${actionLabel} already in progress. Please wait.`);
+    }
+
+    const itemCount = ids.length;
+    const expectedMs = Math.min(30000, Math.max(3000, itemCount * 20));
+    const startedAt = Date.now();
+
+    lockRef.current = true;
+    if (dismissRef.current) {
+      clearTimeout(dismissRef.current);
+      dismissRef.current = null;
+    }
+    setActive(true);
+    setProgress({
+      itemCount,
+      percent: 5,
+      label: itemCount === 1 ? `${actionLabel} 1 item...` : `${actionLabel} ${itemCount} items...`,
+    });
+
+    const timer = setInterval(() => {
+      const elapsed = Date.now() - startedAt;
+      const percent = Math.min(95, Math.max(5, Math.round((elapsed / expectedMs) * 90) + 5));
+      setProgress(prev => (prev ? { ...prev, percent } : prev));
+    }, 250);
+
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ ids }),
+      });
+
+      if (onFetch) {
+        await onFetch(res);
+      } else if (!res.ok) {
+        throw new Error(await extractResponseError(res));
+      }
+
+      clearInterval(timer);
+      setProgress(prev => (prev ? { ...prev, percent: 100, label: `${finalizeLabel}...` } : prev));
+      await refreshFiles();
+      await new Promise(r => setTimeout(r, 450));
+    } finally {
+      clearInterval(timer);
+      lockRef.current = false;
+      setActive(false);
+      dismissRef.current = setTimeout(() => {
+        setProgress(null);
+        dismissRef.current = null;
+      }, 1500);
+    }
+  };
+
+  const pushNavEntry = (path: string[], ids: (string | null)[], shared: boolean[]) => {
+    setNavHistory(prev => {
+      const cur = prev.entries[prev.index];
+      if (cur && cur.path.length === path.length && JSON.stringify(cur.ids) === JSON.stringify(ids)) {
+        return prev;
+      }
+      const base = prev.index < prev.entries.length - 1 ? prev.entries.slice(0, prev.index + 1) : prev.entries;
+      return { entries: [...base, { path, ids, shared }], index: base.length };
+    });
+    setCurrentPathState(path);
+    setFolderStack(ids);
+    setFolderSharedStack(shared);
+  };
+
+  const refreshOrResearch = async () => {
+    const activeQuery = searchQueryRef.current.trim();
+    if (activeQuery) {
+      await searchFilesApi(activeQuery);
+    } else {
+      await refreshFiles();
+    }
+  };
+
+  // Upload dismiss effect
+
+  useEffect(() => {
+    if (!isUploadProgressInteracting) {
+      const checkTimeout = setTimeout(() => {
+        if (!isUploadProgressInteractingRef.current) {
+          setUploadProgress(prev =>
+            prev.filter(item => {
+              if (item.status === 'completed' || item.status === 'error') {
+                const t = uploadDismissTimeoutsRef.current.get(item.id);
+                if (t) {
+                  clearTimeout(t);
+                  uploadDismissTimeoutsRef.current.delete(item.id);
+                }
+                return false;
+              }
+              return true;
+            })
+          );
+        }
+      }, 2000);
+      return () => clearTimeout(checkTimeout);
+    } else {
+      uploadDismissTimeoutsRef.current.forEach(t => clearTimeout(t));
+      uploadDismissTimeoutsRef.current.clear();
+    }
+  }, [isUploadProgressInteracting]);
+
+  // Search effect
+
   useEffect(() => {
     if (searchQuery.trim().length > 0) {
-      // Save the listing before search overwrites `files` so we can restore it
-      // if the user navigates away (e.g., to `Dashboard`).
       if (!didSavePreSearchRef.current) {
         filesBeforeSearchRef.current = filesRef.current;
         didSavePreSearchRef.current = true;
       }
-      // Trigger debounced search
       debouncedSearch(searchQuery);
     } else {
-      // Cancel any pending searches immediately
       cancelSearch();
-
-      // Abort any in-flight fetch requests
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
         abortControllerRef.current = null;
       }
-
-      // Clear search and refresh normal files immediately
       setIsSearching(false);
-      const currentPage = currentPathRef.current[0];
-      const isFileManagerPage =
-        currentPage === 'My Files' || currentPage === 'Shared' || currentPage === 'Starred' || currentPage === 'Trash';
 
-      // If we're leaving the file manager (e.g. to Dashboard), restoring the pre-search
-      // listing prevents the Dashboard "Recent Files" from showing search results
-      if (!isFileManagerPage && filesBeforeSearchRef.current) {
+      if (!isFileManagerPage(currentPathRef.current[0]) && filesBeforeSearchRef.current) {
         setFiles(filesBeforeSearchRef.current);
       } else {
-        // Use skipSearchCheck to force refresh even if searchQuery is being cleared
         void refreshFiles(true);
       }
-
       filesBeforeSearchRef.current = null;
       didSavePreSearchRef.current = false;
     }
   }, [searchQuery, debouncedSearch, cancelSearch, refreshFiles]);
 
-  // Electron desktop: show status for auto-uploaded derived files (e.g. "Save as PDF" from Office)
+  // Electron derived upload status
+
   useEffect(() => {
     if (!isElectron()) return;
-    const api = window.electronAPI;
-    const filesApi = api?.files;
+    const filesApi = window.electronAPI?.files;
     if (!filesApi?.onDerivedUploadStatus) return;
 
     const unsubscribe = filesApi.onDerivedUploadStatus(
@@ -483,144 +576,69 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         originalId?: string;
         error?: string;
       }) => {
-        const formatDerivedFileNameForToast = (name: string): string => {
-          const MAX_LENGTH = 65;
-          const DOTS = '......';
-          if (!name || name.length <= MAX_LENGTH) return name;
-
-          const extIndex = name.lastIndexOf('.');
-          const hasExt = extIndex > 0 && extIndex < name.length - 1;
-          const ext = hasExt ? name.slice(extIndex) : '';
-
-          const baseMax = MAX_LENGTH - DOTS.length - ext.length;
-          if (baseMax <= 0) {
-            return name.slice(0, MAX_LENGTH - DOTS.length) + DOTS;
-          }
-          const base = name.slice(0, baseMax);
-          return `${base}${DOTS}${ext}`;
+        const truncate = (name: string, max = 65): string => {
+          if (!name || name.length <= max) return name;
+          const dots = '......';
+          const extIdx = name.lastIndexOf('.');
+          const ext = extIdx > 0 && extIdx < name.length - 1 ? name.slice(extIdx) : '';
+          const baseMax = max - dots.length - ext.length;
+          return baseMax <= 0 ? name.slice(0, max - dots.length) + dots : `${name.slice(0, baseMax)}${dots}${ext}`;
         };
-
-        const displayName = formatDerivedFileNameForToast(payload.fileName);
+        const display = truncate(payload.fileName);
 
         if (payload.state === 'started') {
-          const sizeText = payload.size != null ? ` (${formatBytes(payload.size)})` : '';
-          showToast(`Saving exported file "${displayName}"${sizeText}.`, 'info');
+          const size = payload.size != null ? ` (${formatBytes(payload.size)})` : '';
+          showToast(`Saving exported file "${display}"${size}.`, 'info');
         } else if (payload.state === 'completed') {
-          showToast(`Exported file "${displayName}".`, 'success');
-          // Trigger a debounced refresh so the new file appears without the user reloading.
+          showToast(`Exported file "${display}".`, 'success');
           debouncedRefreshFiles(true);
         } else if (payload.state === 'error') {
-          showToast(payload.error || `Failed to save exported file "${displayName}". Please try again.`, 'error');
+          showToast(payload.error || `Failed to save exported file "${display}". Please try again.`, 'error');
         }
       }
     );
 
     return () => {
-      if (typeof unsubscribe === 'function') {
-        unsubscribe();
-      }
+      if (typeof unsubscribe === 'function') unsubscribe();
     };
   }, [debouncedRefreshFiles, showToast]);
 
-  // Helper function to check if event is relevant (uses refs, no dependencies)
+  // SSE (Server-Sent Events) for real-time updates
+
   const isEventRelevant = (
     eventType: string,
-    eventData: {
-      parentId?: string | null;
-      id?: string;
-      starred?: boolean;
-      shared?: boolean;
-    }
+    eventData: { parentId?: string | null; id?: string; starred?: boolean; shared?: boolean }
   ) => {
-    const currentPage = currentPathRef.current[0];
-    const currentParentId = folderStackRef.current[folderStackRef.current.length - 1];
+    const page = currentPathRef.current[0];
+    const parentId = folderStackRef.current[folderStackRef.current.length - 1];
 
-    // If in Starred view, only refresh for star/unstar events
-    if (currentPage === 'Starred') {
-      return eventData.starred !== undefined;
-    }
-
-    // If in Shared view, only refresh for share/unshare events
-    if (currentPage === 'Shared') {
-      return eventData.shared !== undefined;
-    }
-
-    // If in Trash view, only refresh for trash-related events
-    if (currentPage === 'Trash') {
+    if (page === 'Starred') return eventData.starred !== undefined;
+    if (page === 'Shared') return eventData.shared !== undefined;
+    if (page === 'Trash') {
       return eventType === 'file.deleted' || eventType === 'file.restored' || eventType === 'file.permanently_deleted';
     }
-
-    // For "My Files" view
-    if (currentPage === 'My Files') {
-      // If we're at root (no parentId), only refresh if event is also at root
-      if (!currentParentId) {
-        return !eventData.parentId;
-      }
-      // Otherwise, refresh if parentId matches
-      return eventData.parentId === currentParentId;
+    if (page === 'My Files') {
+      return !parentId ? !eventData.parentId : eventData.parentId === parentId;
     }
-
-    // Default: refresh for all events (fallback)
     return true;
   };
 
-  // Debounced refresh function for SSE events (uses refs, no dependencies)
   const debouncedSSERefresh = () => {
-    // Clear any pending refresh
-    if (sseRefreshTimeoutRef.current) {
-      clearTimeout(sseRefreshTimeoutRef.current);
-    }
-    // Schedule a refresh after 800ms (debounce window)
+    if (sseRefreshTimeoutRef.current) clearTimeout(sseRefreshTimeoutRef.current);
     sseRefreshTimeoutRef.current = setTimeout(() => {
-      if (refreshFilesRef.current) {
-        void refreshFilesRef.current(true);
-      }
+      refreshFilesRef.current?.(true);
       sseRefreshTimeoutRef.current = null;
     }, 800);
   };
 
-  // Connect to Server-Sent Events for real-time file updates
-  // This effect runs once on mount and uses refs to access current values
   useEffect(() => {
-    // Create EventSource connection
-    const eventSource = new EventSource('/api/files/events', {
-      withCredentials: true,
-    });
-
-    eventSource.onopen = () => {
-      // Connection established
-    };
+    const eventSource = new EventSource('/api/files/events', { withCredentials: true });
 
     eventSource.onmessage = event => {
       try {
         const data = JSON.parse(event.data);
-
-        // Handle connection confirmation
-        if (data.type === 'connected') {
-          return;
-        }
-
-        // Handle errors
-        if (data.type === 'error') {
-          // Silently handle file events stream errors
-          return;
-        }
-
-        // Handle file events
-        if (data.type && data.data) {
-          const eventData = data.data;
-          const eventType = data.type;
-
-          // Filter by relevance - only refresh if event affects current view
-          // Uses refs to get current values without causing re-renders
-          // isEventRelevant determines if the event affects the current view
-          const isRelevant = isEventRelevant(eventType, eventData);
-
-          if (!isRelevant) {
-            return;
-          }
-
-          // Debounce/throttle refresh - batch multiple events
+        if (data.type === 'connected' || data.type === 'error') return;
+        if (data.type && data.data && isEventRelevant(data.type, data.data)) {
           debouncedSSERefresh();
         }
       } catch (error) {
@@ -630,14 +648,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     };
 
-    eventSource.onerror = () => {
-      // Silently handle file events stream errors
-      // EventSource will automatically reconnect
-    };
-
     eventSourceRef.current = eventSource;
 
-    // Cleanup on unmount
     return () => {
       if (sseRefreshTimeoutRef.current) {
         clearTimeout(sseRefreshTimeoutRef.current);
@@ -648,29 +660,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         eventSourceRef.current = null;
       }
     };
-  }, []); // Empty dependency array - connection created once, uses refs for current values
+  }, []);
 
+  // Refresh files when navigating or changing sort (non-search)
   useEffect(() => {
-    // Only refresh files when not searching and searchQuery is empty
-    // Also check if we're on a file manager page to avoid unnecessary calls
-    const currentPage = currentPath[0];
-    const isFileManagerPage =
-      currentPage === 'My Files' || currentPage === 'Shared' || currentPage === 'Starred' || currentPage === 'Trash';
-
-    if (searchQuery.trim().length === 0 && isFileManagerPage) {
-      void refreshFiles(true); // Force refresh when navigating/filtering
+    if (searchQuery.trim().length === 0 && isFileManagerPage(currentPath[0])) {
+      void refreshFiles(true);
     }
   }, [folderStack, currentPath, sortBy, sortOrder, searchQuery, refreshFiles]);
 
+  // File Operations
+
   const createFolder = async (name: string) => {
-    const res = await fetch(`/api/files/folder`, {
+    const res = await fetch('/api/files/folder', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify({
-        name,
-        parentId: folderStack[folderStack.length - 1],
-      }),
+      body: JSON.stringify({ name, parentId: folderStack[folderStack.length - 1] }),
     });
     if (!res.ok) throw new Error(await extractResponseError(res));
     await refreshFiles();
@@ -678,71 +684,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const uploadFile = async (file: File) => {
     return operationQueue.add(async () => {
-      try {
-        const { maxBytes } = await getMaxUploadSizeConfig();
-        if (file.size > maxBytes) {
-          const msg = `This file is too large. Maximum upload size is ${formatBytes(maxBytes)}.`;
-          showToast(msg, 'error');
-          throw new Error(msg);
-        }
-        await checkUploadStorage(file.size);
-      } catch (e) {
-        const msg = e instanceof ApiError ? e.message : 'Storage limit exceeded.';
-        if (!(e instanceof Error && e.message.startsWith('This file is too large'))) {
-          showToast(msg, 'error');
-        }
-        throw e;
-      }
+      await validateUploadSize([file]);
       const data = new FormData();
       const parentId = folderStack[folderStack.length - 1];
       if (parentId) data.append('parentId', parentId);
       data.append('file', file);
-      const res = await fetch(`/api/files/upload`, {
-        method: 'POST',
-        credentials: 'include',
-        body: data,
-      });
+      const res = await fetch('/api/files/upload', { method: 'POST', credentials: 'include', body: data });
       if (!res.ok) throw new Error(await extractResponseError(res));
       await refreshFiles();
     });
   };
 
-  const uploadFilesBulk = async (files: File[]) => {
-    const entries: BulkUploadEntry[] = files.map(file => ({ file }));
-    return uploadEntriesBulk(entries);
+  const uploadFilesBulk = async (filesToUpload: File[]) => {
+    return uploadEntriesBulk(filesToUpload.map(file => ({ file })));
   };
 
   const uploadEntriesBulk = async (entries: BulkUploadEntry[]) => {
     if (entries.length === 0) return;
-
-    const files = entries.map(e => e.file);
+    const allFiles = entries.map(e => e.file);
 
     return operationQueue.add(async () => {
-      try {
-        const { maxBytes } = await getMaxUploadSizeConfig();
-        const oversized = files.find(f => f.size > maxBytes);
-        if (oversized) {
-          const msg = `"${oversized.name}" is too large. Maximum upload size is ${formatBytes(maxBytes)}.`;
-          showToast(msg, 'error');
-          throw new Error(msg);
-        }
-        const totalSize = files.reduce((sum, f) => sum + f.size, 0);
-        await checkUploadStorage(totalSize);
-      } catch (e) {
-        const msg = e instanceof ApiError ? e.message : 'Storage limit exceeded.';
-        if (!(e instanceof Error && e.message.startsWith('"'))) {
-          showToast(msg, 'error');
-        }
-        throw e;
-      }
+      await validateUploadSize(allFiles);
 
       const parentId = folderStack[folderStack.length - 1];
       const hasRelativePaths = entries.some(e => e.relativePath);
 
-      // Folder uploads (entries with relativePath) must be sent as a single bulk
-      // request so the backend can safely and sequentially build folder trees
-      // without creating duplicate folders. In this mode, individual files
-      // cannot be cancelled without cancelling the whole batch.
+      // Folder uploads must be a single bulk XHR to avoid duplicate folder creation
       if (hasRelativePaths) {
         return new Promise<void>((resolve, reject) => {
           const batchGroupId = entries.length > 1 ? `bulk-${Date.now()}-${Math.random()}` : undefined;
@@ -751,21 +718,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const data = new FormData();
           if (parentId) data.append('parentId', parentId);
 
-          const normalizedEntries = entries.map((entry, index) => {
-            const clientId = entry.clientId || `${uploadId}-${index}`;
-            const relativePath = entry.relativePath || '';
-            return { ...entry, clientId, relativePath };
-          });
+          const normalizedEntries = entries.map((entry, i) => ({
+            ...entry,
+            clientId: entry.clientId || `${uploadId}-${i}`,
+            relativePath: entry.relativePath || '',
+          }));
 
-          // Append all files with field name 'files' + aligned metadata arrays.
           normalizedEntries.forEach(entry => {
             data.append('files', entry.file);
             data.append('relativePaths', entry.relativePath);
             data.append('clientIds', entry.clientId);
           });
 
-          // Add all files to progress list (all share the same groupId for "Cancel all").
-          const fileProgressItems = normalizedEntries.map(entry => ({
+          const progressItems = normalizedEntries.map(entry => ({
             id: entry.clientId,
             fileName: entry.relativePath || entry.file.name,
             fileSize: entry.file.size,
@@ -774,254 +739,140 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             groupId: batchGroupId,
           }));
 
-          setUploadProgress(prev => [...prev, ...fileProgressItems]);
-
-          // Track XHR for each file so group cancel can abort the whole request.
-          fileProgressItems.forEach(item => {
-            uploadXhrRef.current.set(item.id, xhr);
-          });
+          setUploadProgress(prev => [...prev, ...progressItems]);
+          progressItems.forEach(item => uploadXhrRef.current.set(item.id, xhr));
 
           xhr.upload.addEventListener('progress', e => {
             if (e.lengthComputable) {
               const progress = getInFlightUploadProgress(e.loaded, e.total);
-              fileProgressItems.forEach(item => {
+              progressItems.forEach(item => {
                 setUploadProgress(prev => updateUploadProgress(prev, item.id, { progress }));
               });
             }
           });
 
+          const markAllStatus = (status: 'completed' | 'error', progress?: number) => {
+            progressItems.forEach(item => {
+              setUploadProgress(prev =>
+                updateUploadProgress(prev, item.id, { status, ...(progress != null ? { progress } : {}) })
+              );
+            });
+          };
+
+          const cleanupXhrRefs = () => {
+            progressItems.forEach(item => uploadXhrRef.current.delete(item.id));
+          };
+
+          const scheduleAutoDismissAll = () => {
+            progressItems.forEach(item => {
+              const timeout = createAutoDismissTimeout(
+                item.id,
+                isUploadProgressInteractingRef,
+                setUploadProgress,
+                uploadDismissTimeoutsRef,
+                3000,
+                2000
+              );
+              uploadDismissTimeoutsRef.current.set(item.id, timeout);
+            });
+          };
+
           xhr.addEventListener('load', () => {
             if (xhr.status >= 200 && xhr.status < 300) {
               try {
                 const response = JSON.parse(xhr.responseText);
-                const { files: uploadedFiles, failed } = response;
+                const { files: uploaded, failed } = response;
 
-                // Mark successful uploads as completed
-                if (Array.isArray(uploadedFiles)) {
-                  uploadedFiles.forEach((file: { clientId?: string }) => {
-                    if (!file?.clientId) return;
-                    setUploadProgress(prev =>
-                      updateUploadProgress(prev, file.clientId!, {
-                        progress: 100,
-                        status: 'completed',
-                      })
-                    );
-                  });
-                }
-
-                // Mark failed uploads as error
-                if (failed && failed.length > 0) {
-                  failed.forEach((failedFile: { fileName: string; error: string; clientId?: string }) => {
-                    const id = failedFile.clientId;
-                    if (id) {
-                      setUploadProgress(prev => updateUploadProgress(prev, id, { status: 'error' }));
+                if (Array.isArray(uploaded)) {
+                  uploaded.forEach((f: { clientId?: string }) => {
+                    if (f?.clientId) {
+                      setUploadProgress(prev =>
+                        updateUploadProgress(prev, f.clientId!, { progress: 100, status: 'completed' })
+                      );
                     }
-                    showToast(`Failed to upload ${failedFile.fileName}: ${failedFile.error}`, 'error');
                   });
                 }
 
-                // If backend didn't return clientIds (older backend), mark all as completed.
-                if (!Array.isArray(uploadedFiles) || uploadedFiles.every((f: { clientId?: string }) => !f?.clientId)) {
-                  fileProgressItems.forEach(item => {
-                    setUploadProgress(prev =>
-                      updateUploadProgress(prev, item.id, {
-                        progress: 100,
-                        status: 'completed',
-                      })
-                    );
+                if (Array.isArray(failed) && failed.length > 0) {
+                  failed.forEach((f: { fileName: string; error: string; clientId?: string }) => {
+                    if (f.clientId) {
+                      setUploadProgress(prev => updateUploadProgress(prev, f.clientId!, { status: 'error' }));
+                    }
+                    showToast(`Failed to upload ${f.fileName}: ${f.error}`, 'error');
                   });
                 }
 
-                // Use debounced refresh to batch multiple upload completions
+                // Fallback: if backend didn't return clientIds, mark all as completed
+                if (!Array.isArray(uploaded) || uploaded.every((f: { clientId?: string }) => !f?.clientId)) {
+                  markAllStatus('completed', 100);
+                }
+
                 debouncedRefreshFiles(false);
-
-                // Auto-dismiss successful uploads after 3 seconds
-                fileProgressItems.forEach(item => {
-                  const dismissTimeout = createAutoDismissTimeout(
-                    item.id,
-                    isUploadProgressInteractingRef,
-                    setUploadProgress,
-                    uploadDismissTimeoutsRef,
-                    3000,
-                    2000
-                  );
-                  uploadDismissTimeoutsRef.current.set(item.id, dismissTimeout);
-                });
-
+                scheduleAutoDismissAll();
                 resolve();
               } catch {
-                // If response parsing fails, mark all as completed (backend might have succeeded)
-                fileProgressItems.forEach(item => {
-                  setUploadProgress(prev =>
-                    updateUploadProgress(prev, item.id, {
-                      progress: 100,
-                      status: 'completed',
-                    })
-                  );
-                });
+                markAllStatus('completed', 100);
                 debouncedRefreshFiles(false);
                 resolve();
               }
             } else {
-              // Mark all as error
-              fileProgressItems.forEach(item => {
-                setUploadProgress(prev => updateUploadProgress(prev, item.id, { status: 'error' }));
-              });
-
+              markAllStatus('error');
               const errorMessage = extractXhrErrorMessage(xhr);
               showToast(errorMessage || 'Bulk upload failed', 'error');
               reject(new Error(errorMessage || 'Bulk upload failed'));
             }
-
-            // Cleanup XHR references after completion or error
-            fileProgressItems.forEach(item => {
-              uploadXhrRef.current.delete(item.id);
-            });
+            cleanupXhrRefs();
           });
 
           xhr.addEventListener('error', () => {
-            fileProgressItems.forEach(item => {
-              setUploadProgress(prev => updateUploadProgress(prev, item.id, { status: 'error' }));
-            });
-
+            markAllStatus('error');
             const errorMessage =
               extractXhrErrorMessage(xhr) || 'Upload failed. Please check your connection and try again.';
             showToast(errorMessage, 'error');
             reject(new Error(errorMessage));
-
-            fileProgressItems.forEach(item => {
-              uploadXhrRef.current.delete(item.id);
-            });
+            cleanupXhrRefs();
           });
 
           xhr.addEventListener('abort', () => {
-            fileProgressItems.forEach(item => {
-              setUploadProgress(prev => removeUploadProgress(prev, item.id));
-            });
+            progressItems.forEach(item => setUploadProgress(prev => removeUploadProgress(prev, item.id)));
             reject(new Error('Upload cancelled'));
-
-            fileProgressItems.forEach(item => {
-              uploadXhrRef.current.delete(item.id);
-            });
+            cleanupXhrRefs();
           });
 
-          xhr.open('POST', `/api/files/upload/bulk`);
+          xhr.open('POST', '/api/files/upload/bulk');
           xhr.withCredentials = true;
           xhr.send(data);
         });
       }
 
-      // Flat multi-file uploads (no relative paths): keep the one-XHR-per-file
-      // behavior so each file can be cancelled independently without affecting
-      // others and without folder tree concurrency issues.
+      // Flat multi-file: one XHR per file for independent cancellation
       await Promise.all(
-        entries.map(
-          (entry, index) =>
-            new Promise<void>((resolve, reject) => {
-              const xhr = new XMLHttpRequest();
-              const data = new FormData();
-              if (parentId) data.append('parentId', parentId);
+        entries.map((entry, index) => {
+          const clientId = entry.clientId || `file-${Date.now()}-${index}`;
+          const formData = new FormData();
+          if (parentId) formData.append('parentId', parentId);
+          formData.append('files', entry.file);
+          formData.append('clientIds', clientId);
 
-              const clientId = entry.clientId || `file-${Date.now()}-${index}`;
-              data.append('files', entry.file);
-              data.append('clientIds', clientId);
-
-              const uploadId = clientId;
-
-              setUploadProgress(prev => [
-                ...prev,
-                {
-                  id: uploadId,
-                  fileName: entry.file.name,
-                  fileSize: entry.file.size,
-                  progress: 0,
-                  status: 'uploading',
-                  // No groupId -> per-file cancel only, no "Cancel all" for flat files.
-                },
-              ]);
-
-              uploadXhrRef.current.set(uploadId, xhr);
-
-              xhr.upload.addEventListener('progress', e => {
-                if (e.lengthComputable) {
-                  const progress = getInFlightUploadProgress(e.loaded, e.total);
-                  setUploadProgress(prev => updateUploadProgress(prev, uploadId, { progress }));
-                }
-              });
-
-              xhr.addEventListener('load', () => {
-                if (xhr.status >= 200 && xhr.status < 300) {
-                  setUploadProgress(prev =>
-                    updateUploadProgress(prev, uploadId, {
-                      progress: 100,
-                      status: 'completed',
-                    })
-                  );
-                  debouncedRefreshFiles(false);
-                  const dismissTimeout = createAutoDismissTimeout(
-                    uploadId,
-                    isUploadProgressInteractingRef,
-                    setUploadProgress,
-                    uploadDismissTimeoutsRef,
-                    3000,
-                    2000
-                  );
-                  uploadDismissTimeoutsRef.current.set(uploadId, dismissTimeout);
-                  resolve();
-                } else {
-                  setUploadProgress(prev => updateUploadProgress(prev, uploadId, { status: 'error' }));
-                  const errorMessage = extractXhrErrorMessage(xhr) || 'Upload failed';
-                  showToast(errorMessage, 'error');
-                  const errorDismissTimeout = createAutoDismissTimeout(
-                    uploadId,
-                    isUploadProgressInteractingRef,
-                    setUploadProgress,
-                    uploadDismissTimeoutsRef
-                  );
-                  uploadDismissTimeoutsRef.current.set(uploadId, errorDismissTimeout);
-                  reject(new Error(errorMessage));
-                }
-                uploadXhrRef.current.delete(uploadId);
-              });
-
-              xhr.addEventListener('error', () => {
-                setUploadProgress(prev => updateUploadProgress(prev, uploadId, { status: 'error' }));
-                const errorMessage =
-                  extractXhrErrorMessage(xhr) || 'Upload failed. Please check your connection and try again.';
-                showToast(errorMessage, 'error');
-                const errorDismissTimeout = createAutoDismissTimeout(
-                  uploadId,
-                  isUploadProgressInteractingRef,
-                  setUploadProgress,
-                  uploadDismissTimeoutsRef
-                );
-                uploadDismissTimeoutsRef.current.set(uploadId, errorDismissTimeout);
-                uploadXhrRef.current.delete(uploadId);
-                reject(new Error(errorMessage));
-              });
-
-              xhr.addEventListener('abort', () => {
-                setUploadProgress(prev => removeUploadProgress(prev, uploadId));
-                uploadXhrRef.current.delete(uploadId);
-                reject(new Error('Upload cancelled'));
-              });
-
-              xhr.open('POST', `/api/files/upload/bulk`);
-              xhr.withCredentials = true;
-              xhr.send(data);
-            })
-        )
+          return executeXhrUpload({
+            url: '/api/files/upload/bulk',
+            formData,
+            uploadId: clientId,
+            fileName: entry.file.name,
+            fileSize: entry.file.size,
+          });
+        })
       );
     });
   };
 
   const uploadFilesFromClipboard = async () => {
-    const files = await getFilesFromElectronClipboard();
-    if (files.length === 0) {
+    const clipFiles = await getFilesFromElectronClipboard();
+    if (clipFiles.length === 0) {
       showToast('No files on clipboard.', 'info');
       return;
     }
-    await uploadFilesBulk(files);
+    await uploadFilesBulk(clipFiles);
   };
 
   const copyFilesToPc = async (ids: string[]) => {
@@ -1036,7 +887,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const anyOverLimit = fileItems.some(f => f.size != null && Number(f.size) > MAX_COPY_TO_PC_BYTES);
     const totalBytes = fileItems.reduce((s, f) => s + Number(f.size ?? 0), 0);
     if (anyOverLimit || totalBytes > MAX_COPY_TO_PC_BYTES) {
-      showToast(`Copy to computer is only allowed for files up to 200 MB total.`, 'error');
+      showToast('Copy to computer is only allowed for files up to 200 MB total.', 'error');
       return;
     }
     const items = fileItems.map(f => ({ id: f.id, name: f.name }));
@@ -1062,345 +913,107 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       showToast('Select a single file to open on desktop.', 'error');
       return;
     }
-
     if (!file.mimeType) {
       showToast('Cannot open this file on desktop: unknown type.', 'error');
       return;
     }
 
     desktopEditInProgressRef.current.add(id);
-
-    const sizeBytes = Number(file.size ?? 0);
-    const LARGE_FILE_BYTES = 50 * 1024 * 1024; // 50MB threshold for "large" files
-    const isLarge = sizeBytes >= LARGE_FILE_BYTES;
-    const progressFileId = file.id;
-    const progressFileName = file.name;
+    const isLarge = Number(file.size ?? 0) >= 50 * 1024 * 1024;
     let succeeded = false;
-    const BASE_DURATION_MS = isLarge ? 20000 : 8000;
-    const MAX_BASE_PERCENT = 90;
-    const TICK_MS = 300;
+    const BASE_DURATION = isLarge ? 20000 : 8000;
+    const MAX_PERCENT = 90;
+    const TICK = 300;
     const startTime = Date.now();
 
-    // Add or reset this file's progress entry
     setDesktopOpenProgress(prev => {
-      const existingIndex = prev.findIndex(p => p.fileId === progressFileId);
-      const baseItem = { fileId: progressFileId, fileName: progressFileName, percent: 5 };
-      if (existingIndex === -1) return [...prev, baseItem];
+      const base = { fileId: file.id, fileName: file.name, percent: 5 };
+      const idx = prev.findIndex(p => p.fileId === file.id);
+      if (idx === -1) return [...prev, base];
       const next = [...prev];
-      next[existingIndex] = baseItem;
+      next[idx] = base;
       return next;
     });
 
     const tick = () => {
       if (!desktopEditInProgressRef.current.has(id)) return;
-      const elapsed = Date.now() - startTime;
-      const raw = (elapsed / BASE_DURATION_MS) * MAX_BASE_PERCENT;
-      const percent = Math.max(5, Math.min(MAX_BASE_PERCENT, Math.round(raw)));
-
+      const percent = Math.max(
+        5,
+        Math.min(MAX_PERCENT, Math.round(((Date.now() - startTime) / BASE_DURATION) * MAX_PERCENT))
+      );
       setDesktopOpenProgress(prev => {
-        const index = prev.findIndex(p => p.fileId === progressFileId);
-        if (index === -1) return prev;
+        const idx = prev.findIndex(p => p.fileId === file.id);
+        if (idx === -1) return prev;
         const next = [...prev];
-        const current = next[index]!;
-        next[index] = {
-          fileId: current.fileId,
-          fileName: current.fileName,
-          percent,
-        };
+        next[idx] = { ...next[idx]!, percent };
         return next;
       });
-
-      if (percent < MAX_BASE_PERCENT) {
-        setTimeout(tick, TICK_MS);
-      }
+      if (percent < MAX_PERCENT) setTimeout(tick, TICK);
     };
-
-    setTimeout(tick, TICK_MS);
+    setTimeout(tick, TICK);
 
     try {
-      const result = await editFileWithDesktopElectron({
-        id: file.id,
-        name: file.name,
-      });
-
+      const result = await editFileWithDesktopElectron({ id: file.id, name: file.name });
       if (!result.ok) {
         showToast(result.error ?? 'Failed to open or edit file on desktop.', 'error');
         return;
       }
 
       succeeded = true;
-
-      // Snap to 100% for this file, then clear its entry after a short delay
       setDesktopOpenProgress(prev => {
-        const index = prev.findIndex(p => p.fileId === progressFileId);
-        if (index === -1) return prev;
+        const idx = prev.findIndex(p => p.fileId === file.id);
+        if (idx === -1) return prev;
         const next = [...prev];
-        const current = next[index]!;
-        next[index] = {
-          fileId: current.fileId,
-          fileName: current.fileName,
-          percent: 100,
-        };
+        next[idx] = { ...next[idx]!, percent: 100 };
         return next;
       });
-
-      setTimeout(() => {
-        setDesktopOpenProgress(prev => prev.filter(p => p.fileId !== progressFileId));
-      }, 800);
-
+      setTimeout(() => setDesktopOpenProgress(prev => prev.filter(p => p.fileId !== file.id)), 800);
       showToast('File opened on desktop. Changes will be auto-synced.', 'success');
     } finally {
       desktopEditInProgressRef.current.delete(id);
-
-      // On error/failure, remove this file's progress entry
       if (!succeeded) {
-        setDesktopOpenProgress(prev => prev.filter(p => p.fileId !== progressFileId));
+        setDesktopOpenProgress(prev => prev.filter(p => p.fileId !== file.id));
       }
     }
   };
 
   const uploadFileWithProgress = async (file: File, onProgress?: (progress: number) => void) => {
     return operationQueue.add(async () => {
-      try {
-        const { maxBytes } = await getMaxUploadSizeConfig();
-        if (file.size > maxBytes) {
-          const msg = `This file is too large. Maximum upload size is ${formatBytes(maxBytes)}.`;
-          showToast(msg, 'error');
-          throw new Error(msg);
-        }
-        await checkUploadStorage(file.size);
-      } catch (e) {
-        const msg = e instanceof ApiError ? e.message : 'Storage limit exceeded.';
-        if (!(e instanceof Error && e.message.startsWith('This file is too large'))) {
-          showToast(msg, 'error');
-        }
-        throw e;
-      }
-
-      return new Promise<void>((resolve, reject) => {
-        const uploadId = `${Date.now()}-${Math.random()}`;
-        const xhr = new XMLHttpRequest();
-        const data = new FormData();
-        const parentId = folderStack[folderStack.length - 1];
-        if (parentId) data.append('parentId', parentId);
-        data.append('file', file);
-
-        // Add upload to progress list
-        setUploadProgress(prev => [
-          ...prev,
-          {
-            id: uploadId,
-            fileName: file.name,
-            fileSize: file.size,
-            progress: 0,
-            status: 'uploading',
-          },
-        ]);
-
-        // Track XHR so we can cancel by uploadId
-        uploadXhrRef.current.set(uploadId, xhr);
-
-        xhr.upload.addEventListener('progress', e => {
-          if (e.lengthComputable) {
-            const progress = getInFlightUploadProgress(e.loaded, e.total);
-            setUploadProgress(prev => updateUploadProgress(prev, uploadId, { progress }));
-            if (onProgress) {
-              onProgress(progress);
-            }
-          }
-        });
-
-        xhr.addEventListener('load', async () => {
-          if (xhr.status >= 200 && xhr.status < 300) {
-            setUploadProgress(prev =>
-              updateUploadProgress(prev, uploadId, {
-                progress: 100,
-                status: 'completed',
-              })
-            );
-            // Use debounced refresh to batch multiple upload completions
-            debouncedRefreshFiles(false);
-            // Auto-dismiss after 3 seconds
-            const dismissTimeout = createAutoDismissTimeout(
-              uploadId,
-              isUploadProgressInteractingRef,
-              setUploadProgress,
-              uploadDismissTimeoutsRef,
-              3000,
-              2000
-            );
-            uploadDismissTimeoutsRef.current.set(uploadId, dismissTimeout);
-            resolve();
-          } else {
-            // Abort the upload immediately on error
-            xhr.abort();
-            setUploadProgress(prev => updateUploadProgress(prev, uploadId, { status: 'error' }));
-
-            // Extract and show error message
-            const errorMessage = extractXhrErrorMessage(xhr);
-            showToast(errorMessage, 'error');
-
-            // Auto-dismiss failed uploads after 10 seconds
-            const errorDismissTimeout = createAutoDismissTimeout(
-              uploadId,
-              isUploadProgressInteractingRef,
-              setUploadProgress,
-              uploadDismissTimeoutsRef
-            );
-            uploadDismissTimeoutsRef.current.set(uploadId, errorDismissTimeout);
-            reject(new Error(errorMessage));
-          }
-          // Cleanup XHR reference after completion or error
-          uploadXhrRef.current.delete(uploadId);
-        });
-
-        xhr.addEventListener('error', () => {
-          xhr.abort();
-          setUploadProgress(prev => updateUploadProgress(prev, uploadId, { status: 'error' }));
-
-          const errorMessage =
-            extractXhrErrorMessage(xhr) || 'Upload failed. Please check your connection and try again.';
-          showToast(errorMessage, 'error');
-
-          const errorDismissTimeout = createAutoDismissTimeout(
-            uploadId,
-            isUploadProgressInteractingRef,
-            setUploadProgress,
-            uploadDismissTimeoutsRef
-          );
-          uploadDismissTimeoutsRef.current.set(uploadId, errorDismissTimeout);
-          reject(new Error(errorMessage));
-          uploadXhrRef.current.delete(uploadId);
-        });
-
-        xhr.addEventListener('abort', () => {
-          setUploadProgress(prev => removeUploadProgress(prev, uploadId));
-          reject(new Error('Upload cancelled'));
-          uploadXhrRef.current.delete(uploadId);
-        });
-
-        xhr.open('POST', `/api/files/upload`);
-        xhr.withCredentials = true;
-        xhr.send(data);
+      await validateUploadSize([file]);
+      const formData = new FormData();
+      const parentId = folderStack[folderStack.length - 1];
+      if (parentId) formData.append('parentId', parentId);
+      formData.append('file', file);
+      return executeXhrUpload({
+        url: '/api/files/upload',
+        formData,
+        uploadId: `${Date.now()}-${Math.random()}`,
+        fileName: file.name,
+        fileSize: file.size,
+        onProgress,
       });
     });
   };
 
   const replaceFileWithProgress = async (fileId: string, file: File, onProgress?: (progress: number) => void) => {
     return operationQueue.add(async () => {
-      try {
-        const { maxBytes } = await getMaxUploadSizeConfig();
-        if (file.size > maxBytes) {
-          const msg = `This file is too large. Maximum upload size is ${formatBytes(maxBytes)}.`;
-          showToast(msg, 'error');
-          throw new Error(msg);
-        }
-        await checkUploadStorage(file.size);
-      } catch (e) {
-        const msg = e instanceof ApiError ? e.message : 'Storage limit exceeded.';
-        if (!(e instanceof Error && e.message.startsWith('This file is too large'))) {
-          showToast(msg, 'error');
-        }
-        throw e;
-      }
-
-      return new Promise<void>((resolve, reject) => {
-        const uploadId = `${Date.now()}-${Math.random()}`;
-        const xhr = new XMLHttpRequest();
-        const data = new FormData();
-        data.append('file', file);
-
-        setUploadProgress(prev => [
-          ...prev,
-          {
-            id: uploadId,
-            fileName: file.name,
-            fileSize: file.size,
-            progress: 0,
-            status: 'uploading',
-          },
-        ]);
-
-        // Track XHR so we can cancel by uploadId
-        uploadXhrRef.current.set(uploadId, xhr);
-
-        xhr.upload.addEventListener('progress', e => {
-          if (e.lengthComputable) {
-            const progress = getInFlightUploadProgress(e.loaded, e.total);
-            setUploadProgress(prev => updateUploadProgress(prev, uploadId, { progress }));
-            if (onProgress) {
-              onProgress(progress);
-            }
-          }
-        });
-
-        xhr.addEventListener('load', async () => {
-          if (xhr.status >= 200 && xhr.status < 300) {
-            setUploadProgress(prev =>
-              updateUploadProgress(prev, uploadId, {
-                progress: 100,
-                status: 'completed',
-              })
-            );
-            debouncedRefreshFiles(false);
-            const dismissTimeout = createAutoDismissTimeout(
-              uploadId,
-              isUploadProgressInteractingRef,
-              setUploadProgress,
-              uploadDismissTimeoutsRef,
-              3000,
-              2000
-            );
-            uploadDismissTimeoutsRef.current.set(uploadId, dismissTimeout);
-            resolve();
-          } else {
-            setUploadProgress(prev => updateUploadProgress(prev, uploadId, { status: 'error' }));
-            const errorMessage = extractXhrErrorMessage(xhr);
-            showToast(errorMessage, 'error');
-            const errorDismissTimeout = createAutoDismissTimeout(
-              uploadId,
-              isUploadProgressInteractingRef,
-              setUploadProgress,
-              uploadDismissTimeoutsRef
-            );
-            uploadDismissTimeoutsRef.current.set(uploadId, errorDismissTimeout);
-            reject(new Error(errorMessage));
-          }
-          uploadXhrRef.current.delete(uploadId);
-        });
-
-        xhr.addEventListener('error', () => {
-          setUploadProgress(prev => updateUploadProgress(prev, uploadId, { status: 'error' }));
-          const errorMessage =
-            extractXhrErrorMessage(xhr) || 'Upload failed. Please check your connection and try again.';
-          showToast(errorMessage, 'error');
-          const errorDismissTimeout = createAutoDismissTimeout(
-            uploadId,
-            isUploadProgressInteractingRef,
-            setUploadProgress,
-            uploadDismissTimeoutsRef
-          );
-          uploadDismissTimeoutsRef.current.set(uploadId, errorDismissTimeout);
-          reject(new Error(errorMessage));
-          uploadXhrRef.current.delete(uploadId);
-        });
-
-        xhr.addEventListener('abort', () => {
-          setUploadProgress(prev => removeUploadProgress(prev, uploadId));
-          reject(new Error('Upload cancelled'));
-          uploadXhrRef.current.delete(uploadId);
-        });
-
-        xhr.open('POST', `/api/files/${fileId}/replace`);
-        xhr.withCredentials = true;
-        xhr.send(data);
+      await validateUploadSize([file]);
+      const formData = new FormData();
+      formData.append('file', file);
+      return executeXhrUpload({
+        url: `/api/files/${fileId}/replace`,
+        formData,
+        uploadId: `${Date.now()}-${Math.random()}`,
+        fileName: file.name,
+        fileSize: file.size,
+        onProgress,
       });
     });
   };
 
   const moveFiles = async (ids: string[], parentId: string | null) => {
     return operationQueue.add(async () => {
-      const res = await fetch(`/api/files/move`, {
+      const res = await fetch('/api/files/move', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -1413,7 +1026,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const copyFilesApi = async (ids: string[], parentId: string | null) => {
     return operationQueue.add(async () => {
-      const res = await fetch(`/api/files/copy`, {
+      const res = await fetch('/api/files/copy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -1425,7 +1038,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const renameFileApi = async (id: string, name: string) => {
-    const res = await fetch(`/api/files/rename`, {
+    const res = await fetch('/api/files/rename', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -1440,8 +1053,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     try {
       const updated: FileItemResponse = await res.json();
-      const displayName = updated.name || name;
-      showToast(`Renamed to "${displayName}"`, 'success');
+      showToast(`Renamed to "${updated.name || name}"`, 'success');
     } catch {
       showToast('Item renamed successfully', 'success');
     }
@@ -1449,63 +1061,40 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await refreshFiles();
   };
 
-  const setShareLinkModalOpen = (open: boolean, links: string[] = []) => {
-    if (open) {
-      setShareLinks(links);
-    } else {
-      setShareLinks([]);
-    }
-    setShareLinkModalOpenState(open);
-  };
-
   const shareFilesApi = async (
     ids: string[],
     shared: boolean,
     expiry?: ShareExpiry
   ): Promise<Record<string, string>> => {
-    const res = await fetch(`/api/files/share`, {
+    const res = await fetch('/api/files/share', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify({
-        ids,
-        shared,
-        ...(shared && expiry ? { expiry } : {}),
-      }),
+      body: JSON.stringify({ ids, shared, ...(shared && expiry ? { expiry } : {}) }),
     });
     if (!res.ok) {
       const errorMessage = await extractResponseError(res);
       throw new Error(errorMessage || 'Failed to share files');
     }
     const data = await res.json();
-    const links = buildShareUrlMap(data);
-    // If a search is active, `refreshFiles()` intentionally bails out
-    // Re-run the search so starred/shared icons update in the search results list
-    const activeQuery = searchQueryRef.current.trim();
-    if (activeQuery) {
-      await searchFilesApi(activeQuery);
-    } else {
-      await refreshFiles();
-    }
-    return links;
+    await refreshOrResearch();
+    return data?.links || {};
   };
 
   const getShareLinks = async (ids: string[]): Promise<Record<string, string>> => {
-    const res = await fetch(`/api/files/share/links`, {
+    const res = await fetch('/api/files/share/links', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
       body: JSON.stringify({ ids }),
     });
-    if (!res.ok) {
-      throw new Error('Failed to get share links');
-    }
+    if (!res.ok) throw new Error('Failed to get share links');
     const data = await res.json();
-    return buildShareUrlMap(data);
+    return data?.links || {};
   };
 
   const starFilesApi = async (ids: string[], starred: boolean) => {
-    const res = await fetch(`/api/files/star`, {
+    const res = await fetch('/api/files/star', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -1515,229 +1104,100 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const errorMessage = await extractResponseError(res);
       throw new Error(errorMessage || 'Failed to update star status');
     }
-    // If a search is active, `refreshFiles()` intentionally bails out
-    // Re-run the search so starred icons update in the search results list
-    const activeQuery = searchQueryRef.current.trim();
-    if (activeQuery) {
-      await searchFilesApi(activeQuery);
-    } else {
-      await refreshFiles();
-    }
+    await refreshOrResearch();
   };
 
   const deleteFilesApi = async (ids: string[]) => {
     if (!ids.length) return;
-    if (deleteInProgressRef.current) {
-      throw new Error('Delete already in progress. Please wait.');
-    }
-
-    const itemCount = ids.length;
-    const expectedDurationMs = Math.min(30000, Math.max(3000, itemCount * 20));
-    const startedAt = Date.now();
-
-    deleteInProgressRef.current = true;
-    if (deleteProgressDismissTimeoutRef.current) {
-      clearTimeout(deleteProgressDismissTimeoutRef.current);
-      deleteProgressDismissTimeoutRef.current = null;
-    }
-    setIsDeleting(true);
-    setDeleteProgress({
-      itemCount,
-      percent: 5,
-      label: itemCount === 1 ? 'Deleting 1 item...' : `Deleting ${itemCount} items...`,
+    await runProgressOperation({
+      ids,
+      lockRef: deleteInProgressRef,
+      dismissRef: deleteProgressDismissTimeoutRef,
+      setActive: setIsDeleting,
+      setProgress: setDeleteProgress,
+      actionLabel: 'Deleting',
+      finalizeLabel: 'Finalizing delete',
+      url: '/api/files/delete',
     });
-
-    const progressTimer = setInterval(() => {
-      const elapsed = Date.now() - startedAt;
-      const smoothPercent = Math.min(95, Math.max(5, Math.round((elapsed / expectedDurationMs) * 90) + 5));
-      setDeleteProgress(prev =>
-        prev
-          ? {
-              ...prev,
-              percent: smoothPercent,
-            }
-          : prev
-      );
-    }, 250);
-
-    try {
-      const res = await fetch(`/api/files/delete`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ ids }),
-      });
-      if (!res.ok) throw new Error(await extractResponseError(res));
-
-      // Stop smooth timer immediately so it can't overwrite the final 100% value.
-      clearInterval(progressTimer);
-      setDeleteProgress(prev => (prev ? { ...prev, percent: 100, label: 'Finalizing delete...' } : prev));
-      await refreshFiles();
-      await new Promise(resolve => setTimeout(resolve, 450));
-    } finally {
-      clearInterval(progressTimer);
-      deleteInProgressRef.current = false;
-      setIsDeleting(false);
-      deleteProgressDismissTimeoutRef.current = setTimeout(() => {
-        setDeleteProgress(null);
-        deleteProgressDismissTimeoutRef.current = null;
-      }, 1500);
-    }
   };
 
   const restoreFilesApi = async (ids: string[]) => {
     if (!ids.length) return { success: true } as const;
-    if (restoreInProgressRef.current) {
-      throw new Error('Restore already in progress. Please wait.');
-    }
+    type RestoreResponse = { success: boolean; message?: string };
+    let result: RestoreResponse | null = null;
+    await runProgressOperation({
+      ids,
+      lockRef: restoreInProgressRef,
+      dismissRef: restoreProgressDismissTimeoutRef,
+      setActive: setIsRestoring,
+      setProgress: setRestoreProgress,
+      actionLabel: 'Restoring',
+      finalizeLabel: 'Finalizing restore',
+      url: '/api/files/trash/restore',
+      onFetch: async res => {
+        const data: unknown = await res.json();
+        if (!res.ok) {
+          const message =
+            typeof (data as { message?: unknown }).message === 'string'
+              ? ((data as { message?: unknown }).message as string)
+              : undefined;
+          throw new Error(message ?? 'Failed to restore files');
+        }
 
-    const itemCount = ids.length;
-    const expectedDurationMs = Math.min(30000, Math.max(3000, itemCount * 20));
-    const startedAt = Date.now();
+        // Best-effort typing: backend should return `{ success: boolean, message?: string }`
+        if (data && typeof data === 'object' && typeof (data as { success?: unknown }).success === 'boolean') {
+          const success = (data as { success: boolean }).success;
+          const message =
+            typeof (data as { message?: unknown }).message === 'string'
+              ? ((data as { message?: unknown }).message as string)
+              : undefined;
+          result = { success, ...(message ? { message } : {}) };
+          return;
+        }
 
-    restoreInProgressRef.current = true;
-    if (restoreProgressDismissTimeoutRef.current) {
-      clearTimeout(restoreProgressDismissTimeoutRef.current);
-      restoreProgressDismissTimeoutRef.current = null;
-    }
-    setIsRestoring(true);
-    setRestoreProgress({
-      itemCount,
-      percent: 5,
-      label: itemCount === 1 ? 'Restoring 1 item...' : `Restoring ${itemCount} items...`,
+        result = { success: false, message: 'Unexpected restore response from server.' };
+      },
     });
-
-    const progressTimer = setInterval(() => {
-      const elapsed = Date.now() - startedAt;
-      const smoothPercent = Math.min(95, Math.max(5, Math.round((elapsed / expectedDurationMs) * 90) + 5));
-      setRestoreProgress(prev =>
-        prev
-          ? {
-              ...prev,
-              percent: smoothPercent,
-            }
-          : prev
-      );
-    }, 250);
-
-    try {
-      const res = await fetch(`/api/files/trash/restore`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ ids }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        const errorMessage = data.message || 'Failed to restore files';
-        throw new Error(errorMessage);
-      }
-
-      // Stop smooth timer immediately so it can't overwrite the final 100% value.
-      clearInterval(progressTimer);
-      setRestoreProgress(prev => (prev ? { ...prev, percent: 100, label: 'Finalizing restore...' } : prev));
-      await refreshFiles();
-      await new Promise(resolve => setTimeout(resolve, 450));
-      return data;
-    } finally {
-      clearInterval(progressTimer);
-      restoreInProgressRef.current = false;
-      setIsRestoring(false);
-      restoreProgressDismissTimeoutRef.current = setTimeout(() => {
-        setRestoreProgress(null);
-        restoreProgressDismissTimeoutRef.current = null;
-      }, 1500);
-    }
+    return result ?? { success: false, message: 'Restore did not return a response.' };
   };
 
   const deleteForeverApi = async (ids: string[]) => {
     if (!ids.length) return;
-    if (deleteInProgressRef.current) {
-      throw new Error('Delete already in progress. Please wait.');
-    }
-
-    const itemCount = ids.length;
-    const expectedDurationMs = Math.min(30000, Math.max(3000, itemCount * 20));
-    const startedAt = Date.now();
-
-    deleteInProgressRef.current = true;
-    if (deleteProgressDismissTimeoutRef.current) {
-      clearTimeout(deleteProgressDismissTimeoutRef.current);
-      deleteProgressDismissTimeoutRef.current = null;
-    }
-    setIsDeleting(true);
-    setDeleteProgress({
-      itemCount,
-      percent: 5,
-      label: itemCount === 1 ? 'Permanently deleting 1 item...' : `Permanently deleting ${itemCount} items...`,
+    await runProgressOperation({
+      ids,
+      lockRef: deleteInProgressRef,
+      dismissRef: deleteProgressDismissTimeoutRef,
+      setActive: setIsDeleting,
+      setProgress: setDeleteProgress,
+      actionLabel: 'Permanently deleting',
+      finalizeLabel: 'Finalizing delete',
+      url: '/api/files/trash/delete',
     });
-
-    const progressTimer = setInterval(() => {
-      const elapsed = Date.now() - startedAt;
-      const smoothPercent = Math.min(95, Math.max(5, Math.round((elapsed / expectedDurationMs) * 90) + 5));
-      setDeleteProgress(prev =>
-        prev
-          ? {
-              ...prev,
-              percent: smoothPercent,
-            }
-          : prev
-      );
-    }, 250);
-
-    try {
-      const res = await fetch(`/api/files/trash/delete`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ ids }),
-      });
-      if (!res.ok) throw new Error(await extractResponseError(res));
-
-      // Stop smooth timer immediately so it can't overwrite the final 100% value.
-      clearInterval(progressTimer);
-      setDeleteProgress(prev => (prev ? { ...prev, percent: 100, label: 'Finalizing delete...' } : prev));
-      await refreshFiles();
-      await new Promise(resolve => setTimeout(resolve, 450));
-    } finally {
-      clearInterval(progressTimer);
-      deleteInProgressRef.current = false;
-      setIsDeleting(false);
-      deleteProgressDismissTimeoutRef.current = setTimeout(() => {
-        setDeleteProgress(null);
-        deleteProgressDismissTimeoutRef.current = null;
-      }, 1500);
-    }
   };
 
   const emptyTrashApi = async () => {
-    const res = await fetch(`/api/files/trash/empty`, {
+    const res = await fetch('/api/files/trash/empty', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
     });
     const data = await res.json();
-    if (!res.ok) {
-      const errorMessage = data.message || 'Failed to empty trash';
-      throw new Error(errorMessage);
-    }
+    if (!res.ok) throw new Error(data.message || 'Failed to empty trash');
     await refreshFiles();
     return data;
   };
 
   const linkToParentShareApi = async (ids: string[]): Promise<Record<string, string>> => {
-    const res = await fetch(`/api/files/link-parent-share`, {
+    const res = await fetch('/api/files/link-parent-share', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
       body: JSON.stringify({ ids }),
     });
-    if (!res.ok) {
-      throw new Error('Failed to link to parent share');
-    }
+    if (!res.ok) throw new Error('Failed to link to parent share');
     const data = await res.json();
     await refreshFiles();
-    return buildShareUrlMap(data);
+    return data?.links || {};
   };
 
   const pasteClipboard = async (parentId: string | null) => {
@@ -1773,96 +1233,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
-  const addSelectedFile = (id: string) => {
-    setSelectedFiles(prev => [...prev, id]);
-  };
-
-  const removeSelectedFile = (id: string) => {
-    setSelectedFiles(prev => prev.filter(fileId => fileId !== id));
-  };
-
-  const clearSelection = () => {
-    setSelectedFiles([]);
-  };
+  // Navigation
 
   const setCurrentPath = (path: string[], ids?: (string | null)[]) => {
-    // If the user is navigating via Sidebar/Dashboard/Mobile nav, discard any active search
-    if (searchQuery.trim().length > 0) {
-      setSearchQuery('');
-    }
-
-    const newIds = ids ?? Array(path.length).fill(null);
-    const newShared = Array(path.length).fill(false);
-    setNavHistory(prev => {
-      const currentEntry = prev.entries[prev.index];
-      if (
-        currentEntry &&
-        currentEntry.path.length === path.length &&
-        JSON.stringify(currentEntry.ids) === JSON.stringify(newIds)
-      ) {
-        return prev;
-      }
-      const entries = prev.index < prev.entries.length - 1 ? prev.entries.slice(0, prev.index + 1) : prev.entries;
-      return {
-        entries: [...entries, { path, ids: newIds, shared: newShared }],
-        index: entries.length,
-      };
-    });
-    setCurrentPathState(path);
-    setFolderStack(newIds);
-    setFolderSharedStack(newShared);
+    if (searchQuery.trim().length > 0) setSearchQuery('');
+    pushNavEntry(path, ids ?? Array(path.length).fill(null), Array(path.length).fill(false));
   };
 
   const openFolder = (folder: FileItem) => {
-    // Clear search when navigating to a folder
-    if (searchQuery.trim().length > 0) {
-      setSearchQuery('');
-    }
-    const newPath = [...currentPathRef.current, folder.name];
-    const newIds = [...folderStackRef.current, folder.id];
-    const newShared = [...folderSharedStackRef.current, !!folder.shared];
-    setNavHistory(prev => {
-      const currentEntry = prev.entries[prev.index];
-      if (
-        currentEntry &&
-        currentEntry.path.length === newPath.length &&
-        JSON.stringify(currentEntry.ids) === JSON.stringify(newIds)
-      ) {
-        return prev;
-      }
-      const entries = prev.index < prev.entries.length - 1 ? prev.entries.slice(0, prev.index + 1) : prev.entries;
-      return {
-        entries: [...entries, { path: newPath, ids: newIds, shared: newShared }],
-        index: entries.length,
-      };
-    });
-    setCurrentPathState(newPath);
-    setFolderStack(newIds);
-    setFolderSharedStack(newShared);
+    if (searchQuery.trim().length > 0) setSearchQuery('');
+    pushNavEntry(
+      [...currentPathRef.current, folder.name],
+      [...folderStackRef.current, folder.id],
+      [...folderSharedStackRef.current, !!folder.shared]
+    );
   };
 
   const navigateTo = (index: number) => {
-    const newPath = currentPathRef.current.slice(0, index + 1);
-    const newIds = folderStackRef.current.slice(0, index + 1);
-    const newShared = folderSharedStackRef.current.slice(0, index + 1);
-    setNavHistory(prev => {
-      const currentEntry = prev.entries[prev.index];
-      if (
-        currentEntry &&
-        currentEntry.path.length === newPath.length &&
-        JSON.stringify(currentEntry.ids) === JSON.stringify(newIds)
-      ) {
-        return prev;
-      }
-      const entries = prev.index < prev.entries.length - 1 ? prev.entries.slice(0, prev.index + 1) : prev.entries;
-      return {
-        entries: [...entries, { path: newPath, ids: newIds, shared: newShared }],
-        index: entries.length,
-      };
-    });
-    setCurrentPathState(newPath);
-    setFolderStack(newIds);
-    setFolderSharedStack(newShared);
+    pushNavEntry(
+      currentPathRef.current.slice(0, index + 1),
+      folderStackRef.current.slice(0, index + 1),
+      folderSharedStackRef.current.slice(0, index + 1)
+    );
   };
 
   const canGoBack = navHistory.index > 0;
@@ -1888,42 +1280,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setFolderSharedStack(entry.shared);
   };
 
+  // Download
+
   const downloadFiles = async (ids: string[]) => {
     if (isDownloading || ids.length === 0) return;
 
     setIsDownloading(true);
     try {
-      // Electron: use native Save dialog (title = app name) and show toast on success
       if (isElectron()) {
         if (ids.length > 1) {
           const result = await saveFilesBulkViaElectron(ids);
-          if (result.ok) {
-            showToast('Files saved successfully', 'success');
-          } else if (!result.canceled && result.error) {
-            showToast(result.error, 'error');
-          }
+          if (result.ok) showToast('Files saved successfully', 'success');
+          else if (!result.canceled && result.error) showToast(result.error, 'error');
         } else {
           const firstId = ids[0];
           if (!firstId) return;
           const file = files.find(f => f.id === firstId);
           const fileName = file?.name || (file?.type === 'folder' ? 'folder' : 'file');
           const suggestedFileName = file?.type === 'folder' ? `${fileName}.zip` : fileName;
-          const result = await saveFileViaElectron({
-            fileId: firstId,
-            suggestedFileName,
-          });
-          if (result.ok) {
-            showToast('File saved successfully', 'success');
-          } else if (!result.canceled && result.error) {
-            showToast(result.error, 'error');
-          }
+          const result = await saveFileViaElectron({ fileId: firstId, suggestedFileName });
+          if (result.ok) showToast('File saved successfully', 'success');
+          else if (!result.canceled && result.error) showToast(result.error, 'error');
         }
         return;
       }
 
-      // Web: Use bulk download endpoint for multiple files (creates a single ZIP)
+      // Web: bulk download creates a single ZIP
       if (ids.length > 1) {
-        const res = await fetch(`/api/files/download/bulk`, {
+        const res = await fetch('/api/files/download/bulk', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
@@ -1936,32 +1320,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           throw new Error(errorMessage || 'Failed to download files');
         }
 
-        // Get the filename from Content-Disposition header
-        const contentDisposition = res.headers.get('Content-Disposition');
-        let filename = `download_${Date.now()}.zip`;
-
-        if (contentDisposition) {
-          const rfc5987Match = contentDisposition.match(/filename\*=UTF-8''([^;,\s]+)/i);
-          if (rfc5987Match && rfc5987Match[1]) {
-            try {
-              filename = decodeURIComponent(rfc5987Match[1]);
-            } catch {
-              filename = rfc5987Match[1];
-            }
-          } else {
-            const quotedMatch = contentDisposition.match(/filename="([^"]+)"/);
-            if (quotedMatch && quotedMatch[1]) {
-              filename = quotedMatch[1];
-            } else {
-              const unquotedMatch = contentDisposition.match(/filename=([^;,\s]+)/);
-              if (unquotedMatch && unquotedMatch[1]) {
-                filename = unquotedMatch[1];
-              }
-            }
-          }
-        }
-
-        // Create blob and trigger download
+        const filename = parseContentDispositionFilename(
+          res.headers.get('Content-Disposition'),
+          `download_${Date.now()}.zip`
+        );
         const blob = await res.blob();
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -1972,21 +1334,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         document.body.removeChild(a);
         window.URL.revokeObjectURL(url);
       } else {
-        // Single file download - use existing endpoint
         const firstId = ids[0];
-        // Type guard: ensure ID exists (even though we check ids.length === 0 at the top)
-        if (!firstId) {
-          return;
-        }
-
+        if (!firstId) return;
         const file = files.find(f => f.id === firstId);
         if (file) {
-          // For folders, the backend will add .zip extension
-          // For files, use the actual filename with extension
           const fileName = file.name || (file.type === 'folder' ? 'folder' : 'file');
-          const filename = file.type === 'folder' ? `${fileName}.zip` : fileName;
-          // firstId is guaranteed to be string here due to the type guard above
-          await downloadFileApi(firstId, filename);
+          await downloadFileApi(firstId, file.type === 'folder' ? `${fileName}.zip` : fileName);
         }
       }
     } catch (error) {
@@ -1997,25 +1350,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  // Config & Updates
+
   const refreshOnlyOfficeConfig = useCallback(async () => {
-    // Don't refresh if user is not authenticated (check via auth state)
-    // This prevents errors after logout
     if (!hasAuthState()) {
       setOnlyOfficeConfigured(false);
       return;
     }
-
     try {
-      // Use the public endpoint that works for all users
       const result = await checkOnlyOfficeConfigured();
       setOnlyOfficeConfigured(result.configured);
     } catch {
-      // Error handled silently - feature will be unavailable
       setOnlyOfficeConfigured(false);
     }
   }, []);
 
-  // Load admin status and OnlyOffice config status on mount
   useEffect(() => {
     const loadAdminStatus = async () => {
       try {
@@ -2023,7 +1372,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setCanConfigureOnlyOffice(status.canToggle);
         setHideFileExtensions(status.hideFileExtensions === true);
       } catch {
-        // Error handled silently - admin features will be unavailable
         setCanConfigureOnlyOffice(false);
       }
     };
@@ -2035,10 +1383,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const xhr = uploadXhrRef.current.get(uploadId);
     if (xhr) {
       xhr.abort();
-      // abort handler will clean up uploadProgress and XHR refs
       return;
     }
-    // If we don't find an XHR (e.g., already completed), just remove from UI
     setUploadProgress(prev => removeUploadProgress(prev, uploadId));
   };
 
@@ -2047,42 +1393,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (idsToCancel.length === 0) return;
     idsToCancel.forEach(id => {
       const xhr = uploadXhrRef.current.get(id);
-      if (xhr) {
-        xhr.abort();
-      } else {
-        setUploadProgress(prev => removeUploadProgress(prev, id));
-      }
+      if (xhr) xhr.abort();
+      else setUploadProgress(prev => removeUploadProgress(prev, id));
     });
-    // After cancelling a bulk folder upload, refresh the current folder so any
-    // files/folders that were successfully created before the cancel are visible
-    // without requiring a manual page reload.
     debouncedRefreshFiles(true);
   };
 
-  // One-time background update check when app opens
   useEffect(() => {
     if (hasCheckedUpdates) return;
-
     const checkForUpdatesOnce = async () => {
       try {
         const [current, latest] = await Promise.all([getCurrentVersions(), fetchLatestVersions()]);
-
         const outdated: { frontend?: string; backend?: string; electron?: string } = {};
 
         if (current.frontend && latest.frontend && current.frontend !== latest.frontend) {
           outdated.frontend = latest.frontend;
         }
-
         if (current.backend && latest.backend && current.backend !== latest.backend) {
           outdated.backend = latest.backend;
         }
-
         if (isElectron() && latest.electron) {
           try {
-            const desktopVersion = await getElectronAppVersion();
-            if (desktopVersion && desktopVersion !== latest.electron) {
-              outdated.electron = latest.electron;
-            }
+            const v = await getElectronAppVersion();
+            if (v && v !== latest.electron) outdated.electron = latest.electron;
           } catch {
             // Ignore Electron version errors for the banner
           }
@@ -2090,15 +1423,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
         setUpdatesAvailable(Object.keys(outdated).length > 0 ? outdated : null);
       } catch {
-        // Silent failure: no banner if check fails
         setUpdatesAvailable(null);
       } finally {
         setHasCheckedUpdates(true);
       }
     };
-
     void checkForUpdatesOnce();
   }, [hasCheckedUpdates]);
+
+  // Provide context
 
   return (
     <AppContext.Provider
@@ -2122,7 +1455,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setDocumentViewerFile,
         shareLinkModalOpen,
         shareLinks,
-        setShareLinkModalOpen,
+        setShareLinkModalOpen: (open: boolean, links: string[] = []) => {
+          setShareLinks(open ? links : []);
+          setShareLinkModalOpenState(open);
+        },
         renameTarget,
         setRenameTarget,
         renameFile: renameFileApi,
@@ -2139,9 +1475,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         },
         clearUploadModalInitialEntries: () => setUploadModalInitialEntries(null),
         setCreateFolderModalOpen,
-        addSelectedFile,
-        removeSelectedFile,
-        clearSelection,
+        addSelectedFile: (id: string) => setSelectedFiles(prev => [...prev, id]),
+        removeSelectedFile: (id: string) => setSelectedFiles(prev => prev.filter(fId => fId !== id)),
+        clearSelection: () => setSelectedFiles([]),
         refreshFiles,
         createFolder,
         uploadFile,
