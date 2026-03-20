@@ -499,6 +499,8 @@ async function uploadFilesBulk(req, res) {
   const clientIds = normalizeMultipartArray(req.body?.clientIds);
   const folderIdCache = new Map();
   const mimeFallbackWarnings = [];
+  const mimeMismatchWarnings = [];
+  const mimeSpoofingWarnings = [];
 
   // S3: streamed uploads (no temp files)
   if (req.streamedUploads) {
@@ -611,6 +613,9 @@ async function uploadFilesBulk(req, res) {
   if (!req.files || req.files.length === 0) {
     return sendError(res, 400, 'No files uploaded');
   }
+  // Defensive: req.files should be an array here, but keep logging robust
+  // so streamed uploads can never crash this controller.
+  const totalFiles = Array.isArray(req.files) ? req.files.length : 0;
 
   for (const file of req.files) {
     if (!validateFileName(file.originalname)) {
@@ -648,7 +653,7 @@ async function uploadFilesBulk(req, res) {
   const successful = [];
   const failed = [];
 
-  for (let index = 0; index < req.files.length; index++) {
+  for (let index = 0; index < totalFiles; index++) {
     const file = req.files[index];
     const relativePath = relativePaths[index] || null;
     const clientId = clientIds[index] || null;
@@ -660,6 +665,10 @@ async function uploadFilesBulk(req, res) {
         onFallback: warning => {
           mimeFallbackWarnings.push(warning);
         },
+        suppressMismatchWarning: true,
+        onMismatch: warning => {
+          mimeMismatchWarnings.push(warning);
+        },
       });
       if (!mimeValidation.valid) {
         await safeUnlink(file.path);
@@ -667,7 +676,12 @@ async function uploadFilesBulk(req, res) {
       }
       actualMimeType = mimeValidation.actualMimeType || file.mimetype || 'application/octet-stream';
 
-      validateFileUpload(actualMimeType, file.originalname);
+      validateFileUpload(actualMimeType, file.originalname, {
+        suppressSpoofingWarning: true,
+        onSpoofing: warning => {
+          mimeSpoofingWarnings.push(warning);
+        },
+      });
 
       const folderSegments = extractFolderSegmentsFromRelativePath(relativePath, file.originalname);
       const targetParentId =
@@ -714,23 +728,52 @@ async function uploadFilesBulk(req, res) {
     }
   }
 
-  if (mimeFallbackWarnings.length > 0) {
+  const anyMimeSecurityWarnings =
+    mimeFallbackWarnings.length > 0 || mimeMismatchWarnings.length > 0 || mimeSpoofingWarnings.length > 0;
+
+  if (anyMimeSecurityWarnings) {
     const SAMPLE_LIMIT = 20;
-    const sampled = mimeFallbackWarnings.slice(0, SAMPLE_LIMIT);
+
+    const sampledFallback = mimeFallbackWarnings.slice(0, SAMPLE_LIMIT).map(item => item.filename);
+    const sampledMismatch = mimeMismatchWarnings.slice(0, SAMPLE_LIMIT).map(item => item.filename);
+    const sampledSpoofing = mimeSpoofingWarnings.slice(0, SAMPLE_LIMIT).map(item => item.filename);
+
     const byDeclaredMimeType = mimeFallbackWarnings.reduce((acc, item) => {
       const key = item?.declaredMimeType || 'unknown';
       acc[key] = (acc[key] || 0) + 1;
       return acc;
     }, {});
+
+    const byMismatchDeclaredMimeType = mimeMismatchWarnings.reduce((acc, item) => {
+      const key = item?.declaredMimeType || 'unknown';
+      acc[key] = (acc[key] || 0) + 1;
+      return acc;
+    }, {});
+
+    const bySpoofingMimeType = mimeSpoofingWarnings.reduce((acc, item) => {
+      const key = item?.mimeType || 'unknown';
+      acc[key] = (acc[key] || 0) + 1;
+      return acc;
+    }, {});
+
     logger.warn(
       {
-        totalFiles: req.files.length,
+        totalFiles,
         fallbackCount: mimeFallbackWarnings.length,
-        sampledFiles: sampled.map(item => item.filename),
-        sampleTruncated: mimeFallbackWarnings.length > SAMPLE_LIMIT,
+        mismatchCount: mimeMismatchWarnings.length,
+        spoofingCount: mimeSpoofingWarnings.length,
+        sampledFallbackFiles: sampledFallback,
+        sampledMismatchFiles: sampledMismatch,
+        sampledSpoofingFiles: sampledSpoofing,
+        sampleTruncated:
+          mimeFallbackWarnings.length > SAMPLE_LIMIT ||
+          mimeMismatchWarnings.length > SAMPLE_LIMIT ||
+          mimeSpoofingWarnings.length > SAMPLE_LIMIT,
         byDeclaredMimeType,
+        byMismatchDeclaredMimeType,
+        bySpoofingMimeType,
       },
-      'Bulk upload MIME detection fallback summary (per-file warnings suppressed)'
+      'Bulk upload MIME security warnings summary (per-file warnings suppressed)'
     );
   }
 
@@ -741,13 +784,13 @@ async function uploadFilesBulk(req, res) {
   // Aggregate audit log + summary log entry for this bulk upload.
   await filesUploadedBulk(successful, req, {
     failedCount: failed.length,
-    total: req.files.length,
+    total: totalFiles,
     parentId,
     driver: 'disk',
   });
   logger.info(
     {
-      total: req.files.length,
+      total: totalFiles,
       successful: successful.length,
       failedCount: failed.length,
       parentId,
@@ -759,7 +802,7 @@ async function uploadFilesBulk(req, res) {
   sendSuccess(res, {
     files: successful,
     failed: failed.length > 0 ? failed : undefined,
-    total: req.files.length,
+    total: totalFiles,
     successful: successful.length,
     failedCount: failed.length,
   });

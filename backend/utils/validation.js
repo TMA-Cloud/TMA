@@ -172,7 +172,7 @@ function validateToken(token) {
  * @param {string} filename - Filename to validate extension
  * @returns {Object} { valid: boolean, error: string|null, requiresDownload: boolean }
  */
-function validateFileUpload(mimeType, filename) {
+function validateFileUpload(mimeType, filename, { suppressSpoofingWarning = false, onSpoofing = null } = {}) {
   // Extract file extension
   const ext = filename ? filename.toLowerCase().match(/\.[^.]+$/) : null;
   const fileExtension = ext ? ext[0] : '';
@@ -233,7 +233,12 @@ function validateFileUpload(mimeType, filename) {
   if (mimeType && mimeExtensionMap[mimeType.toLowerCase()]) {
     const expectedExtensions = mimeExtensionMap[mimeType.toLowerCase()];
     if (fileExtension && !expectedExtensions.includes(fileExtension)) {
-      logger.warn(`[SECURITY] Potential MIME spoofing: ${mimeType} with extension ${fileExtension}`);
+      if (typeof onSpoofing === 'function') {
+        onSpoofing({ mimeType, fileExtension, filename });
+      }
+      if (!suppressSpoofingWarning) {
+        logger.warn(`[SECURITY] Potential MIME spoofing: ${mimeType} with extension ${fileExtension}`);
+      }
     }
   }
 

@@ -152,8 +152,12 @@ async function detectMimeTypeFromContent(filePath) {
  * @param {string} filename - Original filename
  * @returns {Promise<Object>} { valid: boolean, actualMimeType: string|null, error: string|null }
  */
-async function validateMimeType(filePath, declaredMimeType, filename, options = {}) {
-  const { suppressFallbackWarning = false, onFallback = null } = options;
+async function validateMimeType(
+  filePath,
+  declaredMimeType,
+  filename,
+  { suppressFallbackWarning = false, onFallback = null, suppressMismatchWarning = false, onMismatch = null } = {}
+) {
   const actualMimeType = await detectMimeTypeFromContent(filePath);
 
   if (!actualMimeType) {
@@ -179,7 +183,12 @@ async function validateMimeType(filePath, declaredMimeType, filename, options = 
     normalizedDeclared !== 'application/octet-stream' &&
     normalizedActual !== normalizedDeclared
   ) {
-    logger.warn({ declaredMimeType, actualMimeType, filename }, '[SECURITY] MIME type mismatch detected');
+    if (typeof onMismatch === 'function') {
+      onMismatch({ declaredMimeType, actualMimeType, filename });
+    }
+    if (!suppressMismatchWarning) {
+      logger.warn({ declaredMimeType, actualMimeType, filename }, '[SECURITY] MIME type mismatch detected');
+    }
   }
 
   return { valid: true, actualMimeType, error: null, usedDeclaredFallback: false };
