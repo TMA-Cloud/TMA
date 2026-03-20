@@ -136,7 +136,7 @@ function streamUploadToS3(singleOrBulk = 'single') {
         req.on('aborted', () => {
           logger.warn('[StreamUpload] Request aborted by client');
           try {
-            busboy.destroy(new Error('Request aborted by client'));
+            busboy.destroy(new Error('Request aborted'));
           } catch {
             // ignore destroy errors
           }

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Upload, X, CheckCircle, AlertCircle, ChevronDown, ChevronUp } from 'lucide-react';
+import { Upload, X, CheckCircle, AlertCircle, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
 import { formatFileSize } from '../../utils/fileUtils';
 import { useIsMobile } from '../../hooks/useIsMobile';
 
@@ -8,7 +8,7 @@ interface UploadProgressItem {
   fileName: string;
   fileSize: number;
   progress: number;
-  status: 'uploading' | 'completed' | 'error';
+  status: 'uploading' | 'finalizing' | 'completed' | 'error';
 }
 
 interface UploadProgressProps {
@@ -85,13 +85,14 @@ export const UploadProgress: React.FC<UploadProgressProps> = ({
   if (uploads.length === 0) return null;
 
   // Group uploads by status
-  const uploading = uploads.filter(u => u.status === 'uploading');
+  const uploading = uploads.filter(u => u.status === 'uploading' || u.status === 'finalizing');
   const completed = uploads.filter(u => u.status === 'completed');
   const errors = uploads.filter(u => u.status === 'error');
 
   // Calculate overall progress
   const totalProgress =
     uploading.length > 0 ? Math.round(uploading.reduce((sum, u) => sum + u.progress, 0) / uploading.length) : 100;
+  const isFinalizing = uploads.some(u => u.status === 'finalizing');
 
   // Show individual cards for 1-2 files
   if (uploads.length <= MAX_INDIVIDUAL_ITEMS) {
@@ -130,6 +131,16 @@ export const UploadProgress: React.FC<UploadProgressProps> = ({
                   >
                     <AlertCircle className={`${isMobile ? 'w-4 h-4' : 'w-5 h-5'} text-red-600 dark:text-red-400`} />
                   </div>
+                ) : upload.status === 'finalizing' ? (
+                  <div
+                    className={`${
+                      isMobile ? 'w-8 h-8' : 'w-10 h-10'
+                    } rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center`}
+                  >
+                    <Loader2
+                      className={`${isMobile ? 'w-4 h-4' : 'w-5 h-5'} text-blue-600 dark:text-blue-400 animate-spin`}
+                    />
+                  </div>
                 ) : (
                   <div
                     className={`${
@@ -162,9 +173,16 @@ export const UploadProgress: React.FC<UploadProgressProps> = ({
                       {upload.progress}%
                     </p>
                   )}
+                  {upload.status === 'finalizing' && (
+                    <p
+                      className={`${isMobile ? 'text-[10px]' : 'text-xs'} font-medium text-blue-600 dark:text-blue-400`}
+                    >
+                      Finalizing upload...
+                    </p>
+                  )}
                 </div>
 
-                {upload.status === 'uploading' && (
+                {(upload.status === 'uploading' || upload.status === 'finalizing') && (
                   <div className={isMobile ? 'mt-2' : 'mt-2.5'}>
                     <div
                       className={`bg-gray-100 dark:bg-gray-800 rounded-full ${
@@ -201,7 +219,7 @@ export const UploadProgress: React.FC<UploadProgressProps> = ({
                   </p>
                 )}
               </div>
-              {upload.status === 'uploading' && onCancel && (
+              {(upload.status === 'uploading' || upload.status === 'finalizing') && onCancel && (
                 <button
                   type="button"
                   onClick={() => onCancel(upload.id)}
@@ -302,7 +320,7 @@ export const UploadProgress: React.FC<UploadProgressProps> = ({
                   Overall progress
                 </p>
                 <p className={`${isMobile ? 'text-[10px]' : 'text-xs'} font-bold text-blue-600 dark:text-blue-400`}>
-                  {totalProgress}%
+                  {isFinalizing ? 'Finalizing upload...' : `${totalProgress}%`}
                 </p>
               </div>
               <div
@@ -363,6 +381,18 @@ export const UploadProgress: React.FC<UploadProgressProps> = ({
                         className={`${isMobile ? 'w-3.5 h-3.5' : 'w-4 h-4'} text-red-600 dark:text-red-400`}
                       />
                     </div>
+                  ) : upload.status === 'finalizing' ? (
+                    <div
+                      className={`${
+                        isMobile ? 'w-7 h-7' : 'w-8 h-8'
+                      } rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center`}
+                    >
+                      <Loader2
+                        className={`${
+                          isMobile ? 'w-3.5 h-3.5' : 'w-4 h-4'
+                        } text-blue-600 dark:text-blue-400 animate-spin`}
+                      />
+                    </div>
                   ) : (
                     <div
                       className={`${
@@ -399,8 +429,17 @@ export const UploadProgress: React.FC<UploadProgressProps> = ({
                         {upload.progress}%
                       </p>
                     )}
+                    {upload.status === 'finalizing' && (
+                      <p
+                        className={`${
+                          isMobile ? 'text-[10px]' : 'text-xs'
+                        } font-semibold text-blue-600 dark:text-blue-400`}
+                      >
+                        Finalizing upload...
+                      </p>
+                    )}
                   </div>
-                  {upload.status === 'uploading' && (
+                  {(upload.status === 'uploading' || upload.status === 'finalizing') && (
                     <div className={isMobile ? 'mt-1.5' : 'mt-2'}>
                       <div
                         className={`bg-gray-100 dark:bg-gray-800 rounded-full ${
@@ -417,7 +456,7 @@ export const UploadProgress: React.FC<UploadProgressProps> = ({
                     </div>
                   )}
                 </div>
-                {upload.status === 'uploading' && onCancel && (
+                {(upload.status === 'uploading' || upload.status === 'finalizing') && onCancel && (
                   <button
                     type="button"
                     onClick={() => onCancel(upload.id)}

@@ -356,7 +356,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       xhr.upload.addEventListener('progress', e => {
         if (e.lengthComputable) {
           const progress = getInFlightUploadProgress(e.loaded, e.total);
-          setUploadProgress(prev => updateUploadProgress(prev, uploadId, { progress }));
+          // When the browser upload reaches 99%, the XHR is often waiting on the backend
+          // to finalize so we switch to a dedicated UI state instead of "99% stuck"
+          const status: UploadProgressItem['status'] = progress >= 99 ? 'finalizing' : 'uploading';
+          setUploadProgress(prev => updateUploadProgress(prev, uploadId, { progress, status }));
           onProgress?.(progress);
         }
       });
@@ -746,7 +749,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             if (e.lengthComputable) {
               const progress = getInFlightUploadProgress(e.loaded, e.total);
               progressItems.forEach(item => {
-                setUploadProgress(prev => updateUploadProgress(prev, item.id, { progress }));
+                const status: UploadProgressItem['status'] = progress >= 99 ? 'finalizing' : 'uploading';
+                setUploadProgress(prev => updateUploadProgress(prev, item.id, { progress, status }));
               });
             }
           });
@@ -1383,6 +1387,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const xhr = uploadXhrRef.current.get(uploadId);
     if (xhr) {
       xhr.abort();
+      setUploadProgress(prev => removeUploadProgress(prev, uploadId));
+      uploadXhrRef.current.delete(uploadId);
       return;
     }
     setUploadProgress(prev => removeUploadProgress(prev, uploadId));
@@ -1393,8 +1399,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (idsToCancel.length === 0) return;
     idsToCancel.forEach(id => {
       const xhr = uploadXhrRef.current.get(id);
-      if (xhr) xhr.abort();
-      else setUploadProgress(prev => removeUploadProgress(prev, id));
+      if (xhr) {
+        xhr.abort();
+        setUploadProgress(prev => removeUploadProgress(prev, id));
+        uploadXhrRef.current.delete(id);
+      } else {
+        setUploadProgress(prev => removeUploadProgress(prev, id));
+      }
     });
     debouncedRefreshFiles(true);
   };

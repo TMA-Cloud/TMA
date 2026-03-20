@@ -368,7 +368,7 @@ export const UploadModal: React.FC = () => {
     duplicateConflicts.length > 0 && duplicateConflicts.every(c => duplicateChoices[c.uploadId] != null);
 
   // Derive current uploading items and detect if there's a bulk group (multiple items sharing the same groupId).
-  const uploadingProgressItems = uploadProgress.filter(u => u.status === 'uploading');
+  const uploadingProgressItems = uploadProgress.filter(u => u.status === 'uploading' || u.status === 'finalizing');
   let bulkGroupId: string | null = null;
   if (uploadingProgressItems.length > 1) {
     const groupCounts = new Map<string, number>();
@@ -547,11 +547,19 @@ export const UploadModal: React.FC = () => {
                         isMobile ? 'w-7 h-7' : 'w-8 h-8'
                       } rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center`}
                     >
-                      <Upload
-                        className={`${
-                          isMobile ? 'w-3.5 h-3.5' : 'w-4 h-4'
-                        } text-blue-600 dark:text-blue-400 animate-pulse`}
-                      />
+                      {upload.status === 'finalizing' ? (
+                        <Loader2
+                          className={`${
+                            isMobile ? 'w-3.5 h-3.5' : 'w-4 h-4'
+                          } text-blue-600 dark:text-blue-400 animate-spin`}
+                        />
+                      ) : (
+                        <Upload
+                          className={`${
+                            isMobile ? 'w-3.5 h-3.5' : 'w-4 h-4'
+                          } text-blue-600 dark:text-blue-400 animate-pulse`}
+                        />
+                      )}
                     </div>
                   </div>
 
@@ -572,7 +580,7 @@ export const UploadModal: React.FC = () => {
                           isMobile ? 'text-[10px]' : 'text-xs'
                         } font-semibold text-blue-600 dark:text-blue-400`}
                       >
-                        {upload.progress}%
+                        {upload.status === 'finalizing' ? 'Finalizing upload...' : `${upload.progress}%`}
                       </p>
                     </div>
                     <div className={isMobile ? 'mt-1.5' : 'mt-2'}>
