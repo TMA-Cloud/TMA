@@ -182,6 +182,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const folderStackRef = useRef<(string | null)[]>(folderStack);
   const folderSharedStackRef = useRef<boolean[]>(folderSharedStack);
   const refreshFilesRef = useRef<((skipSearchCheck?: boolean) => Promise<void>) | null>(null);
+  const returnHighlightAfterRefreshRef = useRef<string | null>(null);
   const desktopEditInProgressRef = useRef<Set<string>>(new Set());
   const deleteInProgressRef = useRef(false);
   const deleteProgressDismissTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -217,7 +218,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     async (skipSearchCheck = false) => {
       try {
         if (!skipSearchCheck && searchQuery.trim().length > 0) return;
-        if (!isFileManagerPage(currentPath[0])) return;
+        if (!isFileManagerPage(currentPath[0])) {
+          returnHighlightAfterRefreshRef.current = null;
+          return;
+        }
 
         const parentId = folderStack[folderStack.length - 1];
         let urlPath = '/api/files';
@@ -234,9 +238,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
         const res = await fetch(url.toString(), { credentials: 'include' });
         const data: FileItemResponse[] = await res.json();
-        setFiles(sortFilesWithFoldersFirst(data.map(mapFileResponse), sortBy, sortOrder));
+        const sorted = sortFilesWithFoldersFirst(data.map(mapFileResponse), sortBy, sortOrder);
+        setFiles(sorted);
+
+        const highlightId = returnHighlightAfterRefreshRef.current;
+        returnHighlightAfterRefreshRef.current = null;
+        if (highlightId && sorted.some(f => f.id === highlightId)) {
+          setSelectedFiles([highlightId]);
+        }
       } catch {
         // UI will show empty state
+        returnHighlightAfterRefreshRef.current = null;
       }
     },
     [folderStack, currentPath, sortBy, sortOrder, searchQuery]
@@ -1254,11 +1266,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const navigateTo = (index: number) => {
-    pushNavEntry(
-      currentPathRef.current.slice(0, index + 1),
-      folderStackRef.current.slice(0, index + 1),
-      folderSharedStackRef.current.slice(0, index + 1)
-    );
+    const stackBefore = folderStackRef.current;
+    const pathBefore = currentPathRef.current;
+    const nextPath = pathBefore.slice(0, index + 1);
+    const nextIds = stackBefore.slice(0, index + 1);
+    const nextShared = folderSharedStackRef.current.slice(0, index + 1);
+    if (nextPath.length === pathBefore.length && JSON.stringify(nextIds) === JSON.stringify(stackBefore)) {
+      return;
+    }
+    if (searchQuery.trim().length > 0) setSearchQuery('');
+    const newLen = index + 1;
+    const highlightId = stackBefore.length > newLen && stackBefore[newLen] != null ? stackBefore[newLen]! : null;
+    returnHighlightAfterRefreshRef.current = highlightId;
+    setSelectedFiles([]);
+    pushNavEntry(nextPath, nextIds, nextShared);
   };
 
   const canGoBack = navHistory.index > 0;
@@ -1266,8 +1287,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const goBack = () => {
     if (!canGoBack) return;
+    if (searchQuery.trim().length > 0) setSearchQuery('');
+    const stackBefore = folderStackRef.current;
     const entry = navHistory.entries[navHistory.index - 1];
     if (!entry) return;
+    const highlightId =
+      stackBefore.length > entry.path.length && stackBefore[entry.path.length] != null
+        ? stackBefore[entry.path.length]!
+        : null;
+    returnHighlightAfterRefreshRef.current = highlightId;
+    setSelectedFiles([]);
     setNavHistory(prev => ({ ...prev, index: prev.index - 1 }));
     setCurrentPathState(entry.path);
     setFolderStack(entry.ids);

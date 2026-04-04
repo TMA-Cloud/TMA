@@ -29,6 +29,9 @@ interface FileListProps {
   onClearSelection: () => void;
   onMarqueeSelection: (selectedIds: string[], additive: boolean) => void;
   onSelectingChange: (selecting: boolean) => void;
+  /** When set, the matching row scrolls into view after navigation (ref + useLayoutEffect in FileItem) */
+  listScrollRequest?: { fileId: string; token: number } | null;
+  onListScrollRequestHandled?: () => void;
 }
 
 export const FileList: React.FC<FileListProps> = ({
@@ -55,6 +58,8 @@ export const FileList: React.FC<FileListProps> = ({
   onClearSelection,
   onMarqueeSelection,
   onSelectingChange,
+  listScrollRequest,
+  onListScrollRequestHandled,
 }) => {
   const gridClassName = `grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3`;
 
@@ -105,6 +110,8 @@ export const FileList: React.FC<FileListProps> = ({
                 onDrop={file.type === 'folder' ? onFolderDrop(file.id) : undefined}
                 isDragOver={dragOverFolder === file.id}
                 dragDisabled={isSelecting}
+                scrollIntoViewRequest={listScrollRequest}
+                onScrollIntoViewHandled={onListScrollRequestHandled}
               />
               {file.type === 'folder' && dragOverFolder === file.id && draggingIds.length > 1 && (
                 <div className="drop-count-badge">{draggingIds.length}</div>

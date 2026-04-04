@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useLayoutEffect, useEffect } from 'react';
 import { type FileItem as FileItemType, useApp } from '../../contexts/AppContext';
 import { formatFileSize, formatDate, getDisplayFileName } from '../../utils/fileUtils';
 import { Star, Share2, Eye, Clock } from 'lucide-react';
@@ -19,6 +19,8 @@ interface FileItemProps {
   onDrop?: (e: React.DragEvent) => void;
   isDragOver?: boolean;
   dragDisabled?: boolean;
+  scrollIntoViewRequest?: { fileId: string; token: number } | null;
+  onScrollIntoViewHandled?: () => void;
 }
 
 export const FileItemComponent: React.FC<FileItemProps> = ({
@@ -35,13 +37,26 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
   onDrop,
   isDragOver,
   dragDisabled,
+  scrollIntoViewRequest,
+  onScrollIntoViewHandled,
 }) => {
   const isMobile = useIsMobile();
   const { hideFileExtensions } = useApp();
   const displayName = getDisplayFileName(file.name, file.type === 'file', hideFileExtensions);
+  const rootRef = useRef<HTMLDivElement>(null);
   const longPressTimeoutRef = useRef<number | null>(null);
   const longPressTriggeredRef = useRef(false);
   const isExpired = file.shared && file.expiresAt instanceof Date && file.expiresAt < new Date();
+
+  useLayoutEffect(() => {
+    if (!scrollIntoViewRequest || scrollIntoViewRequest.fileId !== file.id) return;
+    rootRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, [file.id, scrollIntoViewRequest]);
+
+  useEffect(() => {
+    if (!scrollIntoViewRequest || scrollIntoViewRequest.fileId !== file.id) return;
+    onScrollIntoViewHandled?.();
+  }, [file.id, scrollIntoViewRequest, onScrollIntoViewHandled]);
 
   const clearLongPress = () => {
     if (longPressTimeoutRef.current !== null) {
@@ -109,6 +124,7 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
   if (viewMode === 'grid') {
     return (
       <div
+        ref={rootRef}
         data-file-id={file.id}
         className={`
           stagger-item group relative rounded-2xl border cursor-pointer
@@ -194,17 +210,18 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
 
   return (
     <div
+      ref={rootRef}
       data-file-id={file.id}
       className={`
-        stagger-item group flex items-center gap-3 py-2.5 px-3 rounded-2xl cursor-pointer
+        stagger-item group flex items-center gap-3 py-2.5 px-3 cursor-pointer
         transition-all duration-300 ease-out
         hover:bg-slate-200/40 dark:hover:bg-slate-700/50
         active:scale-[0.99]
         ${isMobile ? 'select-none' : ''}
         ${
           isSelected
-            ? 'bg-[#5b8def]/10 dark:bg-[#5b8def]/20 shadow-soft border-l-4 border-[#5b8def] dark:border-[#5b8def] ring-2 ring-[#5b8def]/20 dark:ring-[#5b8def]/25'
-            : 'border-l-4 border-transparent'
+            ? 'rounded-r-2xl rounded-l-none bg-[#5b8def]/14 dark:bg-[#5b8def]/22 shadow-soft border-l-[3px] border-[#3b82f6] dark:border-[#60a5fa] ring-1 ring-[#5b8def]/25 dark:ring-[#5b8def]/30'
+            : 'rounded-2xl border-l-[3px] border-transparent'
         }
         ${isDragOver ? 'ring-4 ring-[#5b8def]/40 ring-offset-2 scale-[1.01]' : ''}
       `}

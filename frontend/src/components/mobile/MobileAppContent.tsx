@@ -60,6 +60,7 @@ const navItems = [
 export const MobileAppContent: React.FC = () => {
   const {
     currentPath,
+    folderStack,
     setCurrentPath,
     setUploadModalOpen,
     uploadProgress,
@@ -73,13 +74,27 @@ export const MobileAppContent: React.FC = () => {
   const currentPage = currentPath[0];
 
   const mainRef = useRef<HTMLElement | null>(null);
+  const navScrollRef = useRef<{ page: string; stackLen: number }>({
+    page: currentPath[0] ?? '',
+    stackLen: folderStack.length,
+  });
 
-  // Always reset the main scroll area to the top when navigating to a new path/folder
+  // Scroll to top when changing top-level page or opening a deeper folder — not when going up (back/breadcrumb),
+  // so the highlighted folder row stays visible like Windows Explorer.
   useEffect(() => {
-    if (mainRef.current) {
-      scrollToTopFast(mainRef.current, 180);
+    const page = currentPath[0] ?? '';
+    const stackLen = folderStack.length;
+    const prev = navScrollRef.current;
+    const pageChanged = page !== prev.page;
+    const wentDeeper = stackLen > prev.stackLen;
+    navScrollRef.current = { page, stackLen };
+
+    if (pageChanged || wentDeeper) {
+      if (mainRef.current) {
+        scrollToTopFast(mainRef.current, 180);
+      }
     }
-  }, [currentPath]);
+  }, [currentPath, folderStack.length]);
 
   const renderContent = () => {
     switch (currentPage) {

@@ -101,17 +101,37 @@ const PageLoadingFallback: React.FC = () => (
 );
 
 const AppContent: React.FC = () => {
-  const { currentPath, sidebarOpen, uploadProgress, setUploadProgress, setIsUploadProgressInteracting, cancelUpload } =
-    useApp();
+  const {
+    currentPath,
+    folderStack,
+    sidebarOpen,
+    uploadProgress,
+    setUploadProgress,
+    setIsUploadProgressInteracting,
+    cancelUpload,
+  } = useApp();
   const isMobile = useIsMobile();
   const mainRef = React.useRef<HTMLElement | null>(null);
+  const navScrollRef = React.useRef<{ page: string; stackLen: number }>({
+    page: currentPath[0] ?? '',
+    stackLen: folderStack.length,
+  });
 
-  // Ensure the main scroll container resets to top whenever the path changes
+  // Reset main scroll when changing top-level page or drilling into a folder — not when going up (back / breadcrumb),
+  // so returning to a parent list keeps scroll position and the highlighted row can stay in view
   React.useEffect(() => {
-    if (!isMobile && mainRef.current) {
+    if (isMobile) return;
+    const page = currentPath[0] ?? '';
+    const stackLen = folderStack.length;
+    const prev = navScrollRef.current;
+    const pageChanged = page !== prev.page;
+    const wentDeeper = stackLen > prev.stackLen;
+    navScrollRef.current = { page, stackLen };
+
+    if ((pageChanged || wentDeeper) && mainRef.current) {
       scrollToTopFast(mainRef.current, 180);
     }
-  }, [currentPath, isMobile]);
+  }, [currentPath, folderStack.length, isMobile]);
 
   const renderContent = () => {
     const currentPage = currentPath[0];

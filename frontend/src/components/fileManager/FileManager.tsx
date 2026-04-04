@@ -373,6 +373,37 @@ export const FileManager: React.FC = () => {
     }
   }, [files, selectedFiles, setSelectedFiles]);
 
+  const prevFolderStackLenRef = useRef(folderStack.length);
+  /** True after navigating up; cleared after we scroll to the restored selection (applied async after fetch) */
+  const scrollReturnHighlightRef = useRef(false);
+
+  useEffect(() => {
+    const prevLen = prevFolderStackLenRef.current;
+    const len = folderStack.length;
+    if (len < prevLen) scrollReturnHighlightRef.current = true;
+    if (len > prevLen) scrollReturnHighlightRef.current = false;
+    prevFolderStackLenRef.current = len;
+  }, [folderStack.length]);
+
+  const [listScrollRequest, setListScrollRequest] = useState<{ fileId: string; token: number } | null>(null);
+  const listScrollTokenRef = useRef(0);
+  const clearListScrollRequest = useCallback(() => setListScrollRequest(null), []);
+
+  useEffect(() => {
+    if (!scrollReturnHighlightRef.current) return;
+    if (selectedFiles.length > 1) {
+      scrollReturnHighlightRef.current = false;
+      return;
+    }
+    if (selectedFiles.length !== 1) return;
+    const id = selectedFiles[0];
+    if (!id || !files.some(f => f.id === id)) return;
+
+    scrollReturnHighlightRef.current = false;
+    listScrollTokenRef.current += 1;
+    setListScrollRequest({ fileId: id, token: listScrollTokenRef.current });
+  }, [files, selectedFiles]);
+
   useEffect(() => {
     const handleDocumentClick = (e: MouseEvent) => {
       if (dragSelectingRef.current) return;
@@ -856,6 +887,8 @@ export const FileManager: React.FC = () => {
         onClearSelection={handleClearSelection}
         onMarqueeSelection={handleMarqueeSelection}
         onSelectingChange={handleSelectingChange}
+        listScrollRequest={listScrollRequest}
+        onListScrollRequestHandled={clearListScrollRequest}
       />
 
       {/* Context Menu */}
