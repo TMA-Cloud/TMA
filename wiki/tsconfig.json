@@ -1,8 +1,9 @@
 {
-  // This file is not used in compilation. It is here just for a nice editor experience.
+  // `npm run typecheck` / editors; Docusaurus build compiles via webpack. ignoreDeprecations:
+  // @docusaurus/tsconfig still sets baseUrl (deprecated in TS 6, removed in TS 7).
   "extends": "@docusaurus/tsconfig",
   "compilerOptions": {
-    "baseUrl": ".",
+    "ignoreDeprecations": "6.0",
     "jsx": "react-jsx",
     "types": ["@docusaurus/module-type-aliases"]
   },

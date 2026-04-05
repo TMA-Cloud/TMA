@@ -72,22 +72,17 @@ function createWindow(loadUrl, preloadPath, appRoot) {
     // The backend can use this to distinguish Electron desktop traffic from normal browsers.
     try {
       const serverOrigin = new URL(loadUrl).origin;
+      const originBase = serverOrigin.replace(/\/$/, '');
       const ses = mainWindow.webContents.session;
-      ses.webRequest.onBeforeSendHeaders((details, callback) => {
-        try {
-          const urlOrigin = new URL(details.url).origin;
-          if (urlOrigin === serverOrigin) {
-            const requestHeaders = {
-              ...details.requestHeaders,
-              [ELECTRON_HEADER_NAME]: ELECTRON_HEADER_VALUE,
-            };
-            callback({ requestHeaders });
-            return;
-          }
-        } catch {
-          // Ignore invalid URLs
-        }
-        callback({ requestHeaders: details.requestHeaders });
+      // Scoped filter (recommended webRequest usage): same behavior as previous
+      // origin check — does not match wss: (https origin only), matching old logic.
+      const headerFilter = { urls: [`${originBase}/*`, `${originBase}/`] };
+      ses.webRequest.onBeforeSendHeaders(headerFilter, (details, callback) => {
+        const requestHeaders = {
+          ...details.requestHeaders,
+          [ELECTRON_HEADER_NAME]: ELECTRON_HEADER_VALUE,
+        };
+        callback({ requestHeaders });
       });
     } catch {
       // If URL parsing fails, skip header injection
