@@ -64,7 +64,7 @@ export const SessionsModal: React.FC<SessionsModalProps> = ({
             Loading sessions...
           </p>
         ) : activeSessions.length === 0 ? (
-          <p className="text-center text-gray-600 dark:text-gray-300">No active sessions found.</p>
+          <p className="text-center text-gray-600 dark:text-gray-300">No active sessions found!</p>
         ) : (
           <div className="space-y-3 overflow-y-auto max-h-[60vh]">
             {activeSessions.map(session => {

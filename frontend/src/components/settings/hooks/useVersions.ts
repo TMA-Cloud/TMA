@@ -87,7 +87,7 @@ export function useVersions() {
     if (versionError) return versionError;
     if (checkingVersions && !versionChecked) return 'Checking update feed...';
     if (latestVersions?.[key]) return `Latest available: v${latestVersions[key]}`;
-    return 'Version reported by this installation.';
+    return 'Version reported by this installation';
   };
 
   useEffect(() => {

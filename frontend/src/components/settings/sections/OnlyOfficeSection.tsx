@@ -199,19 +199,14 @@ export const OnlyOfficeSection: React.FC<OnlyOfficeSectionProps> = ({ canConfigu
   const StatusIcon = statusInfo.icon;
 
   return (
-    <div
-      className="relative overflow-hidden card-premium hover-lift spacing-card"
-      style={{
-        animation: 'slideUp 0.45s cubic-bezier(0.16, 1, 0.3, 1) both',
-      }}
-    >
-      <div className="flex flex-wrap items-center gap-4 mb-6">
+    <div className="relative">
+      <div className="flex items-center gap-4 mb-6">
         <div className="p-3 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-300">
-          <FileText className="w-5 h-5 icon-muted" />
+          <FileText className="w-6 h-6 icon-muted" />
         </div>
         <div className="flex-1">
-          <div className="flex items-center gap-2 mb-1">
-            <h3 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-gray-100 tracking-tight">
+          <div className="flex items-center gap-2">
+            <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100 tracking-tight">
               OnlyOffice Integration
             </h3>
             {isCollapsed && hasLoadedSettings && StatusIcon && (
@@ -221,7 +216,7 @@ export const OnlyOfficeSection: React.FC<OnlyOfficeSectionProps> = ({ canConfigu
               </div>
             )}
           </div>
-          <p className="text-sm text-gray-500/80 dark:text-gray-400/80">
+          <p className="text-sm text-gray-500/80 dark:text-gray-400/80 mt-0.5">
             Configure OnlyOffice Document Server for document editing and viewing
             {isCollapsed && hasLoadedSettings && !StatusIcon && (
               <span className={`ml-2 ${statusInfo.color}`}>{statusInfo.text}</span>
@@ -273,13 +268,13 @@ export const OnlyOfficeSection: React.FC<OnlyOfficeSectionProps> = ({ canConfigu
             {isEditing ? (
               <>
                 {isConfigured && (
-                  <div className="stagger-item rounded-2xl bg-blue-50 dark:bg-blue-900/20 px-4 py-3 border border-blue-200 dark:border-blue-800">
+                  <div className="rounded-xl bg-blue-50 dark:bg-blue-900/20 px-4 py-3 border border-blue-200 dark:border-blue-800">
                     <p className="text-sm text-blue-700 dark:text-blue-300">
                       To update, re-enter both URL and JWT secret or to unset, clear both fields
                     </p>
                   </div>
                 )}
-                <div className="stagger-item hover-lift flex flex-col gap-2 rounded-2xl bg-[#dfe3ea]/95 dark:bg-gray-900/60 px-4 py-3 border border-transparent hover:border-blue-500/40 transition-all duration-200">
+                <div className="flex flex-col gap-2 rounded-xl bg-white/60 dark:bg-gray-900/50 border border-slate-200/50 dark:border-slate-700/30 px-4 py-3 hover:border-blue-500/30 transition-all duration-200">
                   <label htmlFor="onlyoffice-url" className="text-sm font-medium text-gray-900 dark:text-gray-100">
                     OnlyOffice Document Server URL
                   </label>
@@ -303,7 +298,7 @@ export const OnlyOfficeSection: React.FC<OnlyOfficeSectionProps> = ({ canConfigu
                   />
                 </div>
 
-                <div className="stagger-item hover-lift flex flex-col gap-2 rounded-2xl bg-[#dfe3ea]/95 dark:bg-gray-900/60 px-4 py-3 border border-transparent hover:border-blue-500/40 transition-all duration-200">
+                <div className="flex flex-col gap-2 rounded-xl bg-white/60 dark:bg-gray-900/50 border border-slate-200/50 dark:border-slate-700/30 px-4 py-3 hover:border-blue-500/30 transition-all duration-200">
                   <label
                     htmlFor="onlyoffice-jwt-secret"
                     className="text-sm font-medium text-gray-900 dark:text-gray-100"
@@ -373,7 +368,7 @@ export const OnlyOfficeSection: React.FC<OnlyOfficeSectionProps> = ({ canConfigu
               </>
             ) : (
               <>
-                <div className="stagger-item hover-lift flex flex-col gap-2 rounded-2xl bg-[#dfe3ea]/95 dark:bg-gray-900/60 px-4 py-3 border border-transparent hover:border-blue-500/40 transition-all duration-200">
+                <div className="flex flex-col gap-2 rounded-xl bg-white/60 dark:bg-gray-900/50 border border-slate-200/50 dark:border-slate-700/30 px-4 py-3 hover:border-blue-500/30 transition-all duration-200">
                   <label className="text-sm font-medium text-gray-900 dark:text-gray-100">
                     OnlyOffice Document Server URL
                   </label>
@@ -391,7 +386,7 @@ export const OnlyOfficeSection: React.FC<OnlyOfficeSectionProps> = ({ canConfigu
                   </div>
                 </div>
 
-                <div className="stagger-item hover-lift flex flex-col gap-2 rounded-2xl bg-[#dfe3ea]/95 dark:bg-gray-900/60 px-4 py-3 border border-transparent hover:border-blue-500/40 transition-all duration-200">
+                <div className="flex flex-col gap-2 rounded-xl bg-white/60 dark:bg-gray-900/50 border border-slate-200/50 dark:border-slate-700/30 px-4 py-3 hover:border-blue-500/30 transition-all duration-200">
                   <label className="text-sm font-medium text-gray-900 dark:text-gray-100">JWT Secret</label>
                   <p className="text-xs text-gray-500 dark:text-gray-400">Secret key for signing OnlyOffice requests</p>
                   <div className="mt-1 px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-800/50 text-gray-900 dark:text-gray-100">

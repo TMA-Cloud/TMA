@@ -25,14 +25,14 @@ export const SecuritySection: React.FC<SecuritySectionProps> = ({
   onShowChangePassword,
 }) => {
   return (
-    <SettingsSection title="Security" icon={Shield} description="Manage your account security and active sessions.">
+    <SettingsSection title="Security" icon={Shield} description="Manage account security and active sessions">
       <SettingsItem
         label="Multi-Factor Authentication"
         value=""
         action="Manage MFA"
         onAction={onShowMfa}
         actionIcon={Key}
-        description="Add an extra layer of security to your account with two-factor authentication."
+        description="Add an extra layer of security with two-factor authentication"
       />
       {passwordChangeEnabled && (
         <SettingsItem
@@ -41,7 +41,7 @@ export const SecuritySection: React.FC<SecuritySectionProps> = ({
           action="Change password"
           onAction={onShowChangePassword}
           actionIcon={Lock}
-          description="Set new password for your account."
+          description="Change account current password"
         />
       )}
       <SettingsItem
@@ -50,7 +50,7 @@ export const SecuritySection: React.FC<SecuritySectionProps> = ({
         action={loadingSessions ? 'Loading...' : 'View sessions'}
         onAction={onShowSessions}
         actionDisabled={loadingSessions}
-        description={`View and manage all active sessions. ${activeSessionsCount > 0 ? `${activeSessionsCount} active session${activeSessionsCount === 1 ? '' : 's'}` : 'No active sessions'}.`}
+        description={`View and manage all active sessions; ${activeSessionsCount > 0 ? `${activeSessionsCount} active session${activeSessionsCount === 1 ? '' : 's'}` : 'No active sessions'}`}
         loadingStates={{ sessions: loadingSessions }}
       />
       <SettingsItem
@@ -61,7 +61,7 @@ export const SecuritySection: React.FC<SecuritySectionProps> = ({
         actionDisabled={loggingOutAll}
         actionIcon={LogOut}
         actionVariant="danger"
-        description="Sign out from all devices and browsers. You will need to login again."
+        description="Sign out from all devices and browsers. You will need to login again"
         loadingStates={{ logoutAll: loggingOutAll }}
       />
     </SettingsSection>

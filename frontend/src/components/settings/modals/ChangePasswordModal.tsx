@@ -58,7 +58,7 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ isOpen
     try {
       setSubmitting(true);
       const result = await changePassword(currentPassword, newPassword);
-      showToast(result.message || 'Password changed successfully. Please log in again.', 'success');
+      showToast(result.message || 'Password changed successfully! Please log in again!', 'success');
       await logout();
       skipReset = true;
       onClose();
@@ -87,8 +87,8 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ isOpen
           <div className="space-y-1">
             <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">Security reminder</p>
             <p className="text-xs text-amber-800 dark:text-amber-300">
-              After changing your password, you may be signed out from your devices. Use a strong, unique password that
-              you do not reuse on other sites.
+              After changing your password, you will be signed out from your devices. Use a strong and unique password
+              that you do not reuse on other sites and avoid using easily guessable information.
             </p>
           </div>
         </div>
@@ -125,7 +125,7 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ isOpen
               className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-[#dfe3ea] dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
             <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              Minimum 6 characters. Avoid using easily guessable information.
+              Minimum 6 characters and avoid using easily guessable information
             </p>
           </div>
 

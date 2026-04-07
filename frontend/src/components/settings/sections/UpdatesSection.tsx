@@ -34,7 +34,7 @@ export const UpdatesSection: React.FC<UpdatesSectionProps> = ({
   }, [runningInDesktopApp]);
 
   return (
-    <SettingsSection title="Updates" icon={RefreshCw} description="Check whether this deployment is up to date.">
+    <SettingsSection title="Updates" icon={RefreshCw} description="Check whether this deployment is up to date">
       <SettingsItem
         label="Frontend"
         value={versionStatusText('frontend')}
@@ -55,12 +55,12 @@ export const UpdatesSection: React.FC<UpdatesSectionProps> = ({
           }
           description={
             !desktopAppVersion
-              ? 'Unable to read desktop app version from the Electron client.'
+              ? 'Unable to read desktop app version from the Electron client'
               : checkingVersions && !latestElectronVersion
                 ? 'Checking update feed...'
                 : latestElectronVersion
                   ? `Latest available: v${latestElectronVersion}`
-                  : 'Version reported by the installed Electron desktop client.'
+                  : 'Version reported by the installed Electron desktop client'
           }
         />
       )}

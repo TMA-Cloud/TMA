@@ -10,7 +10,7 @@ interface ProfileSectionProps {
 
 export const ProfileSection: React.FC<ProfileSectionProps> = ({ userName, userEmail }) => {
   return (
-    <SettingsSection title="Profile" icon={User} description="Personal information that appears on shared items.">
+    <SettingsSection title="Profile" icon={User} description="Personal information">
       <SettingsItem label="Full Name" value={userName || ''} />
       <SettingsItem label="Email" value={userEmail || ''} />
     </SettingsSection>

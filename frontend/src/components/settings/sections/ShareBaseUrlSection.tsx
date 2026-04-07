@@ -149,22 +149,15 @@ export const ShareBaseUrlSection: React.FC<ShareBaseUrlSectionProps> = ({ canCon
   const StatusIcon = statusInfo.icon;
 
   return (
-    <div
-      className="relative overflow-hidden card-premium hover-lift spacing-card"
-      style={{
-        animation: 'slideUp 0.45s cubic-bezier(0.16, 1, 0.3, 1) both',
-      }}
-    >
-      <div className="flex flex-wrap items-center gap-4 mb-6">
+    <div className="relative">
+      <div className="flex items-center gap-4 mb-6">
         <div className="p-3 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-300">
-          <Link className="w-5 h-5 icon-muted" />
+          <Link className="w-6 h-6 icon-muted" />
         </div>
 
         <div className="flex-1">
-          <div className="flex items-center gap-2 mb-1">
-            <h3 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-gray-100 tracking-tight">
-              Share Base URL
-            </h3>
+          <div className="flex items-center gap-2">
+            <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100 tracking-tight">Share Base URL</h3>
 
             {isCollapsed && hasLoadedSettings && StatusIcon && (
               <div className={`flex items-center gap-1 ${statusInfo.color}`}>
@@ -174,7 +167,7 @@ export const ShareBaseUrlSection: React.FC<ShareBaseUrlSectionProps> = ({ canCon
             )}
           </div>
 
-          <p className="text-sm text-gray-500/80 dark:text-gray-400/80">
+          <p className="text-sm text-gray-500/80 dark:text-gray-400/80 mt-0.5">
             Configure a custom base URL for public share links
             {isCollapsed && hasLoadedSettings && !StatusIcon && (
               <span className={`ml-2 ${statusInfo.color}`}>{statusInfo.text}</span>
@@ -199,7 +192,7 @@ export const ShareBaseUrlSection: React.FC<ShareBaseUrlSectionProps> = ({ canCon
           <div className="space-y-4">
             {isEditing ? (
               <>
-                <div className="stagger-item hover-lift flex flex-col gap-2 rounded-2xl bg-[#dfe3ea]/95 dark:bg-gray-900/60 px-4 py-3 border border-transparent hover:border-blue-500/40 transition-all duration-200">
+                <div className="flex flex-col gap-2 rounded-xl bg-white/60 dark:bg-gray-900/50 border border-slate-200/50 dark:border-slate-700/30 px-4 py-3 hover:border-blue-500/30 transition-all duration-200">
                   <label htmlFor="share-base-url" className="text-sm font-medium text-gray-900 dark:text-gray-100">
                     Share Base URL
                   </label>
@@ -238,7 +231,7 @@ export const ShareBaseUrlSection: React.FC<ShareBaseUrlSectionProps> = ({ canCon
                 </div>
               </>
             ) : (
-              <div className="stagger-item hover-lift flex flex-col gap-2 rounded-2xl bg-[#dfe3ea]/95 dark:bg-gray-900/60 px-4 py-3 border border-transparent hover:border-blue-500/40 transition-all duration-200">
+              <div className="flex flex-col gap-2 rounded-xl bg-white/60 dark:bg-gray-900/50 border border-slate-200/50 dark:border-slate-700/30 px-4 py-3 hover:border-blue-500/30 transition-all duration-200">
                 <label className="text-sm font-medium text-gray-900 dark:text-gray-100">Share Base URL</label>
                 <p className="text-xs text-gray-500 dark:text-gray-400">Base URL for public share links</p>
                 <div className="mt-1 px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-800/50 text-gray-900 dark:text-gray-100">

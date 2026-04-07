@@ -203,7 +203,7 @@ export const UsersModal: React.FC<UsersModalProps> = ({
           </p>
         ) : usersList.length === 0 ? (
           <p className="text-center text-gray-600 dark:text-gray-300">
-            Once people sign up, their accounts will appear here.
+            Once people sign up, their accounts will appear here!
           </p>
         ) : (
           <div className="overflow-x-auto max-h-[60vh]">

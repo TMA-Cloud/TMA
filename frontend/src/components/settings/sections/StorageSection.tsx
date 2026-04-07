@@ -164,7 +164,7 @@ export const StorageSection: React.FC<StorageSectionProps> = ({ usage, loading, 
   const availableLabel = usage && usage.free !== null ? formatFileSize(usage.free) : 'Unlimited';
 
   return (
-    <SettingsSection title="Storage" icon={HardDrive} description="Track how your allocated drive space is being used.">
+    <SettingsSection title="Storage" icon={HardDrive} description="Track allocated storage space">
       <div className="space-y-4">
         <SettingsItem
           label="Used Space"
@@ -175,11 +175,11 @@ export const StorageSection: React.FC<StorageSectionProps> = ({ usage, loading, 
         {canConfigure && (
           <>
             {hasLoadedMaxUpload && !isEditingMaxUpload && (
-              <div className="stagger-item hover-lift flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-2xl bg-[#dfe3ea]/95 dark:bg-gray-900/60 px-4 py-3 border border-transparent hover:border-blue-500/40 transition-all duration-200">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-xl bg-white/60 dark:bg-gray-900/50 border border-slate-200/50 dark:border-slate-700/30 px-5 py-4 hover:border-blue-500/30 transition-all duration-200">
                 <div>
                   <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Max upload size</p>
                   <p className="text-sm text-gray-500 dark:text-gray-400">
-                    Maximum size for a single uploaded file (applies to all users).
+                    Maximum size for a single uploaded file (applies to all users)
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -204,7 +204,7 @@ export const StorageSection: React.FC<StorageSectionProps> = ({ usage, loading, 
             {isEditingMaxUpload && (
               <form autoComplete="off" onSubmit={e => e.preventDefault()}>
                 <div className="space-y-4">
-                  <div className="stagger-item hover-lift flex flex-col gap-2 rounded-2xl bg-[#dfe3ea]/95 dark:bg-gray-900/60 px-4 py-3 border border-transparent hover:border-blue-500/40 transition-all duration-200">
+                  <div className="flex flex-col gap-2 rounded-xl bg-white/60 dark:bg-gray-900/50 border border-slate-200/50 dark:border-slate-700/30 px-4 py-3 hover:border-blue-500/30 transition-all duration-200">
                     <label
                       htmlFor="max-upload-size-value"
                       className="text-sm font-medium text-gray-900 dark:text-gray-100"
@@ -212,7 +212,7 @@ export const StorageSection: React.FC<StorageSectionProps> = ({ usage, loading, 
                       Max upload size
                     </label>
                     <p className="text-xs text-gray-500 dark:text-gray-400">
-                      Allowed range: {MIN_LABEL} to {MAX_LABEL} per file.
+                      Allowed range: {MIN_LABEL} to {MAX_LABEL} per file
                     </p>
                     <div className="mt-1 flex gap-2">
                       <input
