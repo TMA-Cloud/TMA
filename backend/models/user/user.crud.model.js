@@ -6,7 +6,7 @@ import { getCache, setCache, deleteCache, invalidateEmailCache, cacheKeys, DEFAU
 async function createUser(email, password, name) {
   const id = generateId(16);
   const result = await pool.query(
-    'INSERT INTO users(id, email, password, name) VALUES($1,$2,$3,$4) RETURNING id, email, name',
+    'INSERT INTO users(id, email, password, name) VALUES($1,$2,$3,$4) RETURNING id, email, name, created_at, mfa_enabled',
     [id, email, password, name]
   );
 
@@ -33,7 +33,10 @@ async function getUserByEmail(email) {
   // and contains password hashes. Password hashes should never be cached.
   // Always query from database to ensure we have the latest password hash
   // and to avoid storing sensitive data in Redis.
-  const result = await pool.query('SELECT id, email, password, name FROM users WHERE email = $1', [email]);
+  const result = await pool.query(
+    'SELECT id, email, password, name, created_at, mfa_enabled FROM users WHERE email = $1',
+    [email]
+  );
   return result.rows[0];
 }
 
@@ -46,7 +49,10 @@ async function getUserById(id) {
   }
 
   // Cache miss - query database
-  const result = await pool.query('SELECT id, email, name, token_version FROM users WHERE id = $1', [id]);
+  const result = await pool.query(
+    'SELECT id, email, name, token_version, created_at, mfa_enabled FROM users WHERE id = $1',
+    [id]
+  );
   const user = result.rows[0];
 
   // Cache the result (longer TTL for user data)
@@ -90,7 +96,7 @@ async function getUserByGoogleId(googleId) {
 async function createUserWithGoogle(googleId, email, name) {
   const id = generateId(16);
   const result = await pool.query(
-    'INSERT INTO users(id, email, name, google_id) VALUES($1,$2,$3,$4) RETURNING id, email, name, google_id',
+    'INSERT INTO users(id, email, name, google_id) VALUES($1,$2,$3,$4) RETURNING id, email, name, google_id, created_at, mfa_enabled',
     [id, email, name, googleId]
   );
 

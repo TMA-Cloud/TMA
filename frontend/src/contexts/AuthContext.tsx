@@ -4,6 +4,8 @@ export interface User {
   id: string;
   email: string;
   name?: string;
+  created_at?: string;
+  mfa_enabled?: boolean;
 }
 
 export interface AuthContextType {

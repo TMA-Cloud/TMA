@@ -182,7 +182,14 @@ export const Settings: React.FC = () => {
   const renderActiveSection = () => {
     switch (activeSection) {
       case 'profile':
-        return <ProfileSection userName={user?.name} userEmail={user?.email} />;
+        return (
+          <ProfileSection
+            userName={user?.name}
+            userEmail={user?.email}
+            userCreatedAt={user?.created_at}
+            userMfaEnabled={user?.mfa_enabled}
+          />
+        );
       case 'storage':
         return <StorageSection usage={usage ?? undefined} loading={storageLoading} canConfigure={canToggleSignup} />;
       case 'administration':

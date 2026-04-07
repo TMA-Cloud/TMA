@@ -76,7 +76,15 @@ async function login(req, res) {
     // Create session and generate token
     const { token } = await createSessionAndToken(user.id, req);
 
-    setAuthCookieAndRespond(res, token, { user: { id: user.id, email: user.email, name: user.name } });
+    setAuthCookieAndRespond(res, token, {
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        created_at: user.created_at,
+        mfa_enabled: user.mfa_enabled || false,
+      },
+    });
   } catch (err) {
     sendError(res, 500, 'Server error', err);
   }
