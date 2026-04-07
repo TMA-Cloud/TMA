@@ -19,6 +19,7 @@ import {
   setSignupEnabled,
   setUserStorageLimit,
 } from '../../models/user.model.js';
+import { upsertClientHeartbeat, getActiveClients } from '../../models/clientHeartbeat.model.js';
 import { logAuditEvent } from '../../services/auditLogger.js';
 import { invalidateOnlyOfficeOriginCache } from '../../utils/onlyofficeOriginCache.js';
 import { sendError, sendSuccess } from '../../utils/response.js';
@@ -754,6 +755,65 @@ async function _updateUserStorageLimit(req, res) {
   }
 }
 
+/**
+ * Record a heartbeat from an Electron desktop client (any authenticated user)
+ * The frontend calls this periodically when running inside Electron
+ */
+async function _clientHeartbeat(req, res) {
+  try {
+    const { appVersion, platform, sessionId, clientId } = req.body;
+    if (!appVersion || typeof appVersion !== 'string') {
+      return sendError(res, 400, 'appVersion is required');
+    }
+
+    await upsertClientHeartbeat({
+      userId: req.userId,
+      clientId: typeof clientId === 'string' && clientId.trim() ? clientId.trim() : null,
+      sessionId: sessionId || req.sessionId || null,
+      appVersion,
+      platform: platform || null,
+      userAgent: req.get('User-Agent') || null,
+      ipAddress: req.ip || null,
+    });
+
+    sendSuccess(res, { ok: true });
+  } catch (err) {
+    logger.error({ err }, 'Failed to record client heartbeat');
+    sendError(res, 500, 'Server error', err);
+  }
+}
+
+/**
+ * Get all active Electron desktop clients (admin / first user only)
+ */
+async function _getActiveClients(req, res) {
+  try {
+    const userIsFirst = await isFirstUser(req.userId);
+    if (!userIsFirst) {
+      return sendError(res, 403, 'Only the first user can view active clients');
+    }
+
+    const clients = await getActiveClients(5);
+
+    sendSuccess(res, {
+      clients: clients.map(c => ({
+        id: c.id,
+        userId: c.user_id,
+        userName: c.user_name,
+        userEmail: c.user_email,
+        appVersion: c.app_version,
+        platform: c.platform,
+        ipAddress: c.ip_address,
+        lastSeenAt: c.last_seen_at,
+        connectedSince: c.created_at,
+      })),
+    });
+  } catch (err) {
+    logger.error({ err }, 'Failed to fetch active clients');
+    sendError(res, 500, 'Server error', err);
+  }
+}
+
 export {
   _getPublicSignupStatus as getPublicSignupStatus,
   _getSignupStatus as getSignupStatus,
@@ -773,4 +833,6 @@ export {
   _updateElectronOnlyAccessConfig as updateElectronOnlyAccessConfig,
   _getPasswordChangeConfig as getPasswordChangeConfig,
   _updatePasswordChangeConfig as updatePasswordChangeConfig,
+  _clientHeartbeat as clientHeartbeat,
+  _getActiveClients as getActiveClients,
 };

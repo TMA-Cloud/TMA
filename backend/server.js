@@ -19,6 +19,7 @@ import { startTrashCleanup } from './services/trashCleanup.js';
 import { startAuditCleanup } from './services/auditCleanup.js';
 import { startOrphanFileCleanup } from './services/orphanCleanup.js';
 import { startShareCleanup } from './services/shareCleanup.js';
+import { startHeartbeatCleanup } from './services/heartbeatCleanup.js';
 import errorHandler from './middleware/error.middleware.js';
 import { requestIdMiddleware } from './middleware/requestId.middleware.js';
 import { blockMainAppOnShareDomain } from './middleware/shareDomain.middleware.js';
@@ -271,6 +272,8 @@ runMigrations()
     startOrphanFileCleanup();
 
     startShareCleanup();
+
+    startHeartbeatCleanup();
 
     // Register shutdown handlers
     process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));

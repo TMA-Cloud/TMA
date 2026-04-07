@@ -25,6 +25,9 @@ interface AdministrationSectionProps {
   canToggleAllowPasswordChange: boolean;
   togglingAllowPasswordChange: boolean;
   onToggleAllowPasswordChange: () => void;
+  activeClientsCount: number | null;
+  loadingActiveClients: boolean;
+  onShowActiveClients: () => void;
 }
 
 export const AdministrationSection: React.FC<AdministrationSectionProps> = ({
@@ -49,6 +52,9 @@ export const AdministrationSection: React.FC<AdministrationSectionProps> = ({
   canToggleAllowPasswordChange,
   togglingAllowPasswordChange,
   onToggleAllowPasswordChange,
+  activeClientsCount,
+  loadingActiveClients,
+  onShowActiveClients,
 }) => {
   return (
     <SettingsSection
@@ -89,6 +95,22 @@ export const AdministrationSection: React.FC<AdministrationSectionProps> = ({
         onToggle={onToggleSignup}
         toggleDisabled={togglingSignup || loadingSignupStatus}
         description="Enable or disable new user registration"
+      />
+      <SettingsItem
+        label="Active Desktop Clients"
+        value={
+          loadingActiveClients
+            ? 'Loading...'
+            : activeClientsCount === null
+              ? 'Unavailable'
+              : activeClientsCount === 0
+                ? 'None online'
+                : `${activeClientsCount} online`
+        }
+        action={loadingActiveClients ? 'Loading...' : 'View clients'}
+        onAction={onShowActiveClients}
+        actionDisabled={loadingActiveClients}
+        description="See all Electron desktop apps connected in the last 5 minutes"
       />
       <SettingsItem
         label="Hide file extensions"

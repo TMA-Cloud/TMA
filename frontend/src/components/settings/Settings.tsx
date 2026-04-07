@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useApp } from '../../contexts/AppContext';
 import { useStorageUsage } from '../../hooks/useStorageUsage';
-import { fetchAllUsers, type UserSummary } from '../../utils/api';
+import { fetchAllUsers, fetchActiveClients, type UserSummary, type ActiveClient } from '../../utils/api';
 import { useToast } from '../../hooks/useToast';
 import { isElectron } from '../../utils/electronDesktop';
 
@@ -24,6 +24,7 @@ import { SecuritySection } from './sections/SecuritySection';
 // Modals
 import { UsersModal } from './modals/UsersModal';
 import { SessionsModal } from './modals/SessionsModal';
+import { ActiveClientsModal } from './modals/ActiveClientsModal';
 import { MfaModal } from './modals/MfaModal';
 import { ChangePasswordModal } from './modals/ChangePasswordModal';
 
@@ -86,6 +87,11 @@ export const Settings: React.FC = () => {
   const [mfaModalOpen, setMfaModalOpen] = useState(false);
   const [changePasswordModalOpen, setChangePasswordModalOpen] = useState(false);
 
+  // Active clients state
+  const [activeClientsModalOpen, setActiveClientsModalOpen] = useState(false);
+  const [activeClientsList, setActiveClientsList] = useState<ActiveClient[]>([]);
+  const [loadingActiveClients, setLoadingActiveClients] = useState(false);
+
   // Data is loaded automatically by hooks on mount
 
   const runningInElectron = isElectron();
@@ -113,6 +119,32 @@ export const Settings: React.FC = () => {
   const handleShowSessions = () => {
     setSessionsModalOpen(true);
     loadActiveSessions();
+  };
+
+  const loadActiveClients = useCallback(
+    async (silent = false) => {
+      try {
+        setLoadingActiveClients(true);
+        const { clients } = await fetchActiveClients();
+        setActiveClientsList(clients);
+      } catch {
+        if (!silent) showToast('Failed to load active clients', 'error');
+      } finally {
+        setLoadingActiveClients(false);
+      }
+    },
+    [showToast]
+  );
+
+  useEffect(() => {
+    if (canToggleSignup) {
+      loadActiveClients(true);
+    }
+  }, [canToggleSignup, loadActiveClients]);
+
+  const handleShowActiveClients = () => {
+    setActiveClientsModalOpen(true);
+    loadActiveClients();
   };
 
   return (
@@ -147,6 +179,9 @@ export const Settings: React.FC = () => {
             canToggleAllowPasswordChange={canToggleAllowPasswordChange}
             togglingAllowPasswordChange={togglingAllowPasswordChange}
             onToggleAllowPasswordChange={handleToggleAllowPasswordChange}
+            activeClientsCount={loadingActiveClients ? null : activeClientsList.length}
+            loadingActiveClients={loadingActiveClients}
+            onShowActiveClients={handleShowActiveClients}
           />
         )}
 
@@ -197,6 +232,14 @@ export const Settings: React.FC = () => {
         revokingSessionId={revokingSessionId}
         onRefresh={loadActiveSessions}
         onRevokeSession={handleRevokeSession}
+      />
+
+      <ActiveClientsModal
+        isOpen={activeClientsModalOpen}
+        onClose={() => setActiveClientsModalOpen(false)}
+        clients={activeClientsList}
+        loading={loadingActiveClients}
+        onRefresh={loadActiveClients}
       />
 
       <MfaModal isOpen={mfaModalOpen} onClose={() => setMfaModalOpen(false)} />

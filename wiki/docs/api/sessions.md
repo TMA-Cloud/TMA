@@ -33,6 +33,8 @@ Get all active sessions for authenticated user.
 
 Revoke a specific session.
 
+When a session is revoked, its matching desktop heartbeat entry is removed from `client_heartbeats`.
+
 **Response:**
 
 ```json
@@ -46,6 +48,8 @@ Revoke a specific session.
 ### POST `/api/sessions/revoke-others`
 
 Revoke all other active sessions except the current one.
+
+This also removes other desktop heartbeat entries for the same user.
 
 **Response:**
 

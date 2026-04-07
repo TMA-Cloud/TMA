@@ -1,4 +1,5 @@
 import { logger } from '../../config/logger.js';
+import { deleteAllHeartbeatsForUser, deleteHeartbeatBySession } from '../../models/clientHeartbeat.model.js';
 import { deleteAllUserSessions, deleteSession } from '../../models/session.model.js';
 import { invalidateAllSessions } from '../../models/user.model.js';
 import { logAuditEvent } from '../../services/auditLogger.js';
@@ -24,6 +25,7 @@ async function logout(req, res) {
     if (sessionId && userId) {
       try {
         await deleteSession(sessionId, userId);
+        await deleteHeartbeatBySession(userId, sessionId);
       } catch (err) {
         // Log error but don't fail logout if session deletion fails
         logger.warn({ err, userId, sessionId }, 'Failed to revoke session on logout');
@@ -69,6 +71,7 @@ async function logoutAllDevices(req, res) {
 
     // Delete all session records
     await deleteAllUserSessions(req.userId);
+    await deleteAllHeartbeatsForUser(req.userId);
 
     // Log the security event
     await logAuditEvent(

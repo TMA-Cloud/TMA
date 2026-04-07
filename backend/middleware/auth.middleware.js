@@ -30,6 +30,7 @@ export default async function authMiddleware(req, res, next) {
     // Explicitly specify allowed algorithms to prevent algorithm confusion attacks
     const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] });
     req.userId = decoded.id;
+    req.sessionId = decoded.sid || null;
 
     // Verify token version - protects against stolen tokens after "logout all devices"
     const currentTokenVersion = await getUserTokenVersion(decoded.id);

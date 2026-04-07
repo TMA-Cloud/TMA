@@ -2,6 +2,8 @@ import express from 'express';
 
 import {
   checkOnlyOfficeConfigured,
+  clientHeartbeat,
+  getActiveClients,
   getElectronOnlyAccessConfig,
   getHideFileExtensionsConfig,
   getMaxUploadSizeConfig,
@@ -67,5 +69,7 @@ router.put(
 router.get('/password-change-config', getPasswordChangeConfig);
 router.put('/password-change-config', updatePasswordChangeConfigSchema, validate, updatePasswordChangeConfig);
 router.put('/storage-limit', updateUserStorageLimitSchema, validate, updateUserStorageLimit);
+router.post('/client-heartbeat', clientHeartbeat);
+router.get('/active-clients', getActiveClients);
 
 export default router;

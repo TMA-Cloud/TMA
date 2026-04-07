@@ -1,4 +1,5 @@
 import { logger } from '../../config/logger.js';
+import { deleteHeartbeatBySession, deleteOtherHeartbeatsForUser } from '../../models/clientHeartbeat.model.js';
 import { deleteOtherUserSessions, deleteSession, getActiveSessions } from '../../models/session.model.js';
 import { getUserById } from '../../models/user.model.js';
 import { logAuditEvent } from '../../services/auditLogger.js';
@@ -57,6 +58,9 @@ async function revokeSession(req, res) {
       return sendError(res, 404, 'Session not found');
     }
 
+    // Remove associated desktop heartbeat row for this session
+    await deleteHeartbeatBySession(req.userId, sessionId);
+
     // Log the security event
     await logAuditEvent(
       'auth.session_revoked',
@@ -100,6 +104,7 @@ async function revokeOtherSessions(req, res) {
 
     const currentTokenVersion = user.token_version || 1;
     const deletedCount = await deleteOtherUserSessions(req.userId, currentSessionId, currentTokenVersion);
+    await deleteOtherHeartbeatsForUser(req.userId, currentSessionId);
 
     // Log the security event
     await logAuditEvent(

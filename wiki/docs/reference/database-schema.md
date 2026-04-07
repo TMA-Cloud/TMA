@@ -100,6 +100,24 @@ Active user sessions.
 
 **Indexes:** `(user_id, created_at DESC)`, `(user_id, token_version)`, `last_activity`
 
+### `client_heartbeats`
+
+Active Electron desktop client heartbeat records.
+
+| Column         | Type         | Description                     |
+| -------------- | ------------ | ------------------------------- |
+| `id`           | VARCHAR(64)  | Primary key                     |
+| `user_id`      | VARCHAR(255) | FK → users.id                   |
+| `session_id`   | VARCHAR(255) | JWT session ID (nullable)       |
+| `app_version`  | VARCHAR(64)  | Electron app version            |
+| `platform`     | VARCHAR(64)  | Client platform (`win32`, etc.) |
+| `user_agent`   | TEXT         | Electron request user agent     |
+| `ip_address`   | VARCHAR(45)  | Client IP                       |
+| `last_seen_at` | TIMESTAMPTZ  | Last heartbeat timestamp        |
+| `created_at`   | TIMESTAMPTZ  | First heartbeat timestamp       |
+
+**Indexes:** `user_id`, `last_seen_at`
+
 ### `audit_logs`
 
 Audit trail events.
@@ -139,6 +157,7 @@ Migration tracking.
 - User → Share Links (one-to-many, CASCADE)
 - Share Link → Files (many-to-many via `share_link_files`)
 - User → Sessions (one-to-many, CASCADE)
+- User → Client Heartbeats (one-to-many, CASCADE)
 - User → Audit Logs (one-to-many, SET NULL)
 
 ## Common Queries

@@ -7,6 +7,7 @@ import {
   type ShareExpiry,
   type UploadModalInitialEntry,
 } from './AppContext';
+import { useAuth } from './AuthContext';
 import { usePromiseQueue, useDebouncedCallback } from '../utils/debounce';
 import {
   downloadFile as downloadFileApi,
@@ -17,6 +18,7 @@ import {
   getMaxUploadSizeConfig,
   getCurrentVersions,
   fetchLatestVersions,
+  sendClientHeartbeat,
 } from '../utils/api';
 import { useToast } from '../hooks/useToast';
 import { extractXhrErrorMessage, extractResponseError, ApiError } from '../utils/errorUtils';
@@ -116,6 +118,7 @@ type ProgressState = { itemCount: number; percent: number; label: string };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { showToast } = useToast();
+  const { user } = useAuth();
 
   // State
 
@@ -1438,6 +1441,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
     debouncedRefreshFiles(true);
   };
+
+  useEffect(() => {
+    if (!isElectron() || !user?.id) return;
+
+    let timer: ReturnType<typeof setInterval> | null = null;
+
+    const beat = async () => {
+      try {
+        const v = await getElectronAppVersion();
+        await sendClientHeartbeat(v || 'unknown', window.electronAPI?.platform);
+      } catch {
+        // heartbeat is best-effort
+      }
+    };
+
+    void beat();
+    timer = setInterval(beat, 2 * 60 * 1000);
+
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [user?.id]);
 
   useEffect(() => {
     if (hasCheckedUpdates) return;

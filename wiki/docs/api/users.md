@@ -343,6 +343,60 @@ Get the current password change setting. Accessible to any authenticated user (u
 }
 ```
 
+## Active Desktop Clients
+
+### GET `/api/user/active-clients`
+
+List active Electron desktop clients seen in the last 5 minutes (first user/admin only).
+
+**Response:**
+
+```json
+{
+  "clients": [
+    {
+      "id": "user_123:client_abc",
+      "userId": "user_123",
+      "userName": "User Name",
+      "userEmail": "user@example.com",
+      "appVersion": "X.Y.Z",
+      "platform": "win32",
+      "ipAddress": "::ffff:192.168.1.1",
+      "lastSeenAt": "2026-04-07T10:41:00.000Z",
+      "connectedSince": "2026-04-07T10:20:00.000Z"
+    }
+  ]
+}
+```
+
+### POST `/api/user/client-heartbeat`
+
+Record or refresh an Electron desktop client heartbeat (authenticated users).
+
+**Request Body:**
+
+```json
+{
+  "appVersion": "X.Y.Z",
+  "platform": "win32",
+  "clientId": "0ca7c806-8ee8-4fde-80e1-f2f43e5f9bfa"
+}
+```
+
+**Validation:**
+
+- `appVersion`: Required. String.
+- `platform`: Optional. String.
+- `clientId`: Optional. String. When omitted, backend falls back to token `sessionId`.
+
+**Response:**
+
+```json
+{
+  "ok": true
+}
+```
+
 ### PUT `/api/user/password-change-config`
 
 Update the password change setting (admin only). When enabled, users can change their password from **Settings** → **Security**.

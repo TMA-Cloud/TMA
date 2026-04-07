@@ -10,6 +10,12 @@ Manage users in TMA Cloud (admin only).
 2. Click **Show all users** under Registered Users
 3. View user details (email, name, storage usage)
 
+### Viewing Active Desktop Clients
+
+1. Go to **Settings** → **Administration** (admin only)
+2. Click **View clients** under Active Desktop Clients
+3. Review active Electron clients (version, platform, IP, last seen)
+
 ### User Information
 
 - **Email:** User email address

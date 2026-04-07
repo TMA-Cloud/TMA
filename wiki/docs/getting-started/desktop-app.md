@@ -84,6 +84,13 @@ The server URL is embedded at build time only. No config file is needed after in
 - If any component is outdated, an **Updates Available** notice appears in the left sidebar above **Settings**, listing the latest versions for backend, frontend, and Electron.
 - **Desktop (Electron) updates:** When the Electron version is outdated and `updatorUrl` was set at build time, a download icon appears next to **Electron** in that section. Any signed-in user can click it to download the update. After the download finishes, the installer is launched and the app quits so the user can complete setup. If `updatorUrl` is not configured, the sidebar still shows the latest version but the download action is not available.
 
+## Active desktop clients (admin view)
+
+- Signed-in desktop clients send periodic heartbeats to the backend.
+- The admin can view active clients in **Settings → Administration → Active Desktop Clients**.
+- Each row includes user, platform, app version, IP, and last seen time.
+- Revoking sessions removes related heartbeat rows; stale rows are also purged automatically.
+
 ## Desktop Editing and Open on Desktop (Windows)
 
 When you run the Windows desktop app, you can open supported files in their desktop applications and have changes sync back automatically.
