@@ -262,29 +262,35 @@ export const Settings: React.FC = () => {
   return (
     <div className="w-full h-full max-w-[1400px] mx-auto p-4 md:p-6 lg:p-8">
       <div className="flex h-full min-h-[calc(100vh-8rem)] rounded-2xl overflow-hidden border border-slate-200/60 dark:border-slate-700/40 bg-[#edf0f5] dark:bg-slate-900/60 shadow-xl">
-        {/* Mobile sidebar toggle */}
+        {/* Mobile toggle: top-left when closed, snaps to drawer edge when open */}
         <button
           onClick={() => setSidebarOpen(!sidebarOpen)}
-          className="fixed bottom-6 right-6 z-50 md:hidden p-3 rounded-full bg-blue-500 text-white shadow-lg hover:bg-blue-600 transition-colors"
+          className={`
+            fixed top-20 z-[60] md:hidden p-3 rounded-full bg-blue-500 text-white shadow-lg hover:bg-blue-600
+            transition-all duration-300 ease-in-out
+            ${sidebarOpen ? 'left-[calc(18rem-1rem)]' : 'left-4'}
+          `}
           aria-label="Toggle settings menu"
         >
           {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
         </button>
 
-        {/* Sidebar */}
+        {/* Sidebar — mobile: below app header (h-16), above bottom nav z-40; desktop unchanged */}
         <aside
           className={`
             ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
-            md:translate-x-0 fixed md:static inset-y-0 left-0 z-40
+            md:translate-x-0
+            fixed md:static left-0 z-50 md:z-auto
+            top-16 bottom-0 md:top-auto md:bottom-auto md:inset-y-0
             w-72 md:w-64 lg:w-72 shrink-0
             bg-[#dde1e8] dark:bg-slate-800/90
             border-r border-slate-200/60 dark:border-slate-700/40
-            flex flex-col
+            flex flex-col min-h-0
             transition-transform duration-300 ease-in-out
           `}
         >
           {/* Sidebar header */}
-          <div className="px-5 pt-6 pb-4 border-b border-slate-300/50 dark:border-slate-700/50">
+          <div className="px-5 pt-4 pb-4 md:pt-6 border-b border-slate-300/50 dark:border-slate-700/50 shrink-0">
             <p className="uppercase tracking-[0.3em] text-[11px] font-semibold text-[#5b8def]/80 mb-2">
               Control Center
             </p>
@@ -358,9 +364,13 @@ export const Settings: React.FC = () => {
           </div>
         </aside>
 
-        {/* Mobile overlay */}
+        {/* Mobile overlay: below main app header, covers content + bottom nav for clear focus */}
         {sidebarOpen && (
-          <div className="fixed inset-0 z-30 bg-black/40 md:hidden" onClick={() => setSidebarOpen(false)} />
+          <div
+            className="fixed inset-x-0 top-16 bottom-0 z-[45] bg-black/50 md:hidden"
+            onClick={() => setSidebarOpen(false)}
+            aria-hidden
+          />
         )}
 
         {/* Content panel */}
