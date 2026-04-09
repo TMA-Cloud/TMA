@@ -170,6 +170,14 @@ export interface AppContextType {
     backend?: string;
     electron?: string;
   } | null;
+  /** Electron auto-update state (auto-download + auto-install). */
+  electronAutoUpdateState: {
+    status: 'idle' | 'downloading' | 'installing' | 'done' | 'error';
+    progress: number | null;
+    error?: string;
+  };
+  /** Retry Electron auto-update download/install after a failure. */
+  retryElectronUpdate: () => Promise<void>;
   /** Progress for opening files on the desktop (Electron). One entry per file. */
   desktopOpenProgress: {
     fileId: string;

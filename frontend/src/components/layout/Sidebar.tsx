@@ -1,12 +1,19 @@
-import React, { useCallback, useRef, useState } from 'react';
-import { Home, FolderOpen, Share2, Star, Trash2, Settings, HardDrive, X, Download, Loader2 } from 'lucide-react';
-import { useApp } from '../../contexts/AppContext';
-import { useToast } from '../../hooks/useToast';
+import React from 'react';
 import {
-  isElectron,
-  downloadAndInstallElectronUpdate,
-  subscribeToUpdateDownloadProgress,
-} from '../../utils/electronDesktop';
+  Home,
+  FolderOpen,
+  Share2,
+  Star,
+  Trash2,
+  Settings,
+  HardDrive,
+  X,
+  Download,
+  Loader2,
+  RefreshCw,
+} from 'lucide-react';
+import { useApp } from '../../contexts/AppContext';
+import { isElectron } from '../../utils/electronDesktop';
 
 const navigationItems = [
   { id: 'dashboard', label: 'Dashboard', icon: Home, path: ['Dashboard'] },
@@ -22,33 +29,15 @@ const navigationItems = [
 ];
 
 export const Sidebar: React.FC = () => {
-  const { currentPath, setCurrentPath, sidebarOpen, setSidebarOpen, updatesAvailable } = useApp();
-  const { showToast } = useToast();
-  const [installingElectron, setInstallingElectron] = useState(false);
-  const [downloadPercent, setDownloadPercent] = useState<number | null>(null);
-  const installingElectronRef = useRef(false);
-
-  const onInstallElectronUpdate = useCallback(async () => {
-    if (!updatesAvailable?.electron) return;
-    if (installingElectronRef.current) return;
-    installingElectronRef.current = true;
-    setInstallingElectron(true);
-    setDownloadPercent(null);
-    const unsubscribe = subscribeToUpdateDownloadProgress(setDownloadPercent);
-    try {
-      const result = await downloadAndInstallElectronUpdate(updatesAvailable.electron);
-      if (result.ok) {
-        showToast('Installer launched. Complete the setup to update the desktop app.', 'success');
-      } else {
-        showToast(result.error ?? 'Failed to download or launch installer', 'error');
-      }
-    } finally {
-      installingElectronRef.current = false;
-      unsubscribe();
-      setDownloadPercent(null);
-      setInstallingElectron(false);
-    }
-  }, [updatesAvailable?.electron, showToast]);
+  const {
+    currentPath,
+    setCurrentPath,
+    sidebarOpen,
+    setSidebarOpen,
+    updatesAvailable,
+    electronAutoUpdateState,
+    retryElectronUpdate,
+  } = useApp();
 
   const handleNavigation = (path: string[]) => {
     setCurrentPath(path);
@@ -145,25 +134,48 @@ export const Sidebar: React.FC = () => {
                   {updatesAvailable.backend && <li>Backend ⟶ {updatesAvailable.backend}</li>}
                   {updatesAvailable.frontend && <li>Frontend ⟶ {updatesAvailable.frontend}</li>}
                   {updatesAvailable.electron && (
-                    <li className="flex items-center gap-1.5">
-                      <span>Electron ⟶ {updatesAvailable.electron}</span>
-                      {isElectron() && (
-                        <button
-                          type="button"
-                          onClick={onInstallElectronUpdate}
-                          disabled={installingElectron}
-                          className="inline-flex items-center gap-1 p-0.5 rounded text-amber-700 dark:text-amber-200 hover:bg-amber-200/50 dark:hover:bg-amber-700/30 focus:outline-none focus:ring-1 focus:ring-amber-500 disabled:opacity-50"
-                          aria-label="Download and install Electron update"
-                        >
-                          {installingElectron ? (
-                            <>
-                              <Loader2 className="w-3.5 h-3.5 animate-spin flex-shrink-0" />
-                              {downloadPercent !== null && <span className="tabular-nums">{downloadPercent}%</span>}
-                            </>
-                          ) : (
-                            <Download className="w-3.5 h-3.5" />
+                    <li className="flex flex-col gap-1">
+                      <span>Desktop ⟶ {updatesAvailable.electron}</span>
+                      {isElectron() && electronAutoUpdateState.status !== 'idle' && (
+                        <div className="flex flex-col gap-1">
+                          {electronAutoUpdateState.status === 'downloading' && (
+                            <div className="flex items-center gap-1.5">
+                              <Loader2 className="w-3 h-3 animate-spin flex-shrink-0" />
+                              <span>
+                                Auto-updating
+                                {electronAutoUpdateState.progress != null
+                                  ? ` ${electronAutoUpdateState.progress}%`
+                                  : '...'}
+                              </span>
+                            </div>
                           )}
-                        </button>
+                          {electronAutoUpdateState.status === 'downloading' &&
+                            electronAutoUpdateState.progress != null && (
+                              <div className="h-1 w-full rounded-full bg-amber-200/50 dark:bg-amber-800/30 overflow-hidden">
+                                <div
+                                  className="h-full rounded-full bg-amber-500 dark:bg-amber-400 transition-all duration-300"
+                                  style={{ width: `${electronAutoUpdateState.progress}%` }}
+                                />
+                              </div>
+                            )}
+                          {electronAutoUpdateState.status === 'installing' && (
+                            <div className="flex items-center gap-1.5">
+                              <Download className="w-3 h-3 flex-shrink-0" />
+                              <span>Installing... app will restart</span>
+                            </div>
+                          )}
+                          {electronAutoUpdateState.status === 'error' && (
+                            <button
+                              type="button"
+                              onClick={() => void retryElectronUpdate()}
+                              className="inline-flex items-center gap-1.5 text-red-600 dark:text-red-400 hover:underline focus:outline-none focus:ring-1 focus:ring-red-400 rounded-sm"
+                              aria-label="Retry desktop update"
+                            >
+                              <RefreshCw className="w-3 h-3 flex-shrink-0" />
+                              <span>{electronAutoUpdateState.error || 'Update failed'} (Retry)</span>
+                            </button>
+                          )}
+                        </div>
                       )}
                     </li>
                   )}

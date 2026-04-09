@@ -37,6 +37,8 @@ import {
   saveFileViaElectron,
   saveFilesBulkViaElectron,
   getElectronAppVersion,
+  downloadAndInstallElectronUpdate,
+  subscribeToUpdateDownloadProgress,
 } from '../utils/electronDesktop';
 import { formatBytes } from '../utils/storageUtils';
 
@@ -161,6 +163,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     electron?: string;
   } | null>(null);
   const [hasCheckedUpdates, setHasCheckedUpdates] = useState(false);
+  const [electronAutoUpdateState, setElectronAutoUpdateState] = useState<{
+    status: 'idle' | 'downloading' | 'installing' | 'done' | 'error';
+    progress: number | null;
+    error?: string;
+  }>({ status: 'idle', progress: null });
   const [navHistory, setNavHistory] = useState<{ entries: NavEntry[]; index: number }>(() => ({
     entries: [{ path: ['My Files'], ids: [null], shared: [false] }],
     index: 0,
@@ -191,6 +198,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const deleteProgressDismissTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const restoreInProgressRef = useRef(false);
   const restoreProgressDismissTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const electronAutoUpdateTriggeredRef = useRef(false);
 
   const operationQueue = usePromiseQueue();
 
@@ -1496,6 +1504,52 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     void checkForUpdatesOnce();
   }, [hasCheckedUpdates]);
 
+  const runElectronAutoUpdate = useCallback(async (version: string) => {
+    if (!isElectron() || !version) return;
+    if (electronAutoUpdateTriggeredRef.current) return;
+
+    electronAutoUpdateTriggeredRef.current = true;
+    setElectronAutoUpdateState({ status: 'downloading', progress: 0 });
+
+    const unsubscribe = subscribeToUpdateDownloadProgress(percent => {
+      setElectronAutoUpdateState(prev => ({ ...prev, progress: percent }));
+    });
+
+    try {
+      const result = await downloadAndInstallElectronUpdate(version);
+      if (result.ok) {
+        setElectronAutoUpdateState({ status: 'installing', progress: 100 });
+      } else {
+        setElectronAutoUpdateState({ status: 'error', progress: null, error: result.error });
+        electronAutoUpdateTriggeredRef.current = false;
+      }
+    } catch {
+      setElectronAutoUpdateState({ status: 'error', progress: null, error: 'Auto-update failed unexpectedly' });
+      electronAutoUpdateTriggeredRef.current = false;
+    } finally {
+      unsubscribe();
+    }
+  }, []);
+
+  const retryElectronUpdate = useCallback(async () => {
+    if (!updatesAvailable?.electron) return;
+    await runElectronAutoUpdate(updatesAvailable.electron);
+  }, [updatesAvailable?.electron, runElectronAutoUpdate]);
+
+  // Auto-download & auto-install electron update once detected
+  useEffect(() => {
+    if (!isElectron() || !updatesAvailable?.electron) return;
+    if (electronAutoUpdateTriggeredRef.current) return;
+
+    const autoUpdateDelay = setTimeout(async () => {
+      const version = updatesAvailable?.electron;
+      if (!version) return;
+      await runElectronAutoUpdate(version);
+    }, 3000);
+
+    return () => clearTimeout(autoUpdateDelay);
+  }, [updatesAvailable?.electron, runElectronAutoUpdate]);
+
   // Provide context
 
   return (
@@ -1599,6 +1653,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         hideFileExtensions,
         setHideFileExtensions,
         updatesAvailable,
+        electronAutoUpdateState,
+        retryElectronUpdate,
         desktopOpenProgress,
         setDesktopOpenProgress,
       }}
