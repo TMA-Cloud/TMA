@@ -163,7 +163,7 @@ export function ChangelogOverview() {
 
               {release.spatialNotes ? (
                 <div style={{ marginTop: 18 }}>
-                  <h4 style={{ marginBottom: 6 }}>Spatial Notes</h4>
+                  <h4 style={{ marginBottom: 6 }}>Notes</h4>
                   <div style={{ whiteSpace: "pre-wrap", opacity: 0.95 }}>
                     {release.spatialNotes}
                   </div>
@@ -235,7 +235,7 @@ export function ChangelogMajor({ major }: { major: number }) {
 
           {release.spatialNotes ? (
             <div style={{ marginTop: 18 }}>
-              <h4 style={{ marginBottom: 6 }}>Spatial Notes</h4>
+              <h4 style={{ marginBottom: 6 }}>Notes</h4>
               <div style={{ whiteSpace: "pre-wrap", opacity: 0.95 }}>
                 {release.spatialNotes}
               </div>
