@@ -32,7 +32,11 @@ export const DesktopImageViewer: React.FC<DesktopImageViewerProps> = ({ imageVie
         try {
           const res = await fetch(`/api/files/${imageViewerFile.id}/download`, {
             credentials: 'include',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
           });
+          if (!res.ok) throw new Error(`Download failed: ${res.status}`);
+          const contentType = res.headers.get('Content-Type') || '';
+          if (!contentType.startsWith('image/')) throw new Error(`Unexpected Content-Type: ${contentType}`);
           const blob = await res.blob();
           const url = URL.createObjectURL(blob);
           setImageSrc(url);
