@@ -85,7 +85,7 @@ function validateIdArray(ids, maxLength = 100) {
  */
 function validateId(id) {
   if (typeof id !== 'string') return null;
-  const idRegex = /^[a-zA-Z0-9]{8,16}$/;
+  const idRegex = /^[a-zA-Z0-9]{16}$/;
   return idRegex.test(id) ? id : null;
 }
 
