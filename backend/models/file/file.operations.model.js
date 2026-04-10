@@ -94,10 +94,14 @@ async function copyFiles(ids, parentId = null, userId) {
     const rootFilesMap = new Map(rootFilesResult.rows.map(f => [f.id, f]));
 
     // Process each root file (files are already fetched, so copyEntry can use them)
+    // Collect the new root-level IDs so the caller can reference them directly
+    // instead of guessing via a name+type query (which is racy).
+    const newRootIds = [];
     for (const id of ids) {
       const file = rootFilesMap.get(id);
       if (file) {
-        await copyEntryWithFile(file, parentId, userId, client);
+        const newId = await copyEntryWithFile(file, parentId, userId, client);
+        newRootIds.push(newId);
       }
     }
 
@@ -108,6 +112,8 @@ async function copyFiles(ids, parentId = null, userId) {
     await invalidateSearchCache(userId);
     await deleteCache(cacheKeys.fileStats(userId));
     await deleteCache(cacheKeys.userStorage(userId)); // Invalidate storage usage cache
+
+    return newRootIds;
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;

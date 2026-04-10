@@ -76,8 +76,8 @@ async function moveFilesController(req, res) {
 async function copyFilesController(req, res) {
   const { ids, actualParentId, fileNames, fileTypes, targetFolderName } = await getPasteContext(req);
 
-  await userOperationLock(req.userId, async () => {
-    await copyFilesModel(ids, actualParentId, req.userId);
+  const newFileIds = await userOperationLock(req.userId, async () => {
+    return copyFilesModel(ids, actualParentId, req.userId);
   });
 
   await logAuditEvent(
@@ -99,9 +99,11 @@ async function copyFilesController(req, res) {
   );
   logger.info({ fileIds: ids, fileNames, targetFolderName }, 'Files copied');
 
+  // Fetch the newly-created copies by their exact IDs (returned by the model)
+  // instead of guessing via name+type which is racy with concurrent operations.
   const newFilesResult = await pool.query(
-    'SELECT id, name, type FROM files WHERE name = ANY($1) AND type = ANY($2) AND parent_id = $3 AND user_id = $4 ORDER BY modified DESC LIMIT $5',
-    [fileNames, fileTypes, actualParentId, req.userId, ids.length]
+    'SELECT id, name, type FROM files WHERE id = ANY($1::text[]) AND user_id = $2',
+    [newFileIds, req.userId]
   );
 
   await publishFileEventsBatch(
