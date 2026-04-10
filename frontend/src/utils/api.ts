@@ -78,7 +78,7 @@ export async function apiPostForm<T = unknown>(endpoint: string, formData: FormD
   const res = await apiRequest(endpoint, {
     method: 'POST',
     body: formData,
-    headers: {},
+    headers: { 'X-Requested-With': 'XMLHttpRequest' },
   });
   if (!res.ok) {
     await throwApiErrorWithDetails(res);
@@ -410,6 +410,7 @@ export async function downloadFile(id: string, fallbackFilename?: string): Promi
   const response = await fetch(url, {
     method: 'GET',
     credentials: 'include',
+    headers: { 'X-Requested-With': 'XMLHttpRequest' },
   });
 
   if (!response.ok) {
@@ -567,7 +568,7 @@ export async function checkAuthSilently(signal?: AbortSignal): Promise<{
     const response = await fetch('/api/profile', {
       method: 'GET',
       credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
       signal,
     });
 
