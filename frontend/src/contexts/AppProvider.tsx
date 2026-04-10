@@ -247,7 +247,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         url.searchParams.append('sortBy', sortBy);
         if (sortOrder?.trim()) url.searchParams.append('order', sortOrder);
 
-        const res = await fetch(url.toString(), { credentials: 'include' });
+        const res = await fetch(url.toString(), {
+          credentials: 'include',
+          headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        });
+        if (!res.ok) throw new Error(`Failed to fetch files: ${res.status}`);
         const data: FileItemResponse[] = await res.json();
         const sorted = sortFilesWithFoldersFirst(data.map(mapFileResponse), sortBy, sortOrder);
         setFiles(sorted);
