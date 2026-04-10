@@ -5,6 +5,7 @@ import {
   login,
   googleLogin,
   googleCallback,
+  googleMfaVerify,
   logout,
   logoutAllDevices,
   profile,
@@ -40,6 +41,7 @@ router.get('/google/enabled', (req, res) => {
 if (googleAuthEnabled) {
   router.get('/google/login', googleLogin);
   router.get('/google/callback', authRateLimiter, googleCallback);
+  router.post('/google/mfa-verify', mfaRateLimiter, googleMfaVerify);
 }
 router.post('/logout', apiRateLimiter, logout);
 router.post('/logout-all', authMiddleware, apiRateLimiter, logoutAllDevices);

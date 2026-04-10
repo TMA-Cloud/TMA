@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs';
 import { OAuth2Client } from 'google-auth-library';
+import jwt from 'jsonwebtoken';
 
 import { logger } from '../../config/logger.js';
 import {
@@ -22,6 +23,7 @@ const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 const GOOGLE_REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI;
 
+const JWT_SECRET = process.env.JWT_SECRET;
 const GOOGLE_AUTH_ENABLED = GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET && GOOGLE_REDIRECT_URI;
 let googleClient;
 if (GOOGLE_AUTH_ENABLED) {
@@ -158,21 +160,19 @@ async function googleCallback(req, res) {
     // Check if MFA is enabled for Google OAuth users
     const mfaStatus = await getMfaStatus(user.id);
     if (mfaStatus?.enabled) {
-      // For Google OAuth, we need to handle MFA differently
-      // Since this is a redirect flow, we'll need to prompt for MFA code
-      // For now, we'll require MFA code as a query parameter or handle it via session
-      // This is a simplified approach - in production, you might want a two-step flow
-      const { mfaCode } = req.query;
-      if (!mfaCode) {
-        // Redirect to MFA prompt page
-        return res.redirect(`/?mfa_required=true&email=${encodeURIComponent(email)}`);
-      }
+      // Use a short-lived signed cookie to carry MFA-pending state instead of
+      // leaking the email in URL query parameters (browser history, Referer header, logs).
+      const mfaPendingToken = jwt.sign({ userId: user.id, purpose: 'mfa_pending' }, JWT_SECRET, {
+        expiresIn: '5m',
+        algorithm: 'HS256',
+      });
 
-      // Verify MFA code
-      const mfaValid = await verifyMfaCode(user.id, mfaCode);
-      if (!mfaValid) {
-        return res.redirect('/?error=invalid_mfa_code');
-      }
+      res.cookie('mfa_pending', mfaPendingToken, {
+        ...getCookieOptions(),
+        maxAge: 5 * 60 * 1000, // 5 minutes
+      });
+
+      return res.redirect('/?mfa_required=true');
     }
 
     // Create session and generate token
@@ -186,6 +186,67 @@ async function googleCallback(req, res) {
   }
 }
 
+/**
+ * Complete Google OAuth MFA verification.
+ * The frontend calls this with { mfaCode } after the user is redirected
+ * back with ?mfa_required=true. The user's identity is carried in a
+ * short-lived, HttpOnly `mfa_pending` cookie — never in the URL.
+ */
+async function googleMfaVerify(req, res) {
+  try {
+    const { mfaCode } = req.body;
+    if (!mfaCode || typeof mfaCode !== 'string') {
+      return sendError(res, 400, 'MFA code required');
+    }
+
+    // Read and validate the mfa_pending cookie (manual parse — no cookie-parser middleware)
+    let pendingToken = null;
+    if (req.headers.cookie) {
+      const match = req.headers.cookie
+        .split(';')
+        .map(c => c.trim())
+        .find(c => c.startsWith('mfa_pending='));
+      if (match) pendingToken = match.split('=')[1];
+    }
+    if (!pendingToken) {
+      return sendError(res, 401, 'MFA session expired or missing. Please sign in again.');
+    }
+
+    let decoded;
+    try {
+      decoded = jwt.verify(pendingToken, JWT_SECRET, { algorithms: ['HS256'] });
+    } catch {
+      // Clear the stale cookie
+      res.clearCookie('mfa_pending', getCookieOptions());
+      return sendError(res, 401, 'MFA session expired. Please sign in again.');
+    }
+
+    if (decoded.purpose !== 'mfa_pending' || !decoded.userId) {
+      res.clearCookie('mfa_pending', getCookieOptions());
+      return sendError(res, 401, 'Invalid MFA session');
+    }
+
+    // Verify the MFA code
+    const mfaValid = await verifyMfaCode(decoded.userId, mfaCode);
+    if (!mfaValid) {
+      await loginFailure(decoded.userId, 'invalid_mfa_code', req);
+      return sendError(res, 401, 'Invalid MFA code');
+    }
+
+    // MFA passed — clear the pending cookie and issue a real auth session
+    res.clearCookie('mfa_pending', getCookieOptions());
+
+    await loginSuccess(decoded.userId, null, req);
+    logger.info({ userId: decoded.userId }, 'Google OAuth MFA verification successful');
+
+    const { token } = await createSessionAndToken(decoded.userId, req);
+
+    setAuthCookieAndRespond(res, token, { success: true });
+  } catch (err) {
+    sendError(res, 500, 'Server error', err);
+  }
+}
+
 const googleAuthEnabled = !!GOOGLE_AUTH_ENABLED;
 
-export { login, googleLogin, googleCallback, googleAuthEnabled };
+export { login, googleLogin, googleCallback, googleMfaVerify, googleAuthEnabled };
