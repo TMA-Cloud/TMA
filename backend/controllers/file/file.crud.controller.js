@@ -245,6 +245,11 @@ async function uploadFile(req, res) {
       return createFileFromStreamedUpload(upload, parentId, req.userId);
     });
 
+    // Upload consumed successfully — prevent auto-cleanup from deleting it.
+    if (req._s3UploadedKeys) {
+      req._s3UploadedKeys = req._s3UploadedKeys.filter(k => k !== upload.storageName);
+    }
+
     await fileUploaded(file.id, file.name, file.size, req);
     logger.info({ fileId: file.id, fileName: file.name, fileSize: file.size }, 'File uploaded (stream to S3)');
     await publishFileEvent(EventTypes.FILE_UPLOADED, {
@@ -418,6 +423,11 @@ async function uploadDerivedFile(req, res) {
         return createFileFromStreamedUpload(upload, existing.parentId || null, req.userId);
       });
 
+      // Upload consumed successfully — remove from auto-cleanup list.
+      if (req._s3UploadedKeys) {
+        req._s3UploadedKeys = req._s3UploadedKeys.filter(k => k !== upload.storageName);
+      }
+
       await fileUploaded(newFile.id, newFile.name, newFile.size, req);
       logger.info(
         { fileId: newFile.id, fileName: newFile.name, fileSize: newFile.size, derivedFrom: existing.id },
@@ -550,6 +560,10 @@ async function uploadFilesBulk(req, res) {
         const file = await userOperationLock(req.userId, () => {
           return createFileFromStreamedUpload(upload, targetParentId, req.userId);
         });
+        // Upload consumed successfully — remove from auto-cleanup list.
+        if (req._s3UploadedKeys) {
+          req._s3UploadedKeys = req._s3UploadedKeys.filter(k => k !== upload.storageName);
+        }
         // For bulk uploads, avoid per-file audit/info spam; we log a single bulk event below.
         logger.debug({ fileId: file.id, fileName: file.name }, 'File uploaded (stream to S3, bulk)');
         await publishFileEvent(EventTypes.FILE_UPLOADED, {
@@ -564,7 +578,11 @@ async function uploadFilesBulk(req, res) {
         successful.push(clientId ? { ...file, clientId } : file);
       } catch (err) {
         // Best-effort cleanup: streamed object is already in S3; delete it if DB creation failed.
-        if (storage.useS3 && upload?.storageName) {
+        if (upload?.storageName) {
+          // Remove from auto-cleanup list (we handle it here explicitly).
+          if (req._s3UploadedKeys) {
+            req._s3UploadedKeys = req._s3UploadedKeys.filter(k => k !== upload.storageName);
+          }
           storage
             .deleteObject(upload.storageName)
             .catch(cleanupErr =>

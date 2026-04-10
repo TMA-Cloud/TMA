@@ -3,9 +3,11 @@
  * directly through encryption to S3 (no temp dir, minimal RAM).
  * Use only when STORAGE_DRIVER=s3.
  *
- * Trade-off: Validation (e.g. parentId, permissions) runs in the controller
- * after the stream has uploaded. Rejected requests leave an orphan object in S3
- * until cleanupOrphanFiles runs — run that job frequently.
+ * Because validation (parentId, permissions, file-name checks) runs in the
+ * controller *after* the stream finishes, every successful S3 put is tracked
+ * on `req._s3UploadedKeys`.  A one-time `res.on('finish', …)` listener
+ * automatically deletes those objects when the response is an error (4xx/5xx)
+ * and the controller hasn't already consumed them — preventing orphan files.
  */
 
 import path from 'path';
@@ -18,6 +20,18 @@ import { createByteCountStream, createEncryptStream } from '../utils/fileEncrypt
 import { generateId } from '../utils/id.js';
 import { createMimeCheckStream } from '../utils/mimeTypeDetection.js';
 import storage from '../utils/storageDriver.js';
+
+/**
+ * Delete a list of S3 objects, logging (but not throwing on) individual failures.
+ * @param {string[]} keys - S3 storage keys to remove
+ */
+function cleanupS3Keys(keys) {
+  for (const key of keys) {
+    storage.deleteObject(key).catch(err => {
+      logger.warn({ err, storageName: key }, '[StreamUpload] Failed to clean up orphaned S3 object');
+    });
+  }
+}
 
 /**
  * Single file: stream one file to S3, set req.streamedUpload and req.body (parentId etc).
@@ -47,6 +61,25 @@ function streamUploadToS3(singleOrBulk = 'single') {
         let hadError = false;
         let pending = 0;
         let fileIndex = 0;
+
+        // Track every S3 key we successfully PUT so we can delete them if the
+        // controller later rejects the request (bad parentId, invalid name, etc.).
+        if (!req._s3UploadedKeys) {
+          req._s3UploadedKeys = [];
+
+          // Auto-cleanup: when the response finishes with an error status and the
+          // controller hasn't explicitly marked the uploads as consumed, delete them.
+          res.on('finish', () => {
+            if (res.statusCode >= 400 && req._s3UploadedKeys.length > 0) {
+              logger.info(
+                { keys: req._s3UploadedKeys, statusCode: res.statusCode },
+                '[StreamUpload] Response was an error — cleaning up orphaned S3 objects'
+              );
+              cleanupS3Keys(req._s3UploadedKeys);
+              req._s3UploadedKeys = [];
+            }
+          });
+        }
 
         busboy.on('field', (name, value) => {
           // Support repeated fields (e.g. relativePaths, clientIds) by collecting into arrays.
@@ -104,6 +137,8 @@ function streamUploadToS3(singleOrBulk = 'single') {
             .putStream(storageName, encryptStream)
             .then(() => {
               const size = getByteCount();
+              // Track for automatic orphan cleanup on controller rejection.
+              req._s3UploadedKeys.push(storageName);
               uploadsByIndex[currentIndex] = {
                 id,
                 storageName,
