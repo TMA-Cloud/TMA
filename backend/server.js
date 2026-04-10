@@ -93,7 +93,7 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '1mb' }));
 
 // Health check endpoint (before auth, for monitoring)
 app.get('/health', (req, res) => {
