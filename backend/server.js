@@ -20,6 +20,7 @@ import { startAuditCleanup } from './services/auditCleanup.js';
 import { startOrphanFileCleanup } from './services/orphanCleanup.js';
 import { startShareCleanup } from './services/shareCleanup.js';
 import { startHeartbeatCleanup } from './services/heartbeatCleanup.js';
+import { csrfProtection } from './middleware/csrf.middleware.js';
 import errorHandler from './middleware/error.middleware.js';
 import { requestIdMiddleware } from './middleware/requestId.middleware.js';
 import { blockMainAppOnShareDomain } from './middleware/shareDomain.middleware.js';
@@ -117,10 +118,13 @@ app.get(
 );
 
 // API routes
+// CSRF protection for frontend-facing API routes (defense-in-depth)
+// Exempt: public routes (no mutations), OnlyOffice (external server callbacks),
+// share routes (HTML pages), and version (read-only)
 app.use('/api', publicRoutes);
-app.use('/api', authRoutes);
-app.use('/api/files', fileRoutes);
-app.use('/api/user', userRoutes);
+app.use('/api', csrfProtection, authRoutes);
+app.use('/api/files', csrfProtection, fileRoutes);
+app.use('/api/user', csrfProtection, userRoutes);
 app.use('/api/onlyoffice', onlyofficeRoutes);
 app.use('/api/version', versionRoutes);
 app.use('/s', shareRoutes);

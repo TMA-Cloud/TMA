@@ -437,6 +437,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       xhr.open('POST', url);
       xhr.withCredentials = true;
+      xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
       xhr.send(formData);
     });
   };
@@ -483,7 +484,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const res = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
         credentials: 'include',
         body: JSON.stringify({ ids }),
       });
@@ -700,7 +701,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const createFolder = async (name: string) => {
     const res = await fetch('/api/files/folder', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
       credentials: 'include',
       body: JSON.stringify({ name, parentId: folderStack[folderStack.length - 1] }),
     });
@@ -715,7 +716,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const parentId = folderStack[folderStack.length - 1];
       if (parentId) data.append('parentId', parentId);
       data.append('file', file);
-      const res = await fetch('/api/files/upload', { method: 'POST', credentials: 'include', body: data });
+      const res = await fetch('/api/files/upload', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        body: data,
+      });
       if (!res.ok) throw new Error(await extractResponseError(res));
       await refreshFiles();
     });
@@ -868,6 +874,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
           xhr.open('POST', '/api/files/upload/bulk');
           xhr.withCredentials = true;
+          xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
           xhr.send(data);
         });
       }
@@ -1042,7 +1049,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return operationQueue.add(async () => {
       const res = await fetch('/api/files/move', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
         credentials: 'include',
         body: JSON.stringify({ ids, parentId }),
       });
@@ -1055,7 +1062,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return operationQueue.add(async () => {
       const res = await fetch('/api/files/copy', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
         credentials: 'include',
         body: JSON.stringify({ ids, parentId }),
       });
@@ -1067,7 +1074,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const renameFileApi = async (id: string, name: string) => {
     const res = await fetch('/api/files/rename', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
       credentials: 'include',
       body: JSON.stringify({ id, name }),
     });
@@ -1095,7 +1102,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   ): Promise<Record<string, string>> => {
     const res = await fetch('/api/files/share', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
       credentials: 'include',
       body: JSON.stringify({ ids, shared, ...(shared && expiry ? { expiry } : {}) }),
     });
@@ -1111,7 +1118,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const getShareLinks = async (ids: string[]): Promise<Record<string, string>> => {
     const res = await fetch('/api/files/share/links', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
       credentials: 'include',
       body: JSON.stringify({ ids }),
     });
@@ -1123,7 +1130,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const starFilesApi = async (ids: string[], starred: boolean) => {
     const res = await fetch('/api/files/star', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
       credentials: 'include',
       body: JSON.stringify({ ids, starred }),
     });
@@ -1205,7 +1212,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const emptyTrashApi = async () => {
     const res = await fetch('/api/files/trash/empty', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
       credentials: 'include',
     });
     const data = await res.json();
@@ -1217,7 +1224,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const linkToParentShareApi = async (ids: string[]): Promise<Record<string, string>> => {
     const res = await fetch('/api/files/link-parent-share', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
       credentials: 'include',
       body: JSON.stringify({ ids }),
     });
@@ -1237,7 +1244,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try {
         const res = await fetch(`/api/files/${endpoint}`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
           credentials: 'include',
           body: JSON.stringify({ ids: clipboard.ids, parentId }),
         });
@@ -1353,7 +1360,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (ids.length > 1) {
         const res = await fetch('/api/files/download/bulk', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
           credentials: 'include',
           body: JSON.stringify({ ids }),
         });

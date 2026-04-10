@@ -15,6 +15,7 @@ async function apiRequest(endpoint: string, options: ApiRequestOptions = {}): Pr
     ...restOptions,
     headers: {
       'Content-Type': 'application/json',
+      'X-Requested-With': 'XMLHttpRequest',
       ...customHeaders,
     },
   };
