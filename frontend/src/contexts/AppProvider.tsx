@@ -667,9 +667,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     eventSource.onmessage = event => {
       try {
-        const data = JSON.parse(event.data);
+        const parsed: unknown = JSON.parse(event.data);
+        if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return;
+        const data = parsed as Record<string, unknown>;
+        if (typeof data.type !== 'string') return;
         if (data.type === 'connected' || data.type === 'error') return;
-        if (data.type && data.data && isEventRelevant(data.type, data.data)) {
+        if (typeof data.data !== 'object' || data.data === null || Array.isArray(data.data)) return;
+        const eventPayload = data.data as {
+          parentId?: string | null;
+          id?: string;
+          starred?: boolean;
+          shared?: boolean;
+        };
+        if (isEventRelevant(data.type, eventPayload)) {
           debouncedSSERefresh();
         }
       } catch (error) {
