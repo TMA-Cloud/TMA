@@ -50,6 +50,12 @@ const changePasswordSchema = [
     .withMessage('New password is required')
     .isLength({ min: 6, max: MAX_PASSWORD_LENGTH })
     .withMessage(`New password must be between 6 and ${MAX_PASSWORD_LENGTH} characters`),
+  body('mfaCode')
+    .optional()
+    .isString()
+    .withMessage('MFA code must be a string')
+    .isLength({ min: 6, max: 20 })
+    .withMessage('MFA code must be between 6 and 20 characters'),
 ];
 
 const addFolderSchema = [

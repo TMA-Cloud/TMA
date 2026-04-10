@@ -191,6 +191,25 @@ async function cleanupOldSessions(daysOld = 30) {
   return deletedCount;
 }
 
+/**
+ * Check whether a session was created recently (i.e. the user authenticated
+ * within the given time window). Used to gate sensitive operations like
+ * password changes behind a "recent auth" requirement.
+ * @param {string} sessionId - Session ID
+ * @param {string} userId - User ID
+ * @param {number} maxAgeSeconds - Maximum session age in seconds (default: 600 = 10 minutes)
+ * @returns {Promise<boolean>} True if the session was created within maxAgeSeconds
+ */
+async function isSessionRecent(sessionId, userId, maxAgeSeconds = 600) {
+  const result = await pool.query(
+    `SELECT 1 FROM sessions
+     WHERE id = $1 AND user_id = $2
+       AND created_at > NOW() - INTERVAL '1 second' * $3`,
+    [sessionId, userId, maxAgeSeconds]
+  );
+  return result.rows.length > 0;
+}
+
 export {
   createSession,
   sessionExists,
@@ -200,4 +219,5 @@ export {
   deleteOtherUserSessions,
   deleteAllUserSessions,
   cleanupOldSessions,
+  isSessionRecent,
 };
