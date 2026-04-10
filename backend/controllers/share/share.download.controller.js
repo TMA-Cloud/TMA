@@ -1,6 +1,6 @@
 import pool from '../../config/db.js';
 import { logger } from '../../config/logger.js';
-import { getFileByToken, getSharedTree, isFileShared } from '../../models/share.model.js';
+import { getFileByToken, getSharedTree } from '../../models/share.model.js';
 import { logAuditEvent } from '../../services/auditLogger.js';
 import { validateAndResolveFile, streamEncryptedFile, streamUnencryptedFile } from '../../utils/fileDownload.js';
 import { sendError } from '../../utils/response.js';
@@ -62,12 +62,9 @@ async function downloadSharedItem(req, res) {
       return renderErrorPage(res, 410, 'Link expired', 'This share link has expired and is no longer available.');
     }
 
-    const allowed = await isFileShared(token, fileId);
-    if (!allowed) {
-      return renderErrorPage(res, 404, 'Not found', 'The requested file was not found in this share.');
-    }
-
-    // Strict DB permission: only return file if it belongs to this share (defense-in-depth)
+    // Single atomic check: only return the file if it belongs to this share.
+    // This replaces a prior two-step check (isFileShared + INNER JOIN) that
+    // was susceptible to a TOCTOU race if the share was modified between calls.
     const res2 = await pool.query(
       `SELECT f.id, f.name, f.type, f.mime_type AS "mimeType", f.path
        FROM files f
