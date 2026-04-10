@@ -36,16 +36,17 @@ async function calculateFolderSize(id, userId) {
   }
 
   // Cache miss - query database
+  const MAX_DEPTH = 50;
   const res = await pool.query(
     `WITH RECURSIVE sub AS (
-       SELECT id, size, type FROM files WHERE id = $1 AND user_id = $2
+       SELECT id, size, type, 1 AS depth FROM files WHERE id = $1 AND user_id = $2
        UNION ALL
-       SELECT f.id, f.size, f.type FROM files f
+       SELECT f.id, f.size, f.type, s.depth + 1 FROM files f
        JOIN sub s ON f.parent_id = s.id
-       WHERE f.user_id = $2
+       WHERE f.user_id = $2 AND s.depth < $3
      )
      SELECT COALESCE(SUM(size), 0) AS size FROM sub WHERE type = 'file'`,
-    [id, userId]
+    [id, userId, MAX_DEPTH]
   );
   // PostgreSQL BIGINT can be returned as string for very large numbers
   // Convert to number if it's a valid number string, otherwise default to 0
