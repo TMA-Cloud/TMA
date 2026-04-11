@@ -146,6 +146,9 @@ export const MfaModal: React.FC<MfaModalProps> = ({ isOpen, onClose }) => {
     setLoading(true);
     try {
       const result = await setupMfa();
+      if (typeof result.qrCode !== 'string' || !result.qrCode.startsWith('data:image/')) {
+        throw new Error('Invalid QR code received from server');
+      }
       setQrCode(result.qrCode);
       setSecret(result.secret);
       setStep('verify');
