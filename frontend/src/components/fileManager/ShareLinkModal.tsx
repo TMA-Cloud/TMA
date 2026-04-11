@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Modal } from '../ui/Modal';
 import { useApp, type ShareExpiry } from '../../contexts/AppContext';
 import { Clipboard, Check, Clock } from 'lucide-react';
@@ -14,6 +14,13 @@ export const ShareLinkModal: React.FC = () => {
   const { shareLinkModalOpen, shareLinks, setShareLinkModalOpen } = useApp();
   const { showToast } = useToast();
   const [copiedLink, setCopiedLink] = useState<string | null>(null);
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    };
+  }, []);
 
   const handleClose = () => setShareLinkModalOpen(false);
 
@@ -38,7 +45,8 @@ export const ShareLinkModal: React.FC = () => {
       }
       setCopiedLink(link);
       showToast('Link copied to clipboard', 'success');
-      setTimeout(() => setCopiedLink(null), 2000);
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+      copiedTimerRef.current = setTimeout(() => setCopiedLink(null), 2000);
     } catch {
       showToast('Failed to copy link', 'error');
     }
