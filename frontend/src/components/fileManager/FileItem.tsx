@@ -58,6 +58,14 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
     onScrollIntoViewHandled?.();
   }, [file.id, scrollIntoViewRequest, onScrollIntoViewHandled]);
 
+  useEffect(() => {
+    return () => {
+      if (longPressTimeoutRef.current !== null) {
+        window.clearTimeout(longPressTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const clearLongPress = () => {
     if (longPressTimeoutRef.current !== null) {
       window.clearTimeout(longPressTimeoutRef.current);
