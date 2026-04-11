@@ -101,9 +101,13 @@ export const FileManager: React.FC = () => {
   const [isExternalDragOver, setIsExternalDragOver] = useState(false);
 
   const activeUploadProcessingRequestIdRef = React.useRef<string | null>(uploadModalProcessingRequestId);
+  const uploadModalProcessingRef = React.useRef(uploadModalProcessing);
   useEffect(() => {
     activeUploadProcessingRequestIdRef.current = uploadModalProcessingRequestId;
   }, [uploadModalProcessingRequestId]);
+  useEffect(() => {
+    uploadModalProcessingRef.current = uploadModalProcessing;
+  }, [uploadModalProcessing]);
 
   const canCreateFolder = currentPath[0] === 'My Files';
   const isTrashView = currentPath[0] === 'Trash';
@@ -710,7 +714,7 @@ export const FileManager: React.FC = () => {
     async (e: React.DragEvent) => {
       if (draggingIds.length > 0) return;
       if (!e.dataTransfer.files?.length) return;
-      if (uploadModalProcessing) return; // Prevent duplicate drops while we are still scanning folders.
+      if (uploadModalProcessingRef.current) return; // Prevent duplicate drops while we are still scanning folders.
       e.preventDefault();
       e.stopPropagation();
       setIsExternalDragOver(false);
@@ -748,7 +752,6 @@ export const FileManager: React.FC = () => {
       isMyFilesView,
       openUploadModalWithEntries,
       setUploadModalOpen,
-      uploadModalProcessing,
       setUploadModalProcessing,
       setUploadModalProcessingRequestId,
       clearUploadModalInitialEntries,
