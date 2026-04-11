@@ -1229,8 +1229,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
       credentials: 'include',
     });
+    if (!res.ok) {
+      const data = await res.json().catch(() => null);
+      throw new Error((data && typeof data.message === 'string' && data.message) || 'Failed to empty trash');
+    }
     const data = await res.json();
-    if (!res.ok) throw new Error(data.message || 'Failed to empty trash');
     await refreshFiles();
     return data;
   };
