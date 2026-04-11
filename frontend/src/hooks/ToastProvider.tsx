@@ -22,7 +22,7 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       return;
     }
 
-    const id = Date.now().toString();
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
     const newToast = { id, message, type };
 
     lastToastRef.current = { message, type, timestamp: now };
