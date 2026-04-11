@@ -1,6 +1,9 @@
 import React, { useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
 
+// Track how many modals are currently open to avoid restoring scroll prematurely
+let openModalCount = 0;
+
 interface ModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -19,6 +22,7 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
 
   useEffect(() => {
     if (isOpen) {
+      openModalCount++;
       document.body.style.overflow = 'hidden';
       // Focus trap
       const focusable = modalRef.current?.querySelectorAll<HTMLElement>(
@@ -56,15 +60,15 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
         }
       }, 0);
       return () => {
+        openModalCount--;
+        if (openModalCount <= 0) {
+          openModalCount = 0;
+          document.body.style.overflow = 'unset';
+        }
         document.removeEventListener('keydown', handleTab);
         document.removeEventListener('keydown', handleEsc);
       };
-    } else {
-      document.body.style.overflow = 'unset';
     }
-    return () => {
-      document.body.style.overflow = 'unset';
-    };
   }, [isOpen, onClose, initialFocusRef]);
 
   if (!isOpen) return null;
