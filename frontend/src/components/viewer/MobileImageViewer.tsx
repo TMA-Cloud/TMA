@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ZoomIn, ZoomOut, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { type FileItem } from '../../contexts/AppContext';
 
@@ -126,17 +126,6 @@ export const MobileImageViewer: React.FC<MobileImageViewerProps> = ({
     }
   }, [imageViewerFile, loading, controlsVisible, zoom]);
 
-  // Attach wheel event listener with passive: false to allow preventDefault
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-
-    container.addEventListener('wheel', handleWheel, { passive: false });
-    return () => {
-      container.removeEventListener('wheel', handleWheel);
-    };
-  }, []);
-
   const navigateToImage = (direction: 'next' | 'prev') => {
     if (direction === 'next' && hasNext) {
       setImageViewerFile(imageFiles[currentIndex + 1] ?? null);
@@ -183,15 +172,10 @@ export const MobileImageViewer: React.FC<MobileImageViewerProps> = ({
     }
   };
 
-  const handlePointerDown = (e: React.PointerEvent) => {
-    if (e.pointerType === 'touch') return; // Let touch handlers take over
-    e.preventDefault();
-    dragOrigin.current = { x: e.clientX, y: e.clientY };
-    window.addEventListener('pointermove', handlePointerMove);
-    window.addEventListener('pointerup', handlePointerUp);
-  };
+  const pointerMoveRef = useRef<((e: PointerEvent) => void) | null>(null);
+  const pointerUpRef = useRef<(() => void) | null>(null);
 
-  const handlePointerMove = (e: PointerEvent) => {
+  pointerMoveRef.current = (e: PointerEvent) => {
     lastMousePos.current = { x: e.clientX, y: e.clientY };
     if (!dragOrigin.current) return;
     const dx = e.clientX - dragOrigin.current.x;
@@ -202,15 +186,39 @@ export const MobileImageViewer: React.FC<MobileImageViewerProps> = ({
     applyTransform();
   };
 
-  const handlePointerUp = () => {
+  const stablePointerMove = useCallback((e: PointerEvent) => pointerMoveRef.current?.(e), []);
+  const stablePointerUp = useCallback(() => pointerUpRef.current?.(), []);
+
+  pointerUpRef.current = () => {
     dragOrigin.current = null;
-    window.removeEventListener('pointermove', handlePointerMove);
-    window.removeEventListener('pointerup', handlePointerUp);
+    window.removeEventListener('pointermove', stablePointerMove);
+    window.removeEventListener('pointerup', stablePointerUp);
+  };
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    if (e.pointerType === 'touch') return; // Let touch handlers take over
+    e.preventDefault();
+    dragOrigin.current = { x: e.clientX, y: e.clientY };
+    window.addEventListener('pointermove', stablePointerMove);
+    window.addEventListener('pointerup', stablePointerUp);
   };
 
   const handleWheel = (e: WheelEvent) => {
     e.preventDefault();
   };
+
+  // Attach wheel event listener with passive: false to allow preventDefault
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    container.addEventListener('wheel', handleWheel, { passive: false });
+    return () => {
+      container.removeEventListener('wheel', handleWheel);
+      window.removeEventListener('pointermove', stablePointerMove);
+      window.removeEventListener('pointerup', stablePointerUp);
+    };
+  }, [stablePointerMove, stablePointerUp]);
 
   // Touch handlers for pinch-to-zoom and swipe
   const getTouchDistance = (touches: React.TouchList) => {
