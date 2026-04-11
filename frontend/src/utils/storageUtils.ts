@@ -26,7 +26,7 @@ export function bytesToNumberAndUnit(bytes: number | string | null | undefined):
   }
 
   const numBytes = typeof bytes === 'string' ? Number(bytes) : bytes;
-  if (isNaN(numBytes) || numBytes <= 0) {
+  if (Number.isNaN(numBytes) || numBytes <= 0) {
     return { number: '', unit: 'GB' };
   }
 
