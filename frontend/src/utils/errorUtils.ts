@@ -102,8 +102,8 @@ export function isAuthError(error: unknown): boolean {
   if (error instanceof ApiError) {
     return error.status === 401;
   }
-  if (error instanceof Error) {
-    return error.message.includes('401') || error.message.toLowerCase().includes('unauthorized');
+  if (error != null && typeof error === 'object' && 'status' in error) {
+    return (error as { status: unknown }).status === 401;
   }
   return false;
 }
