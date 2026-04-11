@@ -102,6 +102,7 @@ export const DocumentViewerModal: React.FC = () => {
         // Fetch config first to get ONLYOFFICE JS URL
         const res = await fetch(`/api/onlyoffice/config/${documentViewerFile.id}`, {
           credentials: 'include',
+          headers: { 'X-Requested-With': 'XMLHttpRequest' },
           signal: abortController.signal,
         });
 

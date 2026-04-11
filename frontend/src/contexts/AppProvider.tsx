@@ -300,6 +300,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
         const res = await fetch(url.toString(), {
           credentials: 'include',
+          headers: { 'X-Requested-With': 'XMLHttpRequest' },
           signal: controller.signal,
         });
 

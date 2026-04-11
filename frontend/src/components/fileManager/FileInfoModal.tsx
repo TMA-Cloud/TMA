@@ -31,6 +31,7 @@ export const FileInfoModal: React.FC<FileInfoModalProps> = ({ isOpen, onClose, f
         const res = await fetch(`/api/files/${file.id}/info`, {
           method: 'GET',
           credentials: 'include',
+          headers: { 'X-Requested-With': 'XMLHttpRequest' },
         });
 
         if (!res.ok) {

@@ -15,6 +15,7 @@ export function useStorageUsage() {
     try {
       const res = await fetch(`/api/user/storage`, {
         credentials: 'include',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
       });
       if (res.ok) {
         const data = await res.json();
