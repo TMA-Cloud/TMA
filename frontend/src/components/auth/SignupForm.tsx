@@ -27,6 +27,18 @@ export const SignupForm: React.FC<{ onSwitch: () => void }> = ({ onSwitch }) => 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    if (!name.trim()) {
+      setError('Please enter your name');
+      return;
+    }
+    if (!email.trim()) {
+      setError('Please enter your email');
+      return;
+    }
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters long');
+      return;
+    }
     try {
       await signup(email, password, name);
     } catch (err) {
