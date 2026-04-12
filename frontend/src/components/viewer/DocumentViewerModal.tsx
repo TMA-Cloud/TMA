@@ -55,12 +55,17 @@ export const DocumentViewerModal: React.FC = () => {
   const editorRef = useRef<DocsAPIEditor | null>(null);
   const lastRefreshedFileIdRef = useRef<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const loadedScriptRef = useRef<HTMLScriptElement | null>(null);
 
   useEffect(() => {
     return () => {
       if (editorRef.current && editorRef.current.destroyEditor) {
         editorRef.current.destroyEditor();
         editorRef.current = null;
+      }
+      if (loadedScriptRef.current) {
+        loadedScriptRef.current.remove();
+        loadedScriptRef.current = null;
       }
     };
   }, []);
@@ -143,8 +148,27 @@ export const DocumentViewerModal: React.FC = () => {
         }
         const { config, token, onlyofficeJsUrl } = await res.json();
 
+        // Validate the OnlyOffice JS URL before loading
+        if (typeof onlyofficeJsUrl !== 'string' || !onlyofficeJsUrl) {
+          throw new Error('Invalid ONLYOFFICE JS URL');
+        }
+        try {
+          const parsedUrl = new URL(onlyofficeJsUrl, window.location.origin);
+          if (parsedUrl.protocol !== 'https:' && parsedUrl.protocol !== 'http:') {
+            throw new Error('Invalid ONLYOFFICE JS URL protocol');
+          }
+        } catch (urlErr) {
+          if (urlErr instanceof Error && urlErr.message.startsWith('Invalid ONLYOFFICE')) throw urlErr;
+          throw new Error('Invalid ONLYOFFICE JS URL', { cause: urlErr });
+        }
+
         // Load ONLYOFFICE JS if needed
         if (!window.DocsAPI) {
+          // Remove previously loaded script if URL changed
+          if (loadedScriptRef.current) {
+            loadedScriptRef.current.remove();
+            loadedScriptRef.current = null;
+          }
           const script = document.createElement('script');
           script.src = onlyofficeJsUrl;
           script.async = true;
@@ -153,6 +177,7 @@ export const DocumentViewerModal: React.FC = () => {
             script.onerror = () => reject(new Error('Failed to load ONLYOFFICE API'));
             document.body.appendChild(script);
           });
+          loadedScriptRef.current = script;
         }
 
         if (token) config.token = token;
