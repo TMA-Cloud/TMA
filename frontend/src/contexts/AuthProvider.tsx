@@ -93,12 +93,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const errorData = await res.json().catch(() => ({}));
         const message = errorData.message || 'Login failed';
         // Return error info for MFA requirement detection
-        throw {
-          status: res.status,
-          message,
-          requiresMfa: message === 'MFA code required',
-          invalidMfa: message === 'Invalid MFA code',
+        const error = new Error(message) as Error & {
+          status: number;
+          requiresMfa: boolean;
+          invalidMfa: boolean;
         };
+        error.status = res.status;
+        error.requiresMfa = message === 'MFA code required';
+        error.invalidMfa = message === 'Invalid MFA code';
+        throw error;
       }
       const data = await res.json();
       setUser(data.user);
