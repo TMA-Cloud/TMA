@@ -59,6 +59,18 @@ export const animateFlyToFolder = async (ids: string[], folderId: string) => {
   const deltaY = targetRect.top - startRect.top;
 
   await new Promise<void>(resolve => {
+    let settled = false;
+    const cleanup = () => {
+      if (settled) return;
+      settled = true;
+      wrapper.remove();
+      resolve();
+    };
+
+    // Fallback timeout in case transitionend never fires
+    // (e.g. prefers-reduced-motion, element removed, browser skips transition)
+    const fallbackTimer = setTimeout(cleanup, 500);
+
     requestAnimationFrame(() => {
       wrapper.style.transition = 'transform 0.3s ease-in-out, opacity 0.3s ease-in-out';
       wrapper.style.transform = `translate(${deltaX}px, ${deltaY}px) scale(${PREVIEW_WIDTH_SCALE * 0.5}, ${PREVIEW_HEIGHT_SCALE * 0.5})`;
@@ -66,8 +78,8 @@ export const animateFlyToFolder = async (ids: string[], folderId: string) => {
       wrapper.addEventListener(
         'transitionend',
         () => {
-          wrapper.remove();
-          resolve();
+          clearTimeout(fallbackTimer);
+          cleanup();
         },
         { once: true }
       );
