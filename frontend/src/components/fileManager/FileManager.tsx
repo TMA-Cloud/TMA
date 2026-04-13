@@ -323,6 +323,16 @@ export const FileManager: React.FC = () => {
   const [draggingIds, setDraggingIds] = useState<string[]>([]);
   const [dragOverFolder, setDragOverFolder] = useState<string | null>(null);
   const [multiSelectMode, setMultiSelectMode] = useState(false);
+
+  // Clean up is-dragging class on unmount or when drag ends unexpectedly
+  useEffect(() => {
+    if (draggingIds.length === 0) {
+      document.body.classList.remove('is-dragging');
+    }
+    return () => {
+      document.body.classList.remove('is-dragging');
+    };
+  }, [draggingIds]);
   const multiSelectModeRef = useRef(multiSelectMode);
 
   // Keep ref in sync with state
