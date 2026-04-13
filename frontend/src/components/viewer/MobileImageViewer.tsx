@@ -50,6 +50,7 @@ export const MobileImageViewer: React.FC<MobileImageViewerProps> = ({
 
   useEffect(() => {
     let revoke: (() => void) | undefined;
+    const abortController = new AbortController();
     if (imageViewerFile) {
       setZoom(1);
       offset.current = { x: 0, y: 0 };
@@ -60,6 +61,7 @@ export const MobileImageViewer: React.FC<MobileImageViewerProps> = ({
           const res = await fetch(`/api/files/${imageViewerFile.id}/download`, {
             credentials: 'include',
             headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            signal: abortController.signal,
           });
           if (!res.ok) throw new Error(`Download failed: ${res.status}`);
           const contentType = res.headers.get('Content-Type') || '';
@@ -100,10 +102,11 @@ export const MobileImageViewer: React.FC<MobileImageViewerProps> = ({
           img.src = url;
 
           revoke = () => URL.revokeObjectURL(url);
-        } catch {
+        } catch (e) {
+          if (e instanceof Error && e.name === 'AbortError') return;
           setImageSrc(null);
         } finally {
-          setLoading(false);
+          if (!abortController.signal.aborted) setLoading(false);
         }
       };
       load();
@@ -111,7 +114,10 @@ export const MobileImageViewer: React.FC<MobileImageViewerProps> = ({
       setImageSrc(null);
       setImageFit(null);
     }
-    return () => revoke?.();
+    return () => {
+      abortController.abort();
+      revoke?.();
+    };
   }, [imageViewerFile]);
 
   // Auto-hide controls on mobile after 3 seconds

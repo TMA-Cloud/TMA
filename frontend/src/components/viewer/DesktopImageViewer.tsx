@@ -26,6 +26,7 @@ export const DesktopImageViewer: React.FC<DesktopImageViewerProps> = ({ imageVie
 
   useEffect(() => {
     let revoke: (() => void) | undefined;
+    const abortController = new AbortController();
     if (imageViewerFile) {
       setLoading(true);
       const load = async () => {
@@ -33,6 +34,7 @@ export const DesktopImageViewer: React.FC<DesktopImageViewerProps> = ({ imageVie
           const res = await fetch(`/api/files/${imageViewerFile.id}/download`, {
             credentials: 'include',
             headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            signal: abortController.signal,
           });
           if (!res.ok) throw new Error(`Download failed: ${res.status}`);
           const contentType = res.headers.get('Content-Type') || '';
@@ -78,10 +80,11 @@ export const DesktopImageViewer: React.FC<DesktopImageViewerProps> = ({ imageVie
           img.src = url;
 
           revoke = () => URL.revokeObjectURL(url);
-        } catch {
+        } catch (e) {
+          if (e instanceof Error && e.name === 'AbortError') return;
           setImageSrc(null);
         } finally {
-          setLoading(false);
+          if (!abortController.signal.aborted) setLoading(false);
         }
       };
       load();
@@ -89,7 +92,10 @@ export const DesktopImageViewer: React.FC<DesktopImageViewerProps> = ({ imageVie
       setImageSrc(null);
       initialFitZoom.current = 1;
     }
-    return () => revoke?.();
+    return () => {
+      abortController.abort();
+      revoke?.();
+    };
   }, [imageViewerFile]);
 
   const clampOffset = (newZoom: number) => {
