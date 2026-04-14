@@ -1426,7 +1426,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
-        window.URL.revokeObjectURL(url);
+        // Defer revocation so the browser has time to start the download
+        setTimeout(() => window.URL.revokeObjectURL(url), 1000);
       } else {
         const firstId = ids[0];
         if (!firstId) return;
