@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useCallback, useEffect, useState, useRef } from 'react';
 import { X, CheckCircle, AlertCircle, Info } from 'lucide-react';
 
 interface ToastProps {
@@ -14,15 +14,23 @@ export const Toast: React.FC<ToastProps> = ({ id, message, type = 'info', durati
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
   const [touchDeltaX, setTouchDeltaX] = useState(0);
   const toastRef = useRef<HTMLDivElement>(null);
+  const dismissedRef = useRef(false);
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  const dismiss = useCallback(() => {
+    if (dismissedRef.current) return;
+    dismissedRef.current = true;
+    setIsVisible(false);
+    setTimeout(() => onCloseRef.current(id), 300);
+  }, [id]);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsVisible(false);
-      setTimeout(() => onClose(id), 300);
-    }, duration);
-
+    const timer = setTimeout(dismiss, duration);
     return () => clearTimeout(timer);
-  }, [id, duration, onClose]);
+  }, [dismiss, duration]);
 
   // Swipe-to-dismiss handlers
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -39,8 +47,7 @@ export const Toast: React.FC<ToastProps> = ({ id, message, type = 'info', durati
   };
   const handleTouchEnd = () => {
     if (Math.abs(touchDeltaX) > 60) {
-      setIsVisible(false);
-      setTimeout(() => onClose(id), 300);
+      dismiss();
     }
     setTouchStartX(null);
     setTouchDeltaX(0);
@@ -85,10 +92,7 @@ export const Toast: React.FC<ToastProps> = ({ id, message, type = 'info', durati
       </div>
       <p className="text-gray-900 dark:text-gray-100 flex-1 font-medium text-base">{message}</p>
       <button
-        onClick={() => {
-          setIsVisible(false);
-          setTimeout(() => onClose(id), 300);
-        }}
+        onClick={dismiss}
         className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors duration-200 rounded-lg p-1"
         aria-label="Close notification"
       >
