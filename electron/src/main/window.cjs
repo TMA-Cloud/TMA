@@ -59,7 +59,7 @@ function createWindow(loadUrl, preloadPath, appRoot) {
       preload: absolutePreload,
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,
+      sandbox: true,
     },
   });
 
