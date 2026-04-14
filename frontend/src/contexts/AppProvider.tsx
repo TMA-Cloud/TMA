@@ -664,35 +664,60 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   useEffect(() => {
-    const eventSource = new EventSource('/api/files/events', { withCredentials: true });
+    let reconnectAttempts = 0;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let stopped = false;
 
-    eventSource.onmessage = event => {
-      try {
-        const parsed: unknown = JSON.parse(event.data);
-        if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return;
-        const data = parsed as Record<string, unknown>;
-        if (typeof data.type !== 'string') return;
-        if (data.type === 'connected' || data.type === 'error') return;
-        if (typeof data.data !== 'object' || data.data === null || Array.isArray(data.data)) return;
-        const eventPayload = data.data as {
-          parentId?: string | null;
-          id?: string;
-          starred?: boolean;
-          shared?: boolean;
-        };
-        if (isEventRelevant(data.type, eventPayload)) {
-          debouncedSSERefresh();
+    const connect = () => {
+      if (stopped) return;
+      const eventSource = new EventSource('/api/files/events', { withCredentials: true });
+
+      eventSource.onmessage = event => {
+        // Successful message resets backoff
+        reconnectAttempts = 0;
+        try {
+          const parsed: unknown = JSON.parse(event.data);
+          if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return;
+          const data = parsed as Record<string, unknown>;
+          if (typeof data.type !== 'string') return;
+          if (data.type === 'connected' || data.type === 'error') return;
+          if (typeof data.data !== 'object' || data.data === null || Array.isArray(data.data)) return;
+          const eventPayload = data.data as {
+            parentId?: string | null;
+            id?: string;
+            starred?: boolean;
+            shared?: boolean;
+          };
+          if (isEventRelevant(data.type, eventPayload)) {
+            debouncedSSERefresh();
+          }
+        } catch (error) {
+          if (import.meta.env.DEV) {
+            console.error('[SSE] Error parsing event:', error, event.data);
+          }
         }
-      } catch (error) {
-        if (import.meta.env.DEV) {
-          console.error('[SSE] Error parsing event:', error, event.data);
-        }
-      }
+      };
+
+      eventSource.onerror = () => {
+        // Close the broken connection to prevent the browser's default rapid reconnect
+        eventSource.close();
+        eventSourceRef.current = null;
+        if (stopped) return;
+
+        reconnectAttempts++;
+        // Exponential backoff: 1s, 2s, 4s, 8s, … capped at 30s
+        const delay = Math.min(1000 * Math.pow(2, reconnectAttempts - 1), 30000);
+        reconnectTimer = setTimeout(connect, delay);
+      };
+
+      eventSourceRef.current = eventSource;
     };
 
-    eventSourceRef.current = eventSource;
+    connect();
 
     return () => {
+      stopped = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
       if (sseRefreshTimeoutRef.current) {
         clearTimeout(sseRefreshTimeoutRef.current);
         sseRefreshTimeoutRef.current = null;
