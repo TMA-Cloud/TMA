@@ -65,6 +65,17 @@ function createWindow(loadUrl, preloadPath, appRoot) {
 
   Menu.setApplicationMenu(null);
 
+  // Security: restrict navigation to the expected origin only
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (!url.startsWith(new URL(loadUrl).origin)) event.preventDefault();
+  });
+
+  // Security: block all window.open() calls
+  mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+
+  // Security: deny all permission requests (camera, mic, etc.) by default
+  mainWindow.webContents.session.setPermissionRequestHandler((_wc, _perm, cb) => cb(false));
+
   const isServerUrl = loadUrl && !loadUrl.startsWith('data:');
 
   if (isServerUrl) {
