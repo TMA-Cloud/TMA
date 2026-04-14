@@ -1524,21 +1524,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   useEffect(() => {
     if (hasCheckedUpdates) return;
+
+    /** Return true when `latest` is strictly newer than `current` using semver-like comparison. */
+    const isNewerVersion = (current: string, latest: string): boolean => {
+      const parse = (v: string) => v.replace(/^v/i, '').split('.').map(Number);
+      const cur = parse(current);
+      const lat = parse(latest);
+      const len = Math.max(cur.length, lat.length);
+      for (let i = 0; i < len; i++) {
+        const c = cur[i] ?? 0;
+        const l = lat[i] ?? 0;
+        if (Number.isNaN(c) || Number.isNaN(l)) return current !== latest;
+        if (l > c) return true;
+        if (l < c) return false;
+      }
+      return false;
+    };
+
     const checkForUpdatesOnce = async () => {
       try {
         const [current, latest] = await Promise.all([getCurrentVersions(), fetchLatestVersions()]);
         const outdated: { frontend?: string; backend?: string; electron?: string } = {};
 
-        if (current.frontend && latest.frontend && current.frontend !== latest.frontend) {
+        if (current.frontend && latest.frontend && isNewerVersion(current.frontend, latest.frontend)) {
           outdated.frontend = latest.frontend;
         }
-        if (current.backend && latest.backend && current.backend !== latest.backend) {
+        if (current.backend && latest.backend && isNewerVersion(current.backend, latest.backend)) {
           outdated.backend = latest.backend;
         }
         if (isElectron() && latest.electron) {
           try {
             const v = await getElectronAppVersion();
-            if (v && v !== latest.electron) outdated.electron = latest.electron;
+            if (v && isNewerVersion(v, latest.electron)) outdated.electron = latest.electron;
           } catch {
             // Ignore Electron version errors for the banner
           }
