@@ -19,35 +19,36 @@ interface ModalProps {
 
 export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, size = 'md', initialFocusRef }) => {
   const modalRef = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (isOpen) {
       openModalCount++;
       document.body.style.overflow = 'hidden';
-      // Focus trap
-      const focusable = modalRef.current?.querySelectorAll<HTMLElement>(
-        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-      );
-      const first = focusable?.[0];
-      const last = focusable?.[focusable.length - 1];
       const handleTab = (e: KeyboardEvent) => {
+        if (e.key !== 'Tab') return;
+        // Query focusable elements dynamically so the trap stays current
+        const focusable = modalRef.current?.querySelectorAll<HTMLElement>(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        );
         if (!focusable || focusable.length === 0) return;
-        if (e.key === 'Tab') {
-          if (e.shiftKey) {
-            if (document.activeElement === first) {
-              e.preventDefault();
-              last?.focus();
-            }
-          } else {
-            if (document.activeElement === last) {
-              e.preventDefault();
-              first?.focus();
-            }
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (e.shiftKey) {
+          if (document.activeElement === first) {
+            e.preventDefault();
+            last?.focus();
+          }
+        } else {
+          if (document.activeElement === last) {
+            e.preventDefault();
+            first?.focus();
           }
         }
       };
       const handleEsc = (e: KeyboardEvent) => {
-        if (e.key === 'Escape') onClose();
+        if (e.key === 'Escape') onCloseRef.current();
       };
       document.addEventListener('keydown', handleTab);
       document.addEventListener('keydown', handleEsc);
@@ -56,6 +57,9 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
         if (initialFocusRef?.current) {
           initialFocusRef.current.focus();
         } else {
+          const first = modalRef.current?.querySelector<HTMLElement>(
+            'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+          );
           first?.focus();
         }
       }, 0);
@@ -69,7 +73,7 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
         document.removeEventListener('keydown', handleEsc);
       };
     }
-  }, [isOpen, onClose, initialFocusRef]);
+  }, [isOpen, initialFocusRef]);
 
   if (!isOpen) return null;
 
