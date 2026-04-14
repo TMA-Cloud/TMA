@@ -10,8 +10,8 @@ let dragPreviewEl: HTMLDivElement | null = null;
 
 export const animateFlyToFolder = async (ids: string[], folderId: string) => {
   if (ids.length === 0) return;
-  const target = document.querySelector<HTMLElement>(`[data-file-id="${folderId}"]`);
-  const first = document.querySelector<HTMLElement>(`[data-file-id="${ids[0]}"]`);
+  const target = document.querySelector<HTMLElement>(`[data-file-id="${CSS.escape(folderId)}"]`);
+  const first = document.querySelector<HTMLElement>(`[data-file-id="${CSS.escape(ids[0]!)}"]`);
   if (!target || !first) return;
   const targetRect = target.getBoundingClientRect();
   const startRect = first.getBoundingClientRect();
@@ -36,7 +36,7 @@ export const animateFlyToFolder = async (ids: string[], folderId: string) => {
   wrapper.appendChild(stack);
 
   ids.slice(0, 3).forEach((id, idx) => {
-    const el = document.querySelector<HTMLElement>(`[data-file-id="${id}"]`) ?? first;
+    const el = document.querySelector<HTMLElement>(`[data-file-id="${CSS.escape(id)}"]`) ?? first;
     const rect = el.getBoundingClientRect();
     const clone = el.cloneNode(true) as HTMLElement;
     clone.classList.add('preview-item');
@@ -90,7 +90,7 @@ export const animateFlyToFolder = async (ids: string[], folderId: string) => {
 export const createDragPreview = (ids: string[], x: number, y: number, isMobile: boolean) => {
   removeDragPreview();
   if (ids.length === 0 || isMobile) return; // Disable drag preview on mobile
-  const first = document.querySelector<HTMLElement>(`[data-file-id="${ids[0]}"]`);
+  const first = document.querySelector<HTMLElement>(`[data-file-id="${CSS.escape(ids[0]!)}"]`);
   if (!first) return;
 
   const wrapper = document.createElement('div');
