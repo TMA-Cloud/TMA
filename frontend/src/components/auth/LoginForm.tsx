@@ -18,13 +18,17 @@ export const LoginForm: React.FC<{
   const [googleEnabled, setGoogleEnabled] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
     checkGoogleAuthEnabled()
-      .then(setGoogleEnabled)
+      .then(enabled => {
+        if (!cancelled) setGoogleEnabled(enabled);
+      })
       .catch(() => {
-        // Error handled silently - Google auth will be unavailable
-        // Default to false on error
-        setGoogleEnabled(false);
+        if (!cancelled) setGoogleEnabled(false);
       });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
