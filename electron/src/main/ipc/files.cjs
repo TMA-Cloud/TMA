@@ -10,6 +10,7 @@ const {
   uploadFileToReplace,
   uploadDerivedFile,
   hashFile,
+  validateOrigin,
 } = require('../utils/file-utils.cjs');
 
 const SAVE_DIALOG_TITLE = 'TMA Cloud';
@@ -34,13 +35,13 @@ function registerEditWithDesktopHandler() {
     }
 
     try {
-      const origin = typeof payload?.origin === 'string' ? payload.origin : '';
+      const origin = validateOrigin(payload?.origin);
       const item = payload?.item;
       if (!origin || !item || !item.id || !item.name) {
         return { ok: false, error: 'Invalid payload' };
       }
 
-      const base = origin.replace(/\/$/, '');
+      const base = origin;
       const win = BrowserWindow.fromWebContents(_event.sender);
       const fileId = String(item.id);
       const downloadUrl = `${base}/api/files/${encodeURIComponent(fileId)}/download`;
@@ -310,7 +311,7 @@ function registerSaveFileHandlers() {
     if (!win) {
       return { ok: false, error: 'No window' };
     }
-    const origin = typeof payload?.origin === 'string' ? payload.origin.replace(/\/$/, '') : '';
+    const origin = validateOrigin(payload?.origin);
     const fileId = payload?.fileId;
     const suggestedFileName = typeof payload?.suggestedFileName === 'string' ? payload.suggestedFileName : 'download';
     if (!origin || !fileId) {
@@ -341,7 +342,7 @@ function registerSaveFileHandlers() {
     if (!win) {
       return { ok: false, error: 'No window' };
     }
-    const origin = typeof payload?.origin === 'string' ? payload.origin.replace(/\/$/, '') : '';
+    const origin = validateOrigin(payload?.origin);
     const ids = Array.isArray(payload?.ids) ? payload.ids.filter(id => id != null) : [];
     if (!origin || ids.length === 0) {
       return { ok: false, error: 'Invalid payload' };

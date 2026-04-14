@@ -5,8 +5,27 @@ const crypto = require('crypto');
 const { net, session } = require('electron');
 const { escapePathForPowerShellLiteralPath, runPowerShell } = require('./powershell.cjs');
 
+const { getServerUrl } = require('../config.cjs');
+
 const PASTE_DIR_PREFIX = 'tma-cloud-paste-';
 const EDIT_DIR_PREFIX = 'tma-cloud-edit-';
+
+/**
+ * Validate that an origin from an IPC payload matches the trusted server URL.
+ * Returns the normalised origin (no trailing slash) or null if invalid.
+ */
+function validateOrigin(origin) {
+  if (typeof origin !== 'string' || !origin) return null;
+  const serverUrl = getServerUrl();
+  if (!serverUrl) return null;
+  try {
+    const expected = new URL(serverUrl).origin;
+    const received = new URL(origin).origin;
+    return expected === received ? received : null;
+  } catch {
+    return null;
+  }
+}
 
 function sanitizeFileName(name) {
   return name.replace(/[/\\:*?"<>|]/g, '_').trim() || 'file';
@@ -405,4 +424,5 @@ module.exports = {
   uploadFileToReplace,
   uploadDerivedFile,
   hashFile,
+  validateOrigin,
 };

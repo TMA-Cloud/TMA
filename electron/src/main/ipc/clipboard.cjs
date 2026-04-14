@@ -4,7 +4,13 @@ const fsPromises = require('fs').promises;
 const os = require('os');
 const { ipcMain, clipboard } = require('electron');
 const { runPowerShell, runPowerShellEnv, escapePathForPowerShellLiteralPath } = require('../utils/powershell.cjs');
-const { PASTE_DIR_PREFIX, sanitizeFileName, setClipboardToPaths, downloadToFile } = require('../utils/file-utils.cjs');
+const {
+  PASTE_DIR_PREFIX,
+  sanitizeFileName,
+  setClipboardToPaths,
+  downloadToFile,
+  validateOrigin,
+} = require('../utils/file-utils.cjs');
 
 const EXT_TO_MIME = {
   '.png': 'image/png',
@@ -253,12 +259,12 @@ function registerClipboardHandlers() {
       return { ok: false, error: 'Not available' };
     }
 
-    const origin = typeof payload.origin === 'string' ? payload.origin : '';
+    const origin = validateOrigin(payload.origin);
     if (!origin) {
-      return { ok: false, error: 'Missing origin' };
+      return { ok: false, error: 'Invalid or untrusted origin' };
     }
 
-    const base = origin.replace(/\/$/, '');
+    const base = origin;
     const tmpRoot = os.tmpdir();
 
     try {
