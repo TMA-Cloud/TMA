@@ -205,6 +205,10 @@ function registerClipboardHandlers() {
     if (process.platform !== 'win32' || !payload?.files?.length) {
       return { ok: false, error: 'Invalid payload' };
     }
+    // Cap total decoded size across all files to avoid OOM from a malicious
+    // renderer passing multi-GB base64 strings.
+    const MAX_TOTAL_BYTES = 500 * 1024 * 1024; // 500 MB
+    const MAX_PER_FILE_BYTES = 200 * 1024 * 1024; // 200 MB
     const tmpRoot = os.tmpdir();
     try {
       const existing = fs.readdirSync(tmpRoot, { withFileTypes: true });
@@ -221,8 +225,18 @@ function registerClipboardHandlers() {
       fs.mkdirSync(pasteDir, { recursive: true });
       const writtenPaths = [];
       const seen = new Set();
+      let totalBytes = 0;
       for (const f of payload.files) {
         if (!f.name || typeof f.data !== 'string') continue;
+        // Cheap upper-bound check on decoded size before allocating:
+        // base64 decodes to ~3/4 of the encoded length.
+        const estimatedBytes = Math.floor((f.data.length * 3) / 4);
+        if (estimatedBytes > MAX_PER_FILE_BYTES) {
+          return { ok: false, error: 'File exceeds maximum allowed size' };
+        }
+        if (totalBytes + estimatedBytes > MAX_TOTAL_BYTES) {
+          return { ok: false, error: 'Total payload size exceeds maximum allowed' };
+        }
         let base = sanitizeFileName(f.name);
         if (seen.has(base)) {
           const ext = path.extname(base);
@@ -236,6 +250,11 @@ function registerClipboardHandlers() {
         seen.add(base);
         const filePath = path.join(pasteDir, base);
         const buf = Buffer.from(f.data, 'base64');
+        // Re-check actual decoded size (estimate can be off by up to 2 bytes).
+        if (buf.length > MAX_PER_FILE_BYTES || totalBytes + buf.length > MAX_TOTAL_BYTES) {
+          return { ok: false, error: 'File size exceeds maximum allowed' };
+        }
+        totalBytes += buf.length;
         fs.writeFileSync(filePath, buf);
         writtenPaths.push(filePath);
       }
