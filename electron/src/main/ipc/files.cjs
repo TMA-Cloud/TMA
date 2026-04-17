@@ -1,6 +1,6 @@
 const path = require('path');
 const fs = require('fs');
-const { ipcMain, shell, dialog, BrowserWindow } = require('electron');
+const { ipcMain, shell, dialog, BrowserWindow, app } = require('electron');
 const {
   EDIT_DIR_PREFIX,
   sanitizeFileName,
@@ -12,6 +12,32 @@ const {
   hashFile,
   validateOrigin,
 } = require('../utils/file-utils.cjs');
+
+// Track active fs.watch handles keyed by fileId so that repeated calls to
+// files:editWithDesktop for the same file don't leak old watchers, and so
+// all handles can be closed cleanly on app exit.
+const activeWatchers = new Map(); // fileId → { watcher, dirWatcher }
+
+function closeWatchersForFile(fileId) {
+  const handles = activeWatchers.get(fileId);
+  if (!handles) return;
+  activeWatchers.delete(fileId);
+  for (const handle of [handles.watcher, handles.dirWatcher]) {
+    if (handle) {
+      try {
+        handle.close();
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+}
+
+app.on('before-quit', () => {
+  for (const fileId of activeWatchers.keys()) {
+    closeWatchersForFile(fileId);
+  }
+});
 
 const SAVE_DIALOG_TITLE = 'TMA Cloud';
 
@@ -98,6 +124,9 @@ function registerEditWithDesktopHandler() {
           });
         }
       }
+
+      // Close any watchers left open from a previous edit session for this file.
+      closeWatchersForFile(fileId);
 
       let lastHash = null;
       let lastUploadTime = 0;
@@ -279,6 +308,9 @@ function registerEditWithDesktopHandler() {
       } catch {
         dirWatcher = null;
       }
+
+      // Register handles so they can be cleaned up on re-entry or app exit.
+      activeWatchers.set(fileId, { watcher, dirWatcher });
 
       try {
         const errorMessage = await shell.openPath(filePath);
