@@ -143,7 +143,9 @@ function createWindow(loadUrl, preloadPath, appRoot) {
           );
         }
       })
-      .catch(() => {});
+      .catch(err => {
+        console.warn('[Electron] Failed to probe window.electronAPI:', err && err.message ? err.message : err);
+      });
   });
 }
 
