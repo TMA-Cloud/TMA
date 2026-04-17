@@ -71,7 +71,13 @@ async function downloadToFile(url, filePath) {
       const fileStream = fs.createWriteStream(filePath);
 
       response.on('data', chunk => {
-        fileStream.write(chunk);
+        if (!fileStream.write(chunk)) {
+          response.pause();
+        }
+      });
+
+      fileStream.on('drain', () => {
+        response.resume();
       });
 
       response.on('end', () => {
@@ -136,9 +142,17 @@ async function downloadPostToFile(url, jsonBody, filePath) {
       }
 
       const fileStream = fs.createWriteStream(filePath);
+
       response.on('data', chunk => {
-        fileStream.write(chunk);
+        if (!fileStream.write(chunk)) {
+          response.pause();
+        }
       });
+
+      fileStream.on('drain', () => {
+        response.resume();
+      });
+
       response.on('end', () => {
         fileStream.end(() => resolve());
       });
@@ -294,7 +308,12 @@ async function uploadFileToReplace(base, fileId, filePath, fileName) {
 
     const fileStream = fs.createReadStream(filePath);
     fileStream.on('data', chunk => {
-      request.write(chunk);
+      if (!request.write(chunk)) {
+        fileStream.pause();
+      }
+    });
+    request.on('drain', () => {
+      fileStream.resume();
     });
     fileStream.on('end', () => {
       request.write(closing);
@@ -369,7 +388,12 @@ async function uploadDerivedFile(base, fileId, filePath, fileName) {
 
     const fileStream = fs.createReadStream(filePath);
     fileStream.on('data', chunk => {
-      request.write(chunk);
+      if (!request.write(chunk)) {
+        fileStream.pause();
+      }
+    });
+    request.on('drain', () => {
+      fileStream.resume();
     });
     fileStream.on('end', () => {
       request.write(closing);
