@@ -10,14 +10,27 @@ function getInstallFileUrl(updatorUrl, version) {
   return `${base}/v${v}`;
 }
 
+const MAX_FILENAME_LENGTH = 120;
+
 /**
  * Parse filename from Content-Disposition header.
+ *
+ * Handles:
+ *  - RFC 5987 extended syntax (filename*=UTF-8''...)
+ *  - Quoted form with backslash-escaped characters per RFC 6266
+ *  - Unquoted "token" form
+ *
+ * Returns the raw extracted filename, or null if none is present. The caller
+ * is responsible for sanitizing the result before using it on disk.
+ *
  * @param {string} contentDisposition
  * @returns {string | null}
  */
 function parseFilenameFromContentDisposition(contentDisposition) {
   if (!contentDisposition || typeof contentDisposition !== 'string') return null;
-  const utf8Match = contentDisposition.match(/filename\*=UTF-8''([^;,\s]+)/i);
+
+  // RFC 5987 extended syntax takes precedence.
+  const utf8Match = contentDisposition.match(/filename\*\s*=\s*UTF-8''([^;,\s]+)/i);
   if (utf8Match && utf8Match[1]) {
     try {
       return decodeURIComponent(utf8Match[1]);
@@ -25,11 +38,57 @@ function parseFilenameFromContentDisposition(contentDisposition) {
       return utf8Match[1];
     }
   }
-  const quoted = contentDisposition.match(/filename="([^"]+)"/);
-  if (quoted && quoted[1]) return quoted[1];
-  const unquoted = contentDisposition.match(/filename=([^;,\s]+)/);
+
+  // Quoted form: filename="..." where \" and \\ are escape sequences.
+  // Match any character except an unescaped quote, allowing \\x escape pairs.
+  const quoted = contentDisposition.match(/filename\s*=\s*"((?:[^"\\]|\\.)*)"/i);
+  if (quoted && quoted[1] != null) {
+    // Unescape RFC 6266 backslash escapes.
+    return quoted[1].replace(/\\(.)/g, '$1');
+  }
+
+  // Unquoted token form.
+  const unquoted = contentDisposition.match(/filename\s*=\s*([^;,\s"]+)/i);
   if (unquoted && unquoted[1]) return unquoted[1].trim();
   return null;
+}
+
+/**
+ * Produce a filesystem-safe installer filename from an untrusted suggestion.
+ *
+ * Rules applied:
+ *  - Strip any directory components (take only the basename).
+ *  - Replace anything outside [A-Za-z0-9._-] with '_'.
+ *  - Collapse any run of dots so the result cannot be '.', '..', or any
+ *    traversal-style component.
+ *  - Truncate to MAX_FILENAME_LENGTH characters.
+ *  - Fall back to the default installer filename if the result is empty.
+ *
+ * @param {string} suggested
+ * @param {string} version
+ * @returns {string}
+ */
+function sanitizeInstallerFilename(suggested, version) {
+  const fallback = getDefaultInstallerFilename(version);
+  if (typeof suggested !== 'string' || !suggested) return fallback;
+
+  // Drop anything before the last path separator, then strip control chars.
+  let name = suggested.split(/[\\/]/).pop() || '';
+  // eslint-disable-next-line no-control-regex
+  name = name.replace(/[\x00-\x1f\x7f]/g, '');
+  // Allow only a conservative character set.
+  name = name.replace(/[^\w.-]/g, '_');
+  // Reject traversal-style names: collapse leading dot sequences so we never
+  // get '.', '..', or hidden names like '..whatever'.
+  name = name.replace(/^\.+/, '');
+  // Truncate.
+  if (name.length > MAX_FILENAME_LENGTH) {
+    const ext = path.extname(name);
+    const stem = name.slice(0, MAX_FILENAME_LENGTH - ext.length);
+    name = stem + ext;
+  }
+  if (!name || name === '.' || name === '..') return fallback;
+  return name;
 }
 
 /**
@@ -71,9 +130,8 @@ async function downloadAndInstallUpdate(version, onProgress) {
     }
 
     const contentDisposition = response.headers.get('Content-Disposition');
-    const suggestedName =
-      parseFilenameFromContentDisposition(contentDisposition) || getDefaultInstallerFilename(trimmedVersion);
-    const safeName = suggestedName.replace(/[^\w.-]/g, '_');
+    const suggestedName = parseFilenameFromContentDisposition(contentDisposition);
+    const safeName = sanitizeInstallerFilename(suggestedName, trimmedVersion);
     const tempDir = app.getPath('temp');
     const tempPath = path.join(tempDir, `tma-cloud-update-${Date.now()}-${safeName}`);
 
