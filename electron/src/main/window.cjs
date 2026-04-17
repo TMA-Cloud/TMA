@@ -89,21 +89,32 @@ function createWindow(loadUrl, preloadPath, appRoot) {
       // the expected origin is a prefix of an attacker-controlled host.
       // Exact origin equality is the only trusted signal.
       ses.webRequest.onBeforeSendHeaders({ urls: ['<all_urls>'] }, (details, callback) => {
-        let sameOrigin;
+        // Wrap the whole body so that any unexpected throw still results in
+        // the callback firing — otherwise the request hangs indefinitely.
         try {
-          sameOrigin = new URL(details.url).origin === serverOrigin;
-        } catch {
-          sameOrigin = false;
+          let sameOrigin;
+          try {
+            sameOrigin = new URL(details.url).origin === serverOrigin;
+          } catch {
+            sameOrigin = false;
+          }
+          if (!sameOrigin) {
+            callback({ requestHeaders: details.requestHeaders });
+            return;
+          }
+          const requestHeaders = {
+            ...details.requestHeaders,
+            [ELECTRON_HEADER_NAME]: ELECTRON_HEADER_VALUE,
+          };
+          callback({ requestHeaders });
+        } catch (err) {
+          console.warn('[Electron] webRequest header injection failed:', err && err.message ? err.message : err);
+          try {
+            callback({ requestHeaders: details.requestHeaders });
+          } catch {
+            /* callback already called or request aborted */
+          }
         }
-        if (!sameOrigin) {
-          callback({ requestHeaders: details.requestHeaders });
-          return;
-        }
-        const requestHeaders = {
-          ...details.requestHeaders,
-          [ELECTRON_HEADER_NAME]: ELECTRON_HEADER_VALUE,
-        };
-        callback({ requestHeaders });
       });
     } catch {
       // If URL parsing fails, skip header injection
