@@ -39,6 +39,20 @@ app.on('before-quit', () => {
   }
 });
 
+// Returns the set of edit directories currently in use OR still referenced by
+// the size-based edit cache, so temp cleanup can skip them and avoid yanking
+// files from under an active edit session or invalidating cached downloads.
+function getActiveEditDirs() {
+  const dirs = new Set();
+  for (const h of activeWatchers.values()) {
+    if (h && h.editDir) dirs.add(h.editDir);
+  }
+  for (const entry of editCache.values()) {
+    if (entry && entry.editDir) dirs.add(entry.editDir);
+  }
+  return dirs;
+}
+
 const SAVE_DIALOG_TITLE = 'TMA Cloud';
 
 // Minimum file size (in bytes) to consider caching between edit sessions (~6 MB).
@@ -310,7 +324,7 @@ function registerEditWithDesktopHandler() {
       }
 
       // Register handles so they can be cleaned up on re-entry or app exit.
-      activeWatchers.set(fileId, { watcher, dirWatcher });
+      activeWatchers.set(fileId, { watcher, dirWatcher, editDir });
 
       try {
         const errorMessage = await shell.openPath(filePath);
@@ -400,4 +414,4 @@ function registerSaveFileHandlers() {
   });
 }
 
-module.exports = { registerEditWithDesktopHandler, registerSaveFileHandlers };
+module.exports = { registerEditWithDesktopHandler, registerSaveFileHandlers, getActiveEditDirs };

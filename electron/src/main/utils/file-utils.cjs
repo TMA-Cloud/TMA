@@ -230,14 +230,17 @@ function setClipboardToPaths(writtenPaths) {
   });
 }
 
-function cleanTempDirsByPrefix(prefix, maxAgeMs) {
+function cleanTempDirsByPrefix(prefix, maxAgeMs, excludeDirs) {
   const tmpRoot = os.tmpdir();
   const now = Date.now();
+  const exclude = excludeDirs instanceof Set ? excludeDirs : null;
   try {
     const existing = fs.readdirSync(tmpRoot, { withFileTypes: true });
     for (const e of existing) {
       if (!e.isDirectory() || !e.name.startsWith(prefix)) continue;
       const dirPath = path.join(tmpRoot, e.name);
+      // Skip directories that are still in use by an active session.
+      if (exclude && exclude.has(dirPath)) continue;
       try {
         const stat = fs.statSync(dirPath);
         const age = now - stat.mtimeMs;
@@ -425,12 +428,12 @@ function hashFile(filePath) {
   });
 }
 
-function cleanTempClipboardDirs(maxAgeMs) {
-  cleanTempDirsByPrefix(PASTE_DIR_PREFIX, maxAgeMs);
+function cleanTempClipboardDirs(maxAgeMs, excludeDirs) {
+  cleanTempDirsByPrefix(PASTE_DIR_PREFIX, maxAgeMs, excludeDirs);
 }
 
-function cleanTempEditDirs(maxAgeMs) {
-  cleanTempDirsByPrefix(EDIT_DIR_PREFIX, maxAgeMs);
+function cleanTempEditDirs(maxAgeMs, excludeDirs) {
+  cleanTempDirsByPrefix(EDIT_DIR_PREFIX, maxAgeMs, excludeDirs);
 }
 
 module.exports = {

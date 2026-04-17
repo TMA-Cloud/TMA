@@ -5,8 +5,10 @@ const { getServerUrl, NO_SERVER_URL_PAGE } = require('./config.cjs');
 const { createWindow, getMainWindow } = require('./window.cjs');
 const { registerClipboardHandlers } = require('./ipc/clipboard.cjs');
 const { registerAppHandlers } = require('./ipc/app.cjs');
-const { registerEditWithDesktopHandler, registerSaveFileHandlers } = require('./ipc/files.cjs');
+const { registerEditWithDesktopHandler, registerSaveFileHandlers, getActiveEditDirs } = require('./ipc/files.cjs');
 const { cleanTempClipboardDirs, cleanTempEditDirs } = require('./utils/file-utils.cjs');
+
+let cleanupInterval = null;
 
 // Ensure a stable identity + storage location on Windows so auth cookies persist across
 // upgrades/reinstalls (and don't vary with install directory / portable location).
@@ -59,18 +61,26 @@ app.whenReady().then(() => {
 
   const CLEAN_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
   const MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
-  setInterval(() => {
+  cleanupInterval = setInterval(() => {
     if (process.platform === 'win32') {
       cleanTempClipboardDirs(MAX_AGE_MS);
-      cleanTempEditDirs(MAX_AGE_MS);
+      cleanTempEditDirs(MAX_AGE_MS, getActiveEditDirs());
     }
   }, CLEAN_INTERVAL_MS);
+  // Allow the app to exit even if this timer is still pending.
+  cleanupInterval.unref();
 });
 
 app.on('before-quit', () => {
+  if (cleanupInterval) {
+    clearInterval(cleanupInterval);
+    cleanupInterval = null;
+  }
   if (process.platform === 'win32') {
     cleanTempClipboardDirs(0);
-    cleanTempEditDirs(0);
+    // Still pass the exclusion set: files.cjs before-quit runs too and may not
+    // have fired yet when this handler runs (order is not guaranteed).
+    cleanTempEditDirs(0, getActiveEditDirs());
   }
 });
 
