@@ -4,6 +4,7 @@ import { setUserId } from './requestId.middleware.js';
 import { logger } from '../config/logger.js';
 import { getUserTokenVersion } from '../models/user.model.js';
 import { sessionExists, updateSessionActivity } from '../models/session.model.js';
+import { extractRawToken } from '../utils/tokenExtractor.js';
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -13,15 +14,7 @@ if (!JWT_SECRET) {
 }
 
 export default async function authMiddleware(req, res, next) {
-  let token;
-  if (req.headers.cookie) {
-    const cookies = req.headers.cookie.split(';').map(c => c.trim());
-    const t = cookies.find(c => c.startsWith('token='));
-    if (t) token = t.slice('token='.length);
-  }
-  if (!token && req.headers.authorization) {
-    token = req.headers.authorization.split(' ')[1];
-  }
+  const token = extractRawToken(req);
   if (!token) {
     return res.status(401).json({ message: 'No token provided' });
   }

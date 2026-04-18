@@ -1,5 +1,5 @@
 -- Function to delete audit logs older than retention period
--- Called by scheduled cleanup service (backend/services/auditCleanup.js)
+-- Called by scheduled cleanup service (backend/services/cleanup.js)
 CREATE OR REPLACE FUNCTION cleanup_old_audit_logs(retention_days INTEGER DEFAULT 30)
 RETURNS INTEGER AS $$
 DECLARE

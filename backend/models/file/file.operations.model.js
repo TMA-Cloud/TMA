@@ -5,7 +5,7 @@ import { PassThrough } from 'stream';
 import pool from '../../config/db.js';
 import { logger } from '../../config/logger.js';
 import { UPLOAD_DIR } from '../../config/paths.js';
-import { invalidateFileCache, invalidateSearchCache, deleteCache, cacheKeys } from '../../utils/cache.js';
+import { invalidateAllFileCaches } from '../../utils/cache.js';
 import { safeUnlink } from '../../utils/fileCleanup.js';
 import { copyEncryptedFile, copyEncryptedFileStreams } from '../../utils/fileEncryption.js';
 import { isFilePathEncrypted, resolveFilePath } from '../../utils/filePath.js';
@@ -51,14 +51,16 @@ async function moveFiles(ids, parentId = null, userId) {
 
     await client.query('COMMIT');
 
-    // Invalidate cache for both old and new parent folders
-    await invalidateFileCache(userId, parentId);
+    // Invalidate cache for both old and new parent folders (move doesn't change total size)
+    await invalidateAllFileCaches(userId, parentId, { includeStats: false, includeStorage: false });
     for (const oldParentId of oldParentIds) {
       if (oldParentId !== parentId) {
-        await invalidateFileCache(userId, oldParentId);
+        await invalidateAllFileCaches(userId, oldParentId, {
+          includeStats: false,
+          includeStorage: false,
+        });
       }
     }
-    await invalidateSearchCache(userId);
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;
@@ -108,10 +110,7 @@ async function copyFiles(ids, parentId = null, userId) {
     await client.query('COMMIT');
 
     // Invalidate cache after copying
-    await invalidateFileCache(userId, parentId);
-    await invalidateSearchCache(userId);
-    await deleteCache(cacheKeys.fileStats(userId));
-    await deleteCache(cacheKeys.userStorage(userId)); // Invalidate storage usage cache
+    await invalidateAllFileCaches(userId, parentId);
 
     return newRootIds;
   } catch (error) {

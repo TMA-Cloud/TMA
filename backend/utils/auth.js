@@ -45,27 +45,6 @@ function getCookieOptions() {
 }
 
 /**
- * Validate email format
- * @param {string} email - Email to validate
- * @returns {boolean} True if email is valid
- */
-function isValidEmail(email) {
-  if (!email || typeof email !== 'string') return false;
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return emailRegex.test(email);
-}
-
-/**
- * Validate password
- * @param {string} password - Password to validate
- * @param {number} minLength - Minimum length (default: 6)
- * @returns {boolean} True if password is valid
- */
-function isValidPassword(password, minLength = 6) {
-  return password && typeof password === 'string' && password.length >= minLength;
-}
-
-/**
  * Generate JWT authentication token for a user
  * @param {string} userId - User ID to encode in the token
  * @param {string} jwtSecret - JWT secret key
@@ -99,4 +78,4 @@ function generateAuthToken(userId, jwtSecret, options = {}) {
   return jwt.sign(payload, jwtSecret, { expiresIn, algorithm: 'HS256' });
 }
 
-export { getCookieOptions, isValidEmail, isValidPassword, generateAuthToken };
+export { getCookieOptions, generateAuthToken };

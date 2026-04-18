@@ -5,7 +5,7 @@ import pool from '../../config/db.js';
 import { logger } from '../../config/logger.js';
 import {
   invalidateFileCache,
-  invalidateSearchCache,
+  invalidateAllFileCaches,
   deleteCache,
   deleteCachePattern,
   cacheKeys,
@@ -35,15 +35,12 @@ async function deleteFiles(ids, userId) {
   );
 
   // Invalidate cache for all affected parent folders
-  await invalidateFileCache(userId);
+  await invalidateAllFileCaches(userId);
   for (const parentId of parentIds) {
     await invalidateFileCache(userId, parentId);
     // Invalidate folder size cache for parent folders
     await deleteCache(cacheKeys.folderSize(parentId, userId));
   }
-  await invalidateSearchCache(userId);
-  await deleteCache(cacheKeys.fileStats(userId));
-  await deleteCache(cacheKeys.userStorage(userId)); // Invalidate storage usage cache
   // Invalidate starred, shared, and trash caches
   await deleteCachePattern(`files:${userId}:starred:*`);
   await deleteCachePattern(`files:${userId}:shared:*`);
@@ -232,10 +229,7 @@ async function restoreFiles(ids, userId) {
     await client.query('COMMIT');
 
     // Invalidate cache after restore
-    await invalidateFileCache(userId);
-    await invalidateSearchCache(userId);
-    await deleteCache(cacheKeys.fileStats(userId));
-    await deleteCache(cacheKeys.userStorage(userId)); // Invalidate storage usage cache
+    await invalidateAllFileCaches(userId);
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;
@@ -299,10 +293,7 @@ async function permanentlyDeleteFiles(ids, userId) {
   await pool.query('DELETE FROM files WHERE id = ANY($1::text[]) AND user_id = $2', [allIds, userId]);
 
   // Invalidate cache after permanent deletion
-  await invalidateFileCache(userId);
-  await invalidateSearchCache(userId);
-  await deleteCache(cacheKeys.fileStats(userId));
-  await deleteCache(cacheKeys.userStorage(userId)); // Invalidate storage usage cache
+  await invalidateAllFileCaches(userId);
 }
 
 export { deleteFiles, getTrashFiles, restoreFiles, permanentlyDeleteFiles };

@@ -7,16 +7,26 @@ const JWT_SECRET = process.env.JWT_SECRET;
  * @param {Object} req - Express request object
  * @returns {Object|null} Decoded token or null if not found/invalid
  */
-function extractTokenFromRequest(req) {
-  let token;
+/**
+ * Extract the raw JWT string from a request's cookie or Authorization header.
+ * Does not verify the token.
+ * @param {Object} req - Express request object
+ * @returns {string|null} Raw token or null if not present
+ */
+function extractRawToken(req) {
   if (req.headers.cookie) {
     const cookies = req.headers.cookie.split(';').map(c => c.trim());
     const t = cookies.find(c => c.startsWith('token='));
-    if (t) token = t.slice('token='.length);
+    if (t) return t.slice('token='.length);
   }
-  if (!token && req.headers.authorization) {
-    token = req.headers.authorization.split(' ')[1];
+  if (req.headers.authorization) {
+    return req.headers.authorization.split(' ')[1] || null;
   }
+  return null;
+}
+
+function extractTokenFromRequest(req) {
+  const token = extractRawToken(req);
   if (!token) return null;
 
   try {
@@ -36,4 +46,4 @@ function getSessionIdFromRequest(req) {
   return decoded?.sid || null;
 }
 
-export { extractTokenFromRequest, getSessionIdFromRequest };
+export { extractRawToken, extractTokenFromRequest, getSessionIdFromRequest };

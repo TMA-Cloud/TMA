@@ -4,15 +4,7 @@ import path from 'path';
 import pool from '../../config/db.js';
 import { logger } from '../../config/logger.js';
 import { UPLOAD_DIR } from '../../config/paths.js';
-import {
-  getCache,
-  setCache,
-  deleteCache,
-  cacheKeys,
-  invalidateFileCache,
-  invalidateSearchCache,
-  DEFAULT_TTL,
-} from '../../utils/cache.js';
+import { getCache, setCache, cacheKeys, invalidateAllFileCaches, DEFAULT_TTL } from '../../utils/cache.js';
 import { safeUnlink } from '../../utils/fileCleanup.js';
 import { createEncryptStream, encryptFile } from '../../utils/fileEncryption.js';
 import { resolveFilePath } from '../../utils/filePath.js';
@@ -74,9 +66,7 @@ async function createFolder(name, parentId = null, userId, modified = null) {
       'INSERT INTO files(id, name, type, parent_id, user_id, modified) VALUES($1,$2,$3,$4,$5,$6) RETURNING id, name, type, size, modified, mime_type AS "mimeType", starred, shared',
       [id, name, 'folder', parentId, userId, modified]
     );
-    await invalidateFileCache(userId, parentId);
-    await invalidateSearchCache(userId);
-    await deleteCache(cacheKeys.fileStats(userId));
+    await invalidateAllFileCaches(userId, parentId, { includeStorage: false });
     return result.rows[0];
   }
 
@@ -86,9 +76,7 @@ async function createFolder(name, parentId = null, userId, modified = null) {
   );
 
   // Invalidate cache for this user's file listings
-  await invalidateFileCache(userId, parentId);
-  await invalidateSearchCache(userId);
-  await deleteCache(cacheKeys.fileStats(userId));
+  await invalidateAllFileCaches(userId, parentId, { includeStorage: false });
 
   return result.rows[0];
 }
@@ -126,10 +114,7 @@ async function createFile(name, size, mimeType, tempPath, parentId = null, userI
   );
 
   // Invalidate cache
-  await invalidateFileCache(userId, parentId);
-  await invalidateSearchCache(userId);
-  await deleteCache(cacheKeys.fileStats(userId));
-  await deleteCache(cacheKeys.userStorage(userId)); // Invalidate storage usage cache
+  await invalidateAllFileCaches(userId, parentId);
 
   return result.rows[0];
 }
@@ -150,10 +135,7 @@ async function createFileFromStreamedUpload(upload, parentId, userId) {
       'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id, modified) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id, name, type, size, modified, mime_type AS "mimeType", starred, shared',
       [id, uniqueName, 'file', size, mimeType, storageName, parentId, userId, modified]
     );
-    await invalidateFileCache(userId, parentId);
-    await invalidateSearchCache(userId);
-    await deleteCache(cacheKeys.fileStats(userId));
-    await deleteCache(cacheKeys.userStorage(userId));
+    await invalidateAllFileCaches(userId, parentId);
     return result.rows[0];
   }
 
@@ -162,10 +144,7 @@ async function createFileFromStreamedUpload(upload, parentId, userId) {
     [id, uniqueName, 'file', size, mimeType, storageName, parentId, userId]
   );
 
-  await invalidateFileCache(userId, parentId);
-  await invalidateSearchCache(userId);
-  await deleteCache(cacheKeys.fileStats(userId));
-  await deleteCache(cacheKeys.userStorage(userId));
+  await invalidateAllFileCaches(userId, parentId);
 
   return result.rows[0];
 }
@@ -274,9 +253,8 @@ async function renameFile(id, name, userId) {
     [id, userId]
   );
 
-  // Invalidate cache
-  await invalidateFileCache(userId, parentId);
-  await invalidateSearchCache(userId);
+  // Invalidate cache (rename doesn't affect size, so skip stats/storage)
+  await invalidateAllFileCaches(userId, parentId, { includeStats: false, includeStorage: false });
 
   // Include parentId in the returned file object for event publishing
   const file = result.rows[0];
@@ -346,10 +324,7 @@ async function replaceFileData(id, size, mimeType, tempPath, userId) {
     [size, mimeType, id, userId]
   );
 
-  await invalidateFileCache(userId, parentId);
-  await invalidateSearchCache(userId);
-  await deleteCache(cacheKeys.fileStats(userId));
-  await deleteCache(cacheKeys.userStorage(userId));
+  await invalidateAllFileCaches(userId, parentId);
 
   const file = result.rows[0];
   if (file) {

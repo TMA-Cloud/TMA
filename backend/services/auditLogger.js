@@ -1,10 +1,8 @@
 import { PgBoss } from 'pg-boss';
-import pg from 'pg';
 
 import { logger } from '../config/logger.js';
 import { getRequestId, getUserId } from '../middleware/requestId.middleware.js';
-
-const { Pool } = pg;
+import { createPool, buildPoolConfig } from '../config/db.js';
 
 let boss = null;
 let isInitialized = false;
@@ -33,22 +31,12 @@ async function initializeAuditQueue() {
   try {
     // Ensure schema exists before pg-boss migrations run
     const schema = process.env.PGBOSS_SCHEMA || 'pgboss';
-    const pool = new Pool({
-      host: process.env.DB_HOST || 'localhost',
-      port: parseInt(process.env.DB_PORT || '5432'),
-      database: process.env.DB_NAME || 'tma_cloud_storage',
-      user: process.env.DB_USER || 'postgres',
-      password: process.env.DB_PASSWORD || 'postgres',
-    });
+    const pool = createPool();
     await pool.query(`CREATE SCHEMA IF NOT EXISTS "${schema}"`);
     await pool.end();
 
     boss = new PgBoss({
-      host: process.env.DB_HOST || 'localhost',
-      port: parseInt(process.env.DB_PORT || '5432'),
-      database: process.env.DB_NAME || 'tma_cloud_storage',
-      user: process.env.DB_USER || 'postgres',
-      password: process.env.DB_PASSWORD || 'postgres',
+      ...buildPoolConfig(),
       schema,
       // Connection pool settings
       max: 10,

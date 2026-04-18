@@ -21,71 +21,15 @@
 import './config/env.js';
 
 import { PgBoss } from 'pg-boss';
-import pg from 'pg';
-import pino from 'pino';
 
 import { incrementEventsProcessed, incrementEventsFailed, recordProcessingDuration } from './services/metrics.js';
+import { createRequestLogger } from './config/logger.js';
+import { createPool, buildPoolConfig } from './config/db.js';
 
-const { Pool } = pg;
-
-const isDevelopment = process.env.NODE_ENV !== 'production';
-const logLevel = process.env.LOG_LEVEL || 'info';
-const logFormat = process.env.LOG_FORMAT || (isDevelopment ? 'pretty' : 'json');
-
-// Initialize logger with comprehensive secret redaction
-const logger = pino({
-  level: logLevel,
-  base: {
-    service: 'audit-worker',
-    environment: process.env.NODE_ENV || 'development',
-  },
-  // Redact sensitive data from logs
-  redact: {
-    paths: [
-      '*.password',
-      '*.token',
-      '*.secret',
-      '*.authorization',
-      '*.jwt',
-      '*.access_token',
-      '*.refresh_token',
-      '*.accessToken',
-      '*.refreshToken',
-      '*.apiKey',
-      '*.api_key',
-      '*.client_secret',
-      '*.clientSecret',
-      '*.connectionString',
-      '*.DB_PASSWORD',
-      '*.JWT_SECRET',
-      '*.GOOGLE_CLIENT_SECRET',
-      '*.ONLYOFFICE_JWT_SECRET',
-      '*.cookie',
-    ],
-    remove: true,
-  },
-  transport:
-    logFormat === 'pretty'
-      ? {
-          target: 'pino-pretty',
-          options: {
-            colorize: true,
-            translateTime: 'yyyy-mm-dd HH:MM:ss.l',
-            ignore: 'pid,hostname,service,environment',
-          },
-        }
-      : undefined,
-});
+const logger = createRequestLogger({ service: 'audit-worker' });
 
 // Database connection pool for writing audit logs
-const pool = new Pool({
-  host: process.env.DB_HOST || 'localhost',
-  port: parseInt(process.env.DB_PORT || '5432'),
-  database: process.env.DB_NAME || 'tma_cloud_storage',
-  user: process.env.DB_USER || 'postgres',
-  password: process.env.DB_PASSWORD || 'postgres',
-  max: 20, // Maximum pool size
-});
+const pool = createPool({ max: 20 });
 
 pool.on('error', err => {
   logger.error({ err }, 'Unexpected database pool error');
@@ -224,23 +168,13 @@ async function initializeWorker() {
 
     // Ensure schema exists before pg-boss migrations run
     const schema = process.env.PGBOSS_SCHEMA || 'pgboss';
-    const pool = new Pool({
-      host: process.env.DB_HOST || 'localhost',
-      port: parseInt(process.env.DB_PORT || '5432'),
-      database: process.env.DB_NAME || 'tma_cloud_storage',
-      user: process.env.DB_USER || 'postgres',
-      password: process.env.DB_PASSWORD || 'postgres',
-    });
-    await pool.query(`CREATE SCHEMA IF NOT EXISTS "${schema}"`);
-    await pool.end();
+    const schemaPool = createPool();
+    await schemaPool.query(`CREATE SCHEMA IF NOT EXISTS "${schema}"`);
+    await schemaPool.end();
 
     // Initialize pg-boss
     boss = new PgBoss({
-      host: process.env.DB_HOST || 'localhost',
-      port: parseInt(process.env.DB_PORT || '5432'),
-      database: process.env.DB_NAME || 'tma_cloud_storage',
-      user: process.env.DB_USER || 'postgres',
-      password: process.env.DB_PASSWORD || 'postgres',
+      ...buildPoolConfig(),
       schema,
       max: 10,
       migrate: true,

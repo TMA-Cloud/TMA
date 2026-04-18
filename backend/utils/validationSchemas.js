@@ -86,28 +86,30 @@ const downloadFileSchema = [
   param('id').notEmpty().withMessage('File ID is required').isString().withMessage('File ID must be a string'),
 ];
 
-const downloadFilesBulkSchema = [
-  body('ids').isArray({ min: 1 }).withMessage('File IDs must be an array with at least one ID'),
-  body('ids.*').isString().withMessage('All file IDs must be strings'),
-];
+/**
+ * Factory for the common `body('ids')` + `body('ids.*')` validation pair
+ * used by every bulk file operation. Extend with `...idsArrayRules(), ...extra` to add more fields.
+ */
+function idsArrayRules() {
+  return [
+    body('ids').isArray({ min: 1 }).withMessage('File IDs must be an array with at least one ID'),
+    body('ids.*').isString().withMessage('All file IDs must be strings'),
+  ];
+}
+
+const downloadFilesBulkSchema = idsArrayRules();
 
 const moveFilesSchema = [
-  body('ids').isArray({ min: 1 }).withMessage('File IDs must be an array with at least one ID'),
-  body('ids.*').isString().withMessage('All file IDs must be strings'),
+  ...idsArrayRules(),
   body('parentId').optional({ nullable: true }).isString().withMessage('Parent ID must be a string'),
 ];
 
 const copyFilesSchema = [
-  body('ids').isArray({ min: 1 }).withMessage('File IDs must be an array with at least one ID'),
-  body('ids.*').isString().withMessage('All file IDs must be strings'),
+  ...idsArrayRules(),
   body('parentId').optional({ nullable: true }).isString().withMessage('Parent ID must be a string'),
 ];
 
-const starFilesSchema = [
-  body('ids').isArray({ min: 1 }).withMessage('File IDs must be an array with at least one ID'),
-  body('ids.*').isString().withMessage('All file IDs must be strings'),
-  body('starred').isBoolean().withMessage('Starred must be a boolean'),
-];
+const starFilesSchema = [...idsArrayRules(), body('starred').isBoolean().withMessage('Starred must be a boolean')];
 
 const shareFilesSchema = [
   // Allow a single ID string or an array of IDs, but always normalize to a non-empty array.
@@ -141,30 +143,11 @@ const shareFilesSchema = [
   body('expiry').optional().isIn(['7d', '30d', 'never']).withMessage('Expiry must be 7d, 30d, or never'),
 ];
 
-const getShareLinksSchema = [
-  body('ids').isArray({ min: 1 }).withMessage('File IDs must be an array with at least one ID'),
-  body('ids.*').isString().withMessage('All file IDs must be strings'),
-];
-
-const linkParentShareSchema = [
-  body('ids').isArray({ min: 1 }).withMessage('File IDs must be an array with at least one ID'),
-  body('ids.*').isString().withMessage('All file IDs must be strings'),
-];
-
-const deleteFilesSchema = [
-  body('ids').isArray({ min: 1 }).withMessage('File IDs must be an array with at least one ID'),
-  body('ids.*').isString().withMessage('All file IDs must be strings'),
-];
-
-const restoreFilesSchema = [
-  body('ids').isArray({ min: 1 }).withMessage('File IDs must be an array with at least one ID'),
-  body('ids.*').isString().withMessage('All file IDs must be strings'),
-];
-
-const deleteForeverSchema = [
-  body('ids').isArray({ min: 1 }).withMessage('File IDs must be an array with at least one ID'),
-  body('ids.*').isString().withMessage('All file IDs must be strings'),
-];
+const getShareLinksSchema = idsArrayRules();
+const linkParentShareSchema = idsArrayRules();
+const deleteFilesSchema = idsArrayRules();
+const restoreFilesSchema = idsArrayRules();
+const deleteForeverSchema = idsArrayRules();
 
 const toggleSignupSchema = [body('enabled').isBoolean().withMessage('Enabled must be a boolean')];
 

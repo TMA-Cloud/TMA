@@ -11,9 +11,9 @@
 
 import '../config/env.js';
 
-import { PutBucketPolicyCommand, S3Client } from '@aws-sdk/client-s3';
+import { PutBucketPolicyCommand } from '@aws-sdk/client-s3';
 
-import { s3 as s3Config, useS3 } from '../config/storage.js';
+import { createS3Client, requireS3Config, s3Config } from './s3Utils.js';
 
 function getHttpsOnlyPolicy(bucketName) {
   return JSON.stringify({
@@ -36,22 +36,9 @@ function getHttpsOnlyPolicy(bucketName) {
 }
 
 async function applyHttpsPolicy() {
-  if (!useS3) {
-    console.error(
-      'STORAGE_DRIVER is not s3 or S3 env vars are missing. Set STORAGE_DRIVER=s3 and RUSTFS_* (or AWS_S3_*) in .env.'
-    );
-    process.exit(1);
-  }
+  requireS3Config();
 
-  const client = new S3Client({
-    endpoint: s3Config.endpoint,
-    region: s3Config.region,
-    credentials: {
-      accessKeyId: s3Config.accessKeyId,
-      secretAccessKey: s3Config.secretAccessKey,
-    },
-    forcePathStyle: s3Config.forcePathStyle,
-  });
+  const client = createS3Client();
 
   const policy = getHttpsOnlyPolicy(s3Config.bucket);
 

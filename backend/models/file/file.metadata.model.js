@@ -1,13 +1,5 @@
 import pool from '../../config/db.js';
-import {
-  invalidateFileCache,
-  deleteCache,
-  deleteCachePattern,
-  invalidateSearchCache,
-  cacheKeys,
-  getCache,
-  setCache,
-} from '../../utils/cache.js';
+import { deleteCachePattern, invalidateAllFileCaches, cacheKeys, getCache, setCache } from '../../utils/cache.js';
 import { fillFolderSizes, buildOrderClause } from './file.utils.model.js';
 
 /**
@@ -17,14 +9,9 @@ async function setStarred(ids, starred, userId) {
   await pool.query('UPDATE files SET starred = $1 WHERE id = ANY($2::text[]) AND user_id = $3', [starred, ids, userId]);
 
   // Invalidate cache (starred status affects file listings and stats)
-  await invalidateFileCache(userId);
-  await deleteCache(cacheKeys.fileStats(userId));
-  await deleteCache(cacheKeys.userStorage(userId)); // Invalidate storage usage cache
+  await invalidateAllFileCaches(userId);
   // Invalidate starred files cache
   await deleteCachePattern(`files:${userId}:starred:*`);
-  // Search results are cached too and include `starred/shared` flags
-  // Without invalidation, search can show stale icon states for up to TTL
-  await invalidateSearchCache(userId);
 }
 
 /**
@@ -71,14 +58,9 @@ async function setShared(ids, shared, userId) {
   );
 
   // Invalidate cache (shared status affects file listings and stats)
-  await invalidateFileCache(userId);
-  await deleteCache(cacheKeys.fileStats(userId));
-  await deleteCache(cacheKeys.userStorage(userId)); // Invalidate storage usage cache
+  await invalidateAllFileCaches(userId);
   // Invalidate shared files cache
   await deleteCachePattern(`files:${userId}:shared:*`);
-  // Search results are cached too and include `starred/shared` flags
-  // Without invalidation, search can show stale icon states for up to TTL
-  await invalidateSearchCache(userId);
 
   return res.rows.map(r => r.id);
 }

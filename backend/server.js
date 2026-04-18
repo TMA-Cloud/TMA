@@ -15,11 +15,7 @@ import userRoutes from './routes/user.routes.js';
 import versionRoutes from './routes/version.routes.js';
 import publicRoutes from './routes/public.routes.js';
 
-import { startTrashCleanup } from './services/trashCleanup.js';
-import { startAuditCleanup } from './services/auditCleanup.js';
-import { startOrphanFileCleanup } from './services/orphanCleanup.js';
-import { startShareCleanup } from './services/shareCleanup.js';
-import { startHeartbeatCleanup } from './services/heartbeatCleanup.js';
+import { startCleanupJobs } from './services/cleanup.js';
 import { csrfProtection } from './middleware/csrf.middleware.js';
 import errorHandler from './middleware/error.middleware.js';
 import { requestIdMiddleware } from './middleware/requestId.middleware.js';
@@ -269,15 +265,7 @@ runMigrations()
     });
 
     // Start background services
-    startTrashCleanup();
-
-    startAuditCleanup();
-
-    startOrphanFileCleanup();
-
-    startShareCleanup();
-
-    startHeartbeatCleanup();
+    startCleanupJobs();
 
     // Register shutdown handlers
     process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));

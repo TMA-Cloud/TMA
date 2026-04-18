@@ -210,6 +210,38 @@ async function invalidateSearchCache(userId) {
 }
 
 /**
+ * Invalidate the full bundle of caches affected by a file mutation.
+ *
+ * Replaces the common block:
+ *   await invalidateFileCache(userId, parentId);
+ *   await invalidateSearchCache(userId);
+ *   await deleteCache(cacheKeys.fileStats(userId));
+ *   await deleteCache(cacheKeys.userStorage(userId));
+ *
+ * @param {string} userId - User ID
+ * @param {string|null} [parentId] - Parent folder ID (optional)
+ * @param {Object} [options]
+ * @param {string|null} [options.oldParentId] - Additional folder to invalidate (e.g. move source)
+ * @param {boolean} [options.includeStats=true] - Also invalidate fileStats
+ * @param {boolean} [options.includeStorage=true] - Also invalidate userStorage
+ */
+async function invalidateAllFileCaches(userId, parentId = null, options = {}) {
+  const { oldParentId = null, includeStats = true, includeStorage = true } = options;
+
+  await invalidateFileCache(userId, parentId);
+  if (oldParentId && oldParentId !== parentId) {
+    await invalidateFileCache(userId, oldParentId);
+  }
+  await invalidateSearchCache(userId);
+  if (includeStats) {
+    await deleteCache(cacheKeys.fileStats(userId));
+  }
+  if (includeStorage) {
+    await deleteCache(cacheKeys.userStorage(userId));
+  }
+}
+
+/**
  * Invalidate share link cache
  * @param {string} shareId - Share link ID
  * @param {string|null} userId - Optional user ID to invalidate user's share caches
@@ -334,6 +366,7 @@ export {
   invalidateUserCache,
   invalidateFileCache,
   invalidateSearchCache,
+  invalidateAllFileCaches,
   invalidateShareCache,
   cacheKeys,
   DEFAULT_TTL,
