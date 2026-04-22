@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Modal } from '../ui/Modal';
 import { ZoomIn, ZoomOut } from 'lucide-react';
 import { type FileItem } from '../../contexts/AppContext';
+import { useImageBlob } from '../../hooks/useImageBlob';
 
 interface DesktopImageViewerProps {
   imageViewerFile: FileItem | null;
@@ -10,9 +11,8 @@ interface DesktopImageViewerProps {
 
 export const DesktopImageViewer: React.FC<DesktopImageViewerProps> = ({ imageViewerFile, onClose }) => {
   const [zoom, setZoom] = useState(1);
-  const [imageSrc, setImageSrc] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const initialFitZoom = useRef<number>(1);
+  const { imageSrc, loading } = useImageBlob(imageViewerFile?.id);
+  const [initialFitZoom, setInitialFitZoom] = useState(1);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
@@ -25,78 +25,41 @@ export const DesktopImageViewer: React.FC<DesktopImageViewerProps> = ({ imageVie
   const rafId = useRef<number | null>(null);
 
   useEffect(() => {
-    let revoke: (() => void) | undefined;
-    const abortController = new AbortController();
-    if (imageViewerFile) {
-      setLoading(true);
-      const load = async () => {
-        try {
-          const res = await fetch(`/api/files/${imageViewerFile.id}/download`, {
-            credentials: 'include',
-            headers: { 'X-Requested-With': 'XMLHttpRequest' },
-            signal: abortController.signal,
-          });
-          if (!res.ok) throw new Error(`Download failed: ${res.status}`);
-          const contentType = res.headers.get('Content-Type') || '';
-          if (!contentType.startsWith('image/')) throw new Error(`Unexpected Content-Type: ${contentType}`);
-          const blob = await res.blob();
-          const url = URL.createObjectURL(blob);
-          setImageSrc(url);
-
-          // Calculate initial fit when image loads
-          const img = new Image();
-          img.onload = () => {
-            const container = containerRef.current;
-            if (container) {
-              const cw = container.clientWidth;
-              const ch = container.clientHeight;
-              const iw = img.naturalWidth;
-              const ih = img.naturalHeight;
-
-              // Calculate scale to fit image within container
-              const scale = Math.min(cw / iw, ch / ih, 1);
-              initialFitZoom.current = scale;
-
-              // Set initial zoom to fit
-              setZoom(scale);
-
-              // Center the image
-              const fittedWidth = iw * scale;
-              const fittedHeight = ih * scale;
-              offset.current = {
-                x: (cw - fittedWidth) / 2,
-                y: (ch - fittedHeight) / 2,
-              };
-
-              // Apply the initial transform
-              requestAnimationFrame(() => {
-                if (wrapperRef.current) {
-                  wrapperRef.current.style.transform = `translate3d(${offset.current.x}px, ${offset.current.y}px, 0) scale(${scale})`;
-                  wrapperRef.current.style.transformOrigin = '0 0';
-                }
-              });
-            }
-          };
-          img.src = url;
-
-          revoke = () => URL.revokeObjectURL(url);
-        } catch (e) {
-          if (e instanceof Error && e.name === 'AbortError') return;
-          setImageSrc(null);
-        } finally {
-          if (!abortController.signal.aborted) setLoading(false);
-        }
-      };
-      load();
-    } else {
-      setImageSrc(null);
-      initialFitZoom.current = 1;
+    if (!imageSrc) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setInitialFitZoom(1);
+      return;
     }
-    return () => {
-      abortController.abort();
-      revoke?.();
+    const img = new Image();
+    img.onload = () => {
+      const container = containerRef.current;
+      if (container) {
+        const cw = container.clientWidth;
+        const ch = container.clientHeight;
+        const iw = img.naturalWidth;
+        const ih = img.naturalHeight;
+
+        const scale = Math.min(cw / iw, ch / ih, 1);
+        setInitialFitZoom(scale);
+        setZoom(scale);
+
+        const fittedWidth = iw * scale;
+        const fittedHeight = ih * scale;
+        offset.current = {
+          x: (cw - fittedWidth) / 2,
+          y: (ch - fittedHeight) / 2,
+        };
+
+        requestAnimationFrame(() => {
+          if (wrapperRef.current) {
+            wrapperRef.current.style.transform = `translate3d(${offset.current.x}px, ${offset.current.y}px, 0) scale(${scale})`;
+            wrapperRef.current.style.transformOrigin = '0 0';
+          }
+        });
+      }
     };
-  }, [imageViewerFile]);
+    img.src = imageSrc;
+  }, [imageSrc]);
 
   const clampOffset = (newZoom: number) => {
     const cont = containerRef.current;
@@ -140,45 +103,47 @@ export const DesktopImageViewer: React.FC<DesktopImageViewerProps> = ({ imageVie
   const pointerMoveRef = useRef<((e: PointerEvent) => void) | null>(null);
   const pointerUpRef = useRef<(() => void) | null>(null);
 
-  pointerMoveRef.current = (e: PointerEvent) => {
-    lastMousePos.current = { x: e.clientX, y: e.clientY };
-    if (!dragOrigin.current) return;
-
-    const dx = e.clientX - dragOrigin.current.x;
-    const dy = e.clientY - dragOrigin.current.y;
-    dragOrigin.current = { x: e.clientX, y: e.clientY };
-    offset.current.x += dx;
-    offset.current.y += dy;
-
-    if (rafId.current !== null) {
-      cancelAnimationFrame(rafId.current);
-    }
-
-    rafId.current = requestAnimationFrame(() => {
-      applyTransform(zoom, true);
-      rafId.current = null;
-    });
-  };
-
   const stablePointerMove = useCallback((e: PointerEvent) => pointerMoveRef.current?.(e), []);
   const stablePointerUp = useCallback(() => pointerUpRef.current?.(), []);
 
-  pointerUpRef.current = () => {
-    setDragging(false);
-    dragOrigin.current = null;
+  useEffect(() => {
+    pointerMoveRef.current = (e: PointerEvent) => {
+      lastMousePos.current = { x: e.clientX, y: e.clientY };
+      if (!dragOrigin.current) return;
 
-    if (rafId.current !== null) {
-      cancelAnimationFrame(rafId.current);
-      rafId.current = null;
-    }
+      const dx = e.clientX - dragOrigin.current.x;
+      const dy = e.clientY - dragOrigin.current.y;
+      dragOrigin.current = { x: e.clientX, y: e.clientY };
+      offset.current.x += dx;
+      offset.current.y += dy;
 
-    requestAnimationFrame(() => {
-      applyTransform(zoom, false);
-    });
+      if (rafId.current !== null) {
+        cancelAnimationFrame(rafId.current);
+      }
 
-    window.removeEventListener('pointermove', stablePointerMove);
-    window.removeEventListener('pointerup', stablePointerUp);
-  };
+      rafId.current = requestAnimationFrame(() => {
+        applyTransform(zoom, true);
+        rafId.current = null;
+      });
+    };
+
+    pointerUpRef.current = () => {
+      setDragging(false);
+      dragOrigin.current = null;
+
+      if (rafId.current !== null) {
+        cancelAnimationFrame(rafId.current);
+        rafId.current = null;
+      }
+
+      requestAnimationFrame(() => {
+        applyTransform(zoom, false);
+      });
+
+      window.removeEventListener('pointermove', stablePointerMove);
+      window.removeEventListener('pointerup', stablePointerUp);
+    };
+  });
 
   const handlePointerDown = (e: React.PointerEvent) => {
     e.preventDefault();
@@ -188,34 +153,37 @@ export const DesktopImageViewer: React.FC<DesktopImageViewerProps> = ({ imageVie
     window.addEventListener('pointerup', stablePointerUp);
   };
 
-  const handleWheel = useCallback((e: WheelEvent) => {
-    e.preventDefault();
-    setZoom(currentZoom => {
-      const minZoom = Math.max(0.1, initialFitZoom.current || 0.25);
-      const newZoom = e.deltaY < 0 ? Math.min(currentZoom + 0.25, 5) : Math.max(currentZoom - 0.25, minZoom);
-      const wrap = wrapperRef.current;
-      if (!wrap) {
+  const handleWheel = useCallback(
+    (e: WheelEvent) => {
+      e.preventDefault();
+      setZoom(currentZoom => {
+        const minZoom = Math.max(0.1, initialFitZoom || 0.25);
+        const newZoom = e.deltaY < 0 ? Math.min(currentZoom + 0.25, 5) : Math.max(currentZoom - 0.25, minZoom);
+        const wrap = wrapperRef.current;
+        if (!wrap) {
+          return newZoom;
+        }
+
+        const rect = wrap.getBoundingClientRect();
+        const imgX = (e.clientX - rect.left - offset.current.x) / currentZoom;
+        const imgY = (e.clientY - rect.top - offset.current.y) / currentZoom;
+
+        offset.current = {
+          x: e.clientX - rect.left - imgX * newZoom,
+          y: e.clientY - rect.top - imgY * newZoom,
+        };
+
+        // Apply transform inline to avoid dependency on applyTransform
+        clampOffset(newZoom);
+        if (wrapperRef.current) {
+          wrapperRef.current.style.transform = `translate3d(${offset.current.x}px, ${offset.current.y}px, 0) scale(${newZoom})`;
+        }
+
         return newZoom;
-      }
-
-      const rect = wrap.getBoundingClientRect();
-      const imgX = (e.clientX - rect.left - offset.current.x) / currentZoom;
-      const imgY = (e.clientY - rect.top - offset.current.y) / currentZoom;
-
-      offset.current = {
-        x: e.clientX - rect.left - imgX * newZoom,
-        y: e.clientY - rect.top - imgY * newZoom,
-      };
-
-      // Apply transform inline to avoid dependency on applyTransform
-      clampOffset(newZoom);
-      if (wrapperRef.current) {
-        wrapperRef.current.style.transform = `translate3d(${offset.current.x}px, ${offset.current.y}px, 0) scale(${newZoom})`;
-      }
-
-      return newZoom;
-    });
-  }, []);
+      });
+    },
+    [initialFitZoom]
+  );
 
   const zoomAtCursor = (newZoom: number) => {
     const wrap = wrapperRef.current;
@@ -236,17 +204,14 @@ export const DesktopImageViewer: React.FC<DesktopImageViewerProps> = ({ imageVie
 
   const zoomInHandler = () => zoomAtCursor(Math.min(zoom + 0.25, 5));
   const zoomOutHandler = () => {
-    const minZoom = Math.max(0.1, initialFitZoom.current || 0.25);
+    const minZoom = Math.max(0.1, initialFitZoom || 0.25);
     zoomAtCursor(Math.max(zoom - 0.25, minZoom));
   };
 
   const resetZoom = () => {
-    // Reset to initial fit zoom
-    const fitZoom = initialFitZoom.current;
-    setZoom(fitZoom);
-    // Offset will be centered by clampOffset
+    setZoom(initialFitZoom);
     offset.current = { x: 0, y: 0 };
-    applyTransform(fitZoom);
+    applyTransform(initialFitZoom);
   };
 
   // Attach wheel event listener with passive: false to allow preventDefault
@@ -283,7 +248,7 @@ export const DesktopImageViewer: React.FC<DesktopImageViewerProps> = ({ imageVie
             ref={wrapperRef}
             className="will-change-transform"
             style={{
-              transform: `translate3d(${offset.current.x}px, ${offset.current.y}px, 0) scale(${zoom})`,
+              transform: `scale(${zoom})`,
               transformOrigin: '0 0',
               backfaceVisibility: 'hidden',
               perspective: 1000,
@@ -312,7 +277,7 @@ export const DesktopImageViewer: React.FC<DesktopImageViewerProps> = ({ imageVie
           <button
             onClick={zoomOutHandler}
             className="p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700"
-            disabled={zoom <= Math.max(0.1, initialFitZoom.current || 0.25)}
+            disabled={zoom <= Math.max(0.1, initialFitZoom || 0.25)}
             title="Zoom Out"
           >
             <ZoomOut className="w-5 h-5" />

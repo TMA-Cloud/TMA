@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Loader2, Shield, ShieldCheck, HardDrive, Edit2, Check, X } from 'lucide-react';
 import { format } from 'date-fns';
 import { Modal } from '../../ui/Modal';
+import { ModalCountHeader } from '../components/ModalCountHeader';
 import { updateUserStorageLimit, type UserSummary } from '../../../utils/api';
 import { useToast } from '../../../hooks/useToast';
 import { formatFileSize } from '../../../utils/fileUtils';
@@ -143,27 +144,14 @@ export const UsersModal: React.FC<UsersModalProps> = ({
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="All Registered Users" size="xl">
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <p className="text-sm text-gray-600 dark:text-gray-300">
-            {usersList.length > 0
-              ? `${usersList.length} user${usersList.length === 1 ? '' : 's'} total`
-              : 'No users to display yet'}
-          </p>
-          <button
-            onClick={onRefresh}
-            disabled={loadingUsersList}
-            className={`
-              px-3 py-1 text-sm rounded-lg transition-colors duration-200 border
-              ${
-                loadingUsersList
-                  ? 'border-gray-300 dark:border-gray-600 text-gray-400 cursor-not-allowed'
-                  : 'border-blue-500 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20'
-              }
-            `}
-          >
-            {loadingUsersList ? 'Refreshing...' : 'Refresh'}
-          </button>
-        </div>
+        <ModalCountHeader
+          count={usersList.length}
+          singular="user"
+          countSuffix=" total"
+          emptyText="No users to display yet"
+          loading={loadingUsersList}
+          onRefresh={onRefresh}
+        />
 
         {usersList.length > 0 && (
           <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">

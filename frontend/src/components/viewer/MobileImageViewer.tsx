@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ZoomIn, ZoomOut, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { type FileItem } from '../../contexts/AppContext';
+import { useImageBlob } from '../../hooks/useImageBlob';
 
 interface MobileImageViewerProps {
   imageViewerFile: FileItem | null;
@@ -16,8 +17,7 @@ export const MobileImageViewer: React.FC<MobileImageViewerProps> = ({
   setImageViewerFile,
 }) => {
   const [zoom, setZoom] = useState(1);
-  const [imageSrc, setImageSrc] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const { imageSrc, loading } = useImageBlob(imageViewerFile?.id);
   const [controlsVisible, setControlsVisible] = useState(true);
   const [imageFit, setImageFit] = useState<{
     width: number;
@@ -49,76 +49,46 @@ export const MobileImageViewer: React.FC<MobileImageViewerProps> = ({
   const hasPrev = currentIndex > 0;
 
   useEffect(() => {
-    let revoke: (() => void) | undefined;
-    const abortController = new AbortController();
-    if (imageViewerFile) {
-      setZoom(1);
-      offset.current = { x: 0, y: 0 };
-      setLoading(true);
-      setControlsVisible(true);
-      const load = async () => {
-        try {
-          const res = await fetch(`/api/files/${imageViewerFile.id}/download`, {
-            credentials: 'include',
-            headers: { 'X-Requested-With': 'XMLHttpRequest' },
-            signal: abortController.signal,
-          });
-          if (!res.ok) throw new Error(`Download failed: ${res.status}`);
-          const contentType = res.headers.get('Content-Type') || '';
-          if (!contentType.startsWith('image/')) throw new Error(`Unexpected Content-Type: ${contentType}`);
-          const blob = await res.blob();
-          const url = URL.createObjectURL(blob);
-          setImageSrc(url);
-
-          // Calculate initial fit
-          const img = new Image();
-          img.onload = () => {
-            const container = containerRef.current;
-            if (container) {
-              const cw = container.clientWidth;
-              const ch = container.clientHeight;
-              const iw = img.naturalWidth;
-              const ih = img.naturalHeight;
-
-              const scale = Math.min(cw / iw, ch / ih, 1); // Fit to screen, max 1x
-              const fittedWidth = iw * scale;
-              const fittedHeight = ih * scale;
-              setImageFit({ width: fittedWidth, height: fittedHeight });
-
-              // Center the image initially
-              offset.current = {
-                x: (cw - fittedWidth) / 2,
-                y: (ch - fittedHeight) / 2,
-              };
-              // Apply the initial transform
-              requestAnimationFrame(() => {
-                if (wrapperRef.current) {
-                  wrapperRef.current.style.transform = `translate(${offset.current.x}px, ${offset.current.y}px) scale(1)`;
-                  wrapperRef.current.style.transformOrigin = '0 0';
-                }
-              });
-            }
-          };
-          img.src = url;
-
-          revoke = () => URL.revokeObjectURL(url);
-        } catch (e) {
-          if (e instanceof Error && e.name === 'AbortError') return;
-          setImageSrc(null);
-        } finally {
-          if (!abortController.signal.aborted) setLoading(false);
-        }
-      };
-      load();
-    } else {
-      setImageSrc(null);
+    if (!imageViewerFile) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setImageFit(null);
+      return;
     }
-    return () => {
-      abortController.abort();
-      revoke?.();
-    };
+    setZoom(1);
+    offset.current = { x: 0, y: 0 };
+    setControlsVisible(true);
   }, [imageViewerFile]);
+
+  useEffect(() => {
+    if (!imageSrc) return;
+    const img = new Image();
+    img.onload = () => {
+      const container = containerRef.current;
+      if (container) {
+        const cw = container.clientWidth;
+        const ch = container.clientHeight;
+        const iw = img.naturalWidth;
+        const ih = img.naturalHeight;
+
+        const scale = Math.min(cw / iw, ch / ih, 1);
+        const fittedWidth = iw * scale;
+        const fittedHeight = ih * scale;
+        setImageFit({ width: fittedWidth, height: fittedHeight });
+
+        offset.current = {
+          x: (cw - fittedWidth) / 2,
+          y: (ch - fittedHeight) / 2,
+        };
+        requestAnimationFrame(() => {
+          if (wrapperRef.current) {
+            wrapperRef.current.style.transform = `translate(${offset.current.x}px, ${offset.current.y}px) scale(1)`;
+            wrapperRef.current.style.transformOrigin = '0 0';
+          }
+        });
+      }
+    };
+    img.src = imageSrc;
+  }, [imageSrc]);
 
   // Auto-hide controls on mobile after 3 seconds
   useEffect(() => {
@@ -181,25 +151,27 @@ export const MobileImageViewer: React.FC<MobileImageViewerProps> = ({
   const pointerMoveRef = useRef<((e: PointerEvent) => void) | null>(null);
   const pointerUpRef = useRef<(() => void) | null>(null);
 
-  pointerMoveRef.current = (e: PointerEvent) => {
-    lastMousePos.current = { x: e.clientX, y: e.clientY };
-    if (!dragOrigin.current) return;
-    const dx = e.clientX - dragOrigin.current.x;
-    const dy = e.clientY - dragOrigin.current.y;
-    dragOrigin.current = { x: e.clientX, y: e.clientY };
-    offset.current.x += dx;
-    offset.current.y += dy;
-    applyTransform();
-  };
-
   const stablePointerMove = useCallback((e: PointerEvent) => pointerMoveRef.current?.(e), []);
   const stablePointerUp = useCallback(() => pointerUpRef.current?.(), []);
 
-  pointerUpRef.current = () => {
-    dragOrigin.current = null;
-    window.removeEventListener('pointermove', stablePointerMove);
-    window.removeEventListener('pointerup', stablePointerUp);
-  };
+  useEffect(() => {
+    pointerMoveRef.current = (e: PointerEvent) => {
+      lastMousePos.current = { x: e.clientX, y: e.clientY };
+      if (!dragOrigin.current) return;
+      const dx = e.clientX - dragOrigin.current.x;
+      const dy = e.clientY - dragOrigin.current.y;
+      dragOrigin.current = { x: e.clientX, y: e.clientY };
+      offset.current.x += dx;
+      offset.current.y += dy;
+      applyTransform();
+    };
+
+    pointerUpRef.current = () => {
+      dragOrigin.current = null;
+      window.removeEventListener('pointermove', stablePointerMove);
+      window.removeEventListener('pointerup', stablePointerUp);
+    };
+  });
 
   const handlePointerDown = (e: React.PointerEvent) => {
     if (e.pointerType === 'touch') return; // Let touch handlers take over
@@ -445,7 +417,7 @@ export const MobileImageViewer: React.FC<MobileImageViewerProps> = ({
           ref={wrapperRef}
           className="will-change-transform"
           style={{
-            transform: `translate(${offset.current.x}px, ${offset.current.y}px) scale(${zoom})`,
+            transform: `scale(${zoom})`,
             transformOrigin: '0 0',
           }}
         >

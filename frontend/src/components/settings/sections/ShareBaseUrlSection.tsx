@@ -1,81 +1,36 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Link, Pencil, CheckCircle2, XCircle } from 'lucide-react';
-import { useToast } from '../../../hooks/useToast';
 import { useAuth } from '../../../contexts/AuthContext';
 import { getShareBaseUrlConfig, updateShareBaseUrlConfig } from '../../../utils/api';
-import { getErrorMessage, isAuthError } from '../../../utils/errorUtils';
+import { useAbortableLoader } from '../../../hooks/useAbortableLoader';
+import { useAsyncAction } from '../../../hooks/useAsyncAction';
+import { SettingsField, SettingsReadonlyValue, SettingsFormActions } from '../components/SettingsField';
 
 interface ShareBaseUrlSectionProps {
   canConfigure: boolean;
 }
 
 export const ShareBaseUrlSection: React.FC<ShareBaseUrlSectionProps> = ({ canConfigure }) => {
-  const { showToast } = useToast();
   const { user } = useAuth();
   const [url, setUrl] = useState('');
   const [originalUrl, setOriginalUrl] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(true);
   const [hasLoadedSettings, setHasLoadedSettings] = useState(false);
-  const abortControllerRef = useRef<AbortController | null>(null);
 
-  const loadSettings = useCallback(async () => {
-    if (!user || !canConfigure) {
-      return;
-    }
-
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
-
-    const abortController = new AbortController();
-    abortControllerRef.current = abortController;
-
-    try {
-      setLoading(true);
-      if (abortController.signal.aborted) {
-        return;
-      }
-
-      const config = await getShareBaseUrlConfig(abortController.signal);
+  const { loading } = useAbortableLoader({
+    fetcher: getShareBaseUrlConfig,
+    onSuccess: useCallback((config: { url: string | null }) => {
       const urlValue = config.url || '';
       setUrl(urlValue);
       setOriginalUrl(urlValue);
       setIsEditing(false);
       setHasLoadedSettings(true);
       setIsCollapsed(true);
-    } catch (error) {
-      if (error instanceof Error && error.name === 'AbortError') {
-        return;
-      }
-      if (isAuthError(error)) {
-        return;
-      }
-      showToast('Failed to load share base URL settings', 'error');
-    } finally {
-      if (!abortController.signal.aborted && abortControllerRef.current === abortController) {
-        setLoading(false);
-        abortControllerRef.current = null;
-      }
-    }
-  }, [showToast, user, canConfigure]);
-
-  useEffect(() => {
-    if (!user) {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-        abortControllerRef.current = null;
-      }
-    }
-  }, [user]);
-
-  useEffect(() => {
-    if (canConfigure && user) {
-      loadSettings();
-    }
-  }, [canConfigure, user, loadSettings]);
+    }, []),
+    errorMessage: 'Failed to load share base URL settings',
+    enabled: !!user && canConfigure,
+  });
 
   const handleEdit = () => {
     if (isCollapsed) {
@@ -96,25 +51,23 @@ export const ShareBaseUrlSection: React.FC<ShareBaseUrlSectionProps> = ({ canCon
     setIsCollapsed(true);
   };
 
-  const handleSave = async () => {
+  const saveAction = useCallback(async (next: string) => {
+    const response = await updateShareBaseUrlConfig(next || null);
+    const savedUrl = response.url || '';
+    setUrl(savedUrl);
+    setOriginalUrl(savedUrl);
+    setHasLoadedSettings(true);
+    setIsEditing(false);
+    setIsCollapsed(true);
+  }, []);
+  const { run: runSave, busy: saving } = useAsyncAction(saveAction, {
+    errorMessage: 'Failed to save share base URL settings',
+    successMessage: 'Settings saved',
+  });
+
+  const handleSave = () => {
     if (!canConfigure) return;
-
-    try {
-      setSaving(true);
-      const response = await updateShareBaseUrlConfig(url || null);
-      const savedUrl = response.url || '';
-      setUrl(savedUrl);
-      setOriginalUrl(savedUrl);
-      setHasLoadedSettings(true);
-      setIsEditing(false);
-      setIsCollapsed(true);
-
-      showToast('Settings saved', 'success');
-    } catch (error) {
-      showToast(getErrorMessage(error, 'Failed to save share base URL settings'), 'error');
-    } finally {
-      setSaving(false);
-    }
+    runSave(url);
   };
 
   if (!canConfigure) {
@@ -192,11 +145,11 @@ export const ShareBaseUrlSection: React.FC<ShareBaseUrlSectionProps> = ({ canCon
           <div className="space-y-4">
             {isEditing ? (
               <>
-                <div className="flex flex-col gap-2 rounded-xl bg-white/60 dark:bg-gray-900/50 border border-slate-200/50 dark:border-slate-700/30 px-4 py-3 hover:border-blue-500/30 transition-all duration-200">
-                  <label htmlFor="share-base-url" className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                    Share Base URL
-                  </label>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Base URL for public share links</p>
+                <SettingsField
+                  htmlFor="share-base-url"
+                  label="Share Base URL"
+                  description="Base URL for public share links"
+                >
                   <input
                     id="share-base-url"
                     type="text"
@@ -211,41 +164,23 @@ export const ShareBaseUrlSection: React.FC<ShareBaseUrlSectionProps> = ({ canCon
                     data-form-type="other"
                     className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-[#dfe3ea] dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
                   />
-                </div>
+                </SettingsField>
 
-                <div className="flex justify-end gap-2">
-                  <button
-                    onClick={handleCancel}
-                    disabled={loading || saving}
-                    className="px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 bg-[#dfe3ea] dark:bg-gray-800 hover:bg-[#d4d9e1] dark:hover:bg-gray-700 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleSave}
-                    disabled={loading || saving}
-                    className="px-6 py-2 text-sm font-medium rounded-lg bg-blue-500 hover:bg-blue-600 text-white transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                  >
-                    {saving ? 'Saving...' : 'Save Settings'}
-                  </button>
-                </div>
+                <SettingsFormActions
+                  onCancel={handleCancel}
+                  onSave={handleSave}
+                  saving={saving}
+                  disabled={loading || saving}
+                />
               </>
             ) : (
-              <div className="flex flex-col gap-2 rounded-xl bg-white/60 dark:bg-gray-900/50 border border-slate-200/50 dark:border-slate-700/30 px-4 py-3 hover:border-blue-500/30 transition-all duration-200">
-                <label className="text-sm font-medium text-gray-900 dark:text-gray-100">Share Base URL</label>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Base URL for public share links</p>
-                <div className="mt-1 px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-800/50 text-gray-900 dark:text-gray-100">
-                  {loading ? (
-                    <span className="text-gray-500 dark:text-gray-400">Loading...</span>
-                  ) : originalUrl ? (
-                    originalUrl
-                  ) : (
-                    <span className="text-gray-400 dark:text-gray-500 italic">
-                      Not configured (using request origin)
-                    </span>
-                  )}
-                </div>
-              </div>
+              <SettingsField label="Share Base URL" description="Base URL for public share links">
+                <SettingsReadonlyValue
+                  loading={loading}
+                  value={originalUrl}
+                  emptyText="Not configured (using request origin)"
+                />
+              </SettingsField>
             )}
           </div>
         </form>

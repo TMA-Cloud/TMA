@@ -5,6 +5,7 @@ import { useToast } from '../../../hooks/useToast';
 import { useAuth } from '../../../contexts/AuthContext';
 import { changePassword } from '../../../utils/api';
 import { getErrorMessage } from '../../../utils/errorUtils';
+import { useIsMounted } from '../../../hooks/useIsMounted';
 
 interface ChangePasswordModalProps {
   isOpen: boolean;
@@ -20,19 +21,15 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ isOpen
   const [submitting, setSubmitting] = useState(false);
   const currentPasswordRef = useRef<HTMLInputElement | null>(null);
 
-  const isMountedRef = useRef(false);
+  const isMountedRef = useIsMounted();
 
   useEffect(() => {
-    isMountedRef.current = true;
     if (!isOpen) {
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
       setSubmitting(false);
     }
-    return () => {
-      isMountedRef.current = false;
-    };
   }, [isOpen]);
 
   const handleSubmit = async (e: React.FormEvent) => {

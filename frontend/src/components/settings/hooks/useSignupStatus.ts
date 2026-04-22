@@ -53,82 +53,95 @@ export function useSignupStatus(options: UseSignupStatusOptions = {}) {
     }
   };
 
-  const handleToggleSignup = async () => {
-    if (!canToggleSignup || togglingSignup) return;
-
+  const runToggle = async <T>(
+    canToggle: boolean,
+    busy: boolean,
+    current: boolean,
+    setBusy: (v: boolean) => void,
+    call: (next: boolean) => Promise<T>,
+    onSuccess: (result: T, next: boolean) => void,
+    errorMsg: string
+  ) => {
+    if (!canToggle || busy) return;
     try {
-      setTogglingSignup(true);
-      const newStatus = !signupEnabled;
-      await toggleSignup(newStatus);
-      setSignupEnabled(newStatus);
-      showToast(newStatus ? 'Signup enabled' : 'Signup disabled', newStatus ? 'success' : 'info');
+      setBusy(true);
+      const next = !current;
+      const result = await call(next);
+      onSuccess(result, next);
     } catch {
-      // Error handled by toast notification
-      showToast('Failed to update signup setting', 'error');
+      showToast(errorMsg, 'error');
     } finally {
-      setTogglingSignup(false);
+      setBusy(false);
     }
   };
 
-  const handleToggleHideFileExtensions = async () => {
-    if (!canToggleHideFileExtensions || togglingHideFileExtensions) return;
+  const handleToggleSignup = () =>
+    runToggle(
+      canToggleSignup,
+      togglingSignup,
+      signupEnabled,
+      setTogglingSignup,
+      next => toggleSignup(next),
+      (_r, next) => {
+        setSignupEnabled(next);
+        showToast(next ? 'Signup enabled' : 'Signup disabled', next ? 'success' : 'info');
+      },
+      'Failed to update signup setting'
+    );
 
-    try {
-      setTogglingHideFileExtensions(true);
-      const newHidden = !hideFileExtensions;
-      const res = await updateHideFileExtensionsConfig(newHidden);
-      const updated = res.hideFileExtensions;
-      setHideFileExtensions(updated);
-      onHideFileExtensionsChange?.(updated);
-      showToast(updated ? 'File extensions hidden' : 'File extensions visible', 'success');
-    } catch {
-      showToast('Failed to update hide file extensions setting', 'error');
-    } finally {
-      setTogglingHideFileExtensions(false);
-    }
-  };
+  const handleToggleHideFileExtensions = () =>
+    runToggle(
+      canToggleHideFileExtensions,
+      togglingHideFileExtensions,
+      hideFileExtensions,
+      setTogglingHideFileExtensions,
+      next => updateHideFileExtensionsConfig(next),
+      res => {
+        const updated = res.hideFileExtensions;
+        setHideFileExtensions(updated);
+        onHideFileExtensionsChange?.(updated);
+        showToast(updated ? 'File extensions hidden' : 'File extensions visible', 'success');
+      },
+      'Failed to update hide file extensions setting'
+    );
 
-  const handleToggleElectronOnlyAccess = async () => {
-    if (!canToggleElectronOnlyAccess || togglingElectronOnlyAccess) return;
+  const handleToggleElectronOnlyAccess = () =>
+    runToggle(
+      canToggleElectronOnlyAccess,
+      togglingElectronOnlyAccess,
+      electronOnlyAccess,
+      setTogglingElectronOnlyAccess,
+      next => updateElectronOnlyAccessConfig(next),
+      res => {
+        const updated = res.electronOnlyAccess;
+        setElectronOnlyAccess(updated);
+        showToast(
+          updated
+            ? 'Web access disabled – this instance now requires the desktop app.'
+            : 'Web access enabled – browsers can access the app again.',
+          'success'
+        );
+      },
+      'Failed to update desktop-only access setting'
+    );
 
-    try {
-      setTogglingElectronOnlyAccess(true);
-      const newEnabled = !electronOnlyAccess;
-      const res = await updateElectronOnlyAccessConfig(newEnabled);
-      const updated = res.electronOnlyAccess;
-      setElectronOnlyAccess(updated);
-      showToast(
-        updated
-          ? 'Web access disabled – this instance now requires the desktop app.'
-          : 'Web access enabled – browsers can access the app again.',
-        'success'
-      );
-    } catch {
-      showToast('Failed to update desktop-only access setting', 'error');
-    } finally {
-      setTogglingElectronOnlyAccess(false);
-    }
-  };
-
-  const handleToggleAllowPasswordChange = async () => {
-    if (!canToggleAllowPasswordChange || togglingAllowPasswordChange) return;
-
-    try {
-      setTogglingAllowPasswordChange(true);
-      const newEnabled = !allowPasswordChange;
-      const res = await updatePasswordChangeConfig(newEnabled);
-      const updated = res.allowPasswordChange;
-      setAllowPasswordChange(updated);
-      showToast(
-        updated ? 'Users can now change their passwords.' : 'Users can no longer change their passwords.',
-        'success'
-      );
-    } catch {
-      showToast('Failed to update password change setting', 'error');
-    } finally {
-      setTogglingAllowPasswordChange(false);
-    }
-  };
+  const handleToggleAllowPasswordChange = () =>
+    runToggle(
+      canToggleAllowPasswordChange,
+      togglingAllowPasswordChange,
+      allowPasswordChange,
+      setTogglingAllowPasswordChange,
+      next => updatePasswordChangeConfig(next),
+      res => {
+        const updated = res.allowPasswordChange;
+        setAllowPasswordChange(updated);
+        showToast(
+          updated ? 'Users can now change their passwords.' : 'Users can no longer change their passwords.',
+          'success'
+        );
+      },
+      'Failed to update password change setting'
+    );
 
   useEffect(() => {
     loadSignupStatus();

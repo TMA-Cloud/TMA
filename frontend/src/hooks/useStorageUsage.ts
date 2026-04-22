@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { authFetch } from '../utils/authFetch';
 
 export interface StorageUsage {
   used: number;
@@ -13,10 +14,7 @@ export function useStorageUsage() {
   const loadUsage = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/user/storage`, {
-        credentials: 'include',
-        headers: { 'X-Requested-With': 'XMLHttpRequest' },
-      });
+      const res = await authFetch(`/api/user/storage`);
       if (res.ok) {
         const data = await res.json();
         setUsage({ used: data.used, total: data.total, free: data.free });

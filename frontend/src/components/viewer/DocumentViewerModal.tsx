@@ -5,6 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { ONLYOFFICE_EXTS, getExt } from '../../utils/fileUtils';
 import { getErrorMessage, isAuthError } from '../../utils/errorUtils';
 import { useToast } from '../../hooks/useToast';
+import { authFetch } from '../../utils/authFetch';
 
 interface DocsAPIEditor {
   destroyEditor?: () => void;
@@ -105,9 +106,7 @@ export const DocumentViewerModal: React.FC = () => {
       setError(null);
       try {
         // Fetch config first to get ONLYOFFICE JS URL
-        const res = await fetch(`/api/onlyoffice/config/${documentViewerFile.id}`, {
-          credentials: 'include',
-          headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        const res = await authFetch(`/api/onlyoffice/config/${documentViewerFile.id}`, {
           signal: abortController.signal,
         });
 

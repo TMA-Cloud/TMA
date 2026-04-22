@@ -1,15 +1,16 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback } from 'react';
 import { HardDrive, Pencil, CheckCircle2 } from 'lucide-react';
 import { useToast } from '../../../hooks/useToast';
 import { useAuth } from '../../../contexts/AuthContext';
 import { getMaxUploadSizeConfig, updateMaxUploadSizeConfig } from '../../../utils/api';
-import { getErrorMessage, isAuthError } from '../../../utils/errorUtils';
 import { SettingsSection } from '../components/SettingsSection';
 import { SettingsItem } from '../components/SettingsItem';
+import { SettingsField, SettingsFormActions } from '../components/SettingsField';
 import { formatFileSize } from '../../../utils/fileUtils';
+import { BYTES_PER_MB, BYTES_PER_GB } from '../../../utils/storageUtils';
+import { useAbortableLoader } from '../../../hooks/useAbortableLoader';
+import { useAsyncAction } from '../../../hooks/useAsyncAction';
 
-const BYTES_PER_MB = 1024 * 1024;
-const BYTES_PER_GB = 1024 * 1024 * 1024;
 const MIN_MB = 1;
 const MAX_MB = 100 * 1024; // 100 GB in MB
 const MIN_GB = 1 / 1024;
@@ -60,48 +61,21 @@ export const StorageSection: React.FC<StorageSectionProps> = ({ usage, loading, 
   const [maxBytes, setMaxBytes] = useState<number>(10 * BYTES_PER_GB);
   const [sizeInput, setSizeInput] = useState<string>('10');
   const [sizeUnit, setSizeUnit] = useState<SizeUnit>('GB');
-  const [maxUploadLoading, setMaxUploadLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [isEditingMaxUpload, setIsEditingMaxUpload] = useState(false);
   const [hasLoadedMaxUpload, setHasLoadedMaxUpload] = useState(false);
-  const abortControllerRef = useRef<AbortController | null>(null);
 
-  const loadMaxUploadSettings = useCallback(async () => {
-    if (!user) return;
-    if (abortControllerRef.current) abortControllerRef.current.abort();
-    const abortController = new AbortController();
-    abortControllerRef.current = abortController;
-    try {
-      setMaxUploadLoading(true);
-      if (abortController.signal.aborted) return;
-      const config = await getMaxUploadSizeConfig(abortController.signal);
+  const { loading: maxUploadLoading } = useAbortableLoader({
+    fetcher: getMaxUploadSizeConfig,
+    onSuccess: useCallback((config: { maxBytes: number }) => {
       setMaxBytes(config.maxBytes);
       setSizeInput('');
       setSizeUnit('GB');
       setIsEditingMaxUpload(false);
       setHasLoadedMaxUpload(true);
-    } catch (error) {
-      if (error instanceof Error && error.name === 'AbortError') return;
-      if (isAuthError(error)) return;
-      showToast('Failed to load max upload size settings', 'error');
-    } finally {
-      if (!abortController.signal.aborted && abortControllerRef.current === abortController) {
-        setMaxUploadLoading(false);
-        abortControllerRef.current = null;
-      }
-    }
-  }, [showToast, user]);
-
-  useEffect(() => {
-    if (!user && abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      abortControllerRef.current = null;
-    }
-  }, [user]);
-
-  useEffect(() => {
-    if (user && canConfigure) loadMaxUploadSettings();
-  }, [user, canConfigure, loadMaxUploadSettings]);
+    }, []),
+    errorMessage: 'Failed to load max upload size settings',
+    enabled: !!user && !!canConfigure,
+  });
 
   const handleEditMaxUpload = () => {
     setIsEditingMaxUpload(true);
@@ -125,7 +99,18 @@ export const StorageSection: React.FC<StorageSectionProps> = ({ usage, loading, 
     setSizeInput(newUnit === 'GB' ? bytesToGb(bytes).toString() : bytesToMb(bytes).toString());
   };
 
-  const handleSaveMaxUpload = async () => {
+  const saveMaxUploadAction = useCallback(async (newBytes: number) => {
+    const response = await updateMaxUploadSizeConfig(newBytes);
+    setMaxBytes(response.maxBytes);
+    setIsEditingMaxUpload(false);
+    setHasLoadedMaxUpload(true);
+  }, []);
+  const { run: runSaveMaxUpload, busy: saving } = useAsyncAction(saveMaxUploadAction, {
+    errorMessage: 'Failed to save max upload size settings',
+    successMessage: 'Settings saved',
+  });
+
+  const handleSaveMaxUpload = () => {
     if (!canConfigure) return;
     const num = parseFloat(sizeInput);
     if (Number.isNaN(num) || num <= 0) {
@@ -146,18 +131,7 @@ export const StorageSection: React.FC<StorageSectionProps> = ({ usage, loading, 
       }
       newBytes = mbToBytes(num);
     }
-    try {
-      setSaving(true);
-      const response = await updateMaxUploadSizeConfig(newBytes);
-      setMaxBytes(response.maxBytes);
-      setIsEditingMaxUpload(false);
-      setHasLoadedMaxUpload(true);
-      showToast('Settings saved', 'success');
-    } catch (error) {
-      showToast(getErrorMessage(error, 'Failed to save max upload size settings'), 'error');
-    } finally {
-      setSaving(false);
-    }
+    runSaveMaxUpload(newBytes);
   };
 
   const totalLabel = usage && usage.total !== null ? formatFileSize(usage.total) : 'Unlimited';
@@ -204,16 +178,11 @@ export const StorageSection: React.FC<StorageSectionProps> = ({ usage, loading, 
             {isEditingMaxUpload && (
               <form autoComplete="off" onSubmit={e => e.preventDefault()}>
                 <div className="space-y-4">
-                  <div className="flex flex-col gap-2 rounded-xl bg-white/60 dark:bg-gray-900/50 border border-slate-200/50 dark:border-slate-700/30 px-4 py-3 hover:border-blue-500/30 transition-all duration-200">
-                    <label
-                      htmlFor="max-upload-size-value"
-                      className="text-sm font-medium text-gray-900 dark:text-gray-100"
-                    >
-                      Max upload size
-                    </label>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                      Allowed range: {MIN_LABEL} to {MAX_LABEL} per file
-                    </p>
+                  <SettingsField
+                    htmlFor="max-upload-size-value"
+                    label="Max upload size"
+                    description={`Allowed range: ${MIN_LABEL} to ${MAX_LABEL} per file`}
+                  >
                     <div className="mt-1 flex gap-2">
                       <input
                         id="max-upload-size-value"
@@ -239,25 +208,14 @@ export const StorageSection: React.FC<StorageSectionProps> = ({ usage, loading, 
                         <option value="GB">GB</option>
                       </select>
                     </div>
-                  </div>
-                  <div className="flex justify-end gap-2">
-                    <button
-                      type="button"
-                      onClick={handleCancelMaxUpload}
-                      disabled={maxUploadLoading || saving}
-                      className="px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 bg-[#dfe3ea] dark:bg-gray-800 hover:bg-[#d4d9e1] dark:hover:bg-gray-700 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleSaveMaxUpload}
-                      disabled={maxUploadLoading || saving}
-                      className="px-6 py-2 text-sm font-medium rounded-lg bg-blue-500 hover:bg-blue-600 text-white transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                    >
-                      {saving ? 'Saving...' : 'Save'}
-                    </button>
-                  </div>
+                  </SettingsField>
+                  <SettingsFormActions
+                    onCancel={handleCancelMaxUpload}
+                    onSave={handleSaveMaxUpload}
+                    saving={saving}
+                    disabled={maxUploadLoading || saving}
+                    saveLabel="Save"
+                  />
                 </div>
               </form>
             )}

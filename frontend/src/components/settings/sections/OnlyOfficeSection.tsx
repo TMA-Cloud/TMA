@@ -1,10 +1,12 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback } from 'react';
 import { FileText, Pencil, CheckCircle2, XCircle, Eye, EyeOff } from 'lucide-react';
 import { useToast } from '../../../hooks/useToast';
 import { useApp } from '../../../contexts/AppContext';
 import { useAuth } from '../../../contexts/AuthContext';
 import { getOnlyOfficeConfig, updateOnlyOfficeConfig } from '../../../utils/api';
-import { getErrorMessage, isAuthError } from '../../../utils/errorUtils';
+import { useAbortableLoader } from '../../../hooks/useAbortableLoader';
+import { useAsyncAction } from '../../../hooks/useAsyncAction';
+import { SettingsField, SettingsReadonlyValue, SettingsFormActions } from '../components/SettingsField';
 
 interface OnlyOfficeSectionProps {
   canConfigure: boolean;
@@ -18,39 +20,15 @@ export const OnlyOfficeSection: React.FC<OnlyOfficeSectionProps> = ({ canConfigu
   const [url, setUrl] = useState('');
   const [originalUrl, setOriginalUrl] = useState('');
   const [jwtSecretSet, setJwtSecretSet] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(true);
   const [hasLoadedSettings, setHasLoadedSettings] = useState(false);
   const [showJwtSecret, setShowJwtSecret] = useState(false);
-  const abortControllerRef = useRef<AbortController | null>(null);
 
-  const loadSettings = useCallback(async () => {
-    // Don't load settings if user is not authenticated
-    if (!user || !canConfigure) {
-      return;
-    }
-
-    // Cancel any previous request
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
-
-    // Create new abort controller for this request
-    const abortController = new AbortController();
-    abortControllerRef.current = abortController;
-
-    try {
-      setLoading(true);
-      // Check if request was aborted before making the call
-      if (abortController.signal.aborted) {
-        return;
-      }
-
-      const config = await getOnlyOfficeConfig(abortController.signal);
+  const { loading } = useAbortableLoader({
+    fetcher: getOnlyOfficeConfig,
+    onSuccess: useCallback((config: { jwtSecretSet: boolean; url: string | null }) => {
       const urlValue = config.url || '';
-      // Never prefill JWT secret - always start empty
       setJwtSecret('');
       setUrl(urlValue);
       setJwtSecretSet(config.jwtSecretSet);
@@ -58,42 +36,10 @@ export const OnlyOfficeSection: React.FC<OnlyOfficeSectionProps> = ({ canConfigu
       setIsEditing(false);
       setHasLoadedSettings(true);
       setIsCollapsed(true);
-    } catch (error) {
-      // Ignore abort errors (expected when cancelling requests)
-      if (error instanceof Error && error.name === 'AbortError') {
-        return;
-      }
-      // Don't show error toast for authentication errors - expected after logout
-      if (isAuthError(error)) {
-        return;
-      }
-      // Error handled by toast notification
-      showToast('Failed to load OnlyOffice settings', 'error');
-    } finally {
-      // Only update loading state if this request wasn't aborted
-      if (!abortController.signal.aborted && abortControllerRef.current === abortController) {
-        setLoading(false);
-        abortControllerRef.current = null;
-      }
-    }
-  }, [showToast, user, canConfigure]);
-
-  // Cancel any in-flight requests when user logs out
-  useEffect(() => {
-    if (!user) {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-        abortControllerRef.current = null;
-      }
-    }
-  }, [user]);
-
-  useEffect(() => {
-    // Only load settings if user is authenticated and can configure
-    if (canConfigure && user) {
-      loadSettings();
-    }
-  }, [canConfigure, user, loadSettings]);
+    }, []),
+    errorMessage: 'Failed to load OnlyOffice settings',
+    enabled: !!user && canConfigure,
+  });
 
   const handleEdit = () => {
     if (isCollapsed) {
@@ -126,16 +72,12 @@ export const OnlyOfficeSection: React.FC<OnlyOfficeSectionProps> = ({ canConfigu
     setIsCollapsed(true);
   };
 
-  const handleSave = async () => {
-    if (!canConfigure) return;
-
-    try {
-      setSaving(true);
-      // Backend handles all validation (trimming, URL format, both-or-none rule)
-      // Send raw values - backend will validate and return appropriate error messages
-      const response = await updateOnlyOfficeConfig(jwtSecret || null, url || null);
+  const saveAction = useCallback(
+    async (nextJwt: string, nextUrl: string) => {
+      // Backend handles validation (trimming, URL format, both-or-none rule)
+      const response = await updateOnlyOfficeConfig(nextJwt || null, nextUrl || null);
       const savedUrl = response.url || '';
-      // Never store JWT secret - always clear it after save
+      // Never store JWT secret - always clear after save
       setJwtSecret('');
       setUrl(savedUrl);
       setJwtSecretSet(response.jwtSecretSet);
@@ -144,26 +86,24 @@ export const OnlyOfficeSection: React.FC<OnlyOfficeSectionProps> = ({ canConfigu
       setIsEditing(false);
       setIsCollapsed(true);
 
-      // Refresh OnlyOffice config cache in app context (after backend cache is invalidated)
+      // Refresh OnlyOffice config cache in app context (non-critical)
       try {
         await refreshOnlyOfficeConfig();
       } catch {
         // Error handled silently - cache refresh is non-critical
       }
 
-      // Show appropriate message based on what was saved
-      if (response.jwtSecretSet && savedUrl) {
-        showToast('Settings saved', 'success');
-      } else {
-        showToast('Settings cleared', 'success');
-      }
-    } catch (error) {
-      // Error handled by toast notification
-      showToast(getErrorMessage(error, 'Failed to save OnlyOffice settings'), 'error');
-      // Don't collapse on error so user can see and fix
-    } finally {
-      setSaving(false);
-    }
+      showToast(response.jwtSecretSet && savedUrl ? 'Settings saved' : 'Settings cleared', 'success');
+    },
+    [refreshOnlyOfficeConfig, showToast]
+  );
+  const { run: runSave, busy: saving } = useAsyncAction(saveAction, {
+    errorMessage: 'Failed to save OnlyOffice settings',
+  });
+
+  const handleSave = () => {
+    if (!canConfigure) return;
+    runSave(jwtSecret, url);
   };
 
   if (!canConfigure) {
@@ -274,13 +214,11 @@ export const OnlyOfficeSection: React.FC<OnlyOfficeSectionProps> = ({ canConfigu
                     </p>
                   </div>
                 )}
-                <div className="flex flex-col gap-2 rounded-xl bg-white/60 dark:bg-gray-900/50 border border-slate-200/50 dark:border-slate-700/30 px-4 py-3 hover:border-blue-500/30 transition-all duration-200">
-                  <label htmlFor="onlyoffice-url" className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                    OnlyOffice Document Server URL
-                  </label>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    Base URL of your OnlyOffice Document Server
-                  </p>
+                <SettingsField
+                  htmlFor="onlyoffice-url"
+                  label="OnlyOffice Document Server URL"
+                  description="Base URL of your OnlyOffice Document Server"
+                >
                   <input
                     id="onlyoffice-url"
                     type="text"
@@ -296,16 +234,13 @@ export const OnlyOfficeSection: React.FC<OnlyOfficeSectionProps> = ({ canConfigu
                     data-form-type="other"
                     className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-[#dfe3ea] dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
                   />
-                </div>
+                </SettingsField>
 
-                <div className="flex flex-col gap-2 rounded-xl bg-white/60 dark:bg-gray-900/50 border border-slate-200/50 dark:border-slate-700/30 px-4 py-3 hover:border-blue-500/30 transition-all duration-200">
-                  <label
-                    htmlFor="onlyoffice-jwt-secret"
-                    className="text-sm font-medium text-gray-900 dark:text-gray-100"
-                  >
-                    JWT Secret
-                  </label>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Secret key for signing OnlyOffice requests</p>
+                <SettingsField
+                  htmlFor="onlyoffice-jwt-secret"
+                  label="JWT Secret"
+                  description="Secret key for signing OnlyOffice requests"
+                >
                   <div className="relative">
                     <input
                       id="onlyoffice-jwt-secret"
@@ -347,58 +282,30 @@ export const OnlyOfficeSection: React.FC<OnlyOfficeSectionProps> = ({ canConfigu
                       {showJwtSecret ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
                     </button>
                   </div>
-                </div>
+                </SettingsField>
 
-                <div className="flex justify-end gap-2">
-                  <button
-                    onClick={handleCancel}
-                    disabled={loading || saving}
-                    className="px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 bg-[#dfe3ea] dark:bg-gray-800 hover:bg-[#d4d9e1] dark:hover:bg-gray-700 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleSave}
-                    disabled={loading || saving}
-                    className="px-6 py-2 text-sm font-medium rounded-lg bg-blue-500 hover:bg-blue-600 text-white transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                  >
-                    {saving ? 'Saving...' : 'Save Settings'}
-                  </button>
-                </div>
+                <SettingsFormActions
+                  onCancel={handleCancel}
+                  onSave={handleSave}
+                  saving={saving}
+                  disabled={loading || saving}
+                />
               </>
             ) : (
               <>
-                <div className="flex flex-col gap-2 rounded-xl bg-white/60 dark:bg-gray-900/50 border border-slate-200/50 dark:border-slate-700/30 px-4 py-3 hover:border-blue-500/30 transition-all duration-200">
-                  <label className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                    OnlyOffice Document Server URL
-                  </label>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    Base URL of your OnlyOffice Document Server
-                  </p>
-                  <div className="mt-1 px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-800/50 text-gray-900 dark:text-gray-100">
-                    {loading ? (
-                      <span className="text-gray-500 dark:text-gray-400">Loading...</span>
-                    ) : originalUrl ? (
-                      originalUrl
-                    ) : (
-                      <span className="text-gray-400 dark:text-gray-500 italic">Not configured</span>
-                    )}
-                  </div>
-                </div>
+                <SettingsField
+                  label="OnlyOffice Document Server URL"
+                  description="Base URL of your OnlyOffice Document Server"
+                >
+                  <SettingsReadonlyValue loading={loading} value={originalUrl} />
+                </SettingsField>
 
-                <div className="flex flex-col gap-2 rounded-xl bg-white/60 dark:bg-gray-900/50 border border-slate-200/50 dark:border-slate-700/30 px-4 py-3 hover:border-blue-500/30 transition-all duration-200">
-                  <label className="text-sm font-medium text-gray-900 dark:text-gray-100">JWT Secret</label>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Secret key for signing OnlyOffice requests</p>
-                  <div className="mt-1 px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-800/50 text-gray-900 dark:text-gray-100">
-                    {loading ? (
-                      <span className="text-gray-500 dark:text-gray-400">Loading...</span>
-                    ) : jwtSecretSet ? (
-                      <span className="font-mono">{'•'.repeat(20)}</span>
-                    ) : (
-                      <span className="text-gray-400 dark:text-gray-500 italic">Not configured</span>
-                    )}
-                  </div>
-                </div>
+                <SettingsField label="JWT Secret" description="Secret key for signing OnlyOffice requests">
+                  <SettingsReadonlyValue
+                    loading={loading}
+                    value={jwtSecretSet ? <span className="font-mono">{'•'.repeat(20)}</span> : ''}
+                  />
+                </SettingsField>
               </>
             )}
           </div>

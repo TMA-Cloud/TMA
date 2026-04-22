@@ -3,6 +3,7 @@ import { Modal } from '../ui/Modal';
 import { useApp, type ShareExpiry } from '../../contexts/AppContext';
 import { Clipboard, Check, Clock } from 'lucide-react';
 import { useToast } from '../../hooks/useToast';
+import { copyToClipboard } from '../../utils/clipboard';
 
 const EXPIRY_OPTIONS: { value: ShareExpiry; label: string }[] = [
   { value: '7d', label: '7 days' },
@@ -26,23 +27,7 @@ export const ShareLinkModal: React.FC = () => {
 
   const copy = async (link: string) => {
     try {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        await navigator.clipboard.writeText(link);
-      } else {
-        const textArea = document.createElement('textarea');
-        textArea.value = link;
-        textArea.style.position = 'fixed';
-        textArea.style.left = '-999999px';
-        textArea.style.top = '-999999px';
-        document.body.appendChild(textArea);
-        textArea.focus();
-        textArea.select();
-        const successful = document.execCommand('copy');
-        document.body.removeChild(textArea);
-        if (!successful) {
-          throw new Error('Copy command failed');
-        }
-      }
+      await copyToClipboard(link);
       setCopiedLink(link);
       showToast('Link copied to clipboard', 'success');
       if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);

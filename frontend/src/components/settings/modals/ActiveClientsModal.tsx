@@ -2,6 +2,7 @@ import React from 'react';
 import { Loader2, Monitor } from 'lucide-react';
 import { format } from 'date-fns';
 import { Modal } from '../../ui/Modal';
+import { ModalCountHeader } from '../components/ModalCountHeader';
 import type { ActiveClient } from '../../../utils/api';
 
 interface ActiveClientsModalProps {
@@ -35,27 +36,13 @@ export const ActiveClientsModal: React.FC<ActiveClientsModalProps> = ({
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Active Desktop Clients" size="lg">
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <p className="text-sm text-gray-600 dark:text-gray-300">
-            {clients.length > 0
-              ? `${clients.length} active client${clients.length === 1 ? '' : 's'}`
-              : 'No active desktop clients'}
-          </p>
-          <button
-            onClick={onRefresh}
-            disabled={loading}
-            className={`
-              px-3 py-1 text-sm rounded-lg transition-colors duration-200 border
-              ${
-                loading
-                  ? 'border-gray-300 dark:border-gray-600 text-gray-400 cursor-not-allowed'
-                  : 'border-blue-500 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20'
-              }
-            `}
-          >
-            {loading ? 'Refreshing...' : 'Refresh'}
-          </button>
-        </div>
+        <ModalCountHeader
+          count={clients.length}
+          singular="active client"
+          emptyText="No active desktop clients"
+          loading={loading}
+          onRefresh={onRefresh}
+        />
 
         {versionGroups.size > 1 && (
           <div className="flex flex-wrap gap-2">

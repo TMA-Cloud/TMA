@@ -8,12 +8,20 @@
 export type StorageUnit = 'MB' | 'GB' | 'TB';
 
 /**
+ * Byte-unit constants.
+ */
+export const BYTES_PER_KB = 1024;
+export const BYTES_PER_MB = 1024 * 1024;
+export const BYTES_PER_GB = 1024 * 1024 * 1024;
+export const BYTES_PER_TB = 1024 * 1024 * 1024 * 1024;
+
+/**
  * Storage multipliers in bytes
  */
 const STORAGE_MULTIPLIERS: Record<StorageUnit, number> = {
-  MB: 1024 * 1024,
-  GB: 1024 * 1024 * 1024,
-  TB: 1024 * 1024 * 1024 * 1024,
+  MB: BYTES_PER_MB,
+  GB: BYTES_PER_GB,
+  TB: BYTES_PER_TB,
 };
 
 /**

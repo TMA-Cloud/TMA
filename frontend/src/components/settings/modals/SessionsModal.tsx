@@ -2,6 +2,7 @@ import React from 'react';
 import { Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { Modal } from '../../ui/Modal';
+import { ModalCountHeader } from '../components/ModalCountHeader';
 import type { ActiveSession } from '../../../utils/api';
 
 interface SessionsModalProps {
@@ -36,27 +37,13 @@ export const SessionsModal: React.FC<SessionsModalProps> = ({
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Active Sessions" size="lg">
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <p className="text-sm text-gray-600 dark:text-gray-300">
-            {activeSessions.length > 0
-              ? `${activeSessions.length} active session${activeSessions.length === 1 ? '' : 's'}`
-              : 'No active sessions'}
-          </p>
-          <button
-            onClick={onRefresh}
-            disabled={loadingSessions}
-            className={`
-              px-3 py-1 text-sm rounded-lg transition-colors duration-200 border
-              ${
-                loadingSessions
-                  ? 'border-gray-300 dark:border-gray-600 text-gray-400 cursor-not-allowed'
-                  : 'border-blue-500 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20'
-              }
-            `}
-          >
-            {loadingSessions ? 'Refreshing...' : 'Refresh'}
-          </button>
-        </div>
+        <ModalCountHeader
+          count={activeSessions.length}
+          singular="active session"
+          emptyText="No active sessions"
+          loading={loadingSessions}
+          onRefresh={onRefresh}
+        />
 
         {loadingSessions ? (
           <p className="text-center text-gray-600 dark:text-gray-300 flex items-center justify-center gap-2">

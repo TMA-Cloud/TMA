@@ -2,14 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Upload, X, CheckCircle, AlertCircle, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
 import { formatFileSize } from '../../utils/fileUtils';
 import { useIsMobile } from '../../hooks/useIsMobile';
-
-interface UploadProgressItem {
-  id: string;
-  fileName: string;
-  fileSize: number;
-  progress: number;
-  status: 'uploading' | 'finalizing' | 'completed' | 'error';
-}
+import type { UploadProgressItem } from '../../utils/uploadUtils';
 
 interface UploadProgressProps {
   uploads: UploadProgressItem[];

@@ -12,7 +12,9 @@ import {
   regenerateBackupCodes,
   getBackupCodesCount,
 } from '../../../utils/api';
-import { ApiError } from '../../../utils/errorUtils';
+import { ApiError, getErrorMessage } from '../../../utils/errorUtils';
+import { copyToClipboard } from '../../../utils/clipboard';
+import { downloadBlob } from '../../../utils/download';
 
 interface MfaModalProps {
   isOpen: boolean;
@@ -153,8 +155,7 @@ export const MfaModal: React.FC<MfaModalProps> = ({ isOpen, onClose }) => {
       setSecret(result.secret);
       setStep('verify');
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to setup MFA';
-      showToast(message, 'error');
+      showToast(getErrorMessage(error, 'Failed to setup MFA'), 'error');
     } finally {
       setLoading(false);
     }
@@ -197,8 +198,7 @@ export const MfaModal: React.FC<MfaModalProps> = ({ isOpen, onClose }) => {
         }
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Invalid verification code';
-      showToast(message, 'error');
+      showToast(getErrorMessage(error, 'Invalid verification code'), 'error');
     } finally {
       setLoading(false);
     }
@@ -224,8 +224,7 @@ export const MfaModal: React.FC<MfaModalProps> = ({ isOpen, onClose }) => {
         showToast('MFA disabled successfully', 'success');
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Invalid verification code';
-      showToast(message, 'error');
+      showToast(getErrorMessage(error, 'Invalid verification code'), 'error');
     } finally {
       setLoading(false);
     }
@@ -243,8 +242,7 @@ export const MfaModal: React.FC<MfaModalProps> = ({ isOpen, onClose }) => {
       );
       onClose();
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to revoke sessions';
-      showToast(message, 'error');
+      showToast(getErrorMessage(error, 'Failed to revoke sessions'), 'error');
     } finally {
       setRevokingSessions(false);
     }
@@ -255,12 +253,15 @@ export const MfaModal: React.FC<MfaModalProps> = ({ isOpen, onClose }) => {
     onClose();
   };
 
-  const copySecret = () => {
-    if (secret) {
-      navigator.clipboard.writeText(secret);
+  const copySecret = async () => {
+    if (!secret) return;
+    try {
+      await copyToClipboard(secret);
       setCopied(true);
       showToast('Secret copied to clipboard', 'success');
       setTimeout(() => setCopied(false), 2000);
+    } catch {
+      showToast('Failed to copy secret', 'error');
     }
   };
 
@@ -319,15 +320,7 @@ Need new backup codes?
 Go to: Account Settings → Security → Multi-Factor Authentication
 `;
 
-    const blob = new Blob([content], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = fileName;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    downloadBlob(new Blob([content], { type: 'text/plain' }), fileName);
   };
 
   const handleRegenerateBackupCodes = () => {
@@ -344,14 +337,12 @@ Go to: Account Settings → Security → Multi-Factor Authentication
       downloadBackupCodes(result.backupCodes);
       showToast('Backup codes regenerated and downloaded', 'success');
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Failed to regenerate backup codes';
-
       // Check if error contains structured cooldown data
       if (error instanceof ApiError && error.data?.retryAfterMs) {
         setCooldownRemaining(error.data.retryAfterMs as number);
       }
 
-      showToast(message, 'error');
+      showToast(getErrorMessage(error, 'Failed to regenerate backup codes'), 'error');
     } finally {
       setRegenerating(false);
     }

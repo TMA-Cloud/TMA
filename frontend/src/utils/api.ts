@@ -2,6 +2,8 @@
  * API utility functions (relative URLs; same origin as backend).
  */
 import { ApiError } from './errorUtils';
+import { authFetch } from './authFetch';
+import { downloadBlob } from './download';
 
 interface ApiRequestOptions extends RequestInit {
   signal?: AbortSignal;
@@ -407,11 +409,7 @@ export async function checkUploadStorage(fileSize: number): Promise<{ allowed: t
 
 export async function downloadFile(id: string, fallbackFilename?: string): Promise<void> {
   const url = `/api/files/${id}/download`;
-  const response = await fetch(url, {
-    method: 'GET',
-    credentials: 'include',
-    headers: { 'X-Requested-With': 'XMLHttpRequest' },
-  });
+  const response = await authFetch(url, { method: 'GET' });
 
   if (!response.ok) {
     let errorMessage = response.statusText;
@@ -460,14 +458,7 @@ export async function downloadFile(id: string, fallbackFilename?: string): Promi
   }
 
   const blob = await response.blob();
-  const downloadUrl = window.URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = downloadUrl;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  setTimeout(() => window.URL.revokeObjectURL(downloadUrl), 1000);
+  downloadBlob(blob, filename);
 }
 
 export const AUTH_STATE_KEY = 'tma_cloud_auth_state';
