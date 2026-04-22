@@ -31,6 +31,134 @@ function sanitizeFileName(name) {
   return name.replace(/[/\\:*?"<>|]/g, '_').trim() || 'file';
 }
 
+/**
+ * Append a "(n)" suffix to a filename until it's not present in the given set.
+ */
+function deduplicateFileName(base, seenSet) {
+  if (!seenSet.has(base)) return base;
+  const ext = path.extname(base);
+  const stem = path.basename(base, ext) || base;
+  let n = 1;
+  let candidate = `${stem} (${n})${ext}`;
+  while (seenSet.has(candidate)) {
+    n += 1;
+    candidate = `${stem} (${n})${ext}`;
+  }
+  return candidate;
+}
+
+/**
+ * Build a `Cookie:` header string from the default session cookies for the
+ * given URL. Returns '' on any error so callers can always send the request.
+ */
+async function getCookieHeader(url) {
+  try {
+    const cookies = await session.defaultSession.cookies.get({ url });
+    return cookies.map(c => `${c.name}=${c.value}`).join('; ');
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * If `response` has a non-2xx status, collect up to 4KB of body and reject
+ * the given promise with a formatted error. Returns true if handled.
+ */
+function handleResponseError(response, reject, label) {
+  if (response.statusCode >= 200 && response.statusCode < 300) return false;
+  const status = response.statusCode || 0;
+  let body = '';
+  response.on('data', chunk => {
+    if (body.length < 4096) {
+      body += chunk.toString('utf8');
+    }
+  });
+  response.on('end', () => {
+    reject(new Error(body ? `${label} (${status}): ${body}` : `${label} (${status})`));
+  });
+  response.on('error', reject);
+  return true;
+}
+
+/**
+ * Pipe a 2xx response body to the given file path with backpressure handling.
+ * Resolves when the file is fully written, rejects on stream errors.
+ */
+function pipeResponseToFile(response, filePath, resolve, reject) {
+  const fileStream = fs.createWriteStream(filePath);
+
+  response.on('data', chunk => {
+    if (!fileStream.write(chunk)) {
+      response.pause();
+    }
+  });
+  fileStream.on('drain', () => {
+    response.resume();
+  });
+  response.on('end', () => {
+    fileStream.end(() => resolve());
+  });
+  response.on('error', err => {
+    fileStream.destroy();
+    reject(err);
+  });
+  fileStream.on('error', err => {
+    response.destroy();
+    reject(err);
+  });
+}
+
+/**
+ * Stream a file as multipart/form-data to `url` with the given cookie header.
+ * Shared body for uploadFileToReplace (replace existing file) and
+ * uploadDerivedFile (upload a derived/exported file) — they only differ by URL.
+ */
+function postMultipartFile(url, filePath, fileName, cookieHeader) {
+  const boundary = `----ElectronFormBoundary${crypto.randomBytes(16).toString('hex')}`;
+  const safeFileName = String(fileName).replace(/"/g, '\\"');
+  const preamble =
+    `--${boundary}\r\n` +
+    `Content-Disposition: form-data; name="file"; filename="${safeFileName}"\r\n` +
+    `Content-Type: application/octet-stream\r\n\r\n`;
+  const closing = `\r\n--${boundary}--\r\n`;
+
+  return new Promise((resolve, reject) => {
+    const request = net.request({ method: 'POST', url });
+    request.setHeader('Content-Type', `multipart/form-data; boundary=${boundary}`);
+    if (cookieHeader) {
+      request.setHeader('Cookie', cookieHeader);
+    }
+
+    request.on('response', response => {
+      if (handleResponseError(response, reject, 'Upload failed')) return;
+      response.on('data', () => {});
+      response.on('end', () => resolve());
+      response.on('error', reject);
+    });
+    request.on('error', reject);
+
+    request.write(preamble);
+
+    const fileStream = fs.createReadStream(filePath);
+    fileStream.on('data', chunk => {
+      if (!request.write(chunk)) {
+        fileStream.pause();
+      }
+    });
+    request.on('drain', () => {
+      fileStream.resume();
+    });
+    fileStream.on('end', () => {
+      request.write(closing);
+      request.end();
+    });
+    fileStream.on('error', err => {
+      request.destroy();
+      reject(err);
+    });
+  });
+}
+
 function createTempDir(prefix) {
   const tmpRoot = os.tmpdir();
   const dir = path.join(tmpRoot, `${prefix}${Date.now()}`);
@@ -39,13 +167,7 @@ function createTempDir(prefix) {
 }
 
 async function downloadToFile(url, filePath) {
-  let cookieHeader = '';
-  try {
-    const cookies = await session.defaultSession.cookies.get({ url });
-    cookieHeader = cookies.map(c => `${c.name}=${c.value}`).join('; ');
-  } catch (_) {
-    cookieHeader = '';
-  }
+  const cookieHeader = await getCookieHeader(url);
 
   return new Promise((resolve, reject) => {
     const request = net.request({ url });
@@ -53,48 +175,9 @@ async function downloadToFile(url, filePath) {
       request.setHeader('Cookie', cookieHeader);
     }
     request.on('response', response => {
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        const status = response.statusCode || 0;
-        let body = '';
-        response.on('data', chunk => {
-          if (body.length < 4096) {
-            body += chunk.toString('utf8');
-          }
-        });
-        response.on('end', () => {
-          reject(new Error(body ? `Download failed (${status}): ${body}` : `Download failed (${status})`));
-        });
-        response.on('error', reject);
-        return;
-      }
-
-      const fileStream = fs.createWriteStream(filePath);
-
-      response.on('data', chunk => {
-        if (!fileStream.write(chunk)) {
-          response.pause();
-        }
-      });
-
-      fileStream.on('drain', () => {
-        response.resume();
-      });
-
-      response.on('end', () => {
-        fileStream.end(() => resolve());
-      });
-
-      response.on('error', err => {
-        fileStream.destroy();
-        reject(err);
-      });
-
-      fileStream.on('error', err => {
-        response.destroy();
-        reject(err);
-      });
+      if (handleResponseError(response, reject, 'Download failed')) return;
+      pipeResponseToFile(response, filePath, resolve, reject);
     });
-
     request.on('error', reject);
     request.end();
   });
@@ -105,13 +188,7 @@ async function downloadToFile(url, filePath) {
  * Uses the same session cookies as downloadToFile.
  */
 async function downloadPostToFile(url, jsonBody, filePath) {
-  let cookieHeader = '';
-  try {
-    const cookies = await session.defaultSession.cookies.get({ url });
-    cookieHeader = cookies.map(c => `${c.name}=${c.value}`).join('; ');
-  } catch (_) {
-    cookieHeader = '';
-  }
+  const cookieHeader = await getCookieHeader(url);
 
   return new Promise((resolve, reject) => {
     const request = net.request({
@@ -126,44 +203,8 @@ async function downloadPostToFile(url, jsonBody, filePath) {
     request.end();
 
     request.on('response', response => {
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        const status = response.statusCode || 0;
-        let body = '';
-        response.on('data', chunk => {
-          if (body.length < 4096) {
-            body += chunk.toString('utf8');
-          }
-        });
-        response.on('end', () => {
-          reject(new Error(body ? `Download failed (${status}): ${body}` : `Download failed (${status})`));
-        });
-        response.on('error', reject);
-        return;
-      }
-
-      const fileStream = fs.createWriteStream(filePath);
-
-      response.on('data', chunk => {
-        if (!fileStream.write(chunk)) {
-          response.pause();
-        }
-      });
-
-      fileStream.on('drain', () => {
-        response.resume();
-      });
-
-      response.on('end', () => {
-        fileStream.end(() => resolve());
-      });
-      response.on('error', err => {
-        fileStream.destroy();
-        reject(err);
-      });
-      fileStream.on('error', err => {
-        response.destroy();
-        reject(err);
-      });
+      if (handleResponseError(response, reject, 'Download failed')) return;
+      pipeResponseToFile(response, filePath, resolve, reject);
     });
     request.on('error', reject);
   });
@@ -172,13 +213,7 @@ async function downloadPostToFile(url, jsonBody, filePath) {
 async function getFileInfoFromBackend(base, fileId) {
   const url = `${base}/api/files/${encodeURIComponent(String(fileId))}/info`;
 
-  let cookieHeader = '';
-  try {
-    const cookies = await session.defaultSession.cookies.get({ url: base });
-    cookieHeader = cookies.map(c => `${c.name}=${c.value}`).join('; ');
-  } catch {
-    cookieHeader = '';
-  }
+  const cookieHeader = await getCookieHeader(base);
 
   return new Promise((resolve, reject) => {
     const request = net.request({ url });
@@ -258,75 +293,8 @@ function cleanTempDirsByPrefix(prefix, maxAgeMs, excludeDirs) {
 
 async function uploadFileToReplace(base, fileId, filePath, fileName) {
   const url = `${base}/api/files/${encodeURIComponent(fileId)}/replace`;
-
-  let cookieHeader = '';
-  try {
-    const cookies = await session.defaultSession.cookies.get({ url: base });
-    cookieHeader = cookies.map(c => `${c.name}=${c.value}`).join('; ');
-  } catch {
-    cookieHeader = '';
-  }
-
-  const boundary = `----ElectronFormBoundary${crypto.randomBytes(16).toString('hex')}`;
-  const dispositionName = 'file';
-  const safeFileName = String(fileName).replace(/"/g, '\\"');
-
-  const preamble =
-    `--${boundary}\r\n` +
-    `Content-Disposition: form-data; name="${dispositionName}"; filename="${safeFileName}"\r\n` +
-    `Content-Type: application/octet-stream\r\n\r\n`;
-  const closing = `\r\n--${boundary}--\r\n`;
-
-  return new Promise((resolve, reject) => {
-    const request = net.request({ method: 'POST', url });
-    request.setHeader('Content-Type', `multipart/form-data; boundary=${boundary}`);
-    if (cookieHeader) {
-      request.setHeader('Cookie', cookieHeader);
-    }
-
-    request.on('response', response => {
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        const status = response.statusCode || 0;
-        let body = '';
-        response.on('data', chunk => {
-          if (body.length < 4096) {
-            body += chunk.toString('utf8');
-          }
-        });
-        response.on('end', () => {
-          reject(new Error(body ? `Upload failed (${status}): ${body}` : `Upload failed (${status})`));
-        });
-        response.on('error', reject);
-        return;
-      }
-
-      response.on('data', () => {});
-      response.on('end', () => resolve());
-      response.on('error', reject);
-    });
-
-    request.on('error', reject);
-
-    request.write(preamble);
-
-    const fileStream = fs.createReadStream(filePath);
-    fileStream.on('data', chunk => {
-      if (!request.write(chunk)) {
-        fileStream.pause();
-      }
-    });
-    request.on('drain', () => {
-      fileStream.resume();
-    });
-    fileStream.on('end', () => {
-      request.write(closing);
-      request.end();
-    });
-    fileStream.on('error', err => {
-      request.destroy();
-      reject(err);
-    });
-  });
+  const cookieHeader = await getCookieHeader(base);
+  return postMultipartFile(url, filePath, fileName, cookieHeader);
 }
 
 /**
@@ -338,75 +306,8 @@ async function uploadFileToReplace(base, fileId, filePath, fileName) {
  */
 async function uploadDerivedFile(base, fileId, filePath, fileName) {
   const url = `${base}/api/files/${encodeURIComponent(fileId)}/derived`;
-
-  let cookieHeader = '';
-  try {
-    const cookies = await session.defaultSession.cookies.get({ url: base });
-    cookieHeader = cookies.map(c => `${c.name}=${c.value}`).join('; ');
-  } catch {
-    cookieHeader = '';
-  }
-
-  const boundary = `----ElectronFormBoundary${crypto.randomBytes(16).toString('hex')}`;
-  const dispositionName = 'file';
-  const safeFileName = String(fileName).replace(/"/g, '\\"');
-
-  const preamble =
-    `--${boundary}\r\n` +
-    `Content-Disposition: form-data; name="${dispositionName}"; filename="${safeFileName}"\r\n` +
-    `Content-Type: application/octet-stream\r\n\r\n`;
-  const closing = `\r\n--${boundary}--\r\n`;
-
-  return new Promise((resolve, reject) => {
-    const request = net.request({ method: 'POST', url });
-    request.setHeader('Content-Type', `multipart/form-data; boundary=${boundary}`);
-    if (cookieHeader) {
-      request.setHeader('Cookie', cookieHeader);
-    }
-
-    request.on('response', response => {
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        const status = response.statusCode || 0;
-        let body = '';
-        response.on('data', chunk => {
-          if (body.length < 4096) {
-            body += chunk.toString('utf8');
-          }
-        });
-        response.on('end', () => {
-          reject(new Error(body ? `Upload failed (${status}): ${body}` : `Upload failed (${status})`));
-        });
-        response.on('error', reject);
-        return;
-      }
-
-      response.on('data', () => {});
-      response.on('end', () => resolve());
-      response.on('error', reject);
-    });
-
-    request.on('error', reject);
-
-    request.write(preamble);
-
-    const fileStream = fs.createReadStream(filePath);
-    fileStream.on('data', chunk => {
-      if (!request.write(chunk)) {
-        fileStream.pause();
-      }
-    });
-    request.on('drain', () => {
-      fileStream.resume();
-    });
-    fileStream.on('end', () => {
-      request.write(closing);
-      request.end();
-    });
-    fileStream.on('error', err => {
-      request.destroy();
-      reject(err);
-    });
-  });
+  const cookieHeader = await getCookieHeader(base);
+  return postMultipartFile(url, filePath, fileName, cookieHeader);
 }
 
 function hashFile(filePath) {
@@ -440,6 +341,7 @@ module.exports = {
   PASTE_DIR_PREFIX,
   EDIT_DIR_PREFIX,
   sanitizeFileName,
+  deduplicateFileName,
   createTempDir,
   downloadToFile,
   downloadPostToFile,

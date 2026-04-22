@@ -16,8 +16,7 @@ electron/
 │   │       ├── powershell.cjs # Windows PowerShell helpers
 │   │       └── file-utils.cjs # Temp dirs, download/upload, clipboard paths
 │   ├── preload/
-│   │   ├── index.cjs         # Preload: inlined API via contextBridge
-│   │   └── api.cjs           # Reference shape only (live API in index.cjs)
+│   │   └── index.cjs         # Preload: inlined API via contextBridge
 │   ├── config/               # Runtime config (build-config.json; dev only)
 │   └── build/                # Packaging: electron-builder configs + icon
 ├── scripts/                  # Build tooling (prepare-client-build.js)

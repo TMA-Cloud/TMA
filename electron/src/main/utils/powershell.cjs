@@ -73,44 +73,8 @@ function runPowerShellEnv(scriptContent, timeoutMs = 5000) {
   });
 }
 
-/**
- * Run a PowerShell script by piping it via stdin. No temp file needed — safe from temp cleanup.
- * Use for long scripts (e.g. OLE clipboard extraction) that exceed command-line limits.
- */
-function runPowerShellStdin(scriptContent, timeoutMs = 5000) {
-  return new Promise((resolve, reject) => {
-    const { spawn } = require('child_process');
-    const child = spawn('powershell', ['-NoProfile', '-NonInteractive', '-Command', '-'], {
-      shell: false,
-      windowsHide: true,
-      stdio: ['pipe', 'pipe', 'pipe'],
-    });
-    let stdout = '';
-    let stderr = '';
-    child.stdout.on('data', d => {
-      stdout += d.toString();
-    });
-    child.stderr.on('data', d => {
-      stderr += d.toString();
-    });
-    const t = setTimeout(() => {
-      child.kill();
-      reject(new Error('Timeout'));
-    }, timeoutMs);
-    child.on('close', code => {
-      clearTimeout(t);
-      if (code !== 0) reject(new Error(stderr || `exit ${code}`));
-      else resolve(stdout);
-    });
-    child.on('error', reject);
-    child.stdin.write(scriptContent, 'utf8');
-    child.stdin.end();
-  });
-}
-
 module.exports = {
   escapePathForPowerShellLiteralPath,
   runPowerShell,
   runPowerShellEnv,
-  runPowerShellStdin,
 };

@@ -3,13 +3,15 @@ const fs = require('fs');
 const fsPromises = require('fs').promises;
 const os = require('os');
 const { ipcMain, clipboard } = require('electron');
-const { runPowerShell, runPowerShellEnv, escapePathForPowerShellLiteralPath } = require('../utils/powershell.cjs');
+const { runPowerShell, runPowerShellEnv } = require('../utils/powershell.cjs');
 const {
   PASTE_DIR_PREFIX,
   sanitizeFileName,
+  deduplicateFileName,
   setClipboardToPaths,
   downloadToFile,
   validateOrigin,
+  cleanTempDirsByPrefix,
 } = require('../utils/file-utils.cjs');
 
 const EXT_TO_MIME = {
@@ -182,22 +184,11 @@ function registerClipboardHandlers() {
     if (process.platform !== 'win32' || !Array.isArray(paths) || paths.length === 0) {
       return { ok: false };
     }
-    const safePaths = paths.filter(p => typeof p === 'string' && p.length > 0 && !/[\r\n\0]/.test(p));
-    if (safePaths.length === 0) return { ok: false };
-    const tmp = path.join(os.tmpdir(), `electron-desktop-${Date.now()}.txt`);
     try {
-      fs.writeFileSync(tmp, safePaths.join('\n'), 'utf8');
-      const ps = `Add-Type -AssemblyName System.Windows.Forms; $col = New-Object System.Collections.Specialized.StringCollection; Get-Content -Encoding UTF8 -LiteralPath '${escapePathForPowerShellLiteralPath(tmp)}' | ForEach-Object { $col.Add($_) }; [System.Windows.Forms.Clipboard]::SetFileDropList($col)`;
-      await runPowerShell(ps);
+      await setClipboardToPaths(paths);
       return { ok: true };
     } catch (e) {
       return { ok: false, error: e.message };
-    } finally {
-      try {
-        fs.unlinkSync(tmp);
-      } catch (_) {
-        // ignore
-      }
     }
   });
 
@@ -211,16 +202,7 @@ function registerClipboardHandlers() {
     const MAX_PER_FILE_BYTES = 200 * 1024 * 1024; // 200 MB
     const tmpRoot = os.tmpdir();
     try {
-      const existing = fs.readdirSync(tmpRoot, { withFileTypes: true });
-      for (const e of existing) {
-        if (e.isDirectory() && e.name.startsWith(PASTE_DIR_PREFIX)) {
-          try {
-            fs.rmSync(path.join(tmpRoot, e.name), { recursive: true });
-          } catch (_) {
-            /* ignore */
-          }
-        }
-      }
+      cleanTempDirsByPrefix(PASTE_DIR_PREFIX, 0);
       const pasteDir = path.join(tmpRoot, `${PASTE_DIR_PREFIX}${Date.now()}`);
       fs.mkdirSync(pasteDir, { recursive: true });
       const writtenPaths = [];
@@ -237,16 +219,7 @@ function registerClipboardHandlers() {
         if (totalBytes + estimatedBytes > MAX_TOTAL_BYTES) {
           return { ok: false, error: 'Total payload size exceeds maximum allowed' };
         }
-        let base = sanitizeFileName(f.name);
-        if (seen.has(base)) {
-          const ext = path.extname(base);
-          const stem = path.basename(base, ext) || base;
-          let n = 1;
-          while (seen.has(base)) {
-            base = `${stem} (${n})${ext}`;
-            n += 1;
-          }
-        }
+        const base = deduplicateFileName(sanitizeFileName(f.name), seen);
         seen.add(base);
         const filePath = path.join(pasteDir, base);
         const buf = Buffer.from(f.data, 'base64');
@@ -287,16 +260,7 @@ function registerClipboardHandlers() {
     const tmpRoot = os.tmpdir();
 
     try {
-      const existing = fs.readdirSync(tmpRoot, { withFileTypes: true });
-      for (const e of existing) {
-        if (e.isDirectory() && e.name.startsWith(PASTE_DIR_PREFIX)) {
-          try {
-            fs.rmSync(path.join(tmpRoot, e.name), { recursive: true });
-          } catch (_) {
-            /* ignore */
-          }
-        }
-      }
+      cleanTempDirsByPrefix(PASTE_DIR_PREFIX, 0);
 
       const pasteDir = path.join(tmpRoot, `${PASTE_DIR_PREFIX}${Date.now()}`);
       fs.mkdirSync(pasteDir, { recursive: true });
@@ -307,16 +271,7 @@ function registerClipboardHandlers() {
       for (const item of payload.items) {
         if (!item || !item.id || !item.name) continue;
 
-        let baseName = sanitizeFileName(String(item.name));
-        if (seen.has(baseName)) {
-          const ext = path.extname(baseName);
-          const stem = path.basename(baseName, ext) || baseName;
-          let n = 1;
-          while (seen.has(baseName)) {
-            baseName = `${stem} (${n})${ext}`;
-            n += 1;
-          }
-        }
+        const baseName = deduplicateFileName(sanitizeFileName(String(item.name)), seen);
         seen.add(baseName);
 
         const filePath = path.join(pasteDir, baseName);

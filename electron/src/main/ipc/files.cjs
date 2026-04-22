@@ -18,19 +18,21 @@ const {
 // all handles can be closed cleanly on app exit.
 const activeWatchers = new Map(); // fileId → { watcher, dirWatcher }
 
+function closeWatcherSafely(handle) {
+  if (!handle) return;
+  try {
+    handle.close();
+  } catch {
+    /* ignore */
+  }
+}
+
 function closeWatchersForFile(fileId) {
   const handles = activeWatchers.get(fileId);
   if (!handles) return;
   activeWatchers.delete(fileId);
-  for (const handle of [handles.watcher, handles.dirWatcher]) {
-    if (handle) {
-      try {
-        handle.close();
-      } catch {
-        /* ignore */
-      }
-    }
-  }
+  closeWatcherSafely(handles.watcher);
+  closeWatcherSafely(handles.dirWatcher);
 }
 
 app.on('before-quit', () => {
@@ -194,11 +196,7 @@ function registerEditWithDesktopHandler() {
           void uploadIfChangedThrottled();
         });
         watcher.on('error', () => {
-          try {
-            watcher.close();
-          } catch {
-            /* ignore */
-          }
+          closeWatcherSafely(watcher);
         });
       } catch {
         watcher = null;
@@ -313,11 +311,7 @@ function registerEditWithDesktopHandler() {
           derivedDebounceTimers.set(key, timer);
         });
         dirWatcher.on('error', () => {
-          try {
-            dirWatcher.close();
-          } catch {
-            /* ignore */
-          }
+          closeWatcherSafely(dirWatcher);
         });
       } catch {
         dirWatcher = null;
