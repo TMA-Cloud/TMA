@@ -31,6 +31,7 @@ import {
 import {
   isElectron,
   getFilesFromElectronClipboard,
+  peekElectronClipboardFileNames,
   copyFilesToPcClipboard,
   MAX_COPY_TO_PC_BYTES,
   editFileWithDesktopElectron,
@@ -142,6 +143,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [shareLinks, setShareLinks] = useState<string[]>([]);
   const [renameTarget, setRenameTarget] = useState<FileItem | null>(null);
   const [clipboard, setClipboard] = useState<{ ids: string[]; action: 'copy' | 'cut' } | null>(null);
+  /**
+   * Names we last wrote to the OS clipboard during a unified Copy. Used at paste time to detect
+   * whether the OS clipboard was overwritten externally (e.g. user copied a file in Explorer
+   * after our Copy). null = we never synced, or we cleared because the cloud clipboard moved on.
+   */
+  const lastOsClipboardSyncRef = useRef<string[] | null>(null);
+  // Anything other than a successful unified Copy (Cut, paste-clear, manual setClipboard) means
+  // the OS sync no longer represents the current cloud clipboard — drop the tracker so paste
+  // doesn't think they still match.
+  useEffect(() => {
+    if (!clipboard || clipboard.action !== 'copy') {
+      lastOsClipboardSyncRef.current = null;
+    }
+  }, [clipboard]);
   const [pasteProgress, setPasteProgress] = useState<number | null>(null);
   const [sortBy, setSortBy] = useState<'name' | 'size' | 'modified' | 'deletedAt'>('name');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
@@ -940,40 +955,64 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
-  const uploadFilesFromClipboard = async () => {
-    const clipFiles = await getFilesFromElectronClipboard();
-    if (clipFiles.length === 0) {
-      showToast('No files on clipboard.', 'info');
+  /**
+   * Unified copy. Algorithm:
+   *   1. Set cloud clipboard immediately so an in-app paste works without waiting for any fetch.
+   *   2. In Electron, if the selection contains regular files that fit within MAX_COPY_TO_PC_BYTES,
+   *      kick off an OS-clipboard sync in the background so the user can also paste in Explorer.
+   *      Folders, oversized files, and non-Electron environments fall back to cloud-only silently.
+   *   3. Toast describes what actually happened (cloud-only, both, or both with a folders note).
+   */
+  const clipboardCopy = (ids: string[]) => {
+    if (ids.length === 0) return;
+
+    setClipboard({ ids, action: 'copy' });
+    // Reset tracker — populated below only if we actually sync to the OS clipboard.
+    lastOsClipboardSyncRef.current = null;
+
+    const itemCount = ids.length;
+    const itemLabel = `${itemCount} item${itemCount !== 1 ? 's' : ''}`;
+
+    if (!isElectron()) {
+      showToast(`Copied ${itemLabel}`, 'success');
       return;
     }
-    await uploadFilesBulk(clipFiles);
-  };
 
-  const copyFilesToPc = async (ids: string[]) => {
-    if (ids.length === 0) return;
     const fileItems = ids
       .map(id => files.find(f => f.id === id))
       .filter((f): f is FileItem => f != null && String(f.type || '').toLowerCase() !== 'folder');
-    if (fileItems.length === 0) {
-      showToast('Select at least one file (folders are not supported)', 'error');
-      return;
-    }
-    const anyOverLimit = fileItems.some(f => f.size != null && Number(f.size) > MAX_COPY_TO_PC_BYTES);
+    const folderCount = itemCount - fileItems.length;
     const totalBytes = fileItems.reduce((s, f) => s + Number(f.size ?? 0), 0);
-    if (anyOverLimit || totalBytes > MAX_COPY_TO_PC_BYTES) {
-      showToast('Copy to computer is only allowed for files up to 200 MB total.', 'error');
+    const overLimit =
+      fileItems.some(f => f.size != null && Number(f.size) > MAX_COPY_TO_PC_BYTES) || totalBytes > MAX_COPY_TO_PC_BYTES;
+
+    if (fileItems.length === 0) {
+      // Folders only — cloud paste only.
+      showToast(`Copied ${itemLabel} (folders paste in cloud only)`, 'success');
       return;
     }
-    const items = fileItems.map(f => ({ id: f.id, name: f.name }));
-    const result = await copyFilesToPcClipboard(items);
-    if (result.ok) {
-      showToast(
-        `Copied ${items.length} file${items.length !== 1 ? 's' : ''} to clipboard. Paste in Explorer to save.`,
-        'success'
-      );
-    } else {
-      showToast(result.error ?? 'Failed to copy to computer', 'error');
+    if (overLimit) {
+      showToast(`Copied ${itemLabel} (over 200 MB — paste in cloud only)`, 'success');
+      return;
     }
+
+    const items = fileItems.map(f => ({ id: f.id, name: f.name }));
+    copyFilesToPcClipboard(items)
+      .then(result => {
+        if (result.ok) {
+          // Remember which names we put on the OS clipboard so a later paste can detect
+          // whether the OS clipboard was overwritten externally.
+          lastOsClipboardSyncRef.current = items.map(i => i.name);
+          const folderNote =
+            folderCount > 0 ? ` (${folderCount} folder${folderCount !== 1 ? 's' : ''} cloud-only)` : '';
+          showToast(`Copied ${itemLabel}${folderNote} — paste in cloud or in Explorer`, 'success');
+        } else {
+          showToast(`Copied ${itemLabel} (system clipboard unavailable — paste in cloud)`, 'success');
+        }
+      })
+      .catch(() => {
+        showToast(`Copied ${itemLabel} (system clipboard error — paste in cloud)`, 'success');
+      });
   };
 
   const editFileWithDesktop = async (id: string) => {
@@ -1308,6 +1347,61 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         throw error;
       }
     });
+  };
+
+  /**
+   * Unified paste. Cloud clipboard takes priority: if it's set, the user just copied/cut inside
+   * the app, so we paste from cloud (no re-upload of bytes we already have). Only when the cloud
+   * clipboard is empty do we fall back to uploading whatever's on the OS clipboard — that's the
+   * "I copied a file in Explorer" case.
+   */
+  const clipboardPaste = async (parentId: string | null) => {
+    // No cloud clipboard: only the OS clipboard matters.
+    if (!clipboard) {
+      if (!isElectron()) {
+        showToast('Nothing to paste', 'info');
+        return;
+      }
+      const clipFiles = await getFilesFromElectronClipboard();
+      if (clipFiles.length === 0) {
+        showToast('Nothing to paste', 'info');
+        return;
+      }
+      await uploadFilesBulk(clipFiles);
+      return;
+    }
+
+    // Cloud clipboard is set. Before defaulting to cloud paste, check whether the OS clipboard
+    // was overwritten externally since our last sync — if so, the user's most recent intent is
+    // the OS clipboard and we should upload that instead.
+    //
+    // Cut is exempt: the OS clipboard is never synced for a cut, so any files there are leftovers
+    // from an earlier Copy/Explorer action and unrelated to the cut the user wants to complete.
+    if (isElectron() && clipboard.action === 'copy') {
+      const osNames = await peekElectronClipboardFileNames();
+      const synced = lastOsClipboardSyncRef.current;
+      const osHasFiles = osNames.length > 0;
+      const matchesSync =
+        synced != null &&
+        osNames.length === synced.length &&
+        new Set(synced).size === synced.length &&
+        osNames.every(n => synced.includes(n));
+
+      if (osHasFiles && !matchesSync) {
+        // OS clipboard was set after our cloud copy (or we never synced). Treat as external paste.
+        const clipFiles = await getFilesFromElectronClipboard();
+        if (clipFiles.length > 0) {
+          // Drop the now-stale cloud clipboard so subsequent pastes don't re-trigger this branch.
+          setClipboard(null);
+          await uploadFilesBulk(clipFiles);
+          return;
+        }
+        // Peek saw names but readFiles returned nothing (race / unreadable format). Fall through
+        // to cloud paste rather than failing silently.
+      }
+    }
+
+    await pasteClipboard(parentId);
   };
 
   // Navigation
@@ -1680,7 +1774,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         emptyTrash: emptyTrashApi,
         clipboard,
         setClipboard,
-        pasteClipboard,
+        clipboardCopy,
+        clipboardPaste,
         pasteProgress,
         setPasteProgress,
         openFolder,
@@ -1703,7 +1798,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         deleteProgress,
         restoreProgress,
         downloadFiles,
-        copyFilesToPc,
         editFileWithDesktop,
         uploadProgress,
         setUploadProgress,
@@ -1713,7 +1807,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         cancelUploadGroup,
         uploadFilesBulk,
         uploadEntriesBulk,
-        uploadFilesFromClipboard,
         setIsUploadProgressInteracting,
         onlyOfficeConfigured,
         canConfigureOnlyOffice,

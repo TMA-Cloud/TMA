@@ -15,6 +15,7 @@ const { contextBridge, ipcRenderer } = require('electron');
         },
       },
       clipboard: {
+        peekFileNames: () => ipcRenderer.invoke('clipboard:peekFileNames'),
         readFiles: () => ipcRenderer.invoke('clipboard:readFiles'),
         writeFiles: paths => ipcRenderer.invoke('clipboard:writeFiles', paths),
         writeFilesFromData: payload => ipcRenderer.invoke('clipboard:writeFilesFromData', payload),

@@ -17,6 +17,7 @@ declare global {
         onUpdateDownloadProgress?: (callback: (percent: number) => void) => () => void;
       };
       clipboard: {
+        peekFileNames?: () => Promise<{ names: string[] }>;
         readFiles: () => Promise<{
           files: { name: string; mime: string; data: string }[];
         }>;
@@ -125,6 +126,20 @@ export function base64ToFile(base64: string, name: string, mime: string): File {
   const arr = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
   return new File([arr], name, { type: mime });
+}
+
+/**
+ * Peek the OS clipboard for file names without reading bytes. Returns [] when no files
+ * are on the clipboard or the API isn't available. Cheap enough to call on every paste.
+ */
+export async function peekElectronClipboardFileNames(): Promise<string[]> {
+  if (!isElectron() || !window.electronAPI?.clipboard?.peekFileNames) return [];
+  try {
+    const { names } = await window.electronAPI.clipboard.peekFileNames();
+    return Array.isArray(names) ? names : [];
+  } catch {
+    return [];
+  }
 }
 
 /** Read files from OS clipboard (e.g. copy in Explorer). */

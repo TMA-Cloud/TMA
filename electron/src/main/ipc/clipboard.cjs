@@ -170,7 +170,39 @@ async function readFilesFromClipboard() {
   return [];
 }
 
+/**
+ * Peek the OS clipboard for file names without reading any bytes. Used to detect when the
+ * clipboard was overwritten externally (e.g. user copied a file in Explorer) so the renderer
+ * can decide between cloud paste and OS-clipboard upload. FileDropList only — heavier OLE
+ * paths aren't worth the latency for a freshness check.
+ */
+async function peekClipboardFileNames() {
+  if (process.platform !== 'win32') return [];
+  try {
+    const stdout = await runPowerShell(
+      'Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.Clipboard]::GetFileDropList() | ForEach-Object { $_ }',
+      5000
+    );
+    const paths = stdout
+      .split(/\r?\n/)
+      .map(p => p.trim())
+      .filter(Boolean);
+    return paths.map(p => path.basename(p));
+  } catch (_) {
+    return [];
+  }
+}
+
 function registerClipboardHandlers() {
+  ipcMain.handle('clipboard:peekFileNames', async () => {
+    try {
+      const names = await peekClipboardFileNames();
+      return { names };
+    } catch (_) {
+      return { names: [] };
+    }
+  });
+
   ipcMain.handle('clipboard:readFiles', async () => {
     try {
       const files = await readFilesFromClipboard();

@@ -108,7 +108,8 @@ export interface AppContextType {
   emptyTrash: () => Promise<{ success: boolean; message?: string }>;
   clipboard: { ids: string[]; action: 'copy' | 'cut' } | null;
   setClipboard: (clip: { ids: string[]; action: 'copy' | 'cut' } | null) => void;
-  pasteClipboard: (parentId: string | null) => Promise<void>;
+  clipboardCopy: (ids: string[]) => void;
+  clipboardPaste: (parentId: string | null) => Promise<void>;
   pasteProgress: number | null;
   setPasteProgress: (p: number | null) => void;
   openFolder: (folder: FileItem) => void;
@@ -140,8 +141,6 @@ export interface AppContextType {
     label: string;
   } | null;
   downloadFiles: (ids: string[]) => Promise<void>;
-  /** Copy selected files to OS clipboard so user can paste in Explorer (Electron only). */
-  copyFilesToPc: (ids: string[]) => Promise<void>;
   /** Open a single file on the desktop (Windows) and save changes back */
   editFileWithDesktop: (id: string) => Promise<void>;
   uploadProgress: UploadProgressItem[];
@@ -155,8 +154,6 @@ export interface AppContextType {
   cancelUploadGroup: (groupId: string) => void;
   uploadFilesBulk: (files: File[]) => Promise<void>;
   uploadEntriesBulk: (entries: BulkUploadEntry[]) => Promise<void>;
-  /** Upload files from OS clipboard (Electron only). */
-  uploadFilesFromClipboard: () => Promise<void>;
   setIsUploadProgressInteracting: (isInteracting: boolean) => void;
   onlyOfficeConfigured: boolean;
   canConfigureOnlyOffice: boolean;

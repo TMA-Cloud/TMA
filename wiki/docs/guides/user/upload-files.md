@@ -30,17 +30,16 @@ Learn how to upload and manage files in TMA Cloud.
 
 - Copy files on your computer (for example, in Explorer with **Ctrl+C**)
 - Open **My Files** and go to the folder where you want to upload
-- Press **Ctrl+V** in the file list; files from the clipboard upload to the current folder
+- Press **Ctrl+V** in the file list; if you haven't recently copied something inside TMA Cloud, the OS-clipboard files upload to the current folder
 - Single file uses standard upload; multiple files use bulk upload with progress
 - Same size and quota limits apply as for Upload
-- In the Windows desktop app, this uses the desktop client's OS clipboard integration
+- In the Windows desktop app, **Paste** is unified with the in-app clipboard: if you also did a Copy/Cut inside TMA Cloud, that takes priority. If you copy something new in Explorer afterwards, Paste detects the change and uploads the newer Explorer files instead
 
 ### Copy to Computer (Windows desktop app)
 
-- Available in the Electron desktop app (Windows)
-- Right-click one or more files → **Copy** (desktop app); files are placed on the OS clipboard and can be pasted in Explorer to save
-- Limit: 200 MB total per action; no single file over 200 MB
-- Folders are not supported; only files; not available in Trash view
+- The desktop-app **Copy** (right-click → **Copy** or **Ctrl+C**) writes the selection to the Windows clipboard in the background, in addition to the in-app clipboard. You can then paste in Explorer to save them
+- Limit for the Windows-clipboard side: 200 MB total per action and no single file over 200 MB. Larger selections and folders still work for in-app pastes — they just aren't written to the Windows clipboard
+- Not available in Trash view
 
 ### Duplicate file names
 
@@ -78,12 +77,11 @@ You choose an action for each conflicting file; nothing is uploaded until you co
 
 - **Download:** Click to download single file
 - **Bulk Download:** Select multiple files → Download (creates ZIP archive)
-- **Copy:** (desktop app) Right-click files → Copy to put them on the OS clipboard and paste in Explorer (200 MB total limit)
-- **Copy in cloud:** In-app copy between folders inside TMA Cloud
+- **Copy:** Right-click → Copy (or **Ctrl+C**). One action: copies between folders inside TMA Cloud and (in the desktop app) also writes to the Windows clipboard so you can paste in Explorer. The 200 MB limit only affects the Windows-clipboard side
+- **Cut:** Right-click → Cut (or **Ctrl+X**). In-app only — cut items appear faded until you paste
 - **Rename:** Right-click → Rename
-- **Move:** Drag and drop or use Move option
-- **Paste:** Right-click → Paste to upload files from the OS clipboard into the current folder (desktop app)
-- **Paste in cloud:** Right-click → Paste in cloud to paste from the in-app clipboard
+- **Move:** Drag and drop or use Cut + Paste
+- **Paste:** Right-click → Paste (or **Ctrl+V**). Smart paste: cloud clipboard wins if you copied/cut inside TMA Cloud, otherwise files from the Windows clipboard are uploaded. If you copied externally after a cloud Copy, Paste detects that and uses the newer Windows-clipboard files
 - **Delete:** Right-click → Delete (moves to trash)
 - **Star:** Mark files as favorites
 - **Select all (desktop app):** Press **Ctrl+A** / **Cmd+A** in the file list to select all items in the current folder

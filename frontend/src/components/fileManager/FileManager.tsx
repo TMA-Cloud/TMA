@@ -36,9 +36,9 @@ export const FileManager: React.FC = () => {
     viewMode,
     currentPath,
     folderStack,
-    clipboard,
     setClipboard,
-    pasteClipboard,
+    clipboardCopy,
+    clipboardPaste,
     setViewMode,
     setSelectedFiles,
     addSelectedFile,
@@ -75,8 +75,6 @@ export const FileManager: React.FC = () => {
     uploadFile,
     uploadFilesBulk,
     editFileWithDesktop,
-    uploadFilesFromClipboard,
-    copyFilesToPc,
     canGoBack,
     canGoForward,
     goBack,
@@ -180,13 +178,12 @@ export const FileManager: React.FC = () => {
     setInfoModalOpen(true);
   }, [files, isTrashView, selectedFiles]);
 
-  // Electron desktop: keyboard shortcuts for file copy/paste
-  // - Ctrl+C / Cmd+C: "Copy to computer" (OS clipboard)
-  // - Ctrl+V / Cmd+V: "Paste from computer" (upload from OS clipboard)
-  // - Ctrl+Shift+C / Cmd+Shift+C: Cloud copy (internal clipboard)
-  // - Ctrl+Shift+V / Cmd+Shift+V: Cloud paste (from internal clipboard)
-  // - Ctrl+Shift+I / Cmd+Shift+I: Show "Get Info" for selected item
-  // - Ctrl+A / Cmd+A: select all files (Electron only)
+  // Electron desktop: unified clipboard shortcuts.
+  // - Ctrl+C: copy (cloud + OS clipboard for files that fit)
+  // - Ctrl+X: cut (cloud only)
+  // - Ctrl+V: smart paste — cloud clipboard if set, otherwise upload from OS clipboard
+  // - Ctrl+Shift+I: Get Info for selected item
+  // - Ctrl+A: select all
   useEffect(() => {
     if (!isElectron()) return;
 
@@ -216,31 +213,26 @@ export const FileManager: React.FC = () => {
       if (key === 'c') {
         if (!selectedFiles.length) return;
         e.preventDefault();
+        clipboardCopy(selectedFiles);
+        return;
+      }
 
-        if (e.shiftKey) {
-          setClipboard({ ids: selectedFiles, action: 'copy' });
-          return;
-        }
-
-        void copyFilesToPc(selectedFiles);
+      if (key === 'x') {
+        if (!selectedFiles.length) return;
+        e.preventDefault();
+        setClipboard({ ids: selectedFiles, action: 'cut' });
+        showToast(
+          `Cut ${selectedFiles.length} item${selectedFiles.length !== 1 ? 's' : ''} — paste to move`,
+          'success'
+        );
         return;
       }
 
       if (key === 'v') {
         e.preventDefault();
-
-        if (e.shiftKey) {
-          if (!clipboard) return;
-          void pasteClipboard(folderStack[folderStack.length - 1] ?? null).catch(error => {
-            const message = error instanceof Error ? error.message : String(error);
-            showToast(message || 'Failed to paste files', 'error');
-          });
-          return;
-        }
-
-        void uploadFilesFromClipboard().catch(error => {
+        void clipboardPaste(folderStack[folderStack.length - 1] ?? null).catch(error => {
           const message = error instanceof Error ? error.message : String(error);
-          showToast(message || 'Failed to upload from clipboard', 'error');
+          showToast(message || 'Failed to paste files', 'error');
         });
       }
 
@@ -254,17 +246,15 @@ export const FileManager: React.FC = () => {
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [
-    clipboard,
-    copyFilesToPc,
+    clipboardCopy,
+    clipboardPaste,
     files,
     folderStack,
     openInfoModalForSelection,
-    pasteClipboard,
     selectedFiles,
     setClipboard,
     setSelectedFiles,
     showToast,
-    uploadFilesFromClipboard,
   ]);
 
   const handleEmptyTrash = async () => {

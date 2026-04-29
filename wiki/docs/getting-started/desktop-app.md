@@ -131,22 +131,22 @@ When you use **Save As** or **Export** in a desktop editor (for example, Word �
 
 ## Clipboard Integration (Windows desktop app)
 
-The Windows desktop app adds OS-level clipboard support on top of the standard browser behavior.
+The Windows desktop app uses a single Copy / Cut / Paste model that bridges the cloud and OS clipboards. One Copy covers both in-app pastes and Explorer pastes, and Paste figures out the right source automatically.
 
 ### Context Menu
 
-- **Copy:** Right-click one or more files → **Copy** to place them on the Windows clipboard, then paste in Explorer to save them (200 MB total limit; folders not supported; not available in Trash).
-- **Paste:** Right-click in a folder → **Paste** to upload files from the Windows clipboard into the current folder (same upload limits as regular uploads). Supports Explorer copy, Outlook attachments, Snipping Tool, OLE file clipboard from other apps, and clipboard text that contains file paths (e.g. Copy as path, IDEs).
-- **Copy in cloud:** Uses the in-app clipboard to copy items between folders inside TMA Cloud.
-- **Paste in cloud:** Pastes from the in-app clipboard into the current folder.
+- **Copy:** Right-click one or more items → **Copy**. The selection goes to the in-app clipboard immediately so you can paste it into another folder inside TMA Cloud, and (in the desktop app) it is also written to the Windows clipboard in the background so you can paste in Explorer. Files larger than 200 MB total and folders are kept on the in-app clipboard only — those still paste between folders in TMA Cloud, but Explorer pastes are skipped. The toast tells you which path applied.
+- **Cut:** Right-click → **Cut**. In-app only. Cut items show a Windows-Explorer-style faded look until paste completes.
+- **Paste:** Right-click in a folder → **Paste**. If you copied or cut something inside TMA Cloud, the cloud clipboard is used (server-side copy/move — no re-upload). Otherwise files on the Windows clipboard are uploaded into the current folder. If you copy something in Explorer after a cloud Copy, Paste detects the change and uses the newer Windows-clipboard files instead.
+
+The OS clipboard side of Paste supports Explorer copy, Outlook attachments, Snipping Tool, the OLE file clipboard used by other apps, and clipboard text containing file paths (e.g. Copy as path, IDE "Copy path/reference").
 
 ### Keyboard Shortcuts
 
 - **Ctrl+A / Cmd+A:** Select all files and folders in the current view.
-- **Ctrl+C / Cmd+C:** Copy selected files to the Windows clipboard (same as context menu **Copy** in the desktop app).
-- **Ctrl+V / Cmd+V:** Upload files from the Windows clipboard into the current folder (same as context menu **Paste** in the desktop app).
-- **Ctrl+Shift+C / Cmd+Shift+C:** Copy selected items using the in-app clipboard (same as **Copy in cloud**).
-- **Ctrl+Shift+V / Cmd+Shift+V:** Paste from the in-app clipboard into the current folder (same as **Paste in cloud**).
+- **Ctrl+C / Cmd+C:** Unified Copy (cloud clipboard + Windows clipboard when files fit).
+- **Ctrl+X / Cmd+X:** Cut (cloud clipboard only).
+- **Ctrl+V / Cmd+V:** Smart Paste — cloud clipboard first, otherwise upload from the Windows clipboard.
 - **Ctrl+Shift+I / Cmd+Shift+I:** Open **Get Info** for the currently selected file or folder (desktop app only and single selection).
 
 ## Folder navigation (back/forward)

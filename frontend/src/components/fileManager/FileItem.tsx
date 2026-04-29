@@ -41,12 +41,14 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
   onScrollIntoViewHandled,
 }) => {
   const isMobile = useIsMobile();
-  const { hideFileExtensions } = useApp();
+  const { hideFileExtensions, clipboard } = useApp();
   const displayName = getDisplayFileName(file.name, file.type === 'file', hideFileExtensions);
   const rootRef = useRef<HTMLDivElement>(null);
   const longPressTimeoutRef = useRef<number | null>(null);
   const longPressTriggeredRef = useRef(false);
   const isExpired = file.shared && file.expiresAt instanceof Date && file.expiresAt < new Date();
+  const isCut = clipboard?.action === 'cut' && clipboard.ids.includes(file.id);
+  const cutClass = isCut ? 'opacity-50' : '';
 
   useLayoutEffect(() => {
     if (!scrollIntoViewRequest || scrollIntoViewRequest.fileId !== file.id) return;
@@ -147,6 +149,7 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
               : 'border-slate-200/60 dark:border-slate-700/50 bg-[#f0f3f7] dark:bg-slate-800/50 hover:border-[#5b8def]/25 dark:hover:border-[#5b8def]/35 hover:bg-slate-200/40 dark:hover:bg-slate-700/50'
           }
           ${isDragOver ? 'ring-4 ring-[#5b8def]/40 ring-offset-2 scale-[1.02]' : ''}
+          ${cutClass}
         `}
         style={{ maxWidth: '100%' }}
         onClick={handleClickWrapped}
@@ -232,6 +235,7 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
             : 'rounded-2xl border-l-[3px] border-transparent'
         }
         ${isDragOver ? 'ring-4 ring-[#5b8def]/40 ring-offset-2 scale-[1.01]' : ''}
+        ${cutClass}
       `}
       onClick={handleClickWrapped}
       onDoubleClick={onDoubleClick}
