@@ -47,6 +47,10 @@ Control user registration in TMA Cloud (admin only).
 
 **When off:** Browsers and the desktop app can both access the main app (default)
 
+:::warning[First-user-admin model]
+The **first account created** on a fresh deployment automatically becomes the administrator. This assignment is permanent (stored in `app_settings.first_user_id`) and cannot be transferred through the UI. If you plan to disable signup, make sure _you_ sign up first.
+:::
+
 ## First User
 
 - The first user to sign up is the administrator

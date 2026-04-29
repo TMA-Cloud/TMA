@@ -39,9 +39,14 @@ An array of file and folder objects.
 
 ### GET `/api/files/stats`
 
-Get file statistics (total files, total size).
+Get file statistics for the current user.
 
-**Response:**
+**Response fields:**
+
+- `totalFiles` — total number of files owned by the user
+- `totalFolders` — total number of folders owned by the user
+- `sharedCount` — number of share links the user has created (not items shared _with_ the user)
+- `starredCount` — number of files/folders the user has starred
 
 ```json
 {

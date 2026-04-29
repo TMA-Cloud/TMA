@@ -783,6 +783,186 @@ a:hover {
 }
 
 /* ============================================
+   UI Gallery — responsive card grid
+   ============================================ */
+.gallery-intro {
+  color: var(--ifm-font-color-base);
+  opacity: 0.85;
+  font-size: 1.05rem;
+  margin-bottom: 2rem;
+}
+
+.gallery-section {
+  margin: 2.5rem 0 3rem;
+}
+
+.gallery-section__label {
+  display: inline-block;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--ifm-color-primary);
+  background: rgba(59, 130, 246, 0.1);
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  margin-bottom: 0.75rem;
+}
+
+[data-theme="dark"] .gallery-section__label {
+  background: rgba(96, 165, 250, 0.12);
+  color: var(--ifm-color-primary-lighter);
+}
+
+.gallery-section h2 {
+  margin-top: 0.25rem !important;
+  margin-bottom: 0.5rem !important;
+  border-bottom: none !important;
+  padding-bottom: 0 !important;
+}
+
+.gallery-section__desc {
+  color: var(--ifm-font-color-base);
+  opacity: 0.75;
+  margin-bottom: 1.5rem;
+  font-size: 0.95rem;
+}
+
+.gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 1.25rem;
+}
+
+.gallery-grid--pair {
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+.gallery-card {
+  display: flex;
+  flex-direction: column;
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--ifm-background-surface-color);
+  border: 1px solid var(--ifm-border-color);
+  box-shadow: var(--ifm-global-shadow-md);
+  transition:
+    transform var(--ifm-transition-fast)
+      var(--ifm-transition-timing-default),
+    box-shadow var(--ifm-transition-fast),
+    border-color var(--ifm-transition-fast);
+  text-decoration: none;
+}
+
+.gallery-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--ifm-global-shadow-tl);
+  border-color: var(--ifm-color-primary);
+  text-decoration: none;
+}
+
+[data-theme="dark"] .gallery-card {
+  background: var(--wiki-bg-elevated);
+  border-color: var(--wiki-border);
+}
+
+.gallery-card__media {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  background: linear-gradient(
+    135deg,
+    rgba(59, 130, 246, 0.06) 0%,
+    rgba(96, 165, 250, 0.03) 100%
+  );
+}
+
+.gallery-card__media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+  display: block;
+  transition: transform var(--ifm-transition-slow)
+    var(--ifm-transition-timing-default);
+}
+
+.gallery-card:hover .gallery-card__media img {
+  transform: scale(1.03);
+}
+
+.gallery-card--mobile .gallery-card__media {
+  aspect-ratio: 9 / 16;
+  max-height: 520px;
+}
+
+.gallery-card--mobile .gallery-card__media img {
+  object-fit: contain;
+  background: var(--wiki-bg-base);
+}
+
+.gallery-card__body {
+  padding: 0.9rem 1.1rem 1.1rem;
+  border-top: 1px solid var(--ifm-border-color);
+}
+
+[data-theme="dark"] .gallery-card__body {
+  border-top-color: var(--wiki-border);
+}
+
+.gallery-card__title {
+  font-weight: 600;
+  font-size: 1rem;
+  color: var(--ifm-heading-color);
+  margin: 0 0 0.2rem;
+}
+
+.gallery-card__subtitle {
+  font-size: 0.85rem;
+  color: var(--ifm-font-color-base);
+  opacity: 0.7;
+  margin: 0;
+}
+
+.gallery-tag {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 0.15rem 0.5rem;
+  border-radius: 6px;
+  margin-right: 0.4rem;
+  vertical-align: middle;
+}
+
+.gallery-tag--desktop {
+  background: rgba(59, 130, 246, 0.15);
+  color: var(--ifm-color-primary);
+}
+
+.gallery-tag--mobile {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+}
+
+[data-theme="dark"] .gallery-tag--desktop {
+  background: rgba(96, 165, 250, 0.18);
+  color: var(--ifm-color-primary-lighter);
+}
+
+@media (max-width: 640px) {
+  .gallery-grid,
+  .gallery-grid--pair {
+    grid-template-columns: 1fr;
+  }
+
+  .gallery-card--mobile .gallery-card__media {
+    aspect-ratio: 9 / 14;
+  }
+}
+
+/* ============================================
    Dynamic Changelog UI (dark theme)
    ============================================ */
 .changelogContainer {

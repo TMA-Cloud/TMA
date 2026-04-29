@@ -64,6 +64,10 @@ All incoming data from clients is strictly validated and sanitized on the backen
 - **Stream Processing:** Memory-efficient for large files
 - **Automatic:** Encryption on upload, decryption on download
 
+:::danger[Key loss means data loss]
+The encryption key is read from an environment variable. If you lose or change the key, **previously stored files cannot be decrypted** — they are effectively unrecoverable. Back the key up somewhere safe (password manager, secrets vault) before taking the deployment to production.
+:::
+
 ### Database Security
 
 - **Parameterized Queries:** SQL injection prevention

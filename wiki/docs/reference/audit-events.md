@@ -9,7 +9,6 @@ Complete list of audit event types in TMA Cloud.
 - `auth.login.failure` - Failed login attempt
 - `auth.logout` - Session logout
 - `auth.logout_all` - Logout from all devices
-- `auth.suspicious_token` - Token fingerprint mismatch
 - `auth.session_revoked` - Single session revoked
 - `auth.other_sessions_revoked` - All other sessions revoked
 
@@ -40,6 +39,10 @@ Complete list of audit event types in TMA Cloud.
 - `share.download` - File or folder downloaded from share
 
 ## Document Events (OnlyOffice)
+
+:::note
+These events are only emitted when OnlyOffice integration is configured and enabled. If OnlyOffice is not set up, these events never appear in the audit log.
+:::
 
 - `document.open` - Document opened in OnlyOffice
 - `document.save` - Document saved from OnlyOffice

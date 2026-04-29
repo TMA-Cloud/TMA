@@ -47,6 +47,10 @@ Recover deleted files and manage your trash in TMA Cloud.
 
 ## Permanent Deletion
 
+:::danger[Irreversible]
+Permanent deletion cannot be undone. Once a file is removed from trash (manually or by the 15-day auto-cleanup), it is gone — there is no additional recovery step.
+:::
+
 ### Delete Permanently
 
 1. Right-click on file in trash

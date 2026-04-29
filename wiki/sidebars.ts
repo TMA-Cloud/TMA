@@ -3,7 +3,11 @@ import type { SidebarsConfig } from "@docusaurus/plugin-content-docs";
 const sidebars: SidebarsConfig = {
   tutorialSidebar: [
     "intro",
-    "gallery",
+    {
+      type: "doc",
+      id: "gallery",
+      label: "UI Gallery",
+    },
     {
       type: "category",
       label: "Getting Started",
@@ -102,6 +106,7 @@ const sidebars: SidebarsConfig = {
         "reference/error-codes",
         "reference/rate-limits",
         "reference/cli-commands",
+        "reference/glossary",
       ],
     },
     {
