@@ -1,6 +1,6 @@
 {
   "name": "tma-cloud-wiki",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "private": true,
   "scripts": {
     "docusaurus": "docusaurus",
