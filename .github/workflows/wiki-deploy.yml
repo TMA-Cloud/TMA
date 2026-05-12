@@ -2,7 +2,7 @@ name: Deploy Wiki
 
 on:
   push:
-    branches: [main, master]
+    branches: [main]
     paths: ['wiki/**']
   workflow_dispatch:
 
@@ -20,13 +20,13 @@ jobs:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
           cache-dependency-path: wiki/package-lock.json
       - run: npm ci
       - run: npm run build
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v4
+      - uses: actions/configure-pages@v6
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: wiki/build
-      - uses: actions/deploy-pages@v4
+      - uses: actions/deploy-pages@v5
