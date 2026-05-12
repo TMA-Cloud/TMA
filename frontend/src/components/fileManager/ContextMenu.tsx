@@ -501,13 +501,12 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     setPlacement({ x: left, y: top });
   }, [isOpen, isMobile, position.x, position.y]);
 
-  // Reset placement when menu closes so next open re-measures
-  useEffect(() => {
-    if (!isOpen) setPlacement(null);
-  }, [isOpen]);
-
+  // Menu is only visible after useLayoutEffect above has measured this open instance.
+  // Deriving `menuVisible` from isOpen makes a separate reset effect unnecessary —
+  // when isOpen toggles back on, useLayoutEffect re-runs and overwrites the stale
+  // placement synchronously before paint.
   const menuStyle = placement ?? initialPosition;
-  const menuVisible = placement !== null;
+  const menuVisible = isOpen && placement !== null;
 
   useEffect(() => {
     if (!isOpen || isMobile) return;

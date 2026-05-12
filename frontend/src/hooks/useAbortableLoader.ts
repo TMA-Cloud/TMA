@@ -65,7 +65,7 @@ export function useAbortableLoader<T>({
   }, [enabled, resetOnDisable]);
 
   useEffect(() => {
-    if (enabled) load();
+    if (enabled) Promise.resolve().then(load);
   }, [enabled, load]);
 
   useEffect(() => {

@@ -24,12 +24,13 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ isOpen
   const isMountedRef = useIsMounted();
 
   useEffect(() => {
-    if (!isOpen) {
+    if (isOpen) return;
+    Promise.resolve().then(() => {
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
       setSubmitting(false);
-    }
+    });
   }, [isOpen]);
 
   const handleSubmit = async (e: React.FormEvent) => {

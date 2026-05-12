@@ -89,7 +89,7 @@ export function useSessions() {
   };
 
   useEffect(() => {
-    loadActiveSessions();
+    Promise.resolve().then(loadActiveSessions);
   }, [loadActiveSessions]);
 
   return {

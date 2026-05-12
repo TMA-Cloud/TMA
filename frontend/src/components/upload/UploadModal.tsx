@@ -127,12 +127,14 @@ export const UploadModal: React.FC = () => {
   useEffect(() => {
     if (!uploadModalOpen || !uploadModalInitialEntries?.length) return;
     const entries = uploadModalInitialEntries;
-    clearUploadModalInitialEntries();
-    handleEntries(entries);
-    // Stop the "processing" UI as soon as we've staged the scanned entries
-    // (even if they later end up being removed/filtered elsewhere).
-    setUploadModalProcessing(false);
-    setUploadModalProcessingRequestId(null);
+    Promise.resolve().then(() => {
+      clearUploadModalInitialEntries();
+      handleEntries(entries);
+      // Stop the "processing" UI as soon as we've staged the scanned entries
+      // (even if they later end up being removed/filtered elsewhere)
+      setUploadModalProcessing(false);
+      setUploadModalProcessingRequestId(null);
+    });
   }, [
     uploadModalOpen,
     uploadModalInitialEntries,

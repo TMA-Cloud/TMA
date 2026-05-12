@@ -596,15 +596,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         abortControllerRef.current.abort();
         abortControllerRef.current = null;
       }
-      setIsSearching(false);
-
-      if (!isFileManagerPage(currentPathRef.current[0]) && filesBeforeSearchRef.current) {
-        setFiles(filesBeforeSearchRef.current);
-      } else {
-        void refreshFiles(true);
-      }
-      filesBeforeSearchRef.current = null;
-      didSavePreSearchRef.current = false;
+      Promise.resolve().then(() => {
+        setIsSearching(false);
+        if (!isFileManagerPage(currentPathRef.current[0]) && filesBeforeSearchRef.current) {
+          setFiles(filesBeforeSearchRef.current);
+        } else {
+          void refreshFiles(true);
+        }
+        filesBeforeSearchRef.current = null;
+        didSavePreSearchRef.current = false;
+      });
     }
   }, [searchQuery, debouncedSearch, cancelSearch, refreshFiles]);
 
@@ -747,7 +748,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Refresh files when navigating or changing sort (non-search)
   useEffect(() => {
     if (searchQuery.trim().length === 0 && isFileManagerPage(currentPath[0])) {
-      void refreshFiles(true);
+      Promise.resolve().then(() => refreshFiles(true));
     }
   }, [folderStack, currentPath, sortBy, sortOrder, searchQuery, refreshFiles]);
 
@@ -1564,8 +1565,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setCanConfigureOnlyOffice(false);
       }
     };
-    void loadAdminStatus();
-    void refreshOnlyOfficeConfig();
+    Promise.resolve().then(() => {
+      void loadAdminStatus();
+      void refreshOnlyOfficeConfig();
+    });
   }, [refreshOnlyOfficeConfig]);
 
   const cancelUpload = (uploadId: string) => {
@@ -1696,7 +1699,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const retryElectronUpdate = useCallback(async () => {
     if (!updatesAvailable?.electron) return;
     await runElectronAutoUpdate(updatesAvailable.electron);
-  }, [updatesAvailable?.electron, runElectronAutoUpdate]);
+  }, [updatesAvailable, runElectronAutoUpdate]);
 
   // Auto-download & auto-install electron update once detected
   useEffect(() => {

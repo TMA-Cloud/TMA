@@ -144,7 +144,7 @@ export function useSignupStatus(options: UseSignupStatusOptions = {}) {
     );
 
   useEffect(() => {
-    loadSignupStatus();
+    Promise.resolve().then(loadSignupStatus);
   }, []);
 
   return {

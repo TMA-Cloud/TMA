@@ -112,11 +112,11 @@ export const Settings: React.FC = () => {
 
   const visibleSections = ALL_SECTIONS.filter(s => !s.adminOnly || canToggleSignup);
 
-  useEffect(() => {
-    if (activeSection !== 'profile' && !visibleSections.find(s => s.id === activeSection)) {
-      setActiveSection('profile');
-    }
-  }, [canToggleSignup, activeSection, visibleSections]);
+  // If the selected section is no longer visible (e.g. admin toggled off), fall back to 'profile'.
+  // Derived during render rather than syncing via setState in an effect.
+  const effectiveActiveSection: SectionId = visibleSections.find(s => s.id === activeSection)
+    ? activeSection
+    : 'profile';
 
   const loadUsersList = async () => {
     try {
@@ -158,9 +158,7 @@ export const Settings: React.FC = () => {
   );
 
   useEffect(() => {
-    if (canToggleSignup) {
-      loadActiveClients(true);
-    }
+    if (canToggleSignup) Promise.resolve().then(() => loadActiveClients(true));
   }, [canToggleSignup, loadActiveClients]);
 
   const handleShowActiveClients = () => {
@@ -180,7 +178,7 @@ export const Settings: React.FC = () => {
   })();
 
   const renderActiveSection = () => {
-    switch (activeSection) {
+    switch (effectiveActiveSection) {
       case 'profile':
         return (
           <ProfileSection
@@ -332,7 +330,7 @@ export const Settings: React.FC = () => {
             <ul className="space-y-0.5">
               {visibleSections.map(section => {
                 const Icon = section.icon;
-                const isActive = activeSection === section.id;
+                const isActive = effectiveActiveSection === section.id;
                 return (
                   <li key={section.id}>
                     <button
@@ -376,7 +374,7 @@ export const Settings: React.FC = () => {
         {/* Content panel */}
         <main className="flex-1 min-w-0 overflow-y-auto">
           <div className="p-6 md:p-8 lg:p-10">
-            <div key={activeSection} style={{ animation: 'fadeIn 0.3s ease both' }}>
+            <div key={effectiveActiveSection} style={{ animation: 'fadeIn 0.3s ease both' }}>
               {renderActiveSection()}
             </div>
           </div>

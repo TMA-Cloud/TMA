@@ -91,7 +91,7 @@ export function useVersions() {
   };
 
   useEffect(() => {
-    loadCurrentVersions();
+    Promise.resolve().then(loadCurrentVersions);
   }, [loadCurrentVersions]);
 
   return {

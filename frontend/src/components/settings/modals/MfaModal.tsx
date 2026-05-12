@@ -113,22 +113,24 @@ export const MfaModal: React.FC<MfaModalProps> = ({ isOpen, onClose }) => {
 
   useEffect(() => {
     if (isOpen) {
-      loadMfaStatus();
+      Promise.resolve().then(loadMfaStatus);
     } else {
-      // Reset state when modal closes
-      setStep('status');
-      setVerificationCode('');
-      setQrCode(null);
-      setSecret(null);
-      setRemainingCodesCount(null);
-      setCooldownRemaining(null);
+      Promise.resolve().then(() => {
+        setStep('status');
+        setVerificationCode('');
+        setQrCode(null);
+        setSecret(null);
+        setRemainingCodesCount(null);
+        setCooldownRemaining(null);
+      });
     }
   }, [isOpen, loadMfaStatus]);
 
   // Countdown timer for cooldown
   useEffect(() => {
     if (cooldownRemaining === null || cooldownRemaining <= 0) {
-      setCooldownRemaining(null);
+      // Defer the clamp-to-null so it runs in a microtask callback
+      if (cooldownRemaining !== null) Promise.resolve().then(() => setCooldownRemaining(null));
       return;
     }
 

@@ -27,7 +27,7 @@ export function useStorageUsage() {
   }, []);
 
   useEffect(() => {
-    loadUsage();
+    Promise.resolve().then(loadUsage);
   }, [loadUsage]);
 
   return { usage, loading, refresh: loadUsage };

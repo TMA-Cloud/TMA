@@ -40,7 +40,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
 
-    loadProfile(abortController.signal);
+    Promise.resolve().then(() => loadProfile(abortController.signal));
 
     // Cleanup: abort request if component unmounts
     return () => {

@@ -214,29 +214,26 @@ const AppContent: React.FC = () => {
 const AuthGate: React.FC = () => {
   const { user, loading } = useAuth();
   const [view, setView] = useState<'login' | 'signup'>('login');
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('error') === 'signup_disabled' ? 'Signup is currently disabled' : null;
+  });
 
   const { signupEnabled, loadingSignupStatus } = useSignupStatus();
 
-  // If signup is disabled, force view to login
-  React.useEffect(() => {
-    if (!loadingSignupStatus && !signupEnabled && view === 'signup') {
-      setView('login');
-      setError('Signup is currently disabled.');
-    }
-  }, [signupEnabled, loadingSignupStatus, view]);
-
-  // Check for error in URL (e.g., from Google OAuth callback)
+  // Clean up the error query param after mount
   React.useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const errorParam = params.get('error');
-    if (errorParam === 'signup_disabled') {
-      setError('Signup is currently disabled');
-      setView('login');
-      // Clean up URL
+    if (params.get('error')) {
       window.history.replaceState({}, '', window.location.pathname);
     }
   }, []);
+
+  // Derived: if signup got disabled while user was viewing signup, fall back to login UI
+  // and surface a contextual error
+  const signupDisabled = !loadingSignupStatus && !signupEnabled;
+  const effectiveView: 'login' | 'signup' = signupDisabled ? 'login' : view;
+  const effectiveError = error ?? (view === 'signup' && signupDisabled ? 'Signup is currently disabled.' : null);
 
   if (loading || loadingSignupStatus) {
     return (
@@ -255,13 +252,13 @@ const AuthGate: React.FC = () => {
         <div className="absolute top-5 right-5 z-50">
           <ThemeToggle />
         </div>
-        {error && (
+        {effectiveError && (
           <div className="absolute top-5 left-1/2 -translate-x-1/2 bg-red-500/95 text-white px-5 py-2.5 rounded-2xl shadow-soft-md z-50 text-sm font-medium backdrop-blur-sm">
-            {error}
+            {effectiveError}
           </div>
         )}
         <Suspense fallback={<PageLoadingFallback />}>
-          {view === 'login' || !signupEnabled ? (
+          {effectiveView === 'login' || !signupEnabled ? (
             <LoginForm
               signupEnabled={signupEnabled}
               onSwitch={() => {

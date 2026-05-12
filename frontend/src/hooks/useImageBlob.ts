@@ -10,17 +10,16 @@ export function useImageBlob(fileId: string | null | undefined): { imageSrc: str
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!fileId) {
-      setImageSrc(null);
-      setLoading(false);
-      return;
-    }
-
     let revoke: (() => void) | undefined;
     const abortController = new AbortController();
-    setLoading(true);
 
-    (async () => {
+    Promise.resolve().then(async () => {
+      if (!fileId) {
+        setImageSrc(null);
+        setLoading(false);
+        return;
+      }
+      setLoading(true);
       try {
         const res = await authFetch(`/api/files/${fileId}/download`, {
           signal: abortController.signal,
@@ -38,7 +37,7 @@ export function useImageBlob(fileId: string | null | undefined): { imageSrc: str
       } finally {
         if (!abortController.signal.aborted) setLoading(false);
       }
-    })();
+    });
 
     return () => {
       abortController.abort();

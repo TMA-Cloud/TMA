@@ -1,6 +1,6 @@
 import path from 'path';
 
-import archiver from 'archiver';
+import { ZipArchive } from 'archiver';
 
 import { logger } from '../config/logger.js';
 import { isFilePathEncrypted, isValidPath, resolveFilePath } from './filePath.js';
@@ -102,7 +102,7 @@ async function appendEntryTree(archive, allEntries, parentId, base) {
 async function createZipArchive(res, archiveName, entries, rootId, baseName, onSuccess) {
   setZipHeaders(res, archiveName);
 
-  const archive = archiver('zip');
+  const archive = new ZipArchive();
   const state = attachArchiveHandlers(archive, res, onSuccess);
 
   archive.pipe(res);
@@ -135,7 +135,7 @@ async function createZipArchive(res, archiveName, entries, rootId, baseName, onS
 async function createBulkZipArchive(res, archiveName, allEntries, rootIds, onSuccess) {
   setZipHeaders(res, archiveName);
 
-  const archive = archiver('zip');
+  const archive = new ZipArchive();
   const state = attachArchiveHandlers(archive, res, onSuccess);
 
   archive.pipe(res);
