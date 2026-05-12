@@ -106,6 +106,9 @@ const DETECTION_ALIASES = {
 
   // PDF (some clients send non-standard aliases)
   pdf: ['application/x-pdf', 'application/acrobat', 'application/vnd.pdf', 'text/pdf', 'text/x-pdf'],
+
+  // SVG is XML-based; file-type reports application/xml for SVGs without an XML declaration
+  svg: ['application/xml', 'text/xml'],
 };
 
 /**
