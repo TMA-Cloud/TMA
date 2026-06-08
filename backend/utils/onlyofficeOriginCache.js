@@ -55,6 +55,16 @@ async function refreshCache() {
 }
 
 /**
+ * Warm the cache at startup (awaitable). Ensures the first responses — including
+ * the SPA index.html — carry a CSP with the OnlyOffice origin, instead of the
+ * synchronous getter returning a cold null while a background refresh runs.
+ */
+async function warmOnlyOfficeOriginCache() {
+  await refreshCache();
+  return onlyOfficeOriginCache.origin;
+}
+
+/**
  * Get OnlyOffice origin from cache (synchronous)
  * Returns cached value immediately, even if expired (stale-while-revalidate pattern)
  * Triggers background refresh if cache is expired
@@ -113,4 +123,4 @@ function invalidateOnlyOfficeOriginCache() {
   }
 }
 
-export { getCachedOnlyOfficeOrigin, invalidateOnlyOfficeOriginCache };
+export { getCachedOnlyOfficeOrigin, invalidateOnlyOfficeOriginCache, warmOnlyOfficeOriginCache };

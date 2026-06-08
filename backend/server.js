@@ -26,7 +26,7 @@ import { initializeAuditQueue, shutdownAuditQueue } from './services/auditLogger
 import { initializeMetrics, metricsEndpoint, startQueueMetricsUpdater } from './services/metrics.js';
 import { connectRedis, disconnectRedis } from './config/redis.js';
 
-import { getCachedOnlyOfficeOrigin } from './utils/onlyofficeOriginCache.js';
+import { getCachedOnlyOfficeOrigin, warmOnlyOfficeOriginCache } from './utils/onlyofficeOriginCache.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -257,6 +257,16 @@ runMigrations()
     } catch (error) {
       logger.error({ err: error }, 'Failed to initialize audit system');
       // Continue anyway - audit system is non-critical for application operation
+    }
+
+    // Warm the OnlyOffice origin cache before accepting requests so the first
+    // page loads get a CSP that allows the OnlyOffice API script. Otherwise the
+    // cold cache returns null synchronously and api.js is blocked until a reload.
+    try {
+      await warmOnlyOfficeOriginCache();
+      logger.info('OnlyOffice origin cache warmed');
+    } catch (error) {
+      logger.warn({ err: error }, 'Failed to warm OnlyOffice origin cache - will populate on first request');
     }
 
     // Start HTTP server
