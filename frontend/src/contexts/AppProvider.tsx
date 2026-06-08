@@ -198,6 +198,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const uploadXhrRef = useRef<Map<string, XMLHttpRequest>>(new Map());
   const searchQueryRef = useRef('');
   const abortControllerRef = useRef<AbortController | null>(null);
+  const listRefreshControllerRef = useRef<AbortController | null>(null);
+  const listRefreshSeqRef = useRef(0);
   const filesRef = useRef<FileItem[]>(files);
   const filesBeforeSearchRef = useRef<FileItem[] | null>(null);
   const didSavePreSearchRef = useRef(false);
@@ -242,32 +244,45 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const refreshFiles = useCallback(
     async (skipSearchCheck = false) => {
+      if (!skipSearchCheck && searchQuery.trim().length > 0) return;
+      if (!isFileManagerPage(currentPath[0])) {
+        returnHighlightAfterRefreshRef.current = null;
+        return;
+      }
+
+      // Abort any prior in-flight listing and tag this request. A newer refresh
+      // (fast navigation, post-mutation refresh, or SSE-triggered refresh) must
+      // win so a slow response for an old folder can't overwrite the new one.
+      listRefreshControllerRef.current?.abort();
+      const controller = new AbortController();
+      listRefreshControllerRef.current = controller;
+      const requestId = ++listRefreshSeqRef.current;
+
+      const parentId = folderStack[folderStack.length - 1];
+      let urlPath = '/api/files';
+      if (folderStack.length === 1) {
+        if (currentPath[0] === 'Starred') urlPath = '/api/files/starred';
+        else if (currentPath[0] === 'Shared') urlPath = '/api/files/shared';
+        else if (currentPath[0] === 'Trash') urlPath = '/api/files/trash';
+      }
+
+      const url = new URL(urlPath, window.location.origin);
+      if (parentId) url.searchParams.append('parentId', parentId);
+      url.searchParams.append('sortBy', sortBy);
+      if (sortOrder?.trim()) url.searchParams.append('order', sortOrder);
+
       try {
-        if (!skipSearchCheck && searchQuery.trim().length > 0) return;
-        if (!isFileManagerPage(currentPath[0])) {
-          returnHighlightAfterRefreshRef.current = null;
-          return;
-        }
-
-        const parentId = folderStack[folderStack.length - 1];
-        let urlPath = '/api/files';
-        if (folderStack.length === 1) {
-          if (currentPath[0] === 'Starred') urlPath = '/api/files/starred';
-          else if (currentPath[0] === 'Shared') urlPath = '/api/files/shared';
-          else if (currentPath[0] === 'Trash') urlPath = '/api/files/trash';
-        }
-
-        const url = new URL(urlPath, window.location.origin);
-        if (parentId) url.searchParams.append('parentId', parentId);
-        url.searchParams.append('sortBy', sortBy);
-        if (sortOrder?.trim()) url.searchParams.append('order', sortOrder);
-
         const res = await fetch(url.toString(), {
           credentials: 'include',
           headers: { 'X-Requested-With': 'XMLHttpRequest' },
+          signal: controller.signal,
         });
         if (!res.ok) throw new Error(`Failed to fetch files: ${res.status}`);
         const data: FileItemResponse[] = await res.json();
+
+        // A newer refresh superseded this one while awaiting — discard the stale result.
+        if (requestId !== listRefreshSeqRef.current) return;
+
         const sorted = sortFilesWithFoldersFirst(data.map(mapFileResponse), sortBy, sortOrder);
         setFiles(sorted);
 
@@ -276,9 +291,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (highlightId && sorted.some(f => f.id === highlightId)) {
           setSelectedFiles([highlightId]);
         }
-      } catch {
-        // UI will show empty state
-        returnHighlightAfterRefreshRef.current = null;
+      } catch (err) {
+        // Aborted by a newer refresh: leave state and the pending highlight for the winner.
+        if (err instanceof Error && err.name === 'AbortError') return;
+        // Only the latest request should clear the pending highlight on failure.
+        if (requestId === listRefreshSeqRef.current) {
+          returnHighlightAfterRefreshRef.current = null;
+        }
+      } finally {
+        if (listRefreshControllerRef.current === controller) {
+          listRefreshControllerRef.current = null;
+        }
       }
     },
     [folderStack, currentPath, sortBy, sortOrder, searchQuery]
