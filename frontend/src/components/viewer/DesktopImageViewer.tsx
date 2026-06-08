@@ -159,18 +159,21 @@ export const DesktopImageViewer: React.FC<DesktopImageViewerProps> = ({ imageVie
       setZoom(currentZoom => {
         const minZoom = Math.max(0.1, initialFitZoom || 0.25);
         const newZoom = e.deltaY < 0 ? Math.min(currentZoom + 0.25, 5) : Math.max(currentZoom - 0.25, minZoom);
-        const wrap = wrapperRef.current;
-        if (!wrap) {
-          return newZoom;
-        }
 
-        const rect = wrap.getBoundingClientRect();
-        const imgX = (e.clientX - rect.left - offset.current.x) / currentZoom;
-        const imgY = (e.clientY - rect.top - offset.current.y) / currentZoom;
+        // Use the (untransformed) container as the reference frame. The wrapper
+        // itself is translated, so its rect already includes offset — using it
+        // here would double-count the offset and zoom toward the wrong point.
+        const cont = containerRef.current;
+        if (!cont) return newZoom;
+        const rect = cont.getBoundingClientRect();
+        const relX = e.clientX - rect.left;
+        const relY = e.clientY - rect.top;
+        const imgX = (relX - offset.current.x) / currentZoom;
+        const imgY = (relY - offset.current.y) / currentZoom;
 
         offset.current = {
-          x: e.clientX - rect.left - imgX * newZoom,
-          y: e.clientY - rect.top - imgY * newZoom,
+          x: relX - imgX * newZoom,
+          y: relY - imgY * newZoom,
         };
 
         // Apply transform inline to avoid dependency on applyTransform
@@ -186,17 +189,21 @@ export const DesktopImageViewer: React.FC<DesktopImageViewerProps> = ({ imageVie
   );
 
   const zoomAtCursor = (newZoom: number) => {
-    const wrap = wrapperRef.current;
-    if (!wrap) return setZoom(newZoom);
+    const cont = containerRef.current;
+    if (!cont) return setZoom(newZoom);
 
-    const rect = wrap.getBoundingClientRect();
+    // Reference the untransformed container, not the translated wrapper, so the
+    // focal point math doesn't double-count the offset.
+    const rect = cont.getBoundingClientRect();
     const { x: cx, y: cy } = lastMousePos.current;
-    const imgX = (cx - rect.left - offset.current.x) / zoom;
-    const imgY = (cy - rect.top - offset.current.y) / zoom;
+    const relX = cx - rect.left;
+    const relY = cy - rect.top;
+    const imgX = (relX - offset.current.x) / zoom;
+    const imgY = (relY - offset.current.y) / zoom;
 
     offset.current = {
-      x: cx - rect.left - imgX * newZoom,
-      y: cy - rect.top - imgY * newZoom,
+      x: relX - imgX * newZoom,
+      y: relY - imgY * newZoom,
     };
     setZoom(newZoom);
     applyTransform(newZoom);
@@ -248,7 +255,6 @@ export const DesktopImageViewer: React.FC<DesktopImageViewerProps> = ({ imageVie
             ref={wrapperRef}
             className="will-change-transform"
             style={{
-              transform: `scale(${zoom})`,
               transformOrigin: '0 0',
               backfaceVisibility: 'hidden',
               perspective: 1000,

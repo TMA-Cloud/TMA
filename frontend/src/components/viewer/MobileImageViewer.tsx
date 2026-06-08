@@ -417,7 +417,6 @@ export const MobileImageViewer: React.FC<MobileImageViewerProps> = ({
           ref={wrapperRef}
           className="will-change-transform"
           style={{
-            transform: `scale(${zoom})`,
             transformOrigin: '0 0',
           }}
         >
