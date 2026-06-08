@@ -114,15 +114,15 @@ app.get(
 );
 
 // API routes
-// CSRF protection for frontend-facing API routes (defense-in-depth)
-// Exempt: public routes (no mutations), OnlyOffice (external server callbacks),
-// share routes (HTML pages), and version (read-only)
+// csrfProtection is mounted at '/api' and runs for every /api/* request that
+// reaches it, so CSRF-exempt routes (public, OnlyOffice callbacks, version) are
+// registered BEFORE the csrf-bearing line so they respond before it runs.
 app.use('/api', publicRoutes);
+app.use('/api/onlyoffice', onlyofficeRoutes);
+app.use('/api/version', versionRoutes);
 app.use('/api', csrfProtection, authRoutes);
 app.use('/api/files', csrfProtection, fileRoutes);
 app.use('/api/user', csrfProtection, userRoutes);
-app.use('/api/onlyoffice', onlyofficeRoutes);
-app.use('/api/version', versionRoutes);
 app.use('/s', shareRoutes);
 
 // Serve static frontend files (only when frontend is built)
