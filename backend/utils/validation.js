@@ -40,8 +40,10 @@ function validateFileName(name) {
   const trimmed = name.trim();
   if (trimmed.length === 0 || trimmed.length > 255) return false;
 
-  // Prevent path traversal attacks
-  if (trimmed.includes('..') || trimmed.includes('/') || trimmed.includes('\\')) return false;
+  // Prevent path traversal: block separators and the "." / ".." dir refs.
+  // Embedded ".." (e.g. "report..pdf") is safe once separators are blocked.
+  if (trimmed.includes('/') || trimmed.includes('\\')) return false;
+  if (trimmed === '.' || trimmed === '..') return false;
 
   // Prevent null bytes and control characters
   // eslint-disable-next-line no-control-regex -- Intentional for security validation
