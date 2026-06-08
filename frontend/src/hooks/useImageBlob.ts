@@ -41,7 +41,10 @@ export function useImageBlob(fileId: string | null | undefined): { imageSrc: str
 
     return () => {
       abortController.abort();
-      revoke?.();
+      if (revoke) {
+        revoke();
+        setImageSrc(null);
+      }
     };
   }, [fileId]);
 
