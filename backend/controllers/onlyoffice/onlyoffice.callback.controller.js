@@ -21,7 +21,7 @@ import { createEncryptStream, encryptFile } from '../../utils/fileEncryption.js'
 import { isFilePathEncrypted, resolveFilePath } from '../../utils/filePath.js';
 import { validateId } from '../../utils/validation.js';
 
-import { getOnlyOfficeConfig } from './onlyoffice.utils.js';
+import { getOnlyOfficeConfig, verifyCallbackToken } from './onlyoffice.utils.js';
 
 /**
  * Download file from URL
@@ -76,7 +76,19 @@ async function callback(req, res) {
   }
 
   try {
-    const body = req.body;
+    // SECURITY: authenticate the callback via the OnlyOffice JWT and use the
+    // verified payload (not raw req.body) as the source of truth.
+    const onlyOfficeConfig = await getOnlyOfficeConfig();
+    if (!onlyOfficeConfig.jwtSecret) {
+      logger.error('[ONLYOFFICE] Callback rejected - OnlyOffice JWT secret not configured');
+      return res.status(401).json({ error: 1 });
+    }
+
+    const body = verifyCallbackToken(req, onlyOfficeConfig.jwtSecret);
+    if (!body) {
+      logger.warn('[ONLYOFFICE] Callback rejected - missing or invalid JWT signature');
+      return res.status(401).json({ error: 1 });
+    }
 
     // OnlyOffice callback statuses:
     // 0 = document is being edited
@@ -144,9 +156,8 @@ async function callback(req, res) {
         const urlObj = new URL(body.url);
         const hostname = urlObj.hostname.toLowerCase();
 
-        // If this callback comes from our configured ONLYOFFICE server, allow it
+        // Allow the configured ONLYOFFICE host (reuse config from top of handler)
         let isTrustedOnlyofficeHost = false;
-        const onlyOfficeConfig = await getOnlyOfficeConfig();
         if (onlyOfficeConfig.url) {
           try {
             const allowedOnlyofficeHost = new URL(onlyOfficeConfig.url).hostname.toLowerCase();

@@ -71,6 +71,38 @@ function getFileTypeFromName(name) {
 }
 
 /**
+ * Extract the OnlyOffice callback JWT from the body (`token`) or `Authorization: Bearer` header.
+ */
+function getCallbackToken(req) {
+  if (req.body && typeof req.body.token === 'string' && req.body.token) {
+    return req.body.token;
+  }
+  const authz = req.headers?.authorization;
+  if (typeof authz === 'string' && authz.startsWith('Bearer ')) {
+    return authz.slice('Bearer '.length).trim() || null;
+  }
+  return null;
+}
+
+/**
+ * Verify an OnlyOffice callback JWT and return the signed payload (or null if invalid).
+ * Header-mode tokens nest the body under `payload`, so unwrap that case.
+ */
+function verifyCallbackToken(req, jwtSecret) {
+  const token = getCallbackToken(req);
+  if (!token) return null;
+  try {
+    const decoded = jwt.verify(token, jwtSecret, { algorithms: ['HS256'] });
+    if (decoded && typeof decoded.payload === 'object' && decoded.payload !== null) {
+      return decoded.payload;
+    }
+    return decoded;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Build signed JWT token for file access (per-user encryption context).
  * Token includes userId so serveFile can enforce strict DB permissions:
  * file is only served when id AND user_id match the token.
@@ -202,6 +234,8 @@ export {
   getOnlyOfficeConfig,
   isOnlyOfficeSupported,
   getFileTypeFromName,
+  getCallbackToken,
+  verifyCallbackToken,
   buildSignedFileToken,
   getOnlyofficeJsUrl,
   getUserName,
