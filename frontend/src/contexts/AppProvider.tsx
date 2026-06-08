@@ -215,6 +215,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const deleteProgressDismissTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const restoreInProgressRef = useRef(false);
   const restoreProgressDismissTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const downloadInProgressRef = useRef(false);
   const electronAutoUpdateTriggeredRef = useRef(false);
 
   const operationQueue = usePromiseQueue();
@@ -1495,7 +1496,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Download
 
   const downloadFiles = async (ids: string[]) => {
-    if (isDownloading || ids.length === 0) return;
+    // Guard with a ref, not isDownloading state: state updates aren't synchronous,
+    // so two rapid clicks could both read `false` and fire duplicate downloads.
+    if (downloadInProgressRef.current || ids.length === 0) return;
+    downloadInProgressRef.current = true;
 
     setIsDownloading(true);
     try {
@@ -1559,6 +1563,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const errorMessage = error instanceof Error ? error.message : String(error);
       showToast(errorMessage || 'Failed to download files', 'error');
     } finally {
+      downloadInProgressRef.current = false;
       setIsDownloading(false);
     }
   };
