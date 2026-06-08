@@ -214,11 +214,23 @@ export const DocumentViewerModal: React.FC = () => {
 
     void load();
 
-    // Cleanup: abort request if component unmounts or file changes
+    // Cleanup: abort the request and tear down the editor when the file
+    // changes, the modal closes (documentViewerFile -> null keeps this
+    // component mounted, so the unmount-only effect never fires), or on
+    // unmount. destroyEditor() also closes the editor's document-server
+    // connection; clearing innerHTML alone would leak it on every switch.
     return () => {
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
         abortControllerRef.current = null;
+      }
+      if (editorRef.current?.destroyEditor) {
+        try {
+          editorRef.current.destroyEditor();
+        } catch {
+          // ignore teardown errors (editor may already be gone)
+        }
+        editorRef.current = null;
       }
     };
   }, [documentViewerFile, refreshOnlyOfficeConfig, user, setDocumentViewerFile, showToast]);
