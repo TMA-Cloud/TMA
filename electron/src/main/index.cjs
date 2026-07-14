@@ -7,6 +7,7 @@ const { registerClipboardHandlers } = require('./ipc/clipboard.cjs');
 const { registerAppHandlers } = require('./ipc/app.cjs');
 const { registerEditWithDesktopHandler, registerSaveFileHandlers, getActiveEditDirs } = require('./ipc/files.cjs');
 const { cleanTempClipboardDirs, cleanTempEditDirs } = require('./utils/file-utils.cjs');
+const { registerCloudDriveHandlers, watchAuthAndMount, stopCloudDrive } = require('./clouddrive.cjs');
 
 let cleanupInterval = null;
 
@@ -50,6 +51,10 @@ registerClipboardHandlers();
 registerAppHandlers();
 registerEditWithDesktopHandler();
 registerSaveFileHandlers();
+// Cloud Drive (WinFsp): renderer starts/stops it based on auth state.
+if (process.platform === 'win32') {
+  registerCloudDriveHandlers();
+}
 
 app.whenReady().then(() => {
   const serverUrl = getServerUrl();
@@ -58,6 +63,11 @@ app.whenReady().then(() => {
   const appRoot = app.getAppPath();
 
   createWindow(loadUrl, preloadPath, appRoot);
+
+  // Auto-mount the cloud drive based on the auth cookie (no frontend needed).
+  if (process.platform === 'win32') {
+    watchAuthAndMount();
+  }
 
   const CLEAN_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
   const MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
@@ -75,6 +85,10 @@ app.on('before-quit', () => {
   if (cleanupInterval) {
     clearInterval(cleanupInterval);
     cleanupInterval = null;
+  }
+  if (process.platform === 'win32') {
+    // Unmount the cloud drive so no orphaned WinFsp host lingers.
+    stopCloudDrive();
   }
   if (process.platform === 'win32') {
     cleanTempClipboardDirs(0);

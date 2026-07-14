@@ -52,7 +52,9 @@ Builds a Windows installer with the server URL embedded so users do not need a c
    npm run build:client
    ```
 
-   This runs `prepare-client-build.js` (copies `src/main` and `src/preload` into `dist-electron/` and injects `serverUrl` into main config), then runs electron-builder. Output is in `electron/dist-client/` (NSIS installer by default).
+   This runs `prepare-client-build.js` (copies `src/main` and `src/preload` into `dist-electron/` and injects `serverUrl` into main config), then `build-clouddrive.js` (compiles the [Cloud Drive](#cloud-drive-mounted-windows-drive) host and bundles the WinFsp installer), then runs electron-builder. Output is in `electron/dist-client/` (NSIS installer by default).
+
+   The Cloud Drive host is a .NET project (`desktop-fs`), so building the installer also requires the **.NET SDK (9+)**. The WinFsp redistributable is downloaded and verified automatically at build time.
 
 3. For a portable executable (no installer):
 
@@ -128,6 +130,24 @@ When you use **Save As** or **Export** in a desktop editor (for example, Word �
   - Shows a status toast such as `Saving exported file "report......pdf" (12.3 MB)` and `Exported file "report......pdf"` when complete.
 - Large exports may take time and the file list updates automatically when the upload finishes.
 - If you choose a different location (for example, Desktop or Documents) in the Save As dialog, the file is saved **only** on your computer and is **not** uploaded automatically.
+
+## Cloud Drive (mounted Windows drive)
+
+The Windows desktop app can mount TMA Cloud as a drive (for example `Z:`) so you can open and save files from the file dialogs of any application — WhatsApp, Telegram, Outlook, Office, browsers, and so on. It appears under **This PC** like OneDrive or Dropbox and keeps nothing on disk except a temporary cache.
+
+- **Requires WinFsp.** The drive is backed by [WinFsp](https://winfsp.dev), a user-mode filesystem driver for Windows ("WinFsp - Windows File System Proxy, Copyright (C) Bill Zissimopoulos"). The installer installs it silently if it is not already present; the user does not need to do anything.
+- **Mounts automatically.** The drive appears a second or two after you sign in and is removed when you sign out or close the app. It reuses the app's existing session — no separate login.
+- **Save As anywhere.** In any app's Save dialog, choose the TMA Cloud drive as the destination. The file uploads through the same pipeline as a normal upload, so permissions, versioning, and audit all apply. Saving into an existing subfolder reuses that folder instead of creating a duplicate.
+- **Live updates.** Changes made from the web app or another device appear on the drive within a few seconds.
+
+### Save-only mode
+
+**Settings → Storage → Cloud Drive → Save-only mode** (desktop app only).
+
+- **Off (default):** files can be opened and copied from the drive normally.
+- **On:** folders and files stay browsable and **Save As** still works, but opening or copying file content from the drive is blocked (Windows shows "Access denied"). Use this to keep people opening files through the app while still allowing Save As uploads.
+
+The toggle applies immediately and is remembered per device.
 
 ## Clipboard Integration (Windows desktop app)
 

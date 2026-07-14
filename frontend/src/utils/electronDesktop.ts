@@ -7,6 +7,9 @@
  * used when the app runs inside the Electron desktop client (Windows).
  */
 
+/** Cloud drive behavior: 'full' = files openable; 'saveOnly' = browse + Save-As, content reads denied. */
+export type CloudDriveMode = 'full' | 'saveOnly';
+
 declare global {
   interface Window {
     electronAPI?: {
@@ -55,6 +58,17 @@ declare global {
           }) => void
         ) => () => void;
       };
+      cloudDrive?: {
+        start: (opts?: { mount?: string; label?: string }) => Promise<{
+          ok: boolean;
+          mountPoint?: string;
+          error?: string;
+        }>;
+        stop: () => Promise<{ ok: boolean; error?: string }>;
+        status: () => Promise<{ running: boolean; mountPoint: string | null; mode?: CloudDriveMode }>;
+        getMode: () => Promise<{ mode: CloudDriveMode }>;
+        setMode: (mode: CloudDriveMode) => Promise<{ ok: boolean; mode?: CloudDriveMode; error?: string }>;
+      };
     };
   }
 }
@@ -62,6 +76,36 @@ declare global {
 /** True when running inside the Windows Electron desktop app (clipboard + open on desktop supported). */
 export function isElectron(): boolean {
   return typeof window !== 'undefined' && !!window.electronAPI?.clipboard && window.electronAPI?.platform === 'win32';
+}
+
+/** True when the desktop app can mount the cloud as a Windows drive (WinFsp). */
+export function hasElectronCloudDrive(): boolean {
+  return typeof window !== 'undefined' && !!window.electronAPI?.cloudDrive?.start;
+}
+
+/** Read the current cloud-drive mode. Returns 'full' outside the desktop app. */
+export async function getElectronCloudDriveMode(): Promise<CloudDriveMode> {
+  const api = typeof window !== 'undefined' ? window.electronAPI : undefined;
+  if (!isElectron() || !api?.cloudDrive?.getMode) return 'full';
+  try {
+    const res = await api.cloudDrive.getMode();
+    return res?.mode === 'saveOnly' ? 'saveOnly' : 'full';
+  } catch {
+    return 'full';
+  }
+}
+
+/** Set the cloud-drive mode (persisted, applied live). No-op outside the desktop app. */
+export async function setElectronCloudDriveMode(
+  mode: CloudDriveMode
+): Promise<{ ok: boolean; mode?: CloudDriveMode; error?: string }> {
+  const api = typeof window !== 'undefined' ? window.electronAPI : undefined;
+  if (!isElectron() || !api?.cloudDrive?.setMode) return { ok: false, error: 'Not available' };
+  try {
+    return await api.cloudDrive.setMode(mode);
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
 }
 
 /** True when the desktop app exposes clipboard APIs (copy/paste to PC). Show "Copy to computer" / "Paste from computer". */

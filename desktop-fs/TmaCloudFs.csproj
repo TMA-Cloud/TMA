@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <PlatformTarget>x64</PlatformTarget>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>false</SelfContained>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AssemblyName>TmaCloudFs</AssemblyName>
+    <RootNamespace>TmaCloud.Fs</RootNamespace>
+    <LangVersion>latest</LangVersion>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
+  </PropertyGroup>
+
+  <!--
+    Path to the WinFsp .NET binding (winfsp-msil.dll). Override with
+    /p:WinFspBin=... if WinFsp is installed elsewhere. Default is the
+    standard 64-bit install location.
+  -->
+  <PropertyGroup>
+    <WinFspBin Condition="'$(WinFspBin)' == ''">C:\Program Files (x86)\WinFsp\bin</WinFspBin>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="winfsp-msil">
+      <HintPath>$(WinFspBin)\winfsp-msil.dll</HintPath>
+      <!--
+        Copy the managed binding next to our exe so the CLR can load it.
+        The NATIVE winfsp-x64.dll is NOT copied: the binding locates it via
+        WinFsp's registered install path (HKLM\Software\WinFsp), so it keeps
+        working on any machine where WinFsp is installed.
+      -->
+      <Private>true</Private>
+    </Reference>
+  </ItemGroup>
+
+</Project>

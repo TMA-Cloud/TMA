@@ -82,6 +82,12 @@ docker-compose-local.yml
 electron/dist-client/
 electron/dist-electron/
 electron/src/config/build-config.json
+electron/clouddrive-dist/
+electron/build-assets/
+
+# Desktop FS
+desktop-fs/bin/
+desktop-fs/obj/
 
 # Misc
 *.tgz

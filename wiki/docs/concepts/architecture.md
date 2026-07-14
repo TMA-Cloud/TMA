@@ -164,6 +164,23 @@ electron/
 
 Some deployments enable an optional mode where the desktop app is only allowed. In that mode, normal browsers are blocked from the main app while share links continue to work.
 
+### Cloud Drive (WinFsp)
+
+The desktop app can mount TMA Cloud as a Windows drive so files can be opened and saved from any application's file dialogs. It has two parts:
+
+- **`desktop-fs`** — a small .NET host (`TmaCloudFs.exe`) built on [WinFsp](https://winfsp.dev). It presents the drive to Windows and translates filesystem operations into requests, but holds no credentials.
+- **`electron/src/main/clouddrive.cjs`** — the trusted half. The host forwards each operation over a local named pipe (newline-delimited JSON); the main process runs the matching authenticated call to `/api/*` using the app's session cookies, so the drive reuses the same auth, permissions, and audit as the rest of the app.
+
+```bash
+Any app's Save As → Z:\ TMA Cloud (WinFsp)
+        │  named pipe (JSON)
+   TmaCloudFs.exe (desktop-fs, no credentials)
+        │
+   Electron main (clouddrive.cjs, session cookies) → /api/* → backend
+```
+
+The main process mounts the drive when the auth cookie appears (sign-in) and unmounts on sign-out or app close. Directory listings are cached briefly and refreshed by the backend event stream. See [Desktop App — Cloud Drive](/getting-started/desktop-app#cloud-drive-mounted-windows-drive).
+
 ## Data Flow
 
 ### Authentication Flow

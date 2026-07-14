@@ -4,6 +4,7 @@
   "directories": { "output": "dist-client" },
   "extraMetadata": { "main": "dist-electron/main/index.cjs" },
   "files": ["dist-electron/**/*"],
+  "extraResources": [{ "from": "clouddrive-dist", "to": "clouddrive" }],
   "win": {
     "target": ["nsis"],
     "signAndEditExecutable": true,
@@ -11,6 +12,7 @@
   },
   "nsis": {
     "oneClick": false,
-    "allowToChangeInstallationDirectory": true
+    "allowToChangeInstallationDirectory": true,
+    "include": "src/build/installer.nsh"
   }
 }

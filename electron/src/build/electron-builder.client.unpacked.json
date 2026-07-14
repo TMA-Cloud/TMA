@@ -4,6 +4,7 @@
   "directories": { "output": "dist-client" },
   "extraMetadata": { "main": "dist-electron/main/index.cjs" },
   "files": ["dist-electron/**/*"],
+  "extraResources": [{ "from": "clouddrive-dist", "to": "clouddrive" }],
   "win": {
     "target": ["dir"],
     "signAndEditExecutable": true,

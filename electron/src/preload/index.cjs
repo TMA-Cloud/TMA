@@ -44,6 +44,18 @@ const { contextBridge, ipcRenderer } = require('electron');
           };
         },
       },
+      /**
+       * Cloud Drive: mount TMA Cloud as a Windows drive so files can be
+       * opened/saved from any app's file dialogs. The renderer should call
+       * start() after a successful login and stop() on logout.
+       */
+      cloudDrive: {
+        start: opts => ipcRenderer.invoke('clouddrive:start', opts || {}),
+        stop: () => ipcRenderer.invoke('clouddrive:stop'),
+        status: () => ipcRenderer.invoke('clouddrive:status'),
+        getMode: () => ipcRenderer.invoke('clouddrive:getMode'),
+        setMode: mode => ipcRenderer.invoke('clouddrive:setMode', mode),
+      },
     };
     contextBridge.exposeInMainWorld('electronAPI', api);
   } catch (err) {

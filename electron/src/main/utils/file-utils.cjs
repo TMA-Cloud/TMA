@@ -310,6 +310,155 @@ async function uploadDerivedFile(base, fileId, filePath, fileName) {
   return postMultipartFile(url, filePath, fileName, cookieHeader);
 }
 
+/**
+ * GET a URL and parse the JSON body, using the default session cookies.
+ * Shared by the cloud-drive bridge for directory listings.
+ */
+function getJson(url, cookieHeader) {
+  return new Promise((resolve, reject) => {
+    const request = net.request({ url });
+    if (cookieHeader) request.setHeader('Cookie', cookieHeader);
+    let body = '';
+    request.on('response', response => {
+      const status = response.statusCode || 0;
+      response.on('data', chunk => {
+        body += chunk.toString('utf8');
+      });
+      response.on('end', () => {
+        if (status < 200 || status >= 300) {
+          return reject(new Error(body ? `GET failed (${status}): ${body}` : `GET failed (${status})`));
+        }
+        try {
+          resolve(body ? JSON.parse(body) : null);
+        } catch (err) {
+          reject(err);
+        }
+      });
+      response.on('error', reject);
+    });
+    request.on('error', reject);
+    request.end();
+  });
+}
+
+/**
+ * POST a JSON body and parse the JSON response, using session cookies.
+ * Used for folder/rename/move/delete operations from the cloud-drive bridge.
+ */
+function apiPostJson(base, pathname, body) {
+  const url = `${base}${pathname}`;
+  return getCookieHeader(base).then(
+    cookieHeader =>
+      new Promise((resolve, reject) => {
+        const request = net.request({
+          method: 'POST',
+          url,
+          headers: {
+            'Content-Type': 'application/json',
+            ...(cookieHeader && { Cookie: cookieHeader }),
+          },
+        });
+        let resp = '';
+        request.on('response', response => {
+          const status = response.statusCode || 0;
+          response.on('data', chunk => {
+            resp += chunk.toString('utf8');
+          });
+          response.on('end', () => {
+            if (status < 200 || status >= 300) {
+              return reject(
+                new Error(resp ? `${pathname} failed (${status}): ${resp}` : `${pathname} failed (${status})`)
+              );
+            }
+            try {
+              resolve(resp ? JSON.parse(resp) : {});
+            } catch {
+              resolve({});
+            }
+          });
+          response.on('error', reject);
+        });
+        request.on('error', reject);
+        request.write(JSON.stringify(body));
+        request.end();
+      })
+  );
+}
+
+/**
+ * List the files/folders in a directory (root when parentId is falsy).
+ * Returns the raw array of entries from GET /api/files.
+ */
+async function listFilesFromBackend(base, parentId) {
+  const url = parentId ? `${base}/api/files?parentId=${encodeURIComponent(parentId)}` : `${base}/api/files`;
+  const cookieHeader = await getCookieHeader(base);
+  return getJson(url, cookieHeader);
+}
+
+/**
+ * Stream a local file as a brand-new upload into a folder. The `parentId`
+ * text field is emitted BEFORE the file part so the backend's busboy stream
+ * parser has it available (fields must precede the file). Returns the created
+ * file object (including its new id).
+ */
+function uploadNewFile(base, parentId, filePath, fileName) {
+  const url = `${base}/api/files/upload`;
+  return getCookieHeader(base).then(cookieHeader => {
+    const boundary = `----ElectronFormBoundary${crypto.randomBytes(16).toString('hex')}`;
+    const safeFileName = String(fileName).replace(/"/g, '\\"');
+    let preamble = '';
+    if (parentId) {
+      preamble += `--${boundary}\r\nContent-Disposition: form-data; name="parentId"\r\n\r\n${parentId}\r\n`;
+    }
+    preamble +=
+      `--${boundary}\r\n` +
+      `Content-Disposition: form-data; name="file"; filename="${safeFileName}"\r\n` +
+      `Content-Type: application/octet-stream\r\n\r\n`;
+    const closing = `\r\n--${boundary}--\r\n`;
+
+    return new Promise((resolve, reject) => {
+      const request = net.request({ method: 'POST', url });
+      request.setHeader('Content-Type', `multipart/form-data; boundary=${boundary}`);
+      if (cookieHeader) request.setHeader('Cookie', cookieHeader);
+
+      let body = '';
+      request.on('response', response => {
+        const status = response.statusCode || 0;
+        response.on('data', chunk => {
+          if (body.length < 8192) body += chunk.toString('utf8');
+        });
+        response.on('end', () => {
+          if (status < 200 || status >= 300) {
+            return reject(new Error(body ? `Upload failed (${status}): ${body}` : `Upload failed (${status})`));
+          }
+          try {
+            resolve(body ? JSON.parse(body) : {});
+          } catch {
+            resolve({});
+          }
+        });
+        response.on('error', reject);
+      });
+      request.on('error', reject);
+
+      request.write(preamble);
+      const fileStream = fs.createReadStream(filePath);
+      fileStream.on('data', chunk => {
+        if (!request.write(chunk)) fileStream.pause();
+      });
+      request.on('drain', () => fileStream.resume());
+      fileStream.on('end', () => {
+        request.write(closing);
+        request.end();
+      });
+      fileStream.on('error', err => {
+        request.destroy();
+        reject(err);
+      });
+    });
+  });
+}
+
 function hashFile(filePath) {
   return new Promise((resolve, reject) => {
     const hash = crypto.createHash('sha256');
@@ -354,4 +503,9 @@ module.exports = {
   uploadDerivedFile,
   hashFile,
   validateOrigin,
+  getJson,
+  apiPostJson,
+  listFilesFromBackend,
+  uploadNewFile,
+  getCookieHeader,
 };

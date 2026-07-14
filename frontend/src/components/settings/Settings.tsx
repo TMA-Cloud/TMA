@@ -16,6 +16,7 @@ import { useSessions } from './hooks/useSessions';
 // Components
 import { ProfileSection } from './sections/ProfileSection';
 import { StorageSection } from './sections/StorageSection';
+import { CloudDriveSection } from './sections/CloudDriveSection';
 import { AdministrationSection } from './sections/AdministrationSection';
 import { OnlyOfficeSection } from './sections/OnlyOfficeSection';
 import { ShareBaseUrlSection } from './sections/ShareBaseUrlSection';
@@ -189,7 +190,12 @@ export const Settings: React.FC = () => {
           />
         );
       case 'storage':
-        return <StorageSection usage={usage ?? undefined} loading={storageLoading} canConfigure={canToggleSignup} />;
+        return (
+          <div className="space-y-8">
+            <StorageSection usage={usage ?? undefined} loading={storageLoading} canConfigure={canToggleSignup} />
+            {runningInElectron && <CloudDriveSection />}
+          </div>
+        );
       case 'administration':
         return canToggleSignup ? (
           <div className="space-y-8">

@@ -14,6 +14,10 @@ Append-only record of notable events (logins, uploads, shares, admin changes). S
 
 Any endpoint that accepts an `ids` array and processes multiple files in one request (move, copy, delete, star, share, download).
 
+### Cloud Drive
+
+A Windows drive the desktop app can mount (via WinFsp) so files can be opened and saved from any application's file dialogs. Backed by the `desktop-fs` host and `clouddrive.cjs` in the main process. See [Desktop App](../getting-started/desktop-app.md#cloud-drive-mounted-windows-drive).
+
 ### Derived file
 
 A new file exported from an existing one — e.g. saving a `.docx` as `.pdf` from the desktop app. Created as a sibling of the source via `POST /api/files/:id/derived`.
@@ -73,3 +77,7 @@ A per-user counter that increments when the user logs out of all devices or chan
 ### Trash
 
 The per-user soft-delete area. Deleting a file moves it here; files auto-purge after 15 days. Trash counts toward the user's storage quota.
+
+### WinFsp
+
+Windows File System Proxy — a user-mode filesystem driver for Windows. The desktop app uses it to provide the [Cloud Drive](#cloud-drive). Installed by the desktop installer if not already present. GPLv3 with a FLOSS exception; see [winfsp.dev](https://winfsp.dev).
