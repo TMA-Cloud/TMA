@@ -266,11 +266,29 @@ function startSse() {
     _sse = request;
 
     request.on('response', response => {
-      response.on('data', () => {
-        // Any event means something changed; clear all cached listings.
-        // (The payload is fine-grained, but a blanket invalidate is cheap
-        // and always correct given our short-lived caches.)
-        pushInvalidate();
+      response.setEncoding('utf8');
+      // Only invalidate on real change events — skip the `: keepalive`
+      // (every 30s) and the `{"type":"connected"}` handshake.
+      let sseBuf = '';
+      response.on('data', chunk => {
+        sseBuf += chunk;
+        if (sseBuf.length > MAX_LINE_BYTES) sseBuf = sseBuf.slice(-MAX_LINE_BYTES); // cap
+        let idx;
+        while ((idx = sseBuf.indexOf('\n')) >= 0) {
+          const line = sseBuf.slice(0, idx).trim();
+          sseBuf = sseBuf.slice(idx + 1);
+          if (!line.startsWith('data:')) continue;
+          const payload = line.slice(5).trim();
+          if (!payload) continue;
+          let type = null;
+          try {
+            type = JSON.parse(payload).type;
+          } catch {
+            /* non-JSON: treat as a real change */
+          }
+          if (type === 'connected' || type === 'error') continue;
+          pushInvalidate(); // blanket invalidate; cheap given the short TTL
+        }
       });
       response.on('end', () => scheduleSseReconnect());
       response.on('error', () => scheduleSseReconnect());
@@ -361,9 +379,41 @@ function startCloudDrive(opts = {}) {
     _authToken = crypto.randomBytes(24).toString('hex');
     const pipePath = `\\\\.\\pipe\\${_pipeName}`;
 
+    let settled = false;
+    let mountTimer = null;
+    const done = (err, mp) => {
+      if (settled) return;
+      settled = true;
+      _starting = null;
+      if (mountTimer) {
+        clearTimeout(mountTimer);
+        mountTimer = null;
+      }
+      if (err) {
+        // Tear down anything half-started so a failed mount leaks no host/pipe.
+        stopSse();
+        if (_child) {
+          try {
+            _child.kill();
+          } catch {
+            /* ignore */
+          }
+          _child = null;
+        }
+        closeServer();
+        _mountPoint = null;
+        _authToken = null;
+        reject(err);
+      } else {
+        resolve(mp);
+      }
+    };
+
     _server = net.createServer(handleConnection);
     _server.on('error', e => {
       warn('bridge pipe error:', e.message);
+      // Reject a pre-mount bind failure, else `_starting` hangs pending forever.
+      if (!_mountPoint) done(new Error('bridge pipe error: ' + e.message));
     });
 
     _server.listen(pipePath, () => {
@@ -384,14 +434,7 @@ function startCloudDrive(opts = {}) {
       log('spawning host:', exe, '--pipe', _pipeName, '--mount', opts.mount || '*');
       _child = spawn(exe, args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
 
-      let settled = false;
-      const done = (err, mp) => {
-        if (settled) return;
-        settled = true;
-        _starting = null;
-        if (err) reject(err);
-        else resolve(mp);
-      };
+      _child.on('error', err => done(new Error('failed to spawn filesystem host: ' + err.message)));
 
       _child.stdout.on('data', d => {
         const s = d.toString();
@@ -418,7 +461,7 @@ function startCloudDrive(opts = {}) {
       });
 
       // Safety timeout: if we never see MOUNTED, fail so callers aren't stuck.
-      setTimeout(() => done(new Error('timed out waiting for mount')), 30000);
+      mountTimer = setTimeout(() => done(new Error('timed out waiting for mount')), 30000);
     });
   });
 
@@ -447,7 +490,12 @@ function stopCloudDrive() {
       closeServer();
       return resolve();
     }
+    let killTimer = null;
     const finish = () => {
+      if (killTimer) {
+        clearTimeout(killTimer);
+        killTimer = null;
+      }
       closeServer();
       resolve();
     };
@@ -458,10 +506,12 @@ function stopCloudDrive() {
     } catch {
       finish();
     }
-    // Hard stop if it lingers.
-    setTimeout(() => {
+    // Hard stop if it lingers. Kill the captured `child`, not `_child` (a fresh
+    // mount may have replaced it).
+    killTimer = setTimeout(() => {
+      killTimer = null;
       try {
-        if (_child) _child.kill('SIGKILL');
+        child.kill('SIGKILL');
       } catch {
         /* ignore */
       }
