@@ -56,7 +56,7 @@ let _sock = null; // the connected fs-host pipe socket (for server→client push
 let _sse = null; // backend SSE request for cache invalidation
 let _sseRetry = null;
 
-// Drive behavior mode, persisted per-device:
+// Drive behavior mode, persisted per-device. Defaults to 'saveOnly'
 //   'full'     - normal: files can be opened/read from the drive
 //   'saveOnly' - browse + Save-As only; reading file content is denied
 function modeConfigPath() {
@@ -71,12 +71,12 @@ function getMode() {
     const p = modeConfigPath();
     if (p && fs.existsSync(p)) {
       const cfg = JSON.parse(fs.readFileSync(p, 'utf8'));
-      return cfg && cfg.mode === 'saveOnly' ? 'saveOnly' : 'full';
+      return cfg && cfg.mode === 'full' ? 'full' : 'saveOnly';
     }
   } catch {
     /* ignore */
   }
-  return 'full';
+  return 'saveOnly';
 }
 function persistMode(mode) {
   try {
