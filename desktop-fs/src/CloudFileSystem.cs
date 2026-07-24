@@ -94,6 +94,13 @@ namespace TmaCloud.Fs
         /// </summary>
         public volatile bool DenyRead;
 
+        /// <summary>
+        /// Invoked when the Electron side asks the host to stop gracefully
+        /// (a "shutdown" push). Program wires this to the service's Stop() so
+        /// OnStop() runs a clean unmount before the process exits.
+        /// </summary>
+        public Action OnShutdownRequested;
+
         public CloudFileSystem(Bridge bridge, string volumeLabel, bool denyRead = false)
         {
             _bridge = bridge;
@@ -116,6 +123,12 @@ namespace TmaCloud.Fs
                 try
                 {
                     string push = msg.TryGetProperty("push", out var pv) ? pv.GetString() : null;
+                    if (push == "shutdown")
+                    {
+                        Log("shutdown requested by host");
+                        OnShutdownRequested?.Invoke();
+                        return;
+                    }
                     if (push == "mode")
                     {
                         string mode = msg.TryGetProperty("mode", out var mv) ? mv.GetString() : null;

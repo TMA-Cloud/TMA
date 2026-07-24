@@ -479,10 +479,20 @@ function closeServer() {
   }
 }
 
-/** Stop the cloud drive: unmount (by stopping the host) and close the pipe. */
+/**
+ * Stop the cloud drive: ask the host to unmount cleanly, then GUARANTEE it dies.
+ *
+ * We first send a `shutdown` push so the host runs its own OnStop() (clean
+ * WinFsp unmount + staging release) and exits with code 0. That path is
+ * best-effort only — it never replaces the kill. If the host hasn't exited
+ * within the grace window we TerminateProcess it (`child.kill()`), and if it
+ * somehow still lingers we SIGKILL and resolve anyway. So the process is always
+ * reaped; the graceful push just makes the common case clean. Always resolves.
+ */
 function stopCloudDrive() {
   return new Promise(resolve => {
     const child = _child;
+    const sock = _sock;
     _mountPoint = null;
     _authToken = null;
     stopSse();
@@ -490,8 +500,17 @@ function stopCloudDrive() {
       closeServer();
       return resolve();
     }
+
+    let done = false;
+    let graceTimer = null;
     let killTimer = null;
     const finish = () => {
+      if (done) return;
+      done = true;
+      if (graceTimer) {
+        clearTimeout(graceTimer);
+        graceTimer = null;
+      }
       if (killTimer) {
         clearTimeout(killTimer);
         killTimer = null;
@@ -499,24 +518,43 @@ function stopCloudDrive() {
       closeServer();
       resolve();
     };
+    // Resolves as soon as the host process actually exits, via any path below.
     child.once('exit', finish);
-    try {
-      // The host's Ctrl-handler / Service.Stop unmounts cleanly on terminate.
-      child.kill();
-    } catch {
-      finish();
-    }
-    // Hard stop if it lingers. Kill the captured `child`, not `_child` (a fresh
-    // mount may have replaced it).
-    killTimer = setTimeout(() => {
-      killTimer = null;
+
+    // 1) Ask for a clean stop. Pushes aren't authenticated, so this works even
+    //    though we've already cleared _authToken above.
+    let askedGracefully = false;
+    if (sock) {
       try {
-        child.kill('SIGKILL');
+        sock.write(JSON.stringify({ push: 'shutdown' }) + '\n');
+        askedGracefully = true;
+      } catch {
+        /* socket already gone; go straight to force-terminate */
+      }
+    }
+
+    // 2) Guaranteed kill. Give the graceful stop a short window (skip it if we
+    //    couldn't even send the push), then TerminateProcess, then SIGKILL.
+    //    Kill the captured `child`, not `_child` (a fresh mount may replace it).
+    const graceMs = askedGracefully ? 3000 : 0;
+    graceTimer = setTimeout(() => {
+      graceTimer = null;
+      if (done) return;
+      try {
+        child.kill();
       } catch {
         /* ignore */
       }
-      finish();
-    }, 5000);
+      killTimer = setTimeout(() => {
+        killTimer = null;
+        try {
+          child.kill('SIGKILL');
+        } catch {
+          /* ignore */
+        }
+        finish();
+      }, 2000);
+    }, graceMs);
   });
 }
 

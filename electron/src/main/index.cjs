@@ -81,21 +81,35 @@ app.whenReady().then(() => {
   cleanupInterval.unref();
 });
 
-app.on('before-quit', () => {
+let isQuitting = false;
+app.on('before-quit', event => {
   if (cleanupInterval) {
     clearInterval(cleanupInterval);
     cleanupInterval = null;
   }
-  if (process.platform === 'win32') {
-    // Unmount the cloud drive so no orphaned WinFsp host lingers.
-    stopCloudDrive();
-  }
-  if (process.platform === 'win32') {
-    cleanTempClipboardDirs(0);
-    // Still pass the exclusion set: files.cjs before-quit runs too and may not
-    // have fired yet when this handler runs (order is not guaranteed).
-    cleanTempEditDirs(0, getActiveEditDirs());
-  }
+  if (process.platform !== 'win32') return;
+  if (isQuitting) return; // re-entry guard; the app.exit() below finishes the quit
+  isQuitting = true;
+
+  // Defer the quit so the host can unmount cleanly before we exit. Without this
+  // the process could exit mid-grace and orphan the WinFsp host. stopCloudDrive
+  // always resolves (it force-kills as a fallback); the race is just a hard cap
+  // so a wedged host can never block the quit.
+  event.preventDefault();
+
+  const finalize = () => {
+    try {
+      cleanTempClipboardDirs(0);
+      // Still pass the exclusion set: files.cjs before-quit runs too and may not
+      // have fired yet when this handler runs (order is not guaranteed).
+      cleanTempEditDirs(0, getActiveEditDirs());
+    } catch {
+      /* ignore */
+    }
+    app.exit(0);
+  };
+
+  Promise.race([stopCloudDrive(), new Promise(resolve => setTimeout(resolve, 6000))]).then(finalize, finalize);
 });
 
 app.on('window-all-closed', () => app.quit());

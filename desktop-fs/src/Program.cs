@@ -60,6 +60,10 @@ namespace TmaCloud.Fs
             _bridge.Connect();
 
             _fs = new CloudFileSystem(_bridge, label, denyRead);
+            // Let a "shutdown" push from Electron stop the service cleanly, so
+            // OnStop() unmounts and releases staging before the process exits
+            // (instead of being force-terminated with no cleanup).
+            _fs.OnShutdownRequested = () => { try { Stop(); } catch { /* already stopping */ } };
             _host = new FileSystemHost(_fs)
             {
                 FileInfoTimeout = 2000,
