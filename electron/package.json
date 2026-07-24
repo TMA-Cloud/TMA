@@ -12,6 +12,9 @@
   "author": "ZIDAN44",
   "license": "ISC",
   "main": "src/main/index.cjs",
+  "dependencies": {
+    "mime-types": "^3.0.2"
+  },
   "scripts": {
     "start": "electron .",
     "build:clouddrive": "node scripts/build-clouddrive.js",

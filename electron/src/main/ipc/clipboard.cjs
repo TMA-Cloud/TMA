@@ -13,21 +13,7 @@ const {
   validateOrigin,
   cleanTempDirsByPrefix,
 } = require('../utils/file-utils.cjs');
-
-const EXT_TO_MIME = {
-  '.png': 'image/png',
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.gif': 'image/gif',
-  '.pdf': 'application/pdf',
-  '.doc': 'application/msword',
-  '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-};
-
-function getMimeForName(name) {
-  const ext = path.extname(name || '').toLowerCase();
-  return EXT_TO_MIME[ext] || 'application/octet-stream';
-}
+const { mimeForFilenameOrDefault: getMimeForName } = require('../utils/mime-types.cjs');
 
 const CLIPBOARD_DEBUG = process.env.TMA_CLOUD_CLIPBOARD_DEBUG === '1';
 
