@@ -23,4 +23,4 @@ electron/
 └── dist-electron/            # Staging for packaging (generated)
 ```
 
-See [Desktop App](https://tma-cloud.github.io/TMA/docs/getting-started/desktop-app) in the wiki for setup and build instructions.
+See [Desktop App](https://tma-cloud.github.io/Wiki/docs/getting-started/desktop-app) in the wiki for setup and build instructions.

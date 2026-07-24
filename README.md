@@ -39,22 +39,22 @@ Start all services
 docker compose up -d
 ```
 
-For detailed setup instructions, see the [Documentation Wiki](https://tma-cloud.github.io/TMA).
+For detailed setup instructions, see the [Documentation Wiki](https://tma-cloud.github.io/Wiki).
 
 ## UI Preview
 
 A quick preview of the TMA Cloud interface.  
-Full gallery available in the [Documentation Wiki](https://tma-cloud.github.io/TMA/gallery).
+Full gallery available in the [Documentation Wiki](https://tma-cloud.github.io/Wiki/docs/gallery).
 
 ### Dashboard & File Manager
 
-| Dashboard                                   | File Manager                                       |
-|---------------------------------------------|----------------------------------------------------|
-| ![Dashboard](wiki/static/img/dashboard.png) | ![File Manager](wiki/static/img/file-manager.png)  |
+| Dashboard                                                        | File Manager                                                           |
+| ---------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| ![Dashboard](https://tma-cloud.github.io/Wiki/img/dashboard.png) | ![File Manager](https://tma-cloud.github.io/Wiki/img/file-manager.png) |
 
 ## Documentation
 
-**Full documentation is available in the [Documentation Wiki](https://tma-cloud.github.io/TMA)**
+**Full documentation is available in the [Documentation Wiki](https://tma-cloud.github.io/Wiki)**
 
 ## Contributing
 
