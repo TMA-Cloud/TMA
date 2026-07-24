@@ -72,8 +72,17 @@ namespace TmaCloud.Fs
         // Volume size reported to Windows, refreshed from the backend's real
         // storage quota/usage (GET /api/user/storage). GetVolumeInfo is called
         // very frequently, so we serve cached values and refresh on a timer.
-        private long _totalSize = 1L << 44; // placeholder until first refresh
-        private long _freeSize = 1L << 43;
+        //
+        // Object storage (S3) has no intrinsic volume size. When the account is
+        // unlimited the backend reports total=null, and we present a large but
+        // FIXED synthetic capacity so Explorer shows a steady capacity bar
+        // (a total derived from usage would make the bar jitter every refresh)
+        // and free space shrinks naturally as files are added. Never report 0
+        // free: apps read FreeSize before "Save As" and refuse to write at 0.
+        private const long SyntheticCapacity = 1L << 50; // 1 PiB
+        private const long MinFreeFloor = 1L << 30;      // 1 GiB, never block saves
+        private long _totalSize = SyntheticCapacity; // placeholder until first refresh
+        private long _freeSize = SyntheticCapacity;
         private System.Threading.Timer _statsTimer;
         private int _refreshingStats;
 
@@ -149,11 +158,12 @@ namespace TmaCloud.Fs
                 }
                 else
                 {
-                    // Unlimited quota: present used + generous headroom so the
-                    // drive doesn't look full.
-                    const long headroom = 1L << 43; // 8 TiB
-                    _totalSize = used + headroom;
-                    _freeSize = headroom;
+                    // Unlimited/unknown quota (typical for S3): present a large,
+                    // STABLE synthetic capacity. Total stays constant so the
+                    // Explorer capacity bar doesn't jitter; free shrinks with
+                    // usage and is floored so saves are never blocked.
+                    _totalSize = SyntheticCapacity;
+                    _freeSize = Math.Max(MinFreeFloor, SyntheticCapacity - used);
                 }
             }
             catch { /* keep previous values */ }
