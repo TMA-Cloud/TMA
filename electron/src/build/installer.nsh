@@ -20,8 +20,15 @@
   ${If} $0 == ""
     IfFileExists "$INSTDIR\resources\clouddrive\winfsp.msi" 0 winfsp_skip
       DetailPrint "Installing WinFsp (required for TMA Cloud Drive)..."
+      ; perMachine install runs elevated, so msiexec has the rights the
+      ; kernel-mode driver install requires. 0 = success, 3010 = success but a
+      ; reboot is pending; anything else is a real failure worth surfacing.
       ExecWait 'msiexec /i "$INSTDIR\resources\clouddrive\winfsp.msi" /qn /norestart' $1
       DetailPrint "WinFsp installer finished (exit code $1)."
+      ${If} $1 != 0
+      ${AndIf} $1 != 3010
+        MessageBox MB_ICONEXCLAMATION|MB_OK "TMA Cloud Drive could not install WinFsp (exit code $1). The app will still work, but the Cloud Drive feature stays unavailable until WinFsp is installed."
+      ${EndIf}
     winfsp_skip:
   ${EndIf}
 !macroend
