@@ -22,6 +22,17 @@ Packaging is handled by `electron/scripts/build-clouddrive.js` (publishes a
 self-contained win-x64 build and bundles the WinFsp installer); see the desktop
 app build docs.
 
+## Format & lint
+
+Both are handled by `dotnet format` (built into the .NET SDK), driven by
+[`.editorconfig`](.editorconfig). The `.csproj` also enables the .NET analyzers,
+so `dotnet build` surfaces the same style/quality warnings (non-fatal).
+
+```powershell
+dotnet format --verify-no-changes    # check only (CI / pre-commit)
+dotnet format                         # auto-fix formatting + style
+```
+
 ## Test
 
 Mounts the filesystem against an in-memory mock bridge (no backend or login) and

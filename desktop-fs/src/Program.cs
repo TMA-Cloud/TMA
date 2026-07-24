@@ -15,7 +15,7 @@ namespace TmaCloud.Fs
     /// On success it prints "MOUNTED &lt;drive&gt;" to stdout so the parent can learn
     /// the assigned drive letter (relevant when --mount is "*").
     /// </summary>
-    public sealed class TmaCloudService : Service
+    public sealed class TmaCloudService : Service, IDisposable
     {
         private FileSystemHost _host;
         private CloudFileSystem _fs;
@@ -99,8 +99,16 @@ namespace TmaCloud.Fs
             try { _host?.Unmount(); } catch { }
             _host = null;
             try { _fs?.Dispose(); } catch { }
+            _fs = null;
             try { _bridge?.Dispose(); } catch { }
+            _bridge = null;
         }
+
+        // The service owns the mount host, filesystem, and bridge (all
+        // disposable). OnStop already tears them down on the service lifecycle;
+        // Dispose reuses it so the type honors IDisposable and is safe to
+        // dispose more than once (each field is null-guarded).
+        public void Dispose() => OnStop();
     }
 
     public static class Program

@@ -56,12 +56,13 @@ namespace TmaCloud.Fs
         private readonly ConcurrentDictionary<int, Waiter> _pending =
             new ConcurrentDictionary<int, Waiter>();
 
-        private sealed class Waiter
+        private sealed class Waiter : IDisposable
         {
             public readonly ManualResetEventSlim Done = new ManualResetEventSlim(false);
             public JsonElement Result;
             public bool Ok;
             public string Error;
+            public void Dispose() => Done.Dispose();
         }
 
         public Bridge(string pipeName, string token = null)
@@ -100,7 +101,7 @@ namespace TmaCloud.Fs
             {
                 while (!_closed)
                 {
-                    int n = await _pipe.ReadAsync(buffer, 0, buffer.Length).ConfigureAwait(false);
+                    int n = await _pipe.ReadAsync(buffer.AsMemory(0, buffer.Length)).ConfigureAwait(false);
                     if (n <= 0) break; // EOF
                     for (int i = 0; i < n; i++)
                     {
@@ -179,7 +180,9 @@ namespace TmaCloud.Fs
                 {
                     w.Ok = false;
                     w.Error = reason;
-                    w.Done.Set();
+                    // The waiting thread may have already timed out and disposed
+                    // the waiter in the tiny window before we removed it.
+                    try { w.Done.Set(); } catch (ObjectDisposedException) { }
                 }
             }
         }
@@ -195,36 +198,44 @@ namespace TmaCloud.Fs
             int id = Interlocked.Increment(ref _nextId);
             var waiter = new Waiter();
             _pending[id] = waiter;
-
-            var buffer = new ArrayBufferWriter<byte>(256);
-            using (var jw = new Utf8JsonWriter(buffer))
+            try
             {
-                jw.WriteStartObject();
-                jw.WriteNumber("rid", id);
-                if (_token != null) jw.WriteString("token", _token);
-                jw.WriteString("op", op);
-                writeArgs?.Invoke(jw);
-                jw.WriteEndObject();
+                var buffer = new ArrayBufferWriter<byte>(256);
+                using (var jw = new Utf8JsonWriter(buffer))
+                {
+                    jw.WriteStartObject();
+                    jw.WriteNumber("rid", id);
+                    if (_token != null) jw.WriteString("token", _token);
+                    jw.WriteString("op", op);
+                    writeArgs?.Invoke(jw);
+                    jw.WriteEndObject();
+                }
+                var span = buffer.WrittenSpan;
+                byte[] frame = new byte[span.Length + 1];
+                span.CopyTo(frame);
+                frame[span.Length] = (byte)'\n';
+
+                lock (_writeLock)
+                {
+                    _pipe.WriteAsync(frame, 0, frame.Length).GetAwaiter().GetResult();
+                    _pipe.FlushAsync().GetAwaiter().GetResult();
+                }
+
+                if (!waiter.Done.Wait(timeoutMs))
+                    throw new BridgeException($"bridge call '{op}' timed out");
+                if (!waiter.Ok)
+                    throw new BridgeException(waiter.Error ?? "bridge error");
+                return waiter.Result;
             }
-            var span = buffer.WrittenSpan;
-            byte[] frame = new byte[span.Length + 1];
-            span.CopyTo(frame);
-            frame[span.Length] = (byte)'\n';
-
-            lock (_writeLock)
+            finally
             {
-                _pipe.WriteAsync(frame, 0, frame.Length).GetAwaiter().GetResult();
-                _pipe.FlushAsync().GetAwaiter().GetResult();
-            }
-
-            if (!waiter.Done.Wait(timeoutMs))
-            {
+                // This thread owns the waiter's lifetime: once we stop waiting
+                // (reply, timeout, or throw) remove it so no late reply targets
+                // it, then dispose. A completer racing on Done.Set() is guarded
+                // at the Set() call sites.
                 _pending.TryRemove(id, out _);
-                throw new BridgeException($"bridge call '{op}' timed out");
+                waiter.Dispose();
             }
-            if (!waiter.Ok)
-                throw new BridgeException(waiter.Error ?? "bridge error");
-            return waiter.Result;
         }
 
         public void Dispose()

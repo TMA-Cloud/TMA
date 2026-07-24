@@ -162,9 +162,9 @@ namespace TmaCloud.Fs
 
         // ============================ Volume ============================
 
-        public override int Init(object Host0)
+        public override int Init(object Host)
         {
-            var host = (FileSystemHost)Host0;
+            var host = (FileSystemHost)Host;
             host.SectorSize = 4096;
             host.SectorsPerAllocationUnit = 1;
             host.MaxComponentLength = 255;
@@ -1020,7 +1020,7 @@ namespace TmaCloud.Fs
         private static string Combine(string dir, string name)
             => dir == "\\" ? "\\" + name : dir + "\\" + name;
 
-        private FileInfo MakeInfoFromNode(Node n)
+        private static FileInfo MakeInfoFromNode(Node n)
         {
             var info = new FileInfo();
             info.FileAttributes = n.IsFolder
@@ -1033,7 +1033,7 @@ namespace TmaCloud.Fs
             return info;
         }
 
-        private FileInfo MakeInfo(OpenFile of)
+        private static FileInfo MakeInfo(OpenFile of)
         {
             if (of.IsDir) return MakeInfoFromNode(of.Node);
             var info = new FileInfo();
@@ -1045,7 +1045,7 @@ namespace TmaCloud.Fs
             return info;
         }
 
-        private FileInfo MakeInfoFolder(DateTime modified)
+        private static FileInfo MakeInfoFolder(DateTime modified)
         {
             var info = new FileInfo();
             info.FileAttributes = (uint)System.IO.FileAttributes.Directory;
