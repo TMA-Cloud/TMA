@@ -4,7 +4,7 @@ import path from 'path';
 import pool from '../../config/db.js';
 import { logger } from '../../config/logger.js';
 import { UPLOAD_DIR } from '../../config/paths.js';
-import { getCache, setCache, cacheKeys, invalidateAllFileCaches, DEFAULT_TTL } from '../../utils/cache.js';
+import { getCache, setCache, deleteCache, cacheKeys, invalidateAllFileCaches, DEFAULT_TTL } from '../../utils/cache.js';
 import { safeUnlink } from '../../utils/fileCleanup.js';
 import { createEncryptStream, encryptFile } from '../../utils/fileEncryption.js';
 import { resolveFilePath } from '../../utils/filePath.js';
@@ -335,6 +335,52 @@ async function replaceFileData(id, size, mimeType, tempPath, userId) {
 }
 
 /**
+ * S3 replace: new bytes already streamed to `newStorageKey` (no temp file).
+ * Point the DB row at it, then best-effort delete the old object.
+ * @param {string} id - File id
+ * @param {number} size - New file size (plaintext bytes)
+ * @param {string} mimeType - Detected MIME type
+ * @param {string} newStorageKey - Storage key the new bytes were streamed to
+ * @param {string} userId - Owner id
+ * @returns {Promise<Object|null>} Updated file row, or null if not found
+ */
+async function replaceFileDataWithStorageKey(id, size, mimeType, newStorageKey, userId) {
+  const fileResult = await pool.query('SELECT path, parent_id FROM files WHERE id = $1 AND user_id = $2', [id, userId]);
+  if (fileResult.rows.length === 0) {
+    return null;
+  }
+
+  const oldFile = fileResult.rows[0];
+  const parentId = oldFile.parent_id || null;
+
+  const result = await pool.query(
+    'UPDATE files SET size = $1, mime_type = $2, path = $3, modified = NOW() WHERE id = $4 AND user_id = $5 RETURNING id, name, type, size, modified, mime_type AS "mimeType", starred, shared',
+    [size, mimeType, newStorageKey, id, userId]
+  );
+
+  const file = result.rows[0];
+  if (!file) {
+    return null;
+  }
+
+  // Drop the old object (best-effort).
+  if (oldFile.path && oldFile.path !== newStorageKey) {
+    storage
+      .deleteObject(oldFile.path)
+      .catch(err =>
+        logger.warn({ err, storageName: oldFile.path }, '[File] Failed to delete old object after replace')
+      );
+  }
+
+  // Clear the cached file record or downloads 404 on the old path until TTL.
+  await deleteCache(cacheKeys.file(id, userId));
+  await invalidateAllFileCaches(userId, parentId);
+
+  file.parentId = parentId;
+  return file;
+}
+
+/**
  * Find an existing folder by name under a parent (or root).
  * Returns the folder id if found, otherwise null.
  */
@@ -363,4 +409,5 @@ export {
   getFilesByIds,
   renameFile,
   replaceFileData,
+  replaceFileDataWithStorageKey,
 };

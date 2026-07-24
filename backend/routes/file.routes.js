@@ -92,7 +92,7 @@ router.post('/trash/delete', deleteForeverSchema, validate, deleteForever);
 router.post('/trash/empty', emptyTrash);
 router.post('/download/bulk', downloadFilesBulkSchema, validate, downloadFilesBulk);
 router.get('/:id/download', downloadFileSchema, validate, downloadFile);
-router.post('/:id/replace', uploadRateLimiter, uploadSingleWithDynamicLimit(), replaceFileContents);
+router.post('/:id/replace', uploadRateLimiter, uploadSingle(), replaceFileContents);
 // Upload a new file derived from an existing one (e.g. "Save as PDF" from desktop editor)
 // When S3 is enabled this uses streamUploadToS3, otherwise multer disk upload.
 router.post('/:id/derived', uploadRateLimiter, uploadSingle(), uploadDerivedFile);

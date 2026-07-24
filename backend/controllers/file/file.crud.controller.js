@@ -12,6 +12,7 @@ import {
   getFolderTree,
   renameFile as renameFileModel,
   replaceFileData,
+  replaceFileDataWithStorageKey,
 } from '../../models/file.model.js';
 import { getUserStorageLimit, getUserStorageUsage } from '../../models/user.model.js';
 import { validateParentId } from '../../utils/controllerHelpers.js';
@@ -311,6 +312,86 @@ async function uploadFile(req, res) {
  */
 async function replaceFileContents(req, res) {
   const fileId = req.params.id;
+
+  // S3: bytes streamed to a fresh key (no temp file); repoint the DB row.
+  if (req.streamedUpload) {
+    const upload = req.streamedUpload;
+
+    // Drop the streamed object when we bail out.
+    const discardStreamedObject = () => {
+      if (!upload?.storageName) return;
+      if (req._s3UploadedKeys) {
+        req._s3UploadedKeys = req._s3UploadedKeys.filter(k => k !== upload.storageName);
+      }
+      storage
+        .deleteObject(upload.storageName)
+        .catch(err =>
+          logger.warn({ err, storageName: upload.storageName }, 'Failed to delete orphaned S3 object after replace')
+        );
+    };
+
+    try {
+      const existing = await getFile(fileId, req.userId);
+      if (!existing) {
+        discardStreamedObject();
+        return sendError(res, 404, 'File not found');
+      }
+
+      if (!validateFileName(existing.name)) {
+        discardStreamedObject();
+        return sendError(res, 400, 'Invalid file name');
+      }
+
+      // Magic bytes already checked in streamUploadToS3; validate MIME + name here.
+      validateFileUpload(upload.mimeType, existing.name);
+
+      const updated = await replaceFileDataWithStorageKey(
+        fileId,
+        upload.size,
+        upload.mimeType || 'application/octet-stream',
+        upload.storageName,
+        req.userId
+      );
+
+      if (!updated) {
+        discardStreamedObject();
+        return sendError(res, 404, 'File not found');
+      }
+
+      // Consumed — keep it out of the middleware's auto-cleanup.
+      if (req._s3UploadedKeys) {
+        req._s3UploadedKeys = req._s3UploadedKeys.filter(k => k !== upload.storageName);
+      }
+
+      await logAuditEvent(
+        'file.update',
+        {
+          status: 'success',
+          resourceType: updated.type,
+          resourceId: updated.id,
+          metadata: { fileName: updated.name, size: updated.size },
+        },
+        req
+      );
+      logger.info({ fileId, fileName: updated.name }, 'File contents updated (stream to S3)');
+
+      await publishFileEvent(EventTypes.FILE_UPDATED, {
+        id: updated.id,
+        name: updated.name,
+        type: updated.type,
+        size: updated.size,
+        mimeType: updated.mimeType,
+        parentId: updated.parentId || null,
+        userId: req.userId,
+      });
+
+      return sendSuccess(res, updated);
+    } catch (err) {
+      logger.error({ err, fileId }, 'Error replacing file contents (S3)');
+      discardStreamedObject();
+      return sendError(res, 500, 'Failed to update file');
+    }
+  }
 
   if (!req.file) {
     return sendError(res, 400, 'No file uploaded');
