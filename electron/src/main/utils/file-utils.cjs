@@ -31,6 +31,83 @@ function sanitizeFileName(name) {
   return name.replace(/[/\\:*?"<>|]/g, '_').trim() || 'file';
 }
 
+// Minimal extension -> MIME map for the multipart upload Content-Type.
+const MIME_BY_EXT = {
+  // images
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  gif: 'image/gif',
+  webp: 'image/webp',
+  bmp: 'image/bmp',
+  svg: 'image/svg+xml',
+  tif: 'image/tiff',
+  tiff: 'image/tiff',
+  ico: 'image/x-icon',
+  heic: 'image/heic',
+  heif: 'image/heif',
+  avif: 'image/avif',
+  // video
+  mp4: 'video/mp4',
+  m4v: 'video/mp4',
+  mov: 'video/quicktime',
+  webm: 'video/webm',
+  mkv: 'video/x-matroska',
+  avi: 'video/x-msvideo',
+  wmv: 'video/x-ms-wmv',
+  flv: 'video/x-flv',
+  '3gp': 'video/3gpp',
+  mpeg: 'video/mpeg',
+  mpg: 'video/mpeg',
+  // audio
+  mp3: 'audio/mpeg',
+  wav: 'audio/wav',
+  ogg: 'audio/ogg',
+  oga: 'audio/ogg',
+  m4a: 'audio/mp4',
+  flac: 'audio/flac',
+  aac: 'audio/aac',
+  opus: 'audio/opus',
+  weba: 'audio/webm',
+  // documents
+  pdf: 'application/pdf',
+  txt: 'text/plain',
+  rtf: 'application/rtf',
+  csv: 'text/csv',
+  doc: 'application/msword',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xls: 'application/vnd.ms-excel',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  ppt: 'application/vnd.ms-powerpoint',
+  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  odt: 'application/vnd.oasis.opendocument.text',
+  ods: 'application/vnd.oasis.opendocument.spreadsheet',
+  odp: 'application/vnd.oasis.opendocument.presentation',
+  // text / web / data
+  html: 'text/html',
+  htm: 'text/html',
+  css: 'text/css',
+  js: 'text/javascript',
+  json: 'application/json',
+  xml: 'application/xml',
+  md: 'text/markdown',
+  // archives
+  zip: 'application/zip',
+  rar: 'application/vnd.rar',
+  '7z': 'application/x-7z-compressed',
+  tar: 'application/x-tar',
+  gz: 'application/gzip',
+};
+
+/** Best-effort MIME type for a filename; null when unknown. */
+function mimeForFilename(name) {
+  const ext = path
+    .extname(String(name || ''))
+    .slice(1)
+    .toLowerCase();
+  return (ext && MIME_BY_EXT[ext]) || null;
+}
+
 /**
  * Append a "(n)" suffix to a filename until it's not present in the given set.
  */
@@ -116,10 +193,11 @@ function pipeResponseToFile(response, filePath, resolve, reject) {
 function postMultipartFile(url, filePath, fileName, cookieHeader) {
   const boundary = `----ElectronFormBoundary${crypto.randomBytes(16).toString('hex')}`;
   const safeFileName = String(fileName).replace(/"/g, '\\"');
+  const contentType = mimeForFilename(fileName) || 'application/octet-stream';
   const preamble =
     `--${boundary}\r\n` +
     `Content-Disposition: form-data; name="file"; filename="${safeFileName}"\r\n` +
-    `Content-Type: application/octet-stream\r\n\r\n`;
+    `Content-Type: ${contentType}\r\n\r\n`;
   const closing = `\r\n--${boundary}--\r\n`;
 
   return new Promise((resolve, reject) => {
@@ -406,6 +484,7 @@ function uploadNewFile(base, parentId, filePath, fileName) {
   return getCookieHeader(base).then(cookieHeader => {
     const boundary = `----ElectronFormBoundary${crypto.randomBytes(16).toString('hex')}`;
     const safeFileName = String(fileName).replace(/"/g, '\\"');
+    const contentType = mimeForFilename(fileName) || 'application/octet-stream';
     let preamble = '';
     if (parentId) {
       preamble += `--${boundary}\r\nContent-Disposition: form-data; name="parentId"\r\n\r\n${parentId}\r\n`;
@@ -413,7 +492,7 @@ function uploadNewFile(base, parentId, filePath, fileName) {
     preamble +=
       `--${boundary}\r\n` +
       `Content-Disposition: form-data; name="file"; filename="${safeFileName}"\r\n` +
-      `Content-Type: application/octet-stream\r\n\r\n`;
+      `Content-Type: ${contentType}\r\n\r\n`;
     const closing = `\r\n--${boundary}--\r\n`;
 
     return new Promise((resolve, reject) => {
