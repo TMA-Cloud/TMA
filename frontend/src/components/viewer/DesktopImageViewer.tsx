@@ -30,8 +30,10 @@ export const DesktopImageViewer: React.FC<DesktopImageViewerProps> = ({ imageVie
       setInitialFitZoom(1);
       return;
     }
+    let cancelled = false;
     const img = new Image();
     img.onload = () => {
+      if (cancelled) return;
       const container = containerRef.current;
       if (container) {
         const cw = container.clientWidth;
@@ -59,6 +61,13 @@ export const DesktopImageViewer: React.FC<DesktopImageViewerProps> = ({ imageVie
       }
     };
     img.src = imageSrc;
+    return () => {
+      // Prevent a late-firing onload from mutating state/refs after the src
+      // changed or the component unmounted, and let the Image be GC'd promptly.
+      cancelled = true;
+      img.onload = null;
+      img.src = '';
+    };
   }, [imageSrc]);
 
   const clampOffset = (newZoom: number) => {

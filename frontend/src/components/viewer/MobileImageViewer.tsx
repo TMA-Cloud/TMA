@@ -61,8 +61,10 @@ export const MobileImageViewer: React.FC<MobileImageViewerProps> = ({
 
   useEffect(() => {
     if (!imageSrc) return;
+    let cancelled = false;
     const img = new Image();
     img.onload = () => {
+      if (cancelled) return;
       const container = containerRef.current;
       if (container) {
         const cw = container.clientWidth;
@@ -88,6 +90,13 @@ export const MobileImageViewer: React.FC<MobileImageViewerProps> = ({
       }
     };
     img.src = imageSrc;
+    return () => {
+      // Prevent a late-firing onload from mutating state/refs after the src
+      // changed or the component unmounted, and let the Image be GC'd promptly.
+      cancelled = true;
+      img.onload = null;
+      img.src = '';
+    };
   }, [imageSrc]);
 
   // Auto-hide controls on mobile after 3 seconds

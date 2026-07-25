@@ -1,5 +1,5 @@
 // MarqueeSelector.tsx
-import React, { useRef, useState, useCallback } from 'react';
+import React, { useRef, useState, useCallback, useEffect } from 'react';
 
 interface MarqueeSelectorProps {
   onSelectionChange: (selectedIds: string[], additive: boolean) => void;
@@ -37,6 +37,26 @@ export const MarqueeSelector: React.FC<MarqueeSelectorProps> = ({
     additive: false,
   });
   const rafRef = useRef<number | null>(null);
+  // Track listeners attached during an active drag so they can be torn down if
+  // the component unmounts mid-drag (mouseup would otherwise never fire).
+  const activeListenersRef = useRef<{
+    move: (e: MouseEvent) => void;
+    up: (e: MouseEvent) => void;
+  } | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (activeListenersRef.current) {
+        document.removeEventListener('mousemove', activeListenersRef.current.move);
+        document.removeEventListener('mouseup', activeListenersRef.current.up);
+        activeListenersRef.current = null;
+      }
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+    };
+  }, []);
 
   const getSelectedIds = useCallback((rect: SelectionRect) => {
     const container = containerRef.current;
@@ -161,6 +181,7 @@ export const MarqueeSelector: React.FC<MarqueeSelectorProps> = ({
       const handleMouseUp = (upEvent: MouseEvent) => {
         document.removeEventListener('mousemove', handleMouseMove);
         document.removeEventListener('mouseup', handleMouseUp);
+        activeListenersRef.current = null;
 
         if (!dragStateRef.current.isDragging) return;
 
@@ -198,6 +219,7 @@ export const MarqueeSelector: React.FC<MarqueeSelectorProps> = ({
 
       document.addEventListener('mousemove', handleMouseMove);
       document.addEventListener('mouseup', handleMouseUp);
+      activeListenersRef.current = { move: handleMouseMove, up: handleMouseUp };
     },
     [onSelectionChange, onSelectingChange, getSelectedIds, cancelSelection, selectedFiles]
   );
