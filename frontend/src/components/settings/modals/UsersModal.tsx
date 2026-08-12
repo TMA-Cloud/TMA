@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Loader2, Shield, ShieldCheck, HardDrive, Edit2, Check, X } from 'lucide-react';
+import { Loader2, Shield, ShieldCheck, HardDrive, Edit2, Check, X, CornerDownRight } from 'lucide-react';
 import { format } from 'date-fns';
 import { Modal } from '../../ui/Modal';
 import { ModalCountHeader } from '../components/ModalCountHeader';
@@ -36,6 +36,22 @@ const formatSignupDate = (isoString: string) => {
   }
 };
 
+/**
+ * Group sub-users under the account they belong to, so the admin list reads as
+ * one row per account with its extra logins nested underneath. A sub-user whose
+ * owner is missing from the list is treated as top-level rather than dropped.
+ */
+const groupByAccount = (users: UserSummary[]) => {
+  const owners = users.filter(u => !u.parentUserId);
+  const ownerIds = new Set(owners.map(u => u.id));
+  const orphans = users.filter(u => u.parentUserId && !ownerIds.has(u.parentUserId));
+
+  return [...owners, ...orphans].map(owner => ({
+    owner,
+    subUsers: users.filter(u => u.parentUserId === owner.id),
+  }));
+};
+
 export const UsersModal: React.FC<UsersModalProps> = ({
   isOpen,
   onClose,
@@ -51,6 +67,20 @@ export const UsersModal: React.FC<UsersModalProps> = ({
   const [editValue, setEditValue] = useState<string>('');
   const [editUnit, setEditUnit] = useState<StorageUnit>('GB');
   const [updating, setUpdating] = useState<string | null>(null);
+
+  const accounts = useMemo(() => groupByAccount(usersList), [usersList]);
+  const subUserCount = usersList.length - accounts.length;
+
+  // Flattened for rendering: each account row is immediately followed by its
+  // sub-user rows, which carry a reference to the owner they belong to.
+  const rows = useMemo(
+    () =>
+      accounts.flatMap(({ owner, subUsers }) => [
+        { user: owner, owner: null as UserSummary | null },
+        ...subUsers.map(subUser => ({ user: subUser, owner })),
+      ]),
+    [accounts]
+  );
 
   const mfaStats = useMemo(() => {
     if (usersList.length === 0) {
@@ -145,9 +175,9 @@ export const UsersModal: React.FC<UsersModalProps> = ({
     <Modal isOpen={isOpen} onClose={onClose} title="All Registered Users" size="xl">
       <div className="space-y-4">
         <ModalCountHeader
-          count={usersList.length}
-          singular="user"
-          countSuffix=" total"
+          count={accounts.length}
+          singular="account"
+          countSuffix={subUserCount > 0 ? ` · ${subUserCount} sub-user${subUserCount === 1 ? '' : 's'}` : ' total'}
           emptyText="No users to display yet"
           loading={loadingUsersList}
           onRefresh={onRefresh}
@@ -207,35 +237,61 @@ export const UsersModal: React.FC<UsersModalProps> = ({
                 </tr>
               </thead>
               <tbody>
-                {usersList.map(listedUser => {
+                {rows.map(({ user: listedUser, owner }) => {
                   const isEditing = editingUserId === listedUser.id;
                   const isUpdating = updating === listedUser.id;
                   const used = listedUser.storageUsed ?? 0;
                   const total = listedUser.storageTotal ?? 0;
                   const percentage = total > 0 ? Math.round((used / total) * 100) : 0;
+                  const ownerLabel = owner ? owner.name || owner.email : '';
 
                   return (
                     <tr
                       key={listedUser.id}
-                      className="border-b border-gray-100 dark:border-gray-800 last:border-b-0 hover:bg-[#d4d9e1]/80 dark:hover:bg-gray-900/40 transition-colors"
+                      className={`border-b border-gray-100 dark:border-gray-800 last:border-b-0 hover:bg-[#d4d9e1]/80 dark:hover:bg-gray-900/40 transition-colors ${
+                        owner ? 'bg-slate-100/50 dark:bg-gray-900/25' : ''
+                      }`}
                     >
-                      <td className="py-2 pr-4 text-gray-900 dark:text-gray-100">{listedUser.name || 'Unnamed'}</td>
+                      <td className="py-2 pr-4 text-gray-900 dark:text-gray-100">
+                        {owner ? (
+                          <span className="flex items-center gap-1.5 pl-4">
+                            <CornerDownRight className="w-3.5 h-3.5 shrink-0 text-gray-400 dark:text-gray-500" />
+                            <span>{listedUser.name || 'Unnamed'}</span>
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-medium uppercase tracking-wide bg-slate-200 text-slate-600 dark:bg-slate-700/60 dark:text-slate-300">
+                              Sub-user
+                            </span>
+                          </span>
+                        ) : (
+                          listedUser.name || 'Unnamed'
+                        )}
+                      </td>
                       <td className="py-2 pr-4 text-gray-700 dark:text-gray-300">{listedUser.email}</td>
                       <td className="py-2 pr-4">
-                        <div className="flex items-center gap-2">
-                          <HardDrive className="w-4 h-4 text-gray-500 dark:text-gray-400" />
-                          <div className="flex flex-col">
-                            <span className="text-gray-900 dark:text-gray-100 font-medium">{formatFileSize(used)}</span>
-                            {total > 0 && (
-                              <span className="text-xs text-gray-500 dark:text-gray-400">
-                                {percentage}% of {formatFileSize(total)}
+                        {owner ? (
+                          <span className="text-xs text-gray-500 dark:text-gray-400">Shares {ownerLabel}</span>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <HardDrive className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+                            <div className="flex flex-col">
+                              <span className="text-gray-900 dark:text-gray-100 font-medium">
+                                {formatFileSize(used)}
                               </span>
-                            )}
+                              {total > 0 && (
+                                <span className="text-xs text-gray-500 dark:text-gray-400">
+                                  {percentage}% of {formatFileSize(total)}
+                                </span>
+                              )}
+                            </div>
                           </div>
-                        </div>
+                        )}
                       </td>
                       <td className="py-2 pr-4">
-                        {isEditing ? (
+                        {/* Sub-users store into the owner's account, so their own
+                            storage limit is never consulted — show the inherited
+                            one instead of offering an edit that does nothing. */}
+                        {owner ? (
+                          <span className="text-xs text-gray-500 dark:text-gray-400">Inherited</span>
+                        ) : isEditing ? (
                           <div className="flex items-center gap-1">
                             <input
                               type="number"

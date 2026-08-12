@@ -508,6 +508,18 @@ async function setUserStorageLimit(userId, targetUserId, storageLimit) {
       throw new Error('Invalid targetUserId format');
     }
 
+    // Sub-users store their files against the owner's account, so a limit on the
+    // sub-user row would never be consulted. Reject instead of silently no-oping.
+    const targetResult = await client.query('SELECT parent_user_id FROM users WHERE id = $1', [targetUserId]);
+    if (targetResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      throw new Error('User not found');
+    }
+    if (targetResult.rows[0].parent_user_id) {
+      await client.query('ROLLBACK');
+      throw new Error("Sub-users share their owner's storage limit; set the limit on the owner account instead");
+    }
+
     // Update user storage limit using parameterized query (prevents SQL injection)
     await client.query('UPDATE users SET storage_limit = $1 WHERE id = $2', [storageLimit, targetUserId]);
 

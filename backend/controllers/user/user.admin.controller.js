@@ -748,7 +748,12 @@ async function _updateUserStorageLimit(req, res) {
       return sendError(res, 403, err.message);
     }
     // Validation errors from setUserStorageLimit (e.g. limit exceeds disk, invalid format) → 400 so frontend can show the message
-    if (err.message?.startsWith('Storage limit') || err.message === 'Invalid targetUserId format') {
+    if (
+      err.message?.startsWith('Storage limit') ||
+      err.message?.startsWith('Sub-users share') ||
+      err.message === 'Invalid targetUserId format' ||
+      err.message === 'User not found'
+    ) {
       logger.warn({ err, userId: req.userId }, 'Storage limit update rejected');
       return sendError(res, 400, err.message);
     }
