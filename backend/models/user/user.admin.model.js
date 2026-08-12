@@ -123,12 +123,66 @@ async function getAllUsersBasic() {
   // Admin-only endpoint — query DB directly; cache invalidation key kept for consistency
   // Sub-users are listed under their owner so the admin screen shows the whole
   // account rather than a flat list of unrelated logins.
+  //
+  // Usage is aggregated per account, not per login: a sub-user's uploads are
+  // stored against the owner, so the account total is what the admin cares
+  // about. One grouped subquery covers every account — no per-user queries.
   const result = await pool.query(
-    `SELECT id, email, name, created_at, mfa_enabled, storage_limit, parent_user_id, permissions
-       FROM users
-      ORDER BY COALESCE(parent_user_id, id), parent_user_id NULLS FIRST, created_at ASC`
+    `SELECT u.id, u.email, u.name, u.created_at, u.mfa_enabled, u.storage_limit,
+            u.parent_user_id, u.permissions,
+            COALESCE(acct_usage.used, 0) AS storage_used
+       FROM users u
+       LEFT JOIN (
+         SELECT COALESCE(o.parent_user_id, o.id) AS account_id, SUM(f.size) AS used
+           FROM files f
+           JOIN users o ON o.id = f.user_id
+          WHERE f.type = 'file'
+          GROUP BY 1
+       ) acct_usage ON acct_usage.account_id = COALESCE(u.parent_user_id, u.id)
+      ORDER BY COALESCE(u.parent_user_id, u.id), u.parent_user_id NULLS FIRST, u.created_at ASC`
   );
-  return result.rows;
+
+  // Capacity is the same for every account, so the disk is measured once.
+  // On S3 there is no disk to cap against — only an explicit limit applies,
+  // and its absence means unlimited (null).
+  let diskSize = null;
+  if (!useS3) {
+    try {
+      diskSize = await getActualDiskSize(process.env.UPLOAD_DIR || __dirname);
+    } catch (err) {
+      logger.warn({ err }, 'Could not determine disk size for user list');
+    }
+  }
+
+  // A sub-user row reports its owner's capacity, since that is the pool it
+  // actually draws from.
+  const limitByAccount = new Map(
+    result.rows
+      .filter(row => !row.parent_user_id)
+      .map(row => [row.id, row.storage_limit != null ? Number(row.storage_limit) : null])
+  );
+
+  return result.rows.map(row => {
+    const accountId = row.parent_user_id || row.id;
+    const limit = limitByAccount.has(accountId)
+      ? limitByAccount.get(accountId)
+      : row.storage_limit != null
+        ? Number(row.storage_limit)
+        : null;
+
+    let storageTotal;
+    if (diskSize != null) {
+      storageTotal = Math.min(diskSize, limit ?? diskSize);
+    } else {
+      storageTotal = limit;
+    }
+
+    return {
+      ...row,
+      storage_used: Number(row.storage_used) || 0,
+      storage_total: storageTotal,
+    };
+  });
 }
 
 async function setSignupEnabled(enabled, userId) {

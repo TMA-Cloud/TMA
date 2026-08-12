@@ -185,7 +185,8 @@ export interface UserSummary {
   mfaEnabled: boolean;
   storageUsed?: number;
   storageLimit?: number | null;
-  storageTotal?: number;
+  /** Effective capacity for the account; null when unlimited (S3, no limit set). */
+  storageTotal?: number | null;
   /** Account this login belongs to; null for top-level accounts. */
   parentUserId?: string | null;
   /** Granted capabilities for sub-users; null for owners, who hold them all. */
