@@ -17,11 +17,11 @@ async function deleteFilesController(req, res) {
   const { ids } = req.body;
 
   // Get file info for audit logging and events
-  const fileInfo = await getFileInfo(ids, req.userId);
+  const fileInfo = await getFileInfo(ids, req.ownerId);
   const fileNames = fileInfo.map(f => f.name);
   const fileTypes = fileInfo.map(f => f.type);
 
-  await deleteFiles(ids, req.userId);
+  await deleteFiles(ids, req.ownerId);
 
   // Log file deletion (soft delete to trash) with details
   await logAuditEvent(
@@ -51,7 +51,7 @@ async function listTrash(req, res) {
   const order = validateSortOrder(req.query.order) || 'DESC';
   // In the UI, we don't want to render every child row of a deleted folder
   // Return only top-level trashed items (hide items whose parent is also trashed)
-  const files = await getTrashFiles(req.userId, sortBy, order, true);
+  const files = await getTrashFiles(req.ownerId, sortBy, order, true);
   sendSuccess(res, files);
 }
 
@@ -62,7 +62,7 @@ async function restoreFilesController(req, res) {
   const { ids } = req.body;
 
   // Get file info for audit logging and events (from trash)
-  const fileInfo = await getFileInfo(ids, req.userId, true);
+  const fileInfo = await getFileInfo(ids, req.ownerId, true);
   const fileNames = fileInfo.map(f => f.name);
   const fileTypes = fileInfo.map(f => f.type);
 
@@ -70,7 +70,7 @@ async function restoreFilesController(req, res) {
     return sendError(res, 404, 'No files found in trash to restore');
   }
 
-  await restoreFiles(ids, req.userId);
+  await restoreFiles(ids, req.ownerId);
 
   // Log file restore with details
   await logAuditEvent(
@@ -99,7 +99,7 @@ async function restoreFilesController(req, res) {
         name: file.name,
         type: file.type,
         parentId: file.parentId || null,
-        userId: req.userId,
+        userId: req.ownerId,
       },
     }))
   );
@@ -114,11 +114,11 @@ async function deleteForeverController(req, res) {
   const { ids } = req.body;
 
   // Get file info for audit logging and events (from trash)
-  const fileInfo = await getFileInfo(ids, req.userId, true);
+  const fileInfo = await getFileInfo(ids, req.ownerId, true);
   const fileNames = fileInfo.map(f => f.name);
   const fileTypes = fileInfo.map(f => f.type);
 
-  await permanentlyDeleteFiles(ids, req.userId);
+  await permanentlyDeleteFiles(ids, req.ownerId);
 
   // Log permanent deletion with details
   await logAuditEvent(
@@ -148,7 +148,7 @@ async function deleteForeverController(req, res) {
         name: file.name,
         type: file.type,
         parentId: file.parentId || null,
-        userId: req.userId,
+        userId: req.ownerId,
         permanent: true,
       },
     }))
@@ -162,7 +162,7 @@ async function deleteForeverController(req, res) {
  */
 async function emptyTrashController(req, res) {
   // Get all trash files for the user
-  const trashFiles = await getTrashFiles(req.userId);
+  const trashFiles = await getTrashFiles(req.ownerId);
 
   if (trashFiles.length === 0) {
     sendSuccess(res, { message: 'Trash is already empty' });
@@ -172,7 +172,7 @@ async function emptyTrashController(req, res) {
   const fileNames = trashFiles.map(f => f.name);
   const fileTypes = trashFiles.map(f => f.type);
 
-  await permanentlyDeleteFiles(allIds, req.userId);
+  await permanentlyDeleteFiles(allIds, req.ownerId);
 
   // Log empty trash action with details
   await logAuditEvent(
@@ -203,7 +203,7 @@ async function emptyTrashController(req, res) {
         name: file.name,
         type: file.type,
         parentId: file.parentId || file.parent_id || null,
-        userId: req.userId,
+        userId: req.ownerId,
         permanent: true,
         action: 'empty_trash',
       },

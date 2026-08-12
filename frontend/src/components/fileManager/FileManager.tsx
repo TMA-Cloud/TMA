@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { useApp, type FileItem, type ShareExpiry } from '../../contexts/AppContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { Breadcrumbs } from './Breadcrumbs';
 import { Tooltip } from '../ui/Tooltip';
 import { ContextMenu } from './ContextMenu';
@@ -89,6 +90,9 @@ export const FileManager: React.FC = () => {
     desktopOpenProgress,
   } = useApp();
 
+  // Sub-users only see the actions they were granted; the rest are omitted
+  // rather than shown and rejected by the server.
+  const { can } = useAuth();
   const { showToast } = useToast();
   const [emptyTrashModalOpen, setEmptyTrashModalOpen] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
@@ -107,14 +111,17 @@ export const FileManager: React.FC = () => {
     uploadModalProcessingRef.current = uploadModalProcessing;
   }, [uploadModalProcessing]);
 
-  const canCreateFolder = currentPath[0] === 'My Files';
+  // Creating folders, uploading and dropping files all need the upload
+  // grant; without it the drop zone and its affordances stay hidden.
+  const canUpload = can('files.upload');
+  const canCreateFolder = currentPath[0] === 'My Files' && canUpload;
   const isTrashView = currentPath[0] === 'Trash';
   const hasTrashFiles = isTrashView && files.length > 0;
   const isMyFilesView = currentPath[0] === 'My Files';
 
   // Paste (Ctrl+V): upload clipboard files only in My Files
   useEffect(() => {
-    if (!isMyFilesView) return;
+    if (!isMyFilesView || !canUpload) return;
 
     const onPaste = (e: ClipboardEvent) => {
       const fileList = e.clipboardData?.files;
@@ -142,7 +149,7 @@ export const FileManager: React.FC = () => {
 
     document.addEventListener('paste', onPaste);
     return () => document.removeEventListener('paste', onPaste);
-  }, [isMyFilesView, uploadFile, uploadFilesBulk]);
+  }, [isMyFilesView, canUpload, uploadFile, uploadFilesBulk]);
 
   // Mouse back/forward (e.g. G502 X side buttons): button 3 = back, button 4 = forward
   useEffect(() => {
@@ -622,7 +629,8 @@ export const FileManager: React.FC = () => {
 
   const handleFolderDrop = (folderId: string) => async (e: React.DragEvent) => {
     e.preventDefault();
-    if (dragSelectingRef.current || draggingIds.length === 0) return;
+    // Dropping onto a folder is a move, so it needs the modify grant.
+    if (dragSelectingRef.current || draggingIds.length === 0 || !can('files.edit')) return;
     setDragOverFolder(null);
     removeDragPreview();
     try {
@@ -713,6 +721,7 @@ export const FileManager: React.FC = () => {
   const handleExternalDrop = useCallback(
     async (e: React.DragEvent) => {
       if (draggingIds.length > 0) return;
+      if (!canUpload) return;
       if (!e.dataTransfer.files?.length) return;
       if (uploadModalProcessingRef.current) return; // Prevent duplicate drops while we are still scanning folders.
       e.preventDefault();
@@ -750,6 +759,7 @@ export const FileManager: React.FC = () => {
     [
       draggingIds.length,
       isMyFilesView,
+      canUpload,
       openUploadModalWithEntries,
       setUploadModalOpen,
       setUploadModalProcessing,

@@ -25,7 +25,9 @@ export const EmptyState: React.FC<EmptyStateProps> = ({ searchQuery, isSearching
     if (currentPath[0] === 'Starred') return 'Star files to easily find them later';
     if (currentPath[0] === 'Shared') return 'Files others share with you will show up here';
     if (currentPath[0] === 'Trash') return 'Deleted files will appear here';
-    return 'Upload files or folders to get started';
+    // `canCreateFolder` is false for members without the upload grant, so
+    // pointing them at an upload they cannot perform would be misleading.
+    return canCreateFolder ? 'Upload files or folders to get started' : 'This folder is empty';
   };
 
   const isDropZoneContext = canCreateFolder && searchQuery.trim().length === 0;

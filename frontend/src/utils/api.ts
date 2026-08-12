@@ -186,6 +186,55 @@ export interface UserSummary {
   storageUsed?: number;
   storageLimit?: number | null;
   storageTotal?: number;
+  /** Account this login belongs to; null for top-level accounts. */
+  parentUserId?: string | null;
+  /** Granted capabilities for sub-users; null for owners, who hold them all. */
+  permissions?: string[] | null;
+}
+
+/**
+ * A capability an owner can grant a sub-user. The catalog is served by the API
+ * rather than hard-coded here, so the checklist always matches what the server
+ * actually enforces.
+ */
+export interface PermissionDefinition {
+  key: string;
+  label: string;
+  description: string;
+}
+
+/** A sub-user: an extra login sharing the owner's files and storage quota. */
+export interface SubUser {
+  id: string;
+  name: string | null;
+  email: string;
+  permissions: string[];
+  createdAt: string;
+  mfaEnabled: boolean;
+}
+
+export async function fetchSubUsers(): Promise<{
+  subUsers: SubUser[];
+  availablePermissions: PermissionDefinition[];
+}> {
+  return apiGet<{ subUsers: SubUser[]; availablePermissions: PermissionDefinition[] }>('/api/user/sub-users');
+}
+
+export async function createSubUser(payload: {
+  email: string;
+  password: string;
+  name: string;
+  permissions: string[];
+}): Promise<{ subUser: SubUser }> {
+  return apiPost<{ subUser: SubUser }>('/api/user/sub-users', payload);
+}
+
+export async function updateSubUserPermissions(id: string, permissions: string[]): Promise<{ subUser: SubUser }> {
+  return apiPut<{ subUser: SubUser }>(`/api/user/sub-users/${encodeURIComponent(id)}`, { permissions });
+}
+
+export async function deleteSubUser(id: string): Promise<{ message: string }> {
+  return apiDelete<{ message: string }>(`/api/user/sub-users/${encodeURIComponent(id)}`);
 }
 
 export async function fetchAllUsers(): Promise<{
@@ -531,7 +580,11 @@ export async function downloadFile(id: string, fallbackFilename?: string): Promi
 }
 
 export const AUTH_STATE_KEY = 'tma_cloud_auth_state';
-const AUTH_STATE_MAX_AGE = 7 * 24 * 60 * 60 * 1000;
+// Must not be shorter than the server's session idle window (SESSION_IDLE_DAYS,
+// 30 days by default). This value only gates whether we bother asking the
+// server; if it expired first, a still-valid session would be shown the login
+// screen without a single request being made.
+const AUTH_STATE_MAX_AGE = 30 * 24 * 60 * 60 * 1000;
 
 interface AuthState {
   timestamp: number;
@@ -613,15 +666,24 @@ function mightBeAuthCallback(): boolean {
   }
 }
 
-/** Returns null if not authenticated, or { user, authenticated: true } if authenticated. Uses localStorage hint to skip API when no prior auth. */
-export async function checkAuthSilently(signal?: AbortSignal): Promise<{
-  user: unknown;
-  authenticated: boolean;
-} | null> {
+/**
+ * Outcome of a silent auth check.
+ *
+ * `unknown` is the important one: the server did not say the session is
+ * invalid, we simply could not reach it or got an error unrelated to auth
+ * (502 during a deploy, 429, a dropped connection). Treating that as
+ * "logged out" is what used to eject users from a perfectly valid session, so
+ * it is reported separately and the caller keeps whatever state it had.
+ */
+export type AuthCheckResult =
+  { status: 'authenticated'; user: unknown } | { status: 'unauthenticated' } | { status: 'unknown' };
+
+/** Checks the current session. Uses the localStorage hint to skip the API call when there was no prior login. */
+export async function checkAuthSilently(signal?: AbortSignal): Promise<AuthCheckResult> {
   const hasValidAuthState = hasAuthState();
   const mightBeOAuth = mightBeAuthCallback();
   if (!hasValidAuthState && !mightBeOAuth) {
-    return null;
+    return { status: 'unauthenticated' };
   }
 
   try {
@@ -632,30 +694,29 @@ export async function checkAuthSilently(signal?: AbortSignal): Promise<{
       signal,
     });
 
+    // Only the server explicitly rejecting the session ends it.
     if (response.status === 401) {
       setAuthState(false);
-      return null;
+      return { status: 'unauthenticated' };
     }
 
     if (response.ok) {
       const data = await response.json();
       setAuthState(true);
-      return { user: data, authenticated: true };
+      return { status: 'authenticated', user: data };
     }
 
     if (import.meta.env.DEV) {
       console.warn(`[Auth] Unexpected status ${response.status} from /api/profile: ${response.statusText}`);
     }
-    return null;
+    return { status: 'unknown' };
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
-      return null;
+      return { status: 'unknown' };
     }
     if (import.meta.env.DEV) {
-      if (error instanceof TypeError && error.message.includes('fetch')) {
-        console.warn('[Auth] Network error during auth check:', error);
-      }
+      console.warn('[Auth] Network error during auth check:', error);
     }
-    return null;
+    return { status: 'unknown' };
   }
 }

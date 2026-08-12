@@ -1,6 +1,7 @@
 import { logger } from '../../config/logger.js';
 import { getFile } from '../../models/file.model.js';
 import { registerOpenDocument } from '../../services/onlyofficeAutoSave.js';
+import { PERMISSIONS, hasPermission } from '../../utils/permissions.js';
 import { validateAndResolveFile } from '../../utils/fileDownload.js';
 import { validateOnlyOfficeMimeType } from '../../utils/mimeTypeDetection.js';
 
@@ -28,7 +29,8 @@ async function getConfig(req, res) {
     }
 
     const { id: fileId } = req.params;
-    const userId = req.userId;
+    // Files belong to the account owner; a sub-user edits the owner's copy.
+    const userId = req.ownerId;
 
     const file = await getFile(fileId, userId);
     const validation = await validateFileForOnlyOffice(file, validateAndResolveFile, validateOnlyOfficeMimeType);
@@ -41,11 +43,19 @@ async function getConfig(req, res) {
       return res.status(400).json({ message: validation.error });
     }
 
-    const userName = await getUserName(userId);
+    const userName = await getUserName(req.userId);
     const token = await buildSignedFileToken(file.id, userId);
     const { downloadUrl, callbackUrl } = buildOnlyofficeUrls(req, file.id, token);
     const isMobile = isMobileDevice(req);
-    const config = buildOnlyofficeConfig(file, userId, userName, downloadUrl, callbackUrl, isMobile);
+    const config = buildOnlyofficeConfig(
+      file,
+      userId,
+      { id: req.userId, name: userName },
+      downloadUrl,
+      callbackUrl,
+      isMobile,
+      hasPermission(req, PERMISSIONS.EDIT)
+    );
     const tokenForConfig = await signConfigToken(config);
     const onlyofficeJsUrl = await getOnlyofficeJsUrl();
 

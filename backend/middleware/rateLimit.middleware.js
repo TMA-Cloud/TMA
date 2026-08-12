@@ -67,7 +67,12 @@ const backupCodeRegenerationRateLimiter = rateLimit({
 
 /**
  * Rate limiter for general API endpoints
- * 10000 requests per 15 minutes per IP
+ * 10000 requests per 15 minutes, per user when authenticated.
+ *
+ * Keying on the authenticated user matters more than it looks: colleagues
+ * sharing an office IP — and, before sub-users existed, sharing an account —
+ * would otherwise pool into one bucket, and the resulting 429s surface to the
+ * user as a spurious logout.
  */
 const apiRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -75,7 +80,12 @@ const apiRateLimiter = rateLimit({
   message: { error: 'Too many requests, please try again later' },
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: req => `api:${ipKeyGenerator(req.ip || req.socket?.remoteAddress || 'unknown')}`,
+  keyGenerator: req => {
+    if (req.userId) {
+      return `api:user:${req.userId}`;
+    }
+    return `api:${ipKeyGenerator(req.ip || req.socket?.remoteAddress || 'unknown')}`;
+  },
   skip: req => req.method === 'OPTIONS',
 });
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { User, HardDrive, Settings as SettingsIcon, RefreshCw, Shield, Menu, X } from 'lucide-react';
+import { User, HardDrive, Settings as SettingsIcon, RefreshCw, Shield, Users, Menu, X } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useApp } from '../../contexts/AppContext';
 import { useStorageUsage } from '../../hooks/useStorageUsage';
@@ -12,6 +12,7 @@ import { formatFileSize } from '../../utils/fileUtils';
 import { useSignupStatus } from './hooks/useSignupStatus';
 import { useVersions } from './hooks/useVersions';
 import { useSessions } from './hooks/useSessions';
+import { useSubUsers } from './hooks/useSubUsers';
 
 // Components
 import { ProfileSection } from './sections/ProfileSection';
@@ -22,6 +23,7 @@ import { OnlyOfficeSection } from './sections/OnlyOfficeSection';
 import { ShareBaseUrlSection } from './sections/ShareBaseUrlSection';
 import { UpdatesSection } from './sections/UpdatesSection';
 import { SecuritySection } from './sections/SecuritySection';
+import { SubUsersSection } from './sections/SubUsersSection';
 
 // Modals
 import { UsersModal } from './modals/UsersModal';
@@ -30,26 +32,30 @@ import { ActiveClientsModal } from './modals/ActiveClientsModal';
 import { OrphanFilesModal } from './modals/OrphanFilesModal';
 import { MfaModal } from './modals/MfaModal';
 import { ChangePasswordModal } from './modals/ChangePasswordModal';
+import { SubUsersModal } from './modals/SubUsersModal';
 
-type SectionId = 'profile' | 'storage' | 'administration' | 'updates' | 'security';
+type SectionId = 'profile' | 'storage' | 'sub-users' | 'administration' | 'updates' | 'security';
 
 interface NavSection {
   id: SectionId;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
   adminOnly?: boolean;
+  /** Hidden for sub-users, who cannot manage sub-users of their own. */
+  ownerOnly?: boolean;
 }
 
 const ALL_SECTIONS: NavSection[] = [
   { id: 'profile', label: 'Profile', icon: User },
   { id: 'storage', label: 'Storage', icon: HardDrive },
+  { id: 'sub-users', label: 'Sub-users', icon: Users, ownerOnly: true },
   { id: 'administration', label: 'Administration', icon: SettingsIcon, adminOnly: true },
   { id: 'updates', label: 'Updates', icon: RefreshCw, adminOnly: true },
   { id: 'security', label: 'Security', icon: Shield },
 ];
 
 export const Settings: React.FC = () => {
-  const { user } = useAuth();
+  const { user, isSubUser } = useAuth();
   const { setHideFileExtensions } = useApp();
   const { usage, loading: storageLoading, refresh: refreshStorage } = useStorageUsage();
   const { showToast } = useToast();
@@ -108,13 +114,28 @@ export const Settings: React.FC = () => {
   const [loadingActiveClients, setLoadingActiveClients] = useState(false);
 
   const [orphansModalOpen, setOrphansModalOpen] = useState(false);
+  const [subUsersModalOpen, setSubUsersModalOpen] = useState(false);
+
+  const {
+    subUsers,
+    loading: loadingSubUsers,
+    error: subUsersError,
+    creating: creatingSubUser,
+    updatingId: updatingSubUserId,
+    deletingId: deletingSubUserId,
+    loadSubUsers,
+    createSubUser,
+    updatePermissions: updateSubUserPermissions,
+    removeSubUser,
+    availablePermissions,
+  } = useSubUsers();
 
   const [activeSection, setActiveSection] = useState<SectionId>('profile');
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const runningInElectron = isElectron();
 
-  const visibleSections = ALL_SECTIONS.filter(s => !s.adminOnly || canToggleSignup);
+  const visibleSections = ALL_SECTIONS.filter(s => (!s.adminOnly || canToggleSignup) && (!s.ownerOnly || !isSubUser));
 
   // If the selected section is no longer visible (e.g. admin toggled off), fall back to 'profile'.
   // Derived during render rather than syncing via setState in an effect.
@@ -165,6 +186,16 @@ export const Settings: React.FC = () => {
     if (canToggleSignup) Promise.resolve().then(() => loadActiveClients(true));
   }, [canToggleSignup, loadActiveClients]);
 
+  // Preload the count so the section can show it without opening the modal.
+  useEffect(() => {
+    if (!isSubUser) Promise.resolve().then(() => loadSubUsers(true));
+  }, [isSubUser, loadSubUsers]);
+
+  const handleShowSubUsers = () => {
+    setSubUsersModalOpen(true);
+    loadSubUsers();
+  };
+
   const handleShowActiveClients = () => {
     setActiveClientsModalOpen(true);
     loadActiveClients();
@@ -198,6 +229,14 @@ export const Settings: React.FC = () => {
             <StorageSection usage={usage ?? undefined} loading={storageLoading} canConfigure={canToggleSignup} />
             {runningInElectron && <CloudDriveSection />}
           </div>
+        );
+      case 'sub-users':
+        return isSubUser ? null : (
+          <SubUsersSection
+            subUserCount={subUsers.length}
+            loading={loadingSubUsers}
+            onManageSubUsers={handleShowSubUsers}
+          />
         );
       case 'administration':
         return canToggleSignup ? (
@@ -422,6 +461,22 @@ export const Settings: React.FC = () => {
       />
 
       <OrphanFilesModal isOpen={orphansModalOpen} onClose={() => setOrphansModalOpen(false)} />
+
+      <SubUsersModal
+        isOpen={subUsersModalOpen}
+        onClose={() => setSubUsersModalOpen(false)}
+        subUsers={subUsers}
+        availablePermissions={availablePermissions}
+        loading={loadingSubUsers}
+        error={subUsersError}
+        creating={creatingSubUser}
+        updatingId={updatingSubUserId}
+        deletingId={deletingSubUserId}
+        onRefresh={() => loadSubUsers()}
+        onCreate={createSubUser}
+        onUpdatePermissions={updateSubUserPermissions}
+        onRemove={removeSubUser}
+      />
 
       <MfaModal isOpen={mfaModalOpen} onClose={() => setMfaModalOpen(false)} />
       <ChangePasswordModal isOpen={changePasswordModalOpen} onClose={() => setChangePasswordModalOpen(false)} />

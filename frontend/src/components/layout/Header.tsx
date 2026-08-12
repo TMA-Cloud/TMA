@@ -6,7 +6,7 @@ import { ThemeToggle } from './ThemeToggle';
 
 export const Header: React.FC = () => {
   const { sidebarOpen, setSidebarOpen, setUploadModalOpen, searchQuery, setSearchQuery, isSearching } = useApp();
-  const { logout, user } = useAuth();
+  const { logout, user, can } = useAuth();
   const [scrolled, setScrolled] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -89,13 +89,17 @@ export const Header: React.FC = () => {
         {/* Right section */}
         <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
           <ThemeToggle />
-          <button
-            onClick={() => setUploadModalOpen(true)}
-            className="ripple btn-glow flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-[#5b8def] to-[#4a7edb] hover:from-[#4a7edb] hover:to-[#3d6ec7] text-white rounded-2xl shadow-soft focus:outline-none focus:ring-2 focus:ring-[#5b8def]/40 hover-lift font-semibold text-sm transition-all duration-300 ease-out"
-          >
-            <Upload className="w-4 h-4" />
-            <span className="hidden sm:inline">Upload</span>
-          </button>
+          {/* A sub-user without the upload grant is rejected by the server
+              either way, so offering the button would only produce an error. */}
+          {can('files.upload') && (
+            <button
+              onClick={() => setUploadModalOpen(true)}
+              className="ripple btn-glow flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-[#5b8def] to-[#4a7edb] hover:from-[#4a7edb] hover:to-[#3d6ec7] text-white rounded-2xl shadow-soft focus:outline-none focus:ring-2 focus:ring-[#5b8def]/40 hover-lift font-semibold text-sm transition-all duration-300 ease-out"
+            >
+              <Upload className="w-4 h-4" />
+              <span className="hidden sm:inline">Upload</span>
+            </button>
+          )}
 
           {/* Profile Dropdown */}
           <div className="relative" ref={dropdownRef}>

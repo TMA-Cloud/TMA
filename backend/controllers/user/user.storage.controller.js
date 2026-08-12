@@ -12,8 +12,8 @@ const checkDiskSpace = checkDiskSpaceModule?.default || checkDiskSpaceModule;
  * S3: total = per-user limit or null (Unlimited); no disk; free = limit - used or null.
  */
 async function storageUsage(req, res) {
-  const used = await getUserStorageUsage(req.userId);
-  const userStorageLimit = await getUserStorageLimit(req.userId);
+  const used = await getUserStorageUsage(req.ownerId);
+  const userStorageLimit = await getUserStorageLimit(req.ownerId);
 
   if (useS3) {
     const total = userStorageLimit !== null ? userStorageLimit : null;

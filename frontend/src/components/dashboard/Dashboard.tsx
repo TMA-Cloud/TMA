@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { RecentFiles } from './RecentFiles';
 import { useApp } from '../../contexts/AppContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { Upload, FolderPlus, Share2, Star } from 'lucide-react';
 import { apiGet } from '../../utils/api';
 
@@ -13,6 +14,7 @@ interface FileStats {
 
 export const Dashboard: React.FC = () => {
   const { files, setUploadModalOpen, setCreateFolderModalOpen, setCurrentPath } = useApp();
+  const { can } = useAuth();
   const [stats, setStats] = useState<FileStats>({
     totalFiles: 0,
     totalFolders: 0,
@@ -72,21 +74,27 @@ export const Dashboard: React.FC = () => {
     };
   }, []);
 
+  // The two navigation tiles are always available; the two that start a write
+  // are dropped for sub-users who lack the upload grant.
   const quickActions = [
-    {
-      title: 'Upload Files',
-      icon: Upload,
-      isPrimary: true,
-      hoverColor: 'hover:border-[#5b8def]/30 hover:bg-[#5b8def]/10 dark:hover:bg-[#5b8def]/20',
-      onClick: () => setUploadModalOpen(true),
-    },
-    {
-      title: 'Create Folder',
-      icon: FolderPlus,
-      isPrimary: false,
-      hoverColor: 'hover:border-emerald-400/30 hover:bg-emerald-500/10 dark:hover:bg-emerald-500/20',
-      onClick: () => setCreateFolderModalOpen(true),
-    },
+    ...(can('files.upload')
+      ? [
+          {
+            title: 'Upload Files',
+            icon: Upload,
+            isPrimary: true,
+            hoverColor: 'hover:border-[#5b8def]/30 hover:bg-[#5b8def]/10 dark:hover:bg-[#5b8def]/20',
+            onClick: () => setUploadModalOpen(true),
+          },
+          {
+            title: 'Create Folder',
+            icon: FolderPlus,
+            isPrimary: false,
+            hoverColor: 'hover:border-emerald-400/30 hover:bg-emerald-500/10 dark:hover:bg-emerald-500/20',
+            onClick: () => setCreateFolderModalOpen(true),
+          },
+        ]
+      : []),
     {
       title: 'Share Files',
       icon: Share2,

@@ -8,6 +8,7 @@
  * - user.storage.model.js - Storage operations (getUserStorageUsage)
  * - user.admin.model.js - Admin operations (isFirstUser, getSignupEnabled, setSignupEnabled, getTotalUserCount, getAllUsersBasic, handleFirstUserSetup)
  * - user.mfa.model.js - MFA operations (getMfaStatus, enableMfa, disableMfa, getMfaSecret)
+ * - user.subuser.model.js - Sub-user operations (getAccountContext, createSubUser, listSubUsers, updateSubUserPermissions, deleteSubUser)
  */
 
 export * from './user/user.crud.model.js';
@@ -15,3 +16,4 @@ export * from './user/user.auth.model.js';
 export * from './user/user.storage.model.js';
 export * from './user/user.admin.model.js';
 export * from './user/user.mfa.model.js';
+export * from './user/user.subuser.model.js';

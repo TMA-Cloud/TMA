@@ -147,8 +147,8 @@ async function checkUploadStorage(req, res) {
     return sendError(res, 400, 'fileSize must be a non-negative integer');
   }
   try {
-    const used = await getUserStorageUsage(req.userId);
-    const userStorageLimit = await getUserStorageLimit(req.userId);
+    const used = await getUserStorageUsage(req.ownerId);
+    const userStorageLimit = await getUserStorageLimit(req.ownerId);
 
     const checkResult = await checkStorageLimitExceeded({
       fileSize,
@@ -161,7 +161,7 @@ async function checkUploadStorage(req, res) {
     }
     return sendSuccess(res, { allowed: true });
   } catch (err) {
-    logger.error({ err, userId: req.userId }, 'Error checking upload storage');
+    logger.error({ err, userId: req.userId, ownerId: req.ownerId }, 'Error checking upload storage');
     return sendError(res, 500, 'Unable to verify storage limit. Please try again.');
   }
 }
@@ -178,7 +178,7 @@ async function listFiles(req, res) {
   // listFiles only reads from database; no filesystem access
   const sortBy = validateSortBy(req.query.sortBy) || 'modified';
   const order = validateSortOrder(req.query.order) || 'DESC';
-  const files = await getFiles(req.userId, parentId, sortBy, order);
+  const files = await getFiles(req.ownerId, parentId, sortBy, order);
 
   // IMPORTANT: Disable HTTP-level caching for dynamic file listings.
   // We already use Redis for caching and handle invalidation explicitly
@@ -199,7 +199,7 @@ async function listFiles(req, res) {
  */
 async function addFolder(req, res) {
   const { name, parentId } = req.body;
-  const folder = await createFolder(name, parentId, req.userId);
+  const folder = await createFolder(name, parentId, req.ownerId);
 
   await logAuditEvent(
     'folder.create',
@@ -219,7 +219,7 @@ async function addFolder(req, res) {
     name: folder.name,
     type: folder.type,
     parentId,
-    userId: req.userId,
+    userId: req.ownerId,
   });
 
   sendSuccess(res, folder);
@@ -242,8 +242,8 @@ async function uploadFile(req, res) {
       return sendError(res, 400, error);
     }
 
-    const file = await userOperationLock(req.userId, () => {
-      return createFileFromStreamedUpload(upload, parentId, req.userId);
+    const file = await userOperationLock(req.ownerId, () => {
+      return createFileFromStreamedUpload(upload, parentId, req.ownerId);
     });
 
     // Upload consumed successfully — prevent auto-cleanup from deleting it.
@@ -260,7 +260,7 @@ async function uploadFile(req, res) {
       size: file.size,
       mimeType: file.mimeType,
       parentId,
-      userId: req.userId,
+      userId: req.ownerId,
     });
     return sendSuccess(res, file);
   }
@@ -280,15 +280,15 @@ async function uploadFile(req, res) {
 
   const storageOk = await enforceStorageLimitForUpload({
     res,
-    userId: req.userId,
+    userId: req.ownerId,
     fileSize: req.file.size,
     cleanup: () => safeUnlink(req.file.path),
     logMessage: 'Error checking storage limit',
   });
   if (!storageOk) return;
 
-  const file = await userOperationLock(req.userId, () => {
-    return createFile(req.file.originalname, req.file.size, actualMimeType, req.file.path, parentId, req.userId);
+  const file = await userOperationLock(req.ownerId, () => {
+    return createFile(req.file.originalname, req.file.size, actualMimeType, req.file.path, parentId, req.ownerId);
   });
 
   await fileUploaded(file.id, file.name, file.size, req);
@@ -301,7 +301,7 @@ async function uploadFile(req, res) {
     size: file.size,
     mimeType: file.mimeType,
     parentId,
-    userId: req.userId,
+    userId: req.ownerId,
   });
 
   sendSuccess(res, file);
@@ -331,7 +331,7 @@ async function replaceFileContents(req, res) {
     };
 
     try {
-      const existing = await getFile(fileId, req.userId);
+      const existing = await getFile(fileId, req.ownerId);
       if (!existing) {
         discardStreamedObject();
         return sendError(res, 404, 'File not found');
@@ -350,7 +350,7 @@ async function replaceFileContents(req, res) {
         upload.size,
         upload.mimeType || 'application/octet-stream',
         upload.storageName,
-        req.userId
+        req.ownerId
       );
 
       if (!updated) {
@@ -382,7 +382,7 @@ async function replaceFileContents(req, res) {
         size: updated.size,
         mimeType: updated.mimeType,
         parentId: updated.parentId || null,
-        userId: req.userId,
+        userId: req.ownerId,
       });
 
       return sendSuccess(res, updated);
@@ -398,7 +398,7 @@ async function replaceFileContents(req, res) {
   }
 
   try {
-    const existing = await getFile(fileId, req.userId);
+    const existing = await getFile(fileId, req.ownerId);
     if (!existing) {
       await safeUnlink(req.file.path);
       return sendError(res, 404, 'File not found');
@@ -419,7 +419,7 @@ async function replaceFileContents(req, res) {
 
     validateFileUpload(actualMimeType, existing.name);
 
-    const updated = await replaceFileData(fileId, req.file.size, actualMimeType, req.file.path, req.userId);
+    const updated = await replaceFileData(fileId, req.file.size, actualMimeType, req.file.path, req.ownerId);
 
     if (!updated) {
       return sendError(res, 404, 'File not found');
@@ -447,7 +447,7 @@ async function replaceFileContents(req, res) {
       size: updated.size,
       mimeType: updated.mimeType,
       parentId: updated.parentId || null,
-      userId: req.userId,
+      userId: req.ownerId,
     });
 
     return sendSuccess(res, updated);
@@ -472,7 +472,7 @@ async function uploadDerivedFile(req, res) {
   const fileId = req.params.id;
 
   try {
-    const existing = await getFile(fileId, req.userId);
+    const existing = await getFile(fileId, req.ownerId);
     if (!existing) {
       return sendError(res, 404, 'File not found');
     }
@@ -493,15 +493,15 @@ async function uploadDerivedFile(req, res) {
 
       const storageOk = await enforceStorageLimitForUpload({
         res,
-        userId: req.userId,
+        userId: req.ownerId,
         fileSize: upload.size,
         cleanup: null,
         logMessage: 'Error checking storage limit (derived upload, S3)',
       });
       if (!storageOk) return;
 
-      const newFile = await userOperationLock(req.userId, () => {
-        return createFileFromStreamedUpload(upload, existing.parentId || null, req.userId);
+      const newFile = await userOperationLock(req.ownerId, () => {
+        return createFileFromStreamedUpload(upload, existing.parentId || null, req.ownerId);
       });
 
       // Upload consumed successfully — remove from auto-cleanup list.
@@ -522,7 +522,7 @@ async function uploadDerivedFile(req, res) {
         size: newFile.size,
         mimeType: newFile.mimeType,
         parentId: newFile.parentId || existing.parentId || null,
-        userId: req.userId,
+        userId: req.ownerId,
       });
 
       return sendSuccess(res, newFile);
@@ -534,21 +534,21 @@ async function uploadDerivedFile(req, res) {
 
     const storageOk = await enforceStorageLimitForUpload({
       res,
-      userId: req.userId,
+      userId: req.ownerId,
       fileSize: req.file.size,
       cleanup: () => safeUnlink(req.file.path),
       logMessage: 'Error checking storage limit (derived upload)',
     });
     if (!storageOk) return;
 
-    const newFile = await userOperationLock(req.userId, () => {
+    const newFile = await userOperationLock(req.ownerId, () => {
       return createFile(
         req.file.originalname,
         req.file.size,
         actualMimeType,
         req.file.path,
         existing.parentId || null,
-        req.userId
+        req.ownerId
       );
     });
 
@@ -565,7 +565,7 @@ async function uploadDerivedFile(req, res) {
       size: newFile.size,
       mimeType: newFile.mimeType,
       parentId: newFile.parentId || existing.parentId || null,
-      userId: req.userId,
+      userId: req.ownerId,
     });
 
     return sendSuccess(res, newFile);
@@ -631,15 +631,15 @@ async function uploadFilesBulk(req, res) {
         const targetParentId =
           folderSegments.length > 0
             ? await ensureFolderPath({
-                userId: req.userId,
+                userId: req.ownerId,
                 baseParentId: parentId,
                 folderSegments,
                 folderIdCache,
               })
             : parentId;
 
-        const file = await userOperationLock(req.userId, () => {
-          return createFileFromStreamedUpload(upload, targetParentId, req.userId);
+        const file = await userOperationLock(req.ownerId, () => {
+          return createFileFromStreamedUpload(upload, targetParentId, req.ownerId);
         });
         // Upload consumed successfully — remove from auto-cleanup list.
         if (req._s3UploadedKeys) {
@@ -654,7 +654,7 @@ async function uploadFilesBulk(req, res) {
           size: file.size,
           mimeType: file.mimeType,
           parentId: targetParentId,
-          userId: req.userId,
+          userId: req.ownerId,
         });
         successful.push(clientId ? { ...file, clientId } : file);
       } catch (err) {
@@ -736,7 +736,7 @@ async function uploadFilesBulk(req, res) {
   const totalSize = req.files.reduce((sum, file) => sum + file.size, 0);
   const storageOk = await enforceStorageLimitForUpload({
     res,
-    userId: req.userId,
+    userId: req.ownerId,
     fileSize: totalSize,
     cleanup: async () => {
       for (const file of req.files) {
@@ -786,15 +786,15 @@ async function uploadFilesBulk(req, res) {
       const targetParentId =
         folderSegments.length > 0
           ? await ensureFolderPath({
-              userId: req.userId,
+              userId: req.ownerId,
               baseParentId: parentId,
               folderSegments,
               folderIdCache,
             })
           : parentId;
 
-      const createdFile = await userOperationLock(req.userId, () => {
-        return createFile(file.originalname, file.size, actualMimeType, file.path, targetParentId, req.userId);
+      const createdFile = await userOperationLock(req.ownerId, () => {
+        return createFile(file.originalname, file.size, actualMimeType, file.path, targetParentId, req.ownerId);
       });
 
       // For bulk uploads, avoid per-file audit/info spam; we log a single bulk event below.
@@ -810,7 +810,7 @@ async function uploadFilesBulk(req, res) {
         size: createdFile.size,
         mimeType: createdFile.mimeType,
         parentId: targetParentId,
-        userId: req.userId,
+        userId: req.ownerId,
       });
 
       successful.push(clientId ? { ...createdFile, clientId } : createdFile);
@@ -913,7 +913,7 @@ async function uploadFilesBulk(req, res) {
 async function downloadFile(req, res) {
   const { id: fileId } = req.params;
 
-  const file = await getFile(fileId, req.userId);
+  const file = await getFile(fileId, req.ownerId);
   if (!file) {
     return sendError(res, 404, 'File not found');
   }
@@ -921,8 +921,8 @@ async function downloadFile(req, res) {
   // If it's a folder, zip it first
   if (file.type === 'folder') {
     try {
-      return await userOperationLock(req.userId, async () => {
-        const entries = await getFolderTree(fileId, req.userId);
+      return await userOperationLock(req.ownerId, async () => {
+        const entries = await getFolderTree(fileId, req.ownerId);
 
         // Create zip archive - this will handle errors internally
         // We pass a callback to log success only after zip completes
@@ -984,7 +984,7 @@ async function downloadFile(req, res) {
 async function renameFile(req, res) {
   const { name, id } = req.body;
 
-  const file = await renameFileModel(id, name, req.userId);
+  const file = await renameFileModel(id, name, req.ownerId);
   if (!file) {
     return sendError(res, 404, 'Not found');
   }
@@ -1007,7 +1007,7 @@ async function renameFile(req, res) {
     oldName: file.name,
     type: file.type,
     parentId: file.parentId || null,
-    userId: req.userId,
+    userId: req.ownerId,
   });
 
   sendSuccess(res, file);
@@ -1020,9 +1020,9 @@ async function downloadFilesBulk(req, res) {
   const { ids } = req.body;
 
   try {
-    return await userOperationLock(req.userId, async () => {
+    return await userOperationLock(req.ownerId, async () => {
       // Get all files/folders to download in a single query (bulk operation)
-      const filesToDownload = await getFilesByIds(ids, req.userId);
+      const filesToDownload = await getFilesByIds(ids, req.ownerId);
 
       if (filesToDownload.length === 0) {
         return sendError(res, 404, 'No files found to download');
@@ -1038,7 +1038,7 @@ async function downloadFilesBulk(req, res) {
         rootIds.push(file.id);
 
         if (file.type === 'folder') {
-          const entries = await getFolderTree(file.id, req.userId);
+          const entries = await getFolderTree(file.id, req.ownerId);
           allEntries.push(...entries);
         } else {
           // Add the file itself to entries

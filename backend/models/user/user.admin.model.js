@@ -121,8 +121,12 @@ async function getTotalUserCount() {
 
 async function getAllUsersBasic() {
   // Admin-only endpoint — query DB directly; cache invalidation key kept for consistency
+  // Sub-users are listed under their owner so the admin screen shows the whole
+  // account rather than a flat list of unrelated logins.
   const result = await pool.query(
-    'SELECT id, email, name, created_at, mfa_enabled, storage_limit FROM users ORDER BY created_at ASC'
+    `SELECT id, email, name, created_at, mfa_enabled, storage_limit, parent_user_id, permissions
+       FROM users
+      ORDER BY COALESCE(parent_user_id, id), parent_user_id NULLS FIRST, created_at ASC`
   );
   return result.rows;
 }

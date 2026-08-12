@@ -17,6 +17,7 @@ import {
   Info,
 } from 'lucide-react';
 import { useApp, type ShareExpiry, type FileItem } from '../../contexts/AppContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../hooks/useToast';
 import { hasElectronClipboard, hasElectronOpenOnDesktop } from '../../utils/electronDesktop';
 import { isOnlyOfficeSupported } from '../../utils/fileUtils';
@@ -86,6 +87,9 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     editFileWithDesktop,
     clearSelection,
   } = useApp();
+  // A sub-user only sees the entries it was actually granted. Anything else
+  // would be refused by the server, so showing it produces a dead menu item.
+  const { can } = useAuth();
   const { showToast } = useToast();
 
   const selectedItems = files.filter(f => selectedFiles.includes(f.id));
@@ -114,6 +118,10 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
       singleSelectedMime.startsWith('audio/'));
 
   const electronClipboardAvailable = hasElectronClipboard();
+
+  // Pasting a copied set creates files; pasting a cut set moves them. Offer
+  // the entry only when the pending clipboard action is actually permitted.
+  const canPaste = clipboard?.action === 'cut' ? can('files.edit') : can('files.upload');
 
   const handleRestore = useCallback(async () => {
     if (isRestoring) return;
@@ -183,26 +191,30 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
               },
             ]
           : []),
-        {
-          icon: RotateCcw,
-          label: 'Restore',
-          disabled: isRestoring,
-          action: () => {
-            handleRestore();
-            onClose();
-          },
-        },
-        {
-          icon: Trash2,
-          label: 'Delete Forever',
-          disabled: isDeleting,
-          action: () => {
-            setPendingAction({ type: 'deleteForever', files: selectedFiles });
-            setConfirmModalOpen(true);
-            onClose();
-          },
-          danger: true,
-        },
+        ...(can('files.trash')
+          ? [
+              {
+                icon: RotateCcw,
+                label: 'Restore',
+                disabled: isRestoring,
+                action: () => {
+                  handleRestore();
+                  onClose();
+                },
+              },
+              {
+                icon: Trash2,
+                label: 'Delete Forever',
+                disabled: isDeleting,
+                action: () => {
+                  setPendingAction({ type: 'deleteForever', files: selectedFiles });
+                  setConfirmModalOpen(true);
+                  onClose();
+                },
+                danger: true,
+              },
+            ]
+          : []),
       ];
     }
 
@@ -227,7 +239,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
             },
           ]
         : []),
-      ...(parentShared && allUnshared
+      ...(parentShared && allUnshared && can('files.share')
         ? [
             {
               icon: Share2,
@@ -246,25 +258,29 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
             },
           ]
         : []),
-      {
-        icon: Share2,
-        label: allShared ? 'Remove from Shared' : 'Add to Shared',
-        disabled: false,
-        action: async () => {
-          if (allShared) {
-            try {
-              await shareFiles(selectedFiles, false);
-              onActionComplete?.();
-            } catch {
-              showToast('Failed to unshare files', 'error');
-            }
-          } else {
-            // Show expiry picker — action continues in handleShareExpiry
-            setShareExpiryOpen(true);
-          }
-        },
-      },
-      ...(anyShared
+      ...(can('files.share')
+        ? [
+            {
+              icon: Share2,
+              label: allShared ? 'Remove from Shared' : 'Add to Shared',
+              disabled: false,
+              action: async () => {
+                if (allShared) {
+                  try {
+                    await shareFiles(selectedFiles, false);
+                    onActionComplete?.();
+                  } catch {
+                    showToast('Failed to unshare files', 'error');
+                  }
+                } else {
+                  // Show expiry picker — action continues in handleShareExpiry
+                  setShareExpiryOpen(true);
+                }
+              },
+            },
+          ]
+        : []),
+      ...(anyShared && can('files.share')
         ? [
             {
               icon: Link2,
@@ -309,21 +325,27 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
             },
           ]
         : []),
-      {
-        icon: Download,
-        label: 'Download',
-        action: async () => {
-          try {
-            await downloadFiles(selectedFiles);
-            onActionComplete?.();
-          } catch {
-            // Error handled by toast notification
-            showToast('Failed to download files', 'error');
-          }
-        },
-        disabled: isDownloading || selectedFiles.length === 0,
-      },
-      ...(!isTrashView && hasElectronOpenOnDesktop() && singleSelectedItem
+      ...(can('files.download')
+        ? [
+            {
+              icon: Download,
+              label: 'Download',
+              action: async () => {
+                try {
+                  await downloadFiles(selectedFiles);
+                  onActionComplete?.();
+                } catch {
+                  // Error handled by toast notification
+                  showToast('Failed to download files', 'error');
+                }
+              },
+              disabled: isDownloading || selectedFiles.length === 0,
+            },
+          ]
+        : []),
+      // Opening on the desktop downloads the file and saves the edited copy
+      // back, so it needs both grants.
+      ...(!isTrashView && hasElectronOpenOnDesktop() && singleSelectedItem && can('files.download') && can('files.edit')
         ? [
             {
               icon: MonitorDown,
@@ -342,43 +364,56 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
             },
           ]
         : []),
-      {
-        icon: Star,
-        label: allStarred ? 'Remove from Starred' : 'Add to Starred',
-        disabled: false,
-        action: async () => {
-          try {
-            await starFiles(selectedFiles, !allStarred);
-            onActionComplete?.();
-          } catch {
-            // Error handled by toast notification
-            showToast('Failed to update star status', 'error');
-          }
-        },
-      },
-      {
-        icon: Copy,
-        label: 'Copy',
-        disabled: false,
-        action: () => {
-          clipboardCopy(selectedFiles);
-          onActionComplete?.();
-        },
-      },
-      {
-        icon: Scissors,
-        label: 'Cut',
-        disabled: false,
-        action: () => {
-          setClipboard({ ids: selectedFiles, action: 'cut' });
-          showToast(
-            `Cut ${selectedFiles.length} item${selectedFiles.length !== 1 ? 's' : ''} — paste to move`,
-            'success'
-          );
-          onActionComplete?.();
-        },
-      },
-      ...(clipboard || electronClipboardAvailable
+      ...(can('files.edit')
+        ? [
+            {
+              icon: Star,
+              label: allStarred ? 'Remove from Starred' : 'Add to Starred',
+              disabled: false,
+              action: async () => {
+                try {
+                  await starFiles(selectedFiles, !allStarred);
+                  onActionComplete?.();
+                } catch {
+                  // Error handled by toast notification
+                  showToast('Failed to update star status', 'error');
+                }
+              },
+            },
+          ]
+        : []),
+      // Copy duplicates files (an upload); Cut moves them (a modification).
+      ...(can('files.upload')
+        ? [
+            {
+              icon: Copy,
+              label: 'Copy',
+              disabled: false,
+              action: () => {
+                clipboardCopy(selectedFiles);
+                onActionComplete?.();
+              },
+            },
+          ]
+        : []),
+      ...(can('files.edit')
+        ? [
+            {
+              icon: Scissors,
+              label: 'Cut',
+              disabled: false,
+              action: () => {
+                setClipboard({ ids: selectedFiles, action: 'cut' });
+                showToast(
+                  `Cut ${selectedFiles.length} item${selectedFiles.length !== 1 ? 's' : ''} — paste to move`,
+                  'success'
+                );
+                onActionComplete?.();
+              },
+            },
+          ]
+        : []),
+      ...(canPaste && (clipboard || electronClipboardAvailable)
         ? [
             {
               icon: ClipboardPaste,
@@ -406,28 +441,36 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
           setInfoOpen(true);
         },
       },
-      {
-        icon: Edit3,
-        label: 'Rename',
-        disabled: false,
-        action: () => {
-          const id = targetId ?? selectedFiles[0];
-          const file = files.find(f => f.id === id);
-          if (file) setRenameTarget(file);
-          onActionComplete?.();
-        },
-      },
-      {
-        icon: Trash2,
-        label: 'Delete',
-        disabled: isDeleting,
-        action: () => {
-          setPendingAction({ type: 'delete', files: selectedFiles });
-          setConfirmModalOpen(true);
-          onClose();
-        },
-        danger: true,
-      },
+      ...(can('files.edit')
+        ? [
+            {
+              icon: Edit3,
+              label: 'Rename',
+              disabled: false,
+              action: () => {
+                const id = targetId ?? selectedFiles[0];
+                const file = files.find(f => f.id === id);
+                if (file) setRenameTarget(file);
+                onActionComplete?.();
+              },
+            },
+          ]
+        : []),
+      ...(can('files.delete')
+        ? [
+            {
+              icon: Trash2,
+              label: 'Delete',
+              disabled: isDeleting,
+              action: () => {
+                setPendingAction({ type: 'delete', files: selectedFiles });
+                setConfirmModalOpen(true);
+                onClose();
+              },
+              danger: true,
+            },
+          ]
+        : []),
     ];
   }, [
     isTrashView,
@@ -466,6 +509,8 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     electronClipboardAvailable,
     isDeleting,
     isRestoring,
+    can,
+    canPaste,
   ]);
 
   // Initial position (below-right of cursor); used for first paint so we can measure

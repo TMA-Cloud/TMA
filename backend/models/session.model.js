@@ -28,13 +28,19 @@ async function createSession(userId, tokenVersion, userAgent, ipAddress) {
 }
 
 /**
- * Check if a session exists and is valid
+ * Check if a session exists and is still within its idle window.
+ *
+ * `last_activity` is refreshed on every authenticated request, so this is what
+ * makes the session window sliding: a session only falls out of scope after
+ * `idleTtlSeconds` with no activity at all.
+ *
  * @param {string} sessionId - Session ID
  * @param {string} userId - User ID
  * @param {number} tokenVersion - Token version
+ * @param {number|null} idleTtlSeconds - Max idle time; null disables the check
  * @returns {Promise<boolean>} True if session exists and is valid
  */
-async function sessionExists(sessionId, userId, tokenVersion) {
+async function sessionExists(sessionId, userId, tokenVersion, idleTtlSeconds = null) {
   // Try to get from cache first
   const cacheKey = cacheKeys.session(sessionId, userId, tokenVersion);
   const cached = await getCache(cacheKey);
@@ -44,13 +50,15 @@ async function sessionExists(sessionId, userId, tokenVersion) {
 
   // Cache miss - query database
   const result = await pool.query(
-    `SELECT id FROM sessions 
-     WHERE id = $1 AND user_id = $2 AND token_version = $3`,
-    [sessionId, userId, tokenVersion]
+    `SELECT id FROM sessions
+     WHERE id = $1 AND user_id = $2 AND token_version = $3
+       AND ($4::bigint IS NULL OR last_activity > NOW() - INTERVAL '1 second' * $4)`,
+    [sessionId, userId, tokenVersion, idleTtlSeconds]
   );
   const exists = result.rows.length > 0;
 
-  // Cache the result (5 minutes TTL)
+  // Cache the result (5 minutes TTL). Safe against the idle check because the
+  // window is orders of magnitude longer than the cache lifetime.
   await setCache(cacheKey, exists, DEFAULT_TTL);
 
   return exists;

@@ -1,5 +1,7 @@
 import { body, param, query } from 'express-validator';
 
+import { ALL_PERMISSIONS } from './permissions.js';
+
 const MAX_EMAIL_LENGTH = 254;
 const MAX_PASSWORD_LENGTH = 128;
 const MAX_NAME_LENGTH = 100;
@@ -240,6 +242,50 @@ const checkUploadStorageSchema = [
   body('fileSize').isInt({ min: 0 }).withMessage('fileSize must be a non-negative integer').toInt(),
 ];
 
+/**
+ * Permissions an owner may grant a sub-user. Imported from the catalog so a new
+ * capability only has to be declared in one place.
+ */
+const permissionsBody = () =>
+  body('permissions')
+    .isArray({ max: ALL_PERMISSIONS.length })
+    .withMessage('Permissions must be an array')
+    .bail()
+    .custom(value => value.every(p => ALL_PERMISSIONS.includes(p)))
+    .withMessage(`Permissions must be drawn from: ${ALL_PERMISSIONS.join(', ')}`);
+
+const createSubUserSchema = [
+  body('email')
+    .isEmail()
+    .withMessage('Invalid email format')
+    .isLength({ max: MAX_EMAIL_LENGTH })
+    .withMessage(`Email must not exceed ${MAX_EMAIL_LENGTH} characters`)
+    .normalizeEmail(),
+  body('password')
+    .isLength({ min: 6, max: MAX_PASSWORD_LENGTH })
+    .withMessage(`Password must be between 6 and ${MAX_PASSWORD_LENGTH} characters`),
+  body('name')
+    .isString()
+    .withMessage('Name is required')
+    .bail()
+    .trim()
+    .notEmpty()
+    .withMessage('Name is required')
+    .isLength({ max: MAX_NAME_LENGTH })
+    .withMessage(`Name must not exceed ${MAX_NAME_LENGTH} characters`)
+    .escape(),
+  permissionsBody(),
+];
+
+const updateSubUserSchema = [
+  param('id').notEmpty().withMessage('Sub-user ID is required').isString().withMessage('Sub-user ID must be a string'),
+  permissionsBody(),
+];
+
+const subUserIdParamSchema = [
+  param('id').notEmpty().withMessage('Sub-user ID is required').isString().withMessage('Sub-user ID must be a string'),
+];
+
 export {
   signupSchema,
   loginSchema,
@@ -263,6 +309,9 @@ export {
   updateMaxUploadSizeConfigSchema,
   updateHideFileExtensionsConfigSchema,
   updateUserStorageLimitSchema,
+  createSubUserSchema,
+  updateSubUserSchema,
+  subUserIdParamSchema,
   scanOrphansSchema,
   deleteOrphansSchema,
   getOnlyOfficeConfigSchema,

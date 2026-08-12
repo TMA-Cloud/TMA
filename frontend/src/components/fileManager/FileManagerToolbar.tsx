@@ -1,5 +1,6 @@
 import React from 'react';
 import { Grid, List, FolderPlus, Trash2, Share2, Star, Download, Edit3, RotateCcw } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
 import { Tooltip } from '../ui/Tooltip';
 import { SortMenu } from './SortMenu';
 
@@ -56,6 +57,10 @@ export const FileManagerToolbar: React.FC<FileManagerToolbarProps> = ({
   onDeleteForever,
   onEmptyTrash,
 }) => {
+  // Actions a sub-user was not granted are left out entirely rather than shown
+  // and rejected: the server would refuse them anyway, so displaying them only
+  // produces a dead button and an error toast.
+  const { can } = useAuth();
   const btnBase =
     'p-2.5 rounded-2xl transition-all duration-300 ease-out hover-lift focus:outline-none focus:ring-2 focus:ring-[#5b8def]/40';
   const btnMuted =
@@ -65,108 +70,118 @@ export const FileManagerToolbar: React.FC<FileManagerToolbarProps> = ({
     <div className={`flex items-center ${isMobile ? 'justify-end w-full flex-wrap gap-2' : 'gap-1.5'}`}>
       {selectedFiles.length > 0 && !isTrashView && !isMobile && (
         <>
-          <Tooltip text={allShared ? 'Remove from Shared' : 'Add to Share'}>
-            <button
-              className={`${btnBase} ${
-                allShared
-                  ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-500/20'
-                  : `${btnMuted} hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-500/10 dark:hover:bg-emerald-500/20`
-              }`}
-              onClick={() => onShare()}
-              aria-label={allShared ? 'Remove from Shared' : 'Add to Share'}
-            >
-              <Share2
-                className={`w-5 h-5 icon-muted ${allShared ? 'fill-emerald-600 dark:fill-emerald-400 opacity-100' : ''}`}
-              />
-            </button>
-          </Tooltip>
+          {can('files.share') && (
+            <Tooltip text={allShared ? 'Remove from Shared' : 'Add to Share'}>
+              <button
+                className={`${btnBase} ${
+                  allShared
+                    ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-500/20'
+                    : `${btnMuted} hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-500/10 dark:hover:bg-emerald-500/20`
+                }`}
+                onClick={() => onShare()}
+                aria-label={allShared ? 'Remove from Shared' : 'Add to Share'}
+              >
+                <Share2
+                  className={`w-5 h-5 icon-muted ${allShared ? 'fill-emerald-600 dark:fill-emerald-400 opacity-100' : ''}`}
+                />
+              </button>
+            </Tooltip>
+          )}
 
-          <Tooltip text={allStarred ? 'Remove from Starred' : 'Add to Starred'}>
-            <button
-              className={`${btnBase} ${
-                allStarred
-                  ? 'text-amber-500 dark:text-amber-400 bg-amber-500/10 dark:bg-amber-500/20'
-                  : `${btnMuted} hover:text-amber-500 dark:hover:text-amber-400 hover:bg-amber-500/10 dark:hover:bg-amber-500/20`
-              }`}
-              onClick={() => onStar()}
-              aria-label={allStarred ? 'Remove from Starred' : 'Add to Starred'}
-            >
-              <Star
-                className={`w-5 h-5 icon-muted ${allStarred ? 'fill-amber-500 dark:fill-amber-400 opacity-100' : ''}`}
-              />
-            </button>
-          </Tooltip>
+          {can('files.edit') && (
+            <Tooltip text={allStarred ? 'Remove from Starred' : 'Add to Starred'}>
+              <button
+                className={`${btnBase} ${
+                  allStarred
+                    ? 'text-amber-500 dark:text-amber-400 bg-amber-500/10 dark:bg-amber-500/20'
+                    : `${btnMuted} hover:text-amber-500 dark:hover:text-amber-400 hover:bg-amber-500/10 dark:hover:bg-amber-500/20`
+                }`}
+                onClick={() => onStar()}
+                aria-label={allStarred ? 'Remove from Starred' : 'Add to Starred'}
+              >
+                <Star
+                  className={`w-5 h-5 icon-muted ${allStarred ? 'fill-amber-500 dark:fill-amber-400 opacity-100' : ''}`}
+                />
+              </button>
+            </Tooltip>
+          )}
 
-          <Tooltip text="Download">
-            <button
-              className={`${btnBase} ${
-                isDownloading || selectedFiles.length === 0
-                  ? 'opacity-50 cursor-not-allowed pointer-events-none text-slate-400'
-                  : `${btnMuted} hover:text-[#5b8def] dark:hover:text-blue-400 hover:bg-[#5b8def]/10 dark:hover:bg-[#5b8def]/20`
-              }`}
-              onClick={e => {
-                if (isDownloading || selectedFiles.length === 0) {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  return;
-                }
-                onDownload();
-              }}
-              disabled={isDownloading || selectedFiles.length === 0}
-              aria-label="Download"
-            >
-              <Download className="w-5 h-5 icon-muted" />
-            </button>
-          </Tooltip>
+          {can('files.download') && (
+            <Tooltip text="Download">
+              <button
+                className={`${btnBase} ${
+                  isDownloading || selectedFiles.length === 0
+                    ? 'opacity-50 cursor-not-allowed pointer-events-none text-slate-400'
+                    : `${btnMuted} hover:text-[#5b8def] dark:hover:text-blue-400 hover:bg-[#5b8def]/10 dark:hover:bg-[#5b8def]/20`
+                }`}
+                onClick={e => {
+                  if (isDownloading || selectedFiles.length === 0) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return;
+                  }
+                  onDownload();
+                }}
+                disabled={isDownloading || selectedFiles.length === 0}
+                aria-label="Download"
+              >
+                <Download className="w-5 h-5 icon-muted" />
+              </button>
+            </Tooltip>
+          )}
 
-          <Tooltip text="Rename">
-            <button
-              className={`${btnBase} ${
-                selectedFiles.length !== 1
-                  ? 'opacity-50 cursor-not-allowed pointer-events-none text-slate-400'
-                  : `${btnMuted} hover:text-violet-500 dark:hover:text-violet-400 hover:bg-violet-500/10 dark:hover:bg-violet-500/20`
-              }`}
-              onClick={e => {
-                if (selectedFiles.length !== 1) {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  return;
-                }
-                onRename();
-              }}
-              disabled={selectedFiles.length !== 1}
-              aria-label="Rename"
-            >
-              <Edit3 className="w-5 h-5 icon-muted" />
-            </button>
-          </Tooltip>
+          {can('files.edit') && (
+            <Tooltip text="Rename">
+              <button
+                className={`${btnBase} ${
+                  selectedFiles.length !== 1
+                    ? 'opacity-50 cursor-not-allowed pointer-events-none text-slate-400'
+                    : `${btnMuted} hover:text-violet-500 dark:hover:text-violet-400 hover:bg-violet-500/10 dark:hover:bg-violet-500/20`
+                }`}
+                onClick={e => {
+                  if (selectedFiles.length !== 1) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return;
+                  }
+                  onRename();
+                }}
+                disabled={selectedFiles.length !== 1}
+                aria-label="Rename"
+              >
+                <Edit3 className="w-5 h-5 icon-muted" />
+              </button>
+            </Tooltip>
+          )}
 
-          <Tooltip text="Delete">
-            <button
-              className={`${btnBase} ${
-                isDeleting
-                  ? 'opacity-50 cursor-not-allowed pointer-events-none text-slate-400'
-                  : `${btnMuted} hover:text-red-500 dark:hover:text-red-400 hover:bg-red-500/10 dark:hover:bg-red-500/20`
-              }`}
-              onClick={e => {
-                if (isDeleting) {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  return;
-                }
-                onDelete();
-              }}
-              disabled={isDeleting}
-              aria-label="Delete"
-            >
-              <Trash2 className="w-5 h-5 icon-muted" />
-            </button>
-          </Tooltip>
+          {can('files.delete') && (
+            <Tooltip text="Delete">
+              <button
+                className={`${btnBase} ${
+                  isDeleting
+                    ? 'opacity-50 cursor-not-allowed pointer-events-none text-slate-400'
+                    : `${btnMuted} hover:text-red-500 dark:hover:text-red-400 hover:bg-red-500/10 dark:hover:bg-red-500/20`
+                }`}
+                onClick={e => {
+                  if (isDeleting) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return;
+                  }
+                  onDelete();
+                }}
+                disabled={isDeleting}
+                aria-label="Delete"
+              >
+                <Trash2 className="w-5 h-5 icon-muted" />
+              </button>
+            </Tooltip>
+          )}
         </>
       )}
       {isTrashView ? (
         <>
-          {selectedFiles.length > 0 && (
+          {selectedFiles.length > 0 && can('files.trash') && (
             <>
               <Tooltip text="Restore">
                 <button
@@ -212,7 +227,7 @@ export const FileManagerToolbar: React.FC<FileManagerToolbarProps> = ({
               </Tooltip>
             </>
           )}
-          {hasTrashFiles && selectedFiles.length === 0 && (
+          {hasTrashFiles && selectedFiles.length === 0 && can('files.trash') && (
             <Tooltip text="Empty Trash">
               <button
                 className={`${btnBase} ${btnMuted} hover:text-red-500 dark:hover:text-red-400 hover:bg-red-500/10 dark:hover:bg-red-500/20`}

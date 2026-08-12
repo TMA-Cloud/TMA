@@ -20,8 +20,8 @@ async function checkStorageLimit(req, res, next) {
     // Estimate actual file size by subtracting multipart overhead (~500 bytes)
     const estimatedFileSize = Math.max(0, contentLength - 500);
 
-    const used = await getUserStorageUsage(req.userId);
-    const userStorageLimit = await getUserStorageLimit(req.userId);
+    const used = await getUserStorageUsage(req.ownerId);
+    const userStorageLimit = await getUserStorageLimit(req.ownerId);
 
     const checkResult = await checkStorageLimitExceeded({
       fileSize: estimatedFileSize,
@@ -39,7 +39,7 @@ async function checkStorageLimit(req, res, next) {
 
     next();
   } catch (storageError) {
-    logger.error({ err: storageError, userId: req.userId }, 'Error checking storage limit');
+    logger.error({ err: storageError, userId: req.userId, ownerId: req.ownerId }, 'Error checking storage limit');
     // Block upload if we can't verify storage limit (fail-safe)
     res.status(500).json({
       message: 'Unable to verify storage limit. Please try again.',

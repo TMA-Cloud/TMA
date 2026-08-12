@@ -5,6 +5,7 @@ import jwt from 'jsonwebtoken';
 import { logger } from '../../config/logger.js';
 import {
   createUserWithGoogle,
+  getAccountContext,
   getMfaStatus,
   getSignupEnabled,
   getUserByEmail,
@@ -14,6 +15,7 @@ import {
 } from '../../models/user.model.js';
 import { loginFailure, loginSuccess, userSignup } from '../../services/auditLogger.js';
 import { getCookieOptions } from '../../utils/auth.js';
+import { ALL_PERMISSIONS } from '../../utils/permissions.js';
 import { createSessionAndToken, setAuthCookieAndRespond } from '../../utils/authSession.js';
 import { sendError } from '../../utils/response.js';
 
@@ -71,9 +73,11 @@ async function login(req, res) {
       }
     }
 
-    // Log successful login
-    await loginSuccess(user.id, email, req);
-    logger.info({ userId: user.id, email }, 'User logged in successfully');
+    // Log successful login, recording the account this identity belongs to so
+    // a sub-user's login is attributable to the shared account it acts under.
+    const account = await getAccountContext(user.id);
+    await loginSuccess(user.id, email, req, account);
+    logger.info({ userId: user.id, email, ownerId: account?.ownerId }, 'User logged in successfully');
 
     // Create session and generate token
     const { token } = await createSessionAndToken(user.id, req);
@@ -85,6 +89,8 @@ async function login(req, res) {
         name: user.name,
         created_at: user.created_at,
         mfa_enabled: user.mfa_enabled || false,
+        isSubUser: Boolean(account?.isSubUser),
+        permissions: account?.isSubUser ? account.permissions : ALL_PERMISSIONS,
       },
     });
   } catch (err) {
@@ -134,7 +140,7 @@ async function googleCallback(req, res) {
       if (user) {
         // User exists by email - link Google account
         await updateGoogleId(user.id, googleId);
-        await loginSuccess(user.id, email, req);
+        await loginSuccess(user.id, email, req, await getAccountContext(user.id));
       } else {
         // User doesn't exist - create new account
         // Check if signup is enabled before creating new user
@@ -152,7 +158,7 @@ async function googleCallback(req, res) {
       }
     } else {
       // User found by Google ID - log login
-      await loginSuccess(user.id, email, req);
+      await loginSuccess(user.id, email, req, await getAccountContext(user.id));
     }
 
     logger.info({ userId: user.id, email }, 'User authenticated via Google OAuth');
@@ -236,7 +242,7 @@ async function googleMfaVerify(req, res) {
     // MFA passed — clear the pending cookie and issue a real auth session
     res.clearCookie('mfa_pending', getCookieOptions());
 
-    await loginSuccess(decoded.userId, null, req);
+    await loginSuccess(decoded.userId, null, req, await getAccountContext(decoded.userId));
     logger.info({ userId: decoded.userId }, 'Google OAuth MFA verification successful');
 
     const { token } = await createSessionAndToken(decoded.userId, req);

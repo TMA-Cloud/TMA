@@ -67,7 +67,7 @@ export const MobileAppContent: React.FC = () => {
     setUploadProgress,
     setIsUploadProgressInteracting,
   } = useApp();
-  const { user, logout } = useAuth();
+  const { user, logout, can } = useAuth();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -164,13 +164,15 @@ export const MobileAppContent: React.FC = () => {
         </div>
 
         <div className="flex items-center space-x-2">
-          <button
-            onClick={() => setUploadModalOpen(true)}
-            className="inline-flex items-center justify-center rounded-full bg-blue-500 hover:bg-blue-600 text-white w-10 h-10 shadow-lg hover:shadow-xl transition-all duration-200 active:scale-95"
-            aria-label="Upload"
-          >
-            <Upload className="w-4 h-4 transition-transform duration-200" />
-          </button>
+          {can('files.upload') && (
+            <button
+              onClick={() => setUploadModalOpen(true)}
+              className="inline-flex items-center justify-center rounded-full bg-blue-500 hover:bg-blue-600 text-white w-10 h-10 shadow-lg hover:shadow-xl transition-all duration-200 active:scale-95"
+              aria-label="Upload"
+            >
+              <Upload className="w-4 h-4 transition-transform duration-200" />
+            </button>
+          )}
 
           {/* Profile Dropdown */}
           <div className="relative z-[10000]" ref={dropdownRef}>

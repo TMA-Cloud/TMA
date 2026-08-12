@@ -94,6 +94,8 @@ async function processAuditEvent(job) {
       INSERT INTO audit_log (
         request_id,
         user_id,
+        account_owner_id,
+        actor_role,
         action,
         resource_type,
         resource_id,
@@ -103,13 +105,17 @@ async function processAuditEvent(job) {
         metadata,
         error_message,
         processing_time_ms
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
       RETURNING id
     `;
 
     const values = [
       event.requestId,
       event.userId || null,
+      // Which account the action happened under. Equals user_id for a
+      // top-level account; the parent for a sub-user.
+      event.accountOwnerId || event.userId || null,
+      event.actorRole || null,
       event.action,
       event.resourceType || null,
       event.resourceId || null,

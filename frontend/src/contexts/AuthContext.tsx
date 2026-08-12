@@ -1,16 +1,32 @@
 import { createContext, useContext } from 'react';
 
+/**
+ * Capability keys the server enforces. Mirrors backend/utils/permissions.js —
+ * the human-readable catalog itself is fetched from the API, this union just
+ * gives call sites autocomplete and a compile-time typo check.
+ */
+export type AccountPermission =
+  'files.download' | 'files.upload' | 'files.edit' | 'files.delete' | 'files.trash' | 'files.share';
+
 export interface User {
   id: string;
   email: string;
   name?: string;
   created_at?: string;
   mfa_enabled?: boolean;
+  /** True when this login is a sub-user of another account. */
+  isSubUser?: boolean;
+  /** Capabilities granted to this login. Owners receive the full set. */
+  permissions?: string[];
 }
 
 export interface AuthContextType {
   user: User | null;
   loading: boolean;
+  /** True when the signed-in user is a sub-user of another account. */
+  isSubUser: boolean;
+  /** Whether the signed-in user holds a given capability. */
+  can: (permission: AccountPermission) => boolean;
   login: (
     email: string,
     password: string,

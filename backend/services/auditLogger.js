@@ -1,7 +1,7 @@
 import { PgBoss } from 'pg-boss';
 
 import { logger } from '../config/logger.js';
-import { getRequestId, getUserId } from '../middleware/requestId.middleware.js';
+import { getRequestId, getUserId, getAccountContext } from '../middleware/requestId.middleware.js';
 import { createPool, buildPoolConfig } from '../config/db.js';
 
 let boss = null;
@@ -158,6 +158,20 @@ function redactMetadata(metadata) {
 }
 
 /**
+ * Whether the actor was operating as the account owner or as one of its
+ * sub-users. Recorded per row so the trail stays readable even after a
+ * sub-user is deleted and the join in `audit_activity` no longer resolves.
+ * @param {Object|null} account - CLS account context
+ * @param {Object|null} req - Express request
+ * @returns {string|null}
+ */
+function resolveActorRole(account, req) {
+  const isSubUser = account?.isSubUser ?? req?.isSubUser;
+  if (isSubUser === undefined || isSubUser === null) return null;
+  return isSubUser ? 'sub_user' : 'owner';
+}
+
+/**
  * Log an audit event (fire-and-forget, async)
  *
  * This is the core function for audit logging. It:
@@ -174,16 +188,31 @@ function redactMetadata(metadata) {
  * @param {Object} [options.metadata] - Additional event-specific data
  * @param {string} [options.errorMessage] - Error message if status is 'error'
  * @param {number} [options.processingTimeMs] - Operation duration in milliseconds
+ * @param {string} [options.actorUserId] - Acting user, for events raised before auth middleware runs
+ * @param {string} [options.accountOwnerId] - Account the action belongs to
+ * @param {string} [options.actorRole] - 'owner' or 'sub_user'
  * @param {Object} req - Express request object (for extracting IP, userAgent, etc.)
  * @returns {Promise<void>}
  */
 async function logAuditEvent(action, options = {}, req = null) {
   try {
-    // Build audit event
+    // Build audit event. Identity normally comes from CLS, which the auth
+    // middleware populates; login and signup run *before* that, so those
+    // callers pass the identity explicitly via options.
+    const account = getAccountContext();
+    const actingUserId = options.actorUserId || getUserId() || req?.userId || null;
+
     const event = {
-      // Auto-populated from CLS context
       requestId: getRequestId() || req?.requestId || 'unknown',
-      userId: getUserId() || req?.userId || null,
+
+      // Who performed the action. For a sub-user this is the sub-user's own
+      // ID, never the owner's — that separation is the whole point of the
+      // feature for audit purposes.
+      userId: actingUserId,
+
+      // Which account it happened under, and what the actor was allowed to do.
+      accountOwnerId: options.accountOwnerId || account?.ownerId || req?.ownerId || actingUserId,
+      actorRole: options.actorRole || resolveActorRole(account, req),
 
       // Action details
       action,
@@ -304,14 +333,25 @@ async function fileDeleted(fileId, fileName, permanent, req) {
 }
 
 /**
- * Log a successful login event
+ * Log a successful login event.
+ *
+ * Login runs before the auth middleware, so the identity is passed in rather
+ * than read from CLS — without this the row would land with a NULL user_id.
+ *
+ * @param {string} userId - Authenticated user ID
+ * @param {string} email - Email used to log in
+ * @param {Object} req - Express request
+ * @param {Object} [account] - Account context ({ ownerId, role }) when known
  */
-async function loginSuccess(userId, email, req) {
+async function loginSuccess(userId, email, req, account = null) {
   return logAuditEvent(
     'auth.login',
     {
       status: 'success',
       resourceType: 'auth',
+      actorUserId: userId,
+      accountOwnerId: account?.ownerId || userId,
+      actorRole: account?.isSubUser ? 'sub_user' : 'owner',
       metadata: { email, method: 'password' },
     },
     req
@@ -343,6 +383,9 @@ async function userSignup(userId, email, method, req) {
       status: 'success',
       resourceType: 'user',
       resourceId: userId,
+      actorUserId: userId,
+      accountOwnerId: userId,
+      actorRole: 'owner',
       metadata: { email, method },
     },
     req

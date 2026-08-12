@@ -160,6 +160,8 @@ async function _listUsers(req, res) {
       createdAt: user.created_at,
       mfaEnabled: user.mfa_enabled || false,
       storageLimit: user.storage_limit != null ? Number(user.storage_limit) : null,
+      parentUserId: user.parent_user_id || null,
+      permissions: user.parent_user_id ? user.permissions || [] : null,
     }));
 
     // Log admin action

@@ -28,7 +28,7 @@ import { validateSortBy, validateSortOrder } from '../../utils/validation.js';
  */
 async function getFileInfoController(req, res) {
   const { id } = req.params;
-  const files = await getFileInfo([id], req.userId);
+  const files = await getFileInfo([id], req.ownerId);
 
   if (!files || files.length === 0) {
     return sendError(res, 404, 'File not found');
@@ -38,11 +38,11 @@ async function getFileInfoController(req, res) {
   // Build UI-visible location from the real parent chain.
   // This is more reliable than using the frontend's currentPath,
   // especially when the user opens "Get Info" from search results.
-  const locationPath = await getFolderPathSegments(file.parentId, req.userId);
+  const locationPath = await getFolderPathSegments(file.parentId, req.ownerId);
 
   // When it's a folder, also return recursive counts and total size
   if (file.type === 'folder') {
-    const tree = await getFolderTree(id, req.userId);
+    const tree = await getFolderTree(id, req.ownerId);
     let totalSize = 0;
     let fileCount = 0;
     let folderCount = 0;
@@ -80,11 +80,11 @@ async function starFilesController(req, res) {
   const { ids, starred } = req.body;
 
   // Get file info for audit logging and events
-  const fileInfo = await getFileInfo(ids, req.userId);
+  const fileInfo = await getFileInfo(ids, req.ownerId);
   const fileNames = fileInfo.map(f => f.name);
   const fileTypes = fileInfo.map(f => f.type);
 
-  await setStarred(ids, starred, req.userId);
+  await setStarred(ids, starred, req.ownerId);
 
   // Log star/unstar with file details
   await logAuditEvent(
@@ -115,7 +115,7 @@ async function starFilesController(req, res) {
         type: file.type,
         parentId: file.parentId || null,
         starred,
-        userId: req.userId,
+        userId: req.ownerId,
       },
     }))
   );
@@ -129,7 +129,7 @@ async function starFilesController(req, res) {
 async function listStarred(req, res) {
   const sortBy = validateSortBy(req.query.sortBy) || 'modified';
   const order = validateSortOrder(req.query.order) || 'DESC';
-  const files = await getStarredFiles(req.userId, sortBy, order);
+  const files = await getStarredFiles(req.ownerId, sortBy, order);
   sendSuccess(res, files);
 }
 
@@ -159,15 +159,15 @@ async function shareFilesController(req, res) {
       const expiresAt = computeExpiresAt(expiry || '7d');
 
       // Bulk operation: Get all existing share links at once
-      const existingShareLinks = await getShareLinks(ids, req.userId);
+      const existingShareLinks = await getShareLinks(ids, req.ownerId);
 
       // Process each file to create/update share links
       const sharePromises = ids.map(async id => {
-        const treeIds = await getRecursiveIds([id], req.userId);
+        const treeIds = await getRecursiveIds([id], req.ownerId);
         let token = existingShareLinks[id];
 
         if (!token) {
-          token = await createShareLink(id, req.userId, treeIds, expiresAt);
+          token = await createShareLink(id, req.ownerId, treeIds, expiresAt);
 
           await logAuditEvent(
             'share.create',
@@ -198,10 +198,10 @@ async function shareFilesController(req, res) {
 
       // Wait for all share operations to complete
       await Promise.all(sharePromises);
-      await setShared(ids, true, req.userId);
+      await setShared(ids, true, req.ownerId);
 
       // Get file info for event publishing
-      const fileInfo = await getFileInfo(ids, req.userId);
+      const fileInfo = await getFileInfo(ids, req.ownerId);
 
       // Publish file shared events in batch (optimized)
       await publishFileEventsBatch(
@@ -213,19 +213,19 @@ async function shareFilesController(req, res) {
             type: file.type,
             parentId: file.parentId || null,
             shared: true,
-            userId: req.userId,
+            userId: req.ownerId,
           },
         }))
       );
     } else {
-      const treeIds = await getRecursiveIds(ids, req.userId);
-      await removeFilesFromShares(treeIds, req.userId);
+      const treeIds = await getRecursiveIds(ids, req.ownerId);
+      await removeFilesFromShares(treeIds, req.ownerId);
 
       // Get file info for event publishing
-      const fileInfo = await getFileInfo(ids, req.userId);
+      const fileInfo = await getFileInfo(ids, req.ownerId);
 
       // Bulk delete all share links at once
-      await deleteShareLinks(ids, req.userId);
+      await deleteShareLinks(ids, req.ownerId);
 
       // Log audit events for share deletions (bulk)
       await logAuditEvent(
@@ -243,7 +243,7 @@ async function shareFilesController(req, res) {
       );
       logger.info({ fileIds: ids, fileCount: ids.length }, 'Share links deleted');
 
-      await setShared(ids, false, req.userId);
+      await setShared(ids, false, req.ownerId);
 
       // Publish file unshared events in batch (optimized)
       await publishFileEventsBatch(
@@ -255,7 +255,7 @@ async function shareFilesController(req, res) {
             type: file.type,
             parentId: file.parentId || null,
             shared: false,
-            userId: req.userId,
+            userId: req.ownerId,
           },
         }))
       );
@@ -281,7 +281,7 @@ async function shareFilesController(req, res) {
 async function listShared(req, res) {
   const sortBy = validateSortBy(req.query.sortBy) || 'modified';
   const order = validateSortOrder(req.query.order) || 'DESC';
-  const files = await getSharedFiles(req.userId, sortBy, order);
+  const files = await getSharedFiles(req.ownerId, sortBy, order);
   sendSuccess(res, files);
 }
 
@@ -292,7 +292,7 @@ async function getShareLinksController(req, res) {
   const { ids } = req.body;
 
   // Bulk operation: Get all share links at once
-  const shareLinksMap = await getShareLinks(ids, req.userId);
+  const shareLinksMap = await getShareLinks(ids, req.ownerId);
 
   // Build links object with full URLs
   const links = {};
@@ -314,7 +314,7 @@ async function linkParentShareController(req, res) {
   // Bulk operation: Get all parent IDs at once
   const parentRes = await pool.query('SELECT id, parent_id FROM files WHERE id = ANY($1::text[]) AND user_id = $2', [
     ids,
-    req.userId,
+    req.ownerId,
   ]);
 
   // Build map of fileId -> parentId
@@ -333,7 +333,7 @@ async function linkParentShareController(req, res) {
 
   // Bulk operation: Get all parent share links at once
   const uniqueParentIds = [...new Set(parentIds)];
-  const parentShareLinks = await getShareLinks(uniqueParentIds, req.userId);
+  const parentShareLinks = await getShareLinks(uniqueParentIds, req.ownerId);
 
   // Group files by their parent's share link
   const shareIdToFileIds = new Map();
@@ -356,7 +356,7 @@ async function linkParentShareController(req, res) {
 
   for (const [shareId, fileIds] of shareIdToFileIds.entries()) {
     // Get recursive IDs for all files in this group
-    const treeIds = await getRecursiveIds(fileIds, req.userId);
+    const treeIds = await getRecursiveIds(fileIds, req.ownerId);
     allTreeIds.push(...treeIds);
     allFileIdsToShare.push(...fileIds);
 
@@ -372,11 +372,11 @@ async function linkParentShareController(req, res) {
 
   // Bulk update shared status for all files
   if (allFileIdsToShare.length > 0) {
-    await setShared(allFileIdsToShare, true, req.userId);
+    await setShared(allFileIdsToShare, true, req.ownerId);
   }
 
   // Get file info for event publishing (bulk)
-  const fileInfo = await getFileInfo(allFileIdsToShare, req.userId);
+  const fileInfo = await getFileInfo(allFileIdsToShare, req.ownerId);
 
   // Publish file shared events in batch (optimized)
   await publishFileEventsBatch(
@@ -388,7 +388,7 @@ async function linkParentShareController(req, res) {
         type: file.type,
         parentId: file.parentId || null,
         shared: true,
-        userId: req.userId,
+        userId: req.ownerId,
       },
     }))
   );

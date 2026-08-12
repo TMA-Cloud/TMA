@@ -1,6 +1,21 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { AuthContext, type User } from './AuthContext';
+import { AuthContext, type AccountPermission, type User } from './AuthContext';
 import { checkAuthSilently, setAuthState, AUTH_STATE_KEY } from '../utils/api';
+
+// Backoff between retries when the server cannot be reached. A deploy or a
+// brief proxy hiccup should not push anyone to the login screen, so we wait it
+// out instead of treating an unreachable server as a rejected session. Kept
+// short so a genuinely down backend still resolves to the login screen quickly.
+const RETRY_DELAYS_MS = [500, 1500, 3000];
+
+const sleep = (ms: number, signal?: AbortSignal) =>
+  new Promise<void>(resolve => {
+    const timer = setTimeout(resolve, ms);
+    signal?.addEventListener('abort', () => {
+      clearTimeout(timer);
+      resolve();
+    });
+  });
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -10,23 +25,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Function to load and update user profile
   const loadProfile = React.useCallback(async (abortSignal?: AbortSignal) => {
     try {
-      const result = await checkAuthSilently(abortSignal);
+      for (let attempt = 0; ; attempt++) {
+        const result = await checkAuthSilently(abortSignal);
 
-      // Check if request was aborted
-      if (abortSignal?.aborted) {
-        return;
-      }
+        // Check if request was aborted
+        if (abortSignal?.aborted) {
+          return;
+        }
 
-      // Standardized return type: null | {user, authenticated}
-      if (result === null) {
-        setUser(null);
-      } else {
-        setUser(result.user as User);
-      }
-    } catch {
-      // Only handle errors if request wasn't aborted
-      if (!abortSignal?.aborted) {
-        setUser(null);
+        if (result.status === 'authenticated') {
+          setUser(result.user as User);
+          return;
+        }
+
+        // The server said the session is gone — that is the only case that
+        // signs the user out.
+        if (result.status === 'unauthenticated') {
+          setUser(null);
+          return;
+        }
+
+        // status === 'unknown': the session may well be fine. Retry a few
+        // times, then give up for this pass while leaving the current user in
+        // place so the UI does not flip to the login screen.
+        const delay = RETRY_DELAYS_MS[attempt];
+        if (delay === undefined) {
+          return;
+        }
+        await sleep(delay, abortSignal);
+        if (abortSignal?.aborted) {
+          return;
+        }
       }
     } finally {
       if (!abortSignal?.aborted) {
@@ -157,5 +186,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setAuthState(false);
   };
 
-  return <AuthContext.Provider value={{ user, loading, login, signup, logout }}>{children}</AuthContext.Provider>;
+  const isSubUser = user?.isSubUser === true;
+
+  // Only sub-users are constrained. Owners — and any state where the profile
+  // has not reported a permission list — keep every action, so a missing field
+  // can never silently strip an owner's own capabilities.
+  const can = React.useCallback(
+    (permission: AccountPermission) => {
+      if (!user?.isSubUser) return true;
+      return Array.isArray(user.permissions) && user.permissions.includes(permission);
+    },
+    [user]
+  );
+
+  return (
+    <AuthContext.Provider value={{ user, loading, isSubUser, can, login, signup, logout }}>
+      {children}
+    </AuthContext.Provider>
+  );
 };

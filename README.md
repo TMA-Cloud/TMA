@@ -6,6 +6,7 @@ A self-hosted cloud storage platform with file storage and management capabiliti
 
 - **Authentication** --- JWT-based auth with optional Google OAuth and MFA
 - **Signup Control** --- Self-hosted deployments can control user registration
+- **Sub-users** --- Extra logins that share one account's files with its own permissions
 - **File Management** --- Upload, download, organize, and manage files and folders
 - **Sharing** --- Create shareable links for files and folders
 - **Custom Share Domain** --- Dedicated domain for share links to isolate traffic

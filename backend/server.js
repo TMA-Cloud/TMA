@@ -33,6 +33,21 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 
+// Trust the reverse proxy so `req.ip` is the real client address rather than
+// the proxy's. Without this every user behind the proxy shares a single
+// rate-limit bucket and one busy client can 429 everybody else.
+//
+// TRUST_PROXY accepts anything Express understands: a hop count ('1'), a
+// comma-separated list of proxy IPs/subnets, or 'loopback'. It defaults to 1
+// hop, which matches the single nginx/traefik in front of the app in the
+// shipped compose files. Set it to '0' to disable when running with no proxy.
+const trustProxySetting = process.env.TRUST_PROXY ?? '1';
+if (trustProxySetting !== '0' && trustProxySetting !== 'false') {
+  const numericHops = Number(trustProxySetting);
+  app.set('trust proxy', Number.isInteger(numericHops) ? numericHops : trustProxySetting);
+  logger.info({ trustProxy: trustProxySetting }, 'Trusting reverse proxy for client IP resolution');
+}
+
 // Metrics endpoint IP whitelist
 const METRICS_ALLOWED_IPS = (process.env.METRICS_ALLOWED_IPS || '127.0.0.1,::ffff:127.0.0.1,::1')
   .split(',')

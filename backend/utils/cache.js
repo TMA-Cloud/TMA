@@ -330,6 +330,10 @@ const cacheKeys = {
   // User token version cache keys
   userTokenVersion: userId => `user:${userId}:token_version`,
 
+  // Account resolution cache keys (owner id + role for a login identity)
+  userAccount: userId => `user:${userId}:account`,
+  subUsers: ownerId => `user:${ownerId}:sub_users`,
+
   // App settings cache keys
   signupEnabled: () => `app:signup_enabled`,
   userCount: () => `app:user_count`,

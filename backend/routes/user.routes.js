@@ -3,7 +3,9 @@ import express from 'express';
 import {
   checkOnlyOfficeConfigured,
   clientHeartbeat,
+  createSubUser,
   deleteOrphans,
+  deleteSubUser,
   getActiveClients,
   getElectronOnlyAccessConfig,
   getHideFileExtensionsConfig,
@@ -13,6 +15,7 @@ import {
   getPasswordChangeConfig,
   getShareBaseUrlConfig,
   getSignupStatus,
+  listSubUsers,
   listUsers,
   storageUsage,
   toggleSignup,
@@ -22,14 +25,18 @@ import {
   updateOnlyOfficeConfig,
   updatePasswordChangeConfig,
   updateShareBaseUrlConfig,
+  updateSubUser,
   updateUserStorageLimit,
 } from '../controllers/user.controller.js';
 import auth from '../middleware/auth.middleware.js';
+import { requireAccountOwner } from '../middleware/accountRole.middleware.js';
 import { apiRateLimiter } from '../middleware/rateLimit.middleware.js';
 import { validate } from '../middleware/validation.middleware.js';
 import {
+  createSubUserSchema,
   deleteOrphansSchema,
   scanOrphansSchema,
+  subUserIdParamSchema,
   toggleSignupSchema,
   updateElectronOnlyAccessConfigSchema,
   updateHideFileExtensionsConfigSchema,
@@ -37,6 +44,7 @@ import {
   updateOnlyOfficeConfigSchema,
   updatePasswordChangeConfigSchema,
   updateShareBaseUrlConfigSchema,
+  updateSubUserSchema,
   updateUserStorageLimitSchema,
 } from '../utils/validationSchemas.js';
 
@@ -77,5 +85,12 @@ router.post('/client-heartbeat', clientHeartbeat);
 router.get('/active-clients', getActiveClients);
 router.get('/orphans', scanOrphansSchema, validate, getOrphans);
 router.post('/orphans/delete', deleteOrphansSchema, validate, deleteOrphans);
+
+// Sub-users. `requireAccountOwner` is what enforces that a sub-user cannot
+// create, promote or remove sub-users of its own.
+router.get('/sub-users', requireAccountOwner, listSubUsers);
+router.post('/sub-users', requireAccountOwner, createSubUserSchema, validate, createSubUser);
+router.put('/sub-users/:id', requireAccountOwner, updateSubUserSchema, validate, updateSubUser);
+router.delete('/sub-users/:id', requireAccountOwner, subUserIdParamSchema, validate, deleteSubUser);
 
 export default router;

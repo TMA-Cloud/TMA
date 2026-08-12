@@ -13,7 +13,7 @@ async function searchFilesController(req, res) {
   }
   const limit = validateLimit(req.query.limit, 100) || 100;
 
-  const files = await searchFiles(req.userId, validatedQuery, limit);
+  const files = await searchFiles(req.ownerId, validatedQuery, limit);
   sendSuccess(res, files);
 }
 
@@ -21,7 +21,7 @@ async function searchFilesController(req, res) {
  * Get file statistics
  */
 async function getFileStatsController(req, res) {
-  const stats = await getFileStats(req.userId);
+  const stats = await getFileStats(req.ownerId);
   sendSuccess(res, stats);
 }
 

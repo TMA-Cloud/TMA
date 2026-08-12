@@ -23,7 +23,7 @@ async function streamFileEvents(req, res) {
   try {
     res.write(`data: ${JSON.stringify({ type: 'connected', message: 'Connected to file events stream' })}\n\n`);
   } catch (err) {
-    logger.error({ err, userId: req.userId }, 'Failed to send initial connection message');
+    logger.error({ err, userId: req.userId, ownerId: req.ownerId }, 'Failed to send initial connection message');
     res.end();
     return;
   }
@@ -34,7 +34,7 @@ async function streamFileEvents(req, res) {
   let isCleanedUp = false;
   let isConnectionClosed = false;
   let lastActivity = Date.now();
-  const userId = req.userId;
+  const userId = req.ownerId;
 
   // Helper function to check if connection is still alive
   const isConnectionAlive = () => {

@@ -154,14 +154,20 @@ function buildOnlyofficeUrls(req, fileId, token) {
 /**
  * Build ONLYOFFICE editor configuration
  */
-function buildOnlyofficeConfig(file, userId, userName, downloadUrl, callbackUrl, isMobile = false) {
+function buildOnlyofficeConfig(file, ownerId, actor, downloadUrl, callbackUrl, isMobile = false, canWrite = true) {
   const fileType = getFileTypeFromName(file.name);
-  const viewOnly = fileType === 'pdf';
+  // The save callback arrives from the OnlyOffice server unauthenticated, so a
+  // read-only member has to be held back here, at config time — there is no
+  // later point where the role can still be checked.
+  const viewOnly = fileType === 'pdf' || !canWrite;
 
   return {
     document: {
       fileType,
-      key: `${userId}-${file.id}-${Date.now()}`,
+      // The document key carries the *account* the file belongs to: the
+      // callback parses it back out to locate and re-encrypt the file, and a
+      // sub-user edits the owner's file, not one of its own.
+      key: `${ownerId}-${file.id}-${Date.now()}`,
       title: file.name,
       url: downloadUrl,
     },
@@ -173,9 +179,11 @@ function buildOnlyofficeConfig(file, userId, userName, downloadUrl, callbackUrl,
         autosave: !viewOnly,
         forcesave: !viewOnly,
       },
+      // Editor presence is the *acting* identity so co-editing shows the
+      // individual sub-user rather than the shared account.
       user: {
-        id: String(userId),
-        name: userName,
+        id: String(actor.id),
+        name: actor.name,
       },
     },
     type: isMobile ? 'mobile' : 'desktop',

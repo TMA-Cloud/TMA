@@ -15,12 +15,12 @@ import { sendSuccess } from '../../utils/response.js';
 async function getPasteContext(req) {
   const { ids, parentId: requestedParentId } = req.body;
 
-  const actualParentId = await resolveTargetFolderId(requestedParentId, req.userId);
-  const fileInfo = await getFileInfo(ids, req.userId);
+  const actualParentId = await resolveTargetFolderId(requestedParentId, req.ownerId);
+  const fileInfo = await getFileInfo(ids, req.ownerId);
   const fileNames = fileInfo.map(f => f.name);
   const fileTypes = fileInfo.map(f => f.type);
 
-  const targetFolderName = await getTargetFolderName(actualParentId, req.userId);
+  const targetFolderName = await getTargetFolderName(actualParentId, req.ownerId);
 
   return { ids, actualParentId, fileInfo, fileNames, fileTypes, targetFolderName };
 }
@@ -30,8 +30,8 @@ async function getPasteContext(req) {
 async function moveFilesController(req, res) {
   const { ids, actualParentId, fileInfo, fileNames, fileTypes, targetFolderName } = await getPasteContext(req);
 
-  await userOperationLock(req.userId, async () => {
-    await moveFilesModel(ids, actualParentId, req.userId);
+  await userOperationLock(req.ownerId, async () => {
+    await moveFilesModel(ids, actualParentId, req.ownerId);
   });
 
   await logAuditEvent(
@@ -62,7 +62,7 @@ async function moveFilesController(req, res) {
         type: file.type,
         parentId: actualParentId,
         targetFolderName,
-        userId: req.userId,
+        userId: req.ownerId,
       },
     }))
   );
@@ -76,8 +76,8 @@ async function moveFilesController(req, res) {
 async function copyFilesController(req, res) {
   const { ids, actualParentId, fileNames, fileTypes, targetFolderName } = await getPasteContext(req);
 
-  const newFileIds = await userOperationLock(req.userId, async () => {
-    return copyFilesModel(ids, actualParentId, req.userId);
+  const newFileIds = await userOperationLock(req.ownerId, async () => {
+    return copyFilesModel(ids, actualParentId, req.ownerId);
   });
 
   await logAuditEvent(
@@ -103,7 +103,7 @@ async function copyFilesController(req, res) {
   // instead of guessing via name+type which is racy with concurrent operations.
   const newFilesResult = await pool.query(
     'SELECT id, name, type FROM files WHERE id = ANY($1::text[]) AND user_id = $2',
-    [newFileIds, req.userId]
+    [newFileIds, req.ownerId]
   );
 
   await publishFileEventsBatch(
@@ -115,7 +115,7 @@ async function copyFilesController(req, res) {
         type: file.type,
         parentId: actualParentId,
         targetFolderName,
-        userId: req.userId,
+        userId: req.ownerId,
       },
     }))
   );

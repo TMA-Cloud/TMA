@@ -26,6 +26,31 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 /**
+ * How long a session survives *inactivity* before a fresh login is required.
+ *
+ * Tokens are minted for this full window and re-issued while the user is
+ * active (see the auth middleware), so the window slides instead of counting
+ * down from login. Configurable via SESSION_IDLE_DAYS; defaults to 30 days.
+ */
+const SESSION_IDLE_DAYS = (() => {
+  const parsed = parseInt(process.env.SESSION_IDLE_DAYS || '30', 10);
+  if (!Number.isFinite(parsed) || parsed < 1) {
+    logger.warn({ value: process.env.SESSION_IDLE_DAYS }, 'Invalid SESSION_IDLE_DAYS, falling back to 30 days');
+    return 30;
+  }
+  return parsed;
+})();
+
+const SESSION_IDLE_TTL_SECONDS = SESSION_IDLE_DAYS * 24 * 60 * 60;
+
+/**
+ * Re-issue the token once less than 80% of its life remains. Renewing on
+ * every request would rewrite the cookie constantly for no benefit; waiting
+ * until the last moment would leave no slack for clock skew.
+ */
+const TOKEN_RENEWAL_THRESHOLD_SECONDS = Math.floor(SESSION_IDLE_TTL_SECONDS * 0.8);
+
+/**
  * Get cookie options for JWT tokens
  * In production over HTTPS we set secure: true so the browser only sends the cookie over HTTPS.
  * In production over HTTP (BACKEND_URL=http://... or FORCE_INSECURE_COOKIES=true) we set secure: false so the cookie is sent over HTTP.
@@ -40,7 +65,7 @@ function getCookieOptions() {
     httpOnly: true,
     secure,
     sameSite: 'lax',
-    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    maxAge: SESSION_IDLE_TTL_SECONDS * 1000,
   };
 }
 
@@ -51,7 +76,7 @@ function getCookieOptions() {
  * @param {Object} options - Additional options
  * @param {number} options.tokenVersion - User's current token version
  * @param {string} options.sessionId - Session ID to bind token to
- * @param {string} options.expiresIn - Token expiration (default: '7d')
+ * @param {number|string} options.expiresIn - Token expiration (default: the idle window)
  * @returns {string} JWT token
  */
 function generateAuthToken(userId, jwtSecret, options = {}) {
@@ -62,7 +87,7 @@ function generateAuthToken(userId, jwtSecret, options = {}) {
     throw new Error('generateAuthToken: jwtSecret must be a non-empty string');
   }
 
-  const { tokenVersion = 1, sessionId = null, expiresIn = '7d' } = options;
+  const { tokenVersion = 1, sessionId = null, expiresIn = SESSION_IDLE_TTL_SECONDS } = options;
 
   const payload = {
     id: userId,
@@ -78,4 +103,10 @@ function generateAuthToken(userId, jwtSecret, options = {}) {
   return jwt.sign(payload, jwtSecret, { expiresIn, algorithm: 'HS256' });
 }
 
-export { getCookieOptions, generateAuthToken };
+export {
+  getCookieOptions,
+  generateAuthToken,
+  SESSION_IDLE_DAYS,
+  SESSION_IDLE_TTL_SECONDS,
+  TOKEN_RENEWAL_THRESHOLD_SECONDS,
+};

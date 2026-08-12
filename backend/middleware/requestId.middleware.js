@@ -63,6 +63,23 @@ function setUserId(userId) {
 }
 
 /**
+ * Get the account context (owner ID + role) from CLS context.
+ * Set by the auth middleware once the acting user has been resolved.
+ * @returns {{ownerId: string, role: string}|null}
+ */
+function getAccountContext() {
+  return requestContext.get('accountContext') || null;
+}
+
+/**
+ * Set the account context in CLS (called by auth middleware).
+ * @param {{ownerId: string, role: string}} context
+ */
+function setAccountContext(context) {
+  requestContext.set('accountContext', context);
+}
+
+/**
  * Get the entire CLS namespace (for advanced use cases)
  * @returns {Object} The CLS namespace
  */
@@ -70,4 +87,4 @@ function getNamespace() {
   return requestContext;
 }
 
-export { requestIdMiddleware, getRequestId, getUserId, setUserId, getNamespace };
+export { requestIdMiddleware, getRequestId, getUserId, setUserId, getAccountContext, setAccountContext, getNamespace };
