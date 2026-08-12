@@ -1,7 +1,7 @@
 import pool from '../config/db.js';
 import { logger } from '../config/logger.js';
 import { createPeriodicCleanup } from '../utils/cleanupScheduler.js';
-import { cleanupExpiredTrash, cleanupOrphanFiles } from '../models/file/file.cleanup.model.js';
+import { cleanupExpiredTrash } from '../models/file/file.cleanup.model.js';
 import { cleanupExpiredShareLinks } from '../models/share.model.js';
 import { purgeStaleHeartbeats } from '../models/clientHeartbeat.model.js';
 
@@ -29,7 +29,6 @@ async function cleanupOldAuditLogs() {
 const CLEANUP_JOBS = [
   { fn: cleanupExpiredTrash, name: 'Trash cleanup', intervalHours: 24 },
   { fn: cleanupOldAuditLogs, name: 'Audit log cleanup', intervalHours: 24 },
-  { fn: cleanupOrphanFiles, name: 'Orphan cleanup', intervalHours: 24 },
   { fn: cleanupExpiredShareLinks, name: 'Share link cleanup', intervalHours: 168 },
   { fn: () => purgeStaleHeartbeats(HEARTBEAT_STALE_MINUTES), name: 'Heartbeat cleanup', intervalHours: 1 },
 ];

@@ -27,6 +27,7 @@ import { SecuritySection } from './sections/SecuritySection';
 import { UsersModal } from './modals/UsersModal';
 import { SessionsModal } from './modals/SessionsModal';
 import { ActiveClientsModal } from './modals/ActiveClientsModal';
+import { OrphanFilesModal } from './modals/OrphanFilesModal';
 import { MfaModal } from './modals/MfaModal';
 import { ChangePasswordModal } from './modals/ChangePasswordModal';
 
@@ -105,6 +106,8 @@ export const Settings: React.FC = () => {
   const [activeClientsModalOpen, setActiveClientsModalOpen] = useState(false);
   const [activeClientsList, setActiveClientsList] = useState<ActiveClient[]>([]);
   const [loadingActiveClients, setLoadingActiveClients] = useState(false);
+
+  const [orphansModalOpen, setOrphansModalOpen] = useState(false);
 
   const [activeSection, setActiveSection] = useState<SectionId>('profile');
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -224,6 +227,7 @@ export const Settings: React.FC = () => {
               activeClientsCount={loadingActiveClients ? null : activeClientsList.length}
               loadingActiveClients={loadingActiveClients}
               onShowActiveClients={handleShowActiveClients}
+              onShowOrphans={() => setOrphansModalOpen(true)}
             />
             <div className="pt-1">
               <p className="text-xs uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 mb-4">Integrations</p>
@@ -416,6 +420,8 @@ export const Settings: React.FC = () => {
         loading={loadingActiveClients}
         onRefresh={loadActiveClients}
       />
+
+      <OrphanFilesModal isOpen={orphansModalOpen} onClose={() => setOrphansModalOpen(false)} />
 
       <MfaModal isOpen={mfaModalOpen} onClose={() => setMfaModalOpen(false)} />
       <ChangePasswordModal isOpen={changePasswordModalOpen} onClose={() => setChangePasswordModalOpen(false)} />

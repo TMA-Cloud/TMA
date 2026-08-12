@@ -65,6 +65,28 @@ function listKeysPaginated(pageSize = 1000) {
   return (async function* () {})();
 }
 
+/**
+ * List objects page-by-page with size and last-modified time (both drivers).
+ * @param {number} [pageSize=1000]
+ * @returns {AsyncGenerator<Array<{ key: string, size: number, lastModified: Date | null }>, void, void>}
+ */
+function listObjectsPaginated(pageSize = 1000) {
+  const driver = getDriver();
+  if (driver.listObjectsPaginated) return driver.listObjectsPaginated(pageSize);
+  return (async function* () {})();
+}
+
+/**
+ * Read an object's size and last-modified time.
+ * @param {string} key
+ * @returns {Promise<{ size: number, lastModified: Date | null } | null>} null when the object is gone
+ */
+async function statObject(key) {
+  const driver = getDriver();
+  if (!driver.statObject) return null;
+  return driver.statObject(key);
+}
+
 /** For local driver only: resolve key to absolute path (for encryption/decryption that need paths) */
 function resolveKeyToPath(key) {
   if (useS3Enabled) return null;
@@ -86,6 +108,8 @@ export {
   copyObject,
   listKeys,
   listKeysPaginated,
+  listObjectsPaginated,
+  statObject,
   resolveKeyToPath,
   getDriver,
 };
@@ -101,6 +125,8 @@ export default {
   copyObject,
   listKeys,
   listKeysPaginated,
+  listObjectsPaginated,
+  statObject,
   resolveKeyToPath,
   getDriver,
 };

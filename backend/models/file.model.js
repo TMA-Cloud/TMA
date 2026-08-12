@@ -9,6 +9,7 @@
  * - file.metadata.model.js - Metadata operations (star, share)
  * - file.trash.model.js - Trash operations
  * - file.cleanup.model.js - Cleanup operations
+ * - file.orphan.model.js - Orphan inspection and admin-driven cleanup
  * - file.search.model.js - Search and stats
  * - file.info.model.js - File info query utilities
  */
@@ -18,5 +19,6 @@ export * from './file/file.operations.model.js';
 export * from './file/file.metadata.model.js';
 export * from './file/file.trash.model.js';
 export * from './file/file.cleanup.model.js';
+export * from './file/file.orphan.model.js';
 export * from './file/file.search.model.js';
 export * from './file/file.info.model.js';

@@ -3,7 +3,6 @@ import path from 'path';
 
 import pool from '../../config/db.js';
 import { logger } from '../../config/logger.js';
-import { UPLOAD_DIR } from '../../config/paths.js';
 import { resolveFilePath } from '../../utils/filePath.js';
 import storage from '../../utils/storageDriver.js';
 
@@ -50,69 +49,10 @@ async function cleanupExpiredTrash() {
   await pool.query("DELETE FROM files WHERE deleted_at IS NOT NULL AND deleted_at < NOW() - INTERVAL '15 days'");
 }
 
-/**
- * Cleanup orphan files (files in database but not on disk/S3, or files on disk/S3 but not in database).
- * S3: uses listKeysPaginated to avoid loading the entire bucket into RAM at scale.
- */
-async function cleanupOrphanFiles() {
-  if (storage.useS3()) {
-    const dbRes = await pool.query(
-      "SELECT id, path FROM files WHERE type = 'file' AND path IS NOT NULL AND path NOT LIKE '/%'"
-    );
-    const dbSet = new Set(dbRes.rows.map(r => r.path).filter(Boolean));
+// Orphan cleanup used to live here as an unattended job. It compared storage
+// against the database and deleted both sides of any mismatch, which meant an
+// upload or paste whose row had not been inserted yet could be destroyed
+// mid-write. It is replaced by the review-then-delete flow in
+// `file.orphan.model.js`, driven by the first user from the admin UI.
 
-    for (const row of dbRes.rows) {
-      if (!row.path) continue;
-      const existsInS3 = await storage.exists(row.path);
-      if (!existsInS3) {
-        await pool.query('DELETE FROM files WHERE id = $1', [row.id]);
-      }
-    }
-
-    for await (const page of storage.listKeysPaginated(1000)) {
-      for (const key of page) {
-        if (!dbSet.has(key)) {
-          try {
-            await storage.deleteObject(key);
-          } catch {
-            // Ignore deletion errors for orphan cleanup
-          }
-        }
-      }
-    }
-    return;
-  }
-
-  const uploadsDir = UPLOAD_DIR;
-  let diskFiles;
-  try {
-    diskFiles = await fs.promises.readdir(uploadsDir);
-  } catch {
-    diskFiles = [];
-  }
-  const diskSet = new Set(diskFiles);
-
-  const dbRes = await pool.query("SELECT id, path FROM files WHERE type = 'file' AND path IS NOT NULL");
-  const dbSet = new Set();
-  for (const row of dbRes.rows) {
-    if (!row.path) continue;
-    if (path.isAbsolute(row.path)) continue;
-
-    dbSet.add(row.path);
-    if (!diskSet.has(row.path)) {
-      await pool.query('DELETE FROM files WHERE id = $1', [row.id]);
-    }
-  }
-
-  for (const file of diskFiles) {
-    if (!dbSet.has(file)) {
-      try {
-        await fs.promises.unlink(path.join(uploadsDir, file));
-      } catch {
-        // Ignore deletion errors for orphan cleanup
-      }
-    }
-  }
-}
-
-export { cleanupExpiredTrash, cleanupOrphanFiles };
+export { cleanupExpiredTrash };

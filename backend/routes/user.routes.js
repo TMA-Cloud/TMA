@@ -3,11 +3,13 @@ import express from 'express';
 import {
   checkOnlyOfficeConfigured,
   clientHeartbeat,
+  deleteOrphans,
   getActiveClients,
   getElectronOnlyAccessConfig,
   getHideFileExtensionsConfig,
   getMaxUploadSizeConfig,
   getOnlyOfficeConfig,
+  getOrphans,
   getPasswordChangeConfig,
   getShareBaseUrlConfig,
   getSignupStatus,
@@ -26,6 +28,8 @@ import auth from '../middleware/auth.middleware.js';
 import { apiRateLimiter } from '../middleware/rateLimit.middleware.js';
 import { validate } from '../middleware/validation.middleware.js';
 import {
+  deleteOrphansSchema,
+  scanOrphansSchema,
   toggleSignupSchema,
   updateElectronOnlyAccessConfigSchema,
   updateHideFileExtensionsConfigSchema,
@@ -71,5 +75,7 @@ router.put('/password-change-config', updatePasswordChangeConfigSchema, validate
 router.put('/storage-limit', updateUserStorageLimitSchema, validate, updateUserStorageLimit);
 router.post('/client-heartbeat', clientHeartbeat);
 router.get('/active-clients', getActiveClients);
+router.get('/orphans', scanOrphansSchema, validate, getOrphans);
+router.post('/orphans/delete', deleteOrphansSchema, validate, deleteOrphans);
 
 export default router;

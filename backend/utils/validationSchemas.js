@@ -1,4 +1,4 @@
-import { body, param } from 'express-validator';
+import { body, param, query } from 'express-validator';
 
 const MAX_EMAIL_LENGTH = 254;
 const MAX_PASSWORD_LENGTH = 128;
@@ -186,6 +186,38 @@ const updateUserStorageLimitSchema = [
     .withMessage('Storage limit must be a positive integer or null'),
 ];
 
+// Grace window bounds mirror MIN/MAX_GRACE_MINUTES in file.orphan.model.js.
+// The floor is what keeps in-flight uploads and pastes out of the results.
+const ORPHAN_MIN_GRACE_MINUTES = 60;
+const ORPHAN_MAX_GRACE_MINUTES = 525600;
+const ORPHAN_MAX_BATCH = 500;
+
+const scanOrphansSchema = [
+  query('graceMinutes')
+    .optional()
+    .isInt({ min: ORPHAN_MIN_GRACE_MINUTES, max: ORPHAN_MAX_GRACE_MINUTES })
+    .withMessage(`Grace window must be between ${ORPHAN_MIN_GRACE_MINUTES} minutes and 1 year`)
+    .toInt(),
+];
+
+const deleteOrphansSchema = [
+  body('storageKeys')
+    .optional()
+    .isArray({ max: ORPHAN_MAX_BATCH })
+    .withMessage(`Provide at most ${ORPHAN_MAX_BATCH} storage keys per request`),
+  body('storageKeys.*').isString().withMessage('Storage keys must be strings'),
+  body('fileIds')
+    .optional()
+    .isArray({ max: ORPHAN_MAX_BATCH })
+    .withMessage(`Provide at most ${ORPHAN_MAX_BATCH} file IDs per request`),
+  body('fileIds.*').isString().withMessage('File IDs must be strings'),
+  body('graceMinutes')
+    .optional()
+    .isInt({ min: ORPHAN_MIN_GRACE_MINUTES, max: ORPHAN_MAX_GRACE_MINUTES })
+    .withMessage(`Grace window must be between ${ORPHAN_MIN_GRACE_MINUTES} minutes and 1 year`)
+    .toInt(),
+];
+
 const getOnlyOfficeConfigSchema = [
   param('id').notEmpty().withMessage('File ID is required').isString().withMessage('File ID must be a string'),
 ];
@@ -231,6 +263,8 @@ export {
   updateMaxUploadSizeConfigSchema,
   updateHideFileExtensionsConfigSchema,
   updateUserStorageLimitSchema,
+  scanOrphansSchema,
+  deleteOrphansSchema,
   getOnlyOfficeConfigSchema,
   handleSharedSchema,
   downloadFolderZipSchema,

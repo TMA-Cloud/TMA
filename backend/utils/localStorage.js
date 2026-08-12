@@ -70,4 +70,63 @@ async function copyObject(sourceKey, destKey) {
   await fs.promises.copyFile(src, dest);
 }
 
-export { exists, getReadStream, putFromPath, putBuffer, putStream, deleteObject, copyObject, resolveKey };
+/**
+ * List files in UPLOAD_DIR page-by-page with their size and mtime.
+ * Mirrors the S3 driver's listObjectsPaginated so the orphan scanner can treat
+ * both drivers the same way. Only top-level entries are listed, matching how
+ * storage keys are written.
+ * @param {number} [pageSize=1000]
+ * @yields {Array<{ key: string, size: number, lastModified: Date | null }>}
+ */
+async function* listObjectsPaginated(pageSize = 1000) {
+  let entries;
+  try {
+    entries = await fs.promises.readdir(UPLOAD_DIR, { withFileTypes: true });
+  } catch {
+    return;
+  }
+
+  let page = [];
+  for (const entry of entries) {
+    if (!entry.isFile()) continue;
+    let stats;
+    try {
+      stats = await fs.promises.stat(path.join(UPLOAD_DIR, entry.name));
+    } catch {
+      continue; // Removed between readdir and stat
+    }
+    page.push({ key: entry.name, size: stats.size, lastModified: stats.mtime });
+    if (page.length >= pageSize) {
+      yield page;
+      page = [];
+    }
+  }
+  if (page.length > 0) yield page;
+}
+
+/**
+ * Read a stored file's size and mtime.
+ * @param {string} key - Storage key
+ * @returns {Promise<{ size: number, lastModified: Date | null } | null>} null when the file is gone
+ */
+async function statObject(key) {
+  try {
+    const stats = await fs.promises.stat(resolveKey(key));
+    return { size: stats.size, lastModified: stats.mtime };
+  } catch {
+    return null;
+  }
+}
+
+export {
+  exists,
+  getReadStream,
+  putFromPath,
+  putBuffer,
+  putStream,
+  deleteObject,
+  copyObject,
+  listObjectsPaginated,
+  statObject,
+  resolveKey,
+};

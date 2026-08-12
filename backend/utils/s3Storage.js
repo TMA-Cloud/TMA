@@ -232,6 +232,63 @@ async function* listKeysPaginated(pageSize = 1000) {
   } while (continuationToken);
 }
 
+/**
+ * List objects page-by-page with their size and last-modified time.
+ * Same streaming behaviour as listKeysPaginated, but carries the metadata the
+ * orphan scanner needs to tell a stale leftover from a fresh upload.
+ * @param {number} [pageSize=1000]
+ * @yields {Array<{ key: string, size: number, lastModified: Date | null }>}
+ */
+async function* listObjectsPaginated(pageSize = 1000) {
+  const client = getClient();
+  if (!client) return;
+  let continuationToken;
+  do {
+    const response = await client.send(
+      new ListObjectsV2Command({
+        Bucket: s3Config.bucket,
+        ContinuationToken: continuationToken,
+        MaxKeys: pageSize,
+      })
+    );
+    const page = (response.Contents || [])
+      .filter(obj => obj.Key)
+      .map(obj => ({
+        key: obj.Key,
+        size: typeof obj.Size === 'number' ? obj.Size : 0,
+        lastModified: obj.LastModified ? new Date(obj.LastModified) : null,
+      }));
+    if (page.length > 0) yield page;
+    continuationToken = response.IsTruncated ? response.NextContinuationToken : undefined;
+  } while (continuationToken);
+}
+
+/**
+ * Read an object's size and last-modified time without downloading it.
+ * @param {string} key - Object key
+ * @returns {Promise<{ size: number, lastModified: Date | null } | null>} null when the object is gone
+ */
+async function statObject(key) {
+  const client = getClient();
+  if (!client) return null;
+  try {
+    const response = await client.send(
+      new HeadObjectCommand({
+        Bucket: s3Config.bucket,
+        Key: key,
+      })
+    );
+    return {
+      size: typeof response.ContentLength === 'number' ? response.ContentLength : 0,
+      lastModified: response.LastModified ? new Date(response.LastModified) : null,
+    };
+  } catch (err) {
+    if (err.name === 'NotFound' || err.$metadata?.httpStatusCode === 404) return null;
+    logger.warn({ err, key }, '[S3] HeadObject failed');
+    throw err;
+  }
+}
+
 function isEnabled() {
   return useS3;
 }
@@ -246,5 +303,7 @@ export {
   copyObject,
   listKeys,
   listKeysPaginated,
+  listObjectsPaginated,
+  statObject,
   isEnabled,
 };

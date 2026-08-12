@@ -1,5 +1,5 @@
 import React from 'react';
-import { Settings as SettingsIcon } from 'lucide-react';
+import { Settings as SettingsIcon, Trash2 } from 'lucide-react';
 import { SettingsSection } from '../components/SettingsSection';
 import { SettingsItem } from '../components/SettingsItem';
 
@@ -28,6 +28,7 @@ interface AdministrationSectionProps {
   activeClientsCount: number | null;
   loadingActiveClients: boolean;
   onShowActiveClients: () => void;
+  onShowOrphans: () => void;
 }
 
 export const AdministrationSection: React.FC<AdministrationSectionProps> = ({
@@ -55,6 +56,7 @@ export const AdministrationSection: React.FC<AdministrationSectionProps> = ({
   activeClientsCount,
   loadingActiveClients,
   onShowActiveClients,
+  onShowOrphans,
 }) => {
   return (
     <SettingsSection
@@ -136,6 +138,15 @@ export const AdministrationSection: React.FC<AdministrationSectionProps> = ({
             onToggle={onToggleAllowPasswordChange}
             toggleDisabled={!canToggleAllowPasswordChange || togglingAllowPasswordChange || loadingSignupStatus}
             description="Allow users to change their account password from the Security settings"
+          />
+          <SettingsItem
+            label="Orphaned files"
+            value=""
+            action="Review orphans"
+            actionIcon={Trash2}
+            actionVariant="danger"
+            onAction={onShowOrphans}
+            description="Review and clean up orphaned files and broken records"
           />
           {showElectronOnlyAccessToggle && (
             <SettingsItem

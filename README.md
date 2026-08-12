@@ -13,7 +13,8 @@ A self-hosted cloud storage platform with file storage and management capabiliti
 - **Redis Caching** --- High-performance caching layer for improved response times
 - **Modern UI** --- React + TypeScript frontend with Tailwind CSS
 - **PostgreSQL** --- Robust database with automatic migrations
-- **Background Services** --- Automatic cleanup of trash and orphaned files
+- **Background Services** --- Automatic cleanup of expired trash, share links, and audit logs
+- **Orphan Review** --- Screen to review and clean up orphaned files and broken records
 - **Audit Logging** --- Comprehensive audit trail with queue-based event tracking
 
 ## Quick Start

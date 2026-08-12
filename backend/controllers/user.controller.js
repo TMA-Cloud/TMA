@@ -5,7 +5,9 @@
  * The controllers have been split into smaller, more maintainable modules:
  * - user.storage.controller.js - Storage operations
  * - user.admin.controller.js - Admin operations (signup, user management)
+ * - user.orphans.controller.js - Orphan review and admin-driven cleanup
  */
 
 export * from './user/user.storage.controller.js';
 export * from './user/user.admin.controller.js';
+export * from './user/user.orphans.controller.js';
