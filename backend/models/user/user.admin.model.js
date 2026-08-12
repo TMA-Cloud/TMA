@@ -574,6 +574,26 @@ async function setUserStorageLimit(userId, targetUserId, storageLimit) {
       throw new Error("Sub-users share their owner's storage limit; set the limit on the owner account instead");
     }
 
+    // A limit below what the account already stores would leave it permanently
+    // over quota and unable to upload, with no way out but deleting files.
+    // Reject it rather than record a number that can never be satisfied.
+    if (storageLimit !== null) {
+      const usedResult = await client.query(
+        `SELECT COALESCE(SUM(f.size), 0) AS used
+           FROM files f
+           JOIN users o ON o.id = f.user_id
+          WHERE f.type = 'file' AND COALESCE(o.parent_user_id, o.id) = $1`,
+        [targetUserId]
+      );
+      const used = Number(usedResult.rows[0].used) || 0;
+      if (Number(storageLimit) < used) {
+        const limitFormatted = formatFileSize(Number(storageLimit));
+        const usedFormatted = formatFileSize(used);
+        await client.query('ROLLBACK');
+        throw new Error(`Storage limit (${limitFormatted}) is below the ${usedFormatted} this account already stores`);
+      }
+    }
+
     // Update user storage limit using parameterized query (prevents SQL injection)
     await client.query('UPDATE users SET storage_limit = $1 WHERE id = $2', [storageLimit, targetUserId]);
 

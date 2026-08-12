@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Loader2, Shield, ShieldCheck, HardDrive, Edit2, Check, X, CornerDownRight } from 'lucide-react';
+import { Loader2, Shield, ShieldCheck, HardDrive, Edit2, Check, X, CornerDownRight, RotateCcw } from 'lucide-react';
 import { format } from 'date-fns';
 import { Modal } from '../../ui/Modal';
 import { ModalCountHeader } from '../components/ModalCountHeader';
@@ -125,43 +125,59 @@ export const UsersModal: React.FC<UsersModalProps> = ({
     setEditValue(cleaned.slice(0, 15));
   };
 
-  const handleSaveLimit = async (userId: string) => {
+  /** Clearing the limit hands the account back the default (actual disk space). */
+  const handleResetLimit = async (userId: string) => {
     setUpdating(userId);
     try {
-      const trimmed = editValue.trim();
+      await updateUserStorageLimit(userId, null);
+      showToast('Storage limit reset to default (actual disk space)', 'success');
+      handleCancelEdit();
+      onRefresh();
+      if (userId === currentUserId) onStorageUpdated?.();
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Failed to reset storage limit', 'error');
+    } finally {
+      setUpdating(null);
+    }
+  };
 
-      // If empty, set to null (use default/actual disk space)
-      if (trimmed === '') {
-        await updateUserStorageLimit(userId, null);
-        showToast('Storage limit reset to default (actual disk space)', 'success');
-        setEditingUserId(null);
-        setEditValue('');
-        setEditUnit('GB');
-        onRefresh();
-        if (userId === currentUserId) onStorageUpdated?.();
-        return;
-      }
+  const handleSaveLimit = async (user: UserSummary) => {
+    const userId = user.id;
+    const trimmed = editValue.trim();
 
-      // Validate and convert to bytes
-      const bytes = numberAndUnitToBytes(trimmed, editUnit);
-      if (bytes === null) {
-        showToast('Invalid storage limit. Please enter a positive number.', 'error');
-        setUpdating(null);
-        return;
-      }
+    // An empty box means "no limit" — same as pressing Reset.
+    if (trimmed === '') {
+      await handleResetLimit(userId);
+      return;
+    }
 
-      // Additional validation: ensure bytes is within reasonable range
-      if (bytes <= 0 || bytes > Number.MAX_SAFE_INTEGER) {
-        showToast('Storage limit must be between 1 byte and 9 Petabytes', 'error');
-        setUpdating(null);
-        return;
-      }
+    // Validate and convert to bytes
+    const bytes = numberAndUnitToBytes(trimmed, editUnit);
+    if (bytes === null) {
+      showToast('Invalid storage limit. Please enter a positive number.', 'error');
+      return;
+    }
 
+    // Additional validation: ensure bytes is within reasonable range
+    if (bytes <= 0 || bytes > Number.MAX_SAFE_INTEGER) {
+      showToast('Storage limit must be between 1 byte and 9 Petabytes', 'error');
+      return;
+    }
+
+    // A limit under what the account already stores would strand it over quota
+    // with no way to upload again. The server rejects this too; checking here
+    // saves a round trip and names the number the admin has to clear.
+    const used = user.storageUsed ?? 0;
+    if (bytes < used) {
+      showToast(`Limit cannot be below the ${formatFileSize(used)} this account already stores`, 'error');
+      return;
+    }
+
+    setUpdating(userId);
+    try {
       await updateUserStorageLimit(userId, bytes);
       showToast('Storage limit updated successfully', 'success');
-      setEditingUserId(null);
-      setEditValue('');
-      setEditUnit('GB');
+      handleCancelEdit();
       onRefresh();
       if (userId === currentUserId) onStorageUpdated?.();
     } catch (error) {
@@ -304,7 +320,7 @@ export const UsersModal: React.FC<UsersModalProps> = ({
                               disabled={isUpdating}
                               onKeyDown={e => {
                                 if (e.key === 'Enter') {
-                                  handleSaveLimit(listedUser.id);
+                                  handleSaveLimit(listedUser);
                                 } else if (e.key === 'Escape') {
                                   handleCancelEdit();
                                 }
@@ -322,12 +338,21 @@ export const UsersModal: React.FC<UsersModalProps> = ({
                               <option value="TB">TB</option>
                             </select>
                             <button
-                              onClick={() => handleSaveLimit(listedUser.id)}
+                              onClick={() => handleSaveLimit(listedUser)}
                               disabled={isUpdating}
                               className="p-1 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 rounded disabled:opacity-50 transition-colors"
                               title="Save"
                             >
                               <Check className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleResetLimit(listedUser.id)}
+                              disabled={isUpdating}
+                              className="p-1 text-gray-500 dark:text-gray-400 hover:bg-slate-200/70 dark:hover:bg-slate-700/40 rounded disabled:opacity-50 transition-colors"
+                              title="Reset to default"
+                              aria-label="Reset storage limit to default"
+                            >
+                              <RotateCcw className="w-4 h-4" />
                             </button>
                             <button
                               onClick={handleCancelEdit}
