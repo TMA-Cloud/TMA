@@ -50,12 +50,23 @@ describe('resolveKey', () => {
     expect(() => resolveKey(null)).toThrow('Storage key is required');
   });
 
-  it.each(['../escape.bin', '../../etc/passwd', '..\\..\\Windows\\System32\\config\\SAM', 'a/../../../escape'])(
-    'blocks traversal via %s',
-    key => {
+  it.each(['../escape.bin', '../../etc/passwd', 'a/../../../escape'])('blocks traversal via %s', key => {
+    expect(() => resolveKey(key)).toThrow(/path traversal/i);
+  });
+
+  it('resolves a backslash traversal attempt according to the platform separator', () => {
+    // Backslash is a separator on Windows and an ordinary filename character on
+    // POSIX, so this escapes on one platform and not the other. On POSIX it
+    // lands inside the upload directory as a single oddly named file, which is
+    // safe; callers reject such keys with isValidPath before getting here.
+    const key = '..\\..\\Windows\\System32\\config\\SAM';
+
+    if (process.platform === 'win32') {
       expect(() => resolveKey(key)).toThrow(/path traversal/i);
+    } else {
+      expect(resolveKey(key).startsWith(path.resolve(UPLOAD_DIR))).toBe(true);
     }
-  );
+  });
 
   it('permits a nested key that stays within the directory', () => {
     expect(resolveKey('sub/file.bin').startsWith(path.resolve(UPLOAD_DIR))).toBe(true);

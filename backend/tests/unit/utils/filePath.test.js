@@ -18,13 +18,32 @@ describe('resolveFilePath', () => {
     expect(() => resolveFilePath(undefined)).toThrow('File path is required');
   });
 
-  it.each([
-    '../../../etc/passwd',
-    '..\\..\\..\\Windows\\System32\\config\\SAM',
-    '../outside.txt',
-    'sub/../../escape.txt',
-  ])('refuses to escape the upload directory via %s', key => {
-    expect(() => resolveFilePath(key)).toThrow(/path traversal/i);
+  it.each(['../../../etc/passwd', '../outside.txt', 'sub/../../escape.txt'])(
+    'refuses to escape the upload directory via %s',
+    key => {
+      expect(() => resolveFilePath(key)).toThrow(/path traversal/i);
+    }
+  );
+
+  it('resolves a backslash traversal attempt according to the platform separator', () => {
+    // A backslash separates directories on Windows but is an ordinary filename
+    // character on POSIX, so the same string escapes on one platform and not
+    // the other. Both outcomes are safe: on POSIX it becomes a single oddly
+    // named file that is still inside the upload directory. What actually
+    // blocks the key everywhere is isValidPath, asserted below.
+    const key = '..\\..\\..\\Windows\\System32\\config\\SAM';
+
+    if (process.platform === 'win32') {
+      expect(() => resolveFilePath(key)).toThrow(/path traversal/i);
+    } else {
+      expect(resolveFilePath(key).startsWith(path.resolve(UPLOAD_DIR))).toBe(true);
+    }
+  });
+
+  it('rejects a backslash key through isValidPath on every platform', () => {
+    // validateAndResolveFile runs this before resolveFilePath, so the download
+    // path never reaches the separator-dependent behaviour above.
+    expect(isValidPath('..\\..\\..\\Windows\\System32\\config\\SAM')).toBe(false);
   });
 
   it('allows a nested key that stays inside the upload directory', () => {
