@@ -20,6 +20,7 @@
     "test:coverage": "vitest run --coverage",
     "test:integration": "vitest run --config vitest.integration.config.js",
     "test:integration:coverage": "vitest run --config vitest.integration.config.js --coverage",
+    "test:s3": "vitest run --config vitest.s3.config.js",
     "test:all": "npm run test && npm run test:integration",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
