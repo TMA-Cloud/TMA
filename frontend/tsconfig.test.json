@@ -1,0 +1,32 @@
+{
+  "compilerOptions": {
+    "target": "ES2024",
+    "useDefineForClassFields": true,
+    "lib": ["ES2024", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+    "types": ["node", "vitest/globals", "@testing-library/jest-dom"],
+
+    /* Bundler mode */
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+    "jsx": "react-jsx",
+
+    /* Same strictness as the app, with two relaxations that only make sense
+       for tests: doubles must often match a signature without using every
+       parameter, and indexing into `mock.calls` is pervasive enough that
+       noUncheckedIndexedAccess would add assertions without adding safety. */
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": false,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": false,
+    "verbatimModuleSyntax": true
+  },
+  /* The ambient declarations live beside the app source; without them the test
+     project cannot see `__FRONTEND_VERSION__` or `import.meta.env`. */
+  "include": ["tests", "vitest.config.ts", "src/vite-env.d.ts", "src/jsx-extensions.d.ts"]
+}
