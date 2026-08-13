@@ -17,6 +17,12 @@ node_modules/
 !.env.example
 !.env.test
 
+# Test output
+coverage/
+coverage-integration/
+backend/tests/.tmp/
+*.tsbuildinfo
+
 # Logs
 logs/
 *.log
