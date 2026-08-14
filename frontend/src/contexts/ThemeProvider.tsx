@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ThemeContext, type Theme } from './ThemeContext';
 
 const STORAGE_KEY = 'theme';
@@ -37,5 +37,11 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setThemeState(prev => (prev === 'dark' ? 'light' : 'dark'));
   }, []);
 
-  return <ThemeContext.Provider value={{ theme, setTheme, toggleTheme }}>{children}</ThemeContext.Provider>;
+  // Both setters are already stable, so this changes only when the theme does.
+  // A fresh object here would hand every consumer in the app a new value on
+  // each render of this provider, which is the shape of bug that had a toast
+  // reloading the settings pane behind it.
+  const value = useMemo(() => ({ theme, setTheme, toggleTheme }), [theme, setTheme, toggleTheme]);
+
+  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 };

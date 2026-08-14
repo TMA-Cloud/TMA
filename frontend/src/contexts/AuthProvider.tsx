@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { AuthContext, type AccountPermission, type User } from './AuthContext';
 import { checkAuthSilently, setAuthState, AUTH_STATE_KEY } from '../utils/api';
 
@@ -110,7 +110,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [loadProfile]);
 
-  const login = async (email: string, password: string, mfaCode?: string) => {
+  const login = useCallback(async (email: string, password: string, mfaCode?: string) => {
     try {
       const res = await fetch(`/api/login`, {
         method: 'POST',
@@ -151,9 +151,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       return { success: false, requiresMfa: false, message: error.message };
     }
-  };
+  }, []);
 
-  const signup = async (email: string, password: string, name?: string) => {
+  const signup = useCallback(async (email: string, password: string, name?: string) => {
     const res = await fetch(`/api/signup`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
@@ -169,9 +169,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Mark user as authenticated in localStorage
     setAuthState(true);
     return true;
-  };
+  }, []);
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     try {
       await fetch(`/api/logout`, {
         method: 'POST',
@@ -184,7 +184,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(null);
     // Clear auth state from localStorage
     setAuthState(false);
-  };
+  }, []);
 
   const isSubUser = user?.isSubUser === true;
 
@@ -199,9 +199,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     [user]
   );
 
-  return (
-    <AuthContext.Provider value={{ user, loading, isSubUser, can, login, signup, logout }}>
-      {children}
-    </AuthContext.Provider>
+  // Changes only when the session actually does. Rebuilding this object on
+  // every render would push a new value to every consumer in the app, which is
+  // how a toast ended up reloading the settings pane behind it.
+  const value = useMemo(
+    () => ({ user, loading, isSubUser, can, login, signup, logout }),
+    [user, loading, isSubUser, can, login, signup, logout]
   );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
