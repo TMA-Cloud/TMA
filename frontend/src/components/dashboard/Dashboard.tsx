@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { RecentFiles } from './RecentFiles';
 import { useApp } from '../../contexts/AppContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { Upload, FolderPlus, Share2, Star } from 'lucide-react';
 import { apiGet } from '../../utils/api';
+import { SPRING_PRESETS, useReducedMotion, useSpring } from '../../motion';
 
 interface FileStats {
   totalFiles: number;
@@ -11,6 +12,32 @@ interface FileStats {
   sharedCount: number;
   starredCount: number;
 }
+
+/**
+ * A number that springs to its value reads as the figure arriving rather than
+ * a slot machine settling: it starts fast, decelerates into place, and — being
+ * a spring — simply retargets if the next poll lands mid-count.
+ */
+const StatValue: React.FC<{ value: number }> = ({ value }) => {
+  const nodeRef = useRef<HTMLParagraphElement>(null);
+  const spring = useSpring(0, SPRING_PRESETS.move);
+  const reducedMotion = useReducedMotion();
+
+  useEffect(() => {
+    return spring.subscribe(current => {
+      const node = nodeRef.current;
+      if (node) node.textContent = String(Math.round(current));
+    });
+  }, [spring]);
+
+  useEffect(() => {
+    if (reducedMotion) spring.jump(value);
+    else spring.setTarget(value);
+  }, [value, spring, reducedMotion]);
+
+  // Tabular figures stop the column jittering as digits change width.
+  return <p ref={nodeRef} className="type-title-1 text-[var(--label)] tabular-nums" />;
+};
 
 export const Dashboard: React.FC = () => {
   const { files, setUploadModalOpen, setCreateFolderModalOpen, setCurrentPath } = useApp();
@@ -80,153 +107,87 @@ export const Dashboard: React.FC = () => {
     ...(can('files.upload')
       ? [
           {
-            title: 'Upload Files',
+            title: 'Upload files',
             icon: Upload,
+            tint: 'var(--accent)',
             isPrimary: true,
-            hoverColor: 'hover:border-[#5b8def]/30 hover:bg-[#5b8def]/10 dark:hover:bg-[#5b8def]/20',
             onClick: () => setUploadModalOpen(true),
           },
           {
-            title: 'Create Folder',
+            title: 'New folder',
             icon: FolderPlus,
+            tint: 'var(--positive)',
             isPrimary: false,
-            hoverColor: 'hover:border-emerald-400/30 hover:bg-emerald-500/10 dark:hover:bg-emerald-500/20',
             onClick: () => setCreateFolderModalOpen(true),
           },
         ]
       : []),
     {
-      title: 'Share Files',
+      title: 'Shared',
       icon: Share2,
+      tint: 'var(--accent)',
       isPrimary: false,
-      hoverColor: 'hover:border-violet-400/30 hover:bg-violet-500/10 dark:hover:bg-violet-500/20',
       onClick: () => setCurrentPath(['Shared']),
     },
     {
-      title: 'Starred Items',
+      title: 'Starred',
       icon: Star,
+      tint: 'var(--warning)',
       isPrimary: false,
-      hoverColor: 'hover:border-amber-400/30 hover:bg-amber-500/10 dark:hover:bg-amber-500/20',
       onClick: () => setCurrentPath(['Starred']),
     },
   ];
 
-  const fileCount = stats.totalFiles;
-  const folderCount = stats.totalFolders;
-  const sharedCount = stats.sharedCount;
-  const starredCount = stats.starredCount;
-
   const statsData = [
-    { label: 'Total Files', value: fileCount },
-    { label: 'Folders', value: folderCount },
-    { label: 'Shared', value: sharedCount },
-    { label: 'Starred', value: starredCount },
+    { label: 'Files', value: stats.totalFiles },
+    { label: 'Folders', value: stats.totalFolders },
+    { label: 'Shared', value: stats.sharedCount },
+    { label: 'Starred', value: stats.starredCount },
   ];
 
-  const [animatedStats, setAnimatedStats] = useState([0, 0, 0, 0]);
-  useEffect(() => {
-    let cancelled = false;
-    const durations = [600, 700, 800, 900] as const;
-    const values = [fileCount, folderCount, sharedCount, starredCount];
-    durations.forEach((duration, i) => {
-      const val = values[i];
-      if (val === undefined) return;
-      let start = 0;
-      const end = val;
-      const step = Math.ceil(end / (duration / 16));
-      const animate = () => {
-        if (cancelled) return;
-        start += step;
-        if (start > end) start = end;
-        setAnimatedStats(prev => {
-          const copy = [...prev];
-          copy[i] = start;
-          return copy;
-        });
-        if (start < end) setTimeout(animate, 16);
-      };
-      animate();
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [fileCount, folderCount, sharedCount, starredCount]);
-
   return (
-    <div className="p-6 md:p-8 min-h-screen bg-gradient-to-br from-[#e8ecf1] via-[#eef2f6] to-[#e2e7ee] dark:from-[#0f172a] dark:via-[#1e293b] dark:to-[#1a2332]">
-      <div className="space-y-8 max-w-6xl mx-auto">
+    <div className="px-6 md:px-8 pt-6 pb-16">
+      <div className="space-y-8 max-w-5xl mx-auto">
         {/* Welcome section */}
         <div>
-          <h1 className="text-3xl md:text-4xl font-bold text-slate-800 dark:text-slate-100 mb-2 tracking-tight">
-            Welcome back
-          </h1>
-          <p className="text-sm md:text-base text-slate-600 dark:text-slate-400">
-            Here's what's happening with your files today.
-          </p>
+          <h1 className="type-title-1 text-[var(--label)]">Welcome back</h1>
+          <p className="type-callout text-[var(--label-secondary)] mt-1">Here is where your files stand today.</p>
         </div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {statsData.map((stat, index) => (
-            <div
-              key={index}
-              className="card-premium hover-lift flex flex-col items-center justify-center p-5 md:p-6 animate-fadeIn rounded-2xl"
-            >
-              <p className="text-2xl md:text-3xl font-semibold text-slate-700 dark:text-slate-200 transition-all duration-300 mb-1.5">
-                {animatedStats[index]}
-              </p>
-              <p className="text-xs text-slate-500 dark:text-slate-400 font-medium uppercase tracking-wide">
-                {stat.label}
-              </p>
+        {/* Stats — a status report, so it is quiet: no tile competes with the
+            actions below it. */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {statsData.map(stat => (
+            <div key={stat.label} className="card flex flex-col items-start justify-center px-5 py-4">
+              <StatValue value={stat.value} />
+              <p className="type-caption text-[var(--label-tertiary)] mt-0.5">{stat.label}</p>
             </div>
           ))}
         </div>
 
         {/* Quick Actions */}
         <div>
-          <h2 className="text-xl md:text-2xl font-bold text-slate-800 dark:text-slate-100 mb-4 tracking-tight">
-            Quick Actions
-          </h2>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            {quickActions.map((action, index) => {
+          <h2 className="type-title-3 text-[var(--label)] mb-3">Quick actions</h2>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {quickActions.map(action => {
               const Icon = action.icon;
               return (
                 <button
-                  key={index}
+                  key={action.title}
                   onClick={action.onClick}
-                  className={`
-                  group p-5 md:p-6 rounded-2xl transition-all duration-300 ease-out
-                  flex flex-col items-center gap-2
-                  border border-slate-200/60 dark:border-slate-700/50
-                  bg-[#f0f3f7] dark:bg-slate-800/80
-                  text-slate-800 dark:text-slate-100
-                  hover-lift
-                  focus:outline-none focus:ring-2 focus:ring-[#5b8def]/40 focus:ring-offset-2 focus:ring-offset-transparent
-                  active:scale-[0.98]
-                  ${
-                    action.isPrimary
-                      ? 'border-[#5b8def]/25 bg-[#5b8def]/8 dark:bg-[#5b8def]/15 dark:border-[#5b8def]/30'
-                      : ''
-                  }
-                  ${action.hoverColor}
-                `}
+                  className={`pressable-lg card flex flex-col items-start gap-3 p-5 text-left hover:border-[var(--separator-strong)] ${
+                    action.isPrimary ? 'border-[var(--accent-ring)] bg-[var(--accent-fill)]' : ''
+                  }`}
                 >
-                  <Icon
-                    className={`w-6 h-6 md:w-7 md:h-7 transition-colors duration-300 ${
-                      action.isPrimary
-                        ? 'text-[#4a7edb] dark:text-blue-400'
-                        : 'text-slate-500 dark:text-slate-400 group-hover:text-slate-700 dark:group-hover:text-slate-200'
-                    }`}
-                  />
-                  <span className="text-sm font-semibold tracking-tight">{action.title}</span>
+                  <Icon className="w-5 h-5" style={{ color: action.tint }} strokeWidth={2} />
+                  <span className="type-callout type-emphasized text-[var(--label)]">{action.title}</span>
                 </button>
               );
             })}
           </div>
         </div>
-        <div>
-          <RecentFiles files={files} />
-        </div>
+
+        <RecentFiles files={files} />
       </div>
     </div>
   );

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { HardDrive } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { PasswordInput } from './PasswordInput';
 import { SocialAuthButtons } from './SocialAuthButtons';
@@ -51,29 +52,35 @@ export const SignupForm: React.FC<{ onSwitch: () => void }> = ({ onSwitch }) => 
   };
 
   return (
-    <div className="bg-[#f0f3f7]/95 dark:bg-slate-800/95 backdrop-blur-xl rounded-3xl p-8 border border-slate-200/60 dark:border-slate-700/50 w-96 max-w-[calc(100vw-2rem)] shadow-soft-lg">
-      <form className="space-y-5" onSubmit={handleSubmit}>
-        <div>
-          <input
-            className="border border-slate-200/80 dark:border-slate-600/80 rounded-2xl px-4 py-3 w-full bg-white/70 dark:bg-slate-700/50 focus:outline-none focus:ring-2 focus:ring-[#5b8def]/35 focus:border-[#5b8def]/40 text-slate-800 dark:text-slate-100 placeholder-slate-400 transition-all duration-300 ease-out text-base"
-            placeholder="Name"
-            value={name}
-            onChange={e => setName(e.target.value)}
-            autoComplete="name"
-            maxLength={100}
-          />
+    <div className="material-thick material-edge rounded-3xl p-8 w-96 max-w-[calc(100vw-2rem)] animate-modalIn">
+      <div className="flex flex-col items-center gap-3 mb-7">
+        <div className="w-11 h-11 bg-[var(--accent)] rounded-[14px] grid place-items-center">
+          <HardDrive className="w-5 h-5 text-[var(--label-on-accent)]" strokeWidth={2.25} />
         </div>
-        <div>
-          <input
-            className="border border-slate-200/80 dark:border-slate-600/80 rounded-2xl px-4 py-3 w-full bg-white/70 dark:bg-slate-700/50 focus:outline-none focus:ring-2 focus:ring-[#5b8def]/35 focus:border-[#5b8def]/40 text-slate-800 dark:text-slate-100 placeholder-slate-400 transition-all duration-300 ease-out text-base"
-            placeholder="Email"
-            value={email}
-            onChange={e => setEmail(e.target.value)}
-            autoComplete="email"
-            maxLength={254}
-            autoFocus
-          />
+        <div className="text-center">
+          <h1 className="type-title-2 text-[var(--label)]">Create your account</h1>
+          <p className="type-footnote text-[var(--label-tertiary)] mt-1">It takes about a minute</p>
         </div>
+      </div>
+
+      <form className="space-y-3" onSubmit={handleSubmit}>
+        <input
+          className="field"
+          placeholder="Name"
+          value={name}
+          onChange={e => setName(e.target.value)}
+          autoComplete="name"
+          maxLength={100}
+        />
+        <input
+          className="field"
+          placeholder="Email"
+          value={email}
+          onChange={e => setEmail(e.target.value)}
+          autoComplete="email"
+          maxLength={254}
+          autoFocus
+        />
         <PasswordInput
           value={password}
           onChange={e => setPassword(e.target.value)}
@@ -82,26 +89,29 @@ export const SignupForm: React.FC<{ onSwitch: () => void }> = ({ onSwitch }) => 
           showPassword={showPassword}
           onTogglePassword={() => setShowPassword(v => !v)}
         />
+        {/* The rule is stated up front rather than sprung on submit. */}
+        <p className="type-caption text-[var(--label-tertiary)]">At least 8 characters</p>
         {error && (
-          <p className="text-red-500 text-sm font-medium animate-bounceIn" key={error}>
+          <p
+            className="type-footnote type-emphasized text-[var(--destructive)] animate-slideDown"
+            key={error}
+            role="alert"
+          >
             {error}
           </p>
         )}
-        <button
-          type="submit"
-          className="w-full bg-gradient-to-r from-[#5b8def] to-[#4a7edb] hover:from-[#4a7edb] hover:to-[#3d6ec7] text-white px-4 py-3 rounded-2xl shadow-soft transition-all duration-300 ease-out text-base font-semibold"
-        >
-          Sign Up
+        <button type="submit" className="btn btn-primary w-full !py-2.5 mt-1">
+          Create account
         </button>
         <SocialAuthButtons googleEnabled={googleEnabled} />
-        <p className="text-sm text-center text-slate-500 dark:text-slate-400">
+        <p className="type-footnote text-center text-[var(--label-tertiary)] pt-1">
           Already have an account?{' '}
           <button
             type="button"
             onClick={onSwitch}
-            className="underline text-[#5b8def] hover:text-[#4a7edb] font-medium transition-colors duration-300"
+            className="type-emphasized text-[var(--accent)] hover:underline underline-offset-2"
           >
-            Login
+            Sign in
           </button>
         </p>
       </form>

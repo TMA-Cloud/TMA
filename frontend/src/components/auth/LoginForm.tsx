@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { HardDrive } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { PasswordInput } from './PasswordInput';
 import { SocialAuthButtons } from './SocialAuthButtons';
@@ -58,19 +59,28 @@ export const LoginForm: React.FC<{
   };
 
   return (
-    <div className="bg-[#f0f3f7]/95 dark:bg-slate-800/95 backdrop-blur-xl rounded-3xl p-8 border border-slate-200/60 dark:border-slate-700/50 w-96 max-w-[calc(100vw-2rem)] shadow-soft-lg">
-      <form className="space-y-5" onSubmit={handleSubmit}>
-        <div>
-          <input
-            className="border border-slate-200/80 dark:border-slate-600/80 rounded-2xl px-4 py-3 w-full bg-white/70 dark:bg-slate-700/50 focus:outline-none focus:ring-2 focus:ring-[#5b8def]/35 focus:border-[#5b8def]/40 text-slate-800 dark:text-slate-100 placeholder-slate-400 transition-all duration-300 ease-out text-base"
-            placeholder="Email"
-            value={email}
-            onChange={e => setEmail(e.target.value)}
-            autoComplete="email"
-            maxLength={254}
-            autoFocus
-          />
+    <div className="material-thick material-edge rounded-3xl p-8 w-96 max-w-[calc(100vw-2rem)] animate-modalIn">
+      {/* Says where you are before it asks you for anything. */}
+      <div className="flex flex-col items-center gap-3 mb-7">
+        <div className="w-11 h-11 bg-[var(--accent)] rounded-[14px] grid place-items-center">
+          <HardDrive className="w-5 h-5 text-[var(--label-on-accent)]" strokeWidth={2.25} />
         </div>
+        <div className="text-center">
+          <h1 className="type-title-2 text-[var(--label)]">Sign in to CloudStore</h1>
+          <p className="type-footnote text-[var(--label-tertiary)] mt-1">Your files, wherever you are</p>
+        </div>
+      </div>
+
+      <form className="space-y-3" onSubmit={handleSubmit}>
+        <input
+          className="field"
+          placeholder="Email"
+          value={email}
+          onChange={e => setEmail(e.target.value)}
+          autoComplete="email"
+          maxLength={254}
+          autoFocus
+        />
         <PasswordInput
           value={password}
           onChange={e => setPassword(e.target.value)}
@@ -79,8 +89,8 @@ export const LoginForm: React.FC<{
           onTogglePassword={() => setShowPassword(v => !v)}
         />
         {requiresMfa && (
-          <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">MFA Code</label>
+          <div className="pt-1">
+            <label className="type-caption type-emphasized text-[var(--label-secondary)] block mb-1.5">MFA code</label>
             <input
               type="text"
               maxLength={9}
@@ -90,36 +100,39 @@ export const LoginForm: React.FC<{
                 const filtered = value.replace(/[^A-Z0-9-]/g, '');
                 setMfaCode(filtered.replace(/-/g, ''));
               }}
-              className="border border-slate-200/80 dark:border-slate-600/80 rounded-2xl px-4 py-3 w-full bg-white/70 dark:bg-slate-700/50 focus:outline-none focus:ring-2 focus:ring-[#5b8def]/35 text-center text-xl tracking-widest font-mono uppercase text-slate-800 dark:text-slate-100 transition-all duration-300 ease-out"
-              placeholder="000000 or ABCD-EFGH"
+              className="field text-center text-xl tracking-[0.35em] font-mono uppercase"
+              placeholder="000000"
               autoFocus
             />
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5">
-              Enter the 6-digit code from your authenticator app or an 8-character backup code
+            <p className="type-caption text-[var(--label-tertiary)] mt-2">
+              The 6-digit code from your authenticator app, or an 8-character backup code
             </p>
           </div>
         )}
+        {/* Validation lands beside the fields it is about, rather than on a
+            banner somewhere else on the screen. */}
         {error && (
-          <p className="text-red-500 text-sm font-medium animate-bounceIn" key={error}>
+          <p
+            className="type-footnote type-emphasized text-[var(--destructive)] animate-slideDown"
+            key={error}
+            role="alert"
+          >
             {error}
           </p>
         )}
-        <button
-          type="submit"
-          className="w-full bg-gradient-to-r from-[#5b8def] to-[#4a7edb] hover:from-[#4a7edb] hover:to-[#3d6ec7] text-white px-4 py-3 rounded-2xl shadow-soft transition-all duration-300 ease-out text-base font-semibold"
-        >
-          Login
+        <button type="submit" className="btn btn-primary w-full !py-2.5 mt-1">
+          Sign in
         </button>
         <SocialAuthButtons googleEnabled={googleEnabled} />
         {signupEnabled && (
-          <p className="text-sm text-center text-slate-500 dark:text-slate-400">
+          <p className="type-footnote text-center text-[var(--label-tertiary)] pt-1">
             No account?{' '}
             <button
               type="button"
               onClick={onSwitch}
-              className="underline text-[#5b8def] hover:text-[#4a7edb] font-medium transition-colors duration-300"
+              className="type-emphasized text-[var(--accent)] hover:underline underline-offset-2"
             >
-              Sign up
+              Create one
             </button>
           </p>
         )}
