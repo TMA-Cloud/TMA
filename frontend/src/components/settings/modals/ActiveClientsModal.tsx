@@ -72,7 +72,7 @@ export const ActiveClientsModal: React.FC<ActiveClientsModalProps> = ({
             {clients.map(client => (
               <div
                 key={client.id}
-                className="flex flex-col gap-2 p-4 rounded-xl bg-[#dfe3ea]/95 dark:bg-gray-900/60 border border-gray-200 dark:border-gray-700"
+                className="flex flex-col gap-2 p-4 rounded-xl bg-[#ffffff]/95 dark:bg-gray-900/60 border border-gray-200 dark:border-gray-700"
               >
                 <div className="flex items-start justify-between">
                   <div className="flex-1">

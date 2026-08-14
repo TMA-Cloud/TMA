@@ -200,7 +200,7 @@ export const OrphanFilesModal: React.FC<OrphanFilesModalProps> = ({ isOpen, onCl
         ${
           checked
             ? 'bg-red-50 dark:bg-red-900/15 border-red-300 dark:border-red-800'
-            : 'bg-[#dfe3ea]/95 dark:bg-gray-900/60 border-gray-200 dark:border-gray-700 hover:border-blue-400/60'
+            : 'bg-[#ffffff]/95 dark:bg-gray-900/60 border-gray-200 dark:border-gray-700 hover:border-blue-400/60'
         }
       `}
     >

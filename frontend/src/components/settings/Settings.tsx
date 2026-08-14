@@ -308,7 +308,7 @@ export const Settings: React.FC = () => {
 
   return (
     <div className="w-full h-full max-w-[1400px] mx-auto p-4 md:p-6 lg:p-8">
-      <div className="flex h-full min-h-[calc(100vh-8rem)] rounded-2xl overflow-hidden border border-slate-200/60 dark:border-slate-700/40 bg-[#edf0f5] dark:bg-slate-900/60 shadow-xl">
+      <div className="flex h-full min-h-[calc(100vh-8rem)] rounded-2xl overflow-hidden border border-slate-200/60 dark:border-slate-700/40 bg-[#f2f2f7] dark:bg-slate-900/60 shadow-xl">
         {/* Mobile toggle: top-left when closed, snaps to drawer edge when open */}
         <button
           onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -330,7 +330,7 @@ export const Settings: React.FC = () => {
             fixed md:static left-0 z-50 md:z-auto
             top-16 bottom-0 md:top-auto md:bottom-auto md:inset-y-0
             w-72 md:w-64 lg:w-72 shrink-0
-            bg-[#dde1e8] dark:bg-slate-800/90
+            bg-[#e5e5ea] dark:bg-slate-800/90
             border-r border-slate-200/60 dark:border-slate-700/40
             flex flex-col min-h-0
             transition-transform duration-300 ease-in-out
@@ -338,13 +338,13 @@ export const Settings: React.FC = () => {
         >
           {/* Sidebar header */}
           <div className="px-5 pt-4 pb-4 md:pt-6 border-b border-slate-300/50 dark:border-slate-700/50 shrink-0">
-            <p className="uppercase tracking-[0.3em] text-[11px] font-semibold text-[#5b8def]/80 mb-2">
+            <p className="uppercase tracking-[0.3em] text-[11px] font-semibold text-[#007aff]/80 mb-2">
               Control Center
             </p>
             <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100 tracking-tight">Settings</h1>
             {user?.name && (
               <div className="mt-3 flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#5b8def] to-[#7c6ef6] flex items-center justify-center text-white text-sm font-semibold shrink-0">
+                <div className="w-8 h-8 rounded-full bg-[var(--accent)] flex items-center justify-center text-white text-sm font-semibold shrink-0">
                   {user.name.charAt(0).toUpperCase()}
                 </div>
                 <div className="min-w-0">
@@ -363,7 +363,7 @@ export const Settings: React.FC = () => {
             </div>
             <div className="h-1.5 w-full rounded-full bg-slate-300/80 dark:bg-slate-700/80 overflow-hidden">
               <div
-                className="h-full rounded-full bg-gradient-to-r from-[#5b8def] to-[#7c6ef6] transition-[width] duration-300"
+                className="h-full rounded-full bg-[var(--accent)] transition-[width] duration-300"
                 style={{
                   width:
                     usage && usage.total != null && usage.total > 0
@@ -375,7 +375,7 @@ export const Settings: React.FC = () => {
           </div>
 
           {/* Navigation items */}
-          <nav className="flex-1 overflow-y-auto py-3 px-3" role="navigation" aria-label="Settings sections">
+          <nav className="scroller flex-1 overflow-y-auto py-3 px-3" role="navigation" aria-label="Settings sections">
             <ul className="space-y-0.5">
               {visibleSections.map(section => {
                 const Icon = section.icon;
@@ -388,14 +388,14 @@ export const Settings: React.FC = () => {
                         w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150
                         ${
                           isActive
-                            ? 'bg-[#5b8def]/15 dark:bg-[#5b8def]/20 text-[#4a7edb] dark:text-blue-300 shadow-sm'
+                            ? 'bg-[#007aff]/15 dark:bg-[#007aff]/20 text-[#0069e0] dark:text-blue-300 shadow-sm'
                             : 'text-slate-600 dark:text-slate-400 hover:bg-slate-300/40 dark:hover:bg-slate-700/40 hover:text-slate-800 dark:hover:text-slate-200'
                         }
                       `}
                     >
-                      <Icon className={`w-[18px] h-[18px] shrink-0 ${isActive ? 'text-[#5b8def]' : ''}`} />
+                      <Icon className={`w-[18px] h-[18px] shrink-0 ${isActive ? 'text-[#007aff]' : ''}`} />
                       <span className="truncate">{section.label}</span>
-                      {isActive && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-[#5b8def]" />}
+                      {isActive && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-[#007aff]" />}
                     </button>
                   </li>
                 );
@@ -421,7 +421,7 @@ export const Settings: React.FC = () => {
         )}
 
         {/* Content panel */}
-        <main className="flex-1 min-w-0 overflow-y-auto">
+        <main className="scroller flex-1 min-w-0 overflow-y-auto">
           <div className="p-6 md:p-8 lg:p-10">
             <div key={effectiveActiveSection} style={{ animation: 'fadeIn 0.3s ease both' }}>
               {renderActiveSection()}

@@ -98,9 +98,9 @@ export const PermissionChecklist: React.FC<PermissionChecklistProps> = ({
                   />
                   <span
                     aria-hidden
-                    className={`w-5 h-5 rounded-md border flex items-center justify-center transition-all duration-150 peer-focus-visible:ring-2 peer-focus-visible:ring-[#5b8def]/50 peer-focus-visible:ring-offset-1 dark:peer-focus-visible:ring-offset-slate-900 ${
+                    className={`w-5 h-5 rounded-md border flex items-center justify-center transition-all duration-150 peer-focus-visible:ring-2 peer-focus-visible:ring-[#007aff]/50 peer-focus-visible:ring-offset-1 dark:peer-focus-visible:ring-offset-slate-900 ${
                       checked
-                        ? 'bg-gradient-to-br from-[#5b8def] to-[#4a7edb] border-transparent'
+                        ? 'bg-[var(--accent)] border-transparent'
                         : 'border-slate-300 dark:border-slate-600 bg-white/70 dark:bg-slate-700/50'
                     }`}
                   >

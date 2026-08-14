@@ -50,14 +50,14 @@ export const SettingsItem: React.FC<SettingsItemProps> = ({
             disabled={toggleDisabled}
             className={`
               relative inline-flex h-7 w-14 items-center rounded-full transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500
-              ${toggleValue ? 'bg-gradient-to-r from-blue-500 to-indigo-500' : 'bg-gray-200 dark:bg-gray-700'}
+              ${toggleValue ? 'bg-[var(--accent)]' : 'bg-gray-200 dark:bg-gray-700'}
               ${toggleDisabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
             `}
             aria-label={label}
           >
             <span
               className={`
-                inline-block h-5 w-5 transform rounded-full bg-[#d4d9e1] shadow-sm transition-transform duration-200
+                inline-block h-5 w-5 transform rounded-full bg-[#f9f9fb] shadow-sm transition-transform duration-200
                 ${toggleValue ? 'translate-x-8' : 'translate-x-1'}
               `}
             />

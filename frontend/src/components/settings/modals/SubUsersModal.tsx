@@ -138,7 +138,7 @@ export const SubUsersModal: React.FC<SubUsersModalProps> = ({
   };
 
   const inputClass =
-    'border border-slate-200/80 dark:border-slate-600/80 rounded-2xl px-4 py-3 w-full bg-white/70 dark:bg-slate-700/50 focus:outline-none focus:ring-2 focus:ring-[#5b8def]/35 focus:border-[#5b8def]/40 text-slate-800 dark:text-slate-100 placeholder-slate-400 transition-all duration-300 ease-out text-base';
+    'border border-slate-200/80 dark:border-slate-600/80 rounded-2xl px-4 py-3 w-full bg-white/70 dark:bg-slate-700/50 focus:outline-none focus:ring-2 focus:ring-[#007aff]/35 focus:border-[#007aff]/40 text-slate-800 dark:text-slate-100 placeholder-slate-400 transition-all duration-300 ease-out text-base';
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Sub-users" size="xl">
@@ -286,7 +286,7 @@ export const SubUsersModal: React.FC<SubUsersModalProps> = ({
 
                   return (
                     <React.Fragment key={subUser.id}>
-                      <tr className="border-b border-gray-100 dark:border-gray-800 hover:bg-[#d4d9e1]/80 dark:hover:bg-gray-900/40 transition-colors">
+                      <tr className="border-b border-gray-100 dark:border-gray-800 hover:bg-[#f9f9fb]/80 dark:hover:bg-gray-900/40 transition-colors">
                         <td className="py-2 pr-4 text-gray-900 dark:text-gray-100">{subUser.name || 'Unnamed'}</td>
                         <td className="py-2 pr-4 text-gray-700 dark:text-gray-300">{subUser.email}</td>
                         <td className="py-2 pr-4">

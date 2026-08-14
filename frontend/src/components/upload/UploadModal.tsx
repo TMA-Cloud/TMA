@@ -592,7 +592,7 @@ export const UploadModal: React.FC = () => {
                         } overflow-hidden`}
                       >
                         <div
-                          className={`bg-gradient-to-r from-blue-500 to-blue-600 ${
+                          className={`bg-[var(--accent)] ${
                             isMobile ? 'h-1' : 'h-1.5'
                           } rounded-full transition-all duration-500 ease-out`}
                           style={{ width: `${upload.progress}%` }}
@@ -636,7 +636,7 @@ export const UploadModal: React.FC = () => {
                       key={group.id}
                       className={`flex items-center ${
                         isMobile ? 'space-x-2 p-2' : 'space-x-3 p-3'
-                      } bg-[#d4d9e1] dark:bg-gray-700 rounded-lg`}
+                      } bg-[#f9f9fb] dark:bg-gray-700 rounded-lg`}
                     >
                       <div className="flex-shrink-0">
                         <Folder className={`${isMobile ? 'w-5 h-5' : 'w-6 h-6'} text-yellow-500`} />
@@ -682,7 +682,7 @@ export const UploadModal: React.FC = () => {
                       key={uploadFile.id}
                       className={`flex items-center ${
                         isMobile ? 'space-x-2 p-2' : 'space-x-3 p-3'
-                      } bg-[#d4d9e1] dark:bg-gray-700 rounded-lg`}
+                      } bg-[#f9f9fb] dark:bg-gray-700 rounded-lg`}
                     >
                       <div className="flex-shrink-0">
                         {uploadFile.status === 'completed' ? (
@@ -780,7 +780,7 @@ export const UploadModal: React.FC = () => {
               return (
                 <li
                   key={uploadId}
-                  className="flex flex-col gap-3 p-4 rounded-xl bg-[#d4d9e1] dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600"
+                  className="flex flex-col gap-3 p-4 rounded-xl bg-[#f9f9fb] dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600"
                 >
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-gray-900 dark:text-gray-100 break-all">{fileName}</p>
