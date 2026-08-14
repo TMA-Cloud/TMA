@@ -1,11 +1,13 @@
 import React from 'react';
-import { act, renderHook, waitFor } from '@testing-library/react';
+import { act, render, renderHook, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PromiseQueue, useDebouncedCallback } from '../../src/utils/debounce';
 import { ToastProvider } from '../../src/hooks/ToastProvider';
 import { useAbortableLoader } from '../../src/hooks/useAbortableLoader';
 import { useAsyncAction } from '../../src/hooks/useAsyncAction';
+import { ToastContext, useToast } from '../../src/hooks/useToast';
 import { useIsMobile } from '../../src/hooks/useIsMobile';
 import { useIsMounted } from '../../src/hooks/useIsMounted';
 import { ApiError } from '../../src/utils/errorUtils';
@@ -472,5 +474,148 @@ describe('useAbortableLoader', () => {
       await result.current.reload();
     });
     expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('a toast does not disturb what the user is doing', () => {
+  /**
+   * Toasts live in a provider that wraps the whole app, so anything unstable
+   * in its context value reaches every consumer below it. useAbortableLoader
+   * is one of those consumers, and its loader re-runs whenever its identity
+   * changes — which meant a toast appearing or disappearing silently refetched
+   * every settings pane on screen and handed the result to onSuccess, wiping
+   * whatever the user had typed since.
+   */
+  function Harness({ fetcher, onSuccess }: { fetcher: () => Promise<number>; onSuccess: (n: number) => void }) {
+    const { showToast } = useToast();
+    useAbortableLoader({ fetcher, onSuccess, errorMessage: 'nope', enabled: true });
+    return <button onClick={() => showToast('Enter a value between 1MB and 5GB', 'error')}>toast</button>;
+  }
+
+  it('does not refetch when a toast appears or is dismissed', async () => {
+    const fetcher = vi.fn(async () => 1);
+    const onSuccess = vi.fn();
+
+    render(
+      <ToastProvider>
+        <Harness fetcher={fetcher} onSuccess={onSuccess} />
+      </ToastProvider>
+    );
+
+    await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1));
+
+    // Show one, then let it dismiss itself. Neither may reload the pane.
+    await userEvent.click(screen.getByRole('button', { name: 'toast' }));
+    await waitFor(() => expect(screen.getByRole('status')).toBeInTheDocument());
+    await userEvent.click(screen.getByRole('button', { name: 'Close notification' }));
+    await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
+
+    expect(fetcher, 'a toast refetched the pane behind it').toHaveBeenCalledTimes(1);
+    expect(onSuccess, 'a toast re-applied loaded data over the user input').toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the value the user typed while a toast comes and goes', async () => {
+    // The reported symptom, end to end: the field is reset from server data
+    // the moment the toast leaves.
+    function Field() {
+      const { showToast } = useToast();
+      const [value, setValue] = React.useState('');
+      useAbortableLoader({
+        fetcher: async () => '10',
+        onSuccess: React.useCallback((loaded: string) => setValue(loaded), []),
+        errorMessage: 'nope',
+        enabled: true,
+      });
+      return (
+        <>
+          <input aria-label="Max upload size" value={value} onChange={e => setValue(e.target.value)} />
+          <button onClick={() => showToast('Enter a value between 1MB and 5GB', 'error')}>reject</button>
+        </>
+      );
+    }
+
+    render(
+      <ToastProvider>
+        <Field />
+      </ToastProvider>
+    );
+
+    const input = await screen.findByLabelText<HTMLInputElement>('Max upload size');
+    await waitFor(() => expect(input.value).toBe('10'));
+
+    await userEvent.click(screen.getByRole('button', { name: 'reject' }));
+    await userEvent.clear(input);
+    await userEvent.type(input, '25');
+    expect(input.value).toBe('25');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Close notification' }));
+    await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
+
+    expect(input.value, 'the toast leaving reset the field').toBe('25');
+  });
+
+  /**
+   * The two guards above are deliberately independent, so either one alone
+   * prevents the reset. That also means the end-to-end test cannot tell which
+   * is doing the work, and would keep passing while one silently rotted. Each
+   * gets its own case.
+   */
+  it('hands every consumer the same context value across toasts', async () => {
+    const seen: unknown[] = [];
+    function Spy() {
+      seen.push(useToast());
+      const { showToast } = useToast();
+      return <button onClick={() => showToast('a message worth reading', 'info')}>toast</button>;
+    }
+
+    render(
+      <ToastProvider>
+        <Spy />
+      </ToastProvider>
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'toast' }));
+    await waitFor(() => expect(screen.getByRole('status')).toBeInTheDocument());
+    await userEvent.click(screen.getByRole('button', { name: 'Close notification' }));
+    await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
+
+    // One render is the ideal outcome, not a weakness in the test: a stable
+    // value means React never has to re-render the consumer at all. Losing the
+    // memo shows up here as extra renders carrying a different object.
+    expect(new Set(seen).size, `the toast context value changed identity across ${seen.length} renders`).toBe(1);
+  });
+
+  it('survives a provider that rebuilds its value on every render', async () => {
+    // Stands in for any provider that forgets to memoise: the loader must not
+    // reload just because something above it re-rendered.
+    const fetcher = vi.fn(async () => 1);
+
+    function UnstableProvider({ children }: { children: React.ReactNode }) {
+      const [, force] = React.useState(0);
+      return (
+        <ToastContext.Provider value={{ showToast: () => {} }}>
+          <button onClick={() => force(n => n + 1)}>re-render</button>
+          {children}
+        </ToastContext.Provider>
+      );
+    }
+
+    function Consumer() {
+      useAbortableLoader({ fetcher, onSuccess: vi.fn(), errorMessage: 'nope', enabled: true });
+      return null;
+    }
+
+    render(
+      <UnstableProvider>
+        <Consumer />
+      </UnstableProvider>
+    );
+
+    await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1));
+    await userEvent.click(screen.getByRole('button', { name: 're-render' }));
+    await userEvent.click(screen.getByRole('button', { name: 're-render' }));
+    await new Promise(r => setTimeout(r, 20));
+
+    expect(fetcher, 'an unrelated re-render reloaded the pane').toHaveBeenCalledTimes(1);
   });
 });

@@ -28,10 +28,16 @@ export function useAbortableLoader<T>({
   const fetcherRef = useRef(fetcher);
   const onSuccessRef = useRef(onSuccess);
   const errorMessageRef = useRef(errorMessage);
+  // `showToast` belongs with the rest of these. Depending on its identity made
+  // `load` change whenever the toast provider re-rendered, so the effect below
+  // refetched on every toast and overwrote the form the user was typing into
+  // with whatever the server last said.
+  const showToastRef = useRef(showToast);
   useEffect(() => {
     fetcherRef.current = fetcher;
     onSuccessRef.current = onSuccess;
     errorMessageRef.current = errorMessage;
+    showToastRef.current = showToast;
   });
 
   const load = useCallback(async () => {
@@ -48,14 +54,16 @@ export function useAbortableLoader<T>({
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') return;
       if (isAuthError(error)) return;
-      showToast(errorMessageRef.current, 'error');
+      showToastRef.current(errorMessageRef.current, 'error');
     } finally {
       if (!abortController.signal.aborted && abortControllerRef.current === abortController) {
         setLoading(false);
         abortControllerRef.current = null;
       }
     }
-  }, [showToast]);
+    // Everything it reads goes through a ref, so `load` is stable for the life
+    // of the hook and the effect that runs it fires only when `enabled` moves.
+  }, []);
 
   useEffect(() => {
     if (!enabled && abortControllerRef.current) {
