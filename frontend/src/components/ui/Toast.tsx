@@ -3,7 +3,7 @@ import { X, CheckCircle2, AlertCircle, Info } from 'lucide-react';
 import { SPRING_PRESETS, projectedEndpoint, rubberband, useDrag, useSpring } from '../../motion';
 
 /** Matches the exit path, so the node finishes leaving before it is unmounted. */
-const EXIT_MS = 300;
+const EXIT_MS = 240;
 
 interface ToastProps {
   id: string;
@@ -114,11 +114,7 @@ export const Toast: React.FC<ToastProps> = ({ id, message, type = 'info', durati
         material-regular material-edge rounded-2xl
         px-4 py-3 flex items-center gap-3 min-w-80 max-w-[26rem]
         cursor-grab active:cursor-grabbing touch-pan-y select-none
-        ${
-          leaving
-            ? 'opacity-0 translate-y-4 scale-[0.96] transition-motion duration-300 ease-[cubic-bezier(0.64,0,0.78,0)]'
-            : 'animate-toastIn'
-        }
+        ${leaving ? 'material-leaving translate-y-4 scale-[0.96]' : 'animate-toastIn'}
       `}
       style={{ willChange: 'transform, opacity' }}
       aria-live="polite"

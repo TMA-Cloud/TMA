@@ -7,7 +7,7 @@ import { SPRING_PRESETS, projectedEndpoint, rubberband, useDrag, useReducedMotio
 let openModalCount = 0;
 
 /** How long the exit path takes; the enter path mirrors it. */
-const EXIT_MS = 260;
+const EXIT_MS = 240;
 
 interface ModalProps {
   isOpen: boolean;
@@ -251,11 +251,7 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
                   : 'rounded-3xl max-h-[90vh]'
             }
             overflow-hidden
-            ${
-              leaving
-                ? 'opacity-0 scale-[0.96] transition-motion duration-[260ms] ease-[cubic-bezier(0.64,0,0.78,0)]'
-                : enterAnimation
-            }
+            ${leaving ? 'material-leaving scale-[0.96]' : enterAnimation}
           `}
         >
           {/* The grabber is the affordance: it names the top edge as the part

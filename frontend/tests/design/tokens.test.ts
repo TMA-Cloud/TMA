@@ -357,3 +357,44 @@ describe('motion shorthand', () => {
     expect(props, `${name} transitions transform but not scale`).toMatch(/\bscale\b/);
   });
 });
+
+describe('materials leave as well as arrive', () => {
+  /**
+   * The entrance animates the blur up, so the exit has to animate it back
+   * down. Fading opacity alone leaves a full-strength blur on screen for the
+   * whole exit, and blur stays legible long after the surface carrying it has
+   * faded — which reads as the panel going but its blur lingering.
+   */
+  const leaving = block(indexCss, /\.material-leaving\s*\{/);
+  const properties = (leaving.match(/transition-property:\s*([^;]+);/)?.[1] ?? '').split(',').map(s => s.trim());
+
+  it('collapses the blur to nothing', () => {
+    expect(leaving).toMatch(/backdrop-filter:\s*blur\(0p?x?\)/);
+  });
+
+  it('transitions the blur rather than snapping it', () => {
+    expect(properties).toContain('backdrop-filter');
+  });
+
+  it('still carries the surface itself out', () => {
+    for (const prop of ['opacity', 'scale', 'translate']) {
+      expect(properties, `.material-leaving omits ${prop}`).toContain(prop);
+    }
+  });
+
+  it('clears the blur before the surface has finished leaving', () => {
+    // The blur is the most expensive property on the element, so it is the
+    // first thing to reach zero rather than the last.
+    const durations = (leaving.match(/transition-duration:\s*([^;]+);/)?.[1] ?? '').split(',').map(s => s.trim());
+    const blurIndex = properties.indexOf('backdrop-filter');
+    const opacityIndex = properties.indexOf('opacity');
+    expect(durations.length, 'each property needs its own duration').toBe(properties.length);
+    expect(durations[blurIndex]).toContain('0.5');
+    expect(durations[opacityIndex]).not.toContain('0.5');
+  });
+
+  it('mirrors the entrance, which animates the blur in', () => {
+    const enter = block(indexCss, /@keyframes modalIn\s*\{/);
+    expect(enter, 'modalIn no longer animates backdrop-filter').toMatch(/backdrop-filter/);
+  });
+});

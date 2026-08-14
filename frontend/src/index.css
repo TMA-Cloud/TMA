@@ -515,6 +515,37 @@ button,
   box-shadow: var(--shadow-4);
 }
 
+/**
+ * A material leaving has to stop being a material.
+ *
+ * Fading the opacity alone leaves the blur at full strength for the whole
+ * exit, and a 44px blur still reads as blur at 30% opacity — so the surface
+ * appears to hang about after the panel itself has gone. Collapsing the blur
+ * over the first half of the exit is what makes it actually leave, and it
+ * mirrors the way the surface resolved into place on the way in.
+ *
+ * The blur is deliberately the fastest thing here: it is the most expensive
+ * property on the element, and the sooner it reaches zero the sooner the
+ * compositor stops re-sampling the backdrop behind a surface nobody can see.
+ */
+.material-leaving {
+  opacity: 0;
+  backdrop-filter: blur(0px) saturate(100%);
+  -webkit-backdrop-filter: blur(0px) saturate(100%);
+  transition-property:
+    opacity,
+    transform,
+    scale,
+    translate,
+    rotate,
+    backdrop-filter,
+    -webkit-backdrop-filter;
+  transition-duration:
+    var(--dur-base), var(--dur-base), var(--dur-base), var(--dur-base), var(--dur-base), calc(var(--dur-base) * 0.5),
+    calc(var(--dur-base) * 0.5);
+  transition-timing-function: var(--ease-in);
+}
+
 /* A hairline of light along the top edge sells the surface as material. */
 .material-edge-top {
   border-top: 1px solid var(--material-edge);
