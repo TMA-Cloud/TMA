@@ -16,6 +16,13 @@ namespace TmaCloud.Fs
         public DateTime Modified;  // UTC; DateTime.MinValue if unknown
         public string Path;        // normalized full path, root == "\"
 
+        // Last read time, reported to Windows as LastAccessTime. Left at
+        // DateTime.MinValue when the backend did not supply one — an older
+        // server, or a response that omits the field — and the write time is
+        // used in its place, which is what a filesystem shows for something
+        // that has been written but never read since.
+        public DateTime Accessed;
+
         public static Node Root() => new Node
         {
             Id = null,

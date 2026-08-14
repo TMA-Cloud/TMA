@@ -21,9 +21,15 @@ const pipePath = `\\\\.\\pipe\\${pipeName}`;
 let seq = 1;
 const newId = () => 'id' + seq++;
 
-// node: { id, name, type:'file'|'folder', size, modified, parentId, content:Buffer|null }
+// node: { id, name, type:'file'|'folder', size, modified, accessed?, parentId, content:Buffer|null }
 const nodes = new Map();
 const root = { id: null, name: '', type: 'folder', parentId: undefined };
+
+// Fixed timestamps for the seeded entries so the mount test can assert exact
+// values. Deliberately far apart, and both in the past, so a wrong mapping
+// (access falling back to write, or to the current clock) is unmistakable.
+const SEED_MODIFIED = Date.parse('2026-01-02T03:04:05.000Z');
+const SEED_ACCESSED = Date.parse('2026-03-04T05:06:07.000Z');
 
 function childrenOf(parentId) {
   const out = [];
@@ -31,30 +37,41 @@ function childrenOf(parentId) {
   return out;
 }
 function listPayload(parentId) {
-  return childrenOf(parentId).map(n => ({
-    id: n.id,
-    name: n.name,
-    type: n.type,
-    // Return size as a STRING to mirror node-postgres serializing BIGINT
-    // columns as strings — the real backend does this.
-    size: String(n.type === 'folder' ? 0 : (n.content ? n.content.length : 0)),
-    modified: new Date(n.modified || Date.now()).toISOString(),
-    mimeType: 'application/octet-stream',
-  }));
+  return childrenOf(parentId).map(n => {
+    const row = {
+      id: n.id,
+      name: n.name,
+      type: n.type,
+      // Return size as a STRING to mirror node-postgres serializing BIGINT
+      // columns as strings — the real backend does this.
+      size: String(n.type === 'folder' ? 0 : (n.content ? n.content.length : 0)),
+      modified: new Date(n.modified || Date.now()).toISOString(),
+      mimeType: 'application/octet-stream',
+    };
+    // Omitted entirely when the node has no access time, which is how an
+    // older backend answers — the host should fall back to `modified`.
+    if (n.accessed) row.accessedAt = new Date(n.accessed).toISOString();
+    return row;
+  });
 }
 
 // seed with a couple of items so a fresh mount shows content
 (function seed() {
-  const docs = { id: newId(), name: 'Documents', type: 'folder', parentId: null, modified: Date.now() };
+  const docs = {
+    id: newId(), name: 'Documents', type: 'folder', parentId: null,
+    modified: SEED_MODIFIED, accessed: SEED_ACCESSED,
+  };
   nodes.set(docs.id, docs);
   const hello = {
     id: newId(), name: 'hello.txt', type: 'file', parentId: null,
-    modified: Date.now(), content: Buffer.from('Hello from TMA Cloud!\r\n'),
+    modified: SEED_MODIFIED, accessed: SEED_ACCESSED,
+    content: Buffer.from('Hello from TMA Cloud!\r\n'),
   };
   nodes.set(hello.id, hello);
+  // No `accessed`: exercises the fallback for backends that never send one.
   const readme = {
     id: newId(), name: 'readme.md', type: 'file', parentId: docs.id,
-    modified: Date.now(), content: Buffer.from('# Inside Documents\r\n'),
+    modified: SEED_MODIFIED, content: Buffer.from('# Inside Documents\r\n'),
   };
   nodes.set(readme.id, readme);
 })();

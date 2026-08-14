@@ -381,6 +381,12 @@ namespace TmaCloud.Fs
                 }
                 of.Dirty = true;
                 of.Node.Modified = DateTime.UtcNow;
+                // Drop the stale read time with it. Writing counts as access on
+                // NTFS, and the backend stamps both on replace, so falling back
+                // to the new write time is right until the next listing brings
+                // the server's value. Without this the file would report having
+                // been read before it was written.
+                of.Node.Accessed = default;
                 FileInfo = MakeInfo(of);
             }
             return STATUS_SUCCESS;
@@ -479,6 +485,13 @@ namespace TmaCloud.Fs
         {
             // Timestamps/attributes on the cloud are managed by the backend; we
             // accept the request so apps don't fail, and report current info.
+            //
+            // This matters most for LastAccessTime now that we report a real
+            // one: Windows writes it back on close, and honouring that would
+            // let a local file handle overwrite the server's value with a read
+            // the server never saw. The backend decides when something was
+            // read, so the write is accepted and dropped, and the next listing
+            // brings the authoritative value back.
             var of = (OpenFile)FileDesc;
             lock (of.Lock) { FileInfo = MakeInfo(of); }
             return STATUS_SUCCESS;
@@ -736,7 +749,7 @@ namespace TmaCloud.Fs
             var list = new List<DirEntry>();
             if (folder.Path != "\\")
             {
-                var dirInfo = MakeInfoFolder(folder.Modified);
+                var dirInfo = MakeInfoFolder(folder);
                 list.Add(new DirEntry { Name = ".", Info = dirInfo });
                 list.Add(new DirEntry { Name = "..", Info = dirInfo });
             }
@@ -1052,7 +1065,8 @@ namespace TmaCloud.Fs
             info.FileSize = n.IsFolder ? 0UL : (ulong)Math.Max(0, n.Size);
             info.AllocationSize = (info.FileSize + 4095) & ~4095UL;
             ulong ft = ToFileTime(n.Modified);
-            info.CreationTime = info.LastAccessTime = info.LastWriteTime = info.ChangeTime = ft;
+            info.CreationTime = info.LastWriteTime = info.ChangeTime = ft;
+            info.LastAccessTime = AccessFileTime(n);
             return info;
         }
 
@@ -1064,18 +1078,30 @@ namespace TmaCloud.Fs
             info.FileSize = (ulong)Math.Max(0, of.CurrentSize);
             info.AllocationSize = (info.FileSize + 4095) & ~4095UL;
             ulong ft = ToFileTime(of.Node.Modified);
-            info.CreationTime = info.LastAccessTime = info.LastWriteTime = info.ChangeTime = ft;
+            info.CreationTime = info.LastWriteTime = info.ChangeTime = ft;
+            info.LastAccessTime = AccessFileTime(of.Node);
             return info;
         }
 
-        private static FileInfo MakeInfoFolder(DateTime modified)
+        private static FileInfo MakeInfoFolder(Node folder)
         {
             var info = new FileInfo();
             info.FileAttributes = (uint)System.IO.FileAttributes.Directory;
-            ulong ft = ToFileTime(modified);
-            info.CreationTime = info.LastAccessTime = info.LastWriteTime = info.ChangeTime = ft;
+            ulong ft = ToFileTime(folder.Modified);
+            info.CreationTime = info.LastWriteTime = info.ChangeTime = ft;
+            info.LastAccessTime = AccessFileTime(folder);
             return info;
         }
+
+        /// <summary>
+        /// The last-access time to report for a node. The backend owns this
+        /// value; when it does not send one we fall back to the write time
+        /// rather than to "now", so the drive never invents a read that did not
+        /// happen. Only LastAccessTime uses it — the other three timestamps
+        /// stay on the write time, as they were.
+        /// </summary>
+        private static ulong AccessFileTime(Node n)
+            => ToFileTime(n.Accessed != default ? n.Accessed : n.Modified);
 
         private static ulong ToFileTime(DateTime dt)
         {
@@ -1123,6 +1149,11 @@ namespace TmaCloud.Fs
             long size = el.TryGetProperty("size", out var sp) ? ParseLong(sp) : 0;
             DateTime mod = DateTime.UtcNow;
             if (el.TryGetProperty("modified", out var mp)) mod = ParseDate(mp);
+            // Absent on older backends and on responses that do not carry it
+            // (mkdir/upload results, trash listings). Left unset so the info
+            // builders fall back to the write time.
+            DateTime acc = default;
+            if (el.TryGetProperty("accessedAt", out var ap)) acc = ParseDateOrDefault(ap);
             return new Node
             {
                 Id = id,
@@ -1130,11 +1161,23 @@ namespace TmaCloud.Fs
                 IsFolder = isFolder,
                 Size = size,
                 Modified = mod,
+                Accessed = acc,
                 Path = Combine(parentPath, name),
             };
         }
 
         private static DateTime ParseDate(JsonElement mp)
+        {
+            var d = ParseDateOrDefault(mp);
+            return d == default ? DateTime.UtcNow : d;
+        }
+
+        /// <summary>
+        /// Parse a JSON timestamp, returning default(DateTime) when the value is
+        /// missing, null or unreadable. Callers that have something better to
+        /// fall back to than the current clock need to tell those apart.
+        /// </summary>
+        private static DateTime ParseDateOrDefault(JsonElement mp)
         {
             try
             {
@@ -1150,7 +1193,7 @@ namespace TmaCloud.Fs
                 }
             }
             catch { }
-            return DateTime.UtcNow;
+            return default;
         }
 
         private static void Log(string msg)

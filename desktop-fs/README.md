@@ -51,17 +51,17 @@ distinct from any `id` argument an op carries). Bulk file bytes never travel on
 the pipe — both processes share `%TEMP%`, so downloads/uploads exchange temp-file
 paths.
 
-| op         | args                       | result                                  |
-| ---------- | -------------------------- | --------------------------------------- |
-| `list`     | `parentId?`                | array of `{id,name,type,size,modified}` |
-| `download` | `id`, `dest`               | writes file bytes to `dest`             |
-| `upload`   | `parentId?`, `name`, `src` | created file `{id,...}`                 |
-| `replace`  | `id`, `name`, `src`        | `{ok}`                                  |
-| `mkdir`    | `name`, `parentId?`        | folder `{id,...}`                       |
-| `rename`   | `id`, `name`               | `{id,name}`                             |
-| `move`     | `ids[]`, `parentId?`       | `{ok}`                                  |
-| `delete`   | `ids[]`                    | `{ok}`                                  |
-| `stats`    | –                          | `{used,total,free}`                     |
+| op         | args                       | result                                              |
+| ---------- | -------------------------- | --------------------------------------------------- |
+| `list`     | `parentId?`                | array of `{id,name,type,size,modified,accessedAt?}` |
+| `download` | `id`, `dest`               | writes file bytes to `dest`                         |
+| `upload`   | `parentId?`, `name`, `src` | created file `{id,...}`                             |
+| `replace`  | `id`, `name`, `src`        | `{ok}`                                              |
+| `mkdir`    | `name`, `parentId?`        | folder `{id,...}`                                   |
+| `rename`   | `id`, `name`               | `{id,name}`                                         |
+| `move`     | `ids[]`, `parentId?`       | `{ok}`                                              |
+| `delete`   | `ids[]`                    | `{ok}`                                              |
+| `stats`    | –                          | `{used,total,free}`                                 |
 
 Server → client pushes (no `rid`): `{"push":"invalidate","path"?}` and
 `{"push":"mode","mode":"full"|"saveonly"}`.
