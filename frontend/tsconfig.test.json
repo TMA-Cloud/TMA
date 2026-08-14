@@ -28,5 +28,12 @@
   },
   /* The ambient declarations live beside the app source; without them the test
      project cannot see `__FRONTEND_VERSION__` or `import.meta.env`. */
-  "include": ["tests", "vitest.config.ts", "src/vite-env.d.ts", "src/jsx-extensions.d.ts"]
+  "include": [
+    "tests",
+    "vitest.config.ts",
+    "src/vite-env.d.ts",
+    "src/jsx-extensions.d.ts",
+    /* Types for the local ESLint plugin, which tests/eslintRules.test.ts imports. */
+    "eslint-rules/house.d.ts"
+  ]
 }
