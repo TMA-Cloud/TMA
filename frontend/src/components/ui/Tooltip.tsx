@@ -76,7 +76,7 @@ export const Tooltip: React.FC<TooltipProps> = ({ text, children }) => {
           ${placement === 'top' ? 'bottom-full mb-2 origin-bottom' : 'top-full mt-2 origin-top'}
           px-2.5 py-1.5 rounded-lg type-caption vibrant
           material-thick material-edge text-[var(--label)]
-          transition-[opacity,transform] duration-150 ease-[cubic-bezier(0.22,1,0.36,1)]
+          transition-motion duration-150 ease-[cubic-bezier(0.22,1,0.36,1)]
           ${visible ? 'opacity-100 scale-100' : 'opacity-0 scale-90'}
           max-w-xs truncate
           drag-hide-tooltip

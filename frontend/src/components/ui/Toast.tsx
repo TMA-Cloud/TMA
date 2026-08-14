@@ -116,7 +116,7 @@ export const Toast: React.FC<ToastProps> = ({ id, message, type = 'info', durati
         cursor-grab active:cursor-grabbing touch-pan-y select-none
         ${
           leaving
-            ? 'opacity-0 translate-y-4 scale-[0.96] transition-[opacity,transform] duration-300 ease-[cubic-bezier(0.64,0,0.78,0)]'
+            ? 'opacity-0 translate-y-4 scale-[0.96] transition-motion duration-300 ease-[cubic-bezier(0.64,0,0.78,0)]'
             : 'animate-toastIn'
         }
       `}

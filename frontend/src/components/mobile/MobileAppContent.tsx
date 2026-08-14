@@ -191,7 +191,7 @@ export const MobileAppContent: React.FC = () => {
                 {getInitials(user?.name)}
               </div>
               <ChevronDown
-                className={`w-3 h-3 text-[var(--label-tertiary)] transition-transform duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                className={`w-3 h-3 text-[var(--label-tertiary)] transition-motion duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] ${
                   dropdownOpen ? 'rotate-180' : ''
                 }`}
                 strokeWidth={2.5}

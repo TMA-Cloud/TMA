@@ -128,7 +128,7 @@ export const Sidebar: React.FC = () => {
         className={`
         fixed lg:static inset-y-0 left-0 z-50 w-64 material-chrome
         border-r border-[var(--separator)]
-        transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]
+        transition-motion duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
         ${!sidebarOpen ? 'lg:w-0 lg:overflow-hidden' : ''}
       `}

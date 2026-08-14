@@ -60,7 +60,7 @@ export const SettingsItem: React.FC<SettingsItemProps> = ({
           >
             <span
               className={`
-                inline-block h-4 w-4 transform rounded-full bg-[#f9f9fb] shadow-sm transition-transform duration-200
+                inline-block h-4 w-4 rounded-full bg-[var(--surface)] shadow-sm transition-motion duration-200
                 ${toggleValue ? 'translate-x-6' : 'translate-x-1'}
               `}
             />

@@ -253,7 +253,7 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
             overflow-hidden
             ${
               leaving
-                ? 'opacity-0 scale-[0.96] transition-[opacity,transform] duration-[260ms] ease-[cubic-bezier(0.64,0,0.78,0)]'
+                ? 'opacity-0 scale-[0.96] transition-motion duration-[260ms] ease-[cubic-bezier(0.64,0,0.78,0)]'
                 : enterAnimation
             }
           `}

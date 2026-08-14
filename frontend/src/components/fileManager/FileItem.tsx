@@ -173,7 +173,7 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
     <button
       className={`absolute -bottom-2.5 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 scale-90 group-hover:scale-100 material-thick material-edge rounded-full ${
         size === 'md' ? 'p-1.5' : 'p-1'
-      } transition-[opacity,transform] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)]`}
+      } transition-motion duration-200 ease-[cubic-bezier(0.22,1,0.36,1)]`}
       tabIndex={-1}
       title="Quick preview"
       onClick={(e: React.MouseEvent<HTMLButtonElement>) => {

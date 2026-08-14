@@ -122,7 +122,7 @@ export const Header: React.FC<HeaderProps> = ({ contentScrolled = false }) => {
                 <p className="type-caption-2 text-[var(--label-tertiary)] truncate">{user?.email || 'Your Files'}</p>
               </div>
               <ChevronDown
-                className={`w-3.5 h-3.5 text-[var(--label-tertiary)] transition-transform duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] flex-shrink-0 ${
+                className={`w-3.5 h-3.5 text-[var(--label-tertiary)] transition-motion duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] flex-shrink-0 ${
                   dropdownOpen ? 'rotate-180' : ''
                 }`}
                 strokeWidth={2.5}

@@ -607,9 +607,27 @@ button,
    land reads as dead. Anything with a pointer on it gets this.
    ========================================================================== */
 
+/**
+ * Motion shorthand.
+ *
+ * Tailwind compiles `scale-*`, `translate-*` and `rotate-*` to the standalone
+ * `scale`, `translate` and `rotate` properties rather than folding them into
+ * `transform`. A transition that names only `transform` therefore leaves them
+ * to snap on the first frame, which does not read as a missing animation — it
+ * reads as a stutter at the start of one, because the opacity beside them is
+ * still easing. Naming all four is the only way to cover both idioms.
+ */
+.transition-motion {
+  transition-property: opacity, transform, scale, translate, rotate;
+  transition-duration: var(--dur-base);
+  transition-timing-function: var(--ease-out);
+}
+
 .pressable {
   transition:
     transform var(--dur-instant) var(--ease-out),
+    scale var(--dur-instant) var(--ease-out),
+    translate var(--dur-instant) var(--ease-out),
     background-color var(--dur-fast) var(--ease-standard),
     color var(--dur-fast) var(--ease-standard),
     opacity var(--dur-fast) var(--ease-standard);
@@ -630,6 +648,8 @@ button,
 .hover-lift {
   transition:
     transform var(--dur-base) var(--ease-out),
+    scale var(--dur-base) var(--ease-out),
+    translate var(--dur-base) var(--ease-out),
     box-shadow var(--dur-base) var(--ease-out);
 }
 
@@ -726,6 +746,7 @@ button,
   cursor: pointer;
   transition:
     transform var(--dur-instant) var(--ease-out),
+    scale var(--dur-instant) var(--ease-out),
     background-color var(--dur-fast) var(--ease-standard),
     color var(--dur-fast) var(--ease-standard);
 }

@@ -333,7 +333,7 @@ export const Settings: React.FC = () => {
             bg-[#e5e5ea] dark:bg-slate-800/90
             border-r border-slate-200/60 dark:border-slate-700/40
             flex flex-col min-h-0
-            transition-transform duration-300 ease-in-out
+            transition-motion duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]
           `}
         >
           {/* Sidebar header */}

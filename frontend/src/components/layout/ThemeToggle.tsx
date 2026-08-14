@@ -13,7 +13,7 @@ export const ThemeToggle: React.FC = () => {
   const isDark = theme === 'dark';
 
   const glyph =
-    'absolute inset-0 grid place-items-center transition-[opacity,transform] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]';
+    'absolute inset-0 grid place-items-center transition-motion duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]';
 
   return (
     <button
