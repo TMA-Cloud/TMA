@@ -38,6 +38,8 @@ export default defineConfig([
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
       'house/toast-copy': 'error',
       'house/no-smart-apostrophe': 'error',
+      // Nothing in the tree cites a vendor, so this one holds everywhere.
+      'house/no-vendor-names': 'error',
     },
   },
   {
@@ -49,6 +51,44 @@ export default defineConfig([
     files: ['src/components/ui/*.tsx', 'src/components/settings/components/Settings*.tsx'],
     rules: {
       'house/use-type-tokens': 'error',
+    },
+  },
+  {
+    /**
+     * Surfaces that have been moved onto the theme tokens. Same principle as
+     * the type ladder above: enforced where it already holds, widened as the
+     * remaining surfaces are converted. settings/, upload/ and viewer/ are the
+     * outstanding ones — they reach the palette through the @theme remap
+     * rather than through tokens, so they still carry literal colours.
+     */
+    files: [
+      'src/App.tsx',
+      'src/components/ui/*.tsx',
+      'src/components/layout/*.tsx',
+      'src/components/mobile/*.tsx',
+      'src/components/auth/*.tsx',
+      'src/components/dashboard/*.tsx',
+      'src/components/fileManager/*.tsx',
+      'src/components/folder/*.tsx',
+    ],
+    rules: {
+      'house/no-raw-theme-color': 'error',
+    },
+  },
+  {
+    /**
+     * Narrower again: the surfaces whose motion was actually rewritten. The
+     * file manager still has a handful of transition-all left over.
+     */
+    files: [
+      'src/App.tsx',
+      'src/components/ui/*.tsx',
+      'src/components/layout/*.tsx',
+      'src/components/auth/*.tsx',
+      'src/components/dashboard/*.tsx',
+    ],
+    rules: {
+      'house/no-transition-all': 'error',
     },
   },
   {

@@ -155,6 +155,56 @@ const noSmartApostrophe = {
  */
 const TAILWIND_TEXT_SIZE = /\btext-(?:xs|sm|base|lg|[2-9]?xl)(?![\w-])|\btext-\[\d+(?:\.\d+)?px\]/;
 
+/**
+ * Every className a rule can usefully see: a bare string, a template, or the
+ * literal arms of the conditionals these components are built from. Shared so
+ * the class-name rules below all recognise the same shapes.
+ */
+function classNameVisitor(check) {
+  const walk = (node, report) => {
+    if (!node) return;
+    switch (node.type) {
+      case 'Literal':
+        if (typeof node.value === 'string') report(node, node.value);
+        break;
+      case 'TemplateLiteral':
+        report(node, node.quasis.map(q => q.value.cooked ?? '').join(' '));
+        break;
+      case 'ConditionalExpression':
+        walk(node.consequent, report);
+        walk(node.alternate, report);
+        break;
+      case 'LogicalExpression':
+        walk(node.left, report);
+        walk(node.right, report);
+        break;
+      default:
+        break;
+    }
+  };
+
+  return {
+    JSXAttribute(node) {
+      if (node.name.name !== 'className' || !node.value) return;
+      const v = node.value;
+      walk(v.type === 'JSXExpressionContainer' ? v.expression : v, check);
+    },
+    /** Class strings also live in lookup tables and `const base = '...'`. */
+    VariableDeclarator(node) {
+      if (!node.init) return;
+      if (/class(Name)?$|^btn|Classes$/i.test(node.id.name ?? '')) walk(node.init, check);
+    },
+    Property(node) {
+      if (node.value?.type === 'Literal' && typeof node.value.value === 'string') {
+        // Only strings that look like class lists, so data is left alone.
+        if (/(^|\s)(bg|text|border|ring|rounded|flex|grid|p[xytblr]?|m[xytblr]?)-/.test(node.value.value)) {
+          check(node.value, node.value.value);
+        }
+      }
+    },
+  };
+}
+
 const useTypeTokens = {
   meta: {
     type: 'problem',
@@ -166,22 +216,91 @@ const useTypeTokens = {
     },
   },
   create(context) {
-    const report = (node, value) => {
+    return classNameVisitor((node, value) => {
       const match = value.match(TAILWIND_TEXT_SIZE);
       if (match) context.report({ node, messageId: 'tailwindSize', data: { cls: match[0] } });
-    };
+    });
+  },
+};
 
+/** An arbitrary colour value baked into a utility: `bg-[#ffffff]`, `text-[#333]`. */
+const RAW_COLOR =
+  /\b(?:bg|text|border|ring|from|via|to|fill|stroke|shadow|outline|decoration|accent|caret|divide|placeholder)-\[#[0-9a-fA-F]{3,8}\]/;
+
+const noRawThemeColor = {
+  meta: {
+    type: 'problem',
+    docs: { description: 'Colour from the theme tokens so both themes stay in step' },
+    messages: {
+      rawColor:
+        'Use a theme token instead of "{{cls}}". A literal colour only suits one theme, and it sidesteps the ' +
+        'contrast the tokens are tuned for. Reach for bg-[var(--surface)], text-[var(--label-secondary)], ' +
+        'border-[var(--separator)], or a material-* class.',
+    },
+  },
+  create(context) {
+    return classNameVisitor((node, value) => {
+      const match = value.match(RAW_COLOR);
+      if (match) context.report({ node, messageId: 'rawColor', data: { cls: match[0] } });
+    });
+  },
+};
+
+const noTransitionAll = {
+  meta: {
+    type: 'problem',
+    docs: { description: 'Transition named properties rather than everything' },
+    messages: {
+      transitionAll:
+        'Name the properties instead of "transition-all". It animates every property that changes — including ' +
+        'colours and layout the compositor cannot handle — so a transform meant to be cheap starts costing ' +
+        'layout. Prefer transition-[opacity,transform] or transition-colors.',
+    },
+  },
+  create(context) {
+    return classNameVisitor((node, value) => {
+      if (/\btransition-all\b/.test(value)) context.report({ node, messageId: 'transitionAll' });
+    });
+  },
+};
+
+/**
+ * Comments explain why a decision holds, and a vendor's name is not a reason.
+ * Naming the source also dates badly and reads as posturing rather than
+ * argument — the rationale has to survive without the borrowed authority.
+ */
+const VENDOR_NAMES = [
+  { re: /\bapple(?:'s)?\b/i, name: 'Apple' },
+  { re: /\bcupertino\b/i, name: 'Cupertino' },
+  { re: /\bWWDC\b/, name: 'WWDC' },
+  { re: /\bhuman interface guidelines\b/i, name: 'Human Interface Guidelines' },
+  { re: /\bHIG\b/, name: 'HIG' },
+  { re: /\biOS\b/, name: 'iOS' },
+  { re: /\biPadOS\b/, name: 'iPadOS' },
+  { re: /\bmacOS\b/, name: 'macOS' },
+  { re: /\bmaterial design\b/i, name: 'Material Design' },
+  { re: /\bfluent design\b/i, name: 'Fluent Design' },
+];
+
+const noVendorNames = {
+  meta: {
+    type: 'problem',
+    docs: { description: 'Explain the reasoning in comments rather than citing a vendor' },
+    messages: {
+      vendor:
+        'Drop "{{name}}" from the comment and say why the rule holds instead. Borrowed authority is not an ' +
+        'argument, and it reads as posturing.',
+    },
+  },
+  create(context) {
     return {
-      JSXAttribute(node) {
-        if (node.name.name !== 'className' || !node.value) return;
-        const v = node.value;
-        if (v.type === 'Literal' && typeof v.value === 'string') report(v, v.value);
-        if (v.type === 'JSXExpressionContainer') {
-          const expr = v.expression;
-          if (expr.type === 'TemplateLiteral') {
-            report(expr, expr.quasis.map(q => q.value.cooked ?? '').join(' '));
-          } else if (expr.type === 'Literal' && typeof expr.value === 'string') {
-            report(expr, expr.value);
+      Program() {
+        for (const comment of context.sourceCode.getAllComments()) {
+          for (const { re, name } of VENDOR_NAMES) {
+            if (re.test(comment.value)) {
+              context.report({ node: comment, messageId: 'vendor', data: { name } });
+              break;
+            }
           }
         }
       },
@@ -195,5 +314,8 @@ export default {
     'toast-copy': toastCopy,
     'no-smart-apostrophe': noSmartApostrophe,
     'use-type-tokens': useTypeTokens,
+    'no-raw-theme-color': noRawThemeColor,
+    'no-transition-all': noTransitionAll,
+    'no-vendor-names': noVendorNames,
   },
 };

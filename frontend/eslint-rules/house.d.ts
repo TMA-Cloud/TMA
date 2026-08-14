@@ -6,6 +6,9 @@ declare const plugin: {
     'toast-copy': Rule.RuleModule;
     'no-smart-apostrophe': Rule.RuleModule;
     'use-type-tokens': Rule.RuleModule;
+    'no-raw-theme-color': Rule.RuleModule;
+    'no-transition-all': Rule.RuleModule;
+    'no-vendor-names': Rule.RuleModule;
   };
 };
 

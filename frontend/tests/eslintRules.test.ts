@@ -139,3 +139,104 @@ describe('house/use-type-tokens', () => {
     });
   });
 });
+
+describe('house/no-raw-theme-color', () => {
+  it('flags literal colours baked into utilities, and leaves tokens alone', () => {
+    ruleTester.run('no-raw-theme-color', house.rules['no-raw-theme-color'], {
+      valid: [
+        '<div className="bg-[var(--surface)] text-[var(--label-secondary)]" />',
+        '<div className="material-thick material-edge" />',
+        // The remapped Tailwind scales resolve to the palette.
+        '<div className="bg-slate-100 text-gray-500" />',
+        // Arbitrary values that are not colours.
+        '<div className="max-h-[70vh] duration-[260ms] ease-[cubic-bezier(0.22,1,0.36,1)]" />',
+        // A hex outside a colour utility is somebody else's concern.
+        '<div title="#ffffff" />',
+        // Icon libraries take colours as props, not classes.
+        "<FileIcon color='#0078D4' />",
+      ],
+      invalid: [
+        {
+          code: '<div className="bg-[#ffffff] p-4" />',
+          errors: [{ messageId: 'rawColor', data: { cls: 'bg-[#ffffff]' } }],
+        },
+        {
+          code: '<p className="text-[#8e8e93]" />',
+          errors: [{ messageId: 'rawColor' }],
+        },
+        {
+          code: '<div className={`border-[#ccc] ${extra}`} />',
+          errors: [{ messageId: 'rawColor' }],
+        },
+        // Both arms of a conditional are class strings a user can be shown.
+        {
+          code: "<div className={on ? 'bg-[#007aff]' : 'bg-[var(--surface)]'} />",
+          errors: [{ messageId: 'rawColor' }],
+        },
+        // Class lookup tables are the other place these hide.
+        {
+          code: "const toneClasses = { neutral: 'bg-[#ffffff] border' };",
+          errors: [{ messageId: 'rawColor' }],
+        },
+      ],
+    });
+  });
+});
+
+describe('house/no-transition-all', () => {
+  it('flags transition-all and accepts named properties', () => {
+    ruleTester.run('no-transition-all', house.rules['no-transition-all'], {
+      valid: [
+        '<div className="transition-[opacity,transform] duration-300" />',
+        '<div className="transition-colors" />',
+        '<div className="transition-transform" />',
+        // Not a class list.
+        '<div title="transition-all" />',
+      ],
+      invalid: [
+        {
+          code: '<div className="transition-all duration-300" />',
+          errors: [{ messageId: 'transitionAll' }],
+        },
+        {
+          code: '<div className={`transition-all ${extra}`} />',
+          errors: [{ messageId: 'transitionAll' }],
+        },
+      ],
+    });
+  });
+});
+
+describe('house/no-vendor-names', () => {
+  it('flags borrowed authority in comments and leaves the reasoning alone', () => {
+    ruleTester.run('no-vendor-names', house.rules['no-vendor-names'], {
+      valid: [
+        '// Neutral ramp, light end to dark end.\nconst a = 1;',
+        '/* Parameterised the way a designer thinks about it. */\nconst b = 2;',
+        // The rule reads comments, so identifiers and user-facing strings are
+        // out of scope: this maps a platform id to a label people recognise.
+        "const label = platform === 'darwin' ? 'macOS' : 'Windows';",
+        // Substrings must not trip the word boundaries.
+        '// The ratios applied here are deliberate.\nconst c = 3;',
+      ],
+      invalid: [
+        {
+          code: "// Apple's system colors, wired into Tailwind.\nconst a = 1;",
+          errors: [{ messageId: 'vendor', data: { name: 'Apple' } }],
+        },
+        {
+          code: '/* Mac and iOS get San Francisco. */\nconst b = 2;',
+          errors: [{ messageId: 'vendor', data: { name: 'iOS' } }],
+        },
+        {
+          code: '// Straight from the Human Interface Guidelines.\nconst c = 3;',
+          errors: [{ messageId: 'vendor' }],
+        },
+        {
+          code: '// Follows Material Design elevation.\nconst d = 4;',
+          errors: [{ messageId: 'vendor', data: { name: 'Material Design' } }],
+        },
+      ],
+    });
+  });
+});
