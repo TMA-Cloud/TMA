@@ -90,7 +90,7 @@ export function useSubUsers() {
       try {
         await deleteSubUserRequest(id);
         setSubUsers(current => current.filter(item => item.id !== id));
-        showToast('Sub-user removed!', 'success');
+        showToast('Sub-user removed', 'success');
       } catch (err) {
         showToast(err instanceof Error ? err.message : 'Failed to remove sub-user', 'error');
       } finally {

@@ -124,11 +124,10 @@ export const DocumentViewerModal: React.FC = () => {
           if (res.status === 400) {
             try {
               const errorData = await res.json();
-              const errorMessage =
-                errorData.message || errorData.error || 'Cannot open file. File type mismatch detected.';
+              const errorMessage = errorData.message || errorData.error || "Can't open — file type doesn't match";
               showToast(errorMessage, 'error');
             } catch {
-              showToast(res.statusText || 'Cannot open file. File type mismatch detected.', 'error');
+              showToast(res.statusText || "Can't open — file type doesn't match", 'error');
             }
             setDocumentViewerFile?.(null);
             return;
@@ -141,7 +140,7 @@ export const DocumentViewerModal: React.FC = () => {
               // Fire and forget - don't wait for it, just refresh the cache
               void refreshOnlyOfficeConfig();
             }
-            throw new Error('OnlyOffice not configured. Configure in Settings.');
+            throw new Error("OnlyOffice isn't set up — configure it in Settings");
           }
           throw new Error('Failed to fetch ONLYOFFICE config');
         }

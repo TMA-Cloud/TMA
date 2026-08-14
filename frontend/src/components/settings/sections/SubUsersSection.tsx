@@ -17,11 +17,7 @@ export const SubUsersSection: React.FC<SubUsersSectionProps> = ({ subUserCount, 
   })();
 
   return (
-    <SettingsSection
-      title="Sub-users"
-      icon={Users}
-      description="Give colleagues their own login to the same files and storage"
-    >
+    <SettingsSection title="Sub-users" icon={Users} description="Separate logins for the same files">
       <SettingsItem
         label="Sub-users"
         value=""
@@ -34,7 +30,7 @@ export const SubUsersSection: React.FC<SubUsersSectionProps> = ({ subUserCount, 
       <SettingsItem
         label="How sub-users work"
         value=""
-        description="Sub-users share your files and storage quota, but log in with separate credentials to ensure accurate audit logs. You customize their exact permissions (upload, download, modify, share, etc.). Sub-users cannot create additional accounts."
+        description="Sub-users share your files and quota but sign in with their own credentials, so audit logs stay accurate. You choose their permissions; they can't create accounts."
       />
     </SettingsSection>
   );

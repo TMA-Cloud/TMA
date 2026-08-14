@@ -25,27 +25,27 @@ export const SettingsHeader: React.FC<SettingsHeaderProps> = ({ userName, usage,
     >
       <div className="relative flex flex-col gap-8 md:flex-row md:items-center md:justify-between">
         <div className="space-y-4">
-          <p className="uppercase tracking-[0.35em] text-sm font-semibold text-[#007aff]/90">Control Center</p>
-          <h1 className="text-4xl md:text-6xl font-bold text-slate-800 dark:text-slate-100 tracking-tight">Settings</h1>
-          <p className="text-lg md:text-xl text-slate-600 dark:text-slate-400 max-w-2xl">
-            Manage your account preferences and adjust application controls
+          <p className="uppercase tracking-[0.28em] type-caption-2 font-semibold text-[#007aff]/90">Control Center</p>
+          <h1 className="type-title-2 text-slate-800 dark:text-slate-100">Settings</h1>
+          <p className="type-footnote text-slate-600 dark:text-slate-400 max-w-md">
+            Account, security, and workspace preferences
           </p>
           {userName && (
-            <div className="inline-flex items-center gap-2.5 mt-5 px-5 py-2.5 rounded-2xl bg-[#007aff]/10 dark:bg-[#007aff]/20 text-base font-medium text-[#0069e0] dark:text-blue-300 border border-[#007aff]/20 dark:border-[#007aff]/30">
-              <User className="w-5 h-5 icon-muted" />
+            <div className="inline-flex items-center gap-2 mt-4 px-3.5 py-1.5 rounded-full bg-[#007aff]/10 dark:bg-[#007aff]/20 type-caption font-medium text-[#0069e0] dark:text-blue-300 border border-[#007aff]/20 dark:border-[#007aff]/30">
+              <User className="w-3.5 h-3.5 icon-muted" />
               <span>Signed in as {userName}</span>
             </div>
           )}
         </div>
 
-        <div className="w-full md:w-1/2 space-y-4">
-          <div className="flex items-center justify-between text-base font-medium text-slate-700 dark:text-slate-300">
+        <div className="w-full md:w-1/2 space-y-2.5">
+          <div className="flex items-center justify-between type-footnote font-medium text-slate-700 dark:text-slate-300">
             <span>Storage usage</span>
-            <span className="font-semibold text-lg">
+            <span className="font-semibold">
               {loading || !usage ? 'Loading...' : storageUsagePercent !== null ? `${storageUsagePercent}%` : '—'}
             </span>
           </div>
-          <div className="relative h-5 w-full rounded-full bg-slate-200/80 dark:bg-slate-700/80 overflow-hidden border border-slate-200/60 dark:border-slate-600/50">
+          <div className="relative h-2.5 w-full rounded-full bg-slate-200/80 dark:bg-slate-700/80 overflow-hidden border border-slate-200/60 dark:border-slate-600/50">
             <div
               className="h-full rounded-full bg-[var(--accent)] transition-[width] duration-300 ease-out"
               style={{
@@ -56,9 +56,9 @@ export const SettingsHeader: React.FC<SettingsHeaderProps> = ({ userName, usage,
               }}
             />
           </div>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
+          <p className="type-caption text-slate-500 dark:text-slate-400">
             {loading || !usage
-              ? 'Calculating storage details...'
+              ? 'Calculating…'
               : usage.total != null
                 ? usage.used > 0
                   ? `${formatFileSize(usage.used)} used · ${formatFileSize(usage.free ?? 0)} free of ${formatFileSize(usage.total)}`

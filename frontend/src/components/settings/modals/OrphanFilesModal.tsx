@@ -167,7 +167,7 @@ export const OrphanFilesModal: React.FC<OrphanFilesModalProps> = ({ isOpen, onCl
           skipped > 0 ? 'info' : 'success'
         );
       } else {
-        showToast('Nothing was deleted | Every entry failed re-verification', 'info');
+        showToast('Nothing deleted — every entry still checks out', 'info');
       }
 
       // Rescan clears the notes, so restate them once the fresh report is in.

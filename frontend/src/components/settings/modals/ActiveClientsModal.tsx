@@ -34,7 +34,7 @@ export const ActiveClientsModal: React.FC<ActiveClientsModalProps> = ({
   }
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Active Desktop Clients" size="lg">
+    <Modal isOpen={isOpen} onClose={onClose} title="Desktop Clients" size="lg">
       <div className="space-y-4">
         <ModalCountHeader
           count={clients.length}

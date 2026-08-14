@@ -269,9 +269,12 @@ export const FileManager: React.FC = () => {
     try {
       const result = await emptyTrash();
       handleClearSelection(); // Clear selection after successful deletion
-      showToast(result?.message || `Successfully deleted ${files.length} item(s) from trash`, 'success');
+      showToast(
+        result?.message || `Trash emptied — ${files.length} item${files.length !== 1 ? 's' : ''} deleted`,
+        'success'
+      );
     } catch (error: unknown) {
-      showToast(getErrorMessage(error, 'Failed to empty trash. Please try again.'), 'error');
+      showToast(getErrorMessage(error, 'Failed to empty trash'), 'error');
     }
   };
 
@@ -284,7 +287,7 @@ export const FileManager: React.FC = () => {
       handleClearSelection(); // Clear selection after successful deletion
       showToast(`Moved ${count} item${count !== 1 ? 's' : ''} to trash`, 'success');
     } catch (error: unknown) {
-      showToast(getErrorMessage(error, 'Failed to delete. Please try again.'), 'error');
+      showToast(getErrorMessage(error, 'Failed to move items to trash'), 'error');
     }
   };
 
@@ -297,7 +300,7 @@ export const FileManager: React.FC = () => {
       handleClearSelection(); // Clear selection after successful deletion
       showToast(`Permanently deleted ${count} item${count !== 1 ? 's' : ''}`, 'success');
     } catch (error: unknown) {
-      showToast(getErrorMessage(error, 'Failed to permanently delete. Please try again.'), 'error');
+      showToast(getErrorMessage(error, 'Failed to delete permanently'), 'error');
     }
   };
 
@@ -309,7 +312,7 @@ export const FileManager: React.FC = () => {
       handleClearSelection(); // Clear selection after successful restore
       showToast(result?.message || `Restored ${count} item${count !== 1 ? 's' : ''} from trash`, 'success');
     } catch (error: unknown) {
-      showToast(getErrorMessage(error, 'Failed to restore files. Please try again.'), 'error');
+      showToast(getErrorMessage(error, 'Failed to restore items'), 'error');
     }
   };
 
@@ -535,7 +538,7 @@ export const FileManager: React.FC = () => {
         // Validate MIME type before opening (prevents unnecessary API calls)
         if (!validateOnlyOfficeMimeType(file.name, file.mimeType)) {
           const ext = getExt(file.name);
-          showToast(`Cannot open file: type mismatch (expected .${ext.slice(1)} format)`, 'error');
+          showToast(`Can't open — this isn't a valid .${ext.slice(1)} file`, 'error');
           return;
         }
         // Check if OnlyOffice is configured before opening (using cached value)
@@ -544,9 +547,9 @@ export const FileManager: React.FC = () => {
             void editFileWithDesktop(file.id);
           } else {
             if (canConfigureOnlyOffice) {
-              showToast('OnlyOffice not configured. Configure in Settings.', 'error');
+              showToast("OnlyOffice isn't set up — configure it in Settings", 'error');
             } else {
-              showToast('OnlyOffice not configured. Contact administrator.', 'error');
+              showToast("OnlyOffice isn't set up — ask your administrator", 'error');
             }
           }
           return;
@@ -746,14 +749,14 @@ export const FileManager: React.FC = () => {
         } else {
           setUploadModalProcessing(false);
           setUploadModalOpen(false);
-          showToast('No files/folders found in the drop.', 'info');
+          showToast('Nothing to upload in that drop', 'info');
         }
       } catch {
         if (activeUploadProcessingRequestIdRef.current !== requestId) return;
         // entriesFromDataTransfer can throw; reset state and close modal (matches previous behavior).
         setUploadModalProcessing(false);
         setUploadModalOpen(false);
-        showToast('Failed to process selected folder. Please try again.', 'error');
+        showToast('Failed to read that folder', 'error');
       }
     },
     [

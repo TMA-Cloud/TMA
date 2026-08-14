@@ -130,7 +130,7 @@ export const UsersModal: React.FC<UsersModalProps> = ({
     setUpdating(userId);
     try {
       await updateUserStorageLimit(userId, null);
-      showToast('Storage limit reset to default (actual disk space)', 'success');
+      showToast('Storage limit reset to disk size', 'success');
       handleCancelEdit();
       onRefresh();
       if (userId === currentUserId) onStorageUpdated?.();
@@ -154,13 +154,13 @@ export const UsersModal: React.FC<UsersModalProps> = ({
     // Validate and convert to bytes
     const bytes = numberAndUnitToBytes(trimmed, editUnit);
     if (bytes === null) {
-      showToast('Invalid storage limit. Please enter a positive number.', 'error');
+      showToast('Enter a positive number', 'error');
       return;
     }
 
     // Additional validation: ensure bytes is within reasonable range
     if (bytes <= 0 || bytes > Number.MAX_SAFE_INTEGER) {
-      showToast('Storage limit must be between 1 byte and 9 Petabytes', 'error');
+      showToast('Limit must be between 1 byte and 9 PB', 'error');
       return;
     }
 
@@ -169,14 +169,14 @@ export const UsersModal: React.FC<UsersModalProps> = ({
     // saves a round trip and names the number the admin has to clear.
     const used = user.storageUsed ?? 0;
     if (bytes < used) {
-      showToast(`Limit cannot be below the ${formatFileSize(used)} this account already stores`, 'error');
+      showToast(`Limit can't be below the ${formatFileSize(used)} already stored`, 'error');
       return;
     }
 
     setUpdating(userId);
     try {
       await updateUserStorageLimit(userId, bytes);
-      showToast('Storage limit updated successfully', 'success');
+      showToast('Storage limit updated', 'success');
       handleCancelEdit();
       onRefresh();
       if (userId === currentUserId) onStorageUpdated?.();
@@ -188,7 +188,7 @@ export const UsersModal: React.FC<UsersModalProps> = ({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="All Registered Users" size="xl">
+    <Modal isOpen={isOpen} onClose={onClose} title="Registered Users" size="xl">
       <div className="space-y-4">
         <ModalCountHeader
           count={accounts.length}

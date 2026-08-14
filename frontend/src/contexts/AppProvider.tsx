@@ -660,12 +660,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
         if (payload.state === 'started') {
           const size = payload.size != null ? ` (${formatBytes(payload.size)})` : '';
-          showToast(`Saving exported file "${display}"${size}.`, 'info');
+          showToast(`Saving "${display}"${size}`, 'info');
         } else if (payload.state === 'completed') {
-          showToast(`Exported file "${display}".`, 'success');
+          showToast(`Exported "${display}"`, 'success');
           debouncedRefreshFiles(true);
         } else if (payload.state === 'error') {
-          showToast(payload.error || `Failed to save exported file "${display}". Please try again.`, 'error');
+          showToast(payload.error || `Failed to save "${display}"`, 'error');
         }
       }
     );
@@ -931,8 +931,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             } else {
               markAllStatus('error');
               const errorMessage = extractXhrErrorMessage(xhr);
-              showToast(errorMessage || 'Bulk upload failed', 'error');
-              reject(new Error(errorMessage || 'Bulk upload failed'));
+              showToast(errorMessage || 'Failed to upload files', 'error');
+              reject(new Error(errorMessage || 'Failed to upload files'));
             }
             cleanupXhrRefs();
           });
@@ -1042,17 +1042,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const editFileWithDesktop = async (id: string) => {
     if (desktopEditInProgressRef.current.has(id)) {
-      showToast('Already opening this file on desktop. Please wait...', 'info');
+      showToast('Already opening this file…', 'info');
       return;
     }
 
     const file = files.find(f => f.id === id);
     if (!file || String(file.type || '').toLowerCase() === 'folder') {
-      showToast('Select a single file to open on desktop.', 'error');
+      showToast('Select one file to open on desktop', 'error');
       return;
     }
     if (!file.mimeType) {
-      showToast('Cannot open this file on desktop: unknown type.', 'error');
+      showToast("Can't open on desktop — unknown file type", 'error');
       return;
     }
 
@@ -1093,7 +1093,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const result = await editFileWithDesktopElectron({ id: file.id, name: file.name });
       if (!result.ok) {
-        showToast(result.error ?? 'Failed to open or edit file on desktop.', 'error');
+        showToast(result.error ?? 'Failed to open file on desktop', 'error');
         return;
       }
 
@@ -1106,7 +1106,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return next;
       });
       setTimeout(() => setDesktopOpenProgress(prev => prev.filter(p => p.fileId !== file.id)), 800);
-      showToast('File opened on desktop. Changes will be auto-synced.', 'success');
+      showToast('Opened on desktop — changes sync back automatically', 'success');
     } finally {
       desktopEditInProgressRef.current.delete(id);
       if (!succeeded) {
@@ -1185,7 +1185,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     if (!res.ok) {
       const errorMessage = await extractResponseError(res);
-      showToast(errorMessage || 'Failed to rename item!!', 'error');
+      showToast(errorMessage || 'Failed to rename item', 'error');
       throw new Error(errorMessage || 'Failed to rename item');
     }
 
@@ -1193,7 +1193,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const updated: FileItemResponse = await res.json();
       showToast(`Renamed to "${updated.name || name}"`, 'success');
     } catch {
-      showToast('Item renamed successfully', 'success');
+      showToast('Item renamed', 'success');
     }
 
     await refreshFiles();
@@ -1506,7 +1506,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (isElectron()) {
         if (ids.length > 1) {
           const result = await saveFilesBulkViaElectron(ids);
-          if (result.ok) showToast('Files saved successfully', 'success');
+          if (result.ok) showToast('Files saved', 'success');
           else if (!result.canceled && result.error) showToast(result.error, 'error');
         } else {
           const firstId = ids[0];
@@ -1515,7 +1515,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const fileName = file?.name || (file?.type === 'folder' ? 'folder' : 'file');
           const suggestedFileName = file?.type === 'folder' ? `${fileName}.zip` : fileName;
           const result = await saveFileViaElectron({ fileId: firstId, suggestedFileName });
-          if (result.ok) showToast('File saved successfully', 'success');
+          if (result.ok) showToast('File saved', 'success');
           else if (!result.canceled && result.error) showToast(result.error, 'error');
         }
         return;

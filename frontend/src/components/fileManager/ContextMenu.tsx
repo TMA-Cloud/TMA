@@ -132,7 +132,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
       showToast(`Restored ${count} item${count !== 1 ? 's' : ''} from trash`, 'success');
       onActionComplete?.();
     } catch (error: unknown) {
-      showToast(getErrorMessage(error, 'Failed to restore files. Please try again.'), 'error');
+      showToast(getErrorMessage(error, 'Failed to restore items'), 'error');
     }
   }, [restoreFiles, selectedFiles, clearSelection, showToast, onActionComplete, isRestoring]);
 
@@ -157,10 +157,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
       onActionComplete?.();
     } catch (error: unknown) {
       showToast(
-        getErrorMessage(
-          error,
-          `Failed to ${type === 'deleteForever' ? 'permanently delete' : 'delete'}. Please try again.`
-        ),
+        getErrorMessage(error, `Failed to ${type === 'deleteForever' ? 'delete permanently' : 'move items to trash'}`),
         'error'
       );
     } finally {
@@ -270,7 +267,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                     await shareFiles(selectedFiles, false);
                     onActionComplete?.();
                   } catch {
-                    showToast('Failed to unshare files', 'error');
+                    showToast('Failed to unshare items', 'error');
                   }
                 } else {
                   // Show expiry picker — action continues in handleShareExpiry
@@ -311,7 +308,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                       document.body.removeChild(textArea);
                       if (!successful) throw new Error('Copy command failed');
                     }
-                    showToast('Link copied to clipboard', 'success');
+                    showToast('Link copied', 'success');
                     onActionComplete?.();
                   } catch {
                     // Error handled by toast notification
@@ -319,7 +316,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                   }
                 } catch {
                   // Error handled by toast notification
-                  showToast('Failed to get share links', 'error');
+                  showToast('Failed to load share links', 'error');
                 }
               },
             },
@@ -358,7 +355,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                   await editFileWithDesktop(file.id);
                   onActionComplete?.();
                 } catch {
-                  showToast('Failed to open or save file from desktop.', 'error');
+                  showToast('Failed to open file on desktop', 'error');
                 }
               },
             },
@@ -376,7 +373,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                   onActionComplete?.();
                 } catch {
                   // Error handled by toast notification
-                  showToast('Failed to update star status', 'error');
+                  showToast('Failed to update star', 'error');
                 }
               },
             },
@@ -611,7 +608,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
       if (list.length) setShareLinkModalOpen(true, list);
       onActionComplete?.();
     } catch {
-      showToast('Failed to share files', 'error');
+      showToast('Failed to share items', 'error');
     }
   };
 

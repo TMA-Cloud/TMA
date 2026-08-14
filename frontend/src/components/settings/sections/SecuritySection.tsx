@@ -32,7 +32,7 @@ export const SecuritySection: React.FC<SecuritySectionProps> = ({
         action="Manage MFA"
         onAction={onShowMfa}
         actionIcon={Key}
-        description="Add an extra layer of security with two-factor authentication"
+        description="Require a second step when signing in"
       />
       {passwordChangeEnabled && (
         <SettingsItem
@@ -41,7 +41,7 @@ export const SecuritySection: React.FC<SecuritySectionProps> = ({
           action="Change password"
           onAction={onShowChangePassword}
           actionIcon={Lock}
-          description="Change account current password"
+          description="Set a new account password"
         />
       )}
       <SettingsItem
@@ -50,7 +50,11 @@ export const SecuritySection: React.FC<SecuritySectionProps> = ({
         action={loadingSessions ? 'Loading...' : 'View sessions'}
         onAction={onShowSessions}
         actionDisabled={loadingSessions}
-        description={`View and manage all active sessions; ${activeSessionsCount > 0 ? `${activeSessionsCount} active session${activeSessionsCount === 1 ? '' : 's'}` : 'No active sessions'}`}
+        description={
+          activeSessionsCount > 0
+            ? `${activeSessionsCount} active session${activeSessionsCount === 1 ? '' : 's'}`
+            : 'No active sessions'
+        }
         loadingStates={{ sessions: loadingSessions }}
       />
       <SettingsItem
@@ -61,7 +65,7 @@ export const SecuritySection: React.FC<SecuritySectionProps> = ({
         actionDisabled={loggingOutAll}
         actionIcon={LogOut}
         actionVariant="danger"
-        description="Sign out from all devices and browsers. You will need to login again"
+        description="Ends every session, including this one"
         loadingStates={{ logoutAll: loggingOutAll }}
       />
     </SettingsSection>

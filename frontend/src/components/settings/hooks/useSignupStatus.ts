@@ -116,9 +116,7 @@ export function useSignupStatus(options: UseSignupStatusOptions = {}) {
         const updated = res.electronOnlyAccess;
         setElectronOnlyAccess(updated);
         showToast(
-          updated
-            ? 'Web access disabled – this instance now requires the desktop app.'
-            : 'Web access enabled – browsers can access the app again.',
+          updated ? 'Web access disabled — desktop app only' : 'Web access enabled — browsers allowed again',
           'success'
         );
       },
@@ -135,10 +133,7 @@ export function useSignupStatus(options: UseSignupStatusOptions = {}) {
       res => {
         const updated = res.allowPasswordChange;
         setAllowPasswordChange(updated);
-        showToast(
-          updated ? 'Users can now change their passwords.' : 'Users can no longer change their passwords.',
-          'success'
-        );
+        showToast(updated ? 'Password changes allowed' : 'Password changes blocked', 'success');
       },
       'Failed to update password change setting'
     );

@@ -138,7 +138,7 @@ export const StorageSection: React.FC<StorageSectionProps> = ({ usage, loading, 
   const availableLabel = usage && usage.free !== null ? formatFileSize(usage.free) : 'Unlimited';
 
   return (
-    <SettingsSection title="Storage" icon={HardDrive} description="Track allocated storage space">
+    <SettingsSection title="Storage" icon={HardDrive} description="Usage and upload limits">
       <div className="space-y-4">
         <SettingsItem
           label="Used Space"

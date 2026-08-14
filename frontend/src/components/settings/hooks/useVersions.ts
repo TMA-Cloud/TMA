@@ -48,10 +48,7 @@ export function useVersions() {
         }
       }
 
-      showToast(
-        allUpToDate ? 'All components are up to date' : 'Updates are available',
-        allUpToDate ? 'success' : 'info'
-      );
+      showToast(allUpToDate ? 'Everything is up to date' : 'Updates available', allUpToDate ? 'success' : 'info');
     } catch {
       // Error handled by error state and toast notification
       setVersionError('Unable to check for updates right now');

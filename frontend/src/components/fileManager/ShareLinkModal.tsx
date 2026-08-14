@@ -29,7 +29,7 @@ export const ShareLinkModal: React.FC = () => {
     try {
       await copyToClipboard(link);
       setCopiedLink(link);
-      showToast('Link copied to clipboard', 'success');
+      showToast('Link copied', 'success');
       if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
       copiedTimerRef.current = setTimeout(() => setCopiedLink(null), 2000);
     } catch {

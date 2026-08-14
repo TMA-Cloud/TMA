@@ -34,7 +34,7 @@ export const UpdatesSection: React.FC<UpdatesSectionProps> = ({
   }, [runningInDesktopApp]);
 
   return (
-    <SettingsSection title="Updates" icon={RefreshCw} description="Check whether this deployment is up to date">
+    <SettingsSection title="Updates" icon={RefreshCw} description="Version status for this deployment">
       <SettingsItem
         label="Frontend"
         value={versionStatusText('frontend')}

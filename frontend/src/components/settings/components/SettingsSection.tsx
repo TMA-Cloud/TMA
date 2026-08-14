@@ -16,17 +16,17 @@ export const SettingsSection: React.FC<SettingsSectionProps> = ({ title, icon: I
         animation: 'slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) both',
       }}
     >
-      <div className="flex items-center gap-4 mb-6">
-        <div className="p-3 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-300">
-          <Icon className="w-6 h-6 icon-muted" />
+      <div className="flex items-center gap-3 mb-4">
+        <div className="p-2 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-300">
+          <Icon className="w-4 h-4 icon-muted" />
         </div>
         <div>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 tracking-tight">{title}</h2>
-          {description && <p className="text-sm text-gray-500/80 dark:text-gray-400/80 mt-0.5">{description}</p>}
+          <h2 className="type-title-3 text-gray-900 dark:text-gray-100">{title}</h2>
+          {description && <p className="type-caption text-gray-500/80 dark:text-gray-400/80 mt-0.5">{description}</p>}
         </div>
       </div>
 
-      <div className="space-y-4">{children}</div>
+      <div className="space-y-3">{children}</div>
     </div>
   );
 };

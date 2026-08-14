@@ -57,9 +57,7 @@ export const CloudDriveSection: React.FC = () => {
       return;
     }
     showToast(
-      next === 'saveOnly'
-        ? 'Cloud drive set to Save-only | Files can be browsed but not opened from the drive'
-        : 'Cloud drive set to Full access',
+      next === 'saveOnly' ? 'Save-only — the drive can be browsed, not opened from' : 'Cloud drive set to full access',
       'success'
     );
   };
@@ -74,13 +72,13 @@ export const CloudDriveSection: React.FC = () => {
       icon={FolderSync}
       description={
         mountPoint
-          ? `Mounted as ${mountPoint} | Save to it from any app's "Save As" dialog`
-          : 'Save to TMA Cloud | From any apps "Save As" dialog'
+          ? `Mounted as ${mountPoint} — save to it from any app's Save As dialog`
+          : "Save to TMA Cloud from any app's Save As dialog"
       }
     >
       <SettingsItem
         label="Save-only Mode"
-        description="Browse folders and see files, but opening or copying files from the drive is blocked"
+        description="Folders stay browsable; opening and copying are blocked"
         toggle
         toggleValue={saveOnly}
         onToggle={handleToggle}

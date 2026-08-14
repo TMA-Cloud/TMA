@@ -36,19 +36,19 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ isOpen
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentPassword || !newPassword || !confirmPassword) {
-      showToast('Please fill in all fields', 'error');
+      showToast('Fill in all fields', 'error');
       return;
     }
     if (newPassword.length < 6) {
-      showToast('New password must be at least 6 characters long', 'error');
+      showToast('Use at least 6 characters', 'error');
       return;
     }
     if (newPassword !== confirmPassword) {
-      showToast('New password and confirmation do not match', 'error');
+      showToast("Passwords don't match", 'error');
       return;
     }
     if (currentPassword === newPassword) {
-      showToast('New password must be different from the current password', 'error');
+      showToast("Choose a password you haven't used", 'error');
       return;
     }
 
@@ -56,7 +56,7 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ isOpen
     try {
       setSubmitting(true);
       const result = await changePassword(currentPassword, newPassword);
-      showToast(result.message || 'Password changed successfully! Please log in again!', 'success');
+      showToast(result.message || 'Password changed — sign in again', 'success');
       await logout();
       skipReset = true;
       onClose();

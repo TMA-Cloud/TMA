@@ -157,7 +157,7 @@ export const MfaModal: React.FC<MfaModalProps> = ({ isOpen, onClose }) => {
       setSecret(result.secret);
       setStep('verify');
     } catch (error) {
-      showToast(getErrorMessage(error, 'Failed to setup MFA'), 'error');
+      showToast(getErrorMessage(error, 'Failed to start MFA setup'), 'error');
     } finally {
       setLoading(false);
     }
@@ -165,7 +165,7 @@ export const MfaModal: React.FC<MfaModalProps> = ({ isOpen, onClose }) => {
 
   const handleVerify = async () => {
     if (!verificationCode || verificationCode.length !== 6) {
-      showToast('Please enter a 6-digit code', 'error');
+      showToast('Enter the 6-digit code', 'error');
       return;
     }
 
@@ -194,9 +194,9 @@ export const MfaModal: React.FC<MfaModalProps> = ({ isOpen, onClose }) => {
         // Download backup codes if provided
         if (result.backupCodes && result.backupCodes.length > 0) {
           downloadBackupCodes(result.backupCodes);
-          showToast('MFA enabled successfully. Backup codes downloaded.', 'success');
+          showToast('MFA enabled — backup codes downloaded', 'success');
         } else {
-          showToast('MFA enabled successfully', 'success');
+          showToast('MFA enabled', 'success');
         }
       }
     } catch (error) {
@@ -208,7 +208,7 @@ export const MfaModal: React.FC<MfaModalProps> = ({ isOpen, onClose }) => {
 
   const handleDisable = async () => {
     if (!verificationCode || (verificationCode.length !== 6 && verificationCode.length !== 8)) {
-      showToast('Please enter a 6-digit TOTP code or 8-character backup code', 'error');
+      showToast('Enter a 6-digit code or 8-character backup code', 'error');
       return;
     }
 
@@ -223,7 +223,7 @@ export const MfaModal: React.FC<MfaModalProps> = ({ isOpen, onClose }) => {
         setStep('sessionPrompt');
       } else {
         setStep('status');
-        showToast('MFA disabled successfully', 'success');
+        showToast('MFA disabled', 'success');
       }
     } catch (error) {
       showToast(getErrorMessage(error, 'Invalid verification code'), 'error');
@@ -251,7 +251,7 @@ export const MfaModal: React.FC<MfaModalProps> = ({ isOpen, onClose }) => {
   };
 
   const handleSkipSessions = () => {
-    showToast('MFA status updated successfully', 'success');
+    showToast('MFA status updated', 'success');
     onClose();
   };
 
@@ -260,7 +260,7 @@ export const MfaModal: React.FC<MfaModalProps> = ({ isOpen, onClose }) => {
     try {
       await copyToClipboard(secret);
       setCopied(true);
-      showToast('Secret copied to clipboard', 'success');
+      showToast('Secret copied', 'success');
       setTimeout(() => setCopied(false), 2000);
     } catch {
       showToast('Failed to copy secret', 'error');
@@ -355,7 +355,7 @@ Go to: Account Settings → Security → Multi-Factor Authentication
       <Modal
         isOpen={isOpen}
         onClose={onClose}
-        title="Multi-Factor Authentication"
+        title="Two-Factor Authentication"
         size="md"
         initialFocusRef={
           step === 'verify' || step === 'disable' ? (mfaInputRef as React.RefObject<HTMLElement>) : undefined

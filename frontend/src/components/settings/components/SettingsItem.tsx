@@ -37,10 +37,13 @@ export const SettingsItem: React.FC<SettingsItemProps> = ({
   loadingStates,
 }) => {
   return (
-    <div className="stagger-item hover-lift flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-xl bg-white/60 dark:bg-gray-900/50 border border-slate-200/50 dark:border-slate-700/30 px-5 py-4 hover:border-blue-500/30 dark:hover:border-blue-500/30 transition-all duration-200">
+    <div className="stagger-item hover-lift flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between rounded-xl bg-white/60 dark:bg-gray-900/50 border border-slate-200/50 dark:border-slate-700/30 px-4 py-3 hover:border-blue-500/30 dark:hover:border-blue-500/30 transition-all duration-200">
       <div>
-        <p className="text-base font-medium text-gray-900 dark:text-gray-100">{label}</p>
-        {description && <p className="text-base text-gray-500 dark:text-gray-400 mt-0.5">{description}</p>}
+        <p className="type-callout font-medium text-gray-900 dark:text-gray-100">{label}</p>
+        {/* A step down from the label: the description is context, never the thing being scanned for. */}
+        {description && (
+          <p className="type-caption text-gray-500 dark:text-gray-400 mt-0.5 max-w-prose">{description}</p>
+        )}
       </div>
 
       {toggle !== undefined ? (
@@ -49,7 +52,7 @@ export const SettingsItem: React.FC<SettingsItemProps> = ({
             onClick={onToggle}
             disabled={toggleDisabled}
             className={`
-              relative inline-flex h-7 w-14 items-center rounded-full transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500
+              relative inline-flex h-6 w-11 items-center rounded-full transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500
               ${toggleValue ? 'bg-[var(--accent)]' : 'bg-gray-200 dark:bg-gray-700'}
               ${toggleDisabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
             `}
@@ -57,8 +60,8 @@ export const SettingsItem: React.FC<SettingsItemProps> = ({
           >
             <span
               className={`
-                inline-block h-5 w-5 transform rounded-full bg-[#f9f9fb] shadow-sm transition-transform duration-200
-                ${toggleValue ? 'translate-x-8' : 'translate-x-1'}
+                inline-block h-4 w-4 transform rounded-full bg-[#f9f9fb] shadow-sm transition-transform duration-200
+                ${toggleValue ? 'translate-x-6' : 'translate-x-1'}
               `}
             />
           </button>
@@ -79,7 +82,7 @@ export const SettingsItem: React.FC<SettingsItemProps> = ({
                 onClick={onAction}
                 disabled={isDisabled}
                 className={`
-                  inline-flex items-center gap-2.5 px-5 py-2.5 text-base rounded-2xl transition-all duration-200 border
+                  inline-flex items-center gap-2 px-3.5 py-1.5 type-footnote rounded-xl transition-all duration-200 border
                   ${
                     isDisabled
                       ? 'bg-gray-200 dark:bg-gray-700 cursor-not-allowed opacity-70 border-transparent'
@@ -89,14 +92,14 @@ export const SettingsItem: React.FC<SettingsItemProps> = ({
                   }
                 `}
               >
-                {showLoader ? <Loader2 className="w-5 h-5 animate-spin" /> : <ActionIcon className="w-5 h-5" />}
+                {showLoader ? <Loader2 className="w-4 h-4 animate-spin" /> : <ActionIcon className="w-4 h-4" />}
                 <span>{action}</span>
               </button>
             );
           })()}
         </div>
       ) : (
-        <span className="text-lg font-semibold text-gray-700 dark:text-gray-200 text-left sm:text-right break-words">
+        <span className="type-callout font-semibold text-gray-700 dark:text-gray-200 text-left sm:text-right break-words">
           {value}
         </span>
       )}

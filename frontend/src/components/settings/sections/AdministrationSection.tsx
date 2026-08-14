@@ -59,11 +59,7 @@ export const AdministrationSection: React.FC<AdministrationSectionProps> = ({
   onShowOrphans,
 }) => {
   return (
-    <SettingsSection
-      title="Administration"
-      icon={SettingsIcon}
-      description="Manage workspace access, visibility, and onboarding"
-    >
+    <SettingsSection title="Administration" icon={SettingsIcon} description="Access, visibility, and maintenance">
       <div className="space-y-6">
         <div className="space-y-3">
           <p className="text-xs uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Workspace Access</p>
@@ -115,7 +111,7 @@ export const AdministrationSection: React.FC<AdministrationSectionProps> = ({
             action={loadingActiveClients ? 'Loading...' : 'View clients'}
             onAction={onShowActiveClients}
             actionDisabled={loadingActiveClients}
-            description="See all Electron desktop apps connected in the last 5 minutes"
+            description="Desktop apps seen in the last 5 minutes"
           />
         </div>
 
@@ -128,7 +124,7 @@ export const AdministrationSection: React.FC<AdministrationSectionProps> = ({
             toggleValue={hideFileExtensions}
             onToggle={onToggleHideFileExtensions}
             toggleDisabled={!canToggleHideFileExtensions || togglingHideFileExtensions || loadingSignupStatus}
-            description="Show file names without extensions in the file manager and rename dialog"
+            description="Show file names without their extensions"
           />
           <SettingsItem
             label="Allow password change"
@@ -137,7 +133,7 @@ export const AdministrationSection: React.FC<AdministrationSectionProps> = ({
             toggleValue={allowPasswordChange}
             onToggle={onToggleAllowPasswordChange}
             toggleDisabled={!canToggleAllowPasswordChange || togglingAllowPasswordChange || loadingSignupStatus}
-            description="Allow users to change their account password from the Security settings"
+            description="Let users change their own password"
           />
           <SettingsItem
             label="Orphaned files"
@@ -146,7 +142,7 @@ export const AdministrationSection: React.FC<AdministrationSectionProps> = ({
             actionIcon={Trash2}
             actionVariant="danger"
             onAction={onShowOrphans}
-            description="Review and clean up orphaned files and broken records"
+            description="Clean up orphaned files and broken records"
           />
           {showElectronOnlyAccessToggle && (
             <SettingsItem
@@ -156,7 +152,7 @@ export const AdministrationSection: React.FC<AdministrationSectionProps> = ({
               toggleValue={electronOnlyAccess}
               onToggle={onToggleElectronOnlyAccess}
               toggleDisabled={!canToggleElectronOnlyAccess || togglingElectronOnlyAccess || loadingSignupStatus}
-              description="When enabled, this instance can only be accessed via the desktop app (browsers will be blocked)"
+              description="Block browsers — desktop app only"
             />
           )}
         </div>

@@ -33,7 +33,7 @@ export function useSessions() {
     try {
       setRevokingSessionId(sessionId);
       await revokeSession(sessionId);
-      showToast('Session revoked successfully', 'success');
+      showToast('Session revoked', 'success');
 
       // If revoking current session, user will be logged out on next request
       if (isRevokingCurrent) {
@@ -64,12 +64,12 @@ export function useSessions() {
     try {
       setLoggingOutAll(true);
       await logoutAllDevices();
-      showToast('Successfully logged out from all devices', 'success');
+      showToast('Signed out on all devices', 'success');
       // Clear sessions list since all are invalidated
       setActiveSessions([]);
     } catch {
       // Error handled by toast notification
-      showToast('Failed to logout from all devices', 'error');
+      showToast('Failed to sign out other devices', 'error');
       // Don't return - still clear local session to avoid inconsistent state
       // (e.g., server may have processed the request before network error)
     } finally {
