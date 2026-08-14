@@ -50,6 +50,7 @@ export const FileInfoModal: React.FC<FileInfoModalProps> = ({ isOpen, onClose, f
           ...file,
           ...apiData,
           modified: apiData.modified != null ? new Date(apiData.modified) : file.modified,
+          accessedAt: apiData.accessedAt != null ? new Date(apiData.accessedAt) : file.accessedAt,
           deletedAt: apiData.deletedAt != null ? new Date(apiData.deletedAt) : file.deletedAt,
           expiresAt: apiData.expiresAt != null ? new Date(apiData.expiresAt) : (file.expiresAt ?? null),
         };
@@ -133,6 +134,16 @@ export const FileInfoModal: React.FC<FileInfoModalProps> = ({ isOpen, onClose, f
                 : new Date(effectiveItem.modified).toLocaleString()}
             </p>
           </div>
+          {effectiveItem.accessedAt && (
+            <div>
+              <p className="font-semibold">Last opened</p>
+              <p className="mt-0.5">
+                {effectiveItem.accessedAt instanceof Date
+                  ? effectiveItem.accessedAt.toLocaleString()
+                  : new Date(effectiveItem.accessedAt).toLocaleString()}
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </Modal>

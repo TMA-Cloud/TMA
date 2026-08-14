@@ -23,6 +23,7 @@ import { blockMainAppOnShareDomain } from './middleware/shareDomain.middleware.j
 import { requireElectronClientIfEnabled } from './middleware/electronClient.middleware.js';
 import { logger, httpLogger } from './config/logger.js';
 import { initializeAuditQueue, shutdownAuditQueue } from './services/auditLogger.js';
+import { startAccessTracker, shutdownAccessTracker } from './services/accessTracker.js';
 import { initializeMetrics, metricsEndpoint, startQueueMetricsUpdater } from './services/metrics.js';
 import { connectRedis, disconnectRedis } from './config/redis.js';
 
@@ -216,6 +217,9 @@ async function gracefulShutdown(signal) {
     // Shutdown audit queue
     await shutdownAuditQueue();
 
+    // Shutdown access tracker
+    await shutdownAccessTracker();
+
     // Disconnect Redis
     await disconnectRedis();
 
@@ -291,6 +295,7 @@ runMigrations()
 
     // Start background services
     startCleanupJobs();
+    startAccessTracker();
 
     // Register shutdown handlers
     process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));

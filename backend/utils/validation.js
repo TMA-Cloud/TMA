@@ -97,7 +97,7 @@ function validateId(id) {
  * @returns {string|null} Validated sort field or null if invalid
  */
 function validateSortBy(sortBy) {
-  const allowedFields = ['name', 'size', 'modified', 'deletedAt'];
+  const allowedFields = ['name', 'size', 'modified', 'accessedAt', 'deletedAt'];
   if (typeof sortBy !== 'string') return null;
   return allowedFields.includes(sortBy) ? sortBy : null;
 }

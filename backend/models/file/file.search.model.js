@@ -41,8 +41,9 @@ async function searchFiles(userId, query, limit = 100) {
         name, 
         type, 
         size, 
-        modified, 
-        mime_type AS "mimeType", 
+        modified,
+        accessed_at AS "accessedAt",
+        mime_type AS "mimeType",
         starred, 
         shared,
         parent_id AS "parentId"
@@ -69,8 +70,9 @@ async function searchFiles(userId, query, limit = 100) {
         name, 
         type, 
         size, 
-        modified, 
-        mime_type AS "mimeType", 
+        modified,
+        accessed_at AS "accessedAt",
+        mime_type AS "mimeType",
         starred, 
         shared,
         parent_id AS "parentId"

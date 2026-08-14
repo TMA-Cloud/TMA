@@ -1,5 +1,6 @@
 import { logger } from '../../config/logger.js';
 import { getFile } from '../../models/file.model.js';
+import { recordAccess } from '../../services/accessTracker.js';
 import { registerOpenDocument } from '../../services/onlyofficeAutoSave.js';
 import { PERMISSIONS, hasPermission } from '../../utils/permissions.js';
 import { validateAndResolveFile } from '../../utils/fileDownload.js';
@@ -61,6 +62,11 @@ async function getConfig(req, res) {
 
     // Register document for auto-save
     registerOpenDocument(config.document.key, file.id, userId);
+
+    // Opening the document is the read. The document server's own fetches of
+    // /onlyoffice/file are a consequence of this one action, so they are not
+    // counted again.
+    recordAccess(file.id, userId);
 
     res.json({ config, token: tokenForConfig, onlyofficeJsUrl });
   } catch (err) {

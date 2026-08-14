@@ -1,6 +1,7 @@
 import pool from '../../config/db.js';
 import { logger } from '../../config/logger.js';
 import { getFileByToken, getSharedTree } from '../../models/share.model.js';
+import { recordAccess } from '../../services/accessTracker.js';
 import { logAuditEvent } from '../../services/auditLogger.js';
 import { validateAndResolveFile, streamEncryptedFile, streamUnencryptedFile } from '../../utils/fileDownload.js';
 import { sendError } from '../../utils/response.js';
@@ -40,6 +41,12 @@ async function downloadFolderZip(req, res) {
     logger.info({ shareToken: token, folderId: file.id }, 'Share folder downloaded as ZIP');
 
     const entries = await getSharedTree(token, file.id);
+
+    // Everything the archive pulls in was read. All shared rows belong to the
+    // link's owner, and the writer matches on user_id, so anything that somehow
+    // does not simply fails to match and is skipped.
+    recordAccess([file.id, ...entries.map(entry => entry.id)], file.userId);
+
     await createZipArchive(res, file.name, entries, file.id, file.name);
   } catch (err) {
     sendError(res, 500, 'Server error', err);
@@ -95,6 +102,8 @@ async function downloadSharedItem(req, res) {
       if (!success) {
         return res.status(400).send(error || 'Invalid file path');
       }
+
+      recordAccess(file.id, shareFile.userId);
       const pathOrKey = filePath || storageKey;
 
       // If file is encrypted, stream decrypted content
@@ -107,6 +116,7 @@ async function downloadSharedItem(req, res) {
     }
     // folder: create zip of shared contents under this folder
     const entries = await getSharedTree(token, fileId);
+    recordAccess([file.id, ...entries.map(entry => entry.id)], shareFile.userId);
     await createZipArchive(res, file.name, entries, file.id, file.name);
   } catch (err) {
     sendError(res, 500, 'Server error', err);

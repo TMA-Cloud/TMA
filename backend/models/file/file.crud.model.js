@@ -27,7 +27,7 @@ async function getFiles(userId, parentId = null, sortBy = 'modified', order = 'D
   // Cache miss - query database
   const orderClause = sortBy === 'size' ? '' : buildOrderClause(sortBy, order);
   const result = await pool.query(
-    `SELECT id, name, type, size, modified, mime_type AS "mimeType", starred, shared, path
+    `SELECT id, name, type, size, modified, accessed_at AS "accessedAt", mime_type AS "mimeType", starred, shared, path
      FROM files
      WHERE user_id = $1
        AND deleted_at IS NULL
@@ -319,8 +319,10 @@ async function replaceFileData(id, size, mimeType, tempPath, userId) {
     }
   }
 
+  // Writing an item counts as accessing it, the same way NTFS stamps both
+  // timestamps on a write. It is free here — the row is being updated anyway.
   const result = await pool.query(
-    'UPDATE files SET size = $1, mime_type = $2, modified = NOW() WHERE id = $3 AND user_id = $4 RETURNING id, name, type, size, modified, mime_type AS "mimeType", starred, shared',
+    'UPDATE files SET size = $1, mime_type = $2, modified = NOW(), accessed_at = NOW() WHERE id = $3 AND user_id = $4 RETURNING id, name, type, size, modified, accessed_at AS "accessedAt", mime_type AS "mimeType", starred, shared',
     [size, mimeType, id, userId]
   );
 
@@ -354,7 +356,7 @@ async function replaceFileDataWithStorageKey(id, size, mimeType, newStorageKey, 
   const parentId = oldFile.parent_id || null;
 
   const result = await pool.query(
-    'UPDATE files SET size = $1, mime_type = $2, path = $3, modified = NOW() WHERE id = $4 AND user_id = $5 RETURNING id, name, type, size, modified, mime_type AS "mimeType", starred, shared',
+    'UPDATE files SET size = $1, mime_type = $2, path = $3, modified = NOW(), accessed_at = NOW() WHERE id = $4 AND user_id = $5 RETURNING id, name, type, size, modified, accessed_at AS "accessedAt", mime_type AS "mimeType", starred, shared',
     [size, mimeType, newStorageKey, id, userId]
   );
 

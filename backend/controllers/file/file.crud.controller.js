@@ -1,4 +1,5 @@
 import { logger } from '../../config/logger.js';
+import { recordAccess } from '../../services/accessTracker.js';
 import { fileDownloaded, fileUploaded, filesUploadedBulk, logAuditEvent } from '../../services/auditLogger.js';
 import { EventTypes, publishFileEvent } from '../../services/fileEvents.js';
 import {
@@ -179,6 +180,12 @@ async function listFiles(req, res) {
   const sortBy = validateSortBy(req.query.sortBy) || 'modified';
   const order = validateSortOrder(req.query.order) || 'DESC';
   const files = await getFiles(req.ownerId, parentId, sortBy, order);
+
+  // Enumerating a directory touches the directory, not the children — the same
+  // line Windows draws. Listing a folder full of files must not restamp every
+  // file inside it, or "last opened" would only ever mean "last browsed past".
+  // The root is not a row, so there is nothing to stamp there.
+  recordAccess(parentId, req.ownerId);
 
   // IMPORTANT: Disable HTTP-level caching for dynamic file listings.
   // We already use Redis for caching and handle invalidation explicitly
@@ -924,6 +931,10 @@ async function downloadFile(req, res) {
       return await userOperationLock(req.ownerId, async () => {
         const entries = await getFolderTree(fileId, req.ownerId);
 
+        // Zipping a folder reads every item under it, so the whole subtree is
+        // accessed, not just the folder that was clicked.
+        recordAccess([fileId, ...entries.map(entry => entry.id)], req.ownerId);
+
         // Create zip archive - this will handle errors internally
         // We pass a callback to log success only after zip completes
         await createZipArchive(res, file.name, entries, fileId, file.name, async () => {
@@ -959,6 +970,7 @@ async function downloadFile(req, res) {
 
   // Log file download
   await fileDownloaded(fileId, file.name, req);
+  recordAccess(fileId, req.ownerId);
   logger.info({ fileId, fileName: file.name }, 'File downloaded');
 
   // Check if file should be forced to download (executable files)
@@ -1051,6 +1063,9 @@ async function downloadFilesBulk(req, res) {
           });
         }
       }
+
+      // Every entry that goes into the archive gets read on the way in.
+      recordAccess([...rootIds, ...allEntries.map(entry => entry.id)], req.ownerId);
 
       // Create archive name from first file/folder name, or use "download" if multiple
       const archiveName = filesToDownload.length === 1 ? filesToDownload[0].name : `download_${Date.now()}`;

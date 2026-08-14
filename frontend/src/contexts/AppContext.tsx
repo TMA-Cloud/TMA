@@ -3,6 +3,8 @@ import type { UploadProgressItem } from '../utils/uploadUtils';
 
 export type ShareExpiry = '7d' | '30d' | 'never';
 
+export type FileSortBy = 'name' | 'size' | 'modified' | 'accessedAt' | 'deletedAt';
+
 export interface FolderInfo {
   totalSize: number;
   fileCount: number;
@@ -15,6 +17,7 @@ export interface FileItem {
   type: 'file' | 'folder';
   size?: number;
   modified: Date;
+  accessedAt?: Date;
   locationPath?: string[];
   mimeType?: string;
   selected?: boolean;
@@ -31,6 +34,7 @@ export interface FileItemResponse {
   type: 'file' | 'folder';
   size?: number;
   modified: string;
+  accessedAt?: string | null;
   mimeType?: string;
   selected?: boolean;
   starred?: boolean;
@@ -119,9 +123,9 @@ export interface AppContextType {
   canGoForward: boolean;
   goBack: () => void;
   goForward: () => void;
-  sortBy: 'name' | 'size' | 'modified' | 'deletedAt';
+  sortBy: FileSortBy;
   sortOrder: 'asc' | 'desc';
-  setSortBy: (s: 'name' | 'size' | 'modified' | 'deletedAt') => void;
+  setSortBy: (s: FileSortBy) => void;
   setSortOrder: (o: 'asc' | 'desc') => void;
   searchQuery: string;
   setSearchQuery: (query: string) => void;

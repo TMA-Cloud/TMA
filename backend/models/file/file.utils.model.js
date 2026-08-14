@@ -7,6 +7,7 @@ const SORT_FIELDS = {
   name: 'name',
   size: 'size',
   modified: 'modified',
+  accessedAt: 'accessed_at',
   deletedAt: 'deleted_at',
 };
 

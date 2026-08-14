@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { ArrowLeft, ArrowRight } from 'lucide-react';
-import { useApp, type FileItem, type ShareExpiry } from '../../contexts/AppContext';
+import { useApp, type FileItem, type FileSortBy, type ShareExpiry } from '../../contexts/AppContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { Breadcrumbs } from './Breadcrumbs';
 import { Tooltip } from '../ui/Tooltip';
@@ -848,7 +848,7 @@ export const FileManager: React.FC = () => {
           isRestoring={isRestoring}
           onViewModeChange={setViewMode}
           onSortChange={(by, order) => {
-            setSortBy(by as 'name' | 'size' | 'modified' | 'deletedAt');
+            setSortBy(by as FileSortBy);
             setSortOrder(order);
           }}
           onCreateFolder={() => setCreateFolderModalOpen(true)}

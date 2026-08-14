@@ -218,7 +218,7 @@ describe('validateIdArray', () => {
 });
 
 describe('validateSortBy', () => {
-  it.each(['name', 'size', 'modified', 'deletedAt'])('accepts %s', field => {
+  it.each(['name', 'size', 'modified', 'accessedAt', 'deletedAt'])('accepts %s', field => {
     expect(validateSortBy(field)).toBe(field);
   });
 

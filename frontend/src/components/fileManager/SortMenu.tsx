@@ -14,6 +14,8 @@ const sortOptions = [
   { label: 'Name (Z–A)', by: 'name', order: 'desc' as const },
   { label: 'Modified (newest)', by: 'modified', order: 'desc' as const },
   { label: 'Modified (oldest)', by: 'modified', order: 'asc' as const },
+  { label: 'Last opened (recent)', by: 'accessedAt', order: 'desc' as const },
+  { label: 'Last opened (oldest)', by: 'accessedAt', order: 'asc' as const },
   { label: 'Size (largest)', by: 'size', order: 'desc' as const },
   { label: 'Size (smallest)', by: 'size', order: 'asc' as const },
 ] as const;

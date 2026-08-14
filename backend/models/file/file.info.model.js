@@ -15,8 +15,8 @@ import pool from '../../config/db.js';
 async function getFileInfo(fileIds, userId, includeDeleted = false) {
   const deletedClause = includeDeleted ? '' : 'AND deleted_at IS NULL';
   const result = await pool.query(
-    `SELECT id, name, type, parent_id, size, modified 
-     FROM files 
+    `SELECT id, name, type, parent_id, size, modified, accessed_at
+     FROM files
      WHERE id = ANY($1) AND user_id = $2 ${deletedClause}`,
     [fileIds, userId]
   );
@@ -28,6 +28,7 @@ async function getFileInfo(fileIds, userId, includeDeleted = false) {
     parentId: f.parent_id,
     size: f.size,
     modified: f.modified,
+    accessedAt: f.accessed_at,
   }));
 }
 

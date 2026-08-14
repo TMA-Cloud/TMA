@@ -4,6 +4,7 @@ import {
   type BulkUploadEntry,
   type FileItem,
   type FileItemResponse,
+  type FileSortBy,
   type ShareExpiry,
   type UploadModalInitialEntry,
 } from './AppContext';
@@ -54,6 +55,7 @@ const naturalCompare = (a: string, b: string) => a.localeCompare(b, undefined, {
 const mapFileResponse = (f: FileItemResponse): FileItem => ({
   ...f,
   modified: new Date(f.modified),
+  accessedAt: f.accessedAt ? new Date(f.accessedAt) : undefined,
   deletedAt: f.deletedAt ? new Date(f.deletedAt) : undefined,
   expiresAt: f.expiresAt ? new Date(f.expiresAt) : f.expiresAt === null ? null : undefined,
 });
@@ -61,11 +63,7 @@ const mapFileResponse = (f: FileItemResponse): FileItem => ({
 const getInFlightUploadProgress = (loaded: number, total: number): number =>
   Math.min(Math.round((loaded / total) * 100), 99);
 
-function sortFilesWithFoldersFirst(
-  items: FileItem[],
-  sortBy: 'name' | 'size' | 'modified' | 'deletedAt',
-  sortOrder: 'asc' | 'desc'
-): FileItem[] {
+function sortFilesWithFoldersFirst(items: FileItem[], sortBy: FileSortBy, sortOrder: 'asc' | 'desc'): FileItem[] {
   const direction = sortOrder === 'desc' ? -1 : 1;
 
   const compareCore = (a: FileItem, b: FileItem): number => {
@@ -79,6 +77,10 @@ function sortFilesWithFoldersFirst(
       }
       case 'deletedAt': {
         const diff = (a.deletedAt?.getTime() ?? 0) - (b.deletedAt?.getTime() ?? 0);
+        return diff !== 0 ? (diff < 0 ? -1 : 1) : byName();
+      }
+      case 'accessedAt': {
+        const diff = (a.accessedAt?.getTime() ?? 0) - (b.accessedAt?.getTime() ?? 0);
         return diff !== 0 ? (diff < 0 ? -1 : 1) : byName();
       }
       case 'modified':
@@ -158,7 +160,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [clipboard]);
   const [pasteProgress, setPasteProgress] = useState<number | null>(null);
-  const [sortBy, setSortBy] = useState<'name' | 'size' | 'modified' | 'deletedAt'>('name');
+  const [sortBy, setSortBy] = useState<FileSortBy>('name');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);

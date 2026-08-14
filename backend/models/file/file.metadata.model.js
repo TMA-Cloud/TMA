@@ -28,7 +28,7 @@ async function getStarredFiles(userId, sortBy = 'modified', order = 'DESC') {
   // Cache miss - query database
   const orderClause = sortBy === 'size' ? '' : buildOrderClause(sortBy, order);
   const result = await pool.query(
-    `SELECT id, name, type, size, modified, mime_type AS "mimeType", starred, shared FROM files WHERE user_id = $1 AND starred = TRUE AND deleted_at IS NULL ${orderClause}`,
+    `SELECT id, name, type, size, modified, accessed_at AS "accessedAt", mime_type AS "mimeType", starred, shared FROM files WHERE user_id = $1 AND starred = TRUE AND deleted_at IS NULL ${orderClause}`,
     [userId]
   );
   const files = result.rows;
@@ -77,7 +77,7 @@ async function getSharedFiles(userId, sortBy = 'modified', order = 'DESC') {
 
   const orderClause = sortBy === 'size' ? '' : buildOrderClause(sortBy, order, 'f');
   const result = await pool.query(
-    `SELECT f.id, f.name, f.type, f.size, f.modified, f.mime_type AS "mimeType",
+    `SELECT f.id, f.name, f.type, f.size, f.modified, f.accessed_at AS "accessedAt", f.mime_type AS "mimeType",
             f.starred, f.shared,
             s.expires_at AS "expiresAt"
      FROM files f

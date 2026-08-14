@@ -1,5 +1,6 @@
 import { logger } from '../../config/logger.js';
 import { getFile } from '../../models/file.model.js';
+import { recordAccess } from '../../services/accessTracker.js';
 import { logAuditEvent } from '../../services/auditLogger.js';
 import { registerOpenDocument } from '../../services/onlyofficeAutoSave.js';
 import { PERMISSIONS, hasPermission } from '../../utils/permissions.js';
@@ -90,6 +91,10 @@ async function getViewerPage(req, res) {
 
     // Register document for auto-save
     registerOpenDocument(config.document.key, file.id, userId);
+
+    // Opening the viewer is the read; the document server's later fetches of
+    // /onlyoffice/file all stem from this one action.
+    recordAccess(file.id, userId);
 
     // Add token to config if JWT is enabled (for viewer page)
     if (configToken) {

@@ -59,7 +59,7 @@ describe('buildOrderClause', () => {
   });
 
   it('exposes the field map so callers can validate against the same source', () => {
-    expect(Object.keys(SORT_FIELDS).sort()).toEqual(['deletedAt', 'modified', 'name', 'size']);
+    expect(Object.keys(SORT_FIELDS).sort()).toEqual(['accessedAt', 'deletedAt', 'modified', 'name', 'size']);
   });
 });
 

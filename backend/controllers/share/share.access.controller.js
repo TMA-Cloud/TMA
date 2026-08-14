@@ -1,5 +1,6 @@
 import { logger } from '../../config/logger.js';
 import { getFileByToken, getFolderContentsByShare } from '../../models/share.model.js';
+import { recordAccess } from '../../services/accessTracker.js';
 import { shareAccessed } from '../../services/auditLogger.js';
 import { validateAndResolveFile, streamEncryptedFile, streamUnencryptedFile } from '../../utils/fileDownload.js';
 import { sendError } from '../../utils/response.js';
@@ -25,6 +26,11 @@ async function handleShared(req, res) {
 
     // Log share access (anonymous users)
     await shareAccessed(token, req);
+
+    // A visitor on a share link is still a reader, so the item counts as
+    // accessed on the owner's account. Who did the reading stays in the audit
+    // trail; this timestamp only records that it happened.
+    recordAccess(file.id, file.userId);
     logger.info({ shareToken: token, fileId: file.id, fileType: file.type }, 'Share link accessed');
 
     if (file.type === 'folder') {
