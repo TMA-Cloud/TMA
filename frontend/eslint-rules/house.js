@@ -156,53 +156,81 @@ const noSmartApostrophe = {
 const TAILWIND_TEXT_SIZE = /\btext-(?:xs|sm|base|lg|[2-9]?xl)(?![\w-])|\btext-\[\d+(?:\.\d+)?px\]/;
 
 /**
- * Every className a rule can usefully see: a bare string, a template, or the
- * literal arms of the conditionals these components are built from. Shared so
- * the class-name rules below all recognise the same shapes.
+ * Every literal fragment of a class list, wherever it hides.
+ *
+ * These components build class names as a template whose branches live in the
+ * interpolations — `` `base ${on ? 'a' : 'b'}` `` — so a walker that reads only
+ * the static quasis sees the scaffolding and none of the decisions. Recursing
+ * into the expressions is what makes the rules apply to the parts that
+ * actually vary.
  */
-function classNameVisitor(check) {
-  const walk = (node, report) => {
-    if (!node) return;
-    switch (node.type) {
-      case 'Literal':
-        if (typeof node.value === 'string') report(node, node.value);
-        break;
-      case 'TemplateLiteral':
-        report(node, node.quasis.map(q => q.value.cooked ?? '').join(' '));
-        break;
-      case 'ConditionalExpression':
-        walk(node.consequent, report);
-        walk(node.alternate, report);
-        break;
-      case 'LogicalExpression':
-        walk(node.left, report);
-        walk(node.right, report);
-        break;
-      default:
-        break;
-    }
-  };
+function collectClassFragments(node, out = []) {
+  if (!node) return out;
+  switch (node.type) {
+    case 'Literal':
+      if (typeof node.value === 'string') out.push({ node, text: node.value });
+      break;
+    case 'TemplateLiteral':
+      out.push({ node, text: node.quasis.map(q => q.value.cooked ?? '').join(' ') });
+      for (const expression of node.expressions) collectClassFragments(expression, out);
+      break;
+    case 'ConditionalExpression':
+      collectClassFragments(node.consequent, out);
+      collectClassFragments(node.alternate, out);
+      break;
+    case 'LogicalExpression':
+      collectClassFragments(node.left, out);
+      collectClassFragments(node.right, out);
+      break;
+    default:
+      break;
+  }
+  return out;
+}
 
+/** The nodes whose string values are class lists rather than data. */
+function eachClassExpression(visit) {
   return {
     JSXAttribute(node) {
       if (node.name.name !== 'className' || !node.value) return;
       const v = node.value;
-      walk(v.type === 'JSXExpressionContainer' ? v.expression : v, check);
+      visit(v.type === 'JSXExpressionContainer' ? v.expression : v);
     },
     /** Class strings also live in lookup tables and `const base = '...'`. */
     VariableDeclarator(node) {
       if (!node.init) return;
-      if (/class(Name)?$|^btn|Classes$/i.test(node.id.name ?? '')) walk(node.init, check);
+      if (/class(Name)?$|^btn|Classes$/i.test(node.id.name ?? '')) visit(node.init);
     },
     Property(node) {
       if (node.value?.type === 'Literal' && typeof node.value.value === 'string') {
         // Only strings that look like class lists, so data is left alone.
         if (/(^|\s)(bg|text|border|ring|rounded|flex|grid|p[xytblr]?|m[xytblr]?)-/.test(node.value.value)) {
-          check(node.value, node.value.value);
+          visit(node.value);
         }
       }
     },
   };
+}
+
+/** Reports against each fragment, so the message lands on the offending string. */
+function classNameVisitor(check) {
+  return eachClassExpression(expression => {
+    for (const { node, text } of collectClassFragments(expression)) check(node, text);
+  });
+}
+
+/**
+ * Reports against the whole class list at once. Needed where a rule is about
+ * how two classes interact rather than about one class on its own — a
+ * `scale-*` in the static part and its transition in a branch are still the
+ * same element.
+ */
+function classListVisitor(check) {
+  return eachClassExpression(expression => {
+    const fragments = collectClassFragments(expression);
+    if (!fragments.length) return;
+    check(fragments[0].node, fragments.map(f => f.text).join(' '));
+  });
 }
 
 const useTypeTokens = {
@@ -260,6 +288,37 @@ const noTransitionAll = {
   create(context) {
     return classNameVisitor((node, value) => {
       if (/\btransition-all\b/.test(value)) context.report({ node, messageId: 'transitionAll' });
+    });
+  },
+};
+
+/** A transition that names `transform` (or every property individually). */
+const NAMES_TRANSFORM = /\btransition-transform\b|\btransition-\[[^\]]*\btransform\b[^\]]*\]/;
+/** The standalone properties Tailwind compiles these utilities to. */
+const STANDALONE = [
+  { re: /(?:^|\s|:)-?scale-(?:\[|\d|x-|y-)/, prop: 'scale' },
+  { re: /(?:^|\s|:)-?rotate-(?:\[|\d)/, prop: 'rotate' },
+  { re: /(?:^|\s|:)-?translate-(?:\[|x-|y-|\d)/, prop: 'translate' },
+];
+
+const transitionCoversMotion = {
+  meta: {
+    type: 'problem',
+    docs: { description: 'Transition the standalone scale/rotate/translate properties, not just transform' },
+    messages: {
+      uncovered:
+        'This transitions "transform" but animates {{props}}, which Tailwind compiles to standalone properties — ' +
+        'so {{props}} snaps on the first frame while the opacity beside it eases, and the motion reads as a ' +
+        'stutter. Use "transition-motion", which names all of them.',
+    },
+  },
+  create(context) {
+    // The whole list, not each fragment: the utility and the transition that
+    // should cover it are routinely written in different branches.
+    return classListVisitor((node, value) => {
+      if (!NAMES_TRANSFORM.test(value)) return;
+      const hit = STANDALONE.filter(s => s.re.test(value)).map(s => s.prop);
+      if (hit.length) context.report({ node, messageId: 'uncovered', data: { props: hit.join(' and ') } });
     });
   },
 };
@@ -361,6 +420,7 @@ export default {
     'no-raw-theme-color': noRawThemeColor,
     'no-transition-all': noTransitionAll,
     'no-vendor-names': noVendorNames,
+    'transition-covers-motion': transitionCoversMotion,
     'no-number-input': noNumberInput,
   },
 };

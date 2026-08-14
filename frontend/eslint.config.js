@@ -40,6 +40,8 @@ export default defineConfig([
       'house/no-smart-apostrophe': 'error',
       // Nothing in the tree cites a vendor, so this one holds everywhere.
       'house/no-vendor-names': 'error',
+      // A correctness bug rather than a convention, so it holds everywhere.
+      'house/transition-covers-motion': 'error',
       // Not a convention but a bug: the number input type drops the value it
       // cannot parse while leaving the characters on screen.
       'house/no-number-input': 'error',

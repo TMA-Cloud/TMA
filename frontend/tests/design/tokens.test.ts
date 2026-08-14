@@ -325,3 +325,35 @@ describe('pointers', () => {
     }
   });
 });
+
+describe('motion shorthand', () => {
+  /**
+   * The modal close shipped with a visible stutter because the exit named
+   * `transform` while Tailwind had compiled `scale-[0.96]` to the standalone
+   * `scale` property. Opacity eased over 260ms; scale snapped on frame one.
+   * The shorthand exists so that pairing cannot come apart again.
+   */
+  const motion = block(indexCss, /\.transition-motion\s*\{/);
+  const declared = (motion.match(/transition-property:\s*([^;]+);/)?.[1] ?? '').split(',').map(s => s.trim());
+
+  it.each(['opacity', 'transform', 'scale', 'translate', 'rotate'])('transitions %s', prop => {
+    expect(declared, `.transition-motion omits ${prop}`).toContain(prop);
+  });
+
+  /**
+   * The same trap in raw CSS: a rule that transitions `transform` and is used
+   * on elements carrying Tailwind scale/translate utilities.
+   */
+  const REUSABLE: ReadonlyArray<readonly [string, RegExp]> = [
+    ['.pressable', /\.pressable\s*\{/],
+    ['.hover-lift', /\.hover-lift\s*\{/],
+    ['.btn', /\n\.btn\s*\{/],
+  ];
+
+  it.each(REUSABLE)('%s covers the standalone properties too', (name, selector) => {
+    const body = block(indexCss, selector);
+    const props = body.match(/transition:\s*([\s\S]*?);/)?.[1] ?? '';
+    expect(props, `${name} declares no transition`).not.toEqual('');
+    expect(props, `${name} transitions transform but not scale`).toMatch(/\bscale\b/);
+  });
+});

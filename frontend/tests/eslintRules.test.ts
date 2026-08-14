@@ -266,3 +266,98 @@ describe('house/no-vendor-names', () => {
     });
   });
 });
+
+describe('house/transition-covers-motion', () => {
+  it('flags a transform-only transition beside a standalone motion utility', () => {
+    ruleTester.run('transition-covers-motion', house.rules['transition-covers-motion'], {
+      valid: [
+        // The shorthand names scale, translate and rotate as well.
+        '<div className="opacity-0 scale-[0.96] transition-motion duration-300" />',
+        '<div className="-translate-x-full transition-motion" />',
+        // A transform transition with nothing standalone beside it is fine.
+        '<div className="transition-transform hover:opacity-50" />',
+        // Static centring with no transition at all.
+        '<div className="absolute left-1/2 -translate-x-1/2" />',
+        // transition-all covers every property, including the standalone ones.
+        '<div className="scale-95 transition-all" />',
+      ],
+      invalid: [
+        {
+          code: '<div className="opacity-0 scale-[0.96] transition-[opacity,transform] duration-300" />',
+          errors: [{ messageId: 'uncovered', data: { props: 'scale' } }],
+        },
+        {
+          code: '<div className="rotate-180 transition-transform duration-200" />',
+          errors: [{ messageId: 'uncovered', data: { props: 'rotate' } }],
+        },
+        {
+          code: '<div className="-translate-x-full transition-transform" />',
+          errors: [{ messageId: 'uncovered', data: { props: 'translate' } }],
+        },
+        // The modal exit that started this: two properties, one message.
+        {
+          code: '<div className="translate-y-4 scale-[0.96] transition-[opacity,transform]" />',
+          errors: [{ messageId: 'uncovered', data: { props: 'scale and translate' } }],
+        },
+        {
+          code: "<div className={open ? 'rotate-180 transition-transform' : 'transition-transform'} />",
+          errors: [{ messageId: 'uncovered' }],
+        },
+      ],
+    });
+  });
+});
+
+describe('class-name rules see inside template interpolations', () => {
+  /**
+   * The shape that let the modal stutter ship: the offending classes were in a
+   * conditional inside a `${...}`, and a walker reading only the static quasis
+   * never saw them. Every class-name rule is checked against that shape.
+   */
+  const insideInterpolation = '<div className={`base ${on ? "PAYLOAD" : "other"}`} />';
+
+  it('finds a raw colour in a branch of an interpolation', () => {
+    ruleTester.run('no-raw-theme-color', house.rules['no-raw-theme-color'], {
+      valid: [],
+      invalid: [
+        {
+          code: insideInterpolation.replace('PAYLOAD', 'bg-[#ffffff]'),
+          errors: [{ messageId: 'rawColor' }],
+        },
+      ],
+    });
+  });
+
+  it('finds transition-all in a branch of an interpolation', () => {
+    ruleTester.run('no-transition-all', house.rules['no-transition-all'], {
+      valid: [],
+      invalid: [
+        {
+          code: insideInterpolation.replace('PAYLOAD', 'transition-all duration-300'),
+          errors: [{ messageId: 'transitionAll' }],
+        },
+      ],
+    });
+  });
+
+  it('pairs a utility in the static part with its transition in a branch', () => {
+    ruleTester.run('transition-covers-motion', house.rules['transition-covers-motion'], {
+      valid: [
+        // Split across the same boundary, but the shorthand covers it.
+        '<div className={`scale-95 ${on ? "transition-motion" : ""}`} />',
+      ],
+      invalid: [
+        // The utility and the transition are in different fragments; only a
+        // rule that reads the whole list can see they belong together.
+        {
+          code: '<div className={`scale-95 ${on ? "transition-transform" : ""}`} />',
+          errors: [{ messageId: 'uncovered', data: { props: 'scale' } }],
+        },
+        {
+          code: insideInterpolation.replace('PAYLOAD', 'rotate-180 transition-transform'),
+          errors: [{ messageId: 'uncovered', data: { props: 'rotate' } }],
+        },
+      ],
+    });
+  });
+});
