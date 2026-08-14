@@ -37,6 +37,17 @@ function block(css: string, selector: RegExp): string {
   throw new Error(`unbalanced braces after ${selector}`);
 }
 
+/**
+ * Looks up a class block by name.
+ *
+ * Built by concatenation rather than a template literal on purpose: in a
+ * template, `\.` collapses to `.` and `\s` to `s`, which yields a regex that
+ * quietly matches nothing and a test that quietly passes.
+ */
+function classBlock(name: string): string {
+  return block(indexCss, new RegExp('\\.' + name + '\\s*\\{'));
+}
+
 function tokens(css: string): Record<string, string> {
   const out: Record<string, string> = {};
   // Values can span lines (the cursor data URIs do), so read to the semicolon.
@@ -336,7 +347,7 @@ describe('motion shorthand', () => {
   const motion = block(indexCss, /\.transition-motion\s*\{/);
   const declared = (motion.match(/transition-property:\s*([^;]+);/)?.[1] ?? '').split(',').map(s => s.trim());
 
-  it.each(['opacity', 'transform', 'scale', 'translate', 'rotate'])('transitions %s', prop => {
+  it.each(['opacity', 'transform', 'scale', 'translate', 'rotate', 'backdrop-filter'])('transitions %s', prop => {
     expect(declared, `.transition-motion omits ${prop}`).toContain(prop);
   });
 
@@ -396,5 +407,38 @@ describe('materials leave as well as arrive', () => {
   it('mirrors the entrance, which animates the blur in', () => {
     const enter = block(indexCss, /@keyframes modalIn\s*\{/);
     expect(enter, 'modalIn no longer animates backdrop-filter').toMatch(/backdrop-filter/);
+  });
+});
+
+describe('materials that stay mounted', () => {
+  /**
+   * A tooltip and a hover-revealed preview button are in the DOM the whole
+   * time. Without a way to flatten them in place they sit at opacity 0 still
+   * carrying a full-strength blur — invisible, but still a backdrop being
+   * re-sampled, once per instance and once per file row.
+   *
+   * The blur is routed through --material-blur so it can be overridden by a
+   * later class, rather than by a second backdrop-filter declaration that
+   * would depend on source order to win.
+   */
+  const WEIGHTS = ['chrome', 'thin', 'regular', 'thick'] as const;
+
+  it.each(WEIGHTS)('.material-%s drives its blur through the custom property', weight => {
+    const body = classBlock(`material-${weight}`);
+    expect(body, `.material-${weight} sets no --material-blur`).toMatch(/--material-blur:/);
+    expect(body, `.material-${weight} hardcodes its blur`).toMatch(/backdrop-filter:\s*blur\(var\(--material-blur\)\)/);
+  });
+
+  it.each(['material-hidden', 'material-on-hover'])('.%s flattens the surface', cls => {
+    const body = classBlock(cls);
+    expect(body).toMatch(/--material-blur:\s*0/);
+  });
+
+  it('brings the blur back when the hover-revealed surface is shown', () => {
+    // Without this the preview button would reveal itself as a flat panel and
+    // never become a material at all.
+    expect(indexCss).toMatch(
+      /\.group:hover \.material-on-hover[\s\S]{0,80}--material-blur:\s*var\(--material-blur-thick\)/
+    );
   });
 });

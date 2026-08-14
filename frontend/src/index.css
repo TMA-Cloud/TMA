@@ -489,30 +489,64 @@ button,
    Never stack a light material directly on another — legibility collapses.
    ========================================================================== */
 
+/* Each weight declares its own blur through --material-blur, so a surface can
+   be flattened in place — see .material-hidden and .material-on-hover below —
+   without a second backdrop-filter declaration racing the first on source
+   order. */
 .material-chrome {
   background: var(--material-chrome);
-  backdrop-filter: blur(var(--material-blur-regular)) saturate(var(--material-saturate));
-  -webkit-backdrop-filter: blur(var(--material-blur-regular)) saturate(var(--material-saturate));
+  --material-blur: var(--material-blur-regular);
+  backdrop-filter: blur(var(--material-blur)) saturate(var(--material-saturate));
+  -webkit-backdrop-filter: blur(var(--material-blur)) saturate(var(--material-saturate));
 }
 
 .material-thin {
   background: var(--material-thin);
-  backdrop-filter: blur(var(--material-blur-thin)) saturate(var(--material-saturate));
-  -webkit-backdrop-filter: blur(var(--material-blur-thin)) saturate(var(--material-saturate));
+  --material-blur: var(--material-blur-thin);
+  backdrop-filter: blur(var(--material-blur)) saturate(var(--material-saturate));
+  -webkit-backdrop-filter: blur(var(--material-blur)) saturate(var(--material-saturate));
 }
 
 .material-regular {
   background: var(--material-regular);
-  backdrop-filter: blur(var(--material-blur-regular)) saturate(var(--material-saturate));
-  -webkit-backdrop-filter: blur(var(--material-blur-regular)) saturate(var(--material-saturate));
+  --material-blur: var(--material-blur-regular);
+  backdrop-filter: blur(var(--material-blur)) saturate(var(--material-saturate));
+  -webkit-backdrop-filter: blur(var(--material-blur)) saturate(var(--material-saturate));
   box-shadow: var(--shadow-3);
 }
 
 .material-thick {
   background: var(--material-thick);
-  backdrop-filter: blur(var(--material-blur-thick)) saturate(var(--material-saturate));
-  -webkit-backdrop-filter: blur(var(--material-blur-thick)) saturate(var(--material-saturate));
+  --material-blur: var(--material-blur-thick);
+  backdrop-filter: blur(var(--material-blur)) saturate(var(--material-saturate));
+  -webkit-backdrop-filter: blur(var(--material-blur)) saturate(var(--material-saturate));
   box-shadow: var(--shadow-4);
+}
+
+/**
+ * For a material that stays in the DOM while it is not being shown.
+ *
+ * A tooltip or a hover-revealed button is mounted the whole time, so without
+ * this it sits at opacity 0 still carrying a full-strength blur — invisible,
+ * but still a backdrop the compositor re-samples, once per instance. With a
+ * tooltip on every toolbar button and a preview button on every file row that
+ * is dozens of them at rest.
+ *
+ * It also fixes the same lingering the modal had: the blur has to come down
+ * with the fade, or the surface reads as still present after it has gone.
+ */
+.material-hidden {
+  --material-blur: 0px;
+}
+
+/* The hover-revealed variant, which cannot simply drop a class on hover. */
+.material-on-hover {
+  --material-blur: 0px;
+}
+
+.group:hover .material-on-hover,
+.material-on-hover:hover {
+  --material-blur: var(--material-blur-thick);
 }
 
 /**
@@ -649,7 +683,16 @@ button,
  * still easing. Naming all four is the only way to cover both idioms.
  */
 .transition-motion {
-  transition-property: opacity, transform, scale, translate, rotate;
+  /* backdrop-filter is here so a material that flattens itself eases rather
+     than snapping. Listing it costs nothing on the elements that have none. */
+  transition-property:
+    opacity,
+    transform,
+    scale,
+    translate,
+    rotate,
+    backdrop-filter,
+    -webkit-backdrop-filter;
   transition-duration: var(--dur-base);
   transition-timing-function: var(--ease-out);
 }

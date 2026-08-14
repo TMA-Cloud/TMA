@@ -77,7 +77,7 @@ export const Tooltip: React.FC<TooltipProps> = ({ text, children }) => {
           px-2.5 py-1.5 rounded-lg type-caption vibrant
           material-thick material-edge text-[var(--label)]
           transition-motion duration-150 ease-[cubic-bezier(0.22,1,0.36,1)]
-          ${visible ? 'opacity-100 scale-100' : 'opacity-0 scale-90'}
+          ${visible ? 'opacity-100 scale-100' : 'opacity-0 scale-90 material-hidden'}
           max-w-xs truncate
           drag-hide-tooltip
         `}
