@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import {
   Home,
   FolderOpen,
@@ -14,7 +14,10 @@ import {
 } from 'lucide-react';
 import { useApp } from '../../contexts/AppContext';
 import { isElectron } from '../../utils/electronDesktop';
+import { SPRING_PRESETS, useSpring } from '../../motion';
 
+// Named for what they contain rather than for a vague umbrella: a specific
+// label is what makes a destination predictable before you get there.
 const navigationItems = [
   { id: 'dashboard', label: 'Dashboard', icon: Home, path: ['Dashboard'] },
   { id: 'files', label: 'My Files', icon: FolderOpen, path: ['My Files'] },
@@ -39,6 +42,16 @@ export const Sidebar: React.FC = () => {
     retryElectronUpdate,
   } = useApp();
 
+  const indicatorRef = useRef<HTMLDivElement>(null);
+  const itemRefs = useRef(new Map<string, HTMLButtonElement>());
+  const placed = useRef(false);
+
+  // The selection is one object that travels between rows, not a fill that
+  // blinks out of one and into another. A spring drives it so running quickly
+  // down the list redirects the pill mid-flight instead of queueing up moves.
+  const indicatorY = useSpring(0, SPRING_PRESETS.move);
+  const indicatorHeight = useSpring(0, SPRING_PRESETS.move);
+
   const handleNavigation = (path: string[]) => {
     setCurrentPath(path);
     if (window.innerWidth < 768) {
@@ -46,16 +59,66 @@ export const Sidebar: React.FC = () => {
     }
   };
 
-  const isActive = (path: string[]) => {
-    return currentPath[0] === path[0];
-  };
+  const isActive = useCallback((path: string[]) => currentPath[0] === path[0], [currentPath]);
+
+  const registerItem = useCallback((id: string, node: HTMLButtonElement | null) => {
+    if (node) itemRefs.current.set(id, node);
+    else itemRefs.current.delete(id);
+  }, []);
+
+  useEffect(() => {
+    const write = () => {
+      const element = indicatorRef.current;
+      if (!element) return;
+      element.style.transform = `translate3d(0, ${indicatorY.current}px, 0)`;
+      element.style.height = `${indicatorHeight.current}px`;
+    };
+    const unsubY = indicatorY.subscribe(write);
+    const unsubH = indicatorHeight.subscribe(write);
+    return () => {
+      unsubY();
+      unsubH();
+    };
+  }, [indicatorY, indicatorHeight]);
+
+  useLayoutEffect(() => {
+    const active = navigationItems.find(item => isActive(item.path));
+    const node = active ? itemRefs.current.get(active.id) : undefined;
+    const indicator = indicatorRef.current;
+    if (!indicator) return;
+
+    if (!node) {
+      // Settings lives outside this list, so the travelling pill has nowhere
+      // to go; it steps aside rather than sliding to a row nobody picked.
+      indicator.style.opacity = '0';
+      return;
+    }
+
+    indicator.style.opacity = '1';
+
+    if (!placed.current) {
+      // Nothing has been on screen yet, so there is no motion to inherit —
+      // place it rather than animating in from an arbitrary zero.
+      indicatorY.jump(node.offsetTop);
+      indicatorHeight.jump(node.offsetHeight);
+      placed.current = true;
+      return;
+    }
+
+    indicatorY.setTarget(node.offsetTop);
+    indicatorHeight.setTarget(node.offsetHeight);
+  }, [currentPath, isActive, indicatorY, indicatorHeight]);
+
+  const navButton = (active: boolean) =>
+    `pressable-lg type-callout relative z-10 w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left
+     ${active ? 'type-emphasized text-[var(--accent)]' : 'text-[var(--label-secondary)] hover:text-[var(--label)]'}`;
 
   return (
     <>
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 z-40 bg-slate-900/30 backdrop-blur-[2px] lg:hidden transition-opacity duration-300 animate-fadeIn"
+          className="fixed inset-0 z-40 bg-[var(--scrim)] lg:hidden animate-fadeIn"
           onClick={() => setSidebarOpen(false)}
         />
       )}
@@ -63,35 +126,41 @@ export const Sidebar: React.FC = () => {
       {/* Sidebar */}
       <div
         className={`
-        fixed lg:static inset-y-0 left-0 z-50 w-64 bg-[#f0f3f7]/95 dark:bg-slate-900/95 backdrop-blur-xl
-        border-r border-slate-200/80 dark:border-slate-800/80 shadow-soft lg:shadow-none rounded-r-2xl lg:rounded-none
-        transform transition-all duration-300 ease-out
+        fixed lg:static inset-y-0 left-0 z-50 w-64 material-chrome
+        border-r border-[var(--separator)]
+        transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
         ${!sidebarOpen ? 'lg:w-0 lg:overflow-hidden' : ''}
       `}
       >
         <div className="flex flex-col h-full">
           {/* Header */}
-          <div className="p-5 border-b border-slate-200/60 dark:border-slate-800/60">
+          <div className="px-4 py-4">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5 animate-slideDown">
-                <div className="w-9 h-9 bg-gradient-to-br from-[#5b8def] to-[#4a7edb] rounded-xl flex items-center justify-center shadow-soft transition-all duration-300 ease-out hover:shadow-soft-md">
-                  <HardDrive className="w-5 h-5 text-white" />
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 bg-[var(--accent)] rounded-[10px] grid place-items-center">
+                  <HardDrive className="w-4 h-4 text-[var(--label-on-accent)]" strokeWidth={2.25} />
                 </div>
-                <span className="text-xl font-bold text-slate-800 dark:text-slate-100 tracking-tight">CloudStore</span>
+                <span className="type-title-3 text-[var(--label)]">CloudStore</span>
               </div>
               <button
                 onClick={() => setSidebarOpen(false)}
-                className="lg:hidden p-2 rounded-xl text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-700/50 transition-all duration-300 ease-out focus:outline-none focus:ring-2 focus:ring-[#5b8def]/40 active:scale-95"
+                className="pressable lg:hidden grid place-items-center w-8 h-8 rounded-full text-[var(--label-secondary)] hover:bg-[var(--fill-quaternary)] hover:text-[var(--label)]"
                 aria-label="Close sidebar"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" strokeWidth={2.25} />
               </button>
             </div>
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 flex flex-col gap-1 p-3">
+          <nav className="relative flex-1 flex flex-col gap-0.5 px-3">
+            <div
+              ref={indicatorRef}
+              aria-hidden="true"
+              className="absolute inset-x-3 rounded-xl bg-[var(--accent-fill)] transition-opacity duration-200 pointer-events-none"
+              style={{ willChange: 'transform, height' }}
+            />
             {navigationItems.map(item => {
               const Icon = item.icon;
               const active = isActive(item.path);
@@ -99,27 +168,16 @@ export const Sidebar: React.FC = () => {
               return (
                 <button
                   key={item.id}
+                  ref={node => registerItem(item.id, node)}
                   onClick={() => handleNavigation(item.path)}
-                  className={`
-                    group stagger-item ripple w-full flex items-center gap-3 px-3.5 py-3 rounded-2xl text-left relative
-                    transition-all duration-300 ease-out
-                    focus:outline-none focus:ring-2 focus:ring-[#5b8def]/40 focus:ring-offset-2 focus:ring-offset-transparent
-                    ${
-                      active
-                        ? 'bg-[#5b8def]/12 dark:bg-[#5b8def]/20 text-[#4a7edb] dark:text-blue-300 font-semibold'
-                        : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200/50 dark:hover:bg-slate-700/40 hover:text-slate-800 dark:hover:text-slate-100'
-                    }
-                  `}
+                  className={navButton(active)}
                   aria-current={active ? 'page' : undefined}
                 >
                   <Icon
-                    className={`w-5 h-5 flex-shrink-0 relative z-10 transition-all duration-300 ease-out ${
-                      active
-                        ? 'text-[#4a7edb] dark:text-blue-400'
-                        : 'text-slate-500 dark:text-slate-400 group-hover:text-slate-700 dark:group-hover:text-slate-200'
-                    }`}
+                    className={`w-[18px] h-[18px] flex-shrink-0 ${active ? 'text-[var(--accent)]' : 'text-[var(--label-tertiary)]'}`}
+                    strokeWidth={2}
                   />
-                  <span className="relative z-10 truncate">{item.label}</span>
+                  <span className="truncate">{item.label}</span>
                 </button>
               );
             })}
@@ -128,14 +186,14 @@ export const Sidebar: React.FC = () => {
           {/* Updates banner */}
           {updatesAvailable && (
             <div className="px-3 pb-2">
-              <div className="rounded-2xl border border-amber-300/50 dark:border-amber-600/30 bg-amber-50/80 dark:bg-amber-900/15 px-3.5 py-2.5 shadow-soft">
-                <p className="text-xs font-semibold text-amber-800 dark:text-amber-200 mb-1">Updates Available</p>
-                <ul className="text-xs text-amber-700 dark:text-amber-100/90 space-y-0.5">
-                  {updatesAvailable.backend && <li>Backend ⟶ {updatesAvailable.backend}</li>}
-                  {updatesAvailable.frontend && <li>Frontend ⟶ {updatesAvailable.frontend}</li>}
+              <div className="rounded-xl border border-[var(--separator)] bg-[var(--fill-quaternary)] px-3 py-2.5">
+                <p className="type-caption type-emphasized text-[var(--warning)] mb-1">Updates available</p>
+                <ul className="type-caption text-[var(--label-secondary)] space-y-0.5">
+                  {updatesAvailable.backend && <li>Backend → {updatesAvailable.backend}</li>}
+                  {updatesAvailable.frontend && <li>Frontend → {updatesAvailable.frontend}</li>}
                   {updatesAvailable.electron && (
                     <li className="flex flex-col gap-1">
-                      <span>Desktop ⟶ {updatesAvailable.electron}</span>
+                      <span>Desktop → {updatesAvailable.electron}</span>
                       {isElectron() && electronAutoUpdateState.status !== 'idle' && (
                         <div className="flex flex-col gap-1">
                           {electronAutoUpdateState.status === 'downloading' && (
@@ -145,15 +203,15 @@ export const Sidebar: React.FC = () => {
                                 Auto-updating
                                 {electronAutoUpdateState.progress != null
                                   ? ` ${electronAutoUpdateState.progress}%`
-                                  : '...'}
+                                  : '…'}
                               </span>
                             </div>
                           )}
                           {electronAutoUpdateState.status === 'downloading' &&
                             electronAutoUpdateState.progress != null && (
-                              <div className="h-1 w-full rounded-full bg-amber-200/50 dark:bg-amber-800/30 overflow-hidden">
+                              <div className="h-1 w-full rounded-full bg-[var(--fill-tertiary)] overflow-hidden">
                                 <div
-                                  className="h-full rounded-full bg-amber-500 dark:bg-amber-400 transition-all duration-300"
+                                  className="h-full rounded-full bg-[var(--accent)] transition-[width] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
                                   style={{ width: `${electronAutoUpdateState.progress}%` }}
                                 />
                               </div>
@@ -161,14 +219,14 @@ export const Sidebar: React.FC = () => {
                           {electronAutoUpdateState.status === 'installing' && (
                             <div className="flex items-center gap-1.5">
                               <Download className="w-3 h-3 flex-shrink-0" />
-                              <span>Installing... app will restart</span>
+                              <span>Installing… the app will restart</span>
                             </div>
                           )}
                           {electronAutoUpdateState.status === 'error' && (
                             <button
                               type="button"
                               onClick={() => void retryElectronUpdate()}
-                              className="inline-flex items-center gap-1.5 text-red-600 dark:text-red-400 hover:underline focus:outline-none focus:ring-1 focus:ring-red-400 rounded-sm"
+                              className="inline-flex items-center gap-1.5 text-[var(--destructive)] hover:underline rounded-sm"
                               aria-label="Retry desktop update"
                             >
                               <RefreshCw className="w-3 h-3 flex-shrink-0" />
@@ -185,29 +243,21 @@ export const Sidebar: React.FC = () => {
           )}
 
           {/* Settings */}
-          <div className="p-3 border-t border-slate-200/60 dark:border-slate-800/60">
+          <div className="p-3 border-t border-[var(--separator)]">
             <button
               onClick={() => handleNavigation(['Settings'])}
-              className={`
-                group ripple w-full flex items-center gap-3 px-3.5 py-3 rounded-2xl text-left relative
-                transition-all duration-300 ease-out
-                focus:outline-none focus:ring-2 focus:ring-[#5b8def]/40 focus:ring-offset-2 focus:ring-offset-transparent
-                ${
-                  isActive(['Settings'])
-                    ? 'bg-[#5b8def]/12 dark:bg-[#5b8def]/20 text-[#4a7edb] dark:text-blue-300 font-semibold'
-                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200/50 dark:hover:bg-slate-700/40 hover:text-slate-800 dark:hover:text-slate-100'
-                }
-              `}
+              className={`${navButton(isActive(['Settings']))} ${
+                isActive(['Settings']) ? 'bg-[var(--accent-fill)]' : 'hover:bg-[var(--fill-quaternary)]'
+              }`}
               aria-current={isActive(['Settings']) ? 'page' : undefined}
             >
               <Settings
-                className={`w-5 h-5 flex-shrink-0 relative z-10 transition-all duration-300 ease-out ${
-                  isActive(['Settings'])
-                    ? 'text-[#4a7edb] dark:text-blue-400'
-                    : 'text-slate-500 dark:text-slate-400 group-hover:text-slate-700 dark:group-hover:text-slate-200'
+                className={`w-[18px] h-[18px] flex-shrink-0 ${
+                  isActive(['Settings']) ? 'text-[var(--accent)]' : 'text-[var(--label-tertiary)]'
                 }`}
+                strokeWidth={2}
               />
-              <span className="relative z-10">Settings</span>
+              <span>Settings</span>
             </button>
           </div>
         </div>

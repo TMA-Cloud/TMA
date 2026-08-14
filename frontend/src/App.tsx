@@ -10,6 +10,7 @@ import { useSignupStatus } from './components/settings/hooks/useSignupStatus';
 import { useIsMobile } from './hooks/useIsMobile';
 import { Sidebar } from './components/layout/Sidebar';
 import { Header } from './components/layout/Header';
+import { useScrollEdge } from './motion';
 
 function easeOutCubic(t: number) {
   return 1 - Math.pow(1 - t, 3);
@@ -90,12 +91,15 @@ const SignupForm = lazy(() =>
   }))
 );
 
-// Loading fallback component
+/**
+ * A spinner is a status report, not decoration, so it stays quiet: one ring,
+ * no colour beyond the accent that marks the moving part.
+ */
 const PageLoadingFallback: React.FC = () => (
   <div className="flex items-center justify-center h-full min-h-[400px]">
     <div className="text-center">
-      <div className="w-11 h-11 mx-auto mb-3 border-[3px] border-slate-200 dark:border-slate-700 border-t-[#5b8def] dark:border-t-blue-400 rounded-full animate-spin"></div>
-      <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">Loading...</p>
+      <div className="w-8 h-8 mx-auto mb-3 border-2 border-[var(--fill-tertiary)] border-t-[var(--accent)] rounded-full animate-spin"></div>
+      <p className="type-footnote text-[var(--label-tertiary)]">Loading…</p>
     </div>
   </div>
 );
@@ -111,7 +115,9 @@ const AppContent: React.FC = () => {
     cancelUpload,
   } = useApp();
   const isMobile = useIsMobile();
-  const mainRef = React.useRef<HTMLElement | null>(null);
+  // One hook feeds both pieces of chrome that depend on this scroller: the
+  // header's soft edge and the overlay scrollbar.
+  const { ref: mainRef, scrolled: contentScrolled } = useScrollEdge<HTMLElement>();
   const navScrollRef = React.useRef<{ page: string; stackLen: number }>({
     page: currentPath[0] ?? '',
     stackLen: folderStack.length,
@@ -131,7 +137,7 @@ const AppContent: React.FC = () => {
     if ((pageChanged || wentDeeper) && mainRef.current) {
       scrollToTopFast(mainRef.current, 180);
     }
-  }, [currentPath, folderStack.length, isMobile]);
+  }, [currentPath, folderStack.length, isMobile, mainRef]);
 
   const renderContent = () => {
     const currentPage = currentPath[0];
@@ -178,15 +184,18 @@ const AppContent: React.FC = () => {
   }
 
   return (
-    <div className="h-screen bg-gradient-to-br from-[#e8ecf1] via-[#eef2f6] to-[#e2e7ee] dark:from-[#0f172a] dark:via-[#1e293b] dark:to-[#1a2332] flex overflow-hidden">
+    <div className="h-screen bg-[var(--canvas)] flex overflow-hidden">
       <Sidebar />
 
       <div
-        className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 ${!sidebarOpen ? 'lg:ml-0' : ''}`}
+        className={`flex-1 flex flex-col overflow-hidden transition-[margin] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${!sidebarOpen ? 'lg:ml-0' : ''}`}
       >
-        <Header />
+        {/* The header floats over the scroller rather than taking a strip out
+            of it, so `contentScrolled` is what tells it whether anything is
+            actually passing underneath. */}
+        <Header contentScrolled={contentScrolled} />
 
-        <main ref={mainRef} className="flex-1 overflow-y-auto">
+        <main ref={mainRef} className="scroller flex-1 overflow-y-auto">
           {renderContent()}
         </main>
       </div>
@@ -237,10 +246,10 @@ const AuthGate: React.FC = () => {
 
   if (loading || loadingSignupStatus) {
     return (
-      <div className="h-screen flex items-center justify-center bg-gradient-to-br from-[#e8ecf1] via-[#eef2f6] to-[#e2e7ee] dark:from-[#0f172a] dark:via-[#1e293b] dark:to-[#1a2332]">
+      <div className="h-screen flex items-center justify-center bg-[var(--canvas)]">
         <div className="text-center animate-fadeIn">
-          <div className="w-14 h-14 mx-auto mb-4 border-[3px] border-[#d5dbe4] dark:border-slate-700 border-t-[#5b8def] dark:border-t-blue-400 rounded-full animate-spin"></div>
-          <p className="text-base font-medium text-slate-600 dark:text-slate-400">Loading...</p>
+          <div className="w-9 h-9 mx-auto mb-4 border-2 border-[var(--fill-tertiary)] border-t-[var(--accent)] rounded-full animate-spin"></div>
+          <p className="type-footnote text-[var(--label-tertiary)]">Loading…</p>
         </div>
       </div>
     );
@@ -248,12 +257,15 @@ const AuthGate: React.FC = () => {
 
   if (!user) {
     return (
-      <div className="h-screen flex items-center justify-center bg-gradient-to-br from-[#e8ecf1] via-[#eef2f6] to-[#e2e7ee] dark:from-[#0f172a] dark:via-[#1e293b] dark:to-[#1a2332] relative">
+      <div className="h-screen flex items-center justify-center bg-[var(--canvas)] relative">
         <div className="absolute top-5 right-5 z-50">
           <ThemeToggle />
         </div>
         {effectiveError && (
-          <div className="absolute top-5 left-1/2 -translate-x-1/2 bg-red-500/95 text-white px-5 py-2.5 rounded-2xl shadow-soft-md z-50 text-sm font-medium backdrop-blur-sm">
+          <div
+            className="absolute top-5 left-1/2 -translate-x-1/2 z-50 material-regular material-edge rounded-2xl px-4 py-2.5 type-footnote vibrant text-[var(--destructive)] animate-slideDown"
+            role="alert"
+          >
             {effectiveError}
           </div>
         )}

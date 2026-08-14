@@ -4,18 +4,16 @@ import { useApp } from '../../contexts/AppContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { ThemeToggle } from './ThemeToggle';
 
-export const Header: React.FC = () => {
+interface HeaderProps {
+  /** Whether the page beneath has scrolled under the bar. */
+  contentScrolled?: boolean;
+}
+
+export const Header: React.FC<HeaderProps> = ({ contentScrolled = false }) => {
   const { sidebarOpen, setSidebarOpen, setUploadModalOpen, searchQuery, setSearchQuery, isSearching } = useApp();
   const { logout, user, can } = useAuth();
-  const [scrolled, setScrolled] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 8);
-    window.addEventListener('scroll', onScroll);
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -44,43 +42,50 @@ export const Header: React.FC = () => {
       .toUpperCase();
   };
 
+  const iconButton =
+    'pressable grid place-items-center w-9 h-9 rounded-full text-[var(--label-secondary)] hover:bg-[var(--fill-quaternary)] hover:text-[var(--label)]';
+
   return (
     <header
-      className={`bg-[#f0f3f7]/90 dark:bg-slate-900/90 border-b border-slate-200/70 dark:border-slate-800/70 backdrop-blur-xl px-4 sm:px-6 py-3 transition-all duration-300 sticky top-0 z-40 ${scrolled ? 'shadow-soft' : ''}`}
+      // A translucent layer the page passes beneath, not an opaque strip cut
+      // out of it. The soft edge below appears only once content is actually
+      // overlapping; a permanent rule would draw a boundary that is not there
+      // most of the time.
+      className="material-chrome scroll-edge sticky top-0 z-40 px-4 sm:px-6 py-2.5"
+      data-scrolled={contentScrolled ? 'true' : 'false'}
     >
       <div className="flex items-center justify-between gap-4">
         {/* Left section */}
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-          <button
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="ripple p-2 rounded-2xl text-slate-500 hover:text-[#4a7edb] dark:hover:text-blue-400 hover:bg-slate-200/50 dark:hover:bg-slate-700/50 transition-all duration-300 ease-out focus:outline-none focus:ring-2 focus:ring-[#5b8def]/40 active:scale-95 flex-shrink-0"
-            aria-label="Open sidebar"
-          >
-            <Menu className="w-5 h-5" />
+          <button onClick={() => setSidebarOpen(!sidebarOpen)} className={iconButton} aria-label="Open sidebar">
+            <Menu className="w-[18px] h-[18px]" strokeWidth={2} />
           </button>
 
           {/* Search */}
           <div className="relative hidden md:block w-44 sm:w-72 lg:w-80 flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none transition-colors duration-300" />
+            <Search
+              className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--label-tertiary)] pointer-events-none"
+              strokeWidth={2}
+            />
             <input
               type="text"
-              placeholder="Search files and folders..."
+              placeholder="Search files and folders"
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-9 py-2.5 bg-slate-100/80 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#5b8def]/35 focus:border-[#5b8def]/40 text-slate-800 dark:text-slate-100 placeholder-slate-400 transition-all duration-300 ease-out text-sm"
+              className="type-callout w-full pl-9 pr-9 py-2 bg-[var(--fill-quaternary)] border border-transparent rounded-full text-[var(--label)] placeholder-[var(--label-tertiary)] focus:outline-none focus:bg-[var(--surface)] focus:border-[var(--accent-ring)] focus:ring-4 focus:ring-[var(--accent-fill)] transition-[background-color,border-color,box-shadow] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)]"
             />
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1.5 rounded-xl hover:bg-slate-200/60 dark:hover:bg-slate-600/50 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-all duration-300 ease-out animate-scaleIn"
+                className="pressable absolute right-2.5 top-1/2 -translate-y-1/2 grid place-items-center w-5 h-5 rounded-full bg-[var(--fill-tertiary)] text-[var(--label-secondary)] hover:bg-[var(--fill-secondary)] animate-scaleIn"
                 aria-label="Clear search"
               >
-                <X className="w-4 h-4" />
+                <X className="w-3 h-3" strokeWidth={3} />
               </button>
             )}
             {isSearching && searchQuery && (
               <div className="absolute right-9 top-1/2 -translate-y-1/2">
-                <div className="w-4 h-4 border-2 border-slate-300 dark:border-slate-600 border-t-[#5b8def] dark:border-t-blue-400 rounded-full animate-spin" />
+                <div className="w-3.5 h-3.5 border-2 border-[var(--fill-tertiary)] border-t-[var(--accent)] rounded-full animate-spin" />
               </div>
             )}
           </div>
@@ -94,9 +99,9 @@ export const Header: React.FC = () => {
           {can('files.upload') && (
             <button
               onClick={() => setUploadModalOpen(true)}
-              className="ripple btn-glow flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-[#5b8def] to-[#4a7edb] hover:from-[#4a7edb] hover:to-[#3d6ec7] text-white rounded-2xl shadow-soft focus:outline-none focus:ring-2 focus:ring-[#5b8def]/40 hover-lift font-semibold text-sm transition-all duration-300 ease-out"
+              className="pressable type-callout type-emphasized flex items-center gap-2 pl-3.5 pr-4 py-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-[var(--label-on-accent)] rounded-full shadow-[var(--shadow-1)]"
             >
-              <Upload className="w-4 h-4" />
+              <Upload className="w-4 h-4" strokeWidth={2.25} />
               <span className="hidden sm:inline">Upload</span>
             </button>
           )}
@@ -105,38 +110,42 @@ export const Header: React.FC = () => {
           <div className="relative" ref={dropdownRef}>
             <button
               onClick={() => setDropdownOpen(!dropdownOpen)}
-              className="flex items-center gap-2 p-2 rounded-2xl hover:bg-slate-200/50 dark:hover:bg-slate-700/50 cursor-pointer transition-all duration-300 ease-out focus:outline-none focus:ring-2 focus:ring-[#5b8def]/40"
+              className="pressable flex items-center gap-2 pl-1 pr-2 py-1 rounded-full hover:bg-[var(--fill-quaternary)]"
             >
-              <div className="w-8 h-8 bg-gradient-to-br from-[#5b8def] to-[#4a7edb] rounded-full flex items-center justify-center shadow-soft text-white font-semibold text-sm transition-all duration-300 ease-out">
+              <div className="w-8 h-8 bg-[var(--accent)] rounded-full grid place-items-center text-[var(--label-on-accent)] type-caption type-emphasized">
                 {getInitials(user?.name) || 'U'}
               </div>
               <div className="hidden sm:block text-left min-w-0">
-                <p className="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate">
+                <p className="type-caption type-emphasized text-[var(--label)] truncate">
                   {user?.name || 'Personal Cloud'}
                 </p>
-                <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{user?.email || 'Your Files'}</p>
+                <p className="type-caption-2 text-[var(--label-tertiary)] truncate">{user?.email || 'Your Files'}</p>
               </div>
               <ChevronDown
-                className={`w-4 h-4 text-slate-500 dark:text-slate-400 transition-transform duration-300 ease-out flex-shrink-0 ${dropdownOpen ? 'rotate-180' : ''}`}
+                className={`w-3.5 h-3.5 text-[var(--label-tertiary)] transition-transform duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] flex-shrink-0 ${
+                  dropdownOpen ? 'rotate-180' : ''
+                }`}
+                strokeWidth={2.5}
               />
             </button>
 
             {dropdownOpen && (
               <>
-                <div
-                  className="fixed inset-0 z-40 bg-slate-900/10 dark:bg-black/15 backdrop-blur-[2px] animate-fadeIn"
-                  onClick={() => setDropdownOpen(false)}
-                />
-                <div className="absolute right-0 mt-2 w-48 bg-[#f0f3f7]/98 dark:bg-slate-800/98 backdrop-blur-xl rounded-2xl shadow-soft-lg border border-slate-200/60 dark:border-slate-700/60 py-1.5 z-50 overflow-hidden animate-menuIn">
+                {/* No scrim: this is a parallel choice, not a task that puts
+                    the rest of the app on hold. */}
+                <div className="fixed inset-0 z-40" onClick={() => setDropdownOpen(false)} />
+                {/* Grown from the control that opened it, so the relationship
+                    between button and menu is never in question. */}
+                <div className="absolute right-0 mt-2 w-48 origin-top-right material-thick material-edge rounded-2xl p-1.5 z-50 animate-menuIn">
                   <button
                     onClick={() => {
                       logout();
                       setDropdownOpen(false);
                     }}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-left text-slate-700 dark:text-slate-300 hover:bg-red-50/80 dark:hover:bg-red-900/20 hover:text-red-600 dark:hover:text-red-400 transition-all duration-300 ease-out rounded-xl mx-1.5 group"
+                    className="pressable type-callout w-full flex items-center gap-2.5 px-3 py-2 text-left text-[var(--label)] hover:bg-[var(--destructive)] hover:text-white rounded-xl"
                   >
-                    <LogOut className="w-4 h-4 flex-shrink-0 transition-transform duration-300 group-hover:-translate-x-0.5" />
-                    <span className="text-sm font-medium">Log out</span>
+                    <LogOut className="w-4 h-4 flex-shrink-0" strokeWidth={2} />
+                    <span>Log out</span>
                   </button>
                 </div>
               </>
