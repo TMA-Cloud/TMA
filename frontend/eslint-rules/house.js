@@ -308,6 +308,50 @@ const noVendorNames = {
   },
 };
 
+/**
+ * `<input type="number">` accepts characters it then refuses to report: `e`,
+ * `E`, `+` and `-` can all be typed, and while the box holds an unparseable
+ * value the element reads back as the empty string. A controlled field stores
+ * that empty string and re-renders, the DOM sees no change and leaves the
+ * stray character on screen, and the save fails over a field that visibly has
+ * a value. NumberInput filters a text input instead, where what was typed is
+ * what the handler is given.
+ */
+const noNumberInput = {
+  meta: {
+    type: 'problem',
+    docs: { description: 'Take numeric input through NumberInput rather than the number input type' },
+    messages: {
+      numberInput:
+        'Use <NumberInput> from components/ui instead of type="number". The number type lets "e", "E", "+" and ' +
+        '"-" be typed but reports the value as an empty string while they are there, so the character stays on ' +
+        'screen, no handler can strip it, and saving fails over a field that looks filled in.',
+    },
+  },
+  create(context) {
+    /** The literal behind `type="number"` or `type={'number'}`. */
+    const literalValue = value => {
+      if (!value) return null;
+      if (value.type === 'Literal') return value.value;
+      if (value.type === 'JSXExpressionContainer' && value.expression.type === 'Literal') {
+        return value.expression.value;
+      }
+      return null;
+    };
+
+    return {
+      JSXAttribute(node) {
+        if (node.name.name !== 'type' || literalValue(node.value) !== 'number') return;
+        // Only the DOM element behaves this way; a wrapper is free to define
+        // its own `type` prop however it likes.
+        const element = node.parent?.name;
+        if (element?.type === 'JSXIdentifier' && element.name !== 'input') return;
+        context.report({ node, messageId: 'numberInput' });
+      },
+    };
+  },
+};
+
 export default {
   meta: { name: 'house' },
   rules: {
@@ -317,5 +361,6 @@ export default {
     'no-raw-theme-color': noRawThemeColor,
     'no-transition-all': noTransitionAll,
     'no-vendor-names': noVendorNames,
+    'no-number-input': noNumberInput,
   },
 };

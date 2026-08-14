@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Loader2, Shield, ShieldCheck, HardDrive, Edit2, Check, X, CornerDownRight, RotateCcw } from 'lucide-react';
 import { format } from 'date-fns';
 import { Modal } from '../../ui/Modal';
+import { NumberInput } from '../../ui/NumberInput';
 import { ModalCountHeader } from '../components/ModalCountHeader';
 import { updateUserStorageLimit, type UserSummary } from '../../../utils/api';
 import { useToast } from '../../../hooks/useToast';
@@ -112,17 +113,6 @@ export const UsersModal: React.FC<UsersModalProps> = ({
     setEditingUserId(null);
     setEditValue('');
     setEditUnit('GB');
-  };
-
-  const handleNumberChange = (value: string) => {
-    // Only allow numbers and decimal point
-    // Remove any non-numeric characters except decimal point
-    const sanitized = value.replace(/[^0-9.]/g, '');
-    // Prevent multiple decimal points
-    const parts = sanitized.split('.');
-    const cleaned = parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : sanitized;
-    // Limit to reasonable length
-    setEditValue(cleaned.slice(0, 15));
   };
 
   /** Clearing the limit hands the account back the default (actual disk space). */
@@ -309,12 +299,10 @@ export const UsersModal: React.FC<UsersModalProps> = ({
                           <span className="text-xs text-gray-500 dark:text-gray-400">Inherited</span>
                         ) : isEditing ? (
                           <div className="flex items-center gap-1">
-                            <input
-                              type="number"
-                              step="0.01"
-                              min="0"
+                            <NumberInput
                               value={editValue}
-                              onChange={e => handleNumberChange(e.target.value)}
+                              onValueChange={setEditValue}
+                              maxLength={15}
                               placeholder="0"
                               className="px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-[#ffffff] dark:bg-gray-800 text-gray-900 dark:text-gray-100 w-20 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                               disabled={isUpdating}

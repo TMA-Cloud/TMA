@@ -207,6 +207,32 @@ describe('house/no-transition-all', () => {
   });
 });
 
+describe('house/no-number-input', () => {
+  it('flags the number input type and leaves the other types alone', () => {
+    ruleTester.run('no-number-input', house.rules['no-number-input'], {
+      valid: [
+        '<NumberInput value={size} onValueChange={setSize} />',
+        '<input type="text" inputMode="decimal" />',
+        '<input type="password" />',
+        // A wrapper is free to give `type` whatever meaning it wants.
+        '<Field type="number" />',
+        // Not a JSX type attribute at all.
+        "const input = { type: 'number' };",
+      ],
+      invalid: [
+        {
+          code: '<input type="number" min="0" step="0.01" />',
+          errors: [{ messageId: 'numberInput' }],
+        },
+        {
+          code: "<input type={'number'} />",
+          errors: [{ messageId: 'numberInput' }],
+        },
+      ],
+    });
+  });
+});
+
 describe('house/no-vendor-names', () => {
   it('flags borrowed authority in comments and leaves the reasoning alone', () => {
     ruleTester.run('no-vendor-names', house.rules['no-vendor-names'], {

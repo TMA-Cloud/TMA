@@ -6,6 +6,7 @@ import { getMaxUploadSizeConfig, updateMaxUploadSizeConfig } from '../../../util
 import { SettingsSection } from '../components/SettingsSection';
 import { SettingsItem } from '../components/SettingsItem';
 import { SettingsField, SettingsFormActions } from '../components/SettingsField';
+import { NumberInput } from '../../ui/NumberInput';
 import { formatFileSize } from '../../../utils/fileUtils';
 import { BYTES_PER_MB, BYTES_PER_GB } from '../../../utils/storageUtils';
 import { useAbortableLoader } from '../../../hooks/useAbortableLoader';
@@ -184,16 +185,11 @@ export const StorageSection: React.FC<StorageSectionProps> = ({ usage, loading, 
                     description={`Allowed range: ${MIN_LABEL} to ${MAX_LABEL} per file`}
                   >
                     <div className="mt-1 flex gap-2">
-                      <input
+                      <NumberInput
                         id="max-upload-size-value"
-                        type="number"
-                        min={sizeUnit === 'GB' ? MIN_GB : MIN_MB}
-                        max={sizeUnit === 'GB' ? MAX_GB : MAX_MB}
-                        step={sizeUnit === 'GB' ? 0.1 : 1}
                         value={sizeInput}
-                        onChange={e => setSizeInput(e.target.value)}
+                        onValueChange={setSizeInput}
                         disabled={maxUploadLoading || saving}
-                        autoComplete="off"
                         data-form-type="other"
                         className="flex-1 min-w-0 px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-[#ffffff] dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
                       />

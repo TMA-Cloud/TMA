@@ -9,6 +9,7 @@ declare const plugin: {
     'no-raw-theme-color': Rule.RuleModule;
     'no-transition-all': Rule.RuleModule;
     'no-vendor-names': Rule.RuleModule;
+    'no-number-input': Rule.RuleModule;
   };
 };
 
