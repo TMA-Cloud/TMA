@@ -210,9 +210,19 @@
     --accent-fill-strong: rgba(0, 122, 255, 0.16);
     --accent-ring: rgba(0, 122, 255, 0.35);
 
+    /* Fills. These are tuned to be sat on, not read: as text on white they
+       measure 2.2:1 (positive) and 2.1:1 (warning), nowhere near legible. */
     --positive: #34c759;
     --warning: #ff9f0a;
     --destructive: #ff3b30;
+
+    /* The same three roles for anything the eye has to resolve — a word, a
+       glyph, a hairline. Darkened until each clears 4.5:1 on both the canvas
+       and a white surface. In dark mode the fill values already clear it, so
+       the pairs converge there. */
+    --positive-text: #1c6b30;
+    --warning-text: #a2540a;
+    --destructive-text: #d70015;
 
     /* --- Materials ---
        Bigger surfaces read as thicker: more blur, deeper shadow. Chrome is the
@@ -289,6 +299,12 @@
     --positive: #30d158;
     --warning: #ffd60a;
     --destructive: #ff453a;
+
+    /* Against a near-black ground these already read, so the text roles are
+       the fills. The split exists for the light theme's sake. */
+    --positive-text: #30d158;
+    --warning-text: #ffd60a;
+    --destructive-text: #ff453a;
 
     --material-chrome: rgba(28, 28, 30, 0.72);
     --material-thin: rgba(44, 44, 46, 0.6);

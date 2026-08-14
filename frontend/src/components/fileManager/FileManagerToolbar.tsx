@@ -36,11 +36,14 @@ type Tint = 'neutral' | 'accent' | 'positive' | 'warning' | 'destructive';
 const TINTS: Record<Tint, { on: string; hover: string }> = {
   neutral: { on: 'text-[var(--label)] bg-[var(--fill-tertiary)]', hover: 'hover:text-[var(--label)]' },
   accent: { on: 'text-[var(--accent)] bg-[var(--accent-fill)]', hover: 'hover:text-[var(--accent)]' },
-  positive: { on: 'text-[var(--positive)] bg-[var(--fill-quaternary)]', hover: 'hover:text-[var(--positive)]' },
-  warning: { on: 'text-[var(--warning)] bg-[var(--fill-quaternary)]', hover: 'hover:text-[var(--warning)]' },
+  positive: {
+    on: 'text-[var(--positive-text)] bg-[var(--fill-quaternary)]',
+    hover: 'hover:text-[var(--positive-text)]',
+  },
+  warning: { on: 'text-[var(--warning-text)] bg-[var(--fill-quaternary)]', hover: 'hover:text-[var(--warning-text)]' },
   destructive: {
-    on: 'text-[var(--destructive)] bg-[var(--fill-quaternary)]',
-    hover: 'hover:text-[var(--destructive)]',
+    on: 'text-[var(--destructive-text)] bg-[var(--fill-quaternary)]',
+    hover: 'hover:text-[var(--destructive-text)]',
   },
 };
 

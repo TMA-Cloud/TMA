@@ -263,7 +263,7 @@ const AuthGate: React.FC = () => {
         </div>
         {effectiveError && (
           <div
-            className="absolute top-5 left-1/2 -translate-x-1/2 z-50 material-regular material-edge rounded-2xl px-4 py-2.5 type-footnote vibrant text-[var(--destructive)] animate-slideDown"
+            className="absolute top-5 left-1/2 -translate-x-1/2 z-50 material-regular material-edge rounded-2xl px-4 py-2.5 type-footnote vibrant text-[var(--destructive-text)] animate-slideDown"
             role="alert"
           >
             {effectiveError}

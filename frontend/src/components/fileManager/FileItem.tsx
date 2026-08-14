@@ -160,10 +160,12 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
   const badge = (
     <>
       {file.starred && (
-        <Star className="absolute -top-1 -right-1 w-3.5 h-3.5 text-[var(--warning)] fill-[var(--warning)]" />
+        <Star className="absolute -top-1 -right-1 w-3.5 h-3.5 text-[var(--warning-text)] fill-[var(--warning-text)]" />
       )}
-      {file.shared && !isExpired && <Share2 className="absolute -top-1 -left-1 w-3.5 h-3.5 text-[var(--positive)]" />}
-      {isExpired && <Clock className="absolute -top-1 -left-1 w-3.5 h-3.5 text-[var(--destructive)]" />}
+      {file.shared && !isExpired && (
+        <Share2 className="absolute -top-1 -left-1 w-3.5 h-3.5 text-[var(--positive-text)]" />
+      )}
+      {isExpired && <Clock className="absolute -top-1 -left-1 w-3.5 h-3.5 text-[var(--destructive-text)]" />}
     </>
   );
 
@@ -233,7 +235,7 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
           <div className="type-caption-2 text-[var(--label-tertiary)] w-full min-w-0 px-1">
             {file.type === 'file' && file.size && <p className="truncate">{formatFileSize(file.size)}</p>}
             <p className="truncate">{formatDate(file.modified)}</p>
-            {isExpired && <p className="truncate text-[var(--destructive)]">Link expired</p>}
+            {isExpired && <p className="truncate text-[var(--destructive-text)]">Link expired</p>}
           </div>
         </div>
       </div>
@@ -278,7 +280,7 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
         <p className="type-caption text-[var(--label-tertiary)]">
           {file.type === 'file' && file.size && `${formatFileSize(file.size)} · `}
           {formatDate(file.modified)}
-          {isExpired && <span className="ml-2 text-[var(--destructive)]">Link expired</span>}
+          {isExpired && <span className="ml-2 text-[var(--destructive-text)]">Link expired</span>}
         </p>
       </div>
     </div>

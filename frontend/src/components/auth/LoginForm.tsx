@@ -113,7 +113,7 @@ export const LoginForm: React.FC<{
             banner somewhere else on the screen. */}
         {error && (
           <p
-            className="type-footnote type-emphasized text-[var(--destructive)] animate-slideDown"
+            className="type-footnote type-emphasized text-[var(--destructive-text)] animate-slideDown"
             key={error}
             role="alert"
           >

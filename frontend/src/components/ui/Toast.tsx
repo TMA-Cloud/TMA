@@ -99,8 +99,8 @@ export const Toast: React.FC<ToastProps> = ({ id, message, type = 'info', durati
   };
 
   const tints = {
-    success: 'text-[var(--positive)]',
-    error: 'text-[var(--destructive)]',
+    success: 'text-[var(--positive-text)]',
+    error: 'text-[var(--destructive-text)]',
     info: 'text-[var(--accent)]',
   };
 
@@ -116,7 +116,7 @@ export const Toast: React.FC<ToastProps> = ({ id, message, type = 'info', durati
         cursor-grab active:cursor-grabbing touch-pan-y select-none
         ${
           leaving
-            ? 'opacity-0 translate-y-4 scale-[0.96] transition-all duration-300 ease-[cubic-bezier(0.64,0,0.78,0)]'
+            ? 'opacity-0 translate-y-4 scale-[0.96] transition-[opacity,transform] duration-300 ease-[cubic-bezier(0.64,0,0.78,0)]'
             : 'animate-toastIn'
         }
       `}

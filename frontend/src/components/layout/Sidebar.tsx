@@ -187,7 +187,7 @@ export const Sidebar: React.FC = () => {
           {updatesAvailable && (
             <div className="px-3 pb-2">
               <div className="rounded-xl border border-[var(--separator)] bg-[var(--fill-quaternary)] px-3 py-2.5">
-                <p className="type-caption type-emphasized text-[var(--warning)] mb-1">Updates available</p>
+                <p className="type-caption type-emphasized text-[var(--warning-text)] mb-1">Updates available</p>
                 <ul className="type-caption text-[var(--label-secondary)] space-y-0.5">
                   {updatesAvailable.backend && <li>Backend → {updatesAvailable.backend}</li>}
                   {updatesAvailable.frontend && <li>Frontend → {updatesAvailable.frontend}</li>}
@@ -226,7 +226,7 @@ export const Sidebar: React.FC = () => {
                             <button
                               type="button"
                               onClick={() => void retryElectronUpdate()}
-                              className="inline-flex items-center gap-1.5 text-[var(--destructive)] hover:underline rounded-sm"
+                              className="inline-flex items-center gap-1.5 text-[var(--destructive-text)] hover:underline rounded-sm"
                               aria-label="Retry desktop update"
                             >
                               <RefreshCw className="w-3 h-3 flex-shrink-0" />

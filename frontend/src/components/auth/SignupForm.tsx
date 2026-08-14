@@ -93,7 +93,7 @@ export const SignupForm: React.FC<{ onSwitch: () => void }> = ({ onSwitch }) => 
         <p className="type-caption text-[var(--label-tertiary)]">At least 8 characters</p>
         {error && (
           <p
-            className="type-footnote type-emphasized text-[var(--destructive)] animate-slideDown"
+            className="type-footnote type-emphasized text-[var(--destructive-text)] animate-slideDown"
             key={error}
             role="alert"
           >
