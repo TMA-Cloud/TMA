@@ -20,10 +20,7 @@ export const DesktopOpenProgress: React.FC<DesktopOpenProgressProps> = ({ items 
         const safePercent = Math.max(0, Math.min(100, Number.isFinite(item.percent) ? item.percent : 0));
 
         return (
-          <div
-            key={item.fileId}
-            className="w-80 bg-[#ffffff] dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-4"
-          >
+          <div key={item.fileId} className="w-80 surface-raised p-4">
             <div className="flex items-center space-x-2 mb-2">
               <Monitor className="w-4 h-4 text-gray-500 dark:text-gray-400" />
               <div className="flex-1">

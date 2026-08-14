@@ -13,9 +13,9 @@ interface FixedProgressProps {
 }
 
 const containerByVariant: Record<ProgressVariant, string> = {
-  neutral: 'bg-[#ffffff] dark:bg-gray-800 border border-gray-200 dark:border-gray-700',
-  emerald: 'bg-[#f2f2f7] dark:bg-gray-800 border border-emerald-200/70 dark:border-gray-700',
-  'blue-pulse': 'bg-[#ffffff] dark:bg-gray-800 border border-gray-200 dark:border-gray-700',
+  neutral: 'bg-[var(--surface)] border border-[var(--separator)]',
+  emerald: 'bg-[var(--surface)] border border-[var(--separator)]',
+  'blue-pulse': 'bg-[var(--surface)] border border-[var(--separator)]',
 };
 
 const iconColorByVariant: Record<ProgressVariant, string> = {
