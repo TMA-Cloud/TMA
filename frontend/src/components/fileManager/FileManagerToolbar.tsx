@@ -31,6 +31,67 @@ interface FileManagerToolbarProps {
   onEmptyTrash: () => void;
 }
 
+type Tint = 'neutral' | 'accent' | 'positive' | 'warning' | 'destructive';
+
+const TINTS: Record<Tint, { on: string; hover: string }> = {
+  neutral: { on: 'text-[var(--label)] bg-[var(--fill-tertiary)]', hover: 'hover:text-[var(--label)]' },
+  accent: { on: 'text-[var(--accent)] bg-[var(--accent-fill)]', hover: 'hover:text-[var(--accent)]' },
+  positive: { on: 'text-[var(--positive)] bg-[var(--fill-quaternary)]', hover: 'hover:text-[var(--positive)]' },
+  warning: { on: 'text-[var(--warning)] bg-[var(--fill-quaternary)]', hover: 'hover:text-[var(--warning)]' },
+  destructive: {
+    on: 'text-[var(--destructive)] bg-[var(--fill-quaternary)]',
+    hover: 'hover:text-[var(--destructive)]',
+  },
+};
+
+interface ToolbarButtonProps {
+  label: string;
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
+  onClick: () => void;
+  /** The control is showing the state it toggles, not merely being available. */
+  active?: boolean;
+  disabled?: boolean;
+  tint?: Tint;
+  filled?: boolean;
+}
+
+/**
+ * One shape for every toolbar action, so the eye can separate state from kind:
+ * the position never moves, the tint says what the action does, and the fill
+ * says whether it is currently on.
+ */
+const ToolbarButton: React.FC<ToolbarButtonProps> = ({
+  label,
+  icon: Icon,
+  onClick,
+  active = false,
+  disabled = false,
+  tint = 'neutral',
+  filled = false,
+}) => {
+  const colours = TINTS[tint];
+  return (
+    <Tooltip text={label}>
+      <button
+        type="button"
+        onClick={onClick}
+        disabled={disabled}
+        aria-label={label}
+        aria-pressed={active}
+        className={`pressable grid place-items-center w-9 h-9 rounded-full
+          ${disabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}
+          ${
+            active
+              ? colours.on
+              : `text-[var(--label-secondary)] hover:bg-[var(--fill-quaternary)] ${disabled ? '' : colours.hover}`
+          }`}
+      >
+        <Icon className={`w-[18px] h-[18px] ${filled ? 'fill-current' : ''}`} strokeWidth={2} />
+      </button>
+    </Tooltip>
+  );
+};
+
 export const FileManagerToolbar: React.FC<FileManagerToolbarProps> = ({
   isMobile,
   viewMode,
@@ -61,224 +122,105 @@ export const FileManagerToolbar: React.FC<FileManagerToolbarProps> = ({
   // and rejected: the server would refuse them anyway, so displaying them only
   // produces a dead button and an error toast.
   const { can } = useAuth();
-  const btnBase =
-    'p-2.5 rounded-2xl transition-all duration-300 ease-out hover-lift focus:outline-none focus:ring-2 focus:ring-[#5b8def]/40';
-  const btnMuted =
-    'text-slate-500 dark:text-slate-400 hover:bg-slate-200/50 dark:hover:bg-slate-700/50 hover:text-slate-700 dark:hover:text-slate-200';
 
   return (
-    <div className={`flex items-center ${isMobile ? 'justify-end w-full flex-wrap gap-2' : 'gap-1.5'}`}>
+    <div className={`flex items-center ${isMobile ? 'justify-end w-full flex-wrap gap-1' : 'gap-0.5'}`}>
       {selectedFiles.length > 0 && !isTrashView && !isMobile && (
         <>
           {can('files.share') && (
-            <Tooltip text={allShared ? 'Remove from Shared' : 'Add to Share'}>
-              <button
-                className={`${btnBase} ${
-                  allShared
-                    ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-500/20'
-                    : `${btnMuted} hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-500/10 dark:hover:bg-emerald-500/20`
-                }`}
-                onClick={() => onShare()}
-                aria-label={allShared ? 'Remove from Shared' : 'Add to Share'}
-              >
-                <Share2
-                  className={`w-5 h-5 icon-muted ${allShared ? 'fill-emerald-600 dark:fill-emerald-400 opacity-100' : ''}`}
-                />
-              </button>
-            </Tooltip>
+            <ToolbarButton
+              label={allShared ? 'Remove from Shared' : 'Add to Share'}
+              icon={Share2}
+              tint="positive"
+              active={allShared}
+              onClick={onShare}
+            />
           )}
 
           {can('files.edit') && (
-            <Tooltip text={allStarred ? 'Remove from Starred' : 'Add to Starred'}>
-              <button
-                className={`${btnBase} ${
-                  allStarred
-                    ? 'text-amber-500 dark:text-amber-400 bg-amber-500/10 dark:bg-amber-500/20'
-                    : `${btnMuted} hover:text-amber-500 dark:hover:text-amber-400 hover:bg-amber-500/10 dark:hover:bg-amber-500/20`
-                }`}
-                onClick={() => onStar()}
-                aria-label={allStarred ? 'Remove from Starred' : 'Add to Starred'}
-              >
-                <Star
-                  className={`w-5 h-5 icon-muted ${allStarred ? 'fill-amber-500 dark:fill-amber-400 opacity-100' : ''}`}
-                />
-              </button>
-            </Tooltip>
+            <ToolbarButton
+              label={allStarred ? 'Remove from Starred' : 'Add to Starred'}
+              icon={Star}
+              tint="warning"
+              active={allStarred}
+              filled={allStarred}
+              onClick={onStar}
+            />
           )}
 
           {can('files.download') && (
-            <Tooltip text="Download">
-              <button
-                className={`${btnBase} ${
-                  isDownloading || selectedFiles.length === 0
-                    ? 'opacity-50 cursor-not-allowed pointer-events-none text-slate-400'
-                    : `${btnMuted} hover:text-[#5b8def] dark:hover:text-blue-400 hover:bg-[#5b8def]/10 dark:hover:bg-[#5b8def]/20`
-                }`}
-                onClick={e => {
-                  if (isDownloading || selectedFiles.length === 0) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    return;
-                  }
-                  onDownload();
-                }}
-                disabled={isDownloading || selectedFiles.length === 0}
-                aria-label="Download"
-              >
-                <Download className="w-5 h-5 icon-muted" />
-              </button>
-            </Tooltip>
+            <ToolbarButton
+              label="Download"
+              icon={Download}
+              tint="accent"
+              disabled={isDownloading || selectedFiles.length === 0}
+              onClick={onDownload}
+            />
           )}
 
           {can('files.edit') && (
-            <Tooltip text="Rename">
-              <button
-                className={`${btnBase} ${
-                  selectedFiles.length !== 1
-                    ? 'opacity-50 cursor-not-allowed pointer-events-none text-slate-400'
-                    : `${btnMuted} hover:text-violet-500 dark:hover:text-violet-400 hover:bg-violet-500/10 dark:hover:bg-violet-500/20`
-                }`}
-                onClick={e => {
-                  if (selectedFiles.length !== 1) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    return;
-                  }
-                  onRename();
-                }}
-                disabled={selectedFiles.length !== 1}
-                aria-label="Rename"
-              >
-                <Edit3 className="w-5 h-5 icon-muted" />
-              </button>
-            </Tooltip>
+            <ToolbarButton
+              label="Rename"
+              icon={Edit3}
+              tint="accent"
+              disabled={selectedFiles.length !== 1}
+              onClick={onRename}
+            />
           )}
 
           {can('files.delete') && (
-            <Tooltip text="Delete">
-              <button
-                className={`${btnBase} ${
-                  isDeleting
-                    ? 'opacity-50 cursor-not-allowed pointer-events-none text-slate-400'
-                    : `${btnMuted} hover:text-red-500 dark:hover:text-red-400 hover:bg-red-500/10 dark:hover:bg-red-500/20`
-                }`}
-                onClick={e => {
-                  if (isDeleting) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    return;
-                  }
-                  onDelete();
-                }}
-                disabled={isDeleting}
-                aria-label="Delete"
-              >
-                <Trash2 className="w-5 h-5 icon-muted" />
-              </button>
-            </Tooltip>
+            <ToolbarButton label="Delete" icon={Trash2} tint="destructive" disabled={isDeleting} onClick={onDelete} />
           )}
+
+          {/* Separates what acts on the selection from what changes the view.
+              Proximity is doing the grouping, so the gap has to mean something. */}
+          <div className="w-px h-5 mx-1.5 bg-[var(--separator)]" />
         </>
       )}
+
       {isTrashView ? (
         <>
           {selectedFiles.length > 0 && can('files.trash') && (
             <>
-              <Tooltip text="Restore">
-                <button
-                  className={`${btnBase} ${
-                    isRestoring
-                      ? 'opacity-50 cursor-not-allowed pointer-events-none text-slate-400'
-                      : `${btnMuted} hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-500/10 dark:hover:bg-emerald-500/20`
-                  }`}
-                  onClick={e => {
-                    if (isRestoring) {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      return;
-                    }
-                    onRestore();
-                  }}
-                  disabled={isRestoring}
-                  aria-label="Restore"
-                >
-                  <RotateCcw className="w-5 h-5" />
-                </button>
-              </Tooltip>
-              <Tooltip text="Delete Forever">
-                <button
-                  className={`${btnBase} ${
-                    isDeleting
-                      ? 'opacity-50 cursor-not-allowed pointer-events-none text-slate-400'
-                      : `${btnMuted} hover:text-red-500 dark:hover:text-red-400 hover:bg-red-500/10 dark:hover:bg-red-500/20`
-                  }`}
-                  onClick={e => {
-                    if (isDeleting) {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      return;
-                    }
-                    onDeleteForever();
-                  }}
-                  disabled={isDeleting}
-                  aria-label="Delete Forever"
-                >
-                  <Trash2 className="w-5 h-5" />
-                </button>
-              </Tooltip>
+              <ToolbarButton
+                label="Restore"
+                icon={RotateCcw}
+                tint="positive"
+                disabled={isRestoring}
+                onClick={onRestore}
+              />
+              <ToolbarButton
+                label="Delete Forever"
+                icon={Trash2}
+                tint="destructive"
+                disabled={isDeleting}
+                onClick={onDeleteForever}
+              />
             </>
           )}
           {hasTrashFiles && selectedFiles.length === 0 && can('files.trash') && (
-            <Tooltip text="Empty Trash">
-              <button
-                className={`${btnBase} ${btnMuted} hover:text-red-500 dark:hover:text-red-400 hover:bg-red-500/10 dark:hover:bg-red-500/20`}
-                onClick={() => onEmptyTrash()}
-                aria-label="Empty Trash"
-              >
-                <Trash2 className="w-5 h-5" />
-              </button>
-            </Tooltip>
+            <ToolbarButton label="Empty Trash" icon={Trash2} tint="destructive" onClick={onEmptyTrash} />
           )}
         </>
       ) : (
         <>
-          <Tooltip text="Grid view">
-            <button
-              onClick={() => onViewModeChange('grid')}
-              className={`${btnBase} ${
-                viewMode === 'grid'
-                  ? 'bg-[#5b8def]/15 dark:bg-[#5b8def]/25 text-[#4a7edb] dark:text-blue-400'
-                  : `${btnMuted} hover:text-[#5b8def] dark:hover:text-blue-400 hover:bg-[#5b8def]/10 dark:hover:bg-[#5b8def]/20`
-              }`}
-              aria-label="Grid view"
-            >
-              <Grid className="w-5 h-5" />
-            </button>
-          </Tooltip>
-
-          <Tooltip text="List view">
-            <button
-              onClick={() => onViewModeChange('list')}
-              className={`${btnBase} ${
-                viewMode === 'list'
-                  ? 'bg-[#5b8def]/15 dark:bg-[#5b8def]/25 text-[#4a7edb] dark:text-blue-400'
-                  : `${btnMuted} hover:text-[#5b8def] dark:hover:text-blue-400 hover:bg-[#5b8def]/10 dark:hover:bg-[#5b8def]/20`
-              }`}
-              aria-label="List view"
-            >
-              <List className="w-5 h-5" />
-            </button>
-          </Tooltip>
+          <ToolbarButton
+            label="Grid view"
+            icon={Grid}
+            tint="accent"
+            active={viewMode === 'grid'}
+            onClick={() => onViewModeChange('grid')}
+          />
+          <ToolbarButton
+            label="List view"
+            icon={List}
+            tint="accent"
+            active={viewMode === 'list'}
+            onClick={() => onViewModeChange('list')}
+          />
 
           {canCreateFolder && (
-            <Tooltip text="Create folder">
-              <button
-                className={`${btnBase} ${btnMuted} hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-500/10 dark:hover:bg-emerald-500/20`}
-                onClick={() => onCreateFolder()}
-                aria-label="Create folder"
-              >
-                <FolderPlus className="w-5 h-5" />
-              </button>
-            </Tooltip>
+            <ToolbarButton label="Create folder" icon={FolderPlus} tint="positive" onClick={onCreateFolder} />
           )}
 
           <SortMenu sortBy={sortBy} sortOrder={sortOrder} onSortChange={onSortChange} />

@@ -120,7 +120,7 @@ export const FileList: React.FC<FileListProps> = ({
           ))}
           {/* Dropzone highlight for drag-and-drop - disabled on mobile */}
           {dragOverFolder === null && draggingIds.length > 0 && !isMobile && (
-            <div className="absolute inset-0 rounded-2xl border-2 border-dashed border-[#5b8def]/40 bg-[#5b8def]/8 dark:bg-[#5b8def]/15 pointer-events-none animate-fadeIn z-10" />
+            <div className="absolute inset-0 rounded-2xl border border-dashed border-[var(--accent-ring)] bg-[var(--accent-fill)] pointer-events-none animate-fadeIn z-10" />
           )}
         </>
       )}

@@ -224,8 +224,15 @@ export const MarqueeSelector: React.FC<MarqueeSelectorProps> = ({
     [onSelectionChange, onSelectingChange, getSelectedIds, cancelSelection, selectedFiles]
   );
 
+  // The crosshair only appears once a rectangle is actually being drawn.
+  // Wearing it the whole time the pointer is over the file area would say
+  // "you are selecting" when the user is just looking.
   return (
-    <div ref={containerRef} className="relative select-none overflow-visible" onMouseDown={handleMouseDown}>
+    <div
+      ref={containerRef}
+      className={`relative select-none overflow-visible ${isSelecting ? 'cursor-crosshair' : ''}`}
+      onMouseDown={handleMouseDown}
+    >
       {children}
       {isSelecting && selectionRect && (
         <div

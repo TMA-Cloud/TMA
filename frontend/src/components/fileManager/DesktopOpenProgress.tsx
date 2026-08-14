@@ -22,7 +22,7 @@ export const DesktopOpenProgress: React.FC<DesktopOpenProgressProps> = ({ items 
         return (
           <div
             key={item.fileId}
-            className="w-80 bg-[#dfe3ea] dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-4"
+            className="w-80 bg-[#ffffff] dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-4"
           >
             <div className="flex items-center space-x-2 mb-2">
               <Monitor className="w-4 h-4 text-gray-500 dark:text-gray-400" />

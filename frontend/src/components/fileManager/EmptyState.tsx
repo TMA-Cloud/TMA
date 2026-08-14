@@ -1,4 +1,16 @@
 import React from 'react';
+import { FolderOpen, Search, Star, Share2, Trash2 } from 'lucide-react';
+
+// Built once at module scope: these are fixed marks for each destination, not
+// something the view decides on the fly.
+const glyph = 'w-6 h-6 text-[var(--label-tertiary)]';
+const GLYPHS = {
+  search: <Search className={glyph} strokeWidth={1.75} />,
+  starred: <Star className={glyph} strokeWidth={1.75} />,
+  shared: <Share2 className={glyph} strokeWidth={1.75} />,
+  trash: <Trash2 className={glyph} strokeWidth={1.75} />,
+  folder: <FolderOpen className={glyph} strokeWidth={1.75} />,
+};
 
 interface EmptyStateProps {
   searchQuery: string;
@@ -7,54 +19,59 @@ interface EmptyStateProps {
   canCreateFolder: boolean;
 }
 
+/**
+ * An empty view still has to answer where you are and what you can do here —
+ * the two questions a screen with nothing on it is worst at answering.
+ */
 export const EmptyState: React.FC<EmptyStateProps> = ({ searchQuery, isSearching, currentPath, canCreateFolder }) => {
+  const searching = searchQuery.trim().length > 0;
+
+  const getIcon = () => {
+    if (searching) return GLYPHS.search;
+    if (currentPath[0] === 'Starred') return GLYPHS.starred;
+    if (currentPath[0] === 'Shared') return GLYPHS.shared;
+    if (currentPath[0] === 'Trash') return GLYPHS.trash;
+    return GLYPHS.folder;
+  };
+
   const getTitle = () => {
-    if (searchQuery.trim().length > 0) {
-      return isSearching ? 'Searching...' : 'No results found';
+    if (searching) {
+      return isSearching ? 'Searching…' : 'No results';
     }
     if (currentPath[0] === 'Starred') return 'No starred files';
     if (currentPath[0] === 'Shared') return 'No shared files';
     if (currentPath[0] === 'Trash') return 'Trash is empty';
-    return 'No files or folders';
+    return 'This folder is empty';
   };
 
   const getDescription = () => {
-    if (searchQuery.trim().length > 0) {
-      return isSearching ? 'Please wait while we search your files...' : `No files or folders match "${searchQuery}"`;
+    if (searching) {
+      return isSearching ? 'Looking through your files' : `Nothing matches “${searchQuery}”`;
     }
-    if (currentPath[0] === 'Starred') return 'Star files to easily find them later';
-    if (currentPath[0] === 'Shared') return 'Files others share with you will show up here';
-    if (currentPath[0] === 'Trash') return 'Deleted files will appear here';
+    if (currentPath[0] === 'Starred') return 'Star a file to find it again quickly';
+    if (currentPath[0] === 'Shared') return 'Files others share with you show up here';
+    if (currentPath[0] === 'Trash') return 'Deleted files wait here before they are gone for good';
     // `canCreateFolder` is false for members without the upload grant, so
     // pointing them at an upload they cannot perform would be misleading.
-    return canCreateFolder ? 'Upload files or folders to get started' : 'This folder is empty';
+    return canCreateFolder ? 'Drop files anywhere here, or use Upload above' : 'Nothing has been added yet';
   };
 
-  const isDropZoneContext = canCreateFolder && searchQuery.trim().length === 0;
+  const isDropZoneContext = canCreateFolder && !searching;
+
   return (
     <div
       className={`
         flex flex-col items-center justify-center text-center select-none animate-fadeIn w-full
-        ${isDropZoneContext ? 'min-h-[calc(100vh-18rem)] rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-600' : 'h-64'}
+        ${
+          isDropZoneContext
+            ? 'min-h-[calc(100vh-18rem)] rounded-2xl border border-dashed border-[var(--separator-strong)]'
+            : 'h-64'
+        }
       `}
     >
-      <svg width="80" height="80" fill="none" viewBox="0 0 80 80" className="mb-1 animate-bounceIn flex-shrink-0">
-        <rect width="80" height="80" rx="20" fill="#e2e7ee" className="dark:fill-slate-800" />
-        <path
-          d="M24 56V32a4 4 0 014-4h24a4 4 0 014 4v24"
-          stroke="#5b8def"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-        <path d="M32 40h16" stroke="#5b8def" strokeWidth="2" strokeLinecap="round" />
-        <path d="M32 48h16" stroke="#5b8def" strokeWidth="2" strokeLinecap="round" />
-      </svg>
-      <h3 className="text-lg font-semibold text-slate-700 dark:text-slate-300 mb-2">{getTitle()}</h3>
-      <p className="text-slate-500 dark:text-slate-400 mb-1">{getDescription()}</p>
-      {isDropZoneContext && (
-        <p className="text-sm text-slate-400 dark:text-slate-500 mb-4">Drop files or folders anywhere in this area</p>
-      )}
+      <div className="w-14 h-14 rounded-2xl bg-[var(--fill-quaternary)] grid place-items-center mb-4">{getIcon()}</div>
+      <h3 className="type-title-3 text-[var(--label)]">{getTitle()}</h3>
+      <p className="type-footnote text-[var(--label-tertiary)] mt-1.5 max-w-xs">{getDescription()}</p>
     </div>
   );
 };
