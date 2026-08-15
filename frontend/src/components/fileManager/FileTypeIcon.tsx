@@ -1,13 +1,36 @@
 import React from 'react';
 import { FileIcon, defaultStyles } from 'react-file-icon';
-import { Folder } from 'lucide-react';
 import { type FileItem } from '../../contexts/AppContext';
 import { getExt } from '../../utils/fileUtils';
 
 /**
- * Renders a file or folder icon in a rounded colored square (like the reference style).
- * Uses react-file-icon's defaultStyles for automatic extension → icon/color mapping;
- * no manual mapping required.
+ * Folder artwork, drawn to be told apart from a file at a glance rather than
+ * by reading it:
+ *
+ * - Filled, not stroked. Below ~32px an outline's counters close up and the
+ *   shape turns to mush; a solid mass keeps its edge all the way down.
+ * - Landscape, so it is inset vertically (~76% of the box) and runs the full
+ *   width. Matched to the page's bounding box instead it would carry more
+ *   area than the files beside it and pull the eye down the column.
+ */
+const FolderGlyph: React.FC<{ className?: string }> = ({ className = '' }) => (
+  <svg viewBox="0 0 32 32" className={className} aria-hidden="true" focusable="false">
+    {/* Back panel and tab. */}
+    <path
+      d="M5 4.5h7.15a3 3 0 0 1 2.12.88L16.5 7.5H27a4 4 0 0 1 4 4V24a4 4 0 0 1-4 4H5a4 4 0 0 1-4-4V8.5a4 4 0 0 1 4-4z"
+      fill="var(--folder-back)"
+    />
+    {/* Front flap, sitting a little proud of the back so the pocket reads. */}
+    <path
+      d="M3 11.25h26a2 2 0 0 1 2 2V24a4 4 0 0 1-4 4H5a4 4 0 0 1-4-4V13.25a2 2 0 0 1 2-2z"
+      fill="var(--folder-front)"
+    />
+  </svg>
+);
+
+/**
+ * Renders a file or folder icon. Files use react-file-icon's defaultStyles for
+ * automatic extension → icon/color mapping; no manual mapping required.
  */
 export const FileTypeIcon: React.FC<{
   file: FileItem;
@@ -15,15 +38,8 @@ export const FileTypeIcon: React.FC<{
 }> = ({ file, className = '' }) => {
   if (file.type === 'folder') {
     return (
-      <div
-        className={`flex items-center justify-center rounded-xl flex-shrink-0 ${className}`}
-        style={{
-          backgroundColor: '#ff9f0a',
-          color: 'white',
-          boxShadow: '0 1px 2px rgba(0,0,0,0.08)',
-        }}
-      >
-        <Folder className="w-[55%] h-[55%]" strokeWidth={2} />
+      <div className={`flex items-center justify-center flex-shrink-0 ${className}`}>
+        <FolderGlyph className="w-full h-full" />
       </div>
     );
   }

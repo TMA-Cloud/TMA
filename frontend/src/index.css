@@ -231,6 +231,12 @@
     --warning-text: #a2540a;
     --destructive-text: #d70015;
 
+    /* Folder artwork. Two tones, not one: the back panel is the shading that
+       makes the front flap read as a pocket rather than a flat blob, which is
+       what separates a folder from a file at 32px once colour is gone. */
+    --folder-back: #e07c00;
+    --folder-front: #ff9f0a;
+
     /* --- Materials ---
        Bigger surfaces read as thicker: more blur, deeper shadow. Chrome is the
        floating nav layer content scrolls beneath. */
@@ -323,6 +329,11 @@
     --positive-text: #30d158;
     --warning-text: #ffd60a;
     --destructive-text: #ff6961;
+
+    /* Both tones are lifted here: the light theme's back panel (#e07c00) is
+       only 2.4:1 on this ground and the silhouette's outer edge would go soft. */
+    --folder-back: #e08c1a;
+    --folder-front: #ffb340;
 
     --material-chrome: rgba(25, 25, 23, 0.72);
     --material-thin: rgba(44, 44, 40, 0.6);
