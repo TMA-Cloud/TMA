@@ -33,6 +33,9 @@
     "vitest.config.ts",
     "src/vite-env.d.ts",
     "src/jsx-extensions.d.ts",
+    /* react-file-icon ships no types. Any test that renders a file row reaches
+       FileTypeIcon eventually, so the test project needs this too. */
+    "src/react-file-icon.d.ts",
     /* Types for the local ESLint plugin, which tests/eslintRules.test.ts imports. */
     "eslint-rules/house.d.ts"
   ]
