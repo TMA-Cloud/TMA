@@ -42,9 +42,9 @@ export const FileTypeIcon: React.FC<{
   // Archive/compressed types: document-with-zipper look, clear label (zip, rar, 7z, etc.)
   const archiveStyle = {
     type: 'compressed',
-    color: '#f2f2f7',
-    labelColor: '#636366',
-    glyphColor: '#aeaeb2',
+    color: '#f3f3f0',
+    labelColor: '#66645d',
+    glyphColor: '#b0aea6',
     labelTextColor: '#FFFFFF',
   } as const;
 
@@ -101,20 +101,20 @@ export const FileTypeIcon: React.FC<{
     },
     txt: {
       type: 'document',
-      color: '#8e8e93',
-      labelColor: '#636366',
+      color: '#8f8d85',
+      labelColor: '#66645d',
       glyphColor: 'rgba(255,255,255,0.9)',
     },
     dmg: {
       type: 'drive',
-      color: '#8e8e93',
-      labelColor: '#636366',
+      color: '#8f8d85',
+      labelColor: '#66645d',
       glyphColor: 'rgba(255,255,255,0.9)',
     },
     pkg: {
       type: 'settings',
-      color: '#8e8e93',
-      labelColor: '#636366',
+      color: '#8f8d85',
+      labelColor: '#66645d',
       glyphColor: 'rgba(255,255,255,0.9)',
     },
   };

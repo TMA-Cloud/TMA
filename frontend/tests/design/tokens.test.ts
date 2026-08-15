@@ -124,7 +124,11 @@ function contrast(theme: 'light' | 'dark', fgToken: string, bgToken: string): nu
 }
 
 const THEMES = ['light', 'dark'] as const;
-const GROUNDS = ['--canvas', '--surface'] as const;
+/** Every layer text can land on. `--surface-raised` is the lightest of them,
+ *  so it is where a dark theme's quiet labels fail first — leaving it out is
+ *  what let `--label-tertiary` pass at 4.66:1 on the ground while sitting at
+ *  4.33:1 on a raised surface. */
+const GROUNDS = ['--canvas', '--surface', '--surface-raised'] as const;
 
 /** WCAG AA for text below ~18.66px bold / 24px regular. */
 const AA_TEXT = 4.5;

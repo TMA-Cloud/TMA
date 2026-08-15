@@ -288,7 +288,7 @@ export const SubUsersModal: React.FC<SubUsersModalProps> = ({
 
                   return (
                     <React.Fragment key={subUser.id}>
-                      <tr className="border-b border-gray-100 dark:border-gray-800 hover:bg-[#f9f9fb]/80 dark:hover:bg-gray-900/40 transition-colors">
+                      <tr className="border-b border-gray-100 dark:border-gray-800 hover:bg-[#f9f9f7]/80 dark:hover:bg-gray-900/40 transition-colors">
                         <td className="py-2 pr-4 text-gray-900 dark:text-gray-100">{subUser.name || 'Unnamed'}</td>
                         <td className="py-2 pr-4 text-gray-700 dark:text-gray-300">{subUser.email}</td>
                         <td className="py-2 pr-4">

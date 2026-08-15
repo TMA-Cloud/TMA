@@ -250,7 +250,7 @@ export const DocumentViewerModal: React.FC = () => {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
       <div className="bg-[#ffffff] dark:bg-gray-900 w-[95vw] h-[90vh] rounded-xl shadow-2xl overflow-hidden flex flex-col">
         {/* Header bar with close button */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-[#f9f9fb] dark:bg-gray-800 flex-shrink-0">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-[#f9f9f7] dark:bg-gray-800 flex-shrink-0">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 truncate flex-1 mr-4">
             {documentViewerFile.name}
           </h3>

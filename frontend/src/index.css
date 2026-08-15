@@ -16,55 +16,55 @@
 @theme {
   /* Neutral ramp, light end to dark end */
   --color-neutral-0: #ffffff;
-  --color-neutral-50: #f9f9fb;
-  --color-neutral-100: #f2f2f7;
-  --color-neutral-200: #e5e5ea;
-  --color-neutral-300: #d1d1d6;
-  --color-neutral-400: #aeaeb2;
-  --color-neutral-500: #8e8e93;
-  --color-neutral-600: #636366;
-  --color-neutral-700: #48484a;
-  --color-neutral-800: #2c2c2e;
-  --color-neutral-900: #1c1c1e;
-  --color-neutral-950: #0b0b0d;
+  --color-neutral-50: #f9f9f7;
+  --color-neutral-100: #f3f3f0;
+  --color-neutral-200: #e7e6e1;
+  --color-neutral-300: #d4d3cc;
+  --color-neutral-400: #b0aea6;
+  --color-neutral-500: #8f8d85;
+  --color-neutral-600: #66645d;
+  --color-neutral-700: #4a4944;
+  --color-neutral-800: #2c2c28;
+  --color-neutral-900: #1b1b19;
+  --color-neutral-950: #0d0d0c;
 
   /* Tailwind's three neutral scales all resolve to the ramp above, so a
      component written against slate-, gray- or zinc- stays on-palette. */
-  --color-slate-50: #f9f9fb;
-  --color-slate-100: #f2f2f7;
-  --color-slate-200: #e5e5ea;
-  --color-slate-300: #d1d1d6;
-  --color-slate-400: #aeaeb2;
-  --color-slate-500: #8e8e93;
-  --color-slate-600: #636366;
-  --color-slate-700: #48484a;
-  --color-slate-800: #2c2c2e;
-  --color-slate-900: #1c1c1e;
-  --color-slate-950: #0b0b0d;
+  --color-slate-50: #f9f9f7;
+  --color-slate-100: #f3f3f0;
+  --color-slate-200: #e7e6e1;
+  --color-slate-300: #d4d3cc;
+  --color-slate-400: #b0aea6;
+  --color-slate-500: #8f8d85;
+  --color-slate-600: #66645d;
+  --color-slate-700: #4a4944;
+  --color-slate-800: #2c2c28;
+  --color-slate-900: #1b1b19;
+  --color-slate-950: #0d0d0c;
 
-  --color-gray-50: #f9f9fb;
-  --color-gray-100: #f2f2f7;
-  --color-gray-200: #e5e5ea;
-  --color-gray-300: #d1d1d6;
-  --color-gray-400: #aeaeb2;
-  --color-gray-500: #8e8e93;
-  --color-gray-600: #636366;
-  --color-gray-700: #48484a;
-  --color-gray-800: #2c2c2e;
-  --color-gray-900: #1c1c1e;
-  --color-gray-950: #0b0b0d;
+  --color-gray-50: #f9f9f7;
+  --color-gray-100: #f3f3f0;
+  --color-gray-200: #e7e6e1;
+  --color-gray-300: #d4d3cc;
+  --color-gray-400: #b0aea6;
+  --color-gray-500: #8f8d85;
+  --color-gray-600: #66645d;
+  --color-gray-700: #4a4944;
+  --color-gray-800: #2c2c28;
+  --color-gray-900: #1b1b19;
+  --color-gray-950: #0d0d0c;
 
-  --color-zinc-50: #f9f9fb;
-  --color-zinc-100: #f2f2f7;
-  --color-zinc-200: #e5e5ea;
-  --color-zinc-300: #d1d1d6;
-  --color-zinc-400: #aeaeb2;
-  --color-zinc-500: #8e8e93;
-  --color-zinc-600: #636366;
-  --color-zinc-700: #48484a;
-  --color-zinc-800: #2c2c2e;
-  --color-zinc-900: #1c1c1e;
-  --color-zinc-950: #0b0b0d;
+  --color-zinc-50: #f9f9f7;
+  --color-zinc-100: #f3f3f0;
+  --color-zinc-200: #e7e6e1;
+  --color-zinc-300: #d4d3cc;
+  --color-zinc-400: #b0aea6;
+  --color-zinc-500: #8f8d85;
+  --color-zinc-600: #66645d;
+  --color-zinc-700: #4a4944;
+  --color-zinc-800: #2c2c28;
+  --color-zinc-900: #1b1b19;
+  --color-zinc-950: #0d0d0c;
 
   /* System blue */
   --color-blue-50: #eaf4ff;
@@ -168,39 +168,46 @@
       system-ui, sans-serif;
     --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', 'Cascadia Mono', Menlo, Consolas, monospace;
 
-    /* --- Backgrounds --- */
-    --canvas: #f2f2f7;
+    /* --- Backgrounds ---
+       A warm off-white ground, so both themes share one temperature: the
+       ground is warm in each, and only the direction flips. An untinted
+       white page next to a warm dark one reads as two different products. */
+    --canvas: #f3f3f0;
     --surface: #ffffff;
     --surface-raised: #ffffff;
-    --surface-sunken: #f2f2f7;
+    --surface-sunken: #f0efec;
     /* Slightly heavier than the platform's own light fills. A grey at 8% over
        white is close to invisible — the search field and row hovers both read
-       as missing rather than subtle. */
-    --fill-quaternary: rgba(116, 116, 128, 0.1);
-    --fill-tertiary: rgba(116, 116, 128, 0.15);
-    --fill-secondary: rgba(116, 116, 128, 0.2);
-    --fill-primary: rgba(120, 120, 128, 0.26);
+       as missing rather than subtle. Warm-tinted. */
+    --fill-quaternary: rgba(120, 118, 110, 0.1);
+    --fill-tertiary: rgba(120, 118, 110, 0.15);
+    --fill-secondary: rgba(120, 118, 110, 0.2);
+    --fill-primary: rgba(124, 122, 112, 0.26);
 
     /* --- Text --- */
-    --label: #1c1c1e;
+    --label: #131313;
     /* Contrast is not symmetric between the two themes: white text at 62% on
        near-black lands around 6:1, while black text at the same alpha on white
        lands near 4:1. Matching the platform's alpha values in both directions
        is what makes a light theme read weaker than its dark counterpart, so
-       these are derived from the target ratio instead — secondary ≈ 6.4:1 and
-       tertiary ≈ 4.9:1 on the canvas, which is where the dark theme already
+       these are derived from the target ratio instead — secondary ≈ 6.6:1 and
+       tertiary ≈ 4.7:1 on the canvas, which is where the dark theme already
        sat. They are the label tone at reduced presence rather than a separate
-       grey, so the hierarchy is one colour getting quieter. */
-    --label-secondary: rgba(28, 28, 30, 0.72);
-    --label-tertiary: rgba(28, 28, 30, 0.64);
-    --label-quaternary: rgba(28, 28, 30, 0.42);
+       grey, so the hierarchy is one colour getting quieter.
+
+       Deriving them is also what keeps the quiet end legible: the reference
+       palette's own muted grey measures 3.91:1 on this ground and 4.35:1 on
+       white, both under AA for the file-size and date line. */
+    --label-secondary: rgba(19, 19, 19, 0.7);
+    --label-tertiary: rgba(19, 19, 19, 0.6);
+    --label-quaternary: rgba(19, 19, 19, 0.4);
     --label-on-accent: #ffffff;
 
     /* --- Separators --- */
     /* Same correction as the labels: a hairline needs more alpha on white to
        carry the weight it has on black. */
-    --separator: rgba(60, 60, 67, 0.22);
-    --separator-strong: rgba(60, 60, 67, 0.36);
+    --separator: rgba(30, 30, 29, 0.22);
+    --separator-strong: rgba(30, 30, 29, 0.36);
 
     /* --- Accent --- */
     --accent: #007aff;
@@ -227,10 +234,10 @@
     /* --- Materials ---
        Bigger surfaces read as thicker: more blur, deeper shadow. Chrome is the
        floating nav layer content scrolls beneath. */
-    --material-chrome: rgba(249, 249, 251, 0.72);
-    --material-thin: rgba(255, 255, 255, 0.62);
-    --material-regular: rgba(255, 255, 255, 0.76);
-    --material-thick: rgba(255, 255, 255, 0.88);
+    --material-chrome: rgba(249, 249, 247, 0.72);
+    --material-thin: rgba(255, 255, 254, 0.62);
+    --material-regular: rgba(255, 255, 254, 0.76);
+    --material-thick: rgba(255, 255, 254, 0.88);
     --material-blur-thin: 20px;
     --material-blur-regular: 30px;
     --material-blur-thick: 44px;
@@ -269,25 +276,34 @@
   html.dark {
     color-scheme: dark;
 
-    --canvas: #000000;
-    --surface: #1c1c1e;
-    --surface-raised: #2c2c2e;
-    --surface-sunken: #000000;
-    --fill-quaternary: rgba(118, 118, 128, 0.12);
-    --fill-tertiary: rgba(118, 118, 128, 0.18);
-    --fill-secondary: rgba(118, 118, 128, 0.24);
-    --fill-primary: rgba(120, 120, 128, 0.36);
+    /* The floor is a dark grey, and depth is carried by each layer
+       getting *lighter*, as shadow has nothing to darken once the
+       ground is already black. Four steps: sunken, canvas, surface,
+       raised, each ~4-6 L* apart — far enough to separate, close
+       enough that no single edge draws attention. */
+    --canvas: #1b1b19;
+    --surface: #232320;
+    --surface-raised: #2c2c28;
+    --surface-sunken: #141413;
+    --fill-quaternary: rgba(140, 138, 128, 0.14);
+    --fill-tertiary: rgba(140, 138, 128, 0.2);
+    --fill-secondary: rgba(140, 138, 128, 0.27);
+    --fill-primary: rgba(142, 140, 130, 0.38);
 
-    --label: #ffffff;
-    --label-secondary: rgba(235, 235, 245, 0.62);
-    /* The one dark value that moved: at 0.4 the file-size and date line
-       measured 3.25:1, under the 4.5:1 small text needs. 0.5 clears it without
-       changing the character of the theme. */
-    --label-tertiary: rgba(235, 235, 245, 0.5);
-    --label-quaternary: rgba(235, 235, 245, 0.24);
+    /* A cool white over a warm ground is the pairing that reads
+       as a screen rather than a surface. */
+    --label: #f5f4f1;
+    --label-secondary: rgba(240, 239, 233, 0.62);
+    /* Checked against the lightest layer it can land on, not the canvas: at
+       0.5 the file-size and date line still cleared 4.5:1 on the ground but
+       fell to 4.33:1 on a raised surface. 0.54 clears it everywhere. */
+    --label-tertiary: rgba(240, 239, 233, 0.54);
+    --label-quaternary: rgba(240, 239, 233, 0.24);
 
-    --separator: rgba(84, 84, 88, 0.5);
-    --separator-strong: rgba(84, 84, 88, 0.78);
+    /* Raising the ground eats into a hairline the same way it eats into a
+       fill, so these move with it. */
+    --separator: rgba(132, 130, 120, 0.34);
+    --separator-strong: rgba(142, 140, 130, 0.52);
 
     --accent: #0a84ff;
     --accent-hover: #3d9bff;
@@ -300,24 +316,26 @@
     --warning: #ffd60a;
     --destructive: #ff453a;
 
-    /* Against a near-black ground these already read, so the text roles are
-       the fills. The split exists for the light theme's sake. */
+    /* Green and yellow are bright enough against every dark layer that the
+       text role is just the fill. Red is not: the fill measured 4.42:1 on a
+       raised surface, so the text role is lifted until it clears 4.5:1 there
+       too. */
     --positive-text: #30d158;
     --warning-text: #ffd60a;
-    --destructive-text: #ff453a;
+    --destructive-text: #ff6961;
 
-    --material-chrome: rgba(28, 28, 30, 0.72);
-    --material-thin: rgba(44, 44, 46, 0.6);
-    --material-regular: rgba(38, 38, 40, 0.76);
-    --material-thick: rgba(28, 28, 30, 0.9);
-    --material-edge: rgba(255, 255, 255, 0.09);
+    --material-chrome: rgba(25, 25, 23, 0.72);
+    --material-thin: rgba(44, 44, 40, 0.6);
+    --material-regular: rgba(38, 38, 34, 0.76);
+    --material-thick: rgba(28, 28, 25, 0.9);
+    --material-edge: rgba(255, 255, 255, 0.08);
 
-    --scrim: rgba(0, 0, 0, 0.5);
+    --scrim: rgba(0, 0, 0, 0.62);
 
-    --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
-    --shadow-2: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 12px rgba(0, 0, 0, 0.45);
-    --shadow-3: 0 2px 6px rgba(0, 0, 0, 0.45), 0 12px 28px rgba(0, 0, 0, 0.5);
-    --shadow-4: 0 4px 12px rgba(0, 0, 0, 0.5), 0 28px 64px rgba(0, 0, 0, 0.6);
+    --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-2: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 12px rgba(0, 0, 0, 0.32);
+    --shadow-3: 0 2px 6px rgba(0, 0, 0, 0.34), 0 12px 28px rgba(0, 0, 0, 0.38);
+    --shadow-4: 0 4px 12px rgba(0, 0, 0, 0.38), 0 28px 64px rgba(0, 0, 0, 0.46);
   }
 }
 
@@ -1412,7 +1430,7 @@ body.is-dragging [role='tooltip'] {
    blur, so nothing behind the surface competes with what is on it. */
 @media (prefers-reduced-transparency: reduce) {
   :root {
-    --material-chrome: #f9f9fb;
+    --material-chrome: #f9f9f7;
     --material-thin: #ffffff;
     --material-regular: #ffffff;
     --material-thick: #ffffff;
@@ -1421,10 +1439,10 @@ body.is-dragging [role='tooltip'] {
 
   .dark,
   html.dark {
-    --material-chrome: #1c1c1e;
-    --material-thin: #2c2c2e;
+    --material-chrome: #1b1b19;
+    --material-thin: #2c2c28;
     --material-regular: #262628;
-    --material-thick: #1c1c1e;
+    --material-thick: #1b1b19;
   }
 
   .material-chrome,
@@ -1453,8 +1471,8 @@ body.is-dragging [role='tooltip'] {
   :root {
     --separator: rgba(0, 0, 0, 0.55);
     --separator-strong: rgba(0, 0, 0, 0.8);
-    --label-secondary: rgba(28, 28, 30, 0.92);
-    --label-tertiary: rgba(28, 28, 30, 0.82);
+    --label-secondary: rgba(19, 19, 19, 0.92);
+    --label-tertiary: rgba(19, 19, 19, 0.82);
     --material-chrome: #ffffff;
     --material-regular: #ffffff;
     --material-thick: #ffffff;
@@ -1462,12 +1480,16 @@ body.is-dragging [role='tooltip'] {
 
   .dark,
   html.dark {
+    /* Black ground and white text belong here and only here. */
+    --canvas: #000000;
+    --surface-sunken: #000000;
+    --label: #ffffff;
     --separator: rgba(255, 255, 255, 0.55);
     --separator-strong: rgba(255, 255, 255, 0.8);
     --label-secondary: rgba(235, 235, 245, 0.92);
     --label-tertiary: rgba(235, 235, 245, 0.78);
     --material-chrome: #000000;
-    --material-regular: #1c1c1e;
+    --material-regular: #1b1b19;
     --material-thick: #000000;
   }
 

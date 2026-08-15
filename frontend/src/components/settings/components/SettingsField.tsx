@@ -65,7 +65,7 @@ export const SettingsFormActions: React.FC<{
         type="button"
         onClick={onCancel}
         disabled={disabled}
-        className="px-4 py-2 type-footnote font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 bg-[#ffffff] dark:bg-gray-800 hover:bg-[#f9f9fb] dark:hover:bg-gray-700 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+        className="px-4 py-2 type-footnote font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 bg-[#ffffff] dark:bg-gray-800 hover:bg-[#f9f9f7] dark:hover:bg-gray-700 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
       >
         Cancel
       </button>

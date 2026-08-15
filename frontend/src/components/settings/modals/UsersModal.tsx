@@ -254,7 +254,7 @@ export const UsersModal: React.FC<UsersModalProps> = ({
                   return (
                     <tr
                       key={listedUser.id}
-                      className={`border-b border-gray-100 dark:border-gray-800 last:border-b-0 hover:bg-[#f9f9fb]/80 dark:hover:bg-gray-900/40 transition-colors ${
+                      className={`border-b border-gray-100 dark:border-gray-800 last:border-b-0 hover:bg-[#f9f9f7]/80 dark:hover:bg-gray-900/40 transition-colors ${
                         owner ? 'bg-slate-100/50 dark:bg-gray-900/25' : ''
                       }`}
                     >

@@ -308,7 +308,7 @@ export const Settings: React.FC = () => {
 
   return (
     <div className="w-full h-full max-w-[1400px] mx-auto p-4 md:p-6 lg:p-8">
-      <div className="flex h-full min-h-[calc(100vh-8rem)] rounded-2xl overflow-hidden border border-slate-200/60 dark:border-slate-700/40 bg-[#f2f2f7] dark:bg-slate-900/60 shadow-xl">
+      <div className="flex h-full min-h-[calc(100vh-8rem)] rounded-2xl overflow-hidden border border-slate-200/60 dark:border-slate-700/40 bg-[#f3f3f0] dark:bg-slate-900/60 shadow-xl">
         {/* Mobile toggle: top-left when closed, snaps to drawer edge when open */}
         <button
           onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -330,7 +330,7 @@ export const Settings: React.FC = () => {
             fixed md:static left-0 z-50 md:z-auto
             top-16 bottom-0 md:top-auto md:bottom-auto md:inset-y-0
             w-72 md:w-64 lg:w-72 shrink-0
-            bg-[#e5e5ea] dark:bg-slate-800/90
+            bg-[#e7e6e1] dark:bg-slate-800/90
             border-r border-slate-200/60 dark:border-slate-700/40
             flex flex-col min-h-0
             transition-motion duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]
