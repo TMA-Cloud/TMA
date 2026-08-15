@@ -29,6 +29,7 @@ import { MultiSelectIndicator } from './MultiSelectIndicator';
 import { ShareExpiryModal } from './ShareLinkModal';
 import { FileInfoModal } from './FileInfoModal';
 import { entriesFromDataTransfer } from '../../utils/folderUpload';
+import { throttleTrailing } from '../../utils/scheduling';
 
 export const FileManager: React.FC = () => {
   const {
@@ -86,6 +87,7 @@ export const FileManager: React.FC = () => {
     setUploadModalProcessing,
     uploadModalProcessingRequestId,
     setUploadModalProcessingRequestId,
+    setUploadScanCount,
     clearUploadModalInitialEntries,
     desktopOpenProgress,
   } = useApp();
@@ -739,7 +741,10 @@ export const FileManager: React.FC = () => {
         setUploadModalProcessingRequestId(requestId);
         clearUploadModalInitialEntries();
 
-        const entries = await entriesFromDataTransfer(e.dataTransfer);
+        const reportScanned = throttleTrailing((scanned: number) => {
+          if (activeUploadProcessingRequestIdRef.current === requestId) setUploadScanCount(scanned);
+        }, 100);
+        const entries = await entriesFromDataTransfer(e.dataTransfer, { onProgress: reportScanned });
         // User might have closed the modal while we were scanning.
         if (activeUploadProcessingRequestIdRef.current !== requestId) return;
 
@@ -767,6 +772,7 @@ export const FileManager: React.FC = () => {
       setUploadModalOpen,
       setUploadModalProcessing,
       setUploadModalProcessingRequestId,
+      setUploadScanCount,
       clearUploadModalInitialEntries,
       showToast,
     ]

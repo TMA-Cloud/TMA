@@ -4,7 +4,23 @@ import { Modal } from '../ui/Modal';
 import { useApp } from '../../contexts/AppContext';
 import { formatFileSize } from '../../utils/fileUtils';
 import { useIsMobile } from '../../hooks/useIsMobile';
-import { entriesFromDataTransfer, entriesFromFileList } from '../../utils/folderUpload';
+import { useToast } from '../../hooks/useToast';
+import {
+  entriesFromDataTransfer,
+  entriesFromFileListAsync,
+  plainEntriesFromFileListAsync,
+  isScanAborted,
+  type FolderUploadEntry,
+  type ScanOptions,
+} from '../../utils/folderUpload';
+import { throttleTrailing } from '../../utils/scheduling';
+
+/**
+ * Staged files are listed, not counted, so the list has to stay bounded: a
+ * folder of 20,000 files is 20,000 DOM nodes the browser lays out on every
+ * keystroke, and nobody scrolls that far anyway.
+ */
+const MAX_VISIBLE_PENDING = 100;
 
 /** Returns a unique name like "name (1).ext" not in existingNames or usedInBatch. */
 function getUniqueUploadName(originalName: string, existingNames: Set<string>, usedInBatch: Set<string>): string {
@@ -35,6 +51,8 @@ export const UploadModal: React.FC = () => {
     uploadModalProcessing,
     setUploadModalProcessing,
     setUploadModalProcessingRequestId,
+    uploadScanCount,
+    setUploadScanCount,
     uploadModalInitialEntries,
     clearUploadModalInitialEntries,
     files: contextFiles,
@@ -56,7 +74,10 @@ export const UploadModal: React.FC = () => {
   const [duplicateChoices, setDuplicateChoices] = useState<Record<string, 'replace' | 'rename'>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
+  /** Lets a closed modal or a second selection abandon a scan already running. */
+  const scanAbortRef = useRef<AbortController | null>(null);
   const isMobile = useIsMobile();
+  const { showToast } = useToast();
 
   const existingFileNames = useMemo(
     () => new Set(contextFiles.filter(f => f.type === 'file').map(f => f.name)),
@@ -111,6 +132,9 @@ export const UploadModal: React.FC = () => {
     return Array.from(map.values());
   }, [isFolderUploadOnly, uploadFiles]);
 
+  const visiblePendingFiles = useMemo(() => uploadFiles.slice(0, MAX_VISIBLE_PENDING), [uploadFiles]);
+  const hiddenPendingCount = uploadFiles.length - visiblePendingFiles.length;
+
   const handleEntries = useCallback((entries: { file: File; relativePath?: string }[]) => {
     const now = Date.now();
     const newUploadFiles: UploadFile[] = entries.map((entry, index) => ({
@@ -134,6 +158,7 @@ export const UploadModal: React.FC = () => {
       // (even if they later end up being removed/filtered elsewhere)
       setUploadModalProcessing(false);
       setUploadModalProcessingRequestId(null);
+      setUploadScanCount(0);
     });
   }, [
     uploadModalOpen,
@@ -142,27 +167,61 @@ export const UploadModal: React.FC = () => {
     handleEntries,
     setUploadModalProcessing,
     setUploadModalProcessingRequestId,
+    setUploadScanCount,
   ]);
 
+  /**
+   * Runs a scan with the modal in its "processing" state and a live count.
+   */
+  const runScan = useCallback(
+    async (scan: (options: ScanOptions) => Promise<FolderUploadEntry[]>) => {
+      scanAbortRef.current?.abort();
+      const controller = new AbortController();
+      scanAbortRef.current = controller;
+
+      setUploadModalProcessing(true);
+      setUploadScanCount(0);
+      const reportProgress = throttleTrailing((scanned: number) => {
+        if (!controller.signal.aborted) setUploadScanCount(scanned);
+      }, 100);
+
+      try {
+        const entries = await scan({ signal: controller.signal, onProgress: reportProgress });
+        if (controller.signal.aborted) return;
+        if (entries.length > 0) {
+          handleEntries(entries.map(en => ({ file: en.file, relativePath: en.relativePath })));
+        }
+      } catch (err) {
+        // An abandoned scan is the expected end of a superseded selection.
+        if (!isScanAborted(err)) showToast('Failed to read that folder', 'error');
+      } finally {
+        if (scanAbortRef.current === controller) {
+          scanAbortRef.current = null;
+          setUploadModalProcessing(false);
+          setUploadModalProcessingRequestId(null);
+          setUploadScanCount(0);
+        }
+      }
+    },
+    [handleEntries, setUploadModalProcessing, setUploadModalProcessingRequestId, setUploadScanCount, showToast]
+  );
+
   const handleFiles = (files: FileList) => {
-    handleEntries(Array.from(files).map(file => ({ file })));
+    void runScan(options => plainEntriesFromFileListAsync(files, options));
   };
 
   const handleFolderFiles = (files: FileList) => {
-    const entries = entriesFromFileList(files);
-    handleEntries(entries.map(e => ({ file: e.file, relativePath: e.relativePath })));
+    void runScan(options => entriesFromFileListAsync(files, options));
   };
 
   const handleDrop = (e: React.DragEvent) => {
     if (uploadModalProcessing) return;
     e.preventDefault();
     setIsDragOver(false);
-    void (async () => {
-      const entries = await entriesFromDataTransfer(e.dataTransfer);
-      if (entries.length > 0) {
-        handleEntries(entries.map(en => ({ file: en.file, relativePath: en.relativePath })));
-      }
-    })();
+    // The DataTransfer's entries must be read before the event returns, so the
+    // scan is started from inside the handler and awaited elsewhere.
+    const { dataTransfer } = e;
+    void runScan(options => entriesFromDataTransfer(dataTransfer, options));
   };
 
   const handleDropZoneClick = (e: React.MouseEvent) => {
@@ -210,6 +269,9 @@ export const UploadModal: React.FC = () => {
   };
 
   const handleClose = () => {
+    scanAbortRef.current?.abort();
+    scanAbortRef.current = null;
+    setUploadScanCount(0);
     setUploadFiles([]);
     setDuplicateConflicts([]);
     setDuplicateChoices({});
@@ -369,23 +431,11 @@ export const UploadModal: React.FC = () => {
   const allDuplicateChoicesMade =
     duplicateConflicts.length > 0 && duplicateConflicts.every(c => duplicateChoices[c.uploadId] != null);
 
-  // Derive current uploading items and detect if there's a bulk group (multiple items sharing the same groupId).
+  // Derive current uploading items and the batch group they belong to. A
+  // batched upload reports as one aggregate row, so a single grouped item is
+  // still a group — cancelling it stops every batch behind it.
   const uploadingProgressItems = uploadProgress.filter(u => u.status === 'uploading' || u.status === 'finalizing');
-  let bulkGroupId: string | null = null;
-  if (uploadingProgressItems.length > 1) {
-    const groupCounts = new Map<string, number>();
-    for (const item of uploadingProgressItems) {
-      if (!item.groupId) continue;
-      const current = groupCounts.get(item.groupId) ?? 0;
-      groupCounts.set(item.groupId, current + 1);
-    }
-    for (const [gid, count] of groupCounts.entries()) {
-      if (count > 1) {
-        bulkGroupId = gid;
-        break;
-      }
-    }
-  }
+  const bulkGroupId = uploadingProgressItems.find(item => item.groupId)?.groupId ?? null;
 
   return (
     <Modal isOpen={uploadModalOpen} onClose={handleClose} title="Upload" size={isMobile ? 'full' : 'xl'}>
@@ -428,7 +478,7 @@ export const UploadModal: React.FC = () => {
               </div>
               <div className="space-y-1">
                 <p className={`${isMobile ? 'text-base' : 'text-lg'} font-semibold text-gray-900 dark:text-gray-100`}>
-                  Processing to Upload...
+                  {uploadScanCount > 0 ? `Found ${uploadScanCount.toLocaleString()} files…` : 'Processing to Upload...'}
                 </p>
                 <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-gray-500 dark:text-gray-400`}>
                   Preparing files from your folder (this can take a moment for large folder trees)
@@ -677,7 +727,7 @@ export const UploadModal: React.FC = () => {
                       )}
                     </div>
                   ))
-                : uploadFiles.map(uploadFile => (
+                : visiblePendingFiles.map(uploadFile => (
                     <div
                       key={uploadFile.id}
                       className={`flex items-center ${
@@ -733,6 +783,15 @@ export const UploadModal: React.FC = () => {
                       )}
                     </div>
                   ))}
+              {!isFolderUploadOnly && hiddenPendingCount > 0 && (
+                <p
+                  className={`${
+                    isMobile ? 'text-[10px]' : 'text-xs'
+                  } text-center font-medium text-gray-500 dark:text-gray-400 py-2`}
+                >
+                  +{hiddenPendingCount.toLocaleString()} more file{hiddenPendingCount !== 1 ? 's' : ''}
+                </p>
+              )}
             </div>
           </div>
         )}

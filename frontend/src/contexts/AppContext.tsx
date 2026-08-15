@@ -68,6 +68,9 @@ export interface AppContextType {
   uploadModalOpen: boolean;
   uploadModalProcessing: boolean;
   uploadModalProcessingRequestId: string | null;
+  /** Files found so far by the in-flight folder scan. */
+  uploadScanCount: number;
+  setUploadScanCount: (count: number) => void;
   createFolderModalOpen: boolean;
   imageViewerFile: FileItem | null;
   setImageViewerFile: (file: FileItem | null) => void;

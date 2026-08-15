@@ -3,7 +3,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { authFetch } from '../../src/utils/authFetch';
 import { copyToClipboard } from '../../src/utils/clipboard';
 import { downloadBlob } from '../../src/utils/download';
-import { entriesFromDataTransfer, entriesFromFileList } from '../../src/utils/folderUpload';
+import {
+  entriesFromDataTransfer,
+  entriesFromFileList,
+  entriesFromFileListAsync,
+  isScanAborted,
+  plainEntriesFromFileListAsync,
+} from '../../src/utils/folderUpload';
+import { mapWithYield, runWithConcurrency, throttleTrailing } from '../../src/utils/scheduling';
 import { removeUploadProgress, updateUploadProgress, createAutoDismissTimeout } from '../../src/utils/uploadUtils';
 import type { UploadProgressItem } from '../../src/utils/uploadUtils';
 
@@ -326,5 +333,110 @@ describe('entriesFromDataTransfer', () => {
       files: [],
     } as unknown as DataTransfer;
     expect(await entriesFromDataTransfer(dt)).toEqual([]);
+  });
+
+  it('keeps sibling order and folder grouping across a wide tree', async () => {
+    const tree = dirEntry('Docs', [fileEntry('a.txt'), dirEntry('sub', [fileEntry('b.txt')]), fileEntry('c.txt')]);
+    const result = await entriesFromDataTransfer(dataTransfer([tree]));
+    expect(result.map(r => r.relativePath)).toEqual(['Docs/a.txt', 'Docs/sub/b.txt', 'Docs/c.txt']);
+  });
+
+  it('reports files as it finds them so the UI can show progress', async () => {
+    const scanned: number[] = [];
+    await entriesFromDataTransfer(dataTransfer([dirEntry('Docs', [fileEntry('a.txt'), fileEntry('b.txt')])]), {
+      onProgress: n => scanned.push(n),
+    });
+    expect(scanned).toEqual([1, 2]);
+  });
+
+  it('abandons the walk when the scan is aborted', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const dt = dataTransfer([dirEntry('Docs', [fileEntry('a.txt')])]);
+    await expect(entriesFromDataTransfer(dt, { signal: controller.signal })).rejects.toSatisfy(isScanAborted);
+  });
+});
+
+describe('plainEntriesFromFileListAsync', () => {
+  const fileList = (files: File[]) => files as unknown as FileList;
+
+  it('stages loose files without a relative path', async () => {
+    const result = await plainEntriesFromFileListAsync(fileList([new File(['x'], 'a.txt')]));
+    expect(result[0]?.relativePath).toBeUndefined();
+  });
+
+  it('keeps the webkit relative path when staging a picked folder', async () => {
+    const file = Object.assign(new File(['x'], 'a.txt'), { webkitRelativePath: 'Docs/a.txt' });
+    const result = await entriesFromFileListAsync(fileList([file]));
+    expect(result[0]?.relativePath).toBe('Docs/a.txt');
+  });
+
+  it('rejects once aborted rather than staging a stale selection', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    await expect(
+      plainEntriesFromFileListAsync(fileList([new File(['x'], 'a.txt')]), { signal: controller.signal })
+    ).rejects.toSatisfy(isScanAborted);
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * cooperative scheduling
+ * ------------------------------------------------------------------ */
+
+describe('runWithConcurrency', () => {
+  it('never exceeds the limit and returns results in input order', async () => {
+    let inFlight = 0;
+    let peak = 0;
+    const items = Array.from({ length: 12 }, (_, i) => i);
+
+    const results = await runWithConcurrency(items, 3, async n => {
+      inFlight += 1;
+      peak = Math.max(peak, inFlight);
+      await new Promise(resolve => setTimeout(resolve, 1));
+      inFlight -= 1;
+      return n * 2;
+    });
+
+    expect(peak).toBeLessThanOrEqual(3);
+    expect(results).toEqual(items.map(n => n * 2));
+  });
+
+  it('runs everything even when the list is shorter than the limit', async () => {
+    const results = await runWithConcurrency([1, 2], 8, async n => n + 1);
+    expect(results).toEqual([2, 3]);
+  });
+});
+
+describe('mapWithYield', () => {
+  it('maps every item and reports completion', async () => {
+    const progress: number[] = [];
+    const result = await mapWithYield(
+      [1, 2, 3],
+      n => n * 10,
+      done => progress.push(done)
+    );
+    expect(result).toEqual([10, 20, 30]);
+    expect(progress.at(-1)).toBe(3);
+  });
+});
+
+describe('throttleTrailing', () => {
+  it('fires immediately, then delivers the last call after the interval', async () => {
+    vi.useFakeTimers();
+    try {
+      const seen: number[] = [];
+      const push = throttleTrailing((n: number) => seen.push(n), 100);
+
+      push(1);
+      push(2);
+      push(3);
+      expect(seen).toEqual([1]);
+
+      await vi.advanceTimersByTimeAsync(150);
+      expect(seen).toEqual([1, 3]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

@@ -43,6 +43,7 @@ import {
   subscribeToUpdateDownloadProgress,
 } from '../utils/electronDesktop';
 import { appendClientMtime } from '../utils/folderUpload';
+import { runWithConcurrency, throttleTrailing } from '../utils/scheduling';
 import { formatBytes } from '../utils/storageUtils';
 import { mapFileResponse } from '../utils/fileUtils';
 
@@ -52,10 +53,60 @@ const FILE_MANAGER_PAGES = new Set(['My Files', 'Shared', 'Starred', 'Trash']);
 
 const isFileManagerPage = (page: string | undefined) => !!page && FILE_MANAGER_PAGES.has(page);
 
+/** How long server events are coalesced before the list refreshes. */
+const SSE_REFRESH_DEBOUNCE_MS = 800;
+const SSE_REFRESH_MAX_WAIT_MS = 2500;
+
 const naturalCompare = (a: string, b: string) => a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true });
 
 const getInFlightUploadProgress = (loaded: number, total: number): number =>
   Math.min(Math.round((loaded / total) * 100), 99);
+
+/**
+ * Bulk upload batching.
+ */
+const BULK_BATCH_MAX_FILES = 100;
+const BULK_BATCH_MAX_BYTES = 64 * 1024 * 1024;
+/** Kept below the browser's six-per-origin ceiling. */
+const BULK_BATCH_CONCURRENCY = 3;
+/** Below this, per-file rows are informative. */
+const BULK_AGGREGATE_THRESHOLD = 8;
+const BULK_PROGRESS_THROTTLE_MS = 120;
+/** A failed batch of hundreds must not become hundreds of toasts. */
+const MAX_FAILURE_TOASTS = 3;
+
+function splitIntoBatches<T extends { file: File }>(entries: T[]): T[][] {
+  const batches: T[][] = [];
+  let current: T[] = [];
+  let bytes = 0;
+
+  for (const entry of entries) {
+    const overflows = current.length >= BULK_BATCH_MAX_FILES || bytes + entry.file.size > BULK_BATCH_MAX_BYTES;
+    if (current.length > 0 && overflows) {
+      batches.push(current);
+      current = [];
+      bytes = 0;
+    }
+    current.push(entry);
+    bytes += entry.file.size;
+  }
+  if (current.length > 0) batches.push(current);
+  return batches;
+}
+
+/** Names the upload for the progress card: the folder if there is one, else a file count. */
+function describeBulkUpload(entries: { file: File; relativePath?: string }[]): string {
+  const roots = new Set<string>();
+  for (const entry of entries) {
+    const normalized = (entry.relativePath || '').replace(/\\/g, '/').replace(/^\/+/, '');
+    const root = normalized.split('/').filter(Boolean)[0];
+    if (root && normalized.includes('/')) roots.add(root);
+  }
+  const countLabel = `${entries.length.toLocaleString()} files`;
+  if (roots.size === 1) return `${[...roots][0]} — ${countLabel}`;
+  if (roots.size > 1) return `${roots.size} folders — ${countLabel}`;
+  return countLabel;
+}
 
 function sortFilesWithFoldersFirst(items: FileItem[], sortBy: FileSortBy, sortOrder: 'asc' | 'desc'): FileItem[] {
   const direction = sortOrder === 'desc' ? -1 : 1;
@@ -131,6 +182,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [uploadModalProcessing, setUploadModalProcessing] = useState(false);
   const [uploadModalProcessingRequestId, setUploadModalProcessingRequestId] = useState<string | null>(null);
+  const [uploadScanCount, setUploadScanCount] = useState(0);
   const [uploadModalInitialEntries, setUploadModalInitialEntries] = useState<UploadModalInitialEntry[] | null>(null);
   const [createFolderModalOpen, setCreateFolderModalOpen] = useState(false);
   const [imageViewerFile, setImageViewerFile] = useState<FileItem | null>(null);
@@ -192,6 +244,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const isUploadProgressInteractingRef = useRef(false);
   const uploadDismissTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const uploadXhrRef = useRef<Map<string, XMLHttpRequest>>(new Map());
+  /** Every request belonging to a batched upload, so one Cancel stops all of them. */
+  const uploadGroupRef = useRef<Map<string, { xhrs: Set<XMLHttpRequest>; cancelled: boolean }>>(new Map());
   const searchQueryRef = useRef('');
   const abortControllerRef = useRef<AbortController | null>(null);
   const listRefreshControllerRef = useRef<AbortController | null>(null);
@@ -201,6 +255,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const didSavePreSearchRef = useRef(false);
   const eventSourceRef = useRef<EventSource | null>(null);
   const sseRefreshTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const sseRefreshDeadlineRef = useRef<number | null>(null);
   const currentPathRef = useRef<string[]>(currentPath);
   const folderStackRef = useRef<(string | null)[]>(folderStack);
   const folderSharedStackRef = useRef<boolean[]>(folderSharedStack);
@@ -691,12 +746,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return true;
   };
 
+  /**
+   * Coalesces server events into a list refresh.
+   */
   const debouncedSSERefresh = () => {
-    if (sseRefreshTimeoutRef.current) clearTimeout(sseRefreshTimeoutRef.current);
-    sseRefreshTimeoutRef.current = setTimeout(() => {
-      refreshFilesRef.current?.(true);
+    const now = Date.now();
+    if (sseRefreshDeadlineRef.current === null) {
+      sseRefreshDeadlineRef.current = now + SSE_REFRESH_MAX_WAIT_MS;
+    }
+
+    const runRefresh = () => {
       sseRefreshTimeoutRef.current = null;
-    }, 800);
+      sseRefreshDeadlineRef.current = null;
+      refreshFilesRef.current?.(true);
+    };
+
+    if (sseRefreshTimeoutRef.current) clearTimeout(sseRefreshTimeoutRef.current);
+    const wait = Math.max(0, Math.min(SSE_REFRESH_DEBOUNCE_MS, sseRefreshDeadlineRef.current - now));
+    sseRefreshTimeoutRef.current = setTimeout(runRefresh, wait);
   };
 
   useEffect(() => {
@@ -807,158 +874,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return uploadEntriesBulk(filesToUpload.map(file => ({ file })));
   };
 
+  /**
+   * Uploads a set of files as a sequence of bounded batches.
+   */
   const uploadEntriesBulk = async (entries: BulkUploadEntry[]) => {
     if (entries.length === 0) return;
-    const allFiles = entries.map(e => e.file);
 
     return operationQueue.add(async () => {
-      await validateUploadSize(allFiles);
+      await validateUploadSize(entries.map(e => e.file));
 
       const parentId = folderStack[folderStack.length - 1];
       const hasRelativePaths = entries.some(e => e.relativePath);
 
-      // Folder uploads must be a single bulk XHR to avoid duplicate folder creation
-      if (hasRelativePaths) {
-        return new Promise<void>((resolve, reject) => {
-          const batchGroupId = entries.length > 1 ? `bulk-${Date.now()}-${Math.random()}` : undefined;
-          const uploadId = batchGroupId || `bulk-${Date.now()}-${Math.random()}`;
-          const xhr = new XMLHttpRequest();
-          const data = new FormData();
-          if (parentId) data.append('parentId', parentId);
-
-          const normalizedEntries = entries.map((entry, i) => ({
-            ...entry,
-            clientId: entry.clientId || `${uploadId}-${i}`,
-            relativePath: entry.relativePath || '',
-          }));
-
-          normalizedEntries.forEach(entry => {
-            data.append('files', entry.file);
-            data.append('relativePaths', entry.relativePath);
-            data.append('clientIds', entry.clientId);
-            appendClientMtime(data, entry.file);
-          });
-
-          const progressItems = normalizedEntries.map(entry => ({
-            id: entry.clientId,
-            fileName: entry.relativePath || entry.file.name,
-            fileSize: entry.file.size,
-            progress: 0,
-            status: 'uploading' as const,
-            groupId: batchGroupId,
-          }));
-
-          setUploadProgress(prev => [...prev, ...progressItems]);
-          progressItems.forEach(item => uploadXhrRef.current.set(item.id, xhr));
-
-          xhr.upload.addEventListener('progress', e => {
-            if (e.lengthComputable) {
-              const progress = getInFlightUploadProgress(e.loaded, e.total);
-              progressItems.forEach(item => {
-                const status: UploadProgressItem['status'] = progress >= 99 ? 'finalizing' : 'uploading';
-                setUploadProgress(prev => updateUploadProgress(prev, item.id, { progress, status }));
-              });
-            }
-          });
-
-          const markAllStatus = (status: 'completed' | 'error', progress?: number) => {
-            progressItems.forEach(item => {
-              setUploadProgress(prev =>
-                updateUploadProgress(prev, item.id, { status, ...(progress != null ? { progress } : {}) })
-              );
-            });
-          };
-
-          const cleanupXhrRefs = () => {
-            progressItems.forEach(item => uploadXhrRef.current.delete(item.id));
-          };
-
-          const scheduleAutoDismissAll = () => {
-            progressItems.forEach(item => {
-              const timeout = createAutoDismissTimeout(
-                item.id,
-                isUploadProgressInteractingRef,
-                setUploadProgress,
-                uploadDismissTimeoutsRef,
-                3000,
-                2000
-              );
-              uploadDismissTimeoutsRef.current.set(item.id, timeout);
-            });
-          };
-
-          xhr.addEventListener('load', () => {
-            if (xhr.status >= 200 && xhr.status < 300) {
-              try {
-                const response = JSON.parse(xhr.responseText);
-                const { files: uploaded, failed } = response;
-
-                if (Array.isArray(uploaded)) {
-                  uploaded.forEach((f: { clientId?: string }) => {
-                    if (f?.clientId) {
-                      setUploadProgress(prev =>
-                        updateUploadProgress(prev, f.clientId!, { progress: 100, status: 'completed' })
-                      );
-                    }
-                  });
-                }
-
-                if (Array.isArray(failed) && failed.length > 0) {
-                  failed.forEach((f: { fileName: string; error: string; clientId?: string }) => {
-                    if (f.clientId) {
-                      setUploadProgress(prev => updateUploadProgress(prev, f.clientId!, { status: 'error' }));
-                    }
-                    showToast(`Failed to upload ${f.fileName}: ${f.error}`, 'error');
-                  });
-                }
-
-                // Fallback: if backend didn't return clientIds, mark all as completed
-                if (!Array.isArray(uploaded) || uploaded.every((f: { clientId?: string }) => !f?.clientId)) {
-                  markAllStatus('completed', 100);
-                }
-
-                debouncedRefreshFiles(false);
-                scheduleAutoDismissAll();
-                resolve();
-              } catch {
-                markAllStatus('completed', 100);
-                debouncedRefreshFiles(false);
-                resolve();
-              }
-            } else {
-              markAllStatus('error');
-              const errorMessage = extractXhrErrorMessage(xhr);
-              showToast(errorMessage || 'Failed to upload files', 'error');
-              reject(new Error(errorMessage || 'Failed to upload files'));
-            }
-            cleanupXhrRefs();
-          });
-
-          xhr.addEventListener('error', () => {
-            markAllStatus('error');
-            const errorMessage =
-              extractXhrErrorMessage(xhr) || 'Upload failed. Please check your connection and try again.';
-            showToast(errorMessage, 'error');
-            reject(new Error(errorMessage));
-            cleanupXhrRefs();
-          });
-
-          xhr.addEventListener('abort', () => {
-            progressItems.forEach(item => setUploadProgress(prev => removeUploadProgress(prev, item.id)));
-            reject(new Error('Upload cancelled'));
-            cleanupXhrRefs();
-          });
-
-          xhr.open('POST', '/api/files/upload/bulk');
-          xhr.withCredentials = true;
-          xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
-          xhr.send(data);
-        });
-      }
-
-      // Flat multi-file: one XHR per file for independent cancellation
-      await Promise.all(
-        entries.map((entry, index) => {
+      // A handful of loose files keeps the per-file path: a row each and
+      // independent cancellation are worth more than batching at that size.
+      if (!hasRelativePaths && entries.length <= BULK_AGGREGATE_THRESHOLD) {
+        await runWithConcurrency(entries, BULK_BATCH_CONCURRENCY, (entry, index) => {
           const clientId = entry.clientId || `file-${Date.now()}-${index}`;
           const formData = new FormData();
           if (parentId) formData.append('parentId', parentId);
@@ -973,8 +904,196 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             fileName: entry.file.name,
             fileSize: entry.file.size,
           });
-        })
+        });
+        return;
+      }
+
+      const groupId = `bulk-${Date.now()}-${Math.random()}`;
+      const aggregateId = `${groupId}-all`;
+      const normalized = entries.map((entry, i) => ({
+        file: entry.file,
+        clientId: entry.clientId || `${groupId}-${i}`,
+        relativePath: entry.relativePath || '',
+      }));
+      const totalBytes = Math.max(
+        1,
+        normalized.reduce((sum, e) => sum + e.file.size, 0)
       );
+      const batches = splitIntoBatches(normalized);
+
+      const group = { xhrs: new Set<XMLHttpRequest>(), cancelled: false };
+      uploadGroupRef.current.set(groupId, group);
+      uploadGroupRef.current.set(aggregateId, group);
+
+      setUploadProgress(prev => [
+        ...prev,
+        {
+          id: aggregateId,
+          fileName: describeBulkUpload(normalized),
+          fileSize: totalBytes,
+          progress: 0,
+          status: 'uploading' as const,
+          groupId,
+        },
+      ]);
+
+      const sentBytes = new Array<number>(batches.length).fill(0);
+      let completedFiles = 0;
+      let failedFiles = 0;
+      let toastedFailures = 0;
+      let settled = false;
+
+      const publishProgress = throttleTrailing(() => {
+        if (settled) return;
+        const loaded = sentBytes.reduce((sum, n) => sum + n, 0);
+        const progress = getInFlightUploadProgress(loaded, totalBytes);
+        // Bytes leave the browser well before the server has written them, so
+        // the tail of the run is server time; say so rather than sit at 99%.
+        const status: UploadProgressItem['status'] = progress >= 99 ? 'finalizing' : 'uploading';
+        setUploadProgress(prev => updateUploadProgress(prev, aggregateId, { progress, status }));
+      }, BULK_PROGRESS_THROTTLE_MS);
+
+      const scheduleAggregateDismiss = (isSuccess: boolean) => {
+        const timeout = isSuccess
+          ? createAutoDismissTimeout(
+              aggregateId,
+              isUploadProgressInteractingRef,
+              setUploadProgress,
+              uploadDismissTimeoutsRef,
+              3000,
+              2000
+            )
+          : createAutoDismissTimeout(
+              aggregateId,
+              isUploadProgressInteractingRef,
+              setUploadProgress,
+              uploadDismissTimeoutsRef
+            );
+        uploadDismissTimeoutsRef.current.set(aggregateId, timeout);
+      };
+
+      const sendBatch = (batch: typeof normalized, batchIndex: number) =>
+        new Promise<void>((resolve, reject) => {
+          if (group.cancelled) {
+            resolve();
+            return;
+          }
+
+          const batchBytes = batch.reduce((sum, e) => sum + e.file.size, 0);
+          const data = new FormData();
+          if (parentId) data.append('parentId', parentId);
+          batch.forEach(entry => {
+            data.append('files', entry.file);
+            data.append('relativePaths', entry.relativePath);
+            data.append('clientIds', entry.clientId);
+            appendClientMtime(data, entry.file);
+          });
+
+          const xhr = new XMLHttpRequest();
+          group.xhrs.add(xhr);
+          const release = () => group.xhrs.delete(xhr);
+
+          xhr.upload.addEventListener('progress', e => {
+            if (!e.lengthComputable || e.total === 0) return;
+            // Scale against the batch's file bytes: the multipart envelope
+            // inflates e.total, and the aggregate bar is drawn from file sizes.
+            sentBytes[batchIndex] = Math.min(batchBytes, (e.loaded / e.total) * batchBytes);
+            publishProgress();
+          });
+
+          xhr.addEventListener('load', () => {
+            release();
+            if (xhr.status < 200 || xhr.status >= 300) {
+              reject(new Error(extractXhrErrorMessage(xhr) || 'Failed to upload files'));
+              return;
+            }
+
+            sentBytes[batchIndex] = batchBytes;
+            let succeeded = batch.length;
+            let failures: { fileName: string; error: string }[] = [];
+            try {
+              const response = JSON.parse(xhr.responseText);
+              if (Array.isArray(response?.files)) succeeded = response.files.length;
+              if (Array.isArray(response?.failed)) failures = response.failed;
+            } catch {
+              // Unparseable body on a 2xx: count the batch as delivered.
+            }
+
+            completedFiles += succeeded;
+            failedFiles += failures.length;
+            failures.slice(0, Math.max(0, MAX_FAILURE_TOASTS - toastedFailures)).forEach(f => {
+              toastedFailures += 1;
+              showToast(`Failed to upload ${f.fileName}: ${f.error}`, 'error');
+            });
+
+            publishProgress();
+            // Each landed batch is real, visible progress in the file list.
+            debouncedRefreshFiles(false);
+            resolve();
+          });
+
+          xhr.addEventListener('error', () => {
+            release();
+            reject(
+              new Error(extractXhrErrorMessage(xhr) || 'Upload failed. Please check your connection and try again.')
+            );
+          });
+
+          // A cancelled group tears its own progress card down; an aborted
+          // batch here is that teardown, not a failure to report.
+          xhr.addEventListener('abort', () => {
+            release();
+            resolve();
+          });
+
+          xhr.open('POST', '/api/files/upload/bulk');
+          xhr.withCredentials = true;
+          xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+          xhr.send(data);
+        });
+
+      try {
+        if (hasRelativePaths) {
+          for (let i = 0; i < batches.length; i++) {
+            if (group.cancelled) break;
+            await sendBatch(batches[i] as typeof normalized, i);
+          }
+        } else {
+          await runWithConcurrency(batches, BULK_BATCH_CONCURRENCY, (batch, i) =>
+            group.cancelled ? Promise.resolve() : sendBatch(batch, i)
+          );
+        }
+
+        settled = true;
+        if (group.cancelled) return;
+
+        const allFailed = completedFiles === 0 && failedFiles > 0;
+        setUploadProgress(prev =>
+          updateUploadProgress(prev, aggregateId, {
+            progress: 100,
+            status: allFailed ? 'error' : 'completed',
+          })
+        );
+        if (failedFiles > 0) {
+          showToast(
+            `${completedFiles.toLocaleString()} uploaded, ${failedFiles.toLocaleString()} failed`,
+            allFailed ? 'error' : 'info'
+          );
+        }
+        scheduleAggregateDismiss(!allFailed);
+        debouncedRefreshFiles(false);
+      } catch (err) {
+        settled = true;
+        setUploadProgress(prev => updateUploadProgress(prev, aggregateId, { status: 'error' }));
+        showToast(err instanceof Error ? err.message : 'Failed to upload files', 'error');
+        scheduleAggregateDismiss(false);
+        debouncedRefreshFiles(false);
+        throw err;
+      } finally {
+        group.xhrs.forEach(xhr => xhr.abort());
+        uploadGroupRef.current.delete(groupId);
+        uploadGroupRef.current.delete(aggregateId);
+      }
     });
   };
 
@@ -1599,7 +1718,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   }, [refreshOnlyOfficeConfig]);
 
+  /**
+   * Stops a batched upload: marks the group so no further batch is sent, then
+   * aborts whatever is already on the wire. Batches that already landed stay
+   * uploaded — cancelling stops the rest, it does not undo the delivered ones.
+   */
+  const cancelUploadBatchGroup = (key: string): boolean => {
+    const group = uploadGroupRef.current.get(key);
+    if (!group) return false;
+    group.cancelled = true;
+    group.xhrs.forEach(xhr => xhr.abort());
+    group.xhrs.clear();
+    return true;
+  };
+
   const cancelUpload = (uploadId: string) => {
+    if (cancelUploadBatchGroup(uploadId)) {
+      setUploadProgress(prev => removeUploadProgress(prev, uploadId));
+      debouncedRefreshFiles(true);
+      return;
+    }
     const xhr = uploadXhrRef.current.get(uploadId);
     if (xhr) {
       xhr.abort();
@@ -1611,17 +1749,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const cancelUploadGroup = (groupId: string) => {
+    cancelUploadBatchGroup(groupId);
     const idsToCancel = uploadProgress.filter(item => item.groupId === groupId).map(item => item.id);
     if (idsToCancel.length === 0) return;
     idsToCancel.forEach(id => {
       const xhr = uploadXhrRef.current.get(id);
       if (xhr) {
         xhr.abort();
-        setUploadProgress(prev => removeUploadProgress(prev, id));
         uploadXhrRef.current.delete(id);
-      } else {
-        setUploadProgress(prev => removeUploadProgress(prev, id));
       }
+      setUploadProgress(prev => removeUploadProgress(prev, id));
     });
     debouncedRefreshFiles(true);
   };
@@ -1760,6 +1897,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setUploadModalProcessing,
         uploadModalProcessingRequestId,
         setUploadModalProcessingRequestId,
+        uploadScanCount,
+        setUploadScanCount,
         createFolderModalOpen,
         imageViewerFile,
         setImageViewerFile,
