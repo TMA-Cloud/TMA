@@ -1,7 +1,7 @@
 import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react';
 import { Upload, File, Folder, CheckCircle, AlertCircle, RefreshCw, FilePlus, Loader2 } from 'lucide-react';
 import { Modal } from '../ui/Modal';
-import { useApp } from '../../contexts/AppContext';
+import { useApp, type UploadModalInitialEntry } from '../../contexts/AppContext';
 import { formatFileSize } from '../../utils/fileUtils';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { useToast } from '../../hooks/useToast';
@@ -76,6 +76,8 @@ export const UploadModal: React.FC = () => {
   const folderInputRef = useRef<HTMLInputElement>(null);
   /** Lets a closed modal or a second selection abandon a scan already running. */
   const scanAbortRef = useRef<AbortController | null>(null);
+  /** The dropped batch already staged, so a repeated effect run cannot stage it again. */
+  const consumedInitialEntriesRef = useRef<UploadModalInitialEntry[] | null>(null);
   const isMobile = useIsMobile();
   const { showToast } = useToast();
 
@@ -147,19 +149,29 @@ export const UploadModal: React.FC = () => {
     setUploadFiles(prev => [...prev, ...newUploadFiles]);
   }, []);
 
-  // When modal is opened with initial entries (e.g. from drag onto file manager), consume them
+  /**
+   * Consumes entries handed over by a drop on the file manager.
+   *
+   * Staging must happen exactly once per batch, because a batch staged twice
+   * is every file uploaded twice. Two things make that harder than it looks:
+   * the provider rebuilds its callbacks on every render, so this effect's
+   * dependencies change constantly and it re-runs while the entries are still
+   * pending, and React invokes effects twice on mount in development. Clearing
+   * the entries is a state update that lands on a later render, so it cannot
+   * be the guard.
+   */
   useEffect(() => {
     if (!uploadModalOpen || !uploadModalInitialEntries?.length) return;
-    const entries = uploadModalInitialEntries;
-    Promise.resolve().then(() => {
-      clearUploadModalInitialEntries();
-      handleEntries(entries);
-      // Stop the "processing" UI as soon as we've staged the scanned entries
-      // (even if they later end up being removed/filtered elsewhere)
-      setUploadModalProcessing(false);
-      setUploadModalProcessingRequestId(null);
-      setUploadScanCount(0);
-    });
+    if (consumedInitialEntriesRef.current === uploadModalInitialEntries) return;
+    consumedInitialEntriesRef.current = uploadModalInitialEntries;
+
+    clearUploadModalInitialEntries();
+    handleEntries(uploadModalInitialEntries);
+    // Stop the "processing" UI as soon as we've staged the scanned entries
+    // (even if they later end up being removed/filtered elsewhere)
+    setUploadModalProcessing(false);
+    setUploadModalProcessingRequestId(null);
+    setUploadScanCount(0);
   }, [
     uploadModalOpen,
     uploadModalInitialEntries,
@@ -271,6 +283,7 @@ export const UploadModal: React.FC = () => {
   const handleClose = () => {
     scanAbortRef.current?.abort();
     scanAbortRef.current = null;
+    consumedInitialEntriesRef.current = null;
     setUploadScanCount(0);
     setUploadFiles([]);
     setDuplicateConflicts([]);
