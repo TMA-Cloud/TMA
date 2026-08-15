@@ -1,10 +1,25 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { HardDrive } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { PasswordInput } from './PasswordInput';
 import { SocialAuthButtons } from './SocialAuthButtons';
 import { checkGoogleAuthEnabled } from '../../utils/api';
 import { getErrorMessage } from '../../utils/errorUtils';
+import {
+  MAX_EMAIL_LENGTH,
+  MAX_NAME_LENGTH,
+  MAX_PASSWORD_LENGTH,
+  MIN_PASSWORD_LENGTH,
+  validateEmail,
+  validateName,
+  validateNewPassword,
+} from '../../utils/authValidation';
+
+type FieldErrors = {
+  name?: string;
+  email?: string;
+  password?: string;
+};
 
 export const SignupForm: React.FC<{ onSwitch: () => void }> = ({ onSwitch }) => {
   const { signup } = useAuth();
@@ -12,8 +27,13 @@ export const SignupForm: React.FC<{ onSwitch: () => void }> = ({ onSwitch }) => 
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const [submitting, setSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [googleEnabled, setGoogleEnabled] = useState(false);
+  const nameRef = useRef<HTMLInputElement>(null);
+  const emailRef = useRef<HTMLInputElement>(null);
+  const passwordRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -29,25 +49,43 @@ export const SignupForm: React.FC<{ onSwitch: () => void }> = ({ onSwitch }) => 
     };
   }, []);
 
+  const clearFieldError = (field: keyof FieldErrors) => {
+    setFieldErrors(prev => (prev[field] ? { ...prev, [field]: undefined } : prev));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitting) return;
     setError('');
-    if (!name.trim()) {
-      setError('Please enter your name');
+
+    // Every field is checked in one pass, so the form asks for all its
+    // corrections at once.
+    const errors: FieldErrors = {
+      name: validateName(name) ?? undefined,
+      email: validateEmail(email) ?? undefined,
+      password: validateNewPassword(password) ?? undefined,
+    };
+    setFieldErrors(errors);
+
+    const firstInvalid = (
+      [
+        [errors.name, nameRef],
+        [errors.email, emailRef],
+        [errors.password, passwordRef],
+      ] as const
+    ).find(([message]) => message);
+    if (firstInvalid) {
+      firstInvalid[1].current?.focus();
       return;
     }
-    if (!email.trim()) {
-      setError('Please enter your email');
-      return;
-    }
-    if (password.length < 8) {
-      setError('Password must be at least 8 characters long');
-      return;
-    }
+
+    setSubmitting(true);
     try {
-      await signup(email, password, name);
+      await signup(email.trim(), password, name.trim());
     } catch (err) {
       setError(getErrorMessage(err, 'Failed to sign up'));
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -63,34 +101,97 @@ export const SignupForm: React.FC<{ onSwitch: () => void }> = ({ onSwitch }) => 
         </div>
       </div>
 
-      <form className="space-y-3" onSubmit={handleSubmit}>
-        <input
-          className="field"
-          placeholder="Name"
-          value={name}
-          onChange={e => setName(e.target.value)}
-          autoComplete="name"
-          maxLength={100}
-          autoFocus
-        />
-        <input
-          className="field"
-          placeholder="Email"
-          value={email}
-          onChange={e => setEmail(e.target.value)}
-          autoComplete="email"
-          maxLength={254}
-        />
-        <PasswordInput
-          value={password}
-          onChange={e => setPassword(e.target.value)}
-          autoComplete="new-password"
-          maxLength={128}
-          showPassword={showPassword}
-          onTogglePassword={() => setShowPassword(v => !v)}
-        />
+      {/* noValidate keeps every message on this form in one voice instead of
+          letting the browser answer for some fields in its own wording. */}
+      <form className="space-y-3" onSubmit={handleSubmit} noValidate>
+        <div>
+          <input
+            ref={nameRef}
+            id="signup-name"
+            className="field"
+            placeholder="Name"
+            aria-label="Name"
+            value={name}
+            onChange={e => {
+              setName(e.target.value);
+              clearFieldError('name');
+            }}
+            autoComplete="name"
+            maxLength={MAX_NAME_LENGTH}
+            required
+            aria-invalid={fieldErrors.name ? true : undefined}
+            aria-describedby={fieldErrors.name ? 'signup-name-error' : undefined}
+            autoFocus
+          />
+          {fieldErrors.name && (
+            <p
+              id="signup-name-error"
+              className="type-caption text-[var(--destructive-text)] mt-1.5 animate-slideDown"
+              role="alert"
+            >
+              {fieldErrors.name}
+            </p>
+          )}
+        </div>
+        <div>
+          <input
+            ref={emailRef}
+            id="signup-email"
+            type="email"
+            className="field"
+            placeholder="Email"
+            aria-label="Email"
+            value={email}
+            onChange={e => {
+              setEmail(e.target.value);
+              clearFieldError('email');
+            }}
+            autoComplete="email"
+            maxLength={MAX_EMAIL_LENGTH}
+            required
+            aria-invalid={fieldErrors.email ? true : undefined}
+            aria-describedby={fieldErrors.email ? 'signup-email-error' : undefined}
+          />
+          {fieldErrors.email && (
+            <p
+              id="signup-email-error"
+              className="type-caption text-[var(--destructive-text)] mt-1.5 animate-slideDown"
+              role="alert"
+            >
+              {fieldErrors.email}
+            </p>
+          )}
+        </div>
+        <div>
+          <PasswordInput
+            inputRef={passwordRef}
+            id="signup-password"
+            value={password}
+            onChange={e => {
+              setPassword(e.target.value);
+              clearFieldError('password');
+            }}
+            autoComplete="new-password"
+            maxLength={MAX_PASSWORD_LENGTH}
+            showPassword={showPassword}
+            onTogglePassword={() => setShowPassword(v => !v)}
+            invalid={Boolean(fieldErrors.password)}
+            describedBy={`signup-password-hint${fieldErrors.password ? ' signup-password-error' : ''}`}
+          />
+          {fieldErrors.password && (
+            <p
+              id="signup-password-error"
+              className="type-caption text-[var(--destructive-text)] mt-1.5 animate-slideDown"
+              role="alert"
+            >
+              {fieldErrors.password}
+            </p>
+          )}
+        </div>
         {/* The rule is stated up front rather than sprung on submit. */}
-        <p className="type-caption text-[var(--label-tertiary)]">At least 8 characters</p>
+        <p id="signup-password-hint" className="type-caption text-[var(--label-tertiary)]">
+          At least {MIN_PASSWORD_LENGTH} characters
+        </p>
         {error && (
           <p
             className="type-footnote type-emphasized text-[var(--destructive-text)] animate-slideDown"
@@ -100,8 +201,8 @@ export const SignupForm: React.FC<{ onSwitch: () => void }> = ({ onSwitch }) => 
             {error}
           </p>
         )}
-        <button type="submit" className="btn btn-primary w-full !py-2.5 mt-1">
-          Create account
+        <button type="submit" className="btn btn-primary w-full !py-2.5 mt-1" disabled={submitting}>
+          {submitting ? 'Creating account…' : 'Create account'}
         </button>
         <SocialAuthButtons googleEnabled={googleEnabled} />
         <p className="type-footnote text-center text-[var(--label-tertiary)] pt-1">

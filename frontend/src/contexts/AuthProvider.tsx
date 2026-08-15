@@ -120,7 +120,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
-        const message = errorData.message || 'Login failed';
+        let message = errorData.message || 'Login failed';
+        // The server's schema rejection reads "Validation failed", which tells
+        // the user nothing. The form checks these fields first, so a 422 here
+        // means something got past it.
+        if (res.status === 422) {
+          message = 'Check your email and password, then try again';
+        }
         // Return error info for MFA requirement detection
         const error = new Error(message) as Error & {
           status: number;

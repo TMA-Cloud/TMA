@@ -80,11 +80,11 @@ describe('changing the password', () => {
     expect(res.body.message).toMatch(/must be different/i);
   });
 
-  it('rejects a new password under six characters at the schema', async () => {
+  it('rejects a new password under eight characters at the schema', async () => {
     const { client: c } = await ensureOwner();
     await allowPasswordChange(c);
 
-    const res = await c.post('/api/change-password').send({ oldPassword: 'correct-horse', newPassword: '12345' });
+    const res = await c.post('/api/change-password').send({ oldPassword: 'correct-horse', newPassword: '1234567' });
 
     expect(res.status).toBe(422);
   });

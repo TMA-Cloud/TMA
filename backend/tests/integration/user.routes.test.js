@@ -74,7 +74,12 @@ beforeEach(asOwner);
 describe('sub-user management is owner-only', () => {
   const subUserRoutes = [
     ['list', 'get', '/api/user/sub-users', null],
-    ['create', 'post', '/api/user/sub-users', { email: 'a@b.com', password: 'secret1', name: 'Sub', permissions: [] }],
+    [
+      'create',
+      'post',
+      '/api/user/sub-users',
+      { email: 'a@b.com', password: 'secret123', name: 'Sub', permissions: [] },
+    ],
     ['update', 'put', `/api/user/sub-users/${SUB_ID}`, { permissions: [] }],
     ['delete', 'delete', `/api/user/sub-users/${SUB_ID}`, null],
   ];
@@ -110,7 +115,7 @@ describe('sub-user management is owner-only', () => {
 
 describe('createSubUser validation', () => {
   const post = body => request(app).post('/api/user/sub-users').send(body);
-  const valid = { email: 'a@b.com', password: 'secret1', name: 'Sub User', permissions: [PERMISSIONS.DOWNLOAD] };
+  const valid = { email: 'a@b.com', password: 'secret123', name: 'Sub User', permissions: [PERMISSIONS.DOWNLOAD] };
 
   it('accepts a well-formed request', async () => {
     expect((await post(valid)).status).toBe(200);
@@ -120,8 +125,8 @@ describe('createSubUser validation', () => {
     expect((await post({ ...valid, email: 'nope' })).status).toBe(422);
   });
 
-  it('rejects a password under 6 characters', async () => {
-    expect((await post({ ...valid, password: '12345' })).status).toBe(422);
+  it('rejects a password under 8 characters', async () => {
+    expect((await post({ ...valid, password: '1234567' })).status).toBe(422);
   });
 
   it('requires a non-empty name', async () => {

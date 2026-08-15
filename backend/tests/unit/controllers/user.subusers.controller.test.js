@@ -101,7 +101,7 @@ describe('listSubUsers', () => {
 describe('createSubUser', () => {
   const body = {
     email: 'sub@example.com',
-    password: 'secret1',
+    password: 'secret123',
     name: 'Sub User',
     permissions: [PERMISSIONS.DOWNLOAD],
   };
@@ -120,7 +120,7 @@ describe('createSubUser', () => {
   it('hashes the password before it reaches the model', async () => {
     await call(controller.createSubUser, { body });
     const { hashedPassword } = models.createSubUser.mock.calls[0][0];
-    expect(hashedPassword).not.toBe('secret1');
+    expect(hashedPassword).not.toBe('secret123');
     expect(hashedPassword).toMatch(/^\$2[aby]\$/);
   });
 

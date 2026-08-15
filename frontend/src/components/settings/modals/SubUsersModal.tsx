@@ -6,6 +6,7 @@ import { ModalCountHeader } from '../components/ModalCountHeader';
 import { PermissionChecklist } from '../components/PermissionChecklist';
 import { PasswordInput } from '../../auth/PasswordInput';
 import type { PermissionDefinition, SubUser } from '../../../utils/api';
+import { MIN_PASSWORD_LENGTH, validateNewPassword } from '../../../utils/authValidation';
 
 export interface SubUsersModalProps {
   isOpen: boolean;
@@ -103,8 +104,9 @@ export const SubUsersModal: React.FC<SubUsersModalProps> = ({
       return;
     }
     // Mirrors the server-side minimum so the request is not wasted.
-    if (password.length < 6) {
-      setFormError('Password must be at least 6 characters.');
+    const passwordError = validateNewPassword(password);
+    if (passwordError) {
+      setFormError(passwordError);
       return;
     }
 
@@ -206,7 +208,7 @@ export const SubUsersModal: React.FC<SubUsersModalProps> = ({
               <PasswordInput
                 value={password}
                 onChange={e => setPassword(e.target.value)}
-                placeholder="At least 6 characters"
+                placeholder={`At least ${MIN_PASSWORD_LENGTH} characters`}
                 autoComplete="new-password"
                 showPassword={showPassword}
                 onTogglePassword={() => setShowPassword(v => !v)}

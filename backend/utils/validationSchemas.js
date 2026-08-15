@@ -3,6 +3,7 @@ import { body, param, query } from 'express-validator';
 import { ALL_PERMISSIONS } from './permissions.js';
 
 const MAX_EMAIL_LENGTH = 254;
+const MIN_PASSWORD_LENGTH = 8;
 const MAX_PASSWORD_LENGTH = 128;
 const MAX_NAME_LENGTH = 100;
 // Allow letters (including Unicode), numbers, and special characters; forbid path/control and Windows-reserved
@@ -17,8 +18,8 @@ const signupSchema = [
     .withMessage(`Email must not exceed ${MAX_EMAIL_LENGTH} characters`)
     .normalizeEmail(),
   body('password')
-    .isLength({ min: 6, max: MAX_PASSWORD_LENGTH })
-    .withMessage(`Password must be between 6 and ${MAX_PASSWORD_LENGTH} characters`),
+    .isLength({ min: MIN_PASSWORD_LENGTH, max: MAX_PASSWORD_LENGTH })
+    .withMessage(`Password must be between ${MIN_PASSWORD_LENGTH} and ${MAX_PASSWORD_LENGTH} characters`),
   body('name')
     .optional()
     .isString()
@@ -50,8 +51,8 @@ const changePasswordSchema = [
   body('newPassword')
     .isString()
     .withMessage('New password is required')
-    .isLength({ min: 6, max: MAX_PASSWORD_LENGTH })
-    .withMessage(`New password must be between 6 and ${MAX_PASSWORD_LENGTH} characters`),
+    .isLength({ min: MIN_PASSWORD_LENGTH, max: MAX_PASSWORD_LENGTH })
+    .withMessage(`New password must be between ${MIN_PASSWORD_LENGTH} and ${MAX_PASSWORD_LENGTH} characters`),
   body('mfaCode')
     .optional()
     .isString()
@@ -262,8 +263,8 @@ const createSubUserSchema = [
     .withMessage(`Email must not exceed ${MAX_EMAIL_LENGTH} characters`)
     .normalizeEmail(),
   body('password')
-    .isLength({ min: 6, max: MAX_PASSWORD_LENGTH })
-    .withMessage(`Password must be between 6 and ${MAX_PASSWORD_LENGTH} characters`),
+    .isLength({ min: MIN_PASSWORD_LENGTH, max: MAX_PASSWORD_LENGTH })
+    .withMessage(`Password must be between ${MIN_PASSWORD_LENGTH} and ${MAX_PASSWORD_LENGTH} characters`),
   body('name')
     .isString()
     .withMessage('Name is required')

@@ -65,7 +65,7 @@ describe('validate', () => {
   it('applies sanitisers before the handler runs', async () => {
     const res = await request(appFor(loginSchema))
       .post('/test')
-      .send({ email: 'USER@Example.COM', password: 'secret' });
+      .send({ email: 'USER@Example.COM', password: 'secret12' });
     expect(res.status).toBe(200);
     expect(res.body.body.email).toBe('user@example.com');
   });
@@ -75,14 +75,14 @@ describe('validate', () => {
     // "Invalid email format" rather than having it trimmed for them.
     const res = await request(appFor(loginSchema))
       .post('/test')
-      .send({ email: '  user@example.com  ', password: 'secret' });
+      .send({ email: '  user@example.com  ', password: 'secret12' });
     expect(res.status).toBe(422);
   });
 
   it('escapes HTML in a submitted name, blunting stored XSS', async () => {
     const res = await request(appFor(signupSchema))
       .post('/test')
-      .send({ email: 'a@b.com', password: 'secret', name: '<script>alert(1)</script>' });
+      .send({ email: 'a@b.com', password: 'secret12', name: '<script>alert(1)</script>' });
     expect(res.status).toBe(200);
     expect(res.body.body.name).not.toContain('<script>');
   });
@@ -93,15 +93,15 @@ describe('signupSchema', () => {
   const post = payload => request(app).post('/test').send(payload);
 
   it('accepts a well-formed signup', async () => {
-    expect((await post({ email: 'a@b.com', password: 'secret1' })).status).toBe(200);
+    expect((await post({ email: 'a@b.com', password: 'secret123' })).status).toBe(200);
   });
 
-  it('rejects a password shorter than 6 characters', async () => {
-    expect((await post({ email: 'a@b.com', password: '12345' })).status).toBe(422);
+  it('rejects a password shorter than 8 characters', async () => {
+    expect((await post({ email: 'a@b.com', password: '1234567' })).status).toBe(422);
   });
 
-  it('accepts a 6-character password', async () => {
-    expect((await post({ email: 'a@b.com', password: '123456' })).status).toBe(200);
+  it('accepts an 8-character password', async () => {
+    expect((await post({ email: 'a@b.com', password: '12345678' })).status).toBe(200);
   });
 
   it('rejects a password over 128 characters', async () => {
@@ -109,20 +109,20 @@ describe('signupSchema', () => {
   });
 
   it('rejects a malformed email', async () => {
-    expect((await post({ email: 'not-an-email', password: 'secret1' })).status).toBe(422);
+    expect((await post({ email: 'not-an-email', password: 'secret123' })).status).toBe(422);
   });
 
   it('rejects an email over 254 characters', async () => {
     const email = `${'a'.repeat(250)}@b.com`;
-    expect((await post({ email, password: 'secret1' })).status).toBe(422);
+    expect((await post({ email, password: 'secret123' })).status).toBe(422);
   });
 
   it('treats the name as optional', async () => {
-    expect((await post({ email: 'a@b.com', password: 'secret1' })).status).toBe(200);
+    expect((await post({ email: 'a@b.com', password: 'secret123' })).status).toBe(200);
   });
 
   it('rejects a name over 100 characters', async () => {
-    expect((await post({ email: 'a@b.com', password: 'secret1', name: 'a'.repeat(101) })).status).toBe(422);
+    expect((await post({ email: 'a@b.com', password: 'secret123', name: 'a'.repeat(101) })).status).toBe(422);
   });
 });
 

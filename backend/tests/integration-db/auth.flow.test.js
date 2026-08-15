@@ -12,7 +12,7 @@ import { countRows, makeOwner, makeSubUser } from './helpers/factories.js';
 describe('signup', () => {
   it('creates an account and persists it', async () => {
     const c = client();
-    const res = await c.post('/api/signup').send({ email: 'new@example.com', password: 'secret1', name: 'New' });
+    const res = await c.post('/api/signup').send({ email: 'new@example.com', password: 'secret123', name: 'New' });
 
     expect(res.status).toBeLessThan(400);
     expect(await countRows('users')).toBe(1);
@@ -20,10 +20,10 @@ describe('signup', () => {
 
   it('never stores the password in plain text', async () => {
     const c = client();
-    await c.post('/api/signup').send({ email: 'new@example.com', password: 'secret1', name: 'New' });
+    await c.post('/api/signup').send({ email: 'new@example.com', password: 'secret123', name: 'New' });
 
     const { rows } = await pool.query('SELECT password FROM users WHERE email = $1', ['new@example.com']);
-    expect(rows[0].password).not.toBe('secret1');
+    expect(rows[0].password).not.toBe('secret123');
     expect(rows[0].password).toMatch(/^\$2[aby]\$/);
   });
 
@@ -31,15 +31,15 @@ describe('signup', () => {
     await makeOwner({ email: 'taken@example.com' });
 
     const c = client();
-    const res = await c.post('/api/signup').send({ email: 'taken@example.com', password: 'secret1', name: 'x' });
+    const res = await c.post('/api/signup').send({ email: 'taken@example.com', password: 'secret123', name: 'x' });
 
     expect(res.status).toBeGreaterThanOrEqual(400);
     expect(await countRows('users')).toBe(1);
   });
 
-  it('rejects a password under six characters before touching the database', async () => {
+  it('rejects a password under eight characters before touching the database', async () => {
     const c = client();
-    const res = await c.post('/api/signup').send({ email: 'short@example.com', password: '12345' });
+    const res = await c.post('/api/signup').send({ email: 'short@example.com', password: '1234567' });
 
     expect(res.status).toBe(422);
     expect(await countRows('users')).toBe(0);
@@ -47,7 +47,7 @@ describe('signup', () => {
 
   it('rejects a malformed email', async () => {
     const c = client();
-    expect((await c.post('/api/signup').send({ email: 'not-an-email', password: 'secret1' })).status).toBe(422);
+    expect((await c.post('/api/signup').send({ email: 'not-an-email', password: 'secret123' })).status).toBe(422);
   });
 
   it('records the first account as the instance admin', async () => {
@@ -78,7 +78,7 @@ describe('signup closes once the instance has an owner', () => {
   it('turns away the second person who tries to register', async () => {
     await signUpAndLogin({ email: 'first@example.com' });
 
-    const res = await client().post('/api/signup').send({ email: 'second@example.com', password: 'secret1' });
+    const res = await client().post('/api/signup').send({ email: 'second@example.com', password: 'secret123' });
 
     expect(res.status).toBe(403);
     expect(res.body.message).toBe('Signup is currently disabled');
@@ -110,7 +110,7 @@ describe('signup closes once the instance has an owner', () => {
     const toggle = await admin.post('/api/user/signup-toggle').send({ enabled: true });
     expect(toggle.status).toBeLessThan(400);
 
-    const res = await client().post('/api/signup').send({ email: 'second@example.com', password: 'secret1' });
+    const res = await client().post('/api/signup').send({ email: 'second@example.com', password: 'secret123' });
 
     expect(res.status).toBeLessThan(400);
     expect(await countRows('users')).toBe(2);
@@ -121,8 +121,8 @@ describe('signup closes once the instance has an owner', () => {
     await admin.post('/api/user/signup-toggle').send({ enabled: true });
 
     const { client: second } = await (async () => {
-      await client().post('/api/signup').send({ email: 'second@example.com', password: 'secret1' });
-      return loginAs('second@example.com', 'secret1');
+      await client().post('/api/signup').send({ email: 'second@example.com', password: 'secret123' });
+      return loginAs('second@example.com', 'secret123');
     })();
     await admin.post('/api/user/signup-toggle').send({ enabled: false });
 

@@ -9,6 +9,10 @@ interface PasswordInputProps {
   maxLength?: number;
   showPassword: boolean;
   onTogglePassword: () => void;
+  id?: string;
+  invalid?: boolean;
+  describedBy?: string;
+  inputRef?: React.Ref<HTMLInputElement>;
 }
 
 export const PasswordInput: React.FC<PasswordInputProps> = ({
@@ -19,17 +23,26 @@ export const PasswordInput: React.FC<PasswordInputProps> = ({
   maxLength = 128,
   showPassword,
   onTogglePassword,
+  id,
+  invalid,
+  describedBy,
+  inputRef,
 }) => {
   return (
     <div className="relative">
       <input
+        ref={inputRef}
+        id={id}
         className="field pr-11"
         type={showPassword ? 'text' : 'password'}
         placeholder={placeholder}
+        aria-label={placeholder}
         value={value}
         onChange={onChange}
         autoComplete={autoComplete}
         maxLength={maxLength}
+        aria-invalid={invalid || undefined}
+        aria-describedby={describedBy}
       />
       <button
         type="button"

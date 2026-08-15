@@ -6,6 +6,7 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { changePassword } from '../../../utils/api';
 import { getErrorMessage } from '../../../utils/errorUtils';
 import { useIsMounted } from '../../../hooks/useIsMounted';
+import { validateNewPassword } from '../../../utils/authValidation';
 
 interface ChangePasswordModalProps {
   isOpen: boolean;
@@ -39,8 +40,9 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ isOpen
       showToast('Fill in all fields', 'error');
       return;
     }
-    if (newPassword.length < 6) {
-      showToast('Use at least 6 characters', 'error');
+    const passwordError = validateNewPassword(newPassword);
+    if (passwordError) {
+      showToast(passwordError, 'error');
       return;
     }
     if (newPassword !== confirmPassword) {
