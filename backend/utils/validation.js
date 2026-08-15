@@ -156,6 +156,36 @@ function validateBoolean(value) {
 }
 
 /**
+ * Earliest modification time an upload may claim. Chosen to match the floor the
+ * ZIP format has always imposed, which in practice is the oldest timestamp any
+ * real-world file carries; anything below it is a broken clock, not history.
+ */
+const MIN_CLIENT_MTIME_MS = Date.UTC(1980, 0, 1);
+
+/**
+ * Validates a client-supplied modification time (epoch milliseconds).
+ *
+ * The value comes from the uploader's machine and is never verified, so it is
+ * display/sort data only — `created_at` remains the clock anything consequential
+ * reads. Reason this returns null rather than throwing: a nonsense mtime should
+ * cost the row its history, not the upload.
+ *
+ * A time in the future is a skewed clock rather than a lie worth rejecting, so
+ * it clamps to now instead of falling back.
+ *
+ * @param {any} value - Epoch milliseconds, as a number or a multipart string
+ * @param {Date} [now] - Injectable clock for tests
+ * @returns {Date|null} Validated time, or null to let the column default to now
+ */
+function validateClientMtime(value, now = new Date()) {
+  if (value == null || value === '') return null;
+  const ms = typeof value === 'number' ? value : Number(String(value).trim());
+  if (!Number.isFinite(ms) || !Number.isInteger(ms)) return null;
+  if (ms < MIN_CLIENT_MTIME_MS) return null;
+  return ms > now.getTime() ? now : new Date(ms);
+}
+
+/**
  * Validates a token (share link token)
  * @param {any} token - Token to validate
  * @returns {string|null} Validated token or null if invalid
@@ -273,4 +303,5 @@ export {
   validateBoolean,
   validateToken,
   validateFileUpload,
+  validateClientMtime,
 };

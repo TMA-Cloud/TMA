@@ -24,13 +24,29 @@ import { validateMimeType } from '../../utils/mimeTypeDetection.js';
 import { sendError, sendSuccess } from '../../utils/response.js';
 import storage from '../../utils/storageDriver.js';
 import { checkStorageLimitExceeded } from '../../utils/storageUtils.js';
-import { validateFileName, validateFileUpload, validateSortBy, validateSortOrder } from '../../utils/validation.js';
+import {
+  validateClientMtime,
+  validateFileName,
+  validateFileUpload,
+  validateSortBy,
+  validateSortOrder,
+} from '../../utils/validation.js';
 import { createBulkZipArchive, createZipArchive } from '../../utils/zipArchive.js';
 
 function normalizeMultipartArray(value) {
   if (value == null) return [];
   if (Array.isArray(value)) return value.map(v => (v == null ? '' : String(v)));
   return [String(value)];
+}
+
+/**
+ * The mtimes the uploader sent, index-aligned with `files` the same way
+ * `relativePaths` and `clientIds` are. Entries that fail validation become null,
+ * which leaves that row's `modified` at the upload time rather than failing the
+ * whole batch over one machine's bad clock.
+ */
+function normalizeClientMtimes(value) {
+  return normalizeMultipartArray(value).map(v => validateClientMtime(v));
 }
 
 function extractFolderSegmentsFromRelativePath(relativePath, fallbackFileName) {
@@ -249,8 +265,9 @@ async function uploadFile(req, res) {
       return sendError(res, 400, error);
     }
 
+    const modified = validateClientMtime(req.body?.lastModifiedTimes);
     const file = await userOperationLock(req.ownerId, () => {
-      return createFileFromStreamedUpload(upload, parentId, req.ownerId);
+      return createFileFromStreamedUpload({ ...upload, modified }, parentId, req.ownerId);
     });
 
     // Upload consumed successfully — prevent auto-cleanup from deleting it.
@@ -294,8 +311,17 @@ async function uploadFile(req, res) {
   });
   if (!storageOk) return;
 
+  const modified = validateClientMtime(req.body?.lastModifiedTimes);
   const file = await userOperationLock(req.ownerId, () => {
-    return createFile(req.file.originalname, req.file.size, actualMimeType, req.file.path, parentId, req.ownerId);
+    return createFile(
+      req.file.originalname,
+      req.file.size,
+      actualMimeType,
+      req.file.path,
+      parentId,
+      req.ownerId,
+      modified
+    );
   });
 
   await fileUploaded(file.id, file.name, file.size, req);
@@ -357,7 +383,8 @@ async function replaceFileContents(req, res) {
         upload.size,
         upload.mimeType || 'application/octet-stream',
         upload.storageName,
-        req.ownerId
+        req.ownerId,
+        validateClientMtime(req.body?.lastModifiedTimes)
       );
 
       if (!updated) {
@@ -426,7 +453,14 @@ async function replaceFileContents(req, res) {
 
     validateFileUpload(actualMimeType, existing.name);
 
-    const updated = await replaceFileData(fileId, req.file.size, actualMimeType, req.file.path, req.ownerId);
+    const updated = await replaceFileData(
+      fileId,
+      req.file.size,
+      actualMimeType,
+      req.file.path,
+      req.ownerId,
+      validateClientMtime(req.body?.lastModifiedTimes)
+    );
 
     if (!updated) {
       return sendError(res, 404, 'File not found');
@@ -595,6 +629,7 @@ async function uploadDerivedFile(req, res) {
 async function uploadFilesBulk(req, res) {
   const relativePaths = normalizeMultipartArray(req.body?.relativePaths);
   const clientIds = normalizeMultipartArray(req.body?.clientIds);
+  const clientMtimes = normalizeClientMtimes(req.body?.lastModifiedTimes);
   const folderIdCache = new Map();
   const mimeFallbackWarnings = [];
   const mimeMismatchWarnings = [];
@@ -632,6 +667,7 @@ async function uploadFilesBulk(req, res) {
       const upload = orderedUploads[i];
       const relativePath = relativePaths[i] || null;
       const clientId = clientIds[i] || null;
+      const modified = clientMtimes[i] || null;
 
       try {
         const folderSegments = extractFolderSegmentsFromRelativePath(relativePath, upload.name);
@@ -646,7 +682,7 @@ async function uploadFilesBulk(req, res) {
             : parentId;
 
         const file = await userOperationLock(req.ownerId, () => {
-          return createFileFromStreamedUpload(upload, targetParentId, req.ownerId);
+          return createFileFromStreamedUpload({ ...upload, modified }, targetParentId, req.ownerId);
         });
         // Upload consumed successfully — remove from auto-cleanup list.
         if (req._s3UploadedKeys) {
@@ -763,6 +799,7 @@ async function uploadFilesBulk(req, res) {
     const file = req.files[index];
     const relativePath = relativePaths[index] || null;
     const clientId = clientIds[index] || null;
+    const modified = clientMtimes[index] || null;
 
     try {
       let actualMimeType = file.mimetype || 'application/octet-stream';
@@ -801,7 +838,15 @@ async function uploadFilesBulk(req, res) {
           : parentId;
 
       const createdFile = await userOperationLock(req.ownerId, () => {
-        return createFile(file.originalname, file.size, actualMimeType, file.path, targetParentId, req.ownerId);
+        return createFile(
+          file.originalname,
+          file.size,
+          actualMimeType,
+          file.path,
+          targetParentId,
+          req.ownerId,
+          modified
+        );
       });
 
       // For bulk uploads, avoid per-file audit/info spam; we log a single bulk event below.

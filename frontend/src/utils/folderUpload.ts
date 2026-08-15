@@ -4,6 +4,20 @@ export type FolderUploadEntry = {
   relativePath?: string;
 };
 
+/**
+ * Sends the file's own modification time alongside the bytes, so an upload reads
+ * as the age of its contents not the moment it landed here.
+ *
+ * `lastModified` is the only timestamp the File API exposes — there is no birth
+ * time to forward and it is epoch milliseconds in UTC, so nothing about the
+ * uploader's timezone travels with it. The server treats it as unverified: it
+ * clamps the value and falls back to the upload time when it is nonsense.
+ */
+export function appendClientMtime(data: FormData, file: File): void {
+  const ms = file.lastModified;
+  data.append('lastModifiedTimes', Number.isFinite(ms) ? String(Math.trunc(ms)) : '');
+}
+
 type FileSystemEntryLike = {
   isFile: boolean;
   isDirectory: boolean;

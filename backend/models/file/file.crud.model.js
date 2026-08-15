@@ -84,8 +84,9 @@ async function createFolder(name, parentId = null, userId, modified = null) {
 /**
  * Create a new file (local: from multer temp path; S3: use createFileFromStreamedUpload instead).
  * When S3 is enabled, uploads go via stream middleware and createFileFromStreamedUpload — no temp dir.
+ * @param {Date|string|null} [modified] - Client's mtime; omit to stamp the row with the upload time.
  */
-async function createFile(name, size, mimeType, tempPath, parentId = null, userId) {
+async function createFile(name, size, mimeType, tempPath, parentId = null, userId, modified = null) {
   const id = generateId(16);
   const ext = path.extname(name);
   const storageName = id + ext;
@@ -108,10 +109,16 @@ async function createFile(name, size, mimeType, tempPath, parentId = null, userI
   }
 
   const uniqueName = await getUniqueDbFileName(name, parentId, userId);
-  const result = await pool.query(
-    'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id, name, type, size, modified, mime_type AS "mimeType", starred, shared',
-    [id, uniqueName, 'file', size, mimeType, storageName, parentId, userId]
-  );
+  const result =
+    modified != null
+      ? await pool.query(
+          'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id, modified) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id, name, type, size, modified, mime_type AS "mimeType", starred, shared',
+          [id, uniqueName, 'file', size, mimeType, storageName, parentId, userId, modified]
+        )
+      : await pool.query(
+          'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id, name, type, size, modified, mime_type AS "mimeType", starred, shared',
+          [id, uniqueName, 'file', size, mimeType, storageName, parentId, userId]
+        );
 
   // Invalidate cache
   await invalidateAllFileCaches(userId, parentId);
@@ -265,7 +272,7 @@ async function renameFile(id, name, userId) {
   return file;
 }
 
-async function replaceFileData(id, size, mimeType, tempPath, userId) {
+async function replaceFileData(id, size, mimeType, tempPath, userId, modified = null) {
   const fileResult = await pool.query('SELECT path, parent_id, type FROM files WHERE id = $1 AND user_id = $2', [
     id,
     userId,
@@ -321,9 +328,11 @@ async function replaceFileData(id, size, mimeType, tempPath, userId) {
 
   // Writing an item counts as accessing it, the same way NTFS stamps both
   // timestamps on a write. It is free here — the row is being updated anyway.
+  // `accessed_at` is ours to stamp; `modified` belongs to the incoming bytes, so
+  // it defers to the replacing file's mtime whenever the client sent one.
   const result = await pool.query(
-    'UPDATE files SET size = $1, mime_type = $2, modified = NOW(), accessed_at = NOW() WHERE id = $3 AND user_id = $4 RETURNING id, name, type, size, modified, accessed_at AS "accessedAt", mime_type AS "mimeType", starred, shared',
-    [size, mimeType, id, userId]
+    'UPDATE files SET size = $1, mime_type = $2, modified = COALESCE($3, NOW()), accessed_at = NOW() WHERE id = $4 AND user_id = $5 RETURNING id, name, type, size, modified, accessed_at AS "accessedAt", mime_type AS "mimeType", starred, shared',
+    [size, mimeType, modified, id, userId]
   );
 
   await invalidateAllFileCaches(userId, parentId);
@@ -344,9 +353,10 @@ async function replaceFileData(id, size, mimeType, tempPath, userId) {
  * @param {string} mimeType - Detected MIME type
  * @param {string} newStorageKey - Storage key the new bytes were streamed to
  * @param {string} userId - Owner id
+ * @param {Date|null} [modified] - Replacing file's mtime; omit to stamp with now
  * @returns {Promise<Object|null>} Updated file row, or null if not found
  */
-async function replaceFileDataWithStorageKey(id, size, mimeType, newStorageKey, userId) {
+async function replaceFileDataWithStorageKey(id, size, mimeType, newStorageKey, userId, modified = null) {
   const fileResult = await pool.query('SELECT path, parent_id FROM files WHERE id = $1 AND user_id = $2', [id, userId]);
   if (fileResult.rows.length === 0) {
     return null;
@@ -356,8 +366,8 @@ async function replaceFileDataWithStorageKey(id, size, mimeType, newStorageKey, 
   const parentId = oldFile.parent_id || null;
 
   const result = await pool.query(
-    'UPDATE files SET size = $1, mime_type = $2, path = $3, modified = NOW(), accessed_at = NOW() WHERE id = $4 AND user_id = $5 RETURNING id, name, type, size, modified, accessed_at AS "accessedAt", mime_type AS "mimeType", starred, shared',
-    [size, mimeType, newStorageKey, id, userId]
+    'UPDATE files SET size = $1, mime_type = $2, path = $3, modified = COALESCE($4, NOW()), accessed_at = NOW() WHERE id = $5 AND user_id = $6 RETURNING id, name, type, size, modified, accessed_at AS "accessedAt", mime_type AS "mimeType", starred, shared',
+    [size, mimeType, newStorageKey, modified, id, userId]
   );
 
   const file = result.rows[0];

@@ -110,6 +110,22 @@ function pipeResponseToFile(response, filePath, resolve, reject) {
 }
 
 /**
+ * The local file's modification time, as the epoch-millisecond field the upload
+ * endpoints read. Here we have a real filesystem to ask, so the value is the
+ * file's own mtime not the browser's second-hand copy of it.
+ */
+function clientMtimeField(boundary, filePath) {
+  let mtimeMs;
+  try {
+    mtimeMs = fs.statSync(filePath).mtimeMs;
+  } catch {
+    return '';
+  }
+  if (!Number.isFinite(mtimeMs)) return '';
+  return `--${boundary}\r\nContent-Disposition: form-data; name="lastModifiedTimes"\r\n\r\n${Math.trunc(mtimeMs)}\r\n`;
+}
+
+/**
  * Stream a file as multipart/form-data to `url` with the given cookie header.
  * Shared body for uploadFileToReplace (replace existing file) and
  * uploadDerivedFile (upload a derived/exported file) — they only differ by URL.
@@ -119,6 +135,7 @@ function postMultipartFile(url, filePath, fileName, cookieHeader) {
   const safeFileName = String(fileName).replace(/"/g, '\\"');
   const contentType = mimeForFilename(fileName) || 'application/octet-stream';
   const preamble =
+    clientMtimeField(boundary, filePath) +
     `--${boundary}\r\n` +
     `Content-Disposition: form-data; name="file"; filename="${safeFileName}"\r\n` +
     `Content-Type: ${contentType}\r\n\r\n`;
@@ -413,6 +430,7 @@ function uploadNewFile(base, parentId, filePath, fileName) {
     if (parentId) {
       preamble += `--${boundary}\r\nContent-Disposition: form-data; name="parentId"\r\n\r\n${parentId}\r\n`;
     }
+    preamble += clientMtimeField(boundary, filePath);
     preamble +=
       `--${boundary}\r\n` +
       `Content-Disposition: form-data; name="file"; filename="${safeFileName}"\r\n` +

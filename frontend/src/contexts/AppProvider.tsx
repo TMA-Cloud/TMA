@@ -42,6 +42,7 @@ import {
   downloadAndInstallElectronUpdate,
   subscribeToUpdateDownloadProgress,
 } from '../utils/electronDesktop';
+import { appendClientMtime } from '../utils/folderUpload';
 import { formatBytes } from '../utils/storageUtils';
 import { mapFileResponse } from '../utils/fileUtils';
 
@@ -835,6 +836,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             data.append('files', entry.file);
             data.append('relativePaths', entry.relativePath);
             data.append('clientIds', entry.clientId);
+            appendClientMtime(data, entry.file);
           });
 
           const progressItems = normalizedEntries.map(entry => ({
@@ -962,6 +964,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           if (parentId) formData.append('parentId', parentId);
           formData.append('files', entry.file);
           formData.append('clientIds', clientId);
+          appendClientMtime(formData, entry.file);
 
           return executeXhrUpload({
             url: '/api/files/upload/bulk',
@@ -1117,6 +1120,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const parentId = folderStack[folderStack.length - 1];
       if (parentId) formData.append('parentId', parentId);
       formData.append('file', file);
+      appendClientMtime(formData, file);
       return executeXhrUpload({
         url: '/api/files/upload',
         formData,
@@ -1133,6 +1137,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       await validateUploadSize([file]);
       const formData = new FormData();
       formData.append('file', file);
+      appendClientMtime(formData, file);
       return executeXhrUpload({
         url: `/api/files/${fileId}/replace`,
         formData,

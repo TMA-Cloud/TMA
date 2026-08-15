@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   validateBoolean,
+  validateClientMtime,
   validateEmail,
   validateFileName,
   validateFileUpload,
@@ -325,6 +326,53 @@ describe('validateBoolean', () => {
     expect(validateBoolean(0)).toBeNull();
     expect(validateBoolean(null)).toBeNull();
     expect(validateBoolean('')).toBeNull();
+  });
+});
+
+describe('validateClientMtime', () => {
+  const now = new Date('2026-08-15T12:00:00.000Z');
+
+  it('accepts an epoch-millisecond time, as a number or a multipart string', () => {
+    const ms = Date.UTC(2019, 4, 3, 9, 30);
+    expect(validateClientMtime(ms, now)).toEqual(new Date(ms));
+    expect(validateClientMtime(String(ms), now)).toEqual(new Date(ms));
+    expect(validateClientMtime(` ${ms} `, now)).toEqual(new Date(ms));
+  });
+
+  it('clamps a future time to now rather than discarding it', () => {
+    // A clock an hour fast is the common case, and the file's real age is
+    // still closer to now than to nothing.
+    const ahead = now.getTime() + 3_600_000;
+    expect(validateClientMtime(ahead, now)).toBe(now);
+  });
+
+  it('keeps a time from a moment ago exactly as sent', () => {
+    const justNow = now.getTime() - 1000;
+    expect(validateClientMtime(justNow, now)).toEqual(new Date(justNow));
+  });
+
+  it('rejects times below the 1980 floor, which mean a broken clock and not history', () => {
+    expect(validateClientMtime(0, now)).toBeNull();
+    expect(validateClientMtime(-1, now)).toBeNull();
+    expect(validateClientMtime(Date.UTC(1979, 11, 31), now)).toBeNull();
+  });
+
+  it('accepts the floor itself', () => {
+    const floor = Date.UTC(1980, 0, 1);
+    expect(validateClientMtime(floor, now)).toEqual(new Date(floor));
+  });
+
+  it('rejects anything that is not a whole number of milliseconds', () => {
+    expect(validateClientMtime('not-a-time', now)).toBeNull();
+    expect(validateClientMtime(NaN, now)).toBeNull();
+    expect(validateClientMtime(Infinity, now)).toBeNull();
+    expect(validateClientMtime(1.5e12 + 0.5, now)).toBeNull();
+  });
+
+  it('treats a missing or empty field as "no time sent"', () => {
+    expect(validateClientMtime(undefined, now)).toBeNull();
+    expect(validateClientMtime(null, now)).toBeNull();
+    expect(validateClientMtime('', now)).toBeNull();
   });
 });
 
