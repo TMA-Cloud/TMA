@@ -23,3 +23,4 @@ export { useDrag, type DragState, type DragOptions } from './useDrag';
 export { usePress, type PressOptions } from './usePress';
 export { useScrollEdge } from './useScrollEdge';
 export { useReducedMotion, useReducedTransparency } from './useReducedMotion';
+export { scrollToTopFast } from './scrollToTop';

@@ -1,6 +1,5 @@
 import pool from '../../config/db.js';
 import { logger } from '../../config/logger.js';
-import { logAuditEvent } from '../../services/auditLogger.js';
 import { EventTypes, publishFileEventsBatch } from '../../services/fileEvents.js';
 import {
   copyFiles as copyFilesModel,
@@ -11,6 +10,7 @@ import {
 } from '../../models/file.model.js';
 import { userOperationLock } from '../../utils/mutex.js';
 import { sendSuccess } from '../../utils/response.js';
+import { logBulkFileAudit } from '../../utils/controllerHelpers.js';
 
 async function getPasteContext(req) {
   const { ids, parentId: requestedParentId } = req.body;
@@ -34,21 +34,9 @@ async function moveFilesController(req, res) {
     await moveFilesModel(ids, actualParentId, req.ownerId);
   });
 
-  await logAuditEvent(
+  await logBulkFileAudit(
     'file.move',
-    {
-      status: 'success',
-      resourceType: fileTypes[0] || 'file', // Use actual type (file/folder)
-      resourceId: ids[0],
-      metadata: {
-        fileCount: ids.length,
-        fileIds: ids,
-        fileNames,
-        fileTypes,
-        targetParentId: actualParentId,
-        targetFolderName,
-      },
-    },
+    { ids, fileNames, fileTypes, metadata: { targetParentId: actualParentId, targetFolderName } },
     req
   );
   logger.info({ fileIds: ids, fileNames, targetFolderName }, 'Files moved');
@@ -80,21 +68,9 @@ async function copyFilesController(req, res) {
     return copyFilesModel(ids, actualParentId, req.ownerId);
   });
 
-  await logAuditEvent(
+  await logBulkFileAudit(
     'file.copy',
-    {
-      status: 'success',
-      resourceType: fileTypes[0] || 'file', // Use actual type (file/folder)
-      resourceId: ids[0],
-      metadata: {
-        fileCount: ids.length,
-        fileIds: ids,
-        fileNames,
-        fileTypes,
-        targetParentId: actualParentId,
-        targetFolderName,
-      },
-    },
+    { ids, fileNames, fileTypes, metadata: { targetParentId: actualParentId, targetFolderName } },
     req
   );
   logger.info({ fileIds: ids, fileNames, targetFolderName }, 'Files copied');

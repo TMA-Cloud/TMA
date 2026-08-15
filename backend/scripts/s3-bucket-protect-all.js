@@ -22,10 +22,14 @@ import {
   PutPublicAccessBlockCommand,
 } from '@aws-sdk/client-s3';
 
-import { createS3Client, requireS3Config, s3Config } from './s3Utils.js';
-
-const DAYS_AFTER_INITIATION = 1;
-const NONCURRENT_DAYS = 7;
+import {
+  createS3Client,
+  requireS3Config,
+  s3Config,
+  buildLifecycleRules,
+  DAYS_AFTER_INITIATION,
+  NONCURRENT_DAYS,
+} from './s3Utils.js';
 
 async function runAll() {
   requireS3Config();
@@ -119,29 +123,7 @@ async function runAll() {
     await client.send(
       new PutBucketLifecycleConfigurationCommand({
         Bucket: bucket,
-        LifecycleConfiguration: {
-          Rules: [
-            {
-              ID: 'AbortIncompleteMultipartUploads',
-              Status: 'Enabled',
-              Filter: {},
-              AbortIncompleteMultipartUpload: {
-                DaysAfterInitiation: DAYS_AFTER_INITIATION,
-              },
-            },
-            {
-              ID: 'DeleteOldVersions',
-              Status: 'Enabled',
-              Filter: {},
-              NoncurrentVersionExpiration: {
-                NoncurrentDays: NONCURRENT_DAYS,
-              },
-              Expiration: {
-                ExpiredObjectDeleteMarker: true,
-              },
-            },
-          ],
-        },
+        LifecycleConfiguration: { Rules: buildLifecycleRules() },
       })
     );
     console.log(

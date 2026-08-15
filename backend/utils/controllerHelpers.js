@@ -4,6 +4,7 @@
  */
 
 import { validateId, validateIdArray } from './validation.js';
+import { logAuditEvent } from '../services/auditLogger.js';
 
 /**
  * Validate and get parent ID from request body or query
@@ -62,4 +63,39 @@ function validateSingleId(req, paramName = 'id', source = 'params') {
   return { valid: true, id: validatedId, error: null };
 }
 
-export { validateParentId, validateFileIds, validateSingleId };
+/**
+ * Record an audit event for an operation applied to a batch of files.
+ *
+ * Move, copy, trash, restore and permanent-delete all report the same shape:
+ * the batch is attributed to its first item, and the full id/name/type lists go
+ * into the metadata so the event stays readable without a join.
+ *
+ * @param {string} action - Audit action name (e.g. 'file.move').
+ * @param {Object} batch
+ * @param {string[]} batch.ids - Affected file ids.
+ * @param {string[]} batch.fileNames - Names, index-aligned with ids.
+ * @param {string[]} batch.fileTypes - Types ('file' | 'folder'), index-aligned with ids.
+ * @param {Object} [batch.metadata] - Extra metadata merged into the event.
+ * @param {Object} req - Express request object.
+ */
+async function logBulkFileAudit(action, { ids, fileNames, fileTypes, metadata = {} }, req) {
+  await logAuditEvent(
+    action,
+    {
+      status: 'success',
+      // Attribute the batch to the actual type of its first item (file/folder).
+      resourceType: fileTypes[0] || 'file',
+      resourceId: ids[0],
+      metadata: {
+        fileCount: ids.length,
+        fileIds: ids,
+        fileNames,
+        fileTypes,
+        ...metadata,
+      },
+    },
+    req
+  );
+}
+
+export { validateParentId, validateFileIds, validateSingleId, logBulkFileAudit };

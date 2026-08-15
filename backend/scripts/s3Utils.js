@@ -30,4 +30,36 @@ function requireS3Config() {
   }
 }
 
-export { createS3Client, requireS3Config, s3Config };
+/**
+ * Lifecycle policy applied to the bucket. Both the standalone lifecycle script
+ * and the all-in-one hardening script write this same configuration, so it is
+ * defined once here to keep them from drifting apart.
+ */
+const DAYS_AFTER_INITIATION = 1;
+const NONCURRENT_DAYS = 7;
+
+function buildLifecycleRules() {
+  return [
+    {
+      ID: 'AbortIncompleteMultipartUploads',
+      Status: 'Enabled',
+      Filter: {},
+      AbortIncompleteMultipartUpload: {
+        DaysAfterInitiation: DAYS_AFTER_INITIATION,
+      },
+    },
+    {
+      ID: 'DeleteOldVersions',
+      Status: 'Enabled',
+      Filter: {},
+      NoncurrentVersionExpiration: {
+        NoncurrentDays: NONCURRENT_DAYS,
+      },
+      Expiration: {
+        ExpiredObjectDeleteMarker: true,
+      },
+    },
+  ];
+}
+
+export { createS3Client, requireS3Config, s3Config, buildLifecycleRules, DAYS_AFTER_INITIATION, NONCURRENT_DAYS };

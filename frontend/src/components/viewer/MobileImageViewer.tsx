@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ZoomIn, ZoomOut, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { type FileItem } from '../../contexts/AppContext';
 import { useImageBlob } from '../../hooks/useImageBlob';
+import { clampPan } from './imageTransform';
 
 interface MobileImageViewerProps {
   imageViewerFile: FileItem | null;
@@ -124,28 +125,13 @@ export const MobileImageViewer: React.FC<MobileImageViewerProps> = ({
     const img = imgRef.current;
     if (!cont || !img || !imageFit) return;
 
-    const cw = cont.clientWidth;
-    const ch = cont.clientHeight;
-    const iw = imageFit.width * newZoom;
-    const ih = imageFit.height * newZoom;
-
-    // If image is smaller than container, center it
-    if (iw <= cw) {
-      offset.current.x = (cw - iw) / 2;
-    } else {
-      // If image is larger, clamp to boundaries
-      const minX = cw - iw;
-      const maxX = 0;
-      offset.current.x = Math.max(minX, Math.min(maxX, offset.current.x));
-    }
-
-    if (ih <= ch) {
-      offset.current.y = (ch - ih) / 2;
-    } else {
-      const minY = ch - ih;
-      const maxY = 0;
-      offset.current.y = Math.max(minY, Math.min(maxY, offset.current.y));
-    }
+    offset.current = clampPan(
+      offset.current,
+      cont.clientWidth,
+      cont.clientHeight,
+      imageFit.width * newZoom,
+      imageFit.height * newZoom
+    );
   };
 
   const applyTransform = (newZoom = zoom, smooth = false) => {

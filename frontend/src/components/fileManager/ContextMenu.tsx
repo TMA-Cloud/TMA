@@ -24,6 +24,7 @@ import { isOnlyOfficeSupported } from '../../utils/fileUtils';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { Modal } from '../ui/Modal';
 import { getErrorMessage } from '../../utils/errorUtils';
+import { copyToClipboard } from '../../utils/clipboard';
 import { ShareExpiryModal } from './ShareLinkModal';
 import { FileInfoModal } from './FileInfoModal';
 
@@ -293,21 +294,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
 
                   const text = list.join('\n');
                   try {
-                    if (navigator.clipboard?.writeText) {
-                      await navigator.clipboard.writeText(text);
-                    } else {
-                      const textArea = document.createElement('textarea');
-                      textArea.value = text;
-                      textArea.style.position = 'fixed';
-                      textArea.style.left = '-999999px';
-                      textArea.style.top = '-999999px';
-                      document.body.appendChild(textArea);
-                      textArea.focus();
-                      textArea.select();
-                      const successful = document.execCommand('copy');
-                      document.body.removeChild(textArea);
-                      if (!successful) throw new Error('Copy command failed');
-                    }
+                    await copyToClipboard(text);
                     showToast('Link copied', 'success');
                     onActionComplete?.();
                   } catch {

@@ -9,7 +9,7 @@ import { UploadProgress } from '../upload/UploadProgress';
 import { CreateFolderModal } from '../folder/CreateFolderModal';
 import { ImageViewerModal } from '../viewer/ImageViewerModal';
 import { DocumentViewerModal } from '../viewer/DocumentViewerModal';
-import { useScrollEdge } from '../../motion';
+import { useScrollEdge, scrollToTopFast } from '../../motion';
 import { RenameModal } from '../fileManager/RenameModal';
 import { ShareLinkModal } from '../fileManager/ShareLinkModal';
 import {
@@ -24,30 +24,6 @@ import {
   LogOut,
   ChevronDown,
 } from 'lucide-react';
-
-function easeOutCubic(t: number) {
-  return 1 - Math.pow(1 - t, 3);
-}
-
-function scrollToTopFast(el: HTMLElement, durationMs = 180) {
-  // Respect reduced-motion preference
-  if (window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches) {
-    el.scrollTo({ top: 0, behavior: 'auto' });
-    return;
-  }
-
-  const startTop = el.scrollTop;
-  if (startTop <= 0) return;
-
-  const start = performance.now();
-  const tick = (now: number) => {
-    const t = Math.min(1, (now - start) / durationMs);
-    const eased = easeOutCubic(t);
-    el.scrollTop = Math.round(startTop * (1 - eased));
-    if (t < 1) requestAnimationFrame(tick);
-  };
-  requestAnimationFrame(tick);
-}
 
 const navItems = [
   { id: 'Dashboard', label: 'Home', icon: Home },

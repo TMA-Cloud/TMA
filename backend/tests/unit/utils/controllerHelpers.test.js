@@ -1,9 +1,23 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { validateFileIds, validateParentId, validateSingleId } from '../../../utils/controllerHelpers.js';
+vi.mock('../../../services/auditLogger.js', () => ({ logAuditEvent: vi.fn() }));
+
+const { logAuditEvent } = await import('../../../services/auditLogger.js');
+
+import {
+  logBulkFileAudit,
+  validateFileIds,
+  validateParentId,
+  validateSingleId,
+} from '../../../utils/controllerHelpers.js';
 
 const ID = 'abcDEF1234567890';
 const ID2 = 'zyxWVU0987654321';
+const req = { userId: 'u1' };
+
+beforeEach(() => {
+  logAuditEvent.mockClear();
+});
 
 describe('validateParentId', () => {
   it('treats a missing parent as the root folder', () => {
@@ -83,5 +97,50 @@ describe('validateSingleId', () => {
 
   it('rejects a missing param', () => {
     expect(validateSingleId({ params: {} }).valid).toBe(false);
+  });
+});
+
+describe('logBulkFileAudit', () => {
+  it('attributes the batch to its first item and lists the whole batch in metadata', async () => {
+    await logBulkFileAudit(
+      'file.move',
+      {
+        ids: [ID, ID2],
+        fileNames: ['a.txt', 'photos'],
+        fileTypes: ['file', 'folder'],
+        metadata: { targetParentId: null, targetFolderName: 'Home' },
+      },
+      req
+    );
+
+    expect(logAuditEvent).toHaveBeenCalledWith(
+      'file.move',
+      {
+        status: 'success',
+        resourceType: 'file',
+        resourceId: ID,
+        metadata: {
+          fileCount: 2,
+          fileIds: [ID, ID2],
+          fileNames: ['a.txt', 'photos'],
+          fileTypes: ['file', 'folder'],
+          targetParentId: null,
+          targetFolderName: 'Home',
+        },
+      },
+      req
+    );
+  });
+
+  it('reports a folder-led batch as a folder resource', async () => {
+    await logBulkFileAudit('file.restore', { ids: [ID], fileNames: ['docs'], fileTypes: ['folder'] }, req);
+
+    expect(logAuditEvent.mock.calls[0][1].resourceType).toBe('folder');
+  });
+
+  it('falls back to a file resource when the batch carries no types', async () => {
+    await logBulkFileAudit('file.delete', { ids: [ID], fileNames: ['a.txt'], fileTypes: [] }, req);
+
+    expect(logAuditEvent.mock.calls[0][1].resourceType).toBe('file');
   });
 });

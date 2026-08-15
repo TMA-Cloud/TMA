@@ -1,8 +1,5 @@
 import { logger } from '../config/logger.js';
-import {
-  getShareBaseHost as getShareBaseHostFromService,
-  getShareBaseUrlOrigin,
-} from '../services/shareBaseUrl.service.js';
+import { getShareBaseHost, getShareBaseUrlOrigin } from '../services/shareBaseUrl.service.js';
 
 /**
  * Get share base URL origin from service
@@ -84,10 +81,6 @@ function getRequestHost(req) {
   return rawHost ? rawHost.split(',')[0].trim() : rawHost;
 }
 
-// Get the host from share base URL if configured (async for middleware)
-// For multi-instance support, this checks Redis cache directly via service
-async function getShareBaseHost() {
-  return getShareBaseHostFromService();
-}
-
+// getShareBaseHost is re-exported straight from the service so middleware can
+// pull the request-host helper and the configured from host.
 export { getShareBaseUrl, buildShareLink, getRequestHost, getShareBaseHost };

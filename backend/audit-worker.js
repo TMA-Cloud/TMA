@@ -25,6 +25,7 @@ import { PgBoss } from 'pg-boss';
 import { incrementEventsProcessed, incrementEventsFailed, recordProcessingDuration } from './services/metrics.js';
 import { createRequestLogger } from './config/logger.js';
 import { createPool, buildPoolConfig } from './config/db.js';
+import { AUDIT_QUEUE, AUDIT_QUEUE_OPTIONS } from './services/auditQueue.js';
 
 const logger = createRequestLogger({ service: 'audit-worker' });
 
@@ -40,7 +41,6 @@ let boss = null;
 
 // Worker concurrency
 const CONCURRENCY = parseInt(process.env.AUDIT_WORKER_CONCURRENCY || '5');
-const AUDIT_QUEUE = 'audit-events';
 
 /**
  * Validate audit event schema
@@ -192,12 +192,7 @@ async function initializeWorker() {
 
     await boss.start();
     // Queues must be created before sending/working in pg-boss v10+
-    await boss.createQueue(AUDIT_QUEUE, {
-      retryLimit: 3,
-      retryDelay: 60,
-      retryBackoff: true,
-      retentionDays: 30,
-    });
+    await boss.createQueue(AUDIT_QUEUE, AUDIT_QUEUE_OPTIONS);
     logger.info('pg-boss started successfully');
 
     // Subscribe to audit events queue

@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 
 import { getOnlyOfficeSettings, getUserById } from '../../models/user.model.js';
 import storage from '../../utils/storageDriver.js';
+import { PERMISSIONS, hasPermission } from '../../utils/permissions.js';
 
 const BACKEND_URL = process.env.BACKEND_URL;
 
@@ -237,8 +238,35 @@ async function validateFileForOnlyOffice(file, validateAndResolveFile, validateO
   return { valid: true, filePath: pathOrKey, isEncrypted };
 }
 
+/**
+ * Assemble everything the browser needs to open a document: the editor config,
+ * its signed token, and the URL of the document server's JS bundle.
+ *
+ * @returns {Promise<{ config: object, configToken: string, onlyofficeJsUrl: string }>}
+ */
+async function buildEditorSession(req, file, userId) {
+  const userName = await getUserName(req.userId);
+  const token = await buildSignedFileToken(file.id, userId);
+  const { downloadUrl, callbackUrl } = buildOnlyofficeUrls(req, file.id, token);
+  const isMobile = isMobileDevice(req);
+  const config = buildOnlyofficeConfig(
+    file,
+    userId,
+    { id: req.userId, name: userName },
+    downloadUrl,
+    callbackUrl,
+    isMobile,
+    hasPermission(req, PERMISSIONS.EDIT)
+  );
+  const configToken = await signConfigToken(config);
+  const onlyofficeJsUrl = await getOnlyofficeJsUrl();
+
+  return { config, configToken, onlyofficeJsUrl };
+}
+
 export {
   BACKEND_URL,
+  buildEditorSession,
   getOnlyOfficeConfig,
   isOnlyOfficeSupported,
   getFileTypeFromName,

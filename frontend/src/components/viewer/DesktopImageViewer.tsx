@@ -3,6 +3,7 @@ import { Modal } from '../ui/Modal';
 import { ZoomIn, ZoomOut } from 'lucide-react';
 import { type FileItem } from '../../contexts/AppContext';
 import { useImageBlob } from '../../hooks/useImageBlob';
+import { clampPan } from './imageTransform';
 
 interface DesktopImageViewerProps {
   imageViewerFile: FileItem | null;
@@ -75,28 +76,13 @@ export const DesktopImageViewer: React.FC<DesktopImageViewerProps> = ({ imageVie
     const img = imgRef.current;
     if (!cont || !img) return;
 
-    const cw = cont.clientWidth;
-    const ch = cont.clientHeight;
-    const iw = img.naturalWidth * newZoom;
-    const ih = img.naturalHeight * newZoom;
-
-    // If image is smaller than container, center it
-    if (iw <= cw) {
-      offset.current.x = (cw - iw) / 2;
-    } else {
-      // If image is larger, clamp to boundaries
-      const minX = cw - iw;
-      const maxX = 0;
-      offset.current.x = Math.max(minX, Math.min(maxX, offset.current.x));
-    }
-
-    if (ih <= ch) {
-      offset.current.y = (ch - ih) / 2;
-    } else {
-      const minY = ch - ih;
-      const maxY = 0;
-      offset.current.y = Math.max(minY, Math.min(maxY, offset.current.y));
-    }
+    offset.current = clampPan(
+      offset.current,
+      cont.clientWidth,
+      cont.clientHeight,
+      img.naturalWidth * newZoom,
+      img.naturalHeight * newZoom
+    );
   };
 
   const applyTransform = (newZoom = zoom, skipClamp = false) => {

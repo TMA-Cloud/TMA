@@ -1,10 +1,11 @@
 import React, { useState, useCallback } from 'react';
-import { Link, Pencil, CheckCircle2, XCircle } from 'lucide-react';
+import { Link } from 'lucide-react';
 import { useAuth } from '../../../contexts/AuthContext';
 import { getShareBaseUrlConfig, updateShareBaseUrlConfig } from '../../../utils/api';
 import { useAbortableLoader } from '../../../hooks/useAbortableLoader';
 import { useAsyncAction } from '../../../hooks/useAsyncAction';
 import { SettingsField, SettingsReadonlyValue, SettingsFormActions } from '../components/SettingsField';
+import { ConfigSectionHeader } from '../components/ConfigSectionHeader';
 
 interface ShareBaseUrlSectionProps {
   canConfigure: boolean;
@@ -74,71 +75,21 @@ export const ShareBaseUrlSection: React.FC<ShareBaseUrlSectionProps> = ({ canCon
     return null;
   }
 
-  const isConfigured = !!originalUrl;
-
-  const getStatusInfo = () => {
-    if (loading) {
-      return {
-        text: 'Loading...',
-        icon: null,
-        color: 'text-gray-500 dark:text-gray-400',
-      };
-    }
-    if (isConfigured) {
-      return {
-        text: 'Configured',
-        icon: CheckCircle2,
-        color: 'text-green-600 dark:text-green-400',
-      };
-    }
-    return {
-      text: 'Not configured',
-      icon: XCircle,
-      color: 'text-gray-500 dark:text-gray-400',
-    };
-  };
-
-  const statusInfo = getStatusInfo();
-  const StatusIcon = statusInfo.icon;
-
   return (
     <div className="relative">
-      <div className="flex items-center gap-4 mb-6">
-        <div className="p-3 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-300">
-          <Link className="w-6 h-6 icon-muted" />
-        </div>
-
-        <div className="flex-1">
-          <div className="flex items-center gap-2">
-            <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100 tracking-tight">Share Base URL</h3>
-
-            {isCollapsed && hasLoadedSettings && StatusIcon && (
-              <div className={`flex items-center gap-1 ${statusInfo.color}`}>
-                <StatusIcon className="w-4 h-4" />
-                <span className="text-sm font-medium">{statusInfo.text}</span>
-              </div>
-            )}
-          </div>
-
-          <p className="text-sm text-gray-500/80 dark:text-gray-400/80 mt-0.5">
-            Configure a custom base URL for public share links
-            {isCollapsed && hasLoadedSettings && !StatusIcon && (
-              <span className={`ml-2 ${statusInfo.color}`}>{statusInfo.text}</span>
-            )}
-          </p>
-        </div>
-
-        {hasLoadedSettings && (
-          <button
-            onClick={handleEdit}
-            disabled={loading || saving}
-            className="p-2 rounded-lg text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-            aria-label={isEditing ? 'Cancel editing' : 'Edit share base URL settings'}
-          >
-            <Pencil className="w-5 h-5" />
-          </button>
-        )}
-      </div>
+      <ConfigSectionHeader
+        icon={Link}
+        title="Share Base URL"
+        description="Configure a custom base URL for public share links"
+        isConfigured={!!originalUrl}
+        loading={loading}
+        saving={saving}
+        isCollapsed={isCollapsed}
+        isEditing={isEditing}
+        hasLoadedSettings={hasLoadedSettings}
+        editLabel="share base URL settings"
+        onEdit={handleEdit}
+      />
 
       {!isCollapsed && (
         <form autoComplete="off" onSubmit={e => e.preventDefault()}>

@@ -479,6 +479,7 @@ export {
   createByteCountStream,
   copyEncryptedFile,
   copyEncryptedFileStreams,
+  createTagBufferedDecipherTransform,
   isFileEncrypted,
   getEncryptionKey,
   readEncryptionMetadata,

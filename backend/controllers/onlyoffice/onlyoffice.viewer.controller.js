@@ -3,22 +3,11 @@ import { getFile } from '../../models/file.model.js';
 import { recordAccess } from '../../services/accessTracker.js';
 import { logAuditEvent } from '../../services/auditLogger.js';
 import { registerOpenDocument } from '../../services/onlyofficeAutoSave.js';
-import { PERMISSIONS, hasPermission } from '../../utils/permissions.js';
 import { validateSingleId } from '../../utils/controllerHelpers.js';
 import { validateAndResolveFile } from '../../utils/fileDownload.js';
 import { validateOnlyOfficeMimeType } from '../../utils/mimeTypeDetection.js';
 
-import {
-  buildOnlyofficeConfig,
-  buildOnlyofficeUrls,
-  buildSignedFileToken,
-  getOnlyOfficeConfig,
-  getOnlyofficeJsUrl,
-  getUserName,
-  isMobileDevice,
-  signConfigToken,
-  validateFileForOnlyOffice,
-} from './onlyoffice.utils.js';
+import { buildEditorSession, getOnlyOfficeConfig, validateFileForOnlyOffice } from './onlyoffice.utils.js';
 
 /**
  * Get standalone viewer HTML page for document editing/viewing
@@ -73,21 +62,7 @@ async function getViewerPage(req, res) {
       `);
     }
 
-    const userName = await getUserName(req.userId);
-    const token = await buildSignedFileToken(file.id, userId);
-    const { downloadUrl, callbackUrl } = buildOnlyofficeUrls(req, file.id, token);
-    const isMobile = isMobileDevice(req);
-    const config = buildOnlyofficeConfig(
-      file,
-      userId,
-      { id: req.userId, name: userName },
-      downloadUrl,
-      callbackUrl,
-      isMobile,
-      hasPermission(req, PERMISSIONS.EDIT)
-    );
-    const configToken = await signConfigToken(config);
-    const onlyofficeJsUrl = await getOnlyofficeJsUrl();
+    const { config, configToken, onlyofficeJsUrl } = await buildEditorSession(req, file, userId);
 
     // Register document for auto-save
     registerOpenDocument(config.document.key, file.id, userId);

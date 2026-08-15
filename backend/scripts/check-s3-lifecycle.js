@@ -4,19 +4,11 @@
  */
 import '../config/env.js';
 
-import { GetBucketLifecycleConfigurationCommand, S3Client } from '@aws-sdk/client-s3';
+import { GetBucketLifecycleConfigurationCommand } from '@aws-sdk/client-s3';
 
-import { s3 as s3Config } from '../config/storage.js';
+import { createS3Client, s3Config } from './s3Utils.js';
 
-const client = new S3Client({
-  endpoint: s3Config.endpoint,
-  region: s3Config.region,
-  credentials: {
-    accessKeyId: s3Config.accessKeyId,
-    secretAccessKey: s3Config.secretAccessKey,
-  },
-  forcePathStyle: s3Config.forcePathStyle,
-});
+const client = createS3Client();
 
 async function checkLifecycle() {
   try {

@@ -10,6 +10,8 @@ import {
 } from '../../models/file.model.js';
 import { sendError, sendSuccess } from '../../utils/response.js';
 import { validateSortBy, validateSortOrder } from '../../utils/validation.js';
+import { logBulkFileAudit } from '../../utils/controllerHelpers.js';
+
 /**
  * Delete files/folders (move to trash)
  */
@@ -24,22 +26,7 @@ async function deleteFilesController(req, res) {
   await deleteFiles(ids, req.ownerId);
 
   // Log file deletion (soft delete to trash) with details
-  await logAuditEvent(
-    'file.delete',
-    {
-      status: 'success',
-      resourceType: fileTypes[0] || 'file', // Use actual type (file/folder)
-      resourceId: ids[0],
-      metadata: {
-        fileCount: ids.length,
-        fileIds: ids,
-        fileNames,
-        fileTypes,
-        permanent: false,
-      },
-    },
-    req
-  );
+  await logBulkFileAudit('file.delete', { ids, fileNames, fileTypes, metadata: { permanent: false } }, req);
   sendSuccess(res, { message: 'Files moved to trash.' });
 }
 
@@ -73,21 +60,7 @@ async function restoreFilesController(req, res) {
   await restoreFiles(ids, req.ownerId);
 
   // Log file restore with details
-  await logAuditEvent(
-    'file.restore',
-    {
-      status: 'success',
-      resourceType: fileTypes[0] || 'file', // Use actual type (file/folder)
-      resourceId: ids[0],
-      metadata: {
-        fileCount: ids.length,
-        fileIds: ids,
-        fileNames,
-        fileTypes,
-      },
-    },
-    req
-  );
+  await logBulkFileAudit('file.restore', { ids, fileNames, fileTypes }, req);
   logger.info({ fileIds: ids, fileNames }, 'Files restored from trash');
 
   // Publish file restored events in batch (optimized)
@@ -121,22 +94,7 @@ async function deleteForeverController(req, res) {
   await permanentlyDeleteFiles(ids, req.ownerId);
 
   // Log permanent deletion with details
-  await logAuditEvent(
-    'file.delete.permanent',
-    {
-      status: 'success',
-      resourceType: fileTypes[0] || 'file', // Use actual type (file/folder)
-      resourceId: ids[0],
-      metadata: {
-        fileCount: ids.length,
-        fileIds: ids,
-        fileNames,
-        fileTypes,
-        permanent: true,
-      },
-    },
-    req
-  );
+  await logBulkFileAudit('file.delete.permanent', { ids, fileNames, fileTypes, metadata: { permanent: true } }, req);
   logger.info({ fileIds: ids, fileNames }, 'Files permanently deleted');
 
   // Publish file permanently deleted events in batch (optimized)

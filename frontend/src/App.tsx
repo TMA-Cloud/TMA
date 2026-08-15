@@ -10,31 +10,7 @@ import { useSignupStatus } from './components/settings/hooks/useSignupStatus';
 import { useIsMobile } from './hooks/useIsMobile';
 import { Sidebar } from './components/layout/Sidebar';
 import { Header } from './components/layout/Header';
-import { useScrollEdge } from './motion';
-
-function easeOutCubic(t: number) {
-  return 1 - Math.pow(1 - t, 3);
-}
-
-function scrollToTopFast(el: HTMLElement, durationMs = 180) {
-  // Respect reduced-motion preference
-  if (window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches) {
-    el.scrollTo({ top: 0, behavior: 'auto' });
-    return;
-  }
-
-  const startTop = el.scrollTop;
-  if (startTop <= 0) return;
-
-  const start = performance.now();
-  const tick = (now: number) => {
-    const t = Math.min(1, (now - start) / durationMs);
-    const eased = easeOutCubic(t);
-    el.scrollTop = Math.round(startTop * (1 - eased));
-    if (t < 1) requestAnimationFrame(tick);
-  };
-  requestAnimationFrame(tick);
-}
+import { useScrollEdge, scrollToTopFast } from './motion';
 
 // Lazy load main page components (using default exports for cleaner syntax)
 const Dashboard = lazy(() => import('./components/dashboard/Dashboard'));

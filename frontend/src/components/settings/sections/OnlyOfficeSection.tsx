@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { FileText, Pencil, CheckCircle2, XCircle, Eye, EyeOff } from 'lucide-react';
+import { FileText, Eye, EyeOff } from 'lucide-react';
 import { useToast } from '../../../hooks/useToast';
 import { useApp } from '../../../contexts/AppContext';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -7,6 +7,7 @@ import { getOnlyOfficeConfig, updateOnlyOfficeConfig } from '../../../utils/api'
 import { useAbortableLoader } from '../../../hooks/useAbortableLoader';
 import { useAsyncAction } from '../../../hooks/useAsyncAction';
 import { SettingsField, SettingsReadonlyValue, SettingsFormActions } from '../components/SettingsField';
+import { ConfigSectionHeader } from '../components/ConfigSectionHeader';
 
 interface OnlyOfficeSectionProps {
   canConfigure: boolean;
@@ -110,70 +111,24 @@ export const OnlyOfficeSection: React.FC<OnlyOfficeSectionProps> = ({ canConfigu
     return null;
   }
 
-  // Consider configured if URL exists and JWT secret is set
-  const isConfigured = originalUrl && jwtSecretSet;
-
-  const getStatusInfo = () => {
-    if (loading) {
-      return {
-        text: 'Loading...',
-        icon: null,
-        color: 'text-gray-500 dark:text-gray-400',
-      };
-    }
-    if (isConfigured) {
-      return {
-        text: 'Configured',
-        icon: CheckCircle2,
-        color: 'text-green-600 dark:text-green-400',
-      };
-    }
-    return {
-      text: 'Not configured',
-      icon: XCircle,
-      color: 'text-gray-500 dark:text-gray-400',
-    };
-  };
-
-  const statusInfo = getStatusInfo();
-  const StatusIcon = statusInfo.icon;
+  // Configured only when both the URL exists and the JWT secret is set.
+  const isConfigured = !!originalUrl && jwtSecretSet;
 
   return (
     <div className="relative">
-      <div className="flex items-center gap-4 mb-6">
-        <div className="p-3 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-300">
-          <FileText className="w-6 h-6 icon-muted" />
-        </div>
-        <div className="flex-1">
-          <div className="flex items-center gap-2">
-            <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100 tracking-tight">
-              OnlyOffice Integration
-            </h3>
-            {isCollapsed && hasLoadedSettings && StatusIcon && (
-              <div className={`flex items-center gap-1 ${statusInfo.color}`}>
-                <StatusIcon className="w-4 h-4" />
-                <span className="text-sm font-medium">{statusInfo.text}</span>
-              </div>
-            )}
-          </div>
-          <p className="text-sm text-gray-500/80 dark:text-gray-400/80 mt-0.5">
-            Configure OnlyOffice Document Server for document editing and viewing
-            {isCollapsed && hasLoadedSettings && !StatusIcon && (
-              <span className={`ml-2 ${statusInfo.color}`}>{statusInfo.text}</span>
-            )}
-          </p>
-        </div>
-        {hasLoadedSettings && (
-          <button
-            onClick={handleEdit}
-            disabled={loading || saving}
-            className="p-2 rounded-lg text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-            aria-label={isEditing ? 'Cancel editing' : 'Edit OnlyOffice settings'}
-          >
-            <Pencil className="w-5 h-5" />
-          </button>
-        )}
-      </div>
+      <ConfigSectionHeader
+        icon={FileText}
+        title="OnlyOffice Integration"
+        description="Configure OnlyOffice Document Server for document editing and viewing"
+        isConfigured={isConfigured}
+        loading={loading}
+        saving={saving}
+        isCollapsed={isCollapsed}
+        isEditing={isEditing}
+        hasLoadedSettings={hasLoadedSettings}
+        editLabel="OnlyOffice settings"
+        onEdit={handleEdit}
+      />
 
       {!isCollapsed && (
         <form autoComplete="off" onSubmit={e => e.preventDefault()}>

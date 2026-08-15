@@ -4,10 +4,11 @@ import { logger } from '../config/logger.js';
 import { getRequestId, getUserId, getAccountContext } from '../middleware/requestId.middleware.js';
 import { createPool, buildPoolConfig } from '../config/db.js';
 
+import { AUDIT_QUEUE, AUDIT_QUEUE_OPTIONS } from './auditQueue.js';
+
 let boss = null;
 let isInitialized = false;
 
-const AUDIT_QUEUE = 'audit-events';
 // pg-boss enforces expiration strictly < 24h; clamp to a safe default.
 const MAX_JOB_TTL_SECONDS = 60 * 60 * 24 - 60; // 23h 59m to stay under limit
 const AUDIT_JOB_TTL_SECONDS = Math.min(
@@ -54,12 +55,7 @@ async function initializeAuditQueue() {
 
     await boss.start();
     // Queues must be created explicitly in pg-boss v10+
-    await boss.createQueue(AUDIT_QUEUE, {
-      retryLimit: 3,
-      retryDelay: 60,
-      retryBackoff: true,
-      retentionDays: 30,
-    });
+    await boss.createQueue(AUDIT_QUEUE, AUDIT_QUEUE_OPTIONS);
     isInitialized = true;
     logger.info('Audit queue initialized successfully');
 
