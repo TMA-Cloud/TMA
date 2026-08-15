@@ -61,7 +61,14 @@ export const FileList: React.FC<FileListProps> = ({
   listScrollRequest,
   onListScrollRequestHandled,
 }) => {
-  const gridClassName = `grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3`;
+  const gridClassName = `grid gap-3 content-start items-start`;
+
+  // Columns are sized from the container, not the viewport, so collapsing the sidebar adds a
+  // column instead of just widening the cards. auto-fill (not auto-fit) leaves the trailing
+  // empty tracks in place, which keeps a short row of files card-sized instead of letting the
+  // last few stretch across the row. min() guards the case where the pane is narrower than a card.
+  const gridStyle: React.CSSProperties =
+    viewMode === 'grid' ? { gridTemplateColumns: 'repeat(auto-fill, minmax(min(150px, 100%), 1fr))' } : {};
 
   const containerClassName = `
     ${viewMode === 'grid' ? gridClassName : 'space-y-1'}
@@ -79,7 +86,7 @@ export const FileList: React.FC<FileListProps> = ({
   const fileListContent = (
     <div
       className={containerClassName}
-      style={{ overflow: 'unset', height: 'auto' }}
+      style={{ overflow: 'unset', height: 'auto', ...gridStyle }}
       onClick={handleContainerClick}
       onContextMenu={e => onContextMenu(e)}
     >
