@@ -13,7 +13,20 @@ import {
 import { format, formatDistanceToNow, isToday, isYesterday } from 'date-fns';
 import bytes from 'bytes';
 import mime from 'mime';
-import { type FileItem } from '../contexts/AppContext';
+import { type FileItem, type FileItemResponse } from '../contexts/AppContext';
+
+/**
+ * Widen a listing row from the API into the shape the UI works with. The only
+ * real work is parsing timestamps, and it happens once here so that nothing
+ * downstream has to remember which fields arrive as strings.
+ */
+export const mapFileResponse = (f: FileItemResponse): FileItem => ({
+  ...f,
+  modified: new Date(f.modified),
+  accessedAt: f.accessedAt ? new Date(f.accessedAt) : undefined,
+  deletedAt: f.deletedAt ? new Date(f.deletedAt) : undefined,
+  expiresAt: f.expiresAt ? new Date(f.expiresAt) : f.expiresAt === null ? null : undefined,
+});
 
 export const getFileIcon = (file: FileItem) => {
   if (file.type === 'folder') {

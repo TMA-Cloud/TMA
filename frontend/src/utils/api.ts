@@ -4,6 +4,7 @@
 import { ApiError } from './errorUtils';
 import { authFetch } from './authFetch';
 import { downloadBlob } from './download';
+import type { FileItemResponse } from '../contexts/AppContext';
 
 interface ApiRequestOptions extends RequestInit {
   signal?: AbortSignal;
@@ -252,6 +253,14 @@ export async function updateUserStorageLimit(
     targetUserId,
     storageLimit,
   });
+}
+
+/**
+ * Files the account opened most recently. The server decides what "recently"
+ * means and how many rows to hand back.
+ */
+export async function getRecentFiles(limit: number, signal?: AbortSignal): Promise<FileItemResponse[]> {
+  return await apiGet<FileItemResponse[]>(`/api/files/recent?limit=${limit}`, { signal });
 }
 
 export async function checkOnlyOfficeConfigured(): Promise<{

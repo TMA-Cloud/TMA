@@ -8,18 +8,20 @@ interface RecentFilesProps {
   files: FileItem[];
 }
 
+/**
+ * The list arrives ordered and trimmed from /api/files/recent and this component
+ * renders what it is given, so what is on screen is what the server ranked.
+ */
 export const RecentFiles: React.FC<RecentFilesProps> = ({ files }) => {
-  const recent = files.slice(0, 5);
-
   return (
     <div className="card p-5 md:p-6">
       <h3 className="type-title-3 text-[var(--label)] mb-3">Recent files</h3>
 
-      {recent.length === 0 ? (
+      {files.length === 0 ? (
         <p className="type-footnote text-[var(--label-tertiary)] py-6 text-center">Nothing here yet.</p>
       ) : (
         <div className="space-y-0.5">
-          {recent.map(file => (
+          {files.map(file => (
             <div
               key={file.id}
               className="pressable-lg flex items-center gap-3 p-2.5 rounded-xl hover:bg-[var(--fill-quaternary)] cursor-pointer"
@@ -30,13 +32,14 @@ export const RecentFiles: React.FC<RecentFilesProps> = ({ files }) => {
                   <p className="type-callout type-emphasized text-[var(--label)] truncate">{file.name}</p>
                 </Tooltip>
                 <div className="type-caption text-[var(--label-tertiary)] flex items-center gap-1.5 mt-0.5">
-                  {file.type === 'file' && file.size && (
+                  {file.size ? (
                     <>
                       <span>{formatFileSize(file.size)}</span>
                       <span aria-hidden="true">·</span>
                     </>
-                  )}
-                  <span>{formatDate(file.modified)}</span>
+                  ) : null}
+                  {/* The ordering is by last opened */}
+                  <span>Opened {formatDate(file.accessedAt ?? file.modified)}</span>
                 </div>
               </div>
             </div>

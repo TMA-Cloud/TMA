@@ -1,5 +1,6 @@
 import pool from '../config/db.js';
 import { logger } from '../config/logger.js';
+import { cacheKeys, deleteCache } from '../utils/cache.js';
 
 /**
  * Last-access tracking for files and folders.
@@ -138,10 +139,11 @@ function recordAccess(ids, ownerId) {
  * The `f.accessed_at < v.accessed_at` guard makes the statement idempotent and
  * stops a delayed flush from dragging a newer timestamp backwards.
  *
- * No cache is invalidated afterwards, and that is deliberate. Listings are
- * cached for a minute; dropping those entries on every read would trade the
- * cache's whole value for precision this timestamp does not claim to have —
- * it is already allowed to lag by an hour.
+ * Folder listings are not invalidated afterwards, and that is deliberate. They
+ * are cached for a minute; dropping those entries on every read would trade the
+ * cache's whole value for precision this timestamp does not claim to have — it
+ * is already allowed to lag by an hour. The recently-opened list is the one
+ * exception, handled in flushAccessTimes.
  */
 async function flushChunk(entries) {
   const tuples = [];
@@ -168,6 +170,29 @@ async function flushChunk(entries) {
 }
 
 /**
+ * Drop the cached "recently opened" list for every account in a flushed batch.
+ *
+ * This is the one cache the timestamps genuinely order, so leaving it to expire
+ * would mean a file you just opened not appearing until the TTL ran out. The
+ * cost stays negligible because it rides on the flush rather than on the read:
+ * one exact-key DEL per account per flush interval, however many items that
+ * account touched, and nothing at all while it touches none.
+ *
+ * A failure here means a stale panel for one TTL, which is not worth
+ * propagating into a download's response path.
+ */
+async function invalidateRecentLists(batch) {
+  const owners = new Set(batch.map(([, entry]) => entry.ownerId));
+  for (const ownerId of owners) {
+    try {
+      await deleteCache(cacheKeys.recentFiles(ownerId));
+    } catch (err) {
+      logger.warn({ err, ownerId }, '[AccessTime] Failed to invalidate recent files cache');
+    }
+  }
+}
+
+/**
  * Write everything buffered so far.
  * @returns {Promise<number>} Rows actually updated
  */
@@ -188,6 +213,7 @@ async function flushAccessTimes() {
       const chunk = batch.slice(i, i + CHUNK_SIZE);
       written += await flushChunk(chunk.map(([, entry]) => entry));
     }
+    if (written > 0) await invalidateRecentLists(batch);
   } catch (err) {
     // Nothing was stored, so the suppression windows are lies. Forget them and
     // let the next read try again rather than going quiet for an hour.

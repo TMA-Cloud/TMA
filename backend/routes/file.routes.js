@@ -14,6 +14,7 @@ import {
   getShareLinks,
   linkParentShare,
   listFiles,
+  listRecent,
   listShared,
   listStarred,
   listTrash,
@@ -77,6 +78,7 @@ router.get('/', listFiles);
 router.get('/stats', getFileStats);
 router.get('/:id/info', getFileInfo);
 router.get('/search', searchFiles);
+router.get('/recent', listRecent);
 router.get('/starred', listStarred);
 router.get('/shared', listShared);
 router.get('/trash', listTrash);

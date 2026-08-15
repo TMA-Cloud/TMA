@@ -155,4 +155,53 @@ async function getFileStats(userId) {
   return stats;
 }
 
-export { searchFiles, getFileStats };
+/**
+ * How many rows the cached recent list holds.
+ */
+const RECENT_CACHE_SIZE = 50;
+
+/**
+ * Recently opened files, most recent first.
+ *
+ * The query is a plain top-N against idx_files_user_accessed_at
+ * (user_id, accessed_at DESC) WHERE deleted_at IS NULL as the index's leading
+ * column, its order, and its predicate all match the query, Postgres walks the
+ * index backwards and stops once LIMIT rows are in hand.
+ *
+ * `type = 'file'` is intentionally *not* in that index. Adding it would make
+ * the scan exact, at the price of a second index to maintain on every
+ * accessed_at write and the write path here is the whole reason the column is
+ * cheap. Filtering after the index scan instead costs only the folder entries
+ * skipped along the way.
+ *
+ * @param {string} userId - Account owner
+ * @param {number} limit - Rows to return, capped at RECENT_CACHE_SIZE
+ * @returns {Promise<Array>} Files ordered by accessed_at DESC
+ */
+async function getRecentFiles(userId, limit = 10) {
+  const wanted = Math.min(Math.max(Number(limit) || 0, 1), RECENT_CACHE_SIZE);
+
+  const cacheKey = cacheKeys.recentFiles(userId);
+  const cached = await getCache(cacheKey);
+  if (cached !== null) {
+    return cached.slice(0, wanted);
+  }
+
+  const result = await pool.query(
+    `SELECT id, name, type, size, modified, accessed_at AS "accessedAt",
+            mime_type AS "mimeType", starred, shared
+       FROM files
+      WHERE user_id = $1
+        AND deleted_at IS NULL
+        AND type = 'file'
+      ORDER BY accessed_at DESC
+      LIMIT $2`,
+    [userId, RECENT_CACHE_SIZE]
+  );
+
+  await setCache(cacheKey, result.rows, DEFAULT_TTL);
+
+  return result.rows.slice(0, wanted);
+}
+
+export { searchFiles, getFileStats, getRecentFiles, RECENT_CACHE_SIZE };

@@ -45,6 +45,7 @@ const handlerNames = [
   'getShareLinks',
   'linkParentShare',
   'listFiles',
+  'listRecent',
   'listShared',
   'listStarred',
   'listTrash',
@@ -234,6 +235,10 @@ describe('routing', () => {
     expect((await request(app).get('/api/files/')).body.handler).toBe('listFiles');
     expect((await request(app).get('/api/files/stats')).body.handler).toBe('getFileStats');
     expect((await request(app).post('/api/files/folder').send({ name: 'x' })).body.handler).toBe('addFolder');
+  });
+
+  it('routes /recent to the recent-files handler', async () => {
+    expect((await request(app).get('/api/files/recent')).body.handler).toBe('listRecent');
   });
 
   it('does not confuse /trash with an :id/info lookup', async () => {

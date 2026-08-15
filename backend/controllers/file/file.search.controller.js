@@ -1,4 +1,4 @@
-import { getFileStats, searchFiles } from '../../models/file.model.js';
+import { getFileStats, getRecentFiles, RECENT_CACHE_SIZE, searchFiles } from '../../models/file.model.js';
 import { sendError, sendSuccess } from '../../utils/response.js';
 import { validateLimit, validateSearchQuery } from '../../utils/validation.js';
 
@@ -25,7 +25,17 @@ async function getFileStatsController(req, res) {
   sendSuccess(res, stats);
 }
 
+/**
+ * List recently opened files for the dashboard.
+ */
+async function listRecentController(req, res) {
+  const limit = validateLimit(req.query.limit, RECENT_CACHE_SIZE) || 10;
+  const files = await getRecentFiles(req.ownerId, limit);
+  sendSuccess(res, files);
+}
+
 const searchFilesExport = searchFilesController;
 const getFileStatsExport = getFileStatsController;
+const listRecent = listRecentController;
 
-export { searchFilesExport as searchFiles, getFileStatsExport as getFileStats };
+export { searchFilesExport as searchFiles, getFileStatsExport as getFileStats, listRecent };

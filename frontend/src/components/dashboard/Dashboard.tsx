@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { RecentFiles } from './RecentFiles';
-import { useApp } from '../../contexts/AppContext';
+import { useApp, type FileItem } from '../../contexts/AppContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { Upload, FolderPlus, Share2, Star } from 'lucide-react';
-import { apiGet } from '../../utils/api';
+import { apiGet, getRecentFiles } from '../../utils/api';
+import { mapFileResponse } from '../../utils/fileUtils';
 import { SPRING_PRESETS, useReducedMotion, useSpring } from '../../motion';
 
 interface FileStats {
@@ -12,6 +13,9 @@ interface FileStats {
   sharedCount: number;
   starredCount: number;
 }
+
+/** Rows the recent panel shows. The server returns exactly this many. */
+const RECENT_LIMIT = 5;
 
 /**
  * A number that springs to its value reads as the figure arriving rather than
@@ -40,7 +44,7 @@ const StatValue: React.FC<{ value: number }> = ({ value }) => {
 };
 
 export const Dashboard: React.FC = () => {
-  const { files, setUploadModalOpen, setCreateFolderModalOpen, setCurrentPath } = useApp();
+  const { setUploadModalOpen, setCreateFolderModalOpen, setCurrentPath } = useApp();
   const { can } = useAuth();
   const [stats, setStats] = useState<FileStats>({
     totalFiles: 0,
@@ -48,15 +52,21 @@ export const Dashboard: React.FC = () => {
     sharedCount: 0,
     starredCount: 0,
   });
+  const [recentFiles, setRecentFiles] = useState<FileItem[]>([]);
 
   useEffect(() => {
+    // Both panels are a snapshot of the same moment, so they refresh together
+    // and one failing does not blank the other.
     const fetchStats = async () => {
-      try {
-        const data = await apiGet<FileStats>('/api/files/stats');
-        setStats(data);
-      } catch {
-        // Error handled silently - stats will show as unavailable
-      }
+      const [statsResult, recentResult] = await Promise.allSettled([
+        apiGet<FileStats>('/api/files/stats'),
+        getRecentFiles(RECENT_LIMIT),
+      ]);
+
+      // Failures leave the last good values on screen: a dropped poll should
+      // not empty a panel that was correct a minute ago.
+      if (statsResult.status === 'fulfilled') setStats(statsResult.value);
+      if (recentResult.status === 'fulfilled') setRecentFiles(recentResult.value.map(mapFileResponse));
     };
 
     fetchStats();
@@ -187,7 +197,7 @@ export const Dashboard: React.FC = () => {
           </div>
         </div>
 
-        <RecentFiles files={files} />
+        <RecentFiles files={recentFiles} />
       </div>
     </div>
   );

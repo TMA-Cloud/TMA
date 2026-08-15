@@ -43,6 +43,7 @@ import {
   subscribeToUpdateDownloadProgress,
 } from '../utils/electronDesktop';
 import { formatBytes } from '../utils/storageUtils';
+import { mapFileResponse } from '../utils/fileUtils';
 
 // Constants & Pure Helpers
 
@@ -51,14 +52,6 @@ const FILE_MANAGER_PAGES = new Set(['My Files', 'Shared', 'Starred', 'Trash']);
 const isFileManagerPage = (page: string | undefined) => !!page && FILE_MANAGER_PAGES.has(page);
 
 const naturalCompare = (a: string, b: string) => a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true });
-
-const mapFileResponse = (f: FileItemResponse): FileItem => ({
-  ...f,
-  modified: new Date(f.modified),
-  accessedAt: f.accessedAt ? new Date(f.accessedAt) : undefined,
-  deletedAt: f.deletedAt ? new Date(f.deletedAt) : undefined,
-  expiresAt: f.expiresAt ? new Date(f.expiresAt) : f.expiresAt === null ? null : undefined,
-});
 
 const getInFlightUploadProgress = (loaded: number, total: number): number =>
   Math.min(Math.round((loaded / total) * 100), 99);

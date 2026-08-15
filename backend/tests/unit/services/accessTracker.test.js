@@ -1,9 +1,12 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { executedCalls, queueQueryResults, resetDbMock } from '../../mocks/db.mock.js';
+import { seedRedis, setRedisDown } from '../../mocks/redis.mock.js';
+import { cacheKeys, getCache } from '../../../utils/cache.js';
 import { CHUNK_SIZE, flushAccessTimes, recordAccess, resetAccessTracker } from '../../../services/accessTracker.js';
 
 const OWNER = 'user000000000001';
+const OTHER = 'user000000000002';
 
 beforeEach(() => {
   resetDbMock();
@@ -115,6 +118,41 @@ describe('when the database rejects the flush', () => {
     await flushAccessTimes();
 
     expect(updates()).toHaveLength(2);
+  });
+});
+
+describe('the cached recent-files list', () => {
+  it('is dropped for every account in the batch once the write lands', async () => {
+    seedRedis(cacheKeys.recentFiles(OWNER), [{ id: 'file1' }]);
+    seedRedis(cacheKeys.recentFiles(OTHER), [{ id: 'file2' }]);
+    queueQueryResults({ rows: [], rowCount: 2 });
+
+    recordAccess('file1', OWNER);
+    recordAccess('file2', OTHER);
+    await flushAccessTimes();
+
+    expect(await getCache(cacheKeys.recentFiles(OWNER))).toBeNull();
+    expect(await getCache(cacheKeys.recentFiles(OTHER))).toBeNull();
+  });
+
+  it('survives a cache that is down, because a read must not fail on it', async () => {
+    queueQueryResults({ rows: [], rowCount: 1 });
+    setRedisDown(true);
+
+    recordAccess('file1', OWNER);
+    await expect(flushAccessTimes()).resolves.toBe(1);
+  });
+
+  it('is left alone when no row actually moved forward', async () => {
+    seedRedis(cacheKeys.recentFiles(OWNER), [{ id: 'file1' }]);
+    queueQueryResults({ rows: [], rowCount: 0 });
+
+    recordAccess('file1', OWNER);
+    await flushAccessTimes();
+
+    // Every id was already inside its window on the row itself, so the list the
+    // cache holds is still the right one.
+    expect(await getCache(cacheKeys.recentFiles(OWNER))).not.toBeNull();
   });
 });
 

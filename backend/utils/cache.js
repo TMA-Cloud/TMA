@@ -302,6 +302,9 @@ const cacheKeys = {
   // File stats cache keys
   fileStats: userId => `files:${userId}:stats`,
 
+  // Recently opened files
+  recentFiles: userId => `files:${userId}:recent`,
+
   // Starred files cache keys
   starredFiles: (userId, sortBy = 'modified', order = 'DESC') => {
     return `files:${userId}:starred:${sortBy}:${order}`;
