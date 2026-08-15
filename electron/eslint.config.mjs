@@ -10,10 +10,27 @@ import prettierConfig from 'eslint-config-prettier';
  */
 export default defineConfig([
   {
-    ignores: ['node_modules/**', 'dist-electron/**', 'dist-client/**', '**/*.min.js'],
+    ignores: [
+      'node_modules/**',
+      'dist-electron/**',
+      'dist-client/**',
+      'clouddrive-dist/**',
+      'coverage/**',
+      '**/*.min.js',
+    ],
   },
   js.configs.recommended,
   prettierConfig,
+  {
+    // The test suite is ESM (Vitest's API cannot be require()d) while the app
+    // it exercises stays CommonJS.
+    files: ['tests/**/*.mjs', 'vitest.config.js'],
+    languageOptions: {
+      ecmaVersion: 2024,
+      sourceType: 'module',
+      globals: { ...globals.node },
+    },
+  },
   {
     files: ['**/*.cjs', '**/*.js'],
     languageOptions: {
