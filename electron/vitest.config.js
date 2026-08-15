@@ -30,7 +30,10 @@ module.exports = defineConfig({
       provider: 'v8',
       reporter: ['text', 'html', 'lcov'],
       reportsDirectory: 'coverage',
-      include: ['src/main/**', 'src/preload/**'],
+      // Only the JavaScript. A broader glob sweeps up the PowerShell helper
+      // script, which the coverage provider then tries to parse as JS and
+      // reports as a failure before excluding it anyway.
+      include: ['src/main/**/*.cjs', 'src/preload/**/*.cjs'],
       exclude: ['**/node_modules/**', 'tests/**', 'scripts/**'],
     },
   },
