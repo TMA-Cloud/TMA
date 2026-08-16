@@ -686,6 +686,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Search effect
 
+  // Re-listing a folder is not this effect's job and the navigation effect
+  // below already re-lists whenever searchQuery goes empty.
   useEffect(() => {
     if (searchQuery.trim().length > 0) {
       if (!didSavePreSearchRef.current) {
@@ -693,24 +695,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         didSavePreSearchRef.current = true;
       }
       debouncedSearch(searchQuery);
-    } else {
-      cancelSearch();
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-        abortControllerRef.current = null;
-      }
-      Promise.resolve().then(() => {
-        setIsSearching(false);
-        if (!isFileManagerPage(currentPathRef.current[0]) && filesBeforeSearchRef.current) {
-          setFiles(filesBeforeSearchRef.current);
-        } else {
-          void refreshFiles(true);
-        }
-        filesBeforeSearchRef.current = null;
-        didSavePreSearchRef.current = false;
-      });
+      return;
     }
-  }, [searchQuery, debouncedSearch, cancelSearch, refreshFiles]);
+
+    // An empty box only needs tearing down if a search was actually running;
+    // otherwise this is just a re-render (mount, navigation, sort change).
+    if (!didSavePreSearchRef.current) return;
+
+    cancelSearch();
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    Promise.resolve().then(() => {
+      setIsSearching(false);
+      // Pages the navigation effect doesn't list (no folder to re-fetch) get
+      // their pre-search contents put back instead.
+      if (!isFileManagerPage(currentPathRef.current[0]) && filesBeforeSearchRef.current) {
+        setFiles(filesBeforeSearchRef.current);
+      }
+      filesBeforeSearchRef.current = null;
+      didSavePreSearchRef.current = false;
+    });
+  }, [searchQuery, debouncedSearch, cancelSearch]);
 
   // Electron derived upload status
 
@@ -860,12 +867,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   }, []);
 
-  // Refresh files when navigating or changing sort (non-search)
+  // The single owner of "what the current view should be listing": folder,
+  // page, sort, and leaving search all resolve to one request here. Mutations
+  // still call refreshFiles directly, and refreshFiles' own abort keeps the
+  // newest of those the winner.
+  // refreshFiles is rebuilt whenever any of these values change, so listing it
+  // as the only dependency would fire on exactly the same renders.
   useEffect(() => {
     if (searchQuery.trim().length === 0 && isFileManagerPage(currentPath[0])) {
       Promise.resolve().then(() => refreshFiles(true));
     }
-  }, [folderStack, currentPath, sortBy, sortOrder, searchQuery, refreshFiles]);
+  }, [currentPath, searchQuery, refreshFiles]);
 
   // File Operations
 
