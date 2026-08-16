@@ -6,6 +6,7 @@ import {
   type FileItemResponse,
   type FileSortBy,
   type ShareExpiry,
+  type UploadFailure,
   type UploadModalInitialEntry,
 } from './AppContext';
 import { useAuth } from './AuthContext';
@@ -72,8 +73,19 @@ const BULK_BATCH_CONCURRENCY = 3;
 /** Below this, per-file rows are informative. */
 const BULK_AGGREGATE_THRESHOLD = 8;
 const BULK_PROGRESS_THROTTLE_MS = 120;
-/** A failed batch of hundreds must not become hundreds of toasts. */
-const MAX_FAILURE_TOASTS = 3;
+
+/** True when the server refused the batch over what was in it, not over who sent it. */
+function isContentRejection(status: number): boolean {
+  return status === 400 || status === 415;
+}
+
+/** Splits "Photos/2024/clip.mp4" into the folder it sat in, if any. */
+function folderPathOf(relativePath: string | undefined): string | undefined {
+  if (!relativePath) return undefined;
+  const normalized = relativePath.replace(/\\/g, '/');
+  const cut = normalized.lastIndexOf('/');
+  return cut > 0 ? normalized.slice(0, cut) : undefined;
+}
 
 function splitIntoBatches<T extends { file: File }>(entries: T[]): T[][] {
   const batches: T[][] = [];
@@ -216,6 +228,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [deleteProgress, setDeleteProgress] = useState<ProgressState | null>(null);
   const [restoreProgress, setRestoreProgress] = useState<ProgressState | null>(null);
   const [uploadProgress, setUploadProgress] = useState<UploadProgressItem[]>([]);
+  const [uploadFailures, setUploadFailures] = useState<UploadFailure[]>([]);
+  const [uploadSavedCount, setUploadSavedCount] = useState(0);
   const [isUploadProgressInteracting, setIsUploadProgressInteracting] = useState(false);
   const [onlyOfficeConfigured, setOnlyOfficeConfigured] = useState(false);
   const [canConfigureOnlyOffice, setCanConfigureOnlyOffice] = useState(false);
@@ -424,6 +438,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Internal helpers (use component scope, called only from event handlers)
 
+  /**
+   * Adds to the dialog rather than replacing it: two upload runs can overlap,
+   * and the second one's rejections should not erase the first one's before
+   * the user has read them.
+   */
+  const reportUploadFailures = (failures: UploadFailure[], savedCount: number) => {
+    if (failures.length === 0) return;
+    setUploadFailures(prev => [...prev, ...failures]);
+    setUploadSavedCount(prev => prev + savedCount);
+  };
+
   const validateUploadSize = async (filesToValidate: File[]) => {
     const { maxBytes } = await getMaxUploadSizeConfig();
     const oversized = filesToValidate.find(f => f.size > maxBytes);
@@ -453,8 +478,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     fileSize: number;
     groupId?: string;
     onProgress?: (progress: number) => void;
+    /** Takes the reason for callers gathering a failure report. */
+    onFailure?: (reason: string) => void;
   }): Promise<void> => {
-    const { url, formData, uploadId, fileName, fileSize, groupId, onProgress } = config;
+    const { url, formData, uploadId, fileName, fileSize, groupId, onProgress, onFailure } = config;
     return new Promise<void>((resolve, reject) => {
       const xhr = new XMLHttpRequest();
 
@@ -504,7 +531,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const handleError = (fallbackMsg: string) => {
         setUploadProgress(prev => updateUploadProgress(prev, uploadId, { status: 'error' }));
         const errorMessage = extractXhrErrorMessage(xhr) || fallbackMsg;
-        showToast(errorMessage, 'error');
+        if (onFailure) onFailure(errorMessage);
+        else showToast(errorMessage, 'error');
         scheduleAutoDismiss(false);
         uploadXhrRef.current.delete(uploadId);
         reject(new Error(errorMessage));
@@ -889,6 +917,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // A handful of loose files keeps the per-file path: a row each and
       // independent cancellation are worth more than batching at that size.
       if (!hasRelativePaths && entries.length <= BULK_AGGREGATE_THRESHOLD) {
+        const rejected: UploadFailure[] = [];
         await runWithConcurrency(entries, BULK_BATCH_CONCURRENCY, (entry, index) => {
           const clientId = entry.clientId || `file-${Date.now()}-${index}`;
           const formData = new FormData();
@@ -903,8 +932,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             uploadId: clientId,
             fileName: entry.file.name,
             fileSize: entry.file.size,
-          });
+            // Collected and swallowed rather than thrown, so
+            // one refused file neither buries the others nor stops them.
+            onFailure: reason => rejected.push({ fileName: entry.file.name, reason }),
+          }).catch(() => {});
         });
+        if (rejected.length > 0) reportUploadFailures(rejected, entries.length - rejected.length);
         return;
       }
 
@@ -938,9 +971,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ]);
 
       const sentBytes = new Array<number>(batches.length).fill(0);
+      const rejected: UploadFailure[] = [];
       let completedFiles = 0;
-      let failedFiles = 0;
-      let toastedFailures = 0;
       let settled = false;
 
       const publishProgress = throttleTrailing(() => {
@@ -1004,13 +1036,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           xhr.addEventListener('load', () => {
             release();
             if (xhr.status < 200 || xhr.status >= 300) {
-              reject(new Error(extractXhrErrorMessage(xhr) || 'Failed to upload files'));
+              const message = extractXhrErrorMessage(xhr) || 'Failed to upload files';
+              // A batch refused for what it contained says nothing about the
+              // batches behind it, so those still go. Anything else — signed
+              // out, out of quota, server down — will refuse them all, and
+              // grinding through the rest to say so 40 more times helps nobody.
+              if (!isContentRejection(xhr.status)) {
+                reject(new Error(message));
+                return;
+              }
+              sentBytes[batchIndex] = batchBytes;
+              batch.forEach(entry => {
+                const folder = folderPathOf(entry.relativePath);
+                rejected.push({
+                  fileName: entry.file.name,
+                  reason: message,
+                  ...(folder ? { folderPath: folder } : {}),
+                });
+              });
+              publishProgress();
+              resolve();
               return;
             }
 
             sentBytes[batchIndex] = batchBytes;
             let succeeded = batch.length;
-            let failures: { fileName: string; error: string }[] = [];
+            let failures: { fileName: string; error: string; clientId?: string }[] = [];
             try {
               const response = JSON.parse(xhr.responseText);
               if (Array.isArray(response?.files)) succeeded = response.files.length;
@@ -1020,10 +1071,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             }
 
             completedFiles += succeeded;
-            failedFiles += failures.length;
-            failures.slice(0, Math.max(0, MAX_FAILURE_TOASTS - toastedFailures)).forEach(f => {
-              toastedFailures += 1;
-              showToast(`Failed to upload ${f.fileName}: ${f.error}`, 'error');
+            // Held for the end-of-run dialog. The client id is what ties a
+            // rejection back to the folder the file came out of.
+            failures.forEach(f => {
+              const entry = batch.find(e => e.clientId === f.clientId);
+              const folder = folderPathOf(entry?.relativePath);
+              rejected.push({ fileName: f.fileName, reason: f.error, ...(folder ? { folderPath: folder } : {}) });
             });
 
             publishProgress();
@@ -1067,19 +1120,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         settled = true;
         if (group.cancelled) return;
 
-        const allFailed = completedFiles === 0 && failedFiles > 0;
+        const allFailed = completedFiles === 0 && rejected.length > 0;
         setUploadProgress(prev =>
           updateUploadProgress(prev, aggregateId, {
             progress: 100,
             status: allFailed ? 'error' : 'completed',
           })
         );
-        if (failedFiles > 0) {
-          showToast(
-            `${completedFiles.toLocaleString()} uploaded, ${failedFiles.toLocaleString()} failed`,
-            allFailed ? 'error' : 'info'
-          );
-        }
+        // The card already carries the counts; the dialog carries the reasons.
+        if (rejected.length > 0) reportUploadFailures(rejected, completedFiles);
         scheduleAggregateDismiss(!allFailed);
         debouncedRefreshFiles(false);
       } catch (err) {
@@ -1977,6 +2026,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         cancelUploadGroup,
         uploadFilesBulk,
         uploadEntriesBulk,
+        uploadFailures,
+        uploadSavedCount,
+        dismissUploadFailures: () => {
+          setUploadFailures([]);
+          setUploadSavedCount(0);
+        },
         setIsUploadProgressInteracting,
         onlyOfficeConfigured,
         canConfigureOnlyOffice,

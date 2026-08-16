@@ -122,15 +122,17 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
     };
     document.addEventListener('keydown', handleTab);
     document.addEventListener('keydown', handleEsc);
-    // Focus requested element or fallback to the first focusable node
+    // Focus requested element or fallback to the first focusable node.
+    // Never scrolling to it: focusing a control near the foot of a long modal
+    // would otherwise open it already scrolled past its own first line.
     setTimeout(() => {
       if (initialFocusRef?.current) {
-        initialFocusRef.current.focus();
+        initialFocusRef.current.focus({ preventScroll: true });
       } else {
         const first = modalRef.current?.querySelector<HTMLElement>(
           'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
         );
-        first?.focus();
+        first?.focus({ preventScroll: true });
       }
     }, 0);
 

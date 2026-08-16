@@ -6,6 +6,7 @@ import Dashboard from '../dashboard/Dashboard';
 import Settings from '../settings/Settings';
 import { UploadModal } from '../upload/UploadModal';
 import { UploadProgress } from '../upload/UploadProgress';
+import { UploadIssuesModal } from '../upload/UploadIssuesModal';
 import { CreateFolderModal } from '../folder/CreateFolderModal';
 import { ImageViewerModal } from '../viewer/ImageViewerModal';
 import { DocumentViewerModal } from '../viewer/DocumentViewerModal';
@@ -239,6 +240,7 @@ export const MobileAppContent: React.FC = () => {
 
       {/* Shared modals */}
       <UploadModal />
+      <UploadIssuesModal />
       <CreateFolderModal />
       <ImageViewerModal />
       <DocumentViewerModal />

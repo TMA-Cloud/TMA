@@ -54,6 +54,11 @@ const ShareLinkModal = lazy(() =>
     default: mod.ShareLinkModal,
   }))
 );
+const UploadIssuesModal = lazy(() =>
+  import('./components/upload/UploadIssuesModal').then(mod => ({
+    default: mod.UploadIssuesModal,
+  }))
+);
 
 // Lazy load auth components
 const LoginForm = lazy(() =>
@@ -183,6 +188,7 @@ const AppContent: React.FC = () => {
         <DocumentViewerModal />
         <RenameModal />
         <ShareLinkModal />
+        <UploadIssuesModal />
         <UploadProgress
           uploads={uploadProgress}
           onDismiss={(id: string) => {

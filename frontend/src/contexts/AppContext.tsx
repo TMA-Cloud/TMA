@@ -57,6 +57,14 @@ export interface BulkUploadEntry {
 /** Entry passed when opening the upload modal via drag-and-drop (e.g. from file manager). */
 export type UploadModalInitialEntry = { file: File; relativePath?: string };
 
+/** One file the server refused, and the reason it gave. */
+export interface UploadFailure {
+  fileName: string;
+  reason: string;
+  /** Folder path the file came from, when it was part of a folder upload. */
+  folderPath?: string;
+}
+
 export interface AppContextType {
   currentPath: string[];
   folderStack: (string | null)[];
@@ -161,6 +169,14 @@ export interface AppContextType {
   cancelUploadGroup: (groupId: string) => void;
   uploadFilesBulk: (files: File[]) => Promise<void>;
   uploadEntriesBulk: (entries: BulkUploadEntry[]) => Promise<void>;
+  /**
+   * Files the last upload run could not store. Reported in one dialog rather
+   * not a toast each.
+   */
+  uploadFailures: UploadFailure[];
+  /** How many files in the same run did land, so the dialog can say so truthfully. */
+  uploadSavedCount: number;
+  dismissUploadFailures: () => void;
   setIsUploadProgressInteracting: (isInteracting: boolean) => void;
   onlyOfficeConfigured: boolean;
   canConfigureOnlyOffice: boolean;
