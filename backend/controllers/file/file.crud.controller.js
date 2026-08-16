@@ -17,6 +17,7 @@ import {
 } from '../../models/file.model.js';
 import { getUserStorageLimit, getUserStorageUsage } from '../../models/user.model.js';
 import { validateParentId } from '../../utils/controllerHelpers.js';
+import { collectUploadParts, extractFolderSegmentsFromRelativePath, metadataForPart } from '../../utils/uploadParts.js';
 import { safeUnlink } from '../../utils/fileCleanup.js';
 import { streamEncryptedFile, streamUnencryptedFile, validateAndResolveFile } from '../../utils/fileDownload.js';
 import { userOperationLock } from '../../utils/mutex.js';
@@ -32,39 +33,6 @@ import {
   validateSortOrder,
 } from '../../utils/validation.js';
 import { createBulkZipArchive, createZipArchive } from '../../utils/zipArchive.js';
-
-function normalizeMultipartArray(value) {
-  if (value == null) return [];
-  if (Array.isArray(value)) return value.map(v => (v == null ? '' : String(v)));
-  return [String(value)];
-}
-
-/**
- * The mtimes the uploader sent, index-aligned with `files` the same way
- * `relativePaths` and `clientIds` are. Entries that fail validation become null,
- * which leaves that row's `modified` at the upload time rather than failing the
- * whole batch over one machine's bad clock.
- */
-function normalizeClientMtimes(value) {
-  return normalizeMultipartArray(value).map(v => validateClientMtime(v));
-}
-
-function extractFolderSegmentsFromRelativePath(relativePath, fallbackFileName) {
-  if (!relativePath || typeof relativePath !== 'string') return [];
-  const normalized = relativePath.replace(/\\/g, '/').replace(/^\/+/, '').trim();
-  if (!normalized) return [];
-  const parts = normalized.split('/').filter(Boolean);
-  if (parts.length === 0) return [];
-
-  // Most browsers provide "RootFolder/sub/filename.ext". We only want the folder parts.
-  const last = parts[parts.length - 1];
-  const isLastFile =
-    (fallbackFileName && last === fallbackFileName) ||
-    // fallback heuristic: if it has a dot, treat as a filename
-    (typeof last === 'string' && last.includes('.'));
-
-  return isLastFile ? parts.slice(0, -1) : parts;
-}
 
 async function ensureFolderPath({ userId, baseParentId, folderSegments, folderIdCache }) {
   let parentId = baseParentId || null;
@@ -627,9 +595,7 @@ async function uploadDerivedFile(req, res) {
  * Bulk upload multiple files (multer disk/local or stream-to-S3 when S3 enabled)
  */
 async function uploadFilesBulk(req, res) {
-  const relativePaths = normalizeMultipartArray(req.body?.relativePaths);
-  const clientIds = normalizeMultipartArray(req.body?.clientIds);
-  const clientMtimes = normalizeClientMtimes(req.body?.lastModifiedTimes);
+  const parts = collectUploadParts(req.body);
   const folderIdCache = new Map();
   const mimeFallbackWarnings = [];
   const mimeMismatchWarnings = [];
@@ -638,8 +604,14 @@ async function uploadFilesBulk(req, res) {
   // S3: streamed uploads (no temp files)
   if (req.streamedUploads) {
     const uploads = req.streamedUploads;
+    // Files the stream middleware rejected (MIME spoof, oversized) never reach
+    // S3; they still have to be reported or the client waits on them forever.
+    const streamFailures = (req.streamedUploadFailures || []).map(f => {
+      const { clientId } = metadataForPart(parts, f.index);
+      return { fileName: f.fileName, error: f.error, ...(clientId ? { clientId } : {}) };
+    });
     if (uploads.length === 0) {
-      return sendError(res, 400, 'No files uploaded');
+      return sendError(res, 400, streamFailures[0]?.error || 'No files uploaded');
     }
 
     for (const u of uploads) {
@@ -655,7 +627,7 @@ async function uploadFilesBulk(req, res) {
     }
 
     const successful = [];
-    const failed = [];
+    const failed = [...streamFailures];
 
     const orderedUploads = [...uploads].sort((a, b) => {
       const ai = Number.isFinite(a?.index) ? a.index : 0;
@@ -663,11 +635,8 @@ async function uploadFilesBulk(req, res) {
       return ai - bi;
     });
 
-    for (let i = 0; i < orderedUploads.length; i++) {
-      const upload = orderedUploads[i];
-      const relativePath = relativePaths[i] || null;
-      const clientId = clientIds[i] || null;
-      const modified = clientMtimes[i] || null;
+    for (const upload of orderedUploads) {
+      const { relativePath, clientId, modified } = metadataForPart(parts, upload.index);
 
       try {
         const folderSegments = extractFolderSegmentsFromRelativePath(relativePath, upload.name);
@@ -725,16 +694,20 @@ async function uploadFilesBulk(req, res) {
       return sendError(res, 400, failed[0]?.error || 'All uploads failed');
     }
 
+    // Rejected-before-S3 files are part of what the client sent, so they count
+    // towards the total it is waiting on.
+    const total = uploads.length + streamFailures.length;
+
     // Aggregate audit log for this bulk upload.
     await filesUploadedBulk(successful, req, {
       failedCount: failed.length,
-      total: uploads.length,
+      total,
       parentId,
       driver: 's3',
     });
     logger.info(
       {
-        total: uploads.length,
+        total,
         successful: successful.length,
         failedCount: failed.length,
         parentId,
@@ -746,7 +719,7 @@ async function uploadFilesBulk(req, res) {
     return sendSuccess(res, {
       files: successful,
       failed: failed.length > 0 ? failed : undefined,
-      total: uploads.length,
+      total,
       successful: successful.length,
       failedCount: failed.length,
     });
@@ -795,11 +768,12 @@ async function uploadFilesBulk(req, res) {
   const successful = [];
   const failed = [];
 
+  // Multer keeps every part it accepts, so here a file's position is its part
+  // ordinal but the lookup goes through the same join either way, so the two
+  // paths cannot drift apart.
   for (let index = 0; index < totalFiles; index++) {
     const file = req.files[index];
-    const relativePath = relativePaths[index] || null;
-    const clientId = clientIds[index] || null;
-    const modified = clientMtimes[index] || null;
+    const { relativePath, clientId, modified } = metadataForPart(parts, index);
 
     try {
       let actualMimeType = file.mimetype || 'application/octet-stream';
