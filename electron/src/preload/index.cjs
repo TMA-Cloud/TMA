@@ -7,6 +7,7 @@ const { contextBridge, ipcRenderer } = require('electron');
       app: {
         getVersion: () => ipcRenderer.invoke('app:getVersion'),
         downloadAndInstallUpdate: version => ipcRenderer.invoke('app:downloadAndInstallUpdate', version),
+        setTheme: theme => ipcRenderer.invoke('app:setTheme', theme),
         onUpdateDownloadProgress: callback => {
           if (typeof callback !== 'function') return () => {};
           const listener = (_e, percent) => callback(percent);

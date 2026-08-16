@@ -1,7 +1,8 @@
 const path = require('path');
 const { app } = require('electron');
 
-const { getServerUrl, NO_SERVER_URL_PAGE } = require('./config.cjs');
+const { getServerUrl, noServerUrlPage } = require('./config.cjs');
+const { getTheme } = require('./theme.cjs');
 const { createWindow, getMainWindow } = require('./window.cjs');
 const { registerClipboardHandlers } = require('./ipc/clipboard.cjs');
 const { registerAppHandlers } = require('./ipc/app.cjs');
@@ -58,7 +59,7 @@ if (process.platform === 'win32') {
 
 app.whenReady().then(() => {
   const serverUrl = getServerUrl();
-  const loadUrl = serverUrl || NO_SERVER_URL_PAGE;
+  const loadUrl = serverUrl || noServerUrlPage(getTheme());
   const preloadPath = path.join(__dirname, '..', 'preload', 'index.cjs');
   const appRoot = app.getAppPath();
 

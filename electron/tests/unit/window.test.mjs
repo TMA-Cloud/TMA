@@ -28,8 +28,15 @@ function readyToShow(win) {
 beforeEach(() => {
   appRoot = createTempRoot('tma-cloud-approot-');
   preloadPath = writeFile(appRoot, 'preload.cjs', '// preload');
+  // The remembered theme lives under userData; give each test its own.
+  __mock.state.paths.userData = createTempRoot('tma-cloud-userdata-');
   ({ createWindow, getMainWindow } = freshRequire('src/main/window.cjs'));
 });
+
+/** Pre-seed the theme the previous session ended in. */
+function rememberedTheme(theme) {
+  writeFile(__mock.state.paths.userData, 'ui-theme.json', JSON.stringify({ theme }));
+}
 
 describe('window security', () => {
   it('isolates the renderer: context isolation and sandbox on, node integration off', () => {
@@ -187,6 +194,57 @@ describe('startup sequence', () => {
 
     expect(warned).toHaveBeenCalled();
     expect(__mock.lastWindow()).toBeTruthy();
+  });
+});
+
+describe('chrome theme', () => {
+  it('paints the window on the app canvas so it never flashes white', () => {
+    expect(open().options.backgroundColor).toBe('#1b1b19');
+  });
+
+  it('opens in the theme the previous session ended in', () => {
+    rememberedTheme('light');
+    ({ createWindow, getMainWindow } = freshRequire('src/main/window.cjs'));
+
+    const win = open();
+
+    expect(win.options.backgroundColor).toBe('#f3f3f0');
+    expect(decodeURIComponent(win.currentUrl())).toContain('background:#f3f3f0');
+  });
+
+  it('themes the connection error page the same way', () => {
+    rememberedTheme('light');
+    ({ createWindow, getMainWindow } = freshRequire('src/main/window.cjs'));
+    const win = open();
+
+    win.webContents.emit('did-fail-load', {}, -106, 'ERR_FAILED', SERVER_URL, true);
+
+    expect(decodeURIComponent(win.currentUrl())).toContain('background:#f3f3f0');
+  });
+
+  it('records the theme the web app is in, for the next launch', async () => {
+    vi.useFakeTimers();
+    const win = open();
+    readyToShow(win);
+    vi.advanceTimersByTime(120);
+    vi.useRealTimers();
+    win.webContents.executeJavaScriptResult = 'light';
+
+    win.webContents.emit('did-finish-load');
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const stored = fs.readFileSync(path.join(__mock.state.paths.userData, 'ui-theme.json'), 'utf8');
+    expect(JSON.parse(stored).theme).toBe('light');
+  });
+
+  it('does not read localStorage on the splash, where the origin is opaque', async () => {
+    const win = open();
+
+    win.webContents.emit('did-finish-load');
+    await Promise.resolve();
+
+    expect(win.webContents.executed.some(code => code.includes('localStorage'))).toBe(false);
   });
 });
 

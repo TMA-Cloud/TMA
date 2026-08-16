@@ -18,6 +18,7 @@ declare global {
         getVersion?: () => Promise<{ version: string | null; error?: string }>;
         downloadAndInstallUpdate?: (version: string) => Promise<{ ok: boolean; error?: string }>;
         onUpdateDownloadProgress?: (callback: (percent: number) => void) => () => void;
+        setTheme?: (theme: 'light' | 'dark') => Promise<{ ok: boolean }>;
       };
       clipboard: {
         peekFileNames?: () => Promise<{ names: string[] }>;

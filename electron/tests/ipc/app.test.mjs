@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { __mock } from 'electron';
@@ -12,8 +14,38 @@ beforeEach(() => {
 });
 
 describe('handler registration', () => {
-  it('exposes exactly the two app channels the preload bridge calls', () => {
-    expect(__mock.handlerChannels().sort()).toEqual(['app:downloadAndInstallUpdate', 'app:getVersion']);
+  it('exposes exactly the app channels the preload bridge calls', () => {
+    expect(__mock.handlerChannels().sort()).toEqual(['app:downloadAndInstallUpdate', 'app:getVersion', 'app:setTheme']);
+  });
+});
+
+describe('app:setTheme', () => {
+  // The splash reads this on the next launch, so a toggle has to land as soon
+  // as it happens and reading it back at shutdown would always be one boot late.
+  let userData;
+
+  beforeEach(() => {
+    userData = createTempRoot('tma-cloud-userdata-');
+    __mock.state.paths.userData = userData;
+  });
+
+  const stored = () => JSON.parse(fs.readFileSync(path.join(userData, 'ui-theme.json'), 'utf8')).theme;
+
+  it('records the theme the renderer switched to', async () => {
+    await expect(__mock.invoke('app:setTheme', 'light')).resolves.toEqual({ ok: true });
+    expect(stored()).toBe('light');
+  });
+
+  it('records a switch back to dark, so the splash follows both directions', async () => {
+    await __mock.invoke('app:setTheme', 'light');
+    await __mock.invoke('app:setTheme', 'dark');
+    expect(stored()).toBe('dark');
+  });
+
+  it('ignores a value that is not one of the two themes', async () => {
+    await __mock.invoke('app:setTheme', 'light');
+    await __mock.invoke('app:setTheme', 'neon');
+    expect(stored()).toBe('light');
   });
 });
 

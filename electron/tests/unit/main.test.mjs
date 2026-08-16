@@ -29,6 +29,7 @@ describe('startup', () => {
     expect(__mock.handlerChannels().sort()).toEqual([
       'app:downloadAndInstallUpdate',
       'app:getVersion',
+      'app:setTheme',
       'clipboard:peekFileNames',
       'clipboard:readFiles',
       'clipboard:writeFiles',
@@ -68,7 +69,7 @@ describe('startup', () => {
     useBuildConfig(null);
     await startApp();
 
-    expect(__mock.lastWindow().currentUrl()).toContain('Server URL not configured');
+    expect(decodeURIComponent(__mock.lastWindow().currentUrl())).toContain('Server URL not configured');
   });
 });
 

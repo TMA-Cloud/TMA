@@ -1,7 +1,8 @@
 const path = require('path');
 const fs = require('fs');
 const { BrowserWindow, Menu, screen } = require('electron');
-const { LOADING_PAGE, serverErrorPage } = require('./config.cjs');
+const { loadingPage, serverErrorPage, themeBackground } = require('./config.cjs');
+const { getTheme, rememberTheme } = require('./theme.cjs');
 
 const ELECTRON_HEADER_NAME = 'X-TMA-Desktop-Client';
 const ELECTRON_HEADER_VALUE = 'tma-electron-client-v1';
@@ -48,12 +49,17 @@ function createWindow(loadUrl, preloadPath, appRoot) {
   const targetWidth = Math.round(screenWidth * 0.7);
   const targetHeight = Math.round(screenHeight * 0.8);
 
+  // Last known renderer theme.
+  const theme = getTheme();
+
   mainWindow = new BrowserWindow({
     width: targetWidth,
     height: targetHeight,
     center: true,
     title: 'TMA Cloud',
     show: false,
+    // Chromium paints this before the first frame of any document.
+    backgroundColor: themeBackground(theme),
     ...(iconPath && { icon: iconPath }),
     webPreferences: {
       preload: absolutePreload,
@@ -125,7 +131,7 @@ function createWindow(loadUrl, preloadPath, appRoot) {
       const a = (loadUrl || '').replace(/\/$/, '');
       const b = (validatedURL || '').replace(/\/$/, '');
       if (a !== b && b.indexOf(a) !== 0 && a.indexOf(b) !== 0) return;
-      mainWindow.loadURL(serverErrorPage(loadUrl));
+      mainWindow.loadURL(serverErrorPage(loadUrl, theme));
     });
   }
 
@@ -134,7 +140,7 @@ function createWindow(loadUrl, preloadPath, appRoot) {
   });
 
   if (isServerUrl) {
-    mainWindow.loadURL(LOADING_PAGE);
+    mainWindow.loadURL(loadingPage(theme));
     mainWindow.once('ready-to-show', () => {
       mainWindow.show();
       setTimeout(() => mainWindow.loadURL(loadUrl), 120);
@@ -145,6 +151,16 @@ function createWindow(loadUrl, preloadPath, appRoot) {
   }
 
   mainWindow.webContents.on('did-finish-load', () => {
+    // Mirror the web app's theme choice for the next launch's splash.
+    if (isServerUrl && !mainWindow.webContents.getURL().startsWith('data:')) {
+      mainWindow.webContents
+        .executeJavaScript('localStorage.getItem("theme")')
+        .then(rememberTheme)
+        .catch(() => {
+          /* storage unavailable; keep the last known theme */
+        });
+    }
+
     mainWindow.webContents
       .executeJavaScript('typeof window.electronAPI !== "undefined"')
       .then(hasAPI => {

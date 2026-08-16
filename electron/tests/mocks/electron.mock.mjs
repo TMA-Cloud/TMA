@@ -198,6 +198,11 @@ class FakeWebContents extends EventEmitter {
     return Promise.resolve(this.executeJavaScriptResult);
   }
 
+  /** Whatever the window loaded last, matching Electron's own semantics. */
+  getURL() {
+    return this._win.currentUrl() || '';
+  }
+
   setWindowOpenHandler(handler) {
     this.windowOpenHandler = handler;
   }

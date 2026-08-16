@@ -27,6 +27,8 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   useEffect(() => {
     applyThemeToDocument(theme);
     localStorage.setItem(STORAGE_KEY, theme);
+    // The desktop client's splash and connection-error screen data.
+    void window.electronAPI?.app?.setTheme?.(theme)?.catch(() => {});
   }, [theme]);
 
   const setTheme = useCallback((next: Theme) => {
