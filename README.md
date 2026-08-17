@@ -24,15 +24,8 @@ Create a directory and download the files
 
 ```bash
 mkdir tma-cloud && cd tma-cloud
-curl -sSL -o docker-compose.yml https://raw.githubusercontent.com/TMA-Cloud/TMA/main/docker-compose.yml
-curl -sSL -o .env.example https://raw.githubusercontent.com/TMA-Cloud/TMA/main/.env.example
-```
-
-Configure environment
-
-```bash
-cp .env.example .env
-# Edit .env with your configuration.
+curl -sSL -o compose.yml https://raw.githubusercontent.com/TMA-Cloud/TMA/main/docker-compose.yml
+curl -sSL -o .env https://raw.githubusercontent.com/TMA-Cloud/TMA/main/.env.example
 ```
 
 Start all services
