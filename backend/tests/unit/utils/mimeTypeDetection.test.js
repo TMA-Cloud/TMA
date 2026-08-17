@@ -48,6 +48,21 @@ const DOCX_LIKE = pad(
 
 const PLAIN_TEXT = pad(Buffer.from('just some plain text, nothing magic here\n'));
 
+/** EBML header with a DocType, which is all that separates Matroska from WebM. */
+const ebml = docType =>
+  pad(
+    Buffer.concat([
+      Buffer.from([0x1a, 0x45, 0xdf, 0xa3, 0x80 | (19 + docType.length)]),
+      Buffer.from('\x42\x86\x81\x01\x42\xF7\x81\x01\x42\xF2\x81\x04\x42\xF3\x81\x08\x42\x82', 'binary'),
+      Buffer.from([0x80 | docType.length]),
+      Buffer.from(docType),
+    ])
+  );
+
+const MATROSKA = ebml('matroska');
+const WEBM = ebml('webm');
+const FLAC = pad(Buffer.from('fLaC'));
+
 let tmpDir;
 beforeAll(async () => {
   tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'tma-mime-'));
@@ -188,6 +203,38 @@ describe('validateMimeTypeFromBuffer', () => {
 
   it('allows any content for an extension nobody has registered', async () => {
     expect((await validateMimeTypeFromBuffer(PNG, 'data.zzzz')).valid).toBe(true);
+  });
+
+  /**
+   * The detector answers with both an extension and a MIME type, and its MIME
+   * type frequently has no place in mime-db's extension index — Matroska sniffs
+   * as video/matroska, which mime-db registers with no extensions at all while
+   * listing video/x-matroska for .mkv. Comparing MIME strings alone therefore
+   * refused ordinary media files.
+   */
+  describe('formats whose detected MIME type mime-db does not map to an extension', () => {
+    it('accepts a Matroska video named .mkv', async () => {
+      expect(await validateMimeTypeFromBuffer(MATROSKA, 'movie.mkv')).toEqual({ valid: true, error: null });
+    });
+
+    it('accepts a FLAC file named .flac', async () => {
+      expect((await validateMimeTypeFromBuffer(FLAC, 'song.flac')).valid).toBe(true);
+    });
+
+    it('accepts either name for the container the two share', async () => {
+      expect((await validateMimeTypeFromBuffer(MATROSKA, 'movie.webm')).valid).toBe(true);
+      expect((await validateMimeTypeFromBuffer(WEBM, 'clip.mkv')).valid).toBe(true);
+    });
+
+    it('still refuses a program renamed to .mkv', async () => {
+      const exe = pad(Buffer.concat([Buffer.from('MZ'), Buffer.alloc(100)]));
+      expect((await validateMimeTypeFromBuffer(exe, 'movie.mkv')).valid).toBe(false);
+    });
+
+    it('still refuses content from an unrelated family', async () => {
+      expect((await validateMimeTypeFromBuffer(MATROSKA, 'movie.mp4')).valid).toBe(false);
+      expect((await validateMimeTypeFromBuffer(FLAC, 'song.mp3')).valid).toBe(false);
+    });
   });
 
   describe('Office Open XML documents that sniff as plain ZIP', () => {

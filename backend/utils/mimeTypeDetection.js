@@ -112,6 +112,61 @@ const DETECTION_ALIASES = {
 };
 
 /**
+ * Groups extensions that share identical magic-byte formats (containers/headers).
+ * Overlapping groups are automatically merged into unified families at build time.
+ */
+const EXTENSION_FAMILIES = [
+  // One container carrying a DocType field. Sniffing separates Matroska from
+  // WebM; a filename does not.
+  ['mkv', 'mk3d', 'mks', 'mka', 'webm'],
+  // ISO base media: a box tree whose ftyp brand names the flavour. Encoders
+  // routinely stamp a generic brand, so the brand rarely matches the extension.
+  ['mp4', 'm4v', 'm4a', 'm4b', 'm4p', 'm4r', 'mov', 'qt', '3gp', '3g2', 'f4v', 'f4a', 'f4b', 'f4p'],
+  // One Ogg container; the extension announces what was muxed into it.
+  ['ogg', 'oga', 'ogv', 'ogx', 'ogm', 'opus', 'spx'],
+  ['jpg', 'jpeg', 'jpe', 'jfif', 'jif'],
+  ['tif', 'tiff'],
+  ['mpg', 'mpeg', 'mpe', 'm1v', 'm2v', 'vob'],
+  // MPEG audio layers share a frame header; only the layer bits differ.
+  ['mp3', 'mp2', 'mp1', 'mpga', 'm2a', 'm3a'],
+  ['aif', 'aiff', 'aifc'],
+  ['asf', 'wmv', 'wma'],
+  ['mid', 'midi', 'kar'],
+  ['gz', 'tgz'],
+  // Portable Executable: the same header whether the image is run or loaded.
+  ['exe', 'dll', 'sys', 'scr', 'com', 'ocx', 'cpl', 'efi'],
+  // ELF, likewise, for programs and shared objects.
+  ['elf', 'so', 'ko'],
+  ['ttf', 'ttc'],
+];
+
+/** extension -> the Set of extensions it is indistinguishable from. */
+const familyByExtension = (function buildExtensionFamilies() {
+  const map = Object.create(null);
+  for (const group of EXTENSION_FAMILIES) {
+    const family = new Set(group);
+    for (const ext of group) {
+      const existing = map[ext];
+      if (existing) for (const member of existing) family.add(member);
+    }
+    for (const ext of family) map[ext] = family;
+  }
+  return map;
+})();
+
+/** @returns {boolean} whether two extensions name a format magic bytes cannot separate */
+function sameFormatFamily(a, b) {
+  if (a === b) return true;
+  const family = familyByExtension[a];
+  return Boolean(family && family === familyByExtension[b]);
+}
+
+/** XML serialisations all sniff as XML; the extension is what carries the schema. */
+function isXmlMime(mimeType) {
+  return mimeType === 'application/xml' || mimeType === 'text/xml' || mimeType.endsWith('+xml');
+}
+
+/**
  * file-type v17+ is ESM-only; load it dynamically and cache for use in CommonJS.
  * @returns {Promise<{ fileTypeFromFile: Function, fileTypeFromBuffer: Function }>}
  */
@@ -223,6 +278,33 @@ function getExpectedMimeTypesForExtension(ext) {
 }
 
 /**
+ * Checks if magic-byte detected content matches the filename extension (`ext`).
+ * Matches on extension first because detector MIME strings frequently mismatch
+ * MIME databases (e.g., `video/matroska` vs `video/x-matroska`),
+ * causing false rejections.
+ *
+ * @param {{ ext: string, mime: string }} detected
+ * @param {string} ext - Lowercase extension without dot.
+ * @param {string[]} expectedMimeTypes
+ * @returns {boolean}
+ */
+function contentMatchesExtension(detected, ext, expectedMimeTypes) {
+  if (sameFormatFamily(detected.ext.toLowerCase(), ext)) return true;
+
+  const detectedMime = normalizeMime(detected.mime);
+  if (expectedMimeTypes.includes(detectedMime)) return true;
+
+  // The other direction: mime-db may list this extension under the detected
+  // type even when the reverse index built from it did not connect the two.
+  const registered = mimeDb[detectedMime]?.extensions;
+  if (registered?.some(candidate => sameFormatFamily(candidate.toLowerCase(), ext))) return true;
+
+  if (isXmlMime(detectedMime) && expectedMimeTypes.some(isXmlMime)) return true;
+
+  return false;
+}
+
+/**
  * Validate MIME type from a buffer (magic bytes) against the file extension.
  * Used for S3 stream upload to prevent spoofing (e.g. .exe renamed to .jpg).
  * @param {Buffer} buffer - First bytes of the file (at least 4KB recommended)
@@ -273,9 +355,9 @@ async function validateMimeTypeFromBuffer(buffer, filename) {
       }
     }
 
-    if (!normalizedExpected.includes(normalizedActual)) {
+    if (!contentMatchesExtension(fileType, ext, normalizedExpected)) {
       logger.warn(
-        { filename, detected: fileType.mime, expected },
+        { filename, detected: fileType.mime, detectedExtension: fileType.ext, expected },
         '[SECURITY] MIME spoof: content does not match extension'
       );
       return { valid: false, error: `File content does not match extension .${ext}` };

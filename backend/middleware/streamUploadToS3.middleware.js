@@ -3,9 +3,11 @@
  * directly through encryption to S3 (no temp dir, minimal RAM).
  * Use only when STORAGE_DRIVER=s3.
  *
- * Because validation (parentId, permissions, file-name checks) runs in the
- * controller *after* the stream finishes, every successful S3 put is tracked
- * on `req._s3UploadedKeys`.  A one-time `res.on('finish', …)` listener
+ * Content is checked against the file's extension from its first few KB.
+ *
+ * Because the rest of validation (parentId, permissions, file-name checks) runs
+ * in the controller *after* the stream finishes, every successful S3 put is
+ * tracked on `req._s3UploadedKeys`.  A one-time `res.on('finish', …)` listener
  * automatically deletes those objects when the response is an error (4xx/5xx)
  * and the controller hasn't already consumed them — preventing orphan files.
  */
@@ -46,26 +48,52 @@ function isMimeRejection(err) {
 }
 
 /**
+ * Errors a stream raises because something else already broke.
+ */
+const SHRAPNEL_CODES = new Set(['ERR_STREAM_PREMATURE_CLOSE', 'ABORT_ERR']);
+
+/**
+ * @param {Error} err
+ * @returns {boolean} whether this error is the wreckage of an earlier failure
+ */
+function isShrapnel(err) {
+  return SHRAPNEL_CODES.has(err?.code);
+}
+
+/** Storage refusing the object is ours to own, not the client's to fix. */
+const STORAGE_UNAVAILABLE = 'Storage is temporarily unavailable. Please try again.';
+
+/**
+ * @param {Error} err
+ * @returns {boolean} whether the storage backend, not the request, is at fault
+ */
+function isStorageFault(err) {
+  return err?.$fault === 'server' || err?.$metadata?.httpStatusCode >= 500;
+}
+
+/**
  * Turns a stream error into something worth showing the user.
- * Premature-close errors are the shrapnel of an earlier failure, not a reason.
  * @param {Error} err
  * @returns {string}
  */
 function describeFailure(err) {
+  // The backend's own words name its internals ("The service is unavailable").
+  if (isStorageFault(err)) return STORAGE_UNAVAILABLE;
   const message = err?.message;
-  if (!message || err?.code === 'ERR_STREAM_PREMATURE_CLOSE') return 'Upload failed';
+  if (!message || isShrapnel(err)) return 'Upload failed';
   return message;
 }
 
 /**
- * Maps a rejection reason to the status that describes it — a rejected file is
- * the client's problem to fix, so none of these are 500s.
+ * Maps a rejection reason to the status that describes it. A refused file is
+ * the client's problem to fix but storage being down is not.
  * @param {string} reason
  * @returns {number}
  */
 function uploadFailureStatus(reason) {
   if (reason.includes(MIME_REJECTION_MARKER)) return 415;
   if (reason.includes('File too large')) return 413;
+  if (reason === STORAGE_UNAVAILABLE) return 503;
   return 400;
 }
 
@@ -103,13 +131,36 @@ function streamUploadToS3(singleOrBulk = 'single') {
         let pending = 0;
         let fileIndex = 0;
 
+        // Set once the client hangs up, which is the point after which there is
+        // no one to answer and nothing worth recording.
+        let clientGone = false;
+
         // Busboy can still error after the last part settled; only the first
         // outcome may hand control on.
         let handedOff = false;
         const handOff = err => {
-          if (handedOff) return;
+          if (handedOff || clientGone) return;
           handedOff = true;
           next(err);
+        };
+
+        /**
+         * Responds immediately (415) on failed magic-byte checks for single uploads.
+         * Closes the socket without draining the remaining body, aborting the client's
+         * transfer early to save bandwidth.
+         */
+        let stoppedEarly = false;
+        const rejectWithoutReadingRest = reason => {
+          if (stoppedEarly) return;
+          stoppedEarly = true;
+          req.unpipe(busboy);
+          busboy.destroy();
+          req.body = fields;
+          req.streamedUpload = null;
+          req.streamedUploadFailures = fileFailures;
+          const err = new Error(reason);
+          err.status = uploadFailureStatus(reason);
+          handOff(err);
         };
 
         // Track every S3 key we successfully PUT so we can delete them if the
@@ -178,15 +229,17 @@ function streamUploadToS3(singleOrBulk = 'single') {
            * end and the request would never answer. Draining the part keeps busboy
            * moving on to the remaining files.
            */
-          const failFile = (err, message) => {
-            if (failed) return;
+          const failFile = (err, message, level = 'warn') => {
+            if (failed || clientGone) return;
             failed = true;
             hadError = true;
-            fileFailures.push({ fileName: filename, error: describeFailure(err), index: currentIndex });
-            logger.warn({ err, storageName, filename }, message);
+            const reason = describeFailure(err);
+            fileFailures.push({ fileName: filename, error: reason, index: currentIndex });
+            logger[level]({ err, storageName, filename }, message);
             if (!mimeCheckStream.destroyed) mimeCheckStream.destroy(err);
             fileStream.unpipe(mimeCheckStream);
             fileStream.resume();
+            if (singleOrBulk === 'single') rejectWithoutReadingRest(reason);
           };
 
           let totalBytes = 0;
@@ -197,25 +250,60 @@ function streamUploadToS3(singleOrBulk = 'single') {
             }
           });
 
+          // Set when the chain down without a reason of its own, so the put
+          // which is holding the real one gets to speak first.
+          let shrapnel = null;
+
           fileStream.pipe(mimeCheckStream);
           // pipeline (not pipe) so a rejected file tears the whole chain down and
           // the S3 put rejects instead of hanging on a stream that stopped early.
-          pipeline(mimeCheckStream, counterStream, encryptStream).catch(err =>
+          const chainSettled = pipeline(mimeCheckStream, counterStream, encryptStream).catch(err => {
+            // When the destination dies it destroys the body it was reading, and
+            // the chain reports that teardown as an abort. Racing to record it
+            // would bury the storage error behind "The operation was aborted"
+            // and answer 400 for an outage so the put settles a tick later and
+            // knows what actually happened.
+            if (isShrapnel(err)) {
+              shrapnel = err;
+              return;
+            }
             failFile(
               err,
               isMimeRejection(err) ? '[StreamUpload] MIME validation failed' : '[StreamUpload] Upload stream failed'
-            )
-          );
+            );
+          });
 
           fileStream.on('error', err => failFile(err, '[StreamUpload] File stream error'));
 
-          storage
-            .putStream(storageName, encryptStream)
-            .then(() => {
-              if (failed) {
-                // The put beat the rejection to the finish line; don't leave the
-                // object behind for a file we are refusing.
+          // Both outcomes as values, so the verdict below waits for each. A put
+          // can report success before the chain's abort has surfaced, and
+          // judging on whichever landed first is how a truncated file gets
+          // written to the database as a whole one.
+          const putSettled = storage.putStream(storageName, encryptStream).then(
+            () => null,
+            err => err
+          );
+
+          Promise.all([putSettled, chainSettled])
+            .then(([putError]) => {
+              if (clientGone) {
+                // No row will be written for a request nobody is waiting on, so
+                // anything that did reach storage is already an orphan.
+                if (!putError) cleanupS3Keys([storageName]);
+                return;
+              }
+              if (putError) {
+                // A file we already rejected drags the put down with it, and
+                // failFile keeps the first reason.
+                failFile(putError, '[StreamUpload] Upload failed', 'error');
+                return;
+              }
+              if (failed || shrapnel) {
+                // Either the put beat the rejection to the finish line, or it
+                // called a body that stopped early a success. Neither is a file
+                // worth keeping, and an object left behind for one is an orphan.
                 cleanupS3Keys([storageName]);
+                if (shrapnel) failFile(shrapnel, '[StreamUpload] Upload stream ended early');
                 return;
               }
               const size = getByteCount();
@@ -230,23 +318,26 @@ function streamUploadToS3(singleOrBulk = 'single') {
                 index: currentIndex,
               };
             })
-            .catch(err => {
-              // A file we already rejected drags the put down with it; the real
-              // reason is the one recorded by failFile.
-              if (failed) return;
-              hadError = true;
-              fileFailures.push({ fileName: filename, error: describeFailure(err), index: currentIndex });
-              logger.error({ err, storageName }, '[StreamUpload] Upload failed');
-            })
             .finally(() => {
               pending -= 1;
               checkDone();
             });
         });
 
-        // If the client aborts the request, stop processing further and let existing streams unwind.
+        // A cancelled upload is not a failure to report.
         req.on('aborted', () => {
-          logger.warn('[StreamUpload] Request aborted by client');
+          if (clientGone) return;
+          clientGone = true;
+          logger.info('[StreamUpload] Upload cancelled by the client');
+
+          // The response will never finish, so the listener that normally sweeps
+          // these never runs. Whatever already reached storage has no request
+          // left to claim it.
+          if (req._s3UploadedKeys?.length > 0) {
+            cleanupS3Keys(req._s3UploadedKeys);
+            req._s3UploadedKeys = [];
+          }
+
           try {
             busboy.destroy(new Error('Request aborted'));
           } catch {
@@ -292,6 +383,9 @@ function streamUploadToS3(singleOrBulk = 'single') {
         });
 
         busboy.on('error', err => {
+          // This is the parser noticing the body stopped mid-part,
+          // which is what cancelling looks like from here.
+          if (clientGone) return;
           logger.error({ err }, '[StreamUpload] Busboy error');
           handOff(err);
         });

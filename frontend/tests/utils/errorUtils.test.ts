@@ -105,6 +105,40 @@ describe('extractXhrErrorMessage', () => {
     );
   });
 
+  /**
+   * A server that refuses an upload early answers and closes while the browser
+   * is still sending, so the reply is often gone by the time it is read. What
+   * survives is a bare status — and "Upload failed:" trailing an empty status
+   * text tells the reader strictly less than the status code does.
+   */
+  describe('when no reason survives the response', () => {
+    it('explains a dropped connection rather than showing a dangling colon', () => {
+      expect(extractXhrErrorMessage(xhr({ status: 0, statusText: '', responseText: '' }))).toBe(
+        'Upload failed. The connection closed before the server replied.'
+      );
+    });
+
+    it('reads the status code when there is no reason phrase', () => {
+      expect(extractXhrErrorMessage(xhr({ status: 503, statusText: '', responseText: '' }))).toBe(
+        'Storage is temporarily unavailable. Please try again.'
+      );
+      expect(extractXhrErrorMessage(xhr({ status: 415, statusText: '', responseText: '' }))).toBe(
+        "This file's content does not match its extension."
+      );
+      expect(extractXhrErrorMessage(xhr({ status: 400, statusText: '', responseText: '' }))).toBe(
+        'Invalid file or request.'
+      );
+    });
+
+    it("still prefers the server's own words when they arrived", () => {
+      expect(
+        extractXhrErrorMessage(
+          xhr({ status: 503, statusText: '', responseText: '{"message":"Storage is temporarily unavailable."}' })
+        )
+      ).toBe('Storage is temporarily unavailable.');
+    });
+  });
+
   describe('413 responses', () => {
     it('explains the storage limit rather than showing raw status text', () => {
       expect(extractXhrErrorMessage(xhr({ status: 413, statusText: 'Payload Too Large', responseText: '' }))).toBe(

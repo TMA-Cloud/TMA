@@ -531,8 +531,14 @@ export async function deleteOrphans(payload: {
   return apiPost<OrphanDeleteResult>('/api/user/orphans/delete', payload);
 }
 
-export async function checkUploadStorage(fileSize: number): Promise<{ allowed: true }> {
-  return apiPost<{ allowed: true }>('/api/files/upload/check', { fileSize });
+/** A file's opening bytes, base64, for the pre-upload content check. */
+export interface UploadSample {
+  name: string;
+  head: string;
+}
+
+export async function checkUploadStorage(fileSize: number, samples: UploadSample[] = []): Promise<{ allowed: true }> {
+  return apiPost<{ allowed: true }>('/api/files/upload/check', { fileSize, samples });
 }
 
 export async function downloadFile(id: string, fallbackFilename?: string): Promise<void> {

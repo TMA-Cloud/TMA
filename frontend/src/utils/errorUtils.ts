@@ -36,6 +36,19 @@ export function getErrorMessage(error: unknown, fallback = 'An error occurred'):
  */
 const UPLOAD_FAILED_PREFIX = 'Upload failed: ';
 
+/**
+ * What a status code means, for when nothing more specific survived.
+ */
+function meaningOfStatus(status: number): string {
+  if (status === 0) return 'Upload failed. The connection closed before the server replied.';
+  if (status === 413) return 'File too large or storage limit exceeded.';
+  if (status === 415) return "This file's content does not match its extension.";
+  if (status === 503) return 'Storage is temporarily unavailable. Please try again.';
+  if (status >= 500) return 'Server error. Please try again later.';
+  if (status >= 400) return 'Invalid file or request.';
+  return 'Upload failed.';
+}
+
 export function extractXhrErrorMessage(xhr: XMLHttpRequest): string {
   let errorMessage = `${UPLOAD_FAILED_PREFIX}${xhr.statusText}`;
 
@@ -55,19 +68,12 @@ export function extractXhrErrorMessage(xhr: XMLHttpRequest): string {
       }
     }
   } catch {
-    // Use status-specific defaults when parsing fails
-    if (xhr.status === 413) {
-      errorMessage = 'File too large or storage limit exceeded.';
-    } else if (xhr.status === 400) {
-      errorMessage = 'Invalid file or request.';
-    } else if (xhr.status >= 500) {
-      errorMessage = 'Server error. Please try again later.';
-    }
+    errorMessage = meaningOfStatus(xhr.status);
   }
 
-  // For 413, never show raw status text; use a clear storage-limit message if we have no body message
-  if (xhr.status === 413 && (errorMessage.startsWith(UPLOAD_FAILED_PREFIX) || !errorMessage.trim())) {
-    errorMessage = 'File too large or storage limit exceeded.';
+  const danglingPrefix = errorMessage.trim() === UPLOAD_FAILED_PREFIX.trim();
+  if (!errorMessage.trim() || danglingPrefix || (xhr.status === 413 && errorMessage.startsWith(UPLOAD_FAILED_PREFIX))) {
+    errorMessage = meaningOfStatus(xhr.status);
   }
 
   return errorMessage;

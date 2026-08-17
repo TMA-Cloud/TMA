@@ -159,6 +159,19 @@ function serializeRes(res) {
 }
 
 /**
+ * Whether the client gave up before the response was written. Cancelling a
+ * large upload lands here, and the status code on such a response is fiction
+ * nothing was ever sent, so it still holds Node's default 200.
+ *
+ * @param {import('http').IncomingMessage} req
+ * @param {import('http').ServerResponse} res
+ * @returns {boolean}
+ */
+function wasAbandoned(req, res) {
+  return !res.writableEnded && (req.destroyed === true || req.aborted === true);
+}
+
+/**
  * Base pino logger configuration
  *
  * Features:
@@ -286,6 +299,9 @@ const httpLogger = pinoHttp({
 
   // Custom log message format
   customLogLevel: (req, res, err) => {
+    // A client that hung up never received a status, so the one on the response
+    // is just the default nobody overwrote.
+    if (wasAbandoned(req, res)) return 'info';
     if (res.statusCode >= 500 || err) return 'error';
     if (res.statusCode >= 400) return 'warn';
     return 'info';
@@ -293,6 +309,7 @@ const httpLogger = pinoHttp({
 
   // Custom success message
   customSuccessMessage: (req, res) => {
+    if (wasAbandoned(req, res)) return `${req.method} ${req.url} aborted by client`;
     return `${req.method} ${req.url} ${res.statusCode}`;
   },
 
