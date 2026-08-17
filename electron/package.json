@@ -10,8 +10,18 @@
     "client"
   ],
   "author": "ZIDAN44",
-  "license": "ISC",
+  "license": "MIT",
   "main": "src/main/index.cjs",
+  "engines": {
+    "node": "^22 || ^24 || >=26"
+  },
+  "devEngines": {
+    "runtime": {
+      "name": "node",
+      "version": "^22 || ^24 || >=26",
+      "onFail": "error"
+    }
+  },
   "dependencies": {
     "mime-types": "^3.0.2"
   },

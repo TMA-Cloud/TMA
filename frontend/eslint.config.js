@@ -3,6 +3,8 @@ import globals from 'globals';
 import reactHooks from 'eslint-plugin-react-hooks';
 import reactRefresh from 'eslint-plugin-react-refresh';
 import tseslint from 'typescript-eslint';
+import prettier from 'eslint-plugin-prettier';
+import prettierConfig from 'eslint-config-prettier';
 import { defineConfig } from 'eslint/config';
 import house from './eslint-rules/house.js';
 
@@ -16,6 +18,9 @@ export default defineConfig([
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
+  // Turns off the rules that would otherwise fight Prettier. Has to come after
+  // the two recommended sets so it can switch their formatting rules back off.
+  prettierConfig,
   {
     files: ['**/*.{ts,tsx}'],
     languageOptions: {
@@ -31,10 +36,14 @@ export default defineConfig([
     plugins: {
       'react-hooks': reactHooks,
       'react-refresh': reactRefresh,
+      prettier,
       house,
     },
     rules: {
       ...reactHooks.configs.recommended.rules,
+      // Options come from .prettierrc rather than being repeated here, so the
+      // CLI, the editor and this rule cannot drift apart.
+      'prettier/prettier': 'error',
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
       'house/toast-copy': 'error',
       'house/no-smart-apostrophe': 'error',

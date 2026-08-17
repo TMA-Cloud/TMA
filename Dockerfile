@@ -14,7 +14,7 @@
 # -----------------------------------------------------------------------------
 # Stage 1: Build Frontend (React + Vite)
 # -----------------------------------------------------------------------------
-FROM node:25-alpine AS frontend-builder
+FROM node:26-alpine AS frontend-builder
 
 # Set working directory
 WORKDIR /app/frontend
@@ -36,7 +36,7 @@ RUN npm run build
 # -----------------------------------------------------------------------------
 # Stage 2: Install Backend Dependencies
 # -----------------------------------------------------------------------------
-FROM node:25-alpine AS backend-builder
+FROM node:26-alpine AS backend-builder
 
 WORKDIR /app/backend
 
@@ -50,7 +50,7 @@ RUN npm ci --only=production && \
 # -----------------------------------------------------------------------------
 # Stage 3: Production Image
 # -----------------------------------------------------------------------------
-FROM node:25-alpine AS production
+FROM node:26-alpine AS production
 
 # Build argument for version (passed from Makefile)
 ARG VERSION

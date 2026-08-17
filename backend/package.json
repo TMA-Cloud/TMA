@@ -1,5 +1,6 @@
 {
   "name": "tma-cloud-backend",
+  "private": true,
   "version": "2.0.23",
   "description": "Backend for TMA Cloud",
   "main": "server.js",
@@ -33,8 +34,18 @@
     "backend"
   ],
   "author": "ZIDAN44",
-  "license": "ISC",
+  "license": "MIT",
   "type": "module",
+  "engines": {
+    "node": "^22 || ^24 || >=26"
+  },
+  "devEngines": {
+    "runtime": {
+      "name": "node",
+      "version": "^22 || ^24 || >=26",
+      "onFail": "error"
+    }
+  },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1094.0",
     "@aws-sdk/lib-storage": "^3.1094.0",
