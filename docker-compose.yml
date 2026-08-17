@@ -72,7 +72,7 @@ services:
 
   # Redis Cache
   redis:
-    image: redis:latest
+    image: redis:8-alpine
     container_name: tma-cloud-redis
     restart: unless-stopped
     command: >
