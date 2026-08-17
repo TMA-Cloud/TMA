@@ -152,25 +152,17 @@ async function runMiddleware(middleware, req = mockReq(), res = mockRes()) {
 }
 
 /**
- * Run a callback inside the CLS request context.
+ * Run a callback inside the request context.
  *
  * Anything that calls setUserId/setAccountContext (the auth middleware, the
- * audit logger) throws outside an active namespace, because in production
+ * audit logger) throws outside an active context, because in production
  * requestIdMiddleware has always established one first.
  *
  * @param {Function} fn - Callback; its resolved value is returned.
  */
 async function withRequestContext(fn) {
-  const { getNamespace } = await import('../../middleware/requestId.middleware.js');
-  const namespace = getNamespace();
-  return new Promise((resolve, reject) => {
-    namespace.run(() => {
-      namespace.set('requestId', 'test-request-id');
-      Promise.resolve()
-        .then(() => fn())
-        .then(resolve, reject);
-    });
-  });
+  const { runInRequestContext } = await import('../../middleware/requestId.middleware.js');
+  return runInRequestContext(async () => fn(), { requestId: 'test-request-id' });
 }
 
 /**

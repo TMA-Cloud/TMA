@@ -16,14 +16,37 @@ const BACKUP_CODE_REGENERATION_COOLDOWN_MS = 5 * 60 * 1000;
  * @returns {Promise<{enabled: boolean, secret: string|null}>}
  */
 async function getMfaStatus(userId) {
-  const result = await pool.query('SELECT mfa_enabled, mfa_secret FROM users WHERE id = $1', [userId]);
+  const result = await pool.query('SELECT mfa_enabled, mfa_secret, mfa_last_time_step FROM users WHERE id = $1', [
+    userId,
+  ]);
   if (result.rows.length === 0) {
     return null;
   }
   return {
     enabled: result.rows[0].mfa_enabled || false,
     secret: result.rows[0].mfa_secret || null,
+    // BIGINT comes back as a string from pg; the caller compares it numerically.
+    lastTimeStep: result.rows[0].mfa_last_time_step === null ? null : Number(result.rows[0].mfa_last_time_step),
   };
+}
+
+/**
+ * Claim a TOTP time step, rejecting one already used.
+ *
+ * Single conditional UPDATE on purpose: a separate read then write would let
+ * concurrent logins with the same stolen code all pass.
+ *
+ * @param {string} userId - User ID
+ * @param {number} timeStep - Time step the presented code belongs to
+ * @returns {Promise<boolean>} False if this step (or a later one) was already used
+ */
+async function consumeMfaTimeStep(userId, timeStep) {
+  const result = await pool.query(
+    `UPDATE users SET mfa_last_time_step = $2
+     WHERE id = $1 AND (mfa_last_time_step IS NULL OR mfa_last_time_step < $2)`,
+    [userId, timeStep]
+  );
+  return result.rowCount > 0;
 }
 
 /**
@@ -34,7 +57,13 @@ async function getMfaStatus(userId) {
  * @returns {Promise<void>}
  */
 async function setMfaSecret(userId, secret, enabled = false) {
-  await pool.query('UPDATE users SET mfa_secret = $1, mfa_enabled = $2 WHERE id = $3', [secret, enabled, userId]);
+  // Reset the replay counter: steps from the old secret mean nothing here, and
+  // a leftover high value would reject valid codes.
+  await pool.query('UPDATE users SET mfa_secret = $1, mfa_enabled = $2, mfa_last_time_step = NULL WHERE id = $3', [
+    secret,
+    enabled,
+    userId,
+  ]);
 
   // Invalidate user cache
   await deleteCache(cacheKeys.userById(userId));
@@ -66,7 +95,9 @@ async function enableMfa(userId) {
 async function disableMfa(userId) {
   // Delete all backup codes when disabling MFA
   await deleteBackupCodes(userId);
-  await pool.query('UPDATE users SET mfa_enabled = FALSE, mfa_secret = NULL WHERE id = $1', [userId]);
+  await pool.query('UPDATE users SET mfa_enabled = FALSE, mfa_secret = NULL, mfa_last_time_step = NULL WHERE id = $1', [
+    userId,
+  ]);
 
   // Invalidate user cache
   await deleteCache(cacheKeys.userById(userId));
@@ -84,18 +115,20 @@ async function getMfaSecret(userId) {
 }
 
 /**
- * Generate backup codes for a user
- * @param {string} userId - User ID
- * @param {number} count - Number of codes to generate (default: 10)
- * @returns {Promise<string[]>} Array of plain text backup codes
+ * Mint plain codes and their hashes. No database access.
+ *
+ * Hashing stays outside the transaction below: ten bcrypt rounds take about a
+ * second, which is a long time to hold a connection and the rows it locks.
+ *
+ * @param {number} count
+ * @returns {Promise<{codes: string[], codeHashes: string[]}>}
  */
-async function generateBackupCodes(userId, count = 10) {
+async function buildBackupCodes(count) {
   // Character set excluding ambiguous characters (0, O, 1, I, l)
   // Using uppercase letters and numbers for better readability
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   const codeLength = 8;
 
-  // Generate all plain text codes first
   const codes = [];
   for (let i = 0; i < count; i++) {
     let code = '';
@@ -108,28 +141,73 @@ async function generateBackupCodes(userId, count = 10) {
   }
 
   // Hash all codes in parallel for better performance
-  const hashPromises = codes.map(code => bcrypt.hash(code, 10));
-  const codeHashes = await Promise.all(hashPromises);
+  const codeHashes = await Promise.all(codes.map(code => bcrypt.hash(code, 10)));
+  return { codes, codeHashes };
+}
 
-  // Store all hashed codes in database
+/** Insert hashed codes using a caller-supplied client, inside its transaction. */
+async function insertBackupCodes(client, userId, codeHashes) {
+  for (const hash of codeHashes) {
+    await client.query('INSERT INTO mfa_backup_codes(id, user_id, code_hash) VALUES($1, $2, $3)', [
+      generateId(16),
+      userId,
+      hash,
+    ]);
+  }
+}
+
+/**
+ * Run `work` in a transaction, rolling back if it throws.
+ * @param {(client: import('pg').PoolClient) => Promise<void>} work
+ */
+async function inTransaction(work) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-
-    for (const hash of codeHashes) {
-      const id = generateId(16);
-      await client.query('INSERT INTO mfa_backup_codes(id, user_id, code_hash) VALUES($1, $2, $3)', [id, userId, hash]);
-    }
-
+    await work(client);
     await client.query('COMMIT');
-    logger.info({ userId, count }, 'Backup codes generated');
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;
   } finally {
     client.release();
   }
+}
 
+/**
+ * Generate backup codes for a user
+ * @param {string} userId - User ID
+ * @param {number} count - Number of codes to generate (default: 10)
+ * @returns {Promise<string[]>} Array of plain text backup codes
+ */
+async function generateBackupCodes(userId, count = 10) {
+  const { codes, codeHashes } = await buildBackupCodes(count);
+
+  await inTransaction(client => insertBackupCodes(client, userId, codeHashes));
+
+  logger.info({ userId, count }, 'Backup codes generated');
+  return codes;
+}
+
+/**
+ * Swap a user's backup codes for a fresh set.
+ *
+ * Delete and insert share one transaction: if minting the replacements fails
+ * partway, the user keeps the codes they had rather than being left with none.
+ *
+ * @param {string} userId - User ID
+ * @param {number} count - Number of codes to generate (default: 10)
+ * @returns {Promise<string[]>} Array of plain text backup codes
+ */
+async function replaceBackupCodes(userId, count = 10) {
+  const { codes, codeHashes } = await buildBackupCodes(count);
+
+  await inTransaction(async client => {
+    await client.query('DELETE FROM mfa_backup_codes WHERE user_id = $1', [userId]);
+    await insertBackupCodes(client, userId, codeHashes);
+  });
+
+  logger.info({ userId, count }, 'Backup codes replaced');
   return codes;
 }
 
@@ -153,8 +231,16 @@ async function verifyAndConsumeBackupCode(userId, code) {
   for (const row of result.rows) {
     const match = await bcrypt.compare(code, row.code_hash);
     if (match) {
-      // Mark as used
-      await pool.query('UPDATE mfa_backup_codes SET used = TRUE, used_at = CURRENT_TIMESTAMP WHERE id = $1', [row.id]);
+      // Re-check `used` in the UPDATE itself: the row was read before the slow
+      // bcrypt compare, so a concurrent login could have spent it since.
+      const claimed = await pool.query(
+        'UPDATE mfa_backup_codes SET used = TRUE, used_at = CURRENT_TIMESTAMP WHERE id = $1 AND used = FALSE',
+        [row.id]
+      );
+      if (claimed.rowCount === 0) {
+        logger.warn({ userId }, 'Rejected reuse of an already-consumed backup code');
+        return false;
+      }
       logger.info({ userId }, 'Backup code consumed');
       return true;
     }
@@ -217,14 +303,25 @@ async function canRegenerateBackupCodes(userId) {
 }
 
 /**
- * Update the last backup code regeneration timestamp
+ * Claim the regeneration cooldown, stamping it only if it has expired.
+ *
+ * Same reason as the other claims here: checking the cooldown and stamping it
+ * separately lets concurrent requests both pass the check.
+ *
  * @param {string} userId - User ID
- * @returns {Promise<void>}
+ * @returns {Promise<boolean>} False if the cooldown is still running
  */
-async function updateLastBackupCodeRegeneration(userId) {
-  await pool.query('UPDATE users SET last_backup_code_regeneration = CURRENT_TIMESTAMP WHERE id = $1', [userId]);
+async function claimBackupCodeRegeneration(userId) {
+  const result = await pool.query(
+    `UPDATE users SET last_backup_code_regeneration = CURRENT_TIMESTAMP
+     WHERE id = $1 AND (last_backup_code_regeneration IS NULL
+       OR last_backup_code_regeneration <= CURRENT_TIMESTAMP - make_interval(secs => $2))`,
+    [userId, BACKUP_CODE_REGENERATION_COOLDOWN_MS / 1000]
+  );
+
   // Invalidate user cache
   await deleteCache(cacheKeys.userById(userId));
+  return result.rowCount > 0;
 }
 
 export {
@@ -233,10 +330,12 @@ export {
   enableMfa,
   disableMfa,
   getMfaSecret,
+  consumeMfaTimeStep,
   generateBackupCodes,
+  replaceBackupCodes,
   verifyAndConsumeBackupCode,
   getRemainingBackupCodesCount,
   deleteBackupCodes,
   canRegenerateBackupCodes,
-  updateLastBackupCodeRegeneration,
+  claimBackupCodeRegeneration,
 };
