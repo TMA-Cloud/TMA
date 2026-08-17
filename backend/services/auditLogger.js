@@ -2,7 +2,7 @@ import { PgBoss } from 'pg-boss';
 
 import { logger } from '../config/logger.js';
 import { getRequestId, getUserId, getAccountContext } from '../middleware/requestId.middleware.js';
-import { createPool, buildPoolConfig } from '../config/db.js';
+import { createPool, buildPoolConfig, pgbossSchema } from '../config/db.js';
 
 import { AUDIT_QUEUE, AUDIT_QUEUE_OPTIONS } from './auditQueue.js';
 
@@ -31,14 +31,13 @@ async function initializeAuditQueue() {
 
   try {
     // Ensure schema exists before pg-boss migrations run
-    const schema = process.env.PGBOSS_SCHEMA || 'pgboss';
     const pool = createPool();
-    await pool.query(`CREATE SCHEMA IF NOT EXISTS "${schema}"`);
+    await pool.query(`CREATE SCHEMA IF NOT EXISTS ${pgbossSchema}`);
     await pool.end();
 
     boss = new PgBoss({
       ...buildPoolConfig(),
-      schema,
+      schema: pgbossSchema,
       // Connection pool settings
       max: 10,
       migrate: true, // ensure schema/tables are built

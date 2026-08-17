@@ -24,7 +24,7 @@ import { PgBoss } from 'pg-boss';
 
 import { incrementEventsProcessed, incrementEventsFailed, recordProcessingDuration } from './services/metrics.js';
 import { createRequestLogger } from './config/logger.js';
-import { createPool, buildPoolConfig } from './config/db.js';
+import { createPool, buildPoolConfig, pgbossSchema } from './config/db.js';
 import { AUDIT_QUEUE, AUDIT_QUEUE_OPTIONS } from './services/auditQueue.js';
 
 const logger = createRequestLogger({ service: 'audit-worker' });
@@ -173,15 +173,14 @@ async function initializeWorker() {
     logger.info('Starting audit worker...');
 
     // Ensure schema exists before pg-boss migrations run
-    const schema = process.env.PGBOSS_SCHEMA || 'pgboss';
     const schemaPool = createPool();
-    await schemaPool.query(`CREATE SCHEMA IF NOT EXISTS "${schema}"`);
+    await schemaPool.query(`CREATE SCHEMA IF NOT EXISTS ${pgbossSchema}`);
     await schemaPool.end();
 
     // Initialize pg-boss
     boss = new PgBoss({
       ...buildPoolConfig(),
-      schema,
+      schema: pgbossSchema,
       max: 10,
       migrate: true,
     });

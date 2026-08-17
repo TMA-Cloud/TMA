@@ -1,7 +1,7 @@
 import promClient from 'prom-client';
 
 import { logger } from '../config/logger.js';
-import pool from '../config/db.js';
+import pool, { pgbossSchema } from '../config/db.js';
 
 // Create a registry for metrics
 const register = new promClient.Registry();
@@ -147,18 +147,17 @@ function recordProcessingDuration(durationSeconds) {
 async function updateQueueMetrics() {
   try {
     // pg-boss v10+ removed getQueueSize; query job table directly
-    const schema = process.env.PGBOSS_SCHEMA || 'pgboss';
     const queueName = 'audit-events';
 
     const pendingQuery = `
       SELECT COUNT(*)::int AS count
-      FROM "${schema}".job
+      FROM ${pgbossSchema}.job
       WHERE name = $1
         AND state IN ('created', 'retry')
     `;
     const failedQuery = `
       SELECT COUNT(*)::int AS count
-      FROM "${schema}".job
+      FROM ${pgbossSchema}.job
       WHERE name = $1
         AND state = 'failed'
     `;

@@ -20,6 +20,12 @@ function buildPoolConfig(overrides = {}) {
   };
 }
 
+/**
+ * The pg-boss schema as a quoted SQL identifier, resolved once so every
+ * consumer targets the same schema.
+ */
+const pgbossSchema = `"${(process.env.PGBOSS_SCHEMA || 'pgboss').replace(/"/g, '""')}"`;
+
 /** Create a new pg Pool with the shared env-driven config. */
 function createPool(overrides = {}) {
   return new Pool(buildPoolConfig(overrides));
@@ -53,5 +59,5 @@ pool.connect((err, client, release) => {
   });
 });
 
-export { createPool, buildPoolConfig };
+export { createPool, buildPoolConfig, pgbossSchema };
 export default pool;
