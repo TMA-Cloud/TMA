@@ -49,7 +49,7 @@ services:
     environment:
       - POSTGRES_USER=${DB_USER:-postgres}
       - POSTGRES_PASSWORD=${DB_PASSWORD:-postgres}
-      - POSTGRES_DB=${DB_NAME:-tma_storage}
+      - POSTGRES_DB=${DB_NAME:-tma_cloud_storage}
       - POSTGRES_INITDB_ARGS=--encoding=UTF8 --locale=C
     #ports:
       #- "127.0.0.1:5432:5432"
