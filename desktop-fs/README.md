@@ -12,7 +12,7 @@ the wiki: **Concepts → Architecture (Cloud Drive)** and
 
 ## Build
 
-Requires the .NET 9 SDK and WinFsp installed.
+Requires the .NET 10 SDK and WinFsp 2.1+ installed.
 
 ```powershell
 dotnet build -c Release      # dev build -> bin/Release/TmaCloudFs.exe
