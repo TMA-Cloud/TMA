@@ -65,3 +65,6 @@ paths.
 
 Server → client pushes (no `rid`): `{"push":"invalidate","path"?}` and
 `{"push":"mode","mode":"full"|"saveonly"}`.
+
+Every request carries the per-session `token`. The host receives it on stdin
+(`--token-stdin`) or in `TMA_CLOUD_FS_TOKEN`.

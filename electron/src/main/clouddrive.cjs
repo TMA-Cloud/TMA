@@ -323,6 +323,22 @@ function stopSse() {
   }
 }
 
+/**
+ * Compare a presented token against the session token in constant time, so the
+ * comparison itself reveals nothing about how much of a guess was right.
+ */
+function tokenMatches(presented) {
+  if (!_authToken || typeof presented !== 'string') return false;
+  const a = Buffer.from(presented, 'utf8');
+  const b = Buffer.from(_authToken, 'utf8');
+  // timingSafeEqual throws on a length mismatch, which would itself leak the
+  // length; hash both sides to a fixed width first.
+  return crypto.timingSafeEqual(
+    crypto.createHash('sha256').update(a).digest(),
+    crypto.createHash('sha256').update(b).digest()
+  );
+}
+
 async function handleLine(sock, line) {
   let msg;
   try {
@@ -341,7 +357,7 @@ async function handleLine(sock, line) {
   // Authenticate the caller: only our spawned host knows the per-session token.
   // This prevents any other local process that reaches the pipe from issuing
   // operations against the signed-in user's account.
-  if (!_authToken || msg.token !== _authToken) {
+  if (!tokenMatches(msg.token)) {
     reply({ ok: false, error: 'unauthorized' });
     return;
   }
@@ -420,8 +436,7 @@ function startCloudDrive(opts = {}) {
       const args = [
         '--pipe',
         _pipeName,
-        '--token',
-        _authToken,
+        '--token-stdin',
         '--mount',
         opts.mount || '*',
         '--label',
@@ -430,9 +445,19 @@ function startCloudDrive(opts = {}) {
       if (getMode() === 'saveOnly') args.push('--mode', 'saveonly');
       if (opts.debug) args.push('--debug');
 
-      // Don't log the token.
       log('spawning host:', exe, '--pipe', _pipeName, '--mount', opts.mount || '*');
-      _child = spawn(exe, args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
+      _child = spawn(exe, args, { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+
+      // The bridge token goes over stdin.
+      try {
+        // A host that exited before reading makes this fail; the 'exit'
+        // handler is what reports that, so there is nothing to do here.
+        _child.stdin.on('error', () => {});
+        _child.stdin.write(_authToken + '\n');
+        _child.stdin.end();
+      } catch (err) {
+        warn('could not hand the token to the host:', err.message);
+      }
 
       _child.on('error', err => done(new Error('failed to spawn filesystem host: ' + err.message)));
 

@@ -116,8 +116,7 @@ function hideFsHost() {
 
 /** The per-session token the host was told to present. */
 function hostToken() {
-  const args = currentHost().args;
-  return args[args.indexOf('--token') + 1];
+  return currentHost().stdinText().trim();
 }
 
 /** Send one bridge request and wait for its reply. */
@@ -201,8 +200,24 @@ describe('starting the drive', () => {
 
     expect(mountPoint).toBe('T:');
     expect(hosts[0].args).toEqual(
-      expect.arrayContaining(['--pipe', '--token', '--mount', 'Z:', '--label', 'My Cloud', '--mode', 'saveonly'])
+      expect.arrayContaining(['--pipe', '--token-stdin', '--mount', 'Z:', '--label', 'My Cloud', '--mode', 'saveonly'])
     );
+  });
+
+  it('hands the token to the host on stdin, never on the command line', async () => {
+    await mount();
+
+    // A command line is readable by any process running as this user, and the
+    // token alone is enough to drive the account through the bridge.
+    expect(hosts[0].args).not.toContain('--token');
+    expect(hosts[0].args.join(' ')).not.toContain(hostToken());
+    expect(hosts[0].stdinText()).toBe(hostToken() + '\n');
+    expect(hosts[0].stdinEnded).toBe(true);
+  });
+
+  it('gives the host a writable stdin to receive the token on', async () => {
+    await mount();
+    expect(hosts[0].options.stdio[0]).toBe('pipe');
   });
 
   it('lets Windows choose the drive letter by default', async () => {
@@ -344,6 +359,15 @@ describe('bridge authentication', () => {
     const sock = connect();
     const reply = await request(sock, { rid: 1, op: 'list', token: 'guessed' });
     expect(reply).toEqual({ rid: 1, ok: false, error: 'unauthorized' });
+  });
+
+  it('refuses a non-string token instead of throwing', async () => {
+    const sock = connect();
+    for (const token of [null, 42, ['x'], { toString: () => hostToken() }]) {
+      await expect(request(sock, { rid: 1, op: 'list', token })).resolves.toMatchObject({
+        error: 'unauthorized',
+      });
+    }
   });
 
   it('never reaches the backend for an unauthorised request', async () => {

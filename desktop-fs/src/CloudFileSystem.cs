@@ -1,11 +1,14 @@
 using System;
+using System.Buffers;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Security.AccessControl;
+using System.Security.Principal;
 using System.Text.Json;
+using System.Threading;
 using Fsp;
 using FileInfo = Fsp.Interop.FileInfo;
 using VolumeInfo = Fsp.Interop.VolumeInfo;
@@ -67,7 +70,31 @@ namespace TmaCloud.Fs
         // object, no DB row, no wasted quota). Set of full paths.
         private readonly ConcurrentDictionary<string, byte> _localEmpty =
             new ConcurrentDictionary<string, byte>(StringComparer.OrdinalIgnoreCase);
-        private byte[] _defaultSecurity;
+        private readonly byte[] _defaultSecurity;
+
+        /// <summary>
+        /// Security descriptor reported for every file and folder. The volume
+        /// holds one user's private storage, so only that user (plus SYSTEM and
+        /// Administrators) gets access. WinFsp's samples grant Everyone full
+        /// access, which on a shared machine would expose the user's documents.
+        /// </summary>
+        private static byte[] BuildDefaultSecurity()
+        {
+            string sddl = "O:BAG:BAD:P(A;;FA;;;SY)(A;;FA;;;BA)";
+            try
+            {
+                using var me = WindowsIdentity.GetCurrent();
+                var user = me.User;
+                if (user != null)
+                    sddl = $"O:{user.Value}G:{user.Value}D:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;FA;;;{user.Value})";
+            }
+            catch (Exception) { /* keep the restrictive fallback */ }
+
+            var sd = new RawSecurityDescriptor(sddl);
+            var bytes = new byte[sd.BinaryLength];
+            sd.GetBinaryForm(bytes, 0);
+            return bytes;
+        }
 
         // Volume size reported to Windows, refreshed from the backend's real
         // storage quota/usage (GET /api/user/storage). GetVolumeInfo is called
@@ -85,6 +112,7 @@ namespace TmaCloud.Fs
         private long _freeSize = SyntheticCapacity;
         private System.Threading.Timer _statsTimer;
         private int _refreshingStats;
+        private volatile bool _disposed;
 
         /// <summary>
         /// "Save-only" mode: when true, reading file CONTENT from the drive is
@@ -110,9 +138,7 @@ namespace TmaCloud.Fs
             Directory.CreateDirectory(_stagingDir);
             CleanStagingDir();
 
-            var sd = new RawSecurityDescriptor("O:BAG:BAD:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;FA;;;WD)");
-            _defaultSecurity = new byte[sd.BinaryLength];
-            sd.GetBinaryForm(_defaultSecurity, 0);
+            _defaultSecurity = BuildDefaultSecurity();
 
             // Backend-driven cache invalidation (via the SSE event stream that
             // Electron forwards). A push clears either one folder or everything,
@@ -153,6 +179,7 @@ namespace TmaCloud.Fs
         /// <summary>Fetch real quota/usage and update the cached volume size.</summary>
         private void RefreshStats(object state)
         {
+            if (_disposed) return;
             if (System.Threading.Interlocked.Exchange(ref _refreshingStats, 1) == 1) return;
             try
             {
@@ -167,7 +194,7 @@ namespace TmaCloud.Fs
                     long free = res.TryGetProperty("free", out var f) && f.ValueKind != JsonValueKind.Null
                         ? ParseLong(f)
                         : Math.Max(0, total - used);
-                    if (total > 0) { _totalSize = total; _freeSize = Math.Max(0, free); }
+                    if (total > 0) { Volatile.Write(ref _totalSize, total); Volatile.Write(ref _freeSize, Math.Max(0, free)); }
                 }
                 else
                 {
@@ -175,8 +202,8 @@ namespace TmaCloud.Fs
                     // STABLE synthetic capacity. Total stays constant so the
                     // Explorer capacity bar doesn't jitter; free shrinks with
                     // usage and is floored so saves are never blocked.
-                    _totalSize = SyntheticCapacity;
-                    _freeSize = Math.Max(MinFreeFloor, SyntheticCapacity - used);
+                    Volatile.Write(ref _totalSize, SyntheticCapacity);
+                    Volatile.Write(ref _freeSize, Math.Max(MinFreeFloor, SyntheticCapacity - used));
                 }
             }
             catch { /* keep previous values */ }
@@ -205,8 +232,8 @@ namespace TmaCloud.Fs
         public override int GetVolumeInfo(out VolumeInfo VolumeInfo)
         {
             VolumeInfo = default;
-            VolumeInfo.TotalSize = (ulong)_totalSize;
-            VolumeInfo.FreeSize = (ulong)_freeSize;
+            VolumeInfo.TotalSize = (ulong)Volatile.Read(ref _totalSize);
+            VolumeInfo.FreeSize = (ulong)Volatile.Read(ref _freeSize);
             VolumeInfo.SetVolumeLabel(_volumeLabel);
             return STATUS_SUCCESS;
         }
@@ -335,8 +362,9 @@ namespace TmaCloud.Fs
             }
 
             // New file: stage locally now, upload on Cleanup.
+            if (!IsSafeName(name)) return STATUS_ACCESS_DENIED;
             string tmp = NewTempFile();
-            var stream = new FileStream(tmp, FileMode.Create, FileAccess.ReadWrite, FileShare.None);
+            var stream = OpenStaging(tmp, FileMode.Create);
             var fnode = new Node
             {
                 Id = null,
@@ -371,9 +399,11 @@ namespace TmaCloud.Fs
             {
                 if (of.Stream == null)
                 {
-                    string tmp = NewTempFile();
+                    // Reuse the staging file if this handle already has one;
+                    // a fresh temp would strand the old one until the sweep.
+                    string tmp = of.LocalPath ?? NewTempFile();
                     of.LocalPath = tmp;
-                    of.Stream = new FileStream(tmp, FileMode.Create, FileAccess.ReadWrite, FileShare.None);
+                    of.Stream = OpenStaging(tmp, FileMode.Create);
                 }
                 else
                 {
@@ -413,17 +443,23 @@ namespace TmaCloud.Fs
                 if ((long)Offset >= size) return STATUS_END_OF_FILE;
 
                 int toRead = (int)Math.Min((long)Length, size - (long)Offset);
-                var buf = new byte[toRead];
-                of.Stream.Seek((long)Offset, SeekOrigin.Begin);
-                int read = 0;
-                while (read < toRead)
+                // Pooled: at WinFsp's max transfer size a fresh array per call
+                // lands on the large object heap and fragments it.
+                byte[] buf = ArrayPool<byte>.Shared.Rent(toRead);
+                try
                 {
-                    int r = of.Stream.Read(buf, read, toRead - read);
-                    if (r <= 0) break;
-                    read += r;
+                    of.Stream.Seek((long)Offset, SeekOrigin.Begin);
+                    int read = 0;
+                    while (read < toRead)
+                    {
+                        int r = of.Stream.Read(buf, read, toRead - read);
+                        if (r <= 0) break;
+                        read += r;
+                    }
+                    Marshal.Copy(buf, 0, Buffer, read);
+                    BytesTransferred = (uint)read;
                 }
-                Marshal.Copy(buf, 0, Buffer, read);
-                BytesTransferred = (uint)read;
+                finally { ArrayPool<byte>.Shared.Return(buf); }
             }
             return STATUS_SUCCESS;
         }
@@ -448,10 +484,14 @@ namespace TmaCloud.Fs
                     if (offset + len > size) len = (uint)(size - offset);
                 }
 
-                var buf = new byte[len];
-                Marshal.Copy(Buffer, buf, 0, (int)len);
-                of.Stream.Seek(offset, SeekOrigin.Begin);
-                of.Stream.Write(buf, 0, (int)len);
+                byte[] buf = ArrayPool<byte>.Shared.Rent((int)len);
+                try
+                {
+                    Marshal.Copy(Buffer, buf, 0, (int)len);
+                    of.Stream.Seek(offset, SeekOrigin.Begin);
+                    of.Stream.Write(buf, 0, (int)len);
+                }
+                finally { ArrayPool<byte>.Shared.Return(buf); }
                 of.Dirty = true;
                 of.Written = true;
                 BytesTransferred = len;
@@ -521,7 +561,10 @@ namespace TmaCloud.Fs
             if (of.IsDir && of.Node.Id == null) return STATUS_ACCESS_DENIED; // root
             if (of.IsDir)
             {
-                try { if (ListDir(of.Node).Count > 0) return STATUS_DIRECTORY_NOT_EMPTY; }
+                // ChildrenOf, not ListDir: a local-only placeholder inside the
+                // folder is visible on the drive, so deleting the folder out
+                // from under it has to be refused the same way.
+                try { if (ChildrenOf(of.Node).Count > 0) return STATUS_DIRECTORY_NOT_EMPTY; }
                 catch (BridgeException) { /* allow; backend will enforce */ }
             }
             return STATUS_SUCCESS;
@@ -551,6 +594,8 @@ namespace TmaCloud.Fs
                 return STATUS_SUCCESS;
             }
 
+            if (!IsSafeName(newName)) return STATUS_ACCESS_DENIED;
+
             try
             {
                 // If a local-only placeholder occupies the destination name, just
@@ -576,17 +621,7 @@ namespace TmaCloud.Fs
                 }
                 if (conflictId != null)
                 {
-                    // Honor ReplaceIfExists: remove whatever already occupies the
-                    // destination name so the rename yields a single file.
-                    try
-                    {
-                        _bridge.Call("delete", w =>
-                        {
-                            w.WriteStartArray("ids");
-                            w.WriteStringValue(conflictId);
-                            w.WriteEndArray();
-                        });
-                    }
+                    try { DeleteId(conflictId); }
                     catch (BridgeException ex) { Log("rename: delete conflict failed: " + ex.Message); }
                     _createdIds.TryRemove(NewFileName, out _);
                 }
@@ -611,7 +646,9 @@ namespace TmaCloud.Fs
                         w.WriteString("name", newName);
                     });
                 }
-                _createdIds.TryRemove(FileName, out _);        // old path no longer valid
+                // Whole subtree, not just this path: a folder rename moves its
+                // descendants, and stale prefixes misdirect later saves.
+                RekeySubtree(FileName, NewFileName);
                 TrackCreatedId(NewFileName, node.Id);          // track the file at its new path
                 Invalidate(oldParent);
                 Invalidate(newParent);
@@ -632,21 +669,13 @@ namespace TmaCloud.Fs
                     {
                         // A local-only placeholder isn't on the backend — just
                         // forget it; only real files need a backend delete.
-                        if (of.Node.Id != null)
-                            _bridge.Call("delete", w =>
-                            {
-                                w.WriteStartArray("ids");
-                                w.WriteStringValue(of.Node.Id);
-                                w.WriteEndArray();
-                            });
+                        if (of.Node.Id != null) DeleteId(of.Node.Id);
                     }
                     catch (BridgeException ex) { Log("delete failed: " + ex.Message); }
                     of.Deleted = true;
-                    if (of.Node.Path != null)
-                    {
-                        _createdIds.TryRemove(of.Node.Path, out _);
-                        _localEmpty.TryRemove(of.Node.Path, out _);
-                    }
+                    // Deleting a folder takes its descendants too; leaving them
+                    // mapped would resurrect ghosts and point uploads at dead ids.
+                    ForgetSubtree(of.Node.Path);
                     Invalidate(ParentPath(of.Node.Path) ?? "\\");
                     return;
                 }
@@ -864,6 +893,22 @@ namespace TmaCloud.Fs
         private Node FindFileByName(string parentId, string name)
             => FindChildByName(parentId, name, wantFolder: false);
 
+        /// <summary>Raw "list" call for one folder id (null == root).</summary>
+        private JsonElement ListRaw(string parentId)
+            => _bridge.Call("list", w =>
+            {
+                if (parentId != null) w.WriteString("parentId", parentId);
+            });
+
+        /// <summary>Delete one backend object by id.</summary>
+        private void DeleteId(string id)
+            => _bridge.Call("delete", w =>
+            {
+                w.WriteStartArray("ids");
+                w.WriteStringValue(id);
+                w.WriteEndArray();
+            });
+
         /// <summary>
         /// Fresh (uncached) lookup of a child by name and kind within a parent
         /// folder. Enforces idempotent create semantics (no duplicate files on
@@ -871,50 +916,62 @@ namespace TmaCloud.Fs
         /// </summary>
         private Node FindChildByName(string parentId, string name, bool wantFolder)
         {
-            var res = _bridge.Call("list", w =>
-            {
-                if (parentId != null) w.WriteString("parentId", parentId);
-            });
+            var res = ListRaw(parentId);
             if (res.ValueKind == JsonValueKind.Array)
                 foreach (var el in res.EnumerateArray())
                 {
-                    if (el.ValueKind != JsonValueKind.Object) continue;
-                    string type = el.TryGetProperty("type", out var tp) ? tp.GetString() : "file";
-                    bool isFolder = string.Equals(type, "folder", StringComparison.OrdinalIgnoreCase);
-                    if (isFolder != wantFolder) continue;
-                    string nm = el.TryGetProperty("name", out var np) ? np.GetString() : null;
-                    if (!string.Equals(nm, name, StringComparison.OrdinalIgnoreCase)) continue;
-                    long size = el.TryGetProperty("size", out var sp) ? ParseLong(sp) : 0;
-                    return new Node
-                    {
-                        Id = el.TryGetProperty("id", out var idp) ? JsonToStringId(idp) : null,
-                        Name = nm,
-                        IsFolder = isFolder,
-                        Size = size,
-                    };
+                    // Callers read only Id and Size, so the parent path is
+                    // irrelevant; sharing the parser keeps validation in one place.
+                    var n = NodeFromJson(el, "\\");
+                    if (n == null || n.IsFolder != wantFolder) continue;
+                    if (!string.Equals(n.Name, name, StringComparison.OrdinalIgnoreCase)) continue;
+                    return n;
                 }
             return null;
         }
+
+        /// <summary>
+        /// Staging file for one handle. Exclusive so nothing can read or tamper
+        /// with staged content; Cleanup releases it before the bridge streams it.
+        /// </summary>
+        private static FileStream OpenStaging(string path, FileMode mode)
+            => new FileStream(path, mode, FileAccess.ReadWrite, FileShare.None);
 
         /// <summary>Ensure the handle has a local staging stream with content.</summary>
         private void EnsureStream(OpenFile of)
         {
             if (of.Stream != null) return;
-            string tmp = NewTempFile();
-            if (of.Node.Id != null)
+            // An existing LocalPath means this handle already staged once; reuse
+            // it rather than leaving the old temp file behind.
+            bool reuse = of.LocalPath != null;
+            string tmp = of.LocalPath ?? NewTempFile();
+            try
             {
-                _bridge.Call("download", w =>
+                if (of.Node.Id != null)
                 {
-                    w.WriteString("id", of.Node.Id);
-                    w.WriteString("dest", tmp);
-                });
+                    _bridge.Call("download", w =>
+                    {
+                        w.WriteString("id", of.Node.Id);
+                        w.WriteString("dest", tmp);
+                    });
+                }
+                else
+                {
+                    using (File.Create(tmp)) { }
+                }
+                of.LocalPath = tmp;
+                of.Stream = OpenStaging(tmp, FileMode.Open);
             }
-            else
+            catch
             {
-                using (File.Create(tmp)) { }
+                // A failed download may still have created the destination,
+                // which nothing points at once we rethrow.
+                if (!reuse)
+                {
+                    try { File.Delete(tmp); } catch { /* never created */ }
+                }
+                throw;
             }
-            of.LocalPath = tmp;
-            of.Stream = new FileStream(tmp, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
         }
 
         /// <summary>
@@ -956,10 +1013,7 @@ namespace TmaCloud.Fs
             if (_dirCache.TryGetValue(key, out var dc) && dc.IsFresh(_ttl))
                 return dc.Children;
 
-            var res = _bridge.Call("list", w =>
-            {
-                if (folder.Id != null) w.WriteString("parentId", folder.Id);
-            });
+            var res = ListRaw(folder.Id);
 
             var children = new List<Node>();
             if (res.ValueKind == JsonValueKind.Array)
@@ -1004,15 +1058,19 @@ namespace TmaCloud.Fs
         private string NewTempFile()
             => Path.Combine(_stagingDir, Guid.NewGuid().ToString("N") + ".tmp");
 
-        /// <summary>Remove stale staging files left behind by a previous crash.</summary>
-        private void CleanStagingDir()
+        /// <summary>
+        /// At startup, drop staging files stale enough to be from a crash; on
+        /// unmount (<paramref name="all"/>) drop them all, so file contents
+        /// don't sit in %TEMP% for an hour after the drive is gone.
+        /// </summary>
+        private void CleanStagingDir(bool all = false)
         {
             try
             {
                 var cutoff = DateTime.UtcNow.AddHours(-1);
                 foreach (var f in Directory.EnumerateFiles(_stagingDir, "*.tmp"))
                 {
-                    try { if (File.GetLastWriteTimeUtc(f) < cutoff) File.Delete(f); }
+                    try { if (all || File.GetLastWriteTimeUtc(f) < cutoff) File.Delete(f); }
                     catch { /* in use or gone */ }
                 }
             }
@@ -1039,6 +1097,54 @@ namespace TmaCloud.Fs
             _localEmpty[path] = 0;
         }
 
+        /// <summary>Whether <paramref name="path"/> is <paramref name="root"/> or sits under it.</summary>
+        private static bool IsAtOrUnder(string path, string root)
+        {
+            if (path == null || root == null) return false;
+            if (string.Equals(path, root, StringComparison.OrdinalIgnoreCase)) return true;
+            string prefix = root == "\\" ? "\\" : root + "\\";
+            return path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// Drop a path and everything beneath it from the per-session maps and
+        /// the listing cache, after the subtree has been deleted.
+        /// </summary>
+        private void ForgetSubtree(string root)
+        {
+            if (root == null) return;
+            foreach (var key in _createdIds.Keys)
+                if (IsAtOrUnder(key, root)) _createdIds.TryRemove(key, out _);
+            foreach (var key in _localEmpty.Keys)
+                if (IsAtOrUnder(key, root)) _localEmpty.TryRemove(key, out _);
+            foreach (var key in _dirCache.Keys)
+                if (IsAtOrUnder(key, root)) _dirCache.TryRemove(key, out _);
+        }
+
+        /// <summary>
+        /// Re-key a path and everything beneath it after a rename or move.
+        /// Renaming a folder changes the path of every descendant, so entries
+        /// left under the old prefix would point later saves at the wrong file.
+        /// </summary>
+        private void RekeySubtree(string oldRoot, string newRoot)
+        {
+            if (oldRoot == null || newRoot == null) return;
+            foreach (var kv in _createdIds)
+            {
+                if (!IsAtOrUnder(kv.Key, oldRoot)) continue;
+                if (_createdIds.TryRemove(kv.Key, out var id))
+                    TrackCreatedId(string.Concat(newRoot, kv.Key.AsSpan(oldRoot.Length)), id);
+            }
+            foreach (var key in _localEmpty.Keys)
+            {
+                if (!IsAtOrUnder(key, oldRoot)) continue;
+                if (_localEmpty.TryRemove(key, out _))
+                    TrackLocalEmpty(string.Concat(newRoot, key.AsSpan(oldRoot.Length)));
+            }
+            foreach (var key in _dirCache.Keys)
+                if (IsAtOrUnder(key, oldRoot)) _dirCache.TryRemove(key, out _);
+        }
+
         private static string ParentPath(string path)
         {
             if (path == "\\") return null;
@@ -1056,13 +1162,17 @@ namespace TmaCloud.Fs
         private static string Combine(string dir, string name)
             => dir == "\\" ? "\\" + name : dir + "\\" + name;
 
-        private static FileInfo MakeInfoFromNode(Node n)
+        /// <summary>
+        /// The one FileInfo builder. Everything but the size comes from the
+        /// node; callers differ only in which size they report.
+        /// </summary>
+        private static FileInfo MakeInfoCore(Node n, long size)
         {
             var info = new FileInfo();
             info.FileAttributes = n.IsFolder
                 ? (uint)System.IO.FileAttributes.Directory
                 : (uint)System.IO.FileAttributes.Normal;
-            info.FileSize = n.IsFolder ? 0UL : (ulong)Math.Max(0, n.Size);
+            info.FileSize = n.IsFolder ? 0UL : (ulong)Math.Max(0, size);
             info.AllocationSize = (info.FileSize + 4095) & ~4095UL;
             ulong ft = ToFileTime(n.Modified);
             info.CreationTime = info.LastWriteTime = info.ChangeTime = ft;
@@ -1070,28 +1180,14 @@ namespace TmaCloud.Fs
             return info;
         }
 
-        private static FileInfo MakeInfo(OpenFile of)
-        {
-            if (of.IsDir) return MakeInfoFromNode(of.Node);
-            var info = new FileInfo();
-            info.FileAttributes = (uint)System.IO.FileAttributes.Normal;
-            info.FileSize = (ulong)Math.Max(0, of.CurrentSize);
-            info.AllocationSize = (info.FileSize + 4095) & ~4095UL;
-            ulong ft = ToFileTime(of.Node.Modified);
-            info.CreationTime = info.LastWriteTime = info.ChangeTime = ft;
-            info.LastAccessTime = AccessFileTime(of.Node);
-            return info;
-        }
+        private static FileInfo MakeInfoFromNode(Node n) => MakeInfoCore(n, n.Size);
 
-        private static FileInfo MakeInfoFolder(Node folder)
-        {
-            var info = new FileInfo();
-            info.FileAttributes = (uint)System.IO.FileAttributes.Directory;
-            ulong ft = ToFileTime(folder.Modified);
-            info.CreationTime = info.LastWriteTime = info.ChangeTime = ft;
-            info.LastAccessTime = AccessFileTime(folder);
-            return info;
-        }
+        // An open handle reports the staged length, which is ahead of the node's
+        // size until the write-back lands.
+        private static FileInfo MakeInfo(OpenFile of)
+            => of.IsDir ? MakeInfoFromNode(of.Node) : MakeInfoCore(of.Node, of.CurrentSize);
+
+        private static FileInfo MakeInfoFolder(Node folder) => MakeInfoCore(folder, 0);
 
         /// <summary>
         /// The last-access time to report for a node. The backend owns this
@@ -1138,11 +1234,32 @@ namespace TmaCloud.Fs
             return 0;
         }
 
+        /// <summary>
+        /// Whether a backend-supplied name is usable as one path component.
+        /// Names are concatenated into the paths we hand Windows and resolve
+        /// against, so a separator, colon or ".." would address a different node
+        /// than the backend returned. None are legal Windows filenames anyway.
+        /// </summary>
+        private static bool IsSafeName(string name)
+        {
+            if (string.IsNullOrEmpty(name) || name.Length > 255) return false;
+            if (name == "." || name == "..") return false;
+            if (name[name.Length - 1] == '.' || name[name.Length - 1] == ' ') return false;
+            foreach (char c in name)
+            {
+                if (c < 0x20 || c == 0x7F) return false;
+                if (c == '\\' || c == '/' || c == ':' || c == '*' || c == '?' ||
+                    c == '"' || c == '<' || c == '>' || c == '|') return false;
+            }
+            return true;
+        }
+
         private static Node NodeFromJson(JsonElement el, string parentPath)
         {
             if (el.ValueKind != JsonValueKind.Object) return null;
-            string name = el.TryGetProperty("name", out var np) ? np.GetString() : null;
-            if (string.IsNullOrEmpty(name)) return null;
+            string name = el.TryGetProperty("name", out var np) && np.ValueKind == JsonValueKind.String
+                ? np.GetString() : null;
+            if (!IsSafeName(name)) return null;
             string id = el.TryGetProperty("id", out var idp) ? JsonToStringId(idp) : null;
             string type = el.TryGetProperty("type", out var tp) ? tp.GetString() : "file";
             bool isFolder = string.Equals(type, "folder", StringComparison.OrdinalIgnoreCase);
@@ -1203,7 +1320,27 @@ namespace TmaCloud.Fs
 
         public void Dispose()
         {
-            try { _statsTimer?.Dispose(); } catch { }
+            _disposed = true;
+            // Wait out an in-flight tick: it calls into the bridge, which the
+            // service disposes immediately after us.
+            var timer = System.Threading.Interlocked.Exchange(ref _statsTimer, null);
+            if (timer != null)
+            {
+                using var drained = new ManualResetEvent(false);
+                try
+                {
+                    if (timer.Dispose(drained)) drained.WaitOne(TimeSpan.FromSeconds(20));
+                }
+                catch (ObjectDisposedException) { /* already gone */ }
+            }
+            // Break the bridge -> filesystem reference so an unmount doesn't
+            // leave both (and every cached node) alive.
+            if (_bridge != null) _bridge.OnPush = null;
+            OnShutdownRequested = null;
+            _dirCache.Clear();
+            _createdIds.Clear();
+            _localEmpty.Clear();
+            CleanStagingDir(all: true);
         }
     }
 }

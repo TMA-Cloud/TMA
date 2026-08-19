@@ -12,14 +12,33 @@ const { EventEmitter } = require('events');
 const childProcess = require('child_process');
 
 class FakeChildProcess extends EventEmitter {
-  constructor(command, args) {
+  constructor(command, args, options) {
     super();
     this.command = command;
     this.args = args;
+    this.options = options || {};
     this.stdout = new EventEmitter();
     this.stderr = new EventEmitter();
+    // Writable enough for callers that hand the child a secret on stdin; what
+    // they wrote is kept so tests can assert on it.
+    this.stdinChunks = [];
+    this.stdinEnded = false;
+    this.stdin = Object.assign(new EventEmitter(), {
+      write: chunk => {
+        this.stdinChunks.push(String(chunk));
+        return true;
+      },
+      end: () => {
+        this.stdinEnded = true;
+      },
+    });
     this.killed = false;
     this.killSignals = [];
+  }
+
+  /** Everything written to the child's stdin, joined. */
+  stdinText() {
+    return this.stdinChunks.join('');
   }
 
   kill(signal) {
@@ -53,8 +72,8 @@ class FakeChildProcess extends EventEmitter {
  */
 function fakeSpawn(vi, onSpawn) {
   const spawned = [];
-  vi.spyOn(childProcess, 'spawn').mockImplementation((command, args) => {
-    const child = new FakeChildProcess(command, args);
+  vi.spyOn(childProcess, 'spawn').mockImplementation((command, args, options) => {
+    const child = new FakeChildProcess(command, args, options);
     spawned.push(child);
     if (onSpawn) onSpawn(child);
     return child;

@@ -9,8 +9,11 @@ namespace TmaCloud.Fs
     /// by the Electron app (Fsp.Service handles both console and service modes).
     ///
     /// Usage:
-    ///   TmaCloudFs.exe --pipe &lt;name&gt; [--mount T:|*] [--label "TMA Cloud"]
-    ///                  [--mode saveonly] [--debug]
+    ///   TmaCloudFs.exe --pipe &lt;name&gt; [--token-stdin] [--mount T:|*]
+    ///                  [--label "TMA Cloud"] [--mode saveonly] [--debug]
+    ///
+    /// With --token-stdin the bridge token is read from stdin (or from
+    /// TMA_CLOUD_FS_TOKEN) - never argv, which any process here can read.
     ///
     /// On success it prints "MOUNTED &lt;drive&gt;" to stdout so the parent can learn
     /// the assigned drive letter (relevant when --mount is "*").
@@ -27,20 +30,23 @@ namespace TmaCloud.Fs
         {
             string mountPoint = "*";           // next free drive letter by default
             string pipeName = null;
-            string token = null;
             string label = "TMA Cloud";
             bool debug = false;
             bool denyRead = false;             // "save-only" mode
+            bool tokenFromStdin = false;
 
             for (int i = 1; i < Args.Length; i++)
             {
                 switch (Args[i])
                 {
-                    case "--mount": mountPoint = Args[++i]; break;
-                    case "--pipe": pipeName = Args[++i]; break;
-                    case "--token": token = Args[++i]; break;
-                    case "--label": label = Args[++i]; break;
-                    case "--mode": denyRead = string.Equals(Args[++i], "saveonly", StringComparison.OrdinalIgnoreCase); break;
+                    case "--mount": mountPoint = NextArg(Args, ref i); break;
+                    case "--pipe": pipeName = NextArg(Args, ref i); break;
+                    case "--label": label = NextArg(Args, ref i); break;
+                    case "--mode":
+                        denyRead = string.Equals(NextArg(Args, ref i), "saveonly",
+                            StringComparison.OrdinalIgnoreCase);
+                        break;
+                    case "--token-stdin": tokenFromStdin = true; break;
                     case "--debug": debug = true; break;
                 }
             }
@@ -48,13 +54,7 @@ namespace TmaCloud.Fs
             if (string.IsNullOrEmpty(pipeName))
                 throw new ArgumentException("--pipe <name> is required");
 
-            // WinFsp's Mount does not accept "*" for "next free drive letter"
-            // (it throws), so resolve a concrete free letter ourselves.
-            if (mountPoint == "*" || string.IsNullOrEmpty(mountPoint))
-            {
-                mountPoint = PickFreeDriveLetter()
-                    ?? throw new IOException("no free drive letter available to mount TMA Cloud");
-            }
+            string token = ReadToken(tokenFromStdin);
 
             _bridge = new Bridge(pipeName, token);
             _bridge.Connect();
@@ -72,18 +72,78 @@ namespace TmaCloud.Fs
             };
 
             uint debugFlags = debug ? unchecked((uint)(-1)) : 0;
-            if (0 > _host.Mount(mountPoint, null, false, debugFlags))
-                throw new IOException("cannot mount TMA Cloud file system at " + mountPoint);
+            Mount(mountPoint, debugFlags);
 
             Console.WriteLine("MOUNTED " + _host.MountPoint());
             Console.Out.Flush();
         }
 
+        /// <summary>Value for a flag, without running off the end of argv.</summary>
+        private static string NextArg(string[] args, ref int i)
+        {
+            if (i + 1 >= args.Length)
+                throw new ArgumentException(args[i] + " requires a value");
+            return args[++i];
+        }
+
         /// <summary>
-        /// Pick the highest free drive letter in D..Z (cloud drives conventionally
-        /// use a high letter), avoiding A–C and anything already in use.
+        /// The secret authenticating us to the bridge, read from stdin (only our
+        /// parent holds the write end). On a command line it would be readable
+        /// by every process running as this user, who could then replay it to
+        /// drive the signed-in account. The env var is a manual-run fallback.
         /// </summary>
-        private static string PickFreeDriveLetter()
+        private static string ReadToken(bool fromStdin)
+        {
+            string env = Environment.GetEnvironmentVariable("TMA_CLOUD_FS_TOKEN");
+            if (!string.IsNullOrEmpty(env))
+            {
+                Environment.SetEnvironmentVariable("TMA_CLOUD_FS_TOKEN", null);
+                return env;
+            }
+            // Opt-in: an unasked-for read would block forever against an
+            // inherited console handle, which is what a manual run has.
+            if (!fromStdin || !Console.IsInputRedirected) return null;
+            try
+            {
+                string line = Console.In.ReadLine();
+                if (!string.IsNullOrEmpty(line)) return line.Trim();
+            }
+            catch (IOException) { /* parent closed it */ }
+            return null;
+        }
+
+        /// <summary>
+        /// Mount at the requested point, or - for "*" - the highest free drive
+        /// letter. Another process can claim a letter between the scan and the
+        /// mount, so fall through to the next candidate rather than failing.
+        /// </summary>
+        private void Mount(string mountPoint, uint debugFlags)
+        {
+            if (mountPoint != "*" && !string.IsNullOrEmpty(mountPoint))
+            {
+                // WinFsp's Mount does not accept "*" for "next free drive
+                // letter" (it throws), so only a concrete point gets here.
+                if (0 > _host.Mount(mountPoint, null, false, debugFlags))
+                    throw new IOException("cannot mount TMA Cloud file system at " + mountPoint);
+                return;
+            }
+
+            foreach (string candidate in FreeDriveLetters())
+            {
+                try
+                {
+                    if (0 <= _host.Mount(candidate, null, false, debugFlags)) return;
+                }
+                catch (Exception)
+                {
+                    // Letter taken between the scan and the mount - keep going.
+                }
+            }
+            throw new IOException("no free drive letter available to mount TMA Cloud");
+        }
+
+        /// <summary>Free letters, Z down to D (cloud drives use a high one).</summary>
+        private static System.Collections.Generic.IEnumerable<string> FreeDriveLetters()
         {
             var used = new System.Collections.Generic.HashSet<char>();
             foreach (var d in DriveInfo.GetDrives())
@@ -94,17 +154,16 @@ namespace TmaCloud.Fs
             }
             for (char c = 'Z'; c >= 'D'; c--)
                 if (!used.Contains(c))
-                    return c + ":";
-            return null;
+                    yield return c + ":";
         }
 
         protected override void OnStop()
         {
-            try { _host?.Unmount(); } catch { }
+            try { _host?.Unmount(); } catch { /* not mounted */ }
             _host = null;
-            try { _fs?.Dispose(); } catch { }
+            try { _fs?.Dispose(); } catch { /* best effort */ }
             _fs = null;
-            try { _bridge?.Dispose(); } catch { }
+            try { _bridge?.Dispose(); } catch { /* best effort */ }
             _bridge = null;
         }
 
@@ -119,7 +178,8 @@ namespace TmaCloud.Fs
     {
         public static void Main(string[] args)
         {
-            Environment.ExitCode = new TmaCloudService().Run();
+            using var service = new TmaCloudService();
+            Environment.ExitCode = service.Run();
         }
     }
 }

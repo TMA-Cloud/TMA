@@ -1,9 +1,9 @@
 using System;
 using System.Buffers;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.IO;
 using System.IO.Pipes;
+using System.Security.Principal;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
@@ -23,10 +23,10 @@ namespace TmaCloud.Fs
     /// JSON-RPC client over a Windows named pipe to the Electron main process.
     ///
     /// Protocol: newline-delimited UTF-8 JSON. Each request is one line:
-    ///   { "id": &lt;int&gt;, "op": "&lt;name&gt;", ...args }
+    ///   { "rid": &lt;int&gt;, "op": "&lt;name&gt;", ...args }
     /// Each response is one line:
-    ///   { "id": &lt;int&gt;, "ok": true,  "result": &lt;any&gt; }
-    ///   { "id": &lt;int&gt;, "ok": false, "error": "&lt;text&gt;" }
+    ///   { "rid": &lt;int&gt;, "ok": true,  "result": &lt;any&gt; }
+    ///   { "rid": &lt;int&gt;, "ok": false, "error": "&lt;text&gt;" }
     ///
     /// Bulk file bytes never travel on the pipe. For reads/writes we exchange
     /// temp-file paths on local disk (both processes share %TEMP%): Electron
@@ -39,15 +39,24 @@ namespace TmaCloud.Fs
     /// </summary>
     public sealed class Bridge : IDisposable
     {
+        // Response lines are control messages, never bulk content, so anything
+        // near this is a peer streaming bytes that never terminate.
+        private const int MaxLineBytes = 8 * 1024 * 1024;
+
         private readonly string _pipeName;
         private readonly string _token;
         private NamedPipeClientStream _pipe;
         private volatile bool _closed;
 
+        // Set once the reader loop ends. Without it every later call ties up a
+        // WinFsp worker thread for the full timeout on a dead connection.
+        private volatile bool _faulted;
+        private volatile string _faultReason;
+
         /// <summary>
-        /// Raised for unsolicited server→client messages (no "rid"), e.g. cache
-        /// invalidation forwarded from the backend's event stream. The argument
-        /// is the parsed message object.
+        /// Raised for unsolicited server-to-client messages (no "rid"), e.g.
+        /// cache invalidation forwarded from the backend's event stream. The
+        /// argument is the parsed message object.
         /// </summary>
         public Action<JsonElement> OnPush;
 
@@ -81,9 +90,23 @@ namespace TmaCloud.Fs
             // read+write on one handle: a blocking read on a synchronous handle
             // would block all writes, so the request that produces the reply
             // could never be sent.
-            _pipe = new NamedPipeClientStream(".", _pipeName,
-                PipeDirection.InOut, PipeOptions.Asynchronous);
-            _pipe.Connect(timeoutMs);
+            //
+            // Impersonation level is explicit, not defaulted: whatever answers
+            // on this pipe must not be able to borrow our security context.
+            var pipe = new NamedPipeClientStream(".", _pipeName,
+                PipeDirection.InOut, PipeOptions.Asynchronous,
+                TokenImpersonationLevel.None);
+            try
+            {
+                pipe.Connect(timeoutMs);
+            }
+            catch
+            {
+                // A failed Connect leaves the handle open until finalization.
+                try { pipe.Dispose(); } catch { /* nothing left to do */ }
+                throw;
+            }
+            _pipe = pipe;
             // Genuine async read loop. Using .GetAwaiter().GetResult() to pump
             // overlapped reads on a plain thread deadlocks after the first
             // completion, so the loop must actually await.
@@ -95,8 +118,12 @@ namespace TmaCloud.Fs
         // after the first synchronous read, so we avoid them entirely.
         private async System.Threading.Tasks.Task ReadLoopAsync()
         {
-            var buffer = new byte[65536];
-            var acc = new List<byte>(1024);
+            byte[] buffer = ArrayPool<byte>.Shared.Rent(65536);
+            // Grown on demand up to MaxLineBytes; pooled because a busy mount
+            // reads continuously for the life of the drive.
+            byte[] acc = ArrayPool<byte>.Shared.Rent(4096);
+            int accLen = 0;
+            string reason = "pipe closed by host";
             try
             {
                 while (!_closed)
@@ -108,27 +135,45 @@ namespace TmaCloud.Fs
                         byte b = buffer[i];
                         if (b == (byte)'\n')
                         {
-                            if (acc.Count > 0)
+                            if (accLen > 0)
                             {
-                                string line = Encoding.UTF8.GetString(acc.ToArray());
-                                acc.Clear();
-                                HandleLine(line);
+                                HandleLine(Encoding.UTF8.GetString(acc, 0, accLen));
+                                accLen = 0;
                             }
                         }
                         else if (b != (byte)'\r')
                         {
-                            acc.Add(b);
+                            if (accLen == acc.Length)
+                            {
+                                if (acc.Length >= MaxLineBytes)
+                                    throw new IOException("bridge sent an oversized line");
+                                byte[] bigger = ArrayPool<byte>.Shared.Rent(
+                                    Math.Min(acc.Length * 2, MaxLineBytes));
+                                Buffer.BlockCopy(acc, 0, bigger, 0, accLen);
+                                ArrayPool<byte>.Shared.Return(acc);
+                                acc = bigger;
+                            }
+                            acc[accLen++] = b;
                         }
                     }
                 }
             }
             catch (Exception ex)
             {
-                if (!_closed) FailAll("pipe read failed: " + ex.Message);
+                reason = "pipe read failed: " + ex.Message;
             }
             finally
             {
-                if (!_closed) FailAll("pipe closed by host");
+                ArrayPool<byte>.Shared.Return(buffer);
+                ArrayPool<byte>.Shared.Return(acc);
+                if (!_closed)
+                {
+                    // Before releasing the waiters, so a thread woken by FailAll
+                    // can't queue a request that would only sit until timeout.
+                    _faultReason = reason;
+                    _faulted = true;
+                    FailAll(reason);
+                }
             }
         }
 
@@ -138,7 +183,8 @@ namespace TmaCloud.Fs
             {
                 using var doc = JsonDocument.Parse(line);
                 var root = doc.RootElement;
-                // "rid" is the RPC correlation id — deliberately distinct from
+                if (root.ValueKind != JsonValueKind.Object) return;
+                // "rid" is the RPC correlation id - deliberately distinct from
                 // any "id" argument (e.g. a file id) an op may also carry.
                 if (!root.TryGetProperty("rid", out var idEl))
                 {
@@ -149,10 +195,12 @@ namespace TmaCloud.Fs
                     }
                     return;
                 }
-                int id = idEl.GetInt32();
+                // Malformed rid: skip the reply, don't kill the read loop.
+                if (idEl.ValueKind != JsonValueKind.Number || !idEl.TryGetInt32(out int id)) return;
                 if (!_pending.TryRemove(id, out var waiter)) return;
 
-                waiter.Ok = root.TryGetProperty("ok", out var okEl) && okEl.GetBoolean();
+                waiter.Ok = root.TryGetProperty("ok", out var okEl)
+                    && okEl.ValueKind == JsonValueKind.True;
                 if (waiter.Ok)
                 {
                     // Clone so the value survives disposal of the JsonDocument.
@@ -162,13 +210,14 @@ namespace TmaCloud.Fs
                 else
                 {
                     waiter.Error = root.TryGetProperty("error", out var err)
+                        && err.ValueKind == JsonValueKind.String
                         ? err.GetString() : "bridge error";
                 }
-                waiter.Done.Set();
+                Complete(waiter);
             }
             catch
             {
-                // Malformed line — ignore; the request will time out.
+                // Malformed line - ignore; the request will time out.
             }
         }
 
@@ -180,11 +229,16 @@ namespace TmaCloud.Fs
                 {
                     w.Ok = false;
                     w.Error = reason;
-                    // The waiting thread may have already timed out and disposed
-                    // the waiter in the tiny window before we removed it.
-                    try { w.Done.Set(); } catch (ObjectDisposedException) { }
+                    Complete(w);
                 }
             }
+        }
+
+        // Whoever wins TryRemove owns the waiter and alone may signal it. Call()
+        // disposes only when it won, so the guard covers only an abandoned wait.
+        private static void Complete(Waiter w)
+        {
+            try { w.Done.Set(); } catch (ObjectDisposedException) { /* caller gave up */ }
         }
 
         /// <summary>
@@ -194,6 +248,7 @@ namespace TmaCloud.Fs
         public JsonElement Call(string op, Action<Utf8JsonWriter> writeArgs = null, int timeoutMs = 120000)
         {
             if (_closed) throw new BridgeException("bridge is closed");
+            if (_faulted) throw new BridgeException(_faultReason ?? "bridge connection lost");
 
             int id = Interlocked.Increment(ref _nextId);
             var waiter = new Waiter();
@@ -211,15 +266,18 @@ namespace TmaCloud.Fs
                     jw.WriteEndObject();
                 }
                 var span = buffer.WrittenSpan;
-                byte[] frame = new byte[span.Length + 1];
-                span.CopyTo(frame);
-                frame[span.Length] = (byte)'\n';
-
-                lock (_writeLock)
+                byte[] frame = ArrayPool<byte>.Shared.Rent(span.Length + 1);
+                try
                 {
-                    _pipe.WriteAsync(frame, 0, frame.Length).GetAwaiter().GetResult();
-                    _pipe.FlushAsync().GetAwaiter().GetResult();
+                    span.CopyTo(frame);
+                    frame[span.Length] = (byte)'\n';
+                    lock (_writeLock)
+                    {
+                        _pipe.WriteAsync(frame, 0, span.Length + 1).GetAwaiter().GetResult();
+                        _pipe.FlushAsync().GetAwaiter().GetResult();
+                    }
                 }
+                finally { ArrayPool<byte>.Shared.Return(frame); }
 
                 if (!waiter.Done.Wait(timeoutMs))
                     throw new BridgeException($"bridge call '{op}' timed out");
@@ -227,21 +285,28 @@ namespace TmaCloud.Fs
                     throw new BridgeException(waiter.Error ?? "bridge error");
                 return waiter.Result;
             }
+            catch (BridgeException) { throw; }
+            catch (Exception ex)
+            {
+                // Callers only handle BridgeException, so a pipe that died
+                // mid-write must not escape into a WinFsp callback raw.
+                throw new BridgeException($"bridge call '{op}' failed: {ex.Message}");
+            }
             finally
             {
-                // This thread owns the waiter's lifetime: once we stop waiting
-                // (reply, timeout, or throw) remove it so no late reply targets
-                // it, then dispose. A completer racing on Done.Set() is guarded
-                // at the Set() call sites.
-                _pending.TryRemove(id, out _);
-                waiter.Dispose();
+                // Removal transfers ownership: win and no completer holds it,
+                // so disposal is safe; lose and the GC reclaims it instead.
+                if (_pending.TryRemove(id, out _)) waiter.Dispose();
             }
         }
 
         public void Dispose()
         {
             _closed = true;
-            try { _pipe?.Dispose(); } catch { }
+            try { _pipe?.Dispose(); } catch { /* already gone */ }
+            _pipe = null;
+            // Stop holding the filesystem (and all it references) alive.
+            OnPush = null;
             FailAll("bridge disposed");
         }
     }
