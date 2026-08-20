@@ -157,9 +157,28 @@ function buildOnlyofficeUrls(req, fileId, token) {
 }
 
 /**
+ * Map the app's theme toggle ('dark' | 'light') to an ONLYOFFICE uiTheme value.
+ * Returns undefined for anything else so the document server keeps its own.
+ */
+function resolveUiTheme(theme) {
+  if (theme === 'dark') return 'theme-dark';
+  if (theme === 'light') return 'theme-light';
+  return undefined;
+}
+
+/**
  * Build ONLYOFFICE editor configuration
  */
-function buildOnlyofficeConfig(file, ownerId, actor, downloadUrl, callbackUrl, isMobile = false, canWrite = true) {
+function buildOnlyofficeConfig(
+  file,
+  ownerId,
+  actor,
+  downloadUrl,
+  callbackUrl,
+  isMobile = false,
+  canWrite = true,
+  uiTheme
+) {
   const fileType = getFileTypeFromName(file.name);
   // The save callback arrives from the OnlyOffice server unauthenticated, so a
   // read-only member has to be held back here, at config time — there is no
@@ -183,6 +202,10 @@ function buildOnlyofficeConfig(file, ownerId, actor, downloadUrl, callbackUrl, i
       customization: {
         autosave: !viewOnly,
         forcesave: !viewOnly,
+        // The app theme is a manual toggle, not the OS preference, so it must
+        // be signed into the config here. Without it the editor follows
+        // prefers-color-scheme and drifts out of sync with the app.
+        ...(uiTheme ? { uiTheme } : {}),
       },
       // Editor presence is the *acting* identity so co-editing shows the
       // individual sub-user rather than the shared account.
@@ -253,6 +276,7 @@ async function buildEditorSession(req, file, userId) {
   const token = await buildSignedFileToken(file.id, userId);
   const { downloadUrl, callbackUrl } = buildOnlyofficeUrls(req, file.id, token);
   const isMobile = isMobileDevice(req);
+  const uiTheme = resolveUiTheme(req.query?.theme);
   const config = buildOnlyofficeConfig(
     file,
     userId,
@@ -260,7 +284,8 @@ async function buildEditorSession(req, file, userId) {
     downloadUrl,
     callbackUrl,
     isMobile,
-    hasPermission(req, PERMISSIONS.EDIT)
+    hasPermission(req, PERMISSIONS.EDIT),
+    uiTheme
   );
   const configToken = await signConfigToken(config);
   const onlyofficeJsUrl = await getOnlyofficeJsUrl();
@@ -282,6 +307,7 @@ export {
   isMobileDevice,
   buildOnlyofficeUrls,
   buildOnlyofficeConfig,
+  resolveUiTheme,
   signConfigToken,
   validateFileForOnlyOffice,
 };

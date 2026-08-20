@@ -120,11 +120,11 @@ async function getViewerPage(req, res) {
       transition: background-color 0.2s;
     }
     body.dark {
-      background: #111827;
+      background: #1b1b19;
     }
     .header {
-      background: #f9fafb;
-      border-bottom: 1px solid #e5e7eb;
+      background: #f9f9f7;
+      border-bottom: 1px solid #e7e6e1;
       padding: 12px 16px;
       display: flex;
       justify-content: space-between;
@@ -135,13 +135,13 @@ async function getViewerPage(req, res) {
       transition: background-color 0.2s, border-color 0.2s;
     }
     body.dark .header {
-      background: #1f2937;
-      border-bottom-color: #374151;
+      background: #2c2c28;
+      border-bottom-color: #4a4944;
     }
     .header h1 {
       font-size: 18px;
       font-weight: 600;
-      color: #111827;
+      color: #1b1b19;
       flex: 1;
       margin-right: 16px;
       overflow: hidden;
@@ -150,7 +150,7 @@ async function getViewerPage(req, res) {
       transition: color 0.2s;
     }
     body.dark .header h1 {
-      color: #f9fafb;
+      color: #f3f3f0;
     }
     .header button {
       padding: 8px 16px;
@@ -175,7 +175,7 @@ async function getViewerPage(req, res) {
       transition: background-color 0.2s;
     }
     body.dark .editor-wrapper {
-      background: #111827;
+      background: #1b1b19;
     }
     #onlyoffice-editor-container {
       width: 100%;
@@ -186,14 +186,14 @@ async function getViewerPage(req, res) {
       align-items: center;
       justify-content: center;
       height: 100%;
-      color: #6b7280;
+      color: #66645d;
       font-size: 14px;
       background: #ffffff;
       transition: background-color 0.2s, color 0.2s;
     }
     body.dark .loading {
-      background: #111827;
-      color: #9ca3af;
+      background: #1b1b19;
+      color: #b0aea6;
     }
   </style>
 </head>
@@ -207,10 +207,16 @@ async function getViewerPage(req, res) {
   </div>
   <script src="${onlyofficeJsUrl}"></script>
   <script>
-    // Detect and apply dark mode based on system preference or stored preference
+    // The app hands its theme over in the ?theme= query param. This tab is often
+    // a different origin than the app, so localStorage.theme isn't shared here so
+    // the query param is the authoritative signal, with localStorage/OS as a
+    // fallback only for stale links that lack it.
+    var appTheme = ${JSON.stringify(req.query?.theme === 'dark' || req.query?.theme === 'light' ? req.query.theme : null)};
     function applyTheme() {
-      const isDark = localStorage.theme === 'dark' || 
-        (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      var isDark = appTheme
+        ? appTheme === 'dark'
+        : localStorage.theme === 'dark' ||
+          (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches);
       if (isDark) {
         document.body.classList.add('dark');
       } else {
@@ -218,8 +224,11 @@ async function getViewerPage(req, res) {
       }
     }
     applyTheme();
-    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme);
-    
+    // Only track the OS preference when the app didn't pin a theme.
+    if (!appTheme) {
+      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme);
+    }
+
     const config = ${JSON.stringify(config)};
     new DocsAPI.DocEditor('onlyoffice-editor-container', config);
   </script>

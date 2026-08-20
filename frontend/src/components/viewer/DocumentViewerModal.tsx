@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { ExternalLink } from 'lucide-react';
 import { useApp } from '../../contexts/AppContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { useTheme } from '../../contexts/ThemeContext';
 import { ONLYOFFICE_EXTS, getExt } from '../../utils/fileUtils';
 import { getErrorMessage, isAuthError } from '../../utils/errorUtils';
 import { useToast } from '../../hooks/useToast';
@@ -46,6 +47,7 @@ declare global {
 export const DocumentViewerModal: React.FC = () => {
   const appContext = useApp();
   const { user } = useAuth();
+  const { theme } = useTheme();
   const { showToast } = useToast();
   const documentViewerFile = appContext.documentViewerFile ?? null;
   const setDocumentViewerFile = appContext.setDocumentViewerFile;
@@ -106,9 +108,14 @@ export const DocumentViewerModal: React.FC = () => {
       setError(null);
       try {
         // Fetch config first to get ONLYOFFICE JS URL
-        const res = await authFetch(`/api/onlyoffice/config/${documentViewerFile.id}`, {
-          signal: abortController.signal,
-        });
+        // Sign the app theme into the config server-side so the editor matches
+        // the app's manual toggle instead of drifting to the OS preference.
+        const res = await authFetch(
+          `/api/onlyoffice/config/${documentViewerFile.id}?theme=${encodeURIComponent(theme)}`,
+          {
+            signal: abortController.signal,
+          }
+        );
 
         // Check if request was aborted after fetch
         if (abortController.signal.aborted) {
@@ -232,7 +239,7 @@ export const DocumentViewerModal: React.FC = () => {
         editorRef.current = null;
       }
     };
-  }, [documentViewerFile, refreshOnlyOfficeConfig, user, setDocumentViewerFile, showToast]);
+  }, [documentViewerFile, refreshOnlyOfficeConfig, user, setDocumentViewerFile, showToast, theme]);
 
   // Cancel any in-flight requests when user logs out
   useEffect(() => {
@@ -258,7 +265,7 @@ export const DocumentViewerModal: React.FC = () => {
             <button
               className="px-3 py-2 rounded-md bg-blue-600 dark:bg-blue-500 text-white text-sm hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors flex items-center gap-2 flex-shrink-0"
               onClick={() => {
-                const url = `/api/onlyoffice/viewer/${documentViewerFile.id}`;
+                const url = `/api/onlyoffice/viewer/${documentViewerFile.id}?theme=${encodeURIComponent(theme)}`;
                 window.open(url, '_blank', 'noopener,noreferrer');
                 // Close the document in the main tab to avoid confusion when editing in the new tab
                 setDocumentViewerFile?.(null);

@@ -19,6 +19,7 @@ const {
   getUserName,
   isMobileDevice,
   isOnlyOfficeSupported,
+  resolveUiTheme,
   signConfigToken,
   verifyCallbackToken,
 } = await import('../../../controllers/onlyoffice/onlyoffice.utils.js');
@@ -267,7 +268,8 @@ describe('buildOnlyofficeConfig', () => {
       'https://dl',
       'https://cb',
       overrides.isMobile ?? false,
-      overrides.canWrite ?? true
+      overrides.canWrite ?? true,
+      overrides.uiTheme
     );
 
   it('derives the editor file type from the name', () => {
@@ -316,5 +318,28 @@ describe('buildOnlyofficeConfig', () => {
     const config = build();
     expect(config.document.url).toBe('https://dl');
     expect(config.editorConfig.callbackUrl).toBe('https://cb');
+  });
+
+  it('signs the app theme into the editor customization when one is given', () => {
+    expect(build({ uiTheme: 'theme-dark' }).editorConfig.customization.uiTheme).toBe('theme-dark');
+    expect(build({ uiTheme: 'theme-light' }).editorConfig.customization.uiTheme).toBe('theme-light');
+  });
+
+  it('omits uiTheme entirely when none is given, so OnlyOffice keeps its own default', () => {
+    expect('uiTheme' in build().editorConfig.customization).toBe(false);
+  });
+});
+
+describe('resolveUiTheme', () => {
+  it('maps the app toggle to OnlyOffice theme names', () => {
+    expect(resolveUiTheme('dark')).toBe('theme-dark');
+    expect(resolveUiTheme('light')).toBe('theme-light');
+  });
+
+  it('returns undefined for anything else so the document server default wins', () => {
+    expect(resolveUiTheme(undefined)).toBeUndefined();
+    expect(resolveUiTheme('')).toBeUndefined();
+    expect(resolveUiTheme('system')).toBeUndefined();
+    expect(resolveUiTheme('theme-dark')).toBeUndefined();
   });
 });
