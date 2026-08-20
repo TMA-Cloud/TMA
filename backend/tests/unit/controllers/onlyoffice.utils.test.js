@@ -187,6 +187,18 @@ describe('getOnlyofficeJsUrl', () => {
     getOnlyOfficeSettings.mockResolvedValue({ jwtSecret: 's', url: null });
     expect(await getOnlyofficeJsUrl()).toBe('http://localhost/web-apps/apps/api/documents/api.js');
   });
+
+  it('repairs a legacy scheme-less server URL into an absolute api.js URL', async () => {
+    // A bare host stored before validation existed would otherwise resolve
+    // relative to the app origin in the browser and fetch index.html.
+    getOnlyOfficeSettings.mockResolvedValue({ jwtSecret: 's', url: '192.168.1.1' });
+    expect(await getOnlyofficeJsUrl()).toBe('http://192.168.1.1/web-apps/apps/api/documents/api.js');
+  });
+
+  it('strips a trailing slash before appending the api.js path', async () => {
+    getOnlyOfficeSettings.mockResolvedValue({ jwtSecret: 's', url: 'https://oo.example.com/' });
+    expect(await getOnlyofficeJsUrl()).toBe('https://oo.example.com/web-apps/apps/api/documents/api.js');
+  });
 });
 
 describe('getUserName', () => {

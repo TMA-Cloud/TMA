@@ -6,6 +6,7 @@ import { logger } from '../../config/logger.js';
 import { useS3 } from '../../config/storage.js';
 import { getCache, setCache, deleteCache, cacheKeys, DEFAULT_TTL } from '../../utils/cache.js';
 import { getActualDiskSize, formatFileSize } from '../../utils/storageUtils.js';
+import { normalizeOnlyOfficeUrl } from '../../utils/onlyofficeUrl.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -264,10 +265,24 @@ async function setOnlyOfficeSettings(jwtSecret, url, userId) {
       throw new Error('OnlyOffice URL must be a non-empty string or null');
     }
 
+    // Normalize to an absolute http/https URL. OnlyOffice needs an absolute URL
+    // for the api.js script, command service, and CSP origin; a scheme-less
+    // value (e.g. "192.168.1.1") silently breaks all three, so store it clean or
+    // reject it here with a clear message.
+    let normalizedUrl = url;
+    if (url !== null) {
+      try {
+        normalizedUrl = normalizeOnlyOfficeUrl(url);
+      } catch (err) {
+        await client.query('ROLLBACK');
+        throw new Error(err?.message || 'Invalid OnlyOffice URL', { cause: err });
+      }
+    }
+
     // Update OnlyOffice settings
     await client.query(
       'UPDATE app_settings SET onlyoffice_jwt_secret = $1, onlyoffice_url = $2, updated_at = NOW() WHERE id = $3',
-      [jwtSecret, url, 'app_settings']
+      [jwtSecret, normalizedUrl, 'app_settings']
     );
 
     await client.query('COMMIT');

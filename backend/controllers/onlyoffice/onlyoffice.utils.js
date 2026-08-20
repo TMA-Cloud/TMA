@@ -5,6 +5,7 @@ import jwt from 'jsonwebtoken';
 import { getOnlyOfficeSettings, getUserById } from '../../models/user.model.js';
 import storage from '../../utils/storageDriver.js';
 import { PERMISSIONS, hasPermission } from '../../utils/permissions.js';
+import { normalizeOnlyOfficeUrlSafe } from '../../utils/onlyofficeUrl.js';
 
 const BACKEND_URL = process.env.BACKEND_URL;
 
@@ -16,7 +17,10 @@ async function getOnlyOfficeConfig() {
   const settings = await getOnlyOfficeSettings();
   return {
     jwtSecret: settings.jwtSecret,
-    url: settings.url,
+    // Every consumer (api.js URL, forcesave command, CSP origin) needs an
+    // absolute URL. Normalize defensively here so a legacy scheme-less value
+    // stored before validation existed still works without re-entry.
+    url: normalizeOnlyOfficeUrlSafe(settings.url),
   };
 }
 
