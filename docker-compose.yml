@@ -1,5 +1,8 @@
-# Docker Compose Configuration for TMA Cloud
-# Requires .env file with environment variables
+# ----------------------------------------------------------------------------------------
+# TMA Cloud | Docker Compose Configuration
+# Installation Guide: https://tma-cloud.github.io/Wiki/docs/getting-started/installation/
+# Prerequisites: Requires '.env' file in the same directory
+# ----------------------------------------------------------------------------------------
 
 services:
   # INIT SERVICE: Prepares filesystem permissions
