@@ -21,7 +21,7 @@ import { collectUploadParts, extractFolderSegmentsFromRelativePath, metadataForP
 import { safeUnlink } from '../../utils/fileCleanup.js';
 import { streamEncryptedFile, streamUnencryptedFile, validateAndResolveFile } from '../../utils/fileDownload.js';
 import { userOperationLock } from '../../utils/mutex.js';
-import { validateMimeType, validateMimeTypeFromBuffer } from '../../utils/mimeTypeDetection.js';
+import { validateMimeType } from '../../utils/mimeTypeDetection.js';
 import { sendError, sendSuccess } from '../../utils/response.js';
 import storage from '../../utils/storageDriver.js';
 import { checkStorageLimitExceeded } from '../../utils/storageUtils.js';
@@ -123,39 +123,14 @@ async function validateDiskUploadOrRespond({ res, file }) {
 }
 
 /**
- * Runs the extension check against the header bytes a client offers up front,
- * so a file whose content contradicts its name is refused before it is sent.
- *
- * Advisory only: nothing here is trusted, because a client is free to send a
- * flattering sample and then upload something else. It exists to spare an
- * honest client a pointless transfer, not to replace the check on the way in.
- *
- * @param {Array<{name: string, head: string}>} samples
- * @returns {Promise<Array<{fileName: string, reason: string}>>} refused files
- */
-async function findRefusedUploadSamples(samples) {
-  const refused = [];
-  for (const { name, head } of samples) {
-    const buffer = Buffer.from(head, 'base64');
-    const result = await validateMimeTypeFromBuffer(buffer, name);
-    if (!result.valid) {
-      refused.push({ fileName: name, reason: result.error || 'Invalid file type' });
-    }
-  }
-  return refused;
-}
-
-/**
- * Check whether an upload would be refused (call before starting one).
- * Returns 200 { allowed: true }, 413 when it would exceed the storage limit, or
- * 415 listing the files whose content contradicts their extension.
+ * Check whether an upload would fit before starting one.
+ * Returns 200 { allowed: true }, or 413 when it would exceed the storage limit.
  */
 async function checkUploadStorage(req, res) {
   const fileSize = Number(req.body.fileSize);
   if (!Number.isInteger(fileSize) || fileSize < 0) {
     return sendError(res, 400, 'fileSize must be a non-negative integer');
   }
-  const samples = Array.isArray(req.body.samples) ? req.body.samples : [];
   try {
     const used = await getUserStorageUsage(req.ownerId);
     const userStorageLimit = await getUserStorageLimit(req.ownerId);
@@ -168,11 +143,6 @@ async function checkUploadStorage(req, res) {
 
     if (checkResult.exceeded) {
       return sendError(res, 413, checkResult.message);
-    }
-
-    const refused = await findRefusedUploadSamples(samples);
-    if (refused.length > 0) {
-      return sendError(res, 415, refused[0].reason, null, { refused });
     }
 
     return sendSuccess(res, { allowed: true });
@@ -374,7 +344,7 @@ async function replaceFileContents(req, res) {
         return sendError(res, 400, 'Invalid file name');
       }
 
-      // Magic bytes already checked in streamUploadToS3; validate MIME + name here.
+      // upload.mimeType was detected from content in streamUploadToS3; check the name here.
       validateFileUpload(upload.mimeType, existing.name);
 
       const updated = await replaceFileDataWithStorageKey(
@@ -528,7 +498,7 @@ async function uploadDerivedFile(req, res) {
         return sendError(res, 400, 'Invalid file name');
       }
 
-      // Validate by MIME + extension (content has already passed magic-byte checks in streamUploadToS3)
+      // upload.mimeType was detected from content in streamUploadToS3; check the name here.
       validateFileUpload(upload.mimeType, upload.name);
 
       const storageOk = await enforceStorageLimitForUpload({

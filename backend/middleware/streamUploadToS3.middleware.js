@@ -3,7 +3,9 @@
  * directly through encryption to S3 (no temp dir, minimal RAM).
  * Use only when STORAGE_DRIVER=s3.
  *
- * Content is checked against the file's extension from its first few KB.
+ * The file's type is detected from its leading bytes so the stored MIME type
+ * reflects the content, not the client-declared header. This never blocks: any
+ * file is stored regardless of whether its content matches its extension.
  *
  * Because the rest of validation (parentId, permissions, file-name checks) runs
  * in the controller *after* the stream finishes, every successful S3 put is
@@ -21,7 +23,7 @@ import { logger } from '../config/logger.js';
 import { getMaxUploadSizeSettings } from '../models/user.model.js';
 import { createByteCountStream, createEncryptStream } from '../utils/fileEncryption.js';
 import { generateId } from '../utils/id.js';
-import { createMimeCheckStream } from '../utils/mimeTypeDetection.js';
+import { createMimeSniffStream } from '../utils/mimeTypeDetection.js';
 import storage from '../utils/storageDriver.js';
 
 /**
@@ -34,17 +36,6 @@ function cleanupS3Keys(keys) {
       logger.warn({ err, storageName: key }, '[StreamUpload] Failed to clean up orphaned S3 object');
     });
   }
-}
-
-/** The tail of the message createMimeCheckStream rejects with. */
-const MIME_REJECTION_MARKER = 'does not match extension';
-
-/**
- * @param {Error} err
- * @returns {boolean} whether this is the magic-bytes check refusing the file
- */
-function isMimeRejection(err) {
-  return typeof err?.message === 'string' && err.message.includes(MIME_REJECTION_MARKER);
 }
 
 /**
@@ -91,7 +82,6 @@ function describeFailure(err) {
  * @returns {number}
  */
 function uploadFailureStatus(reason) {
-  if (reason.includes(MIME_REJECTION_MARKER)) return 415;
   if (reason.includes('File too large')) return 413;
   if (reason === STORAGE_UNAVAILABLE) return 503;
   return 400;
@@ -145,9 +135,9 @@ function streamUploadToS3(singleOrBulk = 'single') {
         };
 
         /**
-         * Responds immediately (415) on failed magic-byte checks for single uploads.
-         * Closes the socket without draining the remaining body, aborting the client's
-         * transfer early to save bandwidth.
+         * Ends a single upload as soon as it is doomed (too large, stream error),
+         * closing the socket without draining the remaining body so the client's
+         * transfer aborts early to save bandwidth.
          */
         let stoppedEarly = false;
         const rejectWithoutReadingRest = reason => {
@@ -215,7 +205,16 @@ function streamUploadToS3(singleOrBulk = 'single') {
           const ext = path.extname(filename);
           const storageName = id + ext;
 
-          const mimeCheckStream = createMimeCheckStream(filename);
+          // Detect the type from the file's own bytes so the stored MIME type
+          // reflects the content, not the client-declared header or the filename
+          // (either can lie). This never blocks: a file whose content contradicts
+          // its extension is still stored, and a spoofed type is defused on the
+          // way out (attachment + nosniff). Detection falls back to the declared
+          // type when the content is not recognisable.
+          let detectedMimeType = null;
+          const sniffStream = createMimeSniffStream(mime => {
+            detectedMimeType = mime;
+          });
           const { stream: counterStream, getByteCount } = createByteCountStream();
           const encryptStream = createEncryptStream();
 
@@ -236,8 +235,8 @@ function streamUploadToS3(singleOrBulk = 'single') {
             const reason = describeFailure(err);
             fileFailures.push({ fileName: filename, error: reason, index: currentIndex });
             logger[level]({ err, storageName, filename }, message);
-            if (!mimeCheckStream.destroyed) mimeCheckStream.destroy(err);
-            fileStream.unpipe(mimeCheckStream);
+            if (!sniffStream.destroyed) sniffStream.destroy(err);
+            fileStream.unpipe(sniffStream);
             fileStream.resume();
             if (singleOrBulk === 'single') rejectWithoutReadingRest(reason);
           };
@@ -254,10 +253,10 @@ function streamUploadToS3(singleOrBulk = 'single') {
           // which is holding the real one gets to speak first.
           let shrapnel = null;
 
-          fileStream.pipe(mimeCheckStream);
+          fileStream.pipe(sniffStream);
           // pipeline (not pipe) so a rejected file tears the whole chain down and
           // the S3 put rejects instead of hanging on a stream that stopped early.
-          const chainSettled = pipeline(mimeCheckStream, counterStream, encryptStream).catch(err => {
+          const chainSettled = pipeline(sniffStream, counterStream, encryptStream).catch(err => {
             // When the destination dies it destroys the body it was reading, and
             // the chain reports that teardown as an abort. Racing to record it
             // would bury the storage error behind "The operation was aborted"
@@ -267,10 +266,7 @@ function streamUploadToS3(singleOrBulk = 'single') {
               shrapnel = err;
               return;
             }
-            failFile(
-              err,
-              isMimeRejection(err) ? '[StreamUpload] MIME validation failed' : '[StreamUpload] Upload stream failed'
-            );
+            failFile(err, '[StreamUpload] Upload stream failed');
           });
 
           fileStream.on('error', err => failFile(err, '[StreamUpload] File stream error'));
@@ -314,7 +310,7 @@ function streamUploadToS3(singleOrBulk = 'single') {
                 storageName,
                 name: filename,
                 size,
-                mimeType: mimeType || 'application/octet-stream',
+                mimeType: detectedMimeType || mimeType || 'application/octet-stream',
                 index: currentIndex,
               };
             })

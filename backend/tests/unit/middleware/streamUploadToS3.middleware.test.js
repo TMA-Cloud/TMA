@@ -1,15 +1,19 @@
 /**
- * The failure paths matter more than the happy path here: a file the magic-byte
- * check refuses used to leave the S3 put waiting on a stream that would never
- * end, so the request never answered and the client's upload sat there forever.
+ * The failure paths matter more than the happy path here: a rejected file (too
+ * large, storage down) used to leave the S3 put waiting on a stream that would
+ * never end, so the request never answered and the client's upload sat there
+ * forever. Content that merely contradicts its extension is not a rejection —
+ * the store keeps it — so those tests assert it is uploaded, not refused.
  */
 import { PassThrough } from 'stream';
 
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
-vi.mock('../../../models/user.model.js', () => ({
+const { getMaxUploadSizeSettings } = vi.hoisted(() => ({
   getMaxUploadSizeSettings: vi.fn(async () => ({ maxBytes: 10 * 1024 * 1024 })),
 }));
+
+vi.mock('../../../models/user.model.js', () => ({ getMaxUploadSizeSettings }));
 
 vi.mock('../../../utils/fileEncryption.js', () => ({
   createEncryptStream: () => new PassThrough(),
@@ -49,17 +53,17 @@ function pdfBytes() {
   return Buffer.concat([Buffer.from('%PDF-1.4\n'), Buffer.alloc(600, 0x20)]);
 }
 
-function partHeader(field, filename) {
+function partHeader(field, filename, contentType = 'application/octet-stream') {
   return Buffer.from(
     `--${BOUNDARY}\r\nContent-Disposition: form-data; name="${field}"; filename="${filename}"\r\n` +
-      'Content-Type: application/octet-stream\r\n\r\n'
+      `Content-Type: ${contentType}\r\n\r\n`
   );
 }
 
 function multipartBody(files) {
   const parts = [];
-  for (const { field = 'files', filename, content } of files) {
-    parts.push(partHeader(field, filename), content, Buffer.from('\r\n'));
+  for (const { field = 'files', filename, content, contentType } of files) {
+    parts.push(partHeader(field, filename, contentType), content, Buffer.from('\r\n'));
   }
   parts.push(Buffer.from(`--${BOUNDARY}--\r\n`));
   return Buffer.concat(parts);
@@ -90,41 +94,56 @@ beforeEach(() => {
 });
 
 describe('streamUploadToS3', () => {
-  it('answers instead of hanging when a bulk file fails the MIME check', async () => {
+  it('stores a bulk file whose content does not match its extension', async () => {
     const { err, req } = await run('bulk', [{ filename: 'clip.mp4', content: pdfBytes() }]);
 
     expect(err).toBeUndefined();
-    expect(req.streamedUploads).toEqual([]);
-    expect(req.streamedUploadFailures).toEqual([
-      { fileName: 'clip.mp4', error: 'File content does not match extension .mp4', index: 0 },
-    ]);
+    expect(req.streamedUploadFailures).toEqual([]);
+    expect(req.streamedUploads.map(u => u.name)).toEqual(['clip.mp4']);
   });
 
-  it('still uploads the good files in a batch that contains a rejected one', async () => {
+  it('stores the type detected from content, not the extension or the declared header', async () => {
+    // PDF bytes, a .mp4 name, and a declared type that is neither: the stored
+    // type comes from the content.
+    const { req } = await run('single', [
+      { field: 'file', filename: 'clip.mp4', content: pdfBytes(), contentType: 'video/mp4' },
+    ]);
+
+    expect(req.streamedUpload.mimeType).toBe('application/pdf');
+  });
+
+  it('falls back to the declared type when the content is not recognisable', async () => {
+    const { req } = await run('single', [
+      { field: 'file', filename: 'notes.txt', content: Buffer.alloc(600, 0x20), contentType: 'text/plain' },
+    ]);
+
+    expect(req.streamedUpload.mimeType).toBe('text/plain');
+  });
+
+  it('keeps every file in a batch, mismatched or not, in part order', async () => {
     const { err, req } = await run('bulk', [
       { filename: 'clip.mp4', content: pdfBytes() },
       { filename: 'doc.pdf', content: pdfBytes() },
     ]);
 
     expect(err).toBeUndefined();
-    expect(req.streamedUploads.map(u => u.name)).toEqual(['doc.pdf']);
-    expect(req.streamedUploadFailures.map(f => f.fileName)).toEqual(['clip.mp4']);
+    expect(req.streamedUploadFailures).toEqual([]);
     // Both keep the ordinal of the part they arrived on. The controller reads
-    // the folder and timestamp fields by that ordinal, so a rejected file must
-    // not renumber the ones behind it.
-    expect(req.streamedUploads[0].index).toBe(1);
-    expect(req.streamedUploadFailures[0].index).toBe(0);
+    // the folder and timestamp fields by that ordinal, so the order must hold.
+    expect(req.streamedUploads.map(u => u.name)).toEqual(['clip.mp4', 'doc.pdf']);
+    expect(req.streamedUploads.map(u => u.index)).toEqual([0, 1]);
   });
 
-  it('rejects a single upload with the reason and a client-error status', async () => {
-    const { err } = await run('single', [{ field: 'file', filename: 'clip.mp4', content: pdfBytes() }]);
+  it('stores a single upload whose content does not match its extension', async () => {
+    const { err, req } = await run('single', [{ field: 'file', filename: 'clip.mp4', content: pdfBytes() }]);
 
-    expect(err).toBeInstanceOf(Error);
-    expect(err.message).toBe('File content does not match extension .mp4');
-    expect(err.status).toBe(415);
+    expect(err).toBeUndefined();
+    expect(req.streamedUpload).toMatchObject({ name: 'clip.mp4', index: 0 });
   });
 
-  it('answers a refused single upload without reading the rest of the body', async () => {
+  it('aborts a too-large single upload without reading the rest of the body', async () => {
+    getMaxUploadSizeSettings.mockResolvedValueOnce({ maxBytes: 1024 });
+
     const req = new PassThrough();
     req.headers = { 'content-type': `multipart/form-data; boundary=${BOUNDARY}` };
     const res = new PassThrough();
@@ -134,14 +153,14 @@ describe('streamUploadToS3', () => {
       streamUploadToS3('single')(req, res, resolve);
     });
 
-    // Only the opening of the body, and no end to the part. The check settles
-    // as soon as it has buffered enough to judge, which is what a client
-    // halfway through a huge file looks like.
-    req.write(partHeader('file', 'clip.mp4'));
-    req.write(Buffer.concat([pdfBytes(), Buffer.alloc(16 * 1024, 0x20)]));
+    // Open the part and pour in more than the limit, with no end to it. The
+    // size guard settles as soon as the ceiling is crossed, which is what a
+    // client halfway through a huge file looks like.
+    req.write(partHeader('file', 'big.bin'));
+    req.write(Buffer.alloc(4 * 1024, 0x20));
 
     const err = await done;
-    expect(err.status).toBe(415);
+    expect(err.status).toBe(413);
 
     // What the client is still sending now piles up unread. Node closes a
     // connection whose request never completed, and that close is what stops a

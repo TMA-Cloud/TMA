@@ -28,7 +28,6 @@ import {
   updateUploadProgress,
   createAutoDismissTimeout,
   precheckUploads,
-  type RefusedUpload,
   type UploadProgressItem,
 } from '../utils/uploadUtils';
 import {
@@ -451,13 +450,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   /**
-   * Settles everything that can be decided before any content is sent: size,
-   * storage headroom, and whether each file's content matches its extension.
-   *
-   * @returns the files the server has already refused, which the caller should
-   *   drop from the upload rather than send.
+   * Settles everything that can be decided before any content is sent: per-file
+   * size against the max, and storage headroom for the whole batch. Throws when
+   * the upload cannot proceed, after showing the reason as a toast.
    */
-  const validateUploadSize = async (filesToValidate: File[]): Promise<RefusedUpload[]> => {
+  const validateUploadSize = async (filesToValidate: File[]): Promise<void> => {
     const { maxBytes } = await getMaxUploadSizeConfig();
     const oversized = filesToValidate.find(f => f.size > maxBytes);
     if (oversized) {
@@ -470,23 +467,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     const totalSize = filesToValidate.reduce((sum, f) => sum + f.size, 0);
     try {
-      return await precheckUploads(filesToValidate, totalSize);
+      await precheckUploads(totalSize);
     } catch (e) {
       const msg = e instanceof ApiError ? e.message : 'Storage limit exceeded.';
       showToast(msg, 'error');
       throw e;
     }
-  };
-
-  /**
-   * Turns a pre-upload refusal into the same failure report the server sends
-   * back mid-upload, so the user sees one kind of message wherever it came from.
-   */
-  const reportRefusedBeforeUpload = (refused: RefusedUpload[], savedCount: number) => {
-    reportUploadFailures(
-      refused.map(r => ({ fileName: r.fileName, reason: r.reason })),
-      savedCount
-    );
   };
 
   const executeXhrUpload = (config: {
@@ -913,11 +899,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const uploadFile = async (file: File) => {
     return operationQueue.add(async () => {
-      const refused = await validateUploadSize([file]);
-      if (refused.length > 0) {
-        reportRefusedBeforeUpload(refused, 0);
-        return;
-      }
+      await validateUploadSize([file]);
       const data = new FormData();
       const parentId = folderStack[folderStack.length - 1];
       if (parentId) data.append('parentId', parentId);
@@ -950,13 +932,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (allEntries.length === 0) return;
 
     return operationQueue.add(async () => {
-      const refusedUpFront = await validateUploadSize(allEntries.map(e => e.file));
-
-      // Carry on with whatever survived: a refused file rules out itself.
-      const refusedNames = new Set(refusedUpFront.map(r => r.fileName));
-      const entries = refusedNames.size > 0 ? allEntries.filter(e => !refusedNames.has(e.file.name)) : allEntries;
-      reportRefusedBeforeUpload(refusedUpFront, 0);
-      if (entries.length === 0) return;
+      await validateUploadSize(allEntries.map(e => e.file));
+      const entries = allEntries;
 
       const parentId = folderStack[folderStack.length - 1];
       const hasRelativePaths = entries.some(e => e.relativePath);
@@ -1330,11 +1307,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const uploadFileWithProgress = async (file: File, onProgress?: (progress: number) => void) => {
     return operationQueue.add(async () => {
-      const refused = await validateUploadSize([file]);
-      if (refused.length > 0) {
-        reportRefusedBeforeUpload(refused, 0);
-        return;
-      }
+      await validateUploadSize([file]);
       const formData = new FormData();
       const parentId = folderStack[folderStack.length - 1];
       if (parentId) formData.append('parentId', parentId);
@@ -1357,11 +1330,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const replaceFileWithProgress = async (fileId: string, file: File, onProgress?: (progress: number) => void) => {
     return operationQueue.add(async () => {
-      const refused = await validateUploadSize([file]);
-      if (refused.length > 0) {
-        reportRefusedBeforeUpload(refused, 0);
-        return;
-      }
+      await validateUploadSize([file]);
       const formData = new FormData();
       formData.append('file', file);
       appendClientMtime(formData, file);

@@ -238,27 +238,9 @@ const downloadSharedItemSchema = [
   param('id').notEmpty().withMessage('File ID is required').isString().withMessage('File ID must be a string'),
 ];
 
-/**
- * Header sample the client may send per file so content can be checked against
- * the extension before the upload starts. 8KiB of content is what the upload
- * stream itself sniffs; base64 inflates it by a third, and the ceiling here
- * leaves room for that rather than inviting a bigger sample.
- */
-const MAX_UPLOAD_SAMPLE_CHARS = 12 * 1024;
-/** Keeps a full batch of inflated samples inside the 1mb JSON body limit. */
-const MAX_UPLOAD_SAMPLES = 32;
-
-/** Check storage — and optionally file headers — before upload */
+/** Check available storage before an upload starts. */
 const checkUploadStorageSchema = [
   body('fileSize').isInt({ min: 0 }).withMessage('fileSize must be a non-negative integer').toInt(),
-  body('samples').optional().isArray({ max: MAX_UPLOAD_SAMPLES }).withMessage('samples must be an array'),
-  body('samples.*.name').isString().withMessage('Each sample needs a file name').bail().isLength({ max: 1024 }),
-  body('samples.*.head')
-    .isBase64()
-    .withMessage('Each sample head must be base64')
-    .bail()
-    .isLength({ max: MAX_UPLOAD_SAMPLE_CHARS })
-    .withMessage('Sample head is too large'),
 ];
 
 /**

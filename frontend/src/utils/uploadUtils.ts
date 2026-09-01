@@ -4,70 +4,14 @@
 
 import type React from 'react';
 
-import { checkUploadStorage, type UploadSample } from './api';
-import { ApiError } from './errorUtils';
+import { checkUploadStorage } from './api';
 
 /**
- * How much of a file the server sniffs to decide whether its content matches
- * its extension. Sampling exactly this much means the answer we get before
- * uploading is the answer the upload itself would reach.
+ * Verifies the upload fits within the user's storage quota before any bytes are
+ * sent. Throws (ApiError) when it would exceed the limit.
  */
-const UPLOAD_SAMPLE_BYTES = 8192;
-
-/** Files per pre-check request, so a batch of base64 samples stays inside the JSON body limit. */
-const UPLOAD_SAMPLE_BATCH = 32;
-
-/** Kept well under the argument-count limit a spread call has to fit into. */
-const CHAR_CODE_CHUNK = 0x8000;
-
-function toBase64(bytes: Uint8Array): string {
-  let binary = '';
-  for (let i = 0; i < bytes.length; i += CHAR_CODE_CHUNK) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + CHAR_CODE_CHUNK));
-  }
-  return btoa(binary);
-}
-
-async function readSample(file: File): Promise<UploadSample> {
-  const head = await file.slice(0, UPLOAD_SAMPLE_BYTES).arrayBuffer();
-  return { name: file.name, head: toBase64(new Uint8Array(head)) };
-}
-
-export interface RefusedUpload {
-  fileName: string;
-  reason: string;
-}
-
-function refusalsFrom(error: unknown): RefusedUpload[] | null {
-  if (!(error instanceof ApiError) || error.status !== 415) return null;
-  const refused = error.data?.refused;
-  return Array.isArray(refused) ? (refused as RefusedUpload[]) : [];
-}
-
-/**
- * Pre-validates uploads by sending 8KiB file headers upfront to verify storage
- * quota (throws if exceeded) and magic bytes without wasting bandwidth on full transfers.
- *
- * @returns Files whose content contradicts their extension.
- */
-export async function precheckUploads(files: File[], totalSize: number): Promise<RefusedUpload[]> {
-  const samples = await Promise.all(files.map(readSample));
-  const refused: RefusedUpload[] = [];
-
-  for (let i = 0; i < samples.length; i += UPLOAD_SAMPLE_BATCH) {
-    const batch = samples.slice(i, i + UPLOAD_SAMPLE_BATCH);
-    try {
-      // Only the first batch carries the total: the storage limit is a property
-      // of the whole upload, not of whichever slice happens to be in flight.
-      await checkUploadStorage(i === 0 ? totalSize : 0, batch);
-    } catch (error) {
-      const batchRefusals = refusalsFrom(error);
-      if (!batchRefusals) throw error;
-      refused.push(...batchRefusals);
-    }
-  }
-
-  return refused;
+export async function precheckUploads(totalSize: number): Promise<void> {
+  await checkUploadStorage(totalSize);
 }
 
 export type UploadProgressItem = {

@@ -6,7 +6,8 @@ import mimeDb from 'mime-db';
 
 import { logger } from '../config/logger.js';
 
-const MIME_CHECK_BUFFER_SIZE = 8192;
+/** Leading bytes buffered to sniff a stream's type; magic bytes live well within this. */
+const MIME_SNIFF_BYTES = 4100;
 
 /**
  * Reverse index: extension (lowercase) -> array of MIME types from mime-db.
@@ -110,61 +111,6 @@ const DETECTION_ALIASES = {
   // SVG is XML-based; file-type reports application/xml for SVGs without an XML declaration
   svg: ['application/xml', 'text/xml'],
 };
-
-/**
- * Groups extensions that share identical magic-byte formats (containers/headers).
- * Overlapping groups are automatically merged into unified families at build time.
- */
-const EXTENSION_FAMILIES = [
-  // One container carrying a DocType field. Sniffing separates Matroska from
-  // WebM; a filename does not.
-  ['mkv', 'mk3d', 'mks', 'mka', 'webm'],
-  // ISO base media: a box tree whose ftyp brand names the flavour. Encoders
-  // routinely stamp a generic brand, so the brand rarely matches the extension.
-  ['mp4', 'm4v', 'm4a', 'm4b', 'm4p', 'm4r', 'mov', 'qt', '3gp', '3g2', 'f4v', 'f4a', 'f4b', 'f4p'],
-  // One Ogg container; the extension announces what was muxed into it.
-  ['ogg', 'oga', 'ogv', 'ogx', 'ogm', 'opus', 'spx'],
-  ['jpg', 'jpeg', 'jpe', 'jfif', 'jif'],
-  ['tif', 'tiff'],
-  ['mpg', 'mpeg', 'mpe', 'm1v', 'm2v', 'vob'],
-  // MPEG audio layers share a frame header; only the layer bits differ.
-  ['mp3', 'mp2', 'mp1', 'mpga', 'm2a', 'm3a'],
-  ['aif', 'aiff', 'aifc'],
-  ['asf', 'wmv', 'wma'],
-  ['mid', 'midi', 'kar'],
-  ['gz', 'tgz'],
-  // Portable Executable: the same header whether the image is run or loaded.
-  ['exe', 'dll', 'sys', 'scr', 'com', 'ocx', 'cpl', 'efi'],
-  // ELF, likewise, for programs and shared objects.
-  ['elf', 'so', 'ko'],
-  ['ttf', 'ttc'],
-];
-
-/** extension -> the Set of extensions it is indistinguishable from. */
-const familyByExtension = (function buildExtensionFamilies() {
-  const map = Object.create(null);
-  for (const group of EXTENSION_FAMILIES) {
-    const family = new Set(group);
-    for (const ext of group) {
-      const existing = map[ext];
-      if (existing) for (const member of existing) family.add(member);
-    }
-    for (const ext of family) map[ext] = family;
-  }
-  return map;
-})();
-
-/** @returns {boolean} whether two extensions name a format magic bytes cannot separate */
-function sameFormatFamily(a, b) {
-  if (a === b) return true;
-  const family = familyByExtension[a];
-  return Boolean(family && family === familyByExtension[b]);
-}
-
-/** XML serialisations all sniff as XML; the extension is what carries the schema. */
-function isXmlMime(mimeType) {
-  return mimeType === 'application/xml' || mimeType === 'text/xml' || mimeType.endsWith('+xml');
-}
 
 /**
  * file-type v17+ is ESM-only; load it dynamically and cache for use in CommonJS.
@@ -278,147 +224,63 @@ function getExpectedMimeTypesForExtension(ext) {
 }
 
 /**
- * Checks if magic-byte detected content matches the filename extension (`ext`).
- * Matches on extension first because detector MIME strings frequently mismatch
- * MIME databases (e.g., `video/matroska` vs `video/x-matroska`),
- * causing false rejections.
+ * Transform stream that detects the MIME type from a file's leading bytes, then
+ * passes every byte through unchanged. Used by the S3 stream upload so the
+ * stored type comes from the content (magic bytes) — the trustworthy source —
+ * rather than the client-declared type or the filename, both of which can lie.
+ * This mirrors what the local-disk path does with `validateMimeType`.
  *
- * @param {{ ext: string, mime: string }} detected
- * @param {string} ext - Lowercase extension without dot.
- * @param {string[]} expectedMimeTypes
- * @returns {boolean}
- */
-function contentMatchesExtension(detected, ext, expectedMimeTypes) {
-  if (sameFormatFamily(detected.ext.toLowerCase(), ext)) return true;
-
-  const detectedMime = normalizeMime(detected.mime);
-  if (expectedMimeTypes.includes(detectedMime)) return true;
-
-  // The other direction: mime-db may list this extension under the detected
-  // type even when the reverse index built from it did not connect the two.
-  const registered = mimeDb[detectedMime]?.extensions;
-  if (registered?.some(candidate => sameFormatFamily(candidate.toLowerCase(), ext))) return true;
-
-  if (isXmlMime(detectedMime) && expectedMimeTypes.some(isXmlMime)) return true;
-
-  return false;
-}
-
-/**
- * Validate MIME type from a buffer (magic bytes) against the file extension.
- * Used for S3 stream upload to prevent spoofing (e.g. .exe renamed to .jpg).
- * @param {Buffer} buffer - First bytes of the file (at least 4KB recommended)
- * @param {string} filename - Original filename with extension
- * @returns {Promise<{ valid: boolean, error: string|null }>}
- */
-async function validateMimeTypeFromBuffer(buffer, filename) {
-  if (!buffer || buffer.length < 256) {
-    return { valid: true, error: null };
-  }
-  try {
-    const { fileTypeFromBuffer } = await getFileTypeModule();
-    const fileType = await fileTypeFromBuffer(buffer);
-    if (!fileType || !fileType.mime) {
-      return { valid: true, error: null };
-    }
-    const ext = path.extname(filename).toLowerCase().replace(/^\./, '');
-    const expected = getExpectedMimeTypesForExtension(ext);
-    if (expected.length === 0) {
-      return { valid: true, error: null };
-    }
-    const normalizedExpected = expected.map(normalizeMime);
-    const normalizedActual = normalizeMime(fileType.mime);
-
-    // Workaround: some valid Office Open XML documents (.docx/.xlsx/.pptx)
-    // are occasionally detected by file-type as generic ZIP archives.
-    // To avoid false positives, if we see a ZIP MIME for these extensions,
-    // inspect the buffered content for common OOXML markers before
-    // treating it as spoofed.
-    if (
-      (normalizedActual === 'application/zip' || normalizedActual === 'application/x-zip-compressed') &&
-      (ext === 'docx' || ext === 'xlsx' || ext === 'pptx')
-    ) {
-      try {
-        const asciiSlice = buffer.toString('utf8', 0, Math.min(buffer.length, MIME_CHECK_BUFFER_SIZE));
-        const hasOfficeMarkers =
-          asciiSlice.includes('[Content_Types].xml') ||
-          asciiSlice.includes('word/') ||
-          asciiSlice.includes('ppt/') ||
-          asciiSlice.includes('xl/');
-
-        if (hasOfficeMarkers) {
-          // Treat as valid OOXML document despite generic ZIP MIME
-          return { valid: true, error: null };
-        }
-      } catch (error) {
-        logger.debug({ filename, err: error.message }, 'Failed OOXML ZIP heuristic during MIME validation from buffer');
-      }
-    }
-
-    if (!contentMatchesExtension(fileType, ext, normalizedExpected)) {
-      logger.warn(
-        { filename, detected: fileType.mime, detectedExtension: fileType.ext, expected },
-        '[SECURITY] MIME spoof: content does not match extension'
-      );
-      return { valid: false, error: `File content does not match extension .${ext}` };
-    }
-    return { valid: true, error: null };
-  } catch (err) {
-    logger.warn({ err: err.message, filename }, 'MIME detection from buffer failed');
-    return { valid: true, error: null };
-  }
-}
-
-/**
- * Transform stream that buffers the first N bytes, validates MIME from magic bytes, then passes through.
- * Use in S3 stream upload pipeline to prevent MIME spoofing without writing to disk.
- * @param {string} filename - Original filename (for extension check)
+ * The detected type (or `null` when the content is not recognisable) is handed
+ * to `onDetect`; the caller falls back to the declared type in that case.
+ * Detection never blocks or alters the stream.
+ *
+ * @param {(mime: string|null) => void} onDetect
  * @returns {Transform}
  */
-function createMimeCheckStream(filename) {
+function createMimeSniffStream(onDetect) {
   const chunks = [];
   let length = 0;
-  let validated = false;
+  let sniffed = false;
+
+  const sniff = async buffer => {
+    sniffed = true;
+    let detected = null;
+    if (buffer && buffer.length >= 256) {
+      try {
+        const { fileTypeFromBuffer } = await getFileTypeModule();
+        const fileType = await fileTypeFromBuffer(buffer);
+        detected = fileType?.mime || null;
+      } catch (err) {
+        logger.debug({ err: err.message }, 'MIME sniff during upload failed; keeping the declared type');
+      }
+    }
+    onDetect(detected);
+  };
 
   return new Transform({
     async transform(chunk, encoding, callback) {
-      if (validated) {
+      if (sniffed) {
         this.push(chunk);
         return callback();
       }
       chunks.push(chunk);
       length += chunk.length;
-      if (length < MIME_CHECK_BUFFER_SIZE) {
+      if (length < MIME_SNIFF_BYTES) {
         return callback();
       }
-      validated = true;
       const buffer = Buffer.concat(chunks);
-      try {
-        const result = await validateMimeTypeFromBuffer(buffer, filename);
-        if (!result.valid) {
-          this.destroy(new Error(result.error));
-          return callback();
-        }
-        this.push(buffer);
-        callback();
-      } catch (err) {
-        this.destroy(err);
-        callback(err);
-      }
+      chunks.length = 0;
+      await sniff(buffer);
+      this.push(buffer);
+      callback();
     },
-    flush(callback) {
-      if (validated) return callback();
-      const buffer = chunks.length ? Buffer.concat(chunks) : Buffer.alloc(0);
-      validateMimeTypeFromBuffer(buffer, filename)
-        .then(result => {
-          if (!result.valid) {
-            callback(new Error(result.error));
-            return;
-          }
-          if (buffer.length > 0) this.push(buffer);
-          callback();
-        })
-        .catch(callback);
+    async flush(callback) {
+      if (!sniffed) {
+        const buffer = chunks.length ? Buffer.concat(chunks) : Buffer.alloc(0);
+        await sniff(buffer);
+        if (buffer.length > 0) this.push(buffer);
+      }
+      callback();
     },
   });
 }
@@ -548,10 +410,4 @@ async function validateOnlyOfficeMimeType(
   };
 }
 
-export {
-  detectMimeTypeFromContent,
-  validateMimeType,
-  validateMimeTypeFromBuffer,
-  createMimeCheckStream,
-  validateOnlyOfficeMimeType,
-};
+export { detectMimeTypeFromContent, validateMimeType, createMimeSniffStream, validateOnlyOfficeMimeType };
