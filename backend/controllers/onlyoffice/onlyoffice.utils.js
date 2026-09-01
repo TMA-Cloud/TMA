@@ -233,7 +233,7 @@ async function signConfigToken(config) {
  * @param {Object} file - File object from database
  * @param {Function} validateAndResolveFile - Function to validate and resolve file path
  * @param {Function} validateOnlyOfficeMimeType - Function to validate MIME type
- * @returns {Promise<Object>} { valid: boolean, filePath?: string, isEncrypted?: boolean, error?: string }
+ * @returns {Promise<Object>} { valid: boolean, storageKey?: string, isEncrypted?: boolean, error?: string }
  */
 async function validateFileForOnlyOffice(file, validateAndResolveFile, validateOnlyOfficeMimeType) {
   if (!file) {
@@ -244,15 +244,16 @@ async function validateFileForOnlyOffice(file, validateAndResolveFile, validateO
     return { valid: false, error: 'File type is not supported by ONLYOFFICE' };
   }
 
-  const { success, filePath, storageKey, isEncrypted, error: fileError } = await validateAndResolveFile(file);
+  const { success, storageKey, isEncrypted, error: fileError } = await validateAndResolveFile(file);
   if (!success) {
     return { valid: false, error: fileError || 'File not found' };
   }
 
-  const pathOrKey = filePath || storageKey;
+  // Stored files are always encrypted, so MIME validation uses the stored type
+  // and never reads content from this key; the key is only a positional arg here.
   const skipContentDetection = storage.useS3(); // S3 key is not a filesystem path
   const mimeValidation = await validateOnlyOfficeMimeType(
-    pathOrKey,
+    storageKey,
     file.name,
     file.mimeType,
     isEncrypted,
@@ -262,7 +263,7 @@ async function validateFileForOnlyOffice(file, validateAndResolveFile, validateO
     return { valid: false, error: mimeValidation.error || 'File type mismatch detected' };
   }
 
-  return { valid: true, filePath: pathOrKey, isEncrypted };
+  return { valid: true, storageKey, isEncrypted };
 }
 
 /**

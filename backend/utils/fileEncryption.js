@@ -1,3 +1,22 @@
+/**
+ * Segmented file encryption in Google Tink's AES-GCM-HKDF-STREAMING format
+ * (AES256_GCM_HKDF_1MB). Splitting the file into independently-sealed segments
+ * makes it seekable — a download can serve an HTTP range by decrypting only the
+ * overlapping segments.
+ *
+ * Wire format:
+ *   header    = headerLength(1) || salt(32) || noncePrefix(7)     // 40 bytes
+ *   body      = segment_0 || segment_1 || ... || segment_n
+ *   segment_i = AES256-GCM(derivedKey, nonce_i, plaintext_i) || tag(16)
+ *   nonce_i   = noncePrefix(7) || uint32BE(i) || lastFlag(1)      // 12 bytes
+ *   derivedKey = HKDF-SHA256(ikm = masterKey, salt, info = "")
+ *
+ * Segment 0's plaintext is shorter so header || segment_0 fills one
+ * CIPHERTEXT_SEGMENT_SIZE block; later ciphertext segments are exactly
+ * CIPHERTEXT_SEGMENT_SIZE (the last may be short), which keeps the range offset
+ * math exact. Interoperable with Tink's StreamingAead.
+ */
+
 import crypto from 'crypto';
 import fs from 'fs/promises';
 import { createReadStream, createWriteStream } from 'fs';
@@ -6,207 +25,44 @@ import { pipeline } from 'stream/promises';
 
 import { logger } from '../config/logger.js';
 
-// AES-256-GCM configuration
-const ALGORITHM = 'aes-256-gcm';
-const IV_LENGTH = 16; // 128 bits for GCM
-const TAG_LENGTH = 16; // 128 bits for authentication tag
-const KEY_LENGTH = 32; // 256 bits
+// --- AES-GCM-HKDF-STREAMING parameters (AES256_GCM_HKDF_1MB) ---
+const HKDF_HASH = 'sha256';
+const KEY_LENGTH = 32; // master key (HKDF ikm), 256 bits
+const DERIVED_KEY_LENGTH = 32; // per-file key, 256 bits
+const TAG_LENGTH = 16; // AES-GCM tag, 128 bits
+const NONCE_PREFIX_LENGTH = 7; // random per-file nonce prefix
+const NONCE_LENGTH = 12; // prefix(7) + segment counter(4) + last-flag(1)
+const HEADER_LENGTH = 1 + DERIVED_KEY_LENGTH + NONCE_PREFIX_LENGTH; // 40
+
+// 1 MiB ciphertext segments (Tink's AES256_GCM_HKDF_1MB template).
+const CIPHERTEXT_SEGMENT_SIZE = 1024 * 1024;
+
+// Plaintext that fits in one ciphertext segment. The first segment shares its
+// block with the header, so it holds a little less.
+const PLAINTEXT_FIRST_SEGMENT_MAX = CIPHERTEXT_SEGMENT_SIZE - HEADER_LENGTH - TAG_LENGTH;
+const PLAINTEXT_SEGMENT_MAX = CIPHERTEXT_SEGMENT_SIZE - TAG_LENGTH;
+
+// Streaming AEAD feeds the associated data into HKDF as `info`, not into each
+// GCM segment. We bind no associated data to stored files, so it is empty.
+const ASSOCIATED_DATA = Buffer.alloc(0);
 
 /**
- * Read exactly n bytes from a readable stream (consumes from stream; rest remains readable)
- * @param {import('stream').Readable} stream - Readable stream
- * @param {number} n - Number of bytes to read
- * @returns {Promise<Buffer>} First n bytes
- */
-function readBytes(stream, n) {
-  return new Promise((resolve, reject) => {
-    let buf = Buffer.alloc(0);
-    function onReadable() {
-      const chunk = stream.read();
-      if (chunk) {
-        buf = Buffer.concat([buf, chunk]);
-        if (buf.length >= n) {
-          const result = buf.subarray(0, n);
-          const rest = buf.subarray(n);
-          if (rest.length > 0) stream.unshift(rest);
-          stream.removeListener('readable', onReadable);
-          stream.removeListener('error', onError);
-          stream.removeListener('end', onEnd);
-          resolve(result);
-        }
-      }
-    }
-    function onError(err) {
-      stream.removeListener('readable', onReadable);
-      stream.removeListener('end', onEnd);
-      reject(err);
-    }
-    function onEnd() {
-      if (buf.length < n) {
-        stream.removeListener('readable', onReadable);
-        stream.removeListener('error', onError);
-        reject(new Error('Invalid encrypted stream: too short for IV'));
-      }
-    }
-    stream.on('readable', onReadable);
-    stream.on('error', onError);
-    stream.on('end', onEnd);
-    onReadable();
-  });
-}
-
-/**
- * Helper to create a Transform stream that appends auth tag at the end
- * @param {Object} cipher - Cipher object to get auth tag from
- * @returns {Transform} Transform stream
- */
-function createAppendTagStream(cipher) {
-  return new Transform({
-    transform(chunk, encoding, cb) {
-      cb(null, chunk);
-    },
-    flush(cb) {
-      this.push(cipher.getAuthTag());
-      cb();
-    },
-  });
-}
-
-function createTagBufferedDecipherTransform(decipher) {
-  return new Transform({
-    transform(chunk, encoding, callback) {
-      this._tail = Buffer.concat([this._tail || Buffer.alloc(0), chunk]);
-      while (this._tail.length > TAG_LENGTH) {
-        const out = this._tail.subarray(0, this._tail.length - TAG_LENGTH);
-        this._tail = this._tail.subarray(this._tail.length - TAG_LENGTH);
-        try {
-          const dec = decipher.update(out);
-          if (dec.length > 0) this.push(dec);
-        } catch (err) {
-          return callback(err);
-        }
-      }
-      callback();
-    },
-    flush(callback) {
-      try {
-        decipher.setAuthTag(this._tail || Buffer.alloc(0));
-        const final = decipher.final();
-        if (final.length > 0) this.push(final);
-        callback();
-      } catch (err) {
-        callback(err);
-      }
-    },
-  });
-}
-
-/**
- * Create a transform stream that encrypts plaintext input (for direct stream-to-S3 upload).
- * Output format: [IV][ENCRYPTED_DATA][TAG]
- * @returns {Transform} Transform stream (plaintext in -> encrypted out)
- */
-function createEncryptStream() {
-  const key = getEncryptionKey();
-  const iv = crypto.randomBytes(IV_LENGTH);
-  const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
-
-  return new Transform({
-    transform(chunk, encoding, callback) {
-      if (!this._ivPushed) {
-        this._ivPushed = true;
-        this.push(iv);
-      }
-      try {
-        const out = cipher.update(chunk);
-        if (out.length > 0) this.push(out);
-        callback();
-      } catch (err) {
-        callback(err);
-      }
-    },
-    flush(callback) {
-      try {
-        if (!this._ivPushed) {
-          this._ivPushed = true;
-          this.push(iv);
-        }
-        const final = cipher.final();
-        if (final.length > 0) this.push(final);
-        this.push(cipher.getAuthTag());
-        callback();
-      } catch (err) {
-        callback(err);
-      }
-    },
-  });
-}
-
-/**
- * Create a transform stream that counts bytes passed through (for stream upload size).
- * @returns {{ stream: Transform, getByteCount: () => number }}
- */
-function createByteCountStream() {
-  let byteCount = 0;
-  const stream = new Transform({
-    transform(chunk, encoding, callback) {
-      byteCount += chunk.length;
-      callback(null, chunk);
-    },
-  });
-  return {
-    stream,
-    getByteCount: () => byteCount,
-  };
-}
-
-/**
- * Helper to read IV and TAG from encrypted file
- * File format: [IV][ENCRYPTED_DATA][TAG]
- * @param {string} encryptedPath - Path to encrypted file
- * @returns {Promise<{iv: Buffer, tag: Buffer, fileSize: number}>}
- */
-async function readEncryptionMetadata(encryptedPath) {
-  const fd = await fs.open(encryptedPath, 'r');
-  const stats = await fd.stat();
-  const fileSize = stats.size;
-
-  if (fileSize < IV_LENGTH + TAG_LENGTH) {
-    await fd.close();
-    throw new Error('Invalid encrypted file format: file too small');
-  }
-
-  // Read IV from the beginning
-  const ivBuffer = Buffer.alloc(IV_LENGTH);
-  await fd.read(ivBuffer, 0, IV_LENGTH, 0);
-
-  // Read TAG from the end
-  const tagBuffer = Buffer.alloc(TAG_LENGTH);
-  await fd.read(tagBuffer, 0, TAG_LENGTH, fileSize - TAG_LENGTH);
-
-  await fd.close();
-
-  return { iv: ivBuffer, tag: tagBuffer, fileSize };
-}
-
-/**
- * Get encryption key from environment variable or generate a default (for development only)
- * In production, FILE_ENCRYPTION_KEY should be set to a secure 32-byte key (base64 encoded)
+ * Get the master encryption key (HKDF input keying material).
+ * Accepts a 32-byte base64 key, a 64-char hex key, or any passphrase (stretched
+ * with PBKDF2). In production FILE_ENCRYPTION_KEY must be set.
+ * @returns {Buffer} 32-byte key
  */
 function getEncryptionKey() {
   const envKey = process.env.FILE_ENCRYPTION_KEY;
   if (envKey) {
     try {
-      // If key is base64 encoded, decode it
       const decoded = Buffer.from(envKey, 'base64');
       if (decoded.length === KEY_LENGTH) {
         return decoded;
       }
-      // If key is hex encoded, decode it
-      if (envKey.length === KEY_LENGTH * 2) {
+      if (envKey.length === KEY_LENGTH * 2 && /^[0-9a-fA-F]+$/.test(envKey)) {
         return Buffer.from(envKey, 'hex');
       }
-      // If key is a string, derive a key from it using PBKDF2
       return crypto.pbkdf2Sync(envKey, 'file-encryption-salt', 100000, KEY_LENGTH, 'sha256');
     } catch (error) {
       logger.error('[Encryption] Error processing encryption key from environment', error);
@@ -231,256 +87,482 @@ function getEncryptionKey() {
 }
 
 /**
- * Encrypt a file using streams (memory-efficient for large files)
- * @param {string} inputPath - Path to the file to encrypt
- * @param {string} outputPath - Path where encrypted file will be saved
- * @returns {Promise<void>}
+ * Derive the per-file key from the master key and the file's random salt.
+ * @param {Buffer} ikm - Master key
+ * @param {Buffer} salt - Per-file salt from the header
+ * @returns {Buffer} 32-byte derived key
  */
-async function encryptFile(inputPath, outputPath) {
-  const key = getEncryptionKey();
-  const iv = crypto.randomBytes(IV_LENGTH);
-  const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
-
-  const input = createReadStream(inputPath);
-  const output = createWriteStream(outputPath);
-
-  // Write IV first
-  output.write(iv);
-
-  // Helper stream to append Auth Tag at the end
-  const appendTagStream = createAppendTagStream(cipher);
-
-  // Pipeline handles flow control, backpressure, and errors automatically
-  await pipeline(input, cipher, appendTagStream, output);
-
-  // Remove original file
-  await fs.unlink(inputPath);
+function deriveKey(ikm, salt) {
+  return Buffer.from(crypto.hkdfSync(HKDF_HASH, ikm, salt, ASSOCIATED_DATA, DERIVED_KEY_LENGTH));
 }
 
 /**
- * Decrypt a file using streams (memory-efficient for large files)
- * File format: [IV][ENCRYPTED_DATA][TAG]
- * @param {string} inputPath - Path to the encrypted file
- * @param {string} outputPath - Path where decrypted file will be saved
- * @returns {Promise<void>}
+ * Build the 40-byte header: headerLength(1) || salt(32) || noncePrefix(7).
  */
-async function decryptFile(inputPath, outputPath) {
-  const key = getEncryptionKey();
-  const { iv, tag, fileSize } = await readEncryptionMetadata(inputPath);
-
-  const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
-  decipher.setAuthTag(tag);
-
-  // Stream encrypted data (excluding IV and TAG); empty file = no ciphertext bytes
-  const ciphertextEnd = fileSize - TAG_LENGTH - 1; // inclusive
-  const input =
-    ciphertextEnd >= IV_LENGTH
-      ? createReadStream(inputPath, { start: IV_LENGTH, end: ciphertextEnd })
-      : Readable.from([Buffer.alloc(0)]);
-  const output = createWriteStream(outputPath);
-
-  // Stream decrypt: input -> decipher -> output
-  await pipeline(input, decipher, output);
+function buildHeader(salt, noncePrefix) {
+  const header = Buffer.alloc(HEADER_LENGTH);
+  header[0] = HEADER_LENGTH;
+  salt.copy(header, 1);
+  noncePrefix.copy(header, 1 + DERIVED_KEY_LENGTH);
+  return header;
 }
 
 /**
- * Create a readable stream for decrypted file content
- * This is more memory-efficient for large files
- * File format: [IV][ENCRYPTED_DATA][TAG]
- * @param {string} encryptedPath - Path to the encrypted file
- * @returns {Promise<{stream: Readable, cleanup: Function}>}
+ * Parse a 40-byte header into its salt and nonce prefix.
+ * @param {Buffer} buf - Buffer holding at least HEADER_LENGTH bytes
+ * @returns {{ salt: Buffer, noncePrefix: Buffer }}
  */
-async function createDecryptStream(encryptedPath) {
-  const key = getEncryptionKey();
-  const { iv, tag, fileSize } = await readEncryptionMetadata(encryptedPath);
+function parseHeader(buf) {
+  if (!buf || buf.length < HEADER_LENGTH) {
+    throw new Error('Invalid encrypted stream: header too short');
+  }
+  const headerLen = buf[0];
+  if (headerLen !== HEADER_LENGTH) {
+    throw new Error(`Unsupported encryption header length: ${headerLen}`);
+  }
+  const salt = buf.subarray(1, 1 + DERIVED_KEY_LENGTH);
+  const noncePrefix = buf.subarray(1 + DERIVED_KEY_LENGTH, HEADER_LENGTH);
+  return { salt, noncePrefix };
+}
 
-  const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
+/**
+ * Compose the 12-byte GCM nonce for a segment.
+ * nonce = noncePrefix(7) || uint32BE(index) || lastFlag(1)
+ */
+function segmentNonce(noncePrefix, index, isLast) {
+  const nonce = Buffer.alloc(NONCE_LENGTH);
+  noncePrefix.copy(nonce, 0);
+  nonce.writeUInt32BE(index >>> 0, NONCE_PREFIX_LENGTH);
+  nonce[NONCE_PREFIX_LENGTH + 4] = isLast ? 1 : 0;
+  return nonce;
+}
+
+/**
+ * Seal one plaintext segment.
+ * @returns {Buffer} ciphertext || tag
+ */
+function encryptSegment(derivedKey, noncePrefix, index, isLast, plaintextSeg) {
+  const cipher = crypto.createCipheriv('aes-256-gcm', derivedKey, segmentNonce(noncePrefix, index, isLast));
+  const body = Buffer.concat([cipher.update(plaintextSeg), cipher.final()]);
+  return Buffer.concat([body, cipher.getAuthTag()]);
+}
+
+/**
+ * Open one ciphertext segment (ciphertext || tag), verifying its GCM tag.
+ * @returns {Buffer} plaintext
+ */
+function decryptSegment(derivedKey, noncePrefix, index, isLast, ctWithTag) {
+  if (ctWithTag.length < TAG_LENGTH) {
+    throw new Error('Invalid encrypted segment: shorter than the authentication tag');
+  }
+  const body = ctWithTag.subarray(0, ctWithTag.length - TAG_LENGTH);
+  const tag = ctWithTag.subarray(ctWithTag.length - TAG_LENGTH);
+  const decipher = crypto.createDecipheriv('aes-256-gcm', derivedKey, segmentNonce(noncePrefix, index, isLast));
   decipher.setAuthTag(tag);
+  return Buffer.concat([decipher.update(body), decipher.final()]);
+}
 
-  // Create a transform stream that decrypts chunks
-  const decryptTransform = new Transform({
-    transform(chunk, encoding, callback) {
+// --- Segment layout math (all derived from the plaintext length) ---
+
+/** Total number of segments a plaintext of `length` bytes is split into. */
+function totalSegments(length) {
+  if (length <= PLAINTEXT_FIRST_SEGMENT_MAX) return 1;
+  return 1 + Math.ceil((length - PLAINTEXT_FIRST_SEGMENT_MAX) / PLAINTEXT_SEGMENT_MAX);
+}
+
+/** Plaintext byte offset at which segment `i` begins. */
+function plaintextOffsetAt(i) {
+  if (i <= 0) return 0;
+  return PLAINTEXT_FIRST_SEGMENT_MAX + (i - 1) * PLAINTEXT_SEGMENT_MAX;
+}
+
+/** Plaintext length of segment `i` for a file of `length` bytes. */
+function plaintextSegmentLength(i, length) {
+  const total = totalSegments(length);
+  if (i < 0 || i >= total) return 0;
+  if (i < total - 1) return i === 0 ? PLAINTEXT_FIRST_SEGMENT_MAX : PLAINTEXT_SEGMENT_MAX;
+  return length - plaintextOffsetAt(i);
+}
+
+/** Ciphertext byte offset at which segment `i` begins. */
+function ciphertextOffsetAt(i) {
+  if (i <= 0) return HEADER_LENGTH;
+  return i * CIPHERTEXT_SEGMENT_SIZE;
+}
+
+/** Ciphertext length (including tag) of segment `i` for a file of `length` bytes. */
+function ciphertextSegmentLength(i, length) {
+  return plaintextSegmentLength(i, length) + TAG_LENGTH;
+}
+
+/** Index of the segment that contains plaintext byte offset `p`. */
+function segmentIndexForOffset(p) {
+  if (p < PLAINTEXT_FIRST_SEGMENT_MAX) return 0;
+  return 1 + Math.floor((p - PLAINTEXT_FIRST_SEGMENT_MAX) / PLAINTEXT_SEGMENT_MAX);
+}
+
+/**
+ * Recover the plaintext length from the total ciphertext (object) size.
+ * The layout is a bijection, so this is exact — no need to store the size
+ * separately for range math.
+ * @param {number} ciphertextSize - Total stored object size in bytes
+ * @returns {number} Plaintext length in bytes
+ */
+function ciphertextSizeToPlaintextSize(ciphertextSize) {
+  const C = Number(ciphertextSize);
+  if (!Number.isFinite(C) || C < HEADER_LENGTH + TAG_LENGTH) {
+    throw new Error(`Invalid ciphertext size: ${ciphertextSize}`);
+  }
+  const body = C - HEADER_LENGTH;
+  const firstCiphertextCap = CIPHERTEXT_SEGMENT_SIZE - HEADER_LENGTH;
+  if (body <= firstCiphertextCap) {
+    return body - TAG_LENGTH; // single segment
+  }
+  const rem = body - firstCiphertextCap;
+  const fullMiddle = Math.floor(rem / CIPHERTEXT_SEGMENT_SIZE);
+  const lastCiphertext = rem - fullMiddle * CIPHERTEXT_SEGMENT_SIZE;
+  const base = PLAINTEXT_FIRST_SEGMENT_MAX + fullMiddle * PLAINTEXT_SEGMENT_MAX;
+  return lastCiphertext === 0 ? base : base + (lastCiphertext - TAG_LENGTH);
+}
+
+/**
+ * Read exactly `n` bytes from a readable stream (for the fixed-size header).
+ */
+async function collectStream(stream, n) {
+  let buf = Buffer.alloc(0);
+  for await (const chunk of stream) {
+    buf = Buffer.concat([buf, chunk]);
+    if (n != null && buf.length >= n) break;
+  }
+  if (n != null && buf.length < n) {
+    throw new Error('Invalid encrypted stream: ended before the header was complete');
+  }
+  return n != null ? buf.subarray(0, n) : buf;
+}
+
+/**
+ * Transform that encrypts plaintext into the streaming wire format.
+ * Buffers just enough to know which segment is last (so its nonce flag is set),
+ * emitting each earlier segment as soon as more data proves it is not the last.
+ * @param {Buffer} [ikm] - Master key (defaults to the configured key)
+ * @returns {Transform}
+ */
+function createEncryptStream(ikm = getEncryptionKey()) {
+  const salt = crypto.randomBytes(DERIVED_KEY_LENGTH);
+  const noncePrefix = crypto.randomBytes(NONCE_PREFIX_LENGTH);
+  const derivedKey = deriveKey(ikm, salt);
+  const header = buildHeader(salt, noncePrefix);
+
+  let headerPushed = false;
+  let segIndex = 0;
+  let pending = Buffer.alloc(0);
+
+  const segmentCap = () => (segIndex === 0 ? PLAINTEXT_FIRST_SEGMENT_MAX : PLAINTEXT_SEGMENT_MAX);
+
+  return new Transform({
+    transform(chunk, _encoding, callback) {
       try {
-        // Decrypt the chunk - the decipher will verify the tag in final()
-        const decrypted = decipher.update(chunk);
-        if (decrypted.length > 0) {
-          this.push(decrypted);
+        if (!headerPushed) {
+          this.push(header);
+          headerPushed = true;
+        }
+        pending = pending.length === 0 ? chunk : Buffer.concat([pending, chunk]);
+        // Emit a segment only when strictly more data follows, so the buffered
+        // remainder is always available to become the final (flagged) segment.
+        while (pending.length > segmentCap()) {
+          const cap = segmentCap();
+          const seg = pending.subarray(0, cap);
+          pending = pending.subarray(cap);
+          this.push(encryptSegment(derivedKey, noncePrefix, segIndex, false, seg));
+          segIndex += 1;
         }
         callback();
-      } catch (error) {
-        callback(error);
+      } catch (err) {
+        callback(err);
       }
     },
     flush(callback) {
       try {
-        // This will verify the authentication tag
-        const final = decipher.final();
-        if (final.length > 0) {
-          this.push(final);
+        if (!headerPushed) {
+          this.push(header);
+          headerPushed = true;
         }
+        // Final segment (marked last). For an empty file this is a zero-length
+        // plaintext, producing a segment that is just the tag.
+        this.push(encryptSegment(derivedKey, noncePrefix, segIndex, true, pending));
         callback();
-      } catch (error) {
-        callback(error);
+      } catch (err) {
+        callback(err);
       }
     },
   });
+}
 
-  // Start reading from after the IV, and stop before the TAG; empty file = no ciphertext bytes
-  const ciphertextEnd = fileSize - TAG_LENGTH - 1; // inclusive
-  const fileStream =
-    ciphertextEnd >= IV_LENGTH
-      ? createReadStream(encryptedPath, { start: IV_LENGTH, end: ciphertextEnd })
-      : Readable.from([Buffer.alloc(0)]);
+/**
+ * Transform that decrypts a full stream in the streaming wire format, in order.
+ * Reads one segment ahead so it can flag the final segment correctly without
+ * knowing the plaintext length up front.
+ * @param {Buffer} [ikm] - Master key
+ * @returns {Transform}
+ */
+function createSequentialDecryptTransform(ikm = getEncryptionKey()) {
+  let headerParsed = false;
+  let derivedKey = null;
+  let noncePrefix = null;
+  let buf = Buffer.alloc(0);
+  let segIndex = 0;
 
-  // Use pipeline for proper backpressure handling and error propagation
-  // But we need to return the stream, so we'll handle errors manually
-  fileStream.on('error', err => {
-    decryptTransform.destroy(err);
+  const currentCiphertextCap = () =>
+    segIndex === 0 ? CIPHERTEXT_SEGMENT_SIZE - HEADER_LENGTH : CIPHERTEXT_SEGMENT_SIZE;
+
+  return new Transform({
+    transform(chunk, _encoding, callback) {
+      try {
+        buf = buf.length === 0 ? chunk : Buffer.concat([buf, chunk]);
+
+        if (!headerParsed) {
+          if (buf.length < HEADER_LENGTH) return callback();
+          const { salt, noncePrefix: np } = parseHeader(buf);
+          derivedKey = deriveKey(ikm, salt);
+          noncePrefix = np;
+          headerParsed = true;
+          buf = buf.subarray(HEADER_LENGTH);
+        }
+
+        // Emit any segment strictly followed by more bytes (so it is not last).
+        while (buf.length > currentCiphertextCap()) {
+          const cap = currentCiphertextCap();
+          const ct = buf.subarray(0, cap);
+          buf = buf.subarray(cap);
+          this.push(decryptSegment(derivedKey, noncePrefix, segIndex, false, ct));
+          segIndex += 1;
+        }
+        callback();
+      } catch (err) {
+        callback(err);
+      }
+    },
+    flush(callback) {
+      try {
+        if (!headerParsed) {
+          return callback(new Error('Invalid encrypted stream: missing header'));
+        }
+        if (buf.length < TAG_LENGTH) {
+          return callback(new Error('Invalid encrypted stream: truncated final segment'));
+        }
+        this.push(decryptSegment(derivedKey, noncePrefix, segIndex, true, buf));
+        callback();
+      } catch (err) {
+        callback(err);
+      }
+    },
   });
+}
 
-  fileStream.pipe(decryptTransform);
+/**
+ * Create a byte-counting passthrough (used to learn an upload's encrypted size).
+ * @returns {{ stream: Transform, getByteCount: () => number }}
+ */
+function createByteCountStream() {
+  let byteCount = 0;
+  const stream = new Transform({
+    transform(chunk, _encoding, callback) {
+      byteCount += chunk.length;
+      callback(null, chunk);
+    },
+  });
+  return { stream, getByteCount: () => byteCount };
+}
 
+/**
+ * Encrypt a file on disk (plaintext -> streaming ciphertext), removing the input.
+ * @param {string} inputPath
+ * @param {string} outputPath
+ * @param {Buffer} [ikm]
+ */
+async function encryptFile(inputPath, outputPath, ikm = getEncryptionKey()) {
+  await pipeline(createReadStream(inputPath), createEncryptStream(ikm), createWriteStream(outputPath));
+  await fs.unlink(inputPath);
+}
+
+/**
+ * Decrypt an encrypted file on disk to a plaintext file.
+ * @param {string} inputPath
+ * @param {string} outputPath
+ * @param {Buffer} [ikm]
+ */
+async function decryptFile(inputPath, outputPath, ikm = getEncryptionKey()) {
+  await pipeline(createReadStream(inputPath), createSequentialDecryptTransform(ikm), createWriteStream(outputPath));
+}
+
+/**
+ * Full-file decrypt stream from a local encrypted file.
+ * @param {string} encryptedPath
+ * @param {Buffer} [ikm]
+ * @returns {Promise<{ stream: Transform, cleanup: Function }>}
+ */
+async function createDecryptStream(encryptedPath, ikm = getEncryptionKey()) {
+  const fileStream = createReadStream(encryptedPath);
+  const decrypt = createSequentialDecryptTransform(ikm);
+  fileStream.on('error', err => decrypt.destroy(err));
+  fileStream.pipe(decrypt);
   return {
-    stream: decryptTransform,
+    stream: decrypt,
     cleanup: () => {
       try {
         fileStream.destroy();
-        decryptTransform.destroy();
-      } catch (_err) {
-        // Ignore cleanup errors
+        decrypt.destroy();
+      } catch {
+        // ignore
       }
     },
   };
 }
 
 /**
- * Copy an encrypted file by decrypting and re-encrypting in a single pipeline
- * This avoids writing plaintext to disk (more secure and faster)
- * @param {string} sourceEncryptedPath - Path to source encrypted file
- * @param {string} destEncryptedPath - Path where new encrypted file will be saved
- * @returns {Promise<void>}
+ * Full-file decrypt stream from an already-open encrypted readable stream (S3).
+ * @param {import('stream').Readable} encryptedStream
+ * @param {Buffer} [ikm]
+ * @returns {Promise<{ stream: Transform, cleanup: Function }>}
  */
-async function copyEncryptedFile(sourceEncryptedPath, destEncryptedPath) {
-  const key = getEncryptionKey();
-  const { iv: sourceIv, tag: sourceTag, fileSize } = await readEncryptionMetadata(sourceEncryptedPath);
-
-  // Create decipher for source
-  const decipher = crypto.createDecipheriv(ALGORITHM, key, sourceIv);
-  decipher.setAuthTag(sourceTag);
-
-  // Create new IV and cipher for destination (ENCRYPT, not decrypt!)
-  const destIv = crypto.randomBytes(IV_LENGTH);
-  const cipher = crypto.createCipheriv(ALGORITHM, key, destIv);
-
-  const ciphertextEnd = fileSize - TAG_LENGTH - 1; // inclusive
-  const sourceStream =
-    ciphertextEnd >= IV_LENGTH
-      ? createReadStream(sourceEncryptedPath, { start: IV_LENGTH, end: ciphertextEnd })
-      : Readable.from([Buffer.alloc(0)]);
-  const destStream = createWriteStream(destEncryptedPath);
-
-  // Write destination IV first
-  destStream.write(destIv);
-
-  // Helper stream to append Auth Tag at the end
-  const appendTagStream = createAppendTagStream(cipher);
-
-  // Pipeline: source(encrypted) -> decipher -> cipher -> appendTag -> dest(encrypted)
-  // This processes data in chunks without ever storing plaintext on disk
-  // Pipeline handles flow control, backpressure, and errors automatically
-  await pipeline(sourceStream, decipher, cipher, appendTagStream, destStream);
-}
-
-/**
- * Create a decryption stream from an encrypted readable stream (for S3/object storage).
- * File format: [IV][ENCRYPTED_DATA][TAG]
- * @param {import('stream').Readable} encryptedStream - Readable stream of encrypted content
- * @returns {Promise<{stream: Transform, cleanup: Function}>}
- */
-async function createDecryptStreamFromStream(encryptedStream) {
-  const iv = await readBytes(encryptedStream, IV_LENGTH);
-  const key = getEncryptionKey();
-  const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
-
-  const bufferTagTransform = createTagBufferedDecipherTransform(decipher);
-
-  encryptedStream.on('error', err => bufferTagTransform.destroy(err));
-  encryptedStream.pipe(bufferTagTransform);
-
+async function createDecryptStreamFromStream(encryptedStream, ikm = getEncryptionKey()) {
+  const decrypt = createSequentialDecryptTransform(ikm);
+  encryptedStream.on('error', err => decrypt.destroy(err));
+  encryptedStream.pipe(decrypt);
   return {
-    stream: bufferTagTransform,
+    stream: decrypt,
     cleanup: () => {
       try {
         encryptedStream.destroy();
-        bufferTagTransform.destroy();
-      } catch (_err) {
-        // Ignore
+        decrypt.destroy();
+      } catch {
+        // ignore
       }
     },
   };
 }
 
 /**
- * Copy encrypted content from a readable stream to a writable stream (decrypt then re-encrypt).
- * Used for S3 copy: source stream -> decrypt -> encrypt -> dest stream.
- * @param {import('stream').Readable} sourceEncryptedStream - Readable stream of encrypted content
- * @param {import('stream').Writable} destEncryptedStream - Writable stream for encrypted output
- * @returns {Promise<void>}
+ * Decrypt only the plaintext byte range [start, end] (inclusive), fetching just
+ * the ciphertext segments that overlap it. This is what lets a download satisfy
+ * an HTTP Range request without reading the whole object.
+ *
+ * @param {Object} params
+ * @param {(startInclusive: number, endInclusive: number) => Promise<import('stream').Readable>} params.readRange
+ *   Returns a readable of the object's ciphertext bytes in [start, end].
+ * @param {number} params.plaintextSize - Full plaintext length of the file
+ * @param {number} params.start - First plaintext byte to return (inclusive)
+ * @param {number} params.end - Last plaintext byte to return (inclusive)
+ * @param {Buffer} [params.ikm] - Master key
+ * @returns {Promise<{ stream: Readable, cleanup: Function }>}
  */
-async function copyEncryptedFileStreams(sourceEncryptedStream, destEncryptedStream) {
-  const iv = await readBytes(sourceEncryptedStream, IV_LENGTH);
-  const key = getEncryptionKey();
-  const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
+async function createRangeDecryptStream({ readRange, plaintextSize, start, end, ikm = getEncryptionKey() }) {
+  const header = await collectStream(await readRange(0, HEADER_LENGTH - 1), HEADER_LENGTH);
+  const { salt, noncePrefix } = parseHeader(header);
+  const derivedKey = deriveKey(ikm, salt);
 
-  const destIv = crypto.randomBytes(IV_LENGTH);
-  const cipher = crypto.createCipheriv(ALGORITHM, key, destIv);
+  const total = totalSegments(plaintextSize);
+  const firstSeg = segmentIndexForOffset(start);
+  const lastSeg = segmentIndexForOffset(end);
 
-  const bufferTagTransform = createTagBufferedDecipherTransform(decipher);
+  const ctStart = ciphertextOffsetAt(firstSeg);
+  const ctEnd = ciphertextOffsetAt(lastSeg) + ciphertextSegmentLength(lastSeg, plaintextSize) - 1;
+  const frontTrim = start - plaintextOffsetAt(firstSeg);
+  const wanted = end - start + 1;
 
-  destEncryptedStream.write(destIv);
-  const appendTagStream = createAppendTagStream(cipher);
+  const ciphertextStream = await readRange(ctStart, ctEnd);
 
-  await pipeline(sourceEncryptedStream, bufferTagTransform, cipher, appendTagStream, destEncryptedStream);
+  async function* decryptRange() {
+    let pending = Buffer.alloc(0);
+    let seg = firstSeg;
+    let emitted = 0;
+
+    for await (const chunk of ciphertextStream) {
+      pending = pending.length === 0 ? chunk : Buffer.concat([pending, chunk]);
+      while (seg <= lastSeg) {
+        const need = ciphertextSegmentLength(seg, plaintextSize);
+        if (pending.length < need) break;
+        const ct = pending.subarray(0, need);
+        pending = pending.subarray(need);
+
+        let pt = decryptSegment(derivedKey, noncePrefix, seg, seg === total - 1, ct);
+        if (seg === firstSeg && frontTrim > 0) pt = pt.subarray(frontTrim);
+        if (emitted + pt.length > wanted) pt = pt.subarray(0, wanted - emitted);
+        emitted += pt.length;
+        seg += 1;
+
+        if (pt.length > 0) yield pt;
+        if (emitted >= wanted) return;
+      }
+    }
+  }
+
+  const stream = Readable.from(decryptRange());
+  return {
+    stream,
+    cleanup: () => {
+      try {
+        ciphertextStream.destroy();
+        stream.destroy();
+      } catch {
+        // ignore
+      }
+    },
+  };
 }
 
 /**
- * Check if a file is encrypted by checking its format
- * Encrypted files have IV + TAG + DATA structure
- * @param {string} filePath - Path to the file
- * @returns {Promise<boolean>}
+ * Copy an encrypted file on disk by decrypting and re-encrypting through a
+ * pipeline, so plaintext is never written to disk and the copy gets a fresh
+ * salt/nonce prefix.
+ * @param {string} sourceEncryptedPath
+ * @param {string} destEncryptedPath
+ * @param {Buffer} [ikm]
  */
-async function isFileEncrypted(filePath) {
-  try {
-    const stats = await fs.stat(filePath);
-    if (stats.size < IV_LENGTH + TAG_LENGTH) {
-      return false;
-    }
+async function copyEncryptedFile(sourceEncryptedPath, destEncryptedPath, ikm = getEncryptionKey()) {
+  await pipeline(
+    createReadStream(sourceEncryptedPath),
+    createSequentialDecryptTransform(ikm),
+    createEncryptStream(ikm),
+    createWriteStream(destEncryptedPath)
+  );
+}
 
-    // Read only the first IV_LENGTH + TAG_LENGTH bytes using a file handle
-    const fd = await fs.open(filePath, 'r');
-    try {
-      const buffer = Buffer.alloc(IV_LENGTH + TAG_LENGTH);
-      const { bytesRead } = await fd.read(buffer, 0, IV_LENGTH + TAG_LENGTH, 0);
-      return bytesRead === IV_LENGTH + TAG_LENGTH;
-    } finally {
-      await fd.close();
-    }
-  } catch (_error) {
-    return false;
-  }
+/**
+ * Copy encrypted content between streams (decrypt then re-encrypt) for S3 copies.
+ * @param {import('stream').Readable} sourceEncryptedStream
+ * @param {import('stream').Writable} destEncryptedStream
+ * @param {Buffer} [ikm]
+ */
+async function copyEncryptedFileStreams(sourceEncryptedStream, destEncryptedStream, ikm = getEncryptionKey()) {
+  await pipeline(
+    sourceEncryptedStream,
+    createSequentialDecryptTransform(ikm),
+    createEncryptStream(ikm),
+    destEncryptedStream
+  );
 }
 
 export {
-  encryptFile,
-  decryptFile,
-  createDecryptStream,
-  createDecryptStreamFromStream,
+  // Streaming primitives
   createEncryptStream,
   createByteCountStream,
+  createDecryptStream,
+  createDecryptStreamFromStream,
+  createRangeDecryptStream,
+  // Whole-file helpers
+  encryptFile,
+  decryptFile,
   copyEncryptedFile,
   copyEncryptedFileStreams,
-  createTagBufferedDecipherTransform,
-  isFileEncrypted,
+  // Key + layout helpers (used by download range math and migration/rotation scripts)
   getEncryptionKey,
-  readEncryptionMetadata,
+  ciphertextSizeToPlaintextSize,
+  // Format constants (exported for scripts and tests)
+  HEADER_LENGTH,
+  TAG_LENGTH,
+  CIPHERTEXT_SEGMENT_SIZE,
+  DERIVED_KEY_LENGTH,
+  PLAINTEXT_FIRST_SEGMENT_MAX,
+  PLAINTEXT_SEGMENT_MAX,
 };

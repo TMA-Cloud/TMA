@@ -59,19 +59,24 @@ async function exists(key) {
 }
 
 /**
- * Get a readable stream for the object
+ * Get a readable stream for the object, optionally limited to a byte range.
+ * A ranged GET only transfers the requested ciphertext bytes, which is what lets
+ * a segmented download serve an HTTP Range without fetching the whole object.
  * @param {string} key - Object key
+ * @param {{ start?: number, end?: number }} [range] - Inclusive byte range
  * @returns {Promise<Readable>}
  */
-async function getReadStream(key) {
+async function getReadStream(key, range) {
   const client = getClient();
   if (!client) throw new Error('S3 client not configured');
-  const response = await client.send(
-    new GetObjectCommand({
-      Bucket: s3Config.bucket,
-      Key: key,
-    })
-  );
+  const params = {
+    Bucket: s3Config.bucket,
+    Key: key,
+  };
+  if (range && Number.isFinite(range.start) && Number.isFinite(range.end)) {
+    params.Range = `bytes=${range.start}-${range.end}`;
+  }
+  const response = await client.send(new GetObjectCommand(params));
   return response.Body;
 }
 

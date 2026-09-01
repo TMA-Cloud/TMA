@@ -29,8 +29,17 @@ async function exists(key) {
   }
 }
 
-async function getReadStream(key) {
+/**
+ * Open a read stream for a stored object, optionally limited to a byte range.
+ * @param {string} key
+ * @param {{ start?: number, end?: number }} [range] - Inclusive byte range
+ * @returns {Promise<import('stream').Readable>}
+ */
+async function getReadStream(key, range) {
   const p = resolveKey(key);
+  if (range && Number.isFinite(range.start) && Number.isFinite(range.end)) {
+    return fs.createReadStream(p, { start: range.start, end: range.end });
+  }
   return fs.createReadStream(p);
 }
 

@@ -16,8 +16,8 @@ async function exists(key) {
   return getDriver().exists(key);
 }
 
-async function getReadStream(key) {
-  return getDriver().getReadStream(key);
+async function getReadStream(key, range) {
+  return getDriver().getReadStream(key, range);
 }
 
 async function putFromPath(key, localPath) {

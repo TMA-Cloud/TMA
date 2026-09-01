@@ -1010,13 +1010,11 @@ async function downloadFile(req, res) {
     }
   }
 
-  // For files, download directly (filePath for local, storageKey for S3)
-  const { success, filePath, storageKey, isEncrypted, error: fileError } = await validateAndResolveFile(file);
+  // For files, download directly (storageKey is the DB path for local and S3)
+  const { success, storageKey, ciphertextSize, isEncrypted, error: fileError } = await validateAndResolveFile(file);
   if (!success) {
-    return sendError(res, filePath || storageKey ? 400 : 404, fileError);
+    return sendError(res, fileError?.startsWith('Invalid') ? 400 : 404, fileError);
   }
-
-  const pathOrKey = filePath || storageKey;
 
   // Log file download
   await fileDownloaded(fileId, file.name, req);
@@ -1031,13 +1029,13 @@ async function downloadFile(req, res) {
     res.setHeader('X-Content-Type-Options', 'nosniff');
   }
 
-  // If file is encrypted, stream decrypted content
+  // If file is encrypted, stream decrypted content (Range-aware)
   if (isEncrypted) {
-    return streamEncryptedFile(res, pathOrKey, file.name, file.mimeType);
+    return streamEncryptedFile(res, storageKey, file.name, file.mimeType, { req, ciphertextSize });
   }
 
   // For unencrypted files, stream from path or S3
-  return streamUnencryptedFile(res, pathOrKey, file.name, file.mimeType, true);
+  return streamUnencryptedFile(res, storageKey, file.name, file.mimeType, true);
 }
 
 /**

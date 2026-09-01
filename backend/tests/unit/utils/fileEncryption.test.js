@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import fs from 'fs/promises';
+import { createWriteStream } from 'fs';
 import os from 'os';
 import path from 'path';
 import { Readable } from 'stream';
@@ -14,15 +15,19 @@ import {
   createDecryptStream,
   createDecryptStreamFromStream,
   createEncryptStream,
+  createRangeDecryptStream,
+  ciphertextSizeToPlaintextSize,
   decryptFile,
   encryptFile,
   getEncryptionKey,
-  isFileEncrypted,
-  readEncryptionMetadata,
+  HEADER_LENGTH,
+  TAG_LENGTH,
+  PLAINTEXT_FIRST_SEGMENT_MAX,
+  PLAINTEXT_SEGMENT_MAX,
 } from '../../../utils/fileEncryption.js';
 
-const IV_LENGTH = 16;
-const TAG_LENGTH = 16;
+// Ciphertext overhead for a file that fits in a single segment.
+const SINGLE_SEGMENT_OVERHEAD = HEADER_LENGTH + TAG_LENGTH; // 56
 
 let tmpDir;
 
@@ -37,19 +42,25 @@ afterAll(async () => {
 let counter = 0;
 const tmp = (suffix = '') => path.join(tmpDir, `f${counter++}${suffix}`);
 
-/** Write plaintext to a temp file and return its path. */
 async function writePlain(content) {
   const p = tmp('.plain');
   await fs.writeFile(p, content);
   return p;
 }
 
-/** Drain a readable into a Buffer. */
 async function collect(stream) {
   const chunks = [];
   for await (const chunk of stream) chunks.push(chunk);
   return Buffer.concat(chunks);
 }
+
+/** Encrypt a Buffer to a Buffer via the streaming transform. */
+async function encryptBuffer(plain) {
+  return collect(Readable.from([plain]).pipe(createEncryptStream()));
+}
+
+/** A readRange backed by an in-memory ciphertext buffer (inclusive bounds). */
+const rangeReaderFor = buf => (start, end) => Promise.resolve(Readable.from([buf.subarray(start, end + 1)]));
 
 describe('getEncryptionKey', () => {
   const original = process.env.FILE_ENCRYPTION_KEY;
@@ -111,11 +122,10 @@ describe('getEncryptionKey', () => {
 describe('encryptFile / decryptFile', () => {
   it('round-trips content unchanged', async () => {
     const plain = 'The quick brown fox jumps over the lazy dog.';
-    const src = await writePlain(plain);
     const enc = tmp('.enc');
     const dec = tmp('.dec');
 
-    await encryptFile(src, enc);
+    await encryptFile(await writePlain(plain), enc);
     await decryptFile(enc, dec);
 
     expect(await fs.readFile(dec, 'utf8')).toBe(plain);
@@ -123,28 +133,31 @@ describe('encryptFile / decryptFile', () => {
 
   it('removes the plaintext source after encrypting', async () => {
     const src = await writePlain('secret');
-    const enc = tmp('.enc');
-    await encryptFile(src, enc);
+    await encryptFile(src, tmp('.enc'));
     await expect(fs.access(src)).rejects.toThrow();
   });
 
-  it('writes [IV][ciphertext][TAG], so the file grows by exactly 32 bytes', async () => {
-    const content = Buffer.alloc(1000, 7);
-    const src = await writePlain(content);
+  it('writes header + ciphertext + tag, so a single-segment file grows by 56 bytes', async () => {
     const enc = tmp('.enc');
-    await encryptFile(src, enc);
-    expect((await fs.stat(enc)).size).toBe(1000 + IV_LENGTH + TAG_LENGTH);
+    await encryptFile(await writePlain(Buffer.alloc(1000, 7)), enc);
+    expect((await fs.stat(enc)).size).toBe(1000 + SINGLE_SEGMENT_OVERHEAD);
+  });
+
+  it('starts every object with the 40-byte streaming header', async () => {
+    const enc = tmp('.enc');
+    await encryptFile(await writePlain('hello'), enc);
+    const raw = await fs.readFile(enc);
+    expect(raw[0]).toBe(HEADER_LENGTH);
   });
 
   it('never leaves the plaintext visible in the ciphertext', async () => {
     const marker = 'SUPER-SECRET-MARKER-STRING';
-    const src = await writePlain(marker);
     const enc = tmp('.enc');
-    await encryptFile(src, enc);
+    await encryptFile(await writePlain(marker), enc);
     expect((await fs.readFile(enc)).toString('latin1')).not.toContain(marker);
   });
 
-  it('uses a fresh IV each time, so identical inputs give different ciphertext', async () => {
+  it('uses a fresh salt each time, so identical inputs give different ciphertext', async () => {
     const a = tmp('.enc');
     const b = tmp('.enc');
     await encryptFile(await writePlain('same content'), a);
@@ -153,41 +166,37 @@ describe('encryptFile / decryptFile', () => {
   });
 
   it('round-trips an empty file', async () => {
-    const src = await writePlain('');
     const enc = tmp('.enc');
     const dec = tmp('.dec');
-    await encryptFile(src, enc);
-    expect((await fs.stat(enc)).size).toBe(IV_LENGTH + TAG_LENGTH);
+    await encryptFile(await writePlain(''), enc);
+    expect((await fs.stat(enc)).size).toBe(SINGLE_SEGMENT_OVERHEAD);
     await decryptFile(enc, dec);
     expect((await fs.stat(dec)).size).toBe(0);
   });
 
   it('round-trips binary content byte for byte', async () => {
     const binary = crypto.randomBytes(64 * 1024);
-    const src = await writePlain(binary);
     const enc = tmp('.enc');
     const dec = tmp('.dec');
-    await encryptFile(src, enc);
+    await encryptFile(await writePlain(binary), enc);
     await decryptFile(enc, dec);
     expect((await fs.readFile(dec)).equals(binary)).toBe(true);
   });
 
-  it('round-trips content larger than the stream chunk size', async () => {
-    const big = crypto.randomBytes(1024 * 1024);
-    const src = await writePlain(big);
+  it('round-trips content spanning multiple 1 MiB segments', async () => {
+    const big = crypto.randomBytes(PLAINTEXT_FIRST_SEGMENT_MAX + PLAINTEXT_SEGMENT_MAX + 4096);
     const enc = tmp('.enc');
     const dec = tmp('.dec');
-    await encryptFile(src, enc);
+    await encryptFile(await writePlain(big), enc);
     await decryptFile(enc, dec);
     expect((await fs.readFile(dec)).equals(big)).toBe(true);
   });
 
   it('round-trips UTF-8 text with multi-byte characters', async () => {
     const text = '報告書 — résumé — 📄';
-    const src = await writePlain(text);
     const enc = tmp('.enc');
     const dec = tmp('.dec');
-    await encryptFile(src, enc);
+    await encryptFile(await writePlain(text), enc);
     await decryptFile(enc, dec);
     expect(await fs.readFile(dec, 'utf8')).toBe(text);
   });
@@ -201,11 +210,10 @@ describe('tamper detection', () => {
   }
 
   it('rejects a modified ciphertext body', async () => {
-    const enc = await makeEncrypted('authentic content');
+    const enc = await makeEncrypted();
     const bytes = await fs.readFile(enc);
-    bytes[IV_LENGTH + 2] ^= 0xff;
+    bytes[HEADER_LENGTH + 2] ^= 0xff;
     await fs.writeFile(enc, bytes);
-
     await expect(decryptFile(enc, tmp('.dec'))).rejects.toThrow();
   });
 
@@ -214,16 +222,14 @@ describe('tamper detection', () => {
     const bytes = await fs.readFile(enc);
     bytes[bytes.length - 1] ^= 0xff;
     await fs.writeFile(enc, bytes);
-
     await expect(decryptFile(enc, tmp('.dec'))).rejects.toThrow();
   });
 
-  it('rejects a modified IV', async () => {
+  it('rejects a modified header (salt)', async () => {
     const enc = await makeEncrypted();
     const bytes = await fs.readFile(enc);
-    bytes[0] ^= 0xff;
+    bytes[1] ^= 0xff; // first salt byte
     await fs.writeFile(enc, bytes);
-
     await expect(decryptFile(enc, tmp('.dec'))).rejects.toThrow();
   });
 
@@ -238,32 +244,10 @@ describe('tamper detection', () => {
     }
   });
 
-  it('rejects a file too short to hold an IV and tag', async () => {
+  it('rejects a file too short to hold a header', async () => {
     const truncated = tmp('.enc');
     await fs.writeFile(truncated, Buffer.alloc(20));
-    await expect(readEncryptionMetadata(truncated)).rejects.toThrow(/too small/i);
-  });
-});
-
-describe('readEncryptionMetadata', () => {
-  it('reads the IV from the head and the tag from the tail', async () => {
-    const enc = tmp('.enc');
-    await encryptFile(await writePlain('hello'), enc);
-
-    const { iv, tag, fileSize } = await readEncryptionMetadata(enc);
-    const raw = await fs.readFile(enc);
-
-    expect(iv).toHaveLength(IV_LENGTH);
-    expect(tag).toHaveLength(TAG_LENGTH);
-    expect(iv.equals(raw.subarray(0, IV_LENGTH))).toBe(true);
-    expect(tag.equals(raw.subarray(raw.length - TAG_LENGTH))).toBe(true);
-    expect(fileSize).toBe(raw.length);
-  });
-
-  it('accepts a file that holds nothing but an IV and a tag', async () => {
-    const enc = tmp('.enc');
-    await encryptFile(await writePlain(''), enc);
-    await expect(readEncryptionMetadata(enc)).resolves.toBeDefined();
+    await expect(decryptFile(truncated, tmp('.dec'))).rejects.toThrow();
   });
 });
 
@@ -272,7 +256,6 @@ describe('createDecryptStream', () => {
     const plain = 'streamed content that is reasonably long'.repeat(50);
     const enc = tmp('.enc');
     await encryptFile(await writePlain(plain), enc);
-
     const { stream } = await createDecryptStream(enc);
     expect((await collect(stream)).toString('utf8')).toBe(plain);
   });
@@ -281,9 +264,8 @@ describe('createDecryptStream', () => {
     const enc = tmp('.enc');
     await encryptFile(await writePlain('content'), enc);
     const bytes = await fs.readFile(enc);
-    bytes[IV_LENGTH] ^= 0xff;
+    bytes[HEADER_LENGTH] ^= 0xff;
     await fs.writeFile(enc, bytes);
-
     const { stream } = await createDecryptStream(enc);
     await expect(collect(stream)).rejects.toThrow();
   });
@@ -306,31 +288,25 @@ describe('createDecryptStream', () => {
   });
 });
 
-describe('createEncryptStream (used for direct-to-S3 upload)', () => {
+describe('createEncryptStream', () => {
   it('produces output that decryptFile can read back', async () => {
     const plain = crypto.randomBytes(50_000);
     const enc = tmp('.enc');
     const dec = tmp('.dec');
-
-    await pipeline(Readable.from([plain]), createEncryptStream(), (await import('fs')).createWriteStream(enc));
+    await pipeline(Readable.from([plain]), createEncryptStream(), createWriteStream(enc));
     await decryptFile(enc, dec);
-
     expect((await fs.readFile(dec)).equals(plain)).toBe(true);
   });
 
-  it('emits the IV first, before any ciphertext', async () => {
+  it('emits the header first, before any ciphertext', async () => {
     const out = await collect(Readable.from([Buffer.from('payload')]).pipe(createEncryptStream()));
-    const { iv } = await (async () => {
-      const enc = tmp('.enc');
-      await fs.writeFile(enc, out);
-      return readEncryptionMetadata(enc);
-    })();
-    expect(out.subarray(0, IV_LENGTH).equals(iv)).toBe(true);
+    expect(out[0]).toBe(HEADER_LENGTH);
+    expect(out.length).toBeGreaterThanOrEqual(HEADER_LENGTH);
   });
 
-  it('still emits a valid IV+tag envelope for an empty input', async () => {
+  it('still emits a valid header+tag envelope for an empty input', async () => {
     const out = await collect(Readable.from([]).pipe(createEncryptStream()));
-    expect(out).toHaveLength(IV_LENGTH + TAG_LENGTH);
+    expect(out).toHaveLength(SINGLE_SEGMENT_OVERHEAD);
   });
 });
 
@@ -356,43 +332,106 @@ describe('createByteCountStream', () => {
   });
 });
 
-describe('createDecryptStreamFromStream (used for S3 reads)', () => {
+describe('createDecryptStreamFromStream', () => {
   it('decrypts content arriving as a stream', async () => {
     const plain = 'content that came from object storage'.repeat(100);
-    const enc = tmp('.enc');
-    await encryptFile(await writePlain(plain), enc);
-
-    const encrypted = Readable.from([await fs.readFile(enc)]);
-    const { stream } = await createDecryptStreamFromStream(encrypted);
-
+    const enc = await encryptBuffer(Buffer.from(plain));
+    const { stream } = await createDecryptStreamFromStream(Readable.from([enc]));
     expect((await collect(stream)).toString('utf8')).toBe(plain);
   });
 
-  it('reassembles the IV even when it is split across chunks', async () => {
+  it('reassembles the header even when it is split across tiny chunks', async () => {
     const plain = 'chunked delivery';
-    const enc = tmp('.enc');
-    await encryptFile(await writePlain(plain), enc);
-    const raw = await fs.readFile(enc);
-
+    const enc = await encryptBuffer(Buffer.from(plain));
     const chunks = [];
-    for (let i = 0; i < raw.length; i += 5) chunks.push(raw.subarray(i, i + 5));
-
+    for (let i = 0; i < enc.length; i += 5) chunks.push(enc.subarray(i, i + 5));
     const { stream } = await createDecryptStreamFromStream(Readable.from(chunks));
     expect((await collect(stream)).toString('utf8')).toBe(plain);
   });
 
-  it('rejects a stream too short to contain an IV', async () => {
-    await expect(createDecryptStreamFromStream(Readable.from([Buffer.alloc(4)]))).rejects.toThrow(/too short for IV/);
+  it('errors on a stream too short to contain a header', async () => {
+    const { stream } = await createDecryptStreamFromStream(Readable.from([Buffer.alloc(4)]));
+    await expect(collect(stream)).rejects.toThrow();
   });
 
   it('errors on a tampered stream instead of returning garbage', async () => {
-    const enc = tmp('.enc');
-    await encryptFile(await writePlain('authentic'), enc);
-    const raw = await fs.readFile(enc);
-    raw[raw.length - 3] ^= 0xff;
-
-    const { stream } = await createDecryptStreamFromStream(Readable.from([raw]));
+    const enc = await encryptBuffer(Buffer.from('authentic'));
+    enc[enc.length - 3] ^= 0xff;
+    const { stream } = await createDecryptStreamFromStream(Readable.from([enc]));
     await expect(collect(stream)).rejects.toThrow();
+  });
+});
+
+describe('ciphertextSizeToPlaintextSize', () => {
+  it('recovers the plaintext length from the ciphertext size for many sizes', async () => {
+    const sizes = [
+      0,
+      1,
+      1000,
+      PLAINTEXT_FIRST_SEGMENT_MAX - 1,
+      PLAINTEXT_FIRST_SEGMENT_MAX,
+      PLAINTEXT_FIRST_SEGMENT_MAX + 1,
+      PLAINTEXT_FIRST_SEGMENT_MAX + PLAINTEXT_SEGMENT_MAX,
+      PLAINTEXT_FIRST_SEGMENT_MAX + PLAINTEXT_SEGMENT_MAX + 12345,
+    ];
+    for (const size of sizes) {
+      const enc = await encryptBuffer(crypto.randomBytes(size));
+      expect(ciphertextSizeToPlaintextSize(enc.length)).toBe(size);
+    }
+  });
+
+  it('throws on an impossibly small ciphertext', () => {
+    expect(() => ciphertextSizeToPlaintextSize(HEADER_LENGTH)).toThrow();
+  });
+});
+
+describe('createRangeDecryptStream', () => {
+  const plain = crypto.randomBytes(PLAINTEXT_FIRST_SEGMENT_MAX + PLAINTEXT_SEGMENT_MAX + 20000);
+  let enc;
+  let plaintextSize;
+
+  beforeAll(async () => {
+    enc = await encryptBuffer(plain);
+    plaintextSize = plain.length;
+  });
+
+  async function readRange(start, end) {
+    const { stream } = await createRangeDecryptStream({
+      readRange: rangeReaderFor(enc),
+      plaintextSize,
+      start,
+      end,
+    });
+    return collect(stream);
+  }
+
+  it('returns a small range at the very start', async () => {
+    const out = await readRange(0, 9);
+    expect(out.equals(plain.subarray(0, 10))).toBe(true);
+  });
+
+  it('returns a range that spans the segment-0/segment-1 boundary', async () => {
+    const start = PLAINTEXT_FIRST_SEGMENT_MAX - 100;
+    const end = PLAINTEXT_FIRST_SEGMENT_MAX + 100;
+    const out = await readRange(start, end);
+    expect(out.equals(plain.subarray(start, end + 1))).toBe(true);
+  });
+
+  it('returns a range fully inside a middle segment', async () => {
+    const start = PLAINTEXT_FIRST_SEGMENT_MAX + 500;
+    const end = PLAINTEXT_FIRST_SEGMENT_MAX + 1500;
+    const out = await readRange(start, end);
+    expect(out.equals(plain.subarray(start, end + 1))).toBe(true);
+  });
+
+  it('returns the final byte', async () => {
+    const out = await readRange(plaintextSize - 1, plaintextSize - 1);
+    expect(out.equals(plain.subarray(plaintextSize - 1))).toBe(true);
+  });
+
+  it('returns the entire file when the range covers everything', async () => {
+    const out = await readRange(0, plaintextSize - 1);
+    expect(out.equals(plain)).toBe(true);
   });
 });
 
@@ -402,24 +441,21 @@ describe('copyEncryptedFile', () => {
     const src = tmp('.enc');
     const dst = tmp('.enc');
     const dec = tmp('.dec');
-
     await encryptFile(await writePlain(plain), src);
     await copyEncryptedFile(src, dst);
     await decryptFile(dst, dec);
-
     expect(await fs.readFile(dec, 'utf8')).toBe(plain);
   });
 
-  it('re-encrypts under a new IV rather than copying bytes', async () => {
+  it('re-encrypts under a new header rather than copying bytes', async () => {
     const src = tmp('.enc');
     const dst = tmp('.enc');
     await encryptFile(await writePlain('copy me'), src);
     await copyEncryptedFile(src, dst);
-
     const a = await fs.readFile(src);
     const b = await fs.readFile(dst);
     expect(a.equals(b)).toBe(false);
-    expect(a.subarray(0, IV_LENGTH).equals(b.subarray(0, IV_LENGTH))).toBe(false);
+    expect(a.subarray(0, HEADER_LENGTH).equals(b.subarray(0, HEADER_LENGTH))).toBe(false);
     expect(b).toHaveLength(a.length);
   });
 
@@ -446,51 +482,23 @@ describe('copyEncryptedFile', () => {
     const src = tmp('.enc');
     await encryptFile(await writePlain('content'), src);
     const bytes = await fs.readFile(src);
-    bytes[IV_LENGTH + 1] ^= 0xff;
+    bytes[HEADER_LENGTH + 1] ^= 0xff;
     await fs.writeFile(src, bytes);
-
     await expect(copyEncryptedFile(src, tmp('.enc'))).rejects.toThrow();
   });
 });
 
-describe('copyEncryptedFileStreams (S3 to S3 copy)', () => {
+describe('copyEncryptedFileStreams', () => {
   it('re-encrypts a stream into a writable and stays decryptable', async () => {
     const plain = 'stream copy payload'.repeat(200);
     const src = tmp('.enc');
     await encryptFile(await writePlain(plain), src);
 
     const dst = tmp('.enc');
-    const { createWriteStream } = await import('fs');
     await copyEncryptedFileStreams(Readable.from([await fs.readFile(src)]), createWriteStream(dst));
 
     const dec = tmp('.dec');
     await decryptFile(dst, dec);
     expect(await fs.readFile(dec, 'utf8')).toBe(plain);
-  });
-});
-
-describe('isFileEncrypted', () => {
-  it('reports true for a real encrypted file', async () => {
-    const enc = tmp('.enc');
-    await encryptFile(await writePlain('content'), enc);
-    expect(await isFileEncrypted(enc)).toBe(true);
-  });
-
-  it('reports false for a file smaller than the IV+tag envelope', async () => {
-    const small = tmp('.bin');
-    await fs.writeFile(small, Buffer.alloc(10));
-    expect(await isFileEncrypted(small)).toBe(false);
-  });
-
-  it('reports false for a missing file rather than throwing', async () => {
-    expect(await isFileEncrypted(path.join(tmpDir, 'does-not-exist'))).toBe(false);
-  });
-
-  it('only checks size, so a large plaintext file also reports true', async () => {
-    // This is a structural check, not a cryptographic one — the codebase relies
-    // on isFilePathEncrypted() for the real answer.
-    const plain = tmp('.txt');
-    await fs.writeFile(plain, Buffer.alloc(100, 65));
-    expect(await isFileEncrypted(plain)).toBe(true);
   });
 });

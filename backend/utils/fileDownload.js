@@ -1,9 +1,12 @@
-import fs from 'fs';
 import path from 'path';
 
 import { logger } from '../config/logger.js';
-import { isFilePathEncrypted, isValidPath, resolveFilePath } from './filePath.js';
-import { createDecryptStream, createDecryptStreamFromStream } from './fileEncryption.js';
+import { isFilePathEncrypted, isValidPath } from './filePath.js';
+import {
+  ciphertextSizeToPlaintextSize,
+  createDecryptStreamFromStream,
+  createRangeDecryptStream,
+} from './fileEncryption.js';
 import storage from './storageDriver.js';
 
 /**
@@ -30,87 +33,149 @@ function contentDispositionValue(disposition, filename) {
 }
 
 /**
- * Validates and resolves file for download (local path or S3 key).
+ * Parse a single HTTP Range header against a known content size.
+ * Multi-range and malformed headers are ignored (serve the full body instead).
+ * @param {string|undefined} rangeHeader
+ * @param {number} size - Total content (plaintext) size in bytes
+ * @returns {{ start: number, end: number } | { unsatisfiable: true } | null}
+ */
+function parseRange(rangeHeader, size) {
+  if (!rangeHeader || typeof rangeHeader !== 'string') return null;
+  const match = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader.trim());
+  if (!match) return null;
+  const [, startStr, endStr] = match;
+  if (startStr === '' && endStr === '') return null;
+
+  let start;
+  let end;
+  if (startStr === '') {
+    // Suffix range: the final N bytes.
+    const suffix = parseInt(endStr, 10);
+    if (!Number.isFinite(suffix) || suffix <= 0 || size === 0) return { unsatisfiable: true };
+    start = Math.max(0, size - suffix);
+    end = size - 1;
+  } else {
+    start = parseInt(startStr, 10);
+    end = endStr === '' ? size - 1 : parseInt(endStr, 10);
+    if (Number.isNaN(start) || Number.isNaN(end)) return null;
+    if (end > size - 1) end = size - 1;
+    if (size === 0 || start > end || start >= size) return { unsatisfiable: true };
+  }
+  return { start, end };
+}
+
+/**
+ * Validates and resolves a file for download. Returns the storage key (which is
+ * the DB path for both local and S3) and the encrypted object's size.
  * @param {Object} file - File object from database
- * @returns {Promise<Object>} { success: boolean, filePath?: string, storageKey?: string, isEncrypted?: boolean, error?: string }
+ * @returns {Promise<{ success: boolean, storageKey?: string, ciphertextSize?: number, isEncrypted?: boolean, error?: string }>}
  */
 async function validateAndResolveFile(file) {
   if (!file) {
     return { success: false, error: 'File not found' };
   }
-
   if (!file.path) {
     return { success: false, error: 'File path not found' };
   }
-
   if (!isValidPath(file.path)) {
     return { success: false, error: 'Invalid file path' };
   }
 
-  const isEncrypted = isFilePathEncrypted(file.path);
-
-  if (storage.useS3()) {
-    const exists = await storage.exists(file.path);
-    if (!exists) {
-      return { success: false, error: 'File not found in storage' };
-    }
-    return { success: true, storageKey: file.path, isEncrypted };
-  }
-
-  let filePath;
+  let stat;
   try {
-    filePath = resolveFilePath(file.path);
+    stat = await storage.statObject(file.path);
   } catch (err) {
-    return { success: false, error: err.message || 'Invalid file path' };
+    logger.warn({ err, key: file.path }, 'Error checking stored object');
+    return { success: false, error: 'Error accessing file storage' };
+  }
+  if (!stat) {
+    return { success: false, error: 'File not found in storage' };
   }
 
-  filePath = path.resolve(filePath);
-  if (!fs.existsSync(filePath)) {
-    return { success: false, error: 'File not found on disk' };
-  }
-
-  return { success: true, filePath, isEncrypted };
+  return {
+    success: true,
+    storageKey: file.path,
+    ciphertextSize: stat.size,
+    isEncrypted: isFilePathEncrypted(file.path),
+  };
 }
 
 /**
- * Stream an encrypted file to response (local path or S3 key)
- * @param {Object} res - Express response object
- * @param {string} encryptedPathOrKey - Local path to encrypted file or S3 object key
- * @param {string} filename - Original filename for Content-Disposition header
- * @param {string} mimeType - MIME type for Content-Type header
+ * Stream an encrypted (streaming-AEAD) object to the response, honouring HTTP
+ * Range requests. A ranged request only fetches and decrypts the overlapping
+ * segments, so large files can be opened/seeked without a full download.
+ *
+ * @param {Object} res - Express response
+ * @param {string} storageKey - Storage key of the encrypted object
+ * @param {string} filename - Original filename for Content-Disposition
+ * @param {string} mimeType - Content-Type
+ * @param {Object} [options]
+ * @param {import('express').Request} [options.req] - Request (read for its Range header)
+ * @param {number} [options.ciphertextSize] - Encrypted object size, if already known
+ * @param {'attachment'|'inline'} [options.disposition] - Content-Disposition type (default 'attachment')
  */
-async function streamEncryptedFile(res, encryptedPathOrKey, filename, mimeType) {
+async function streamEncryptedFile(res, storageKey, filename, mimeType, options = {}) {
+  const { req, disposition = 'attachment' } = options;
   let cleanupCalled = false;
-  let stream = null;
+  let active = null;
 
   const cleanup = () => {
     if (!cleanupCalled) {
       cleanupCalled = true;
-      if (stream && stream.cleanup) {
-        stream.cleanup();
-      }
+      if (active && active.cleanup) active.cleanup();
     }
   };
 
-  const createErrorDetails = error => ({
+  const errorDetails = error => ({
     message: error?.message || 'Unknown error',
     code: error?.code,
     stack: error?.stack,
-    encryptedPathOrKey,
+    storageKey,
   });
 
   try {
-    res.type(mimeType);
-    res.setHeader('Content-Disposition', contentDispositionValue('attachment', filename));
+    let ciphertextSize = options.ciphertextSize;
+    if (ciphertextSize == null) {
+      const stat = await storage.statObject(storageKey);
+      if (!stat) {
+        return res.status(404).json({ error: 'File not found' });
+      }
+      ciphertextSize = stat.size;
+    }
+    const plaintextSize = ciphertextSizeToPlaintextSize(ciphertextSize);
 
-    const decryptResult = storage.useS3()
-      ? await createDecryptStreamFromStream(await storage.getReadStream(encryptedPathOrKey))
-      : await createDecryptStream(encryptedPathOrKey);
-    stream = decryptResult;
+    res.type(mimeType);
+    res.setHeader('Content-Disposition', contentDispositionValue(disposition, filename));
+    res.setHeader('Accept-Ranges', 'bytes');
+
+    const range = req ? parseRange(req.headers?.range, plaintextSize) : null;
+
+    if (range && range.unsatisfiable) {
+      res.setHeader('Content-Range', `bytes */${plaintextSize}`);
+      return res.status(416).end();
+    }
+
+    let decryptResult;
+    if (range) {
+      res.status(206);
+      res.setHeader('Content-Range', `bytes ${range.start}-${range.end}/${plaintextSize}`);
+      res.setHeader('Content-Length', String(range.end - range.start + 1));
+      decryptResult = await createRangeDecryptStream({
+        readRange: (start, end) => storage.getReadStream(storageKey, { start, end }),
+        plaintextSize,
+        start: range.start,
+        end: range.end,
+      });
+    } else {
+      res.setHeader('Content-Length', String(plaintextSize));
+      decryptResult = await createDecryptStreamFromStream(await storage.getReadStream(storageKey));
+    }
+
+    active = decryptResult;
     const decryptStream = decryptResult.stream;
 
     decryptStream.on('error', error => {
-      logger.error(createErrorDetails(error), 'Error streaming decrypted file');
+      logger.error(errorDetails(error), 'Error streaming decrypted file');
       if (!res.headersSent) {
         res.status(500).json({ error: 'Error decrypting file' });
       } else {
@@ -128,21 +193,16 @@ async function streamEncryptedFile(res, encryptedPathOrKey, filename, mimeType) 
         error.message?.includes('aborted') ||
         error.message?.includes('socket hang up');
       if (!isExpectedError) {
-        logger.warn(
-          { error: error.message, code: error.code, encryptedPathOrKey },
-          'Response error during decryption stream'
-        );
+        logger.warn({ error: error.message, code: error.code, storageKey }, 'Response error during decryption stream');
       }
       cleanup();
     });
 
-    res.on('close', () => {
-      cleanup();
-    });
+    res.on('close', cleanup);
 
     decryptStream.pipe(res);
   } catch (error) {
-    logger.error(createErrorDetails(error), 'Error creating decrypt stream');
+    logger.error(errorDetails(error), 'Error creating decrypt stream');
     if (!res.headersSent) {
       res.status(500).json({ error: 'Error decrypting file' });
     }
@@ -151,22 +211,22 @@ async function streamEncryptedFile(res, encryptedPathOrKey, filename, mimeType) 
 }
 
 /**
- * Stream an unencrypted file to response (local path or S3 key)
- * @param {Object} res - Express response object
- * @param {string} filePathOrKey - Local file path or S3 object key
- * @param {string} filename - Original filename for Content-Disposition header
- * @param {string} mimeType - MIME type for Content-Type header
- * @param {boolean} attachment - If true, use "attachment" disposition (download), else "inline" (view)
+ * Stream a non-encrypted object to the response (legacy/unencrypted objects).
+ * @param {Object} res - Express response
+ * @param {string} storageKey - Storage key
+ * @param {string} filename - Original filename for Content-Disposition
+ * @param {string} mimeType - Content-Type
+ * @param {boolean} attachment - If true, "attachment" disposition, else "inline"
  */
-async function streamUnencryptedFile(res, filePathOrKey, filename, mimeType, attachment = false) {
+async function streamUnencryptedFile(res, storageKey, filename, mimeType, attachment = false) {
   res.type(mimeType);
   const disposition = attachment ? 'attachment' : 'inline';
   res.setHeader('Content-Disposition', contentDispositionValue(disposition, filename));
 
-  const stream = storage.useS3() ? await storage.getReadStream(filePathOrKey) : fs.createReadStream(filePathOrKey);
+  const stream = await storage.getReadStream(storageKey);
 
   stream.on('error', error => {
-    logger.error({ error, filePathOrKey }, 'Error streaming file');
+    logger.error({ error, storageKey }, 'Error streaming file');
     if (!res.headersSent) {
       res.status(404).json({ error: 'File not found' });
     } else {
@@ -175,12 +235,10 @@ async function streamUnencryptedFile(res, filePathOrKey, filename, mimeType, att
   });
 
   res.on('close', () => {
-    if (!stream.destroyed) {
-      stream.destroy();
-    }
+    if (!stream.destroyed) stream.destroy();
   });
 
   stream.pipe(res);
 }
 
-export { validateAndResolveFile, streamEncryptedFile, streamUnencryptedFile, contentDispositionValue };
+export { validateAndResolveFile, streamEncryptedFile, streamUnencryptedFile, contentDispositionValue, parseRange };

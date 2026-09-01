@@ -68,22 +68,28 @@ async function serveFile(req, res) {
       logger.error('[ONLYOFFICE] File not found or access denied', { id, userId: payload.userId });
       return res.status(404).json({ error: 'File not found' });
     }
-    const { success, filePath, storageKey, isEncrypted, error: fileError } = await validateAndResolveFile(fileRow);
+    const {
+      success,
+      storageKey,
+      ciphertextSize,
+      isEncrypted,
+      error: fileError,
+    } = await validateAndResolveFile(fileRow);
     if (!success) {
       logger.error('[ONLYOFFICE] File validation failed', id, fileError);
       return res.status(404).json({ error: fileError || 'File not found' });
     }
 
-    const pathOrKey = filePath || storageKey;
-
-    res.setHeader('Content-Disposition', contentDispositionValue('inline', fileRow.name));
-    res.type(fileRow.mimeType || 'application/octet-stream');
-
     if (isEncrypted) {
-      return streamEncryptedFile(res, pathOrKey, fileRow.name, fileRow.mimeType || 'application/octet-stream');
+      return streamEncryptedFile(res, storageKey, fileRow.name, fileRow.mimeType || 'application/octet-stream', {
+        req,
+        ciphertextSize,
+        disposition: 'inline',
+      });
     }
 
-    return streamUnencryptedFile(res, pathOrKey, fileRow.name, fileRow.mimeType || 'application/octet-stream');
+    res.setHeader('Content-Disposition', contentDispositionValue('inline', fileRow.name));
+    return streamUnencryptedFile(res, storageKey, fileRow.name, fileRow.mimeType || 'application/octet-stream');
   } catch (err) {
     logger.error({ err }, '[ONLYOFFICE] Error serving file');
     res.status(500).json({ error: 'Server error' });
