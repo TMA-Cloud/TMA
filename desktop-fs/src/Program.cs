@@ -5,18 +5,12 @@ using Fsp;
 namespace TmaCloud.Fs
 {
     /// <summary>
-    /// Hosts the TMA Cloud filesystem. Runs as a console child process spawned
-    /// by the Electron app (Fsp.Service handles both console and service modes).
-    ///
-    /// Usage:
+    /// Hosts the TMA Cloud filesystem as a console child process spawned by the
+    /// Electron app. Usage:
     ///   TmaCloudFs.exe --pipe &lt;name&gt; [--token-stdin] [--mount T:|*]
     ///                  [--label "TMA Cloud"] [--mode saveonly] [--debug]
-    ///
-    /// With --token-stdin the bridge token is read from stdin (or from
-    /// TMA_CLOUD_FS_TOKEN) - never argv, which any process here can read.
-    ///
-    /// On success it prints "MOUNTED &lt;drive&gt;" to stdout so the parent can learn
-    /// the assigned drive letter (relevant when --mount is "*").
+    /// The bridge token comes from stdin (or TMA_CLOUD_FS_TOKEN), never argv. On
+    /// success it prints "MOUNTED &lt;drive&gt;" so the parent learns the letter.
     /// </summary>
     public sealed class TmaCloudService : Service, IDisposable
     {
@@ -86,12 +80,9 @@ namespace TmaCloud.Fs
             return args[++i];
         }
 
-        /// <summary>
-        /// The secret authenticating us to the bridge, read from stdin (only our
-        /// parent holds the write end). On a command line it would be readable
-        /// by every process running as this user, who could then replay it to
-        /// drive the signed-in account. The env var is a manual-run fallback.
-        /// </summary>
+        // The bridge secret, read from stdin (only our parent holds the write
+        // end) — on argv any process as this user could read and replay it. The
+        // env var is a manual-run fallback.
         private static string ReadToken(bool fromStdin)
         {
             string env = Environment.GetEnvironmentVariable("TMA_CLOUD_FS_TOKEN");
@@ -112,11 +103,8 @@ namespace TmaCloud.Fs
             return null;
         }
 
-        /// <summary>
-        /// Mount at the requested point, or - for "*" - the highest free drive
-        /// letter. Another process can claim a letter between the scan and the
-        /// mount, so fall through to the next candidate rather than failing.
-        /// </summary>
+        // Mount at the requested point, or (for "*") the highest free letter,
+        // falling through to the next if one is claimed between scan and mount.
         private void Mount(string mountPoint, uint debugFlags)
         {
             if (mountPoint != "*" && !string.IsNullOrEmpty(mountPoint))
@@ -167,10 +155,8 @@ namespace TmaCloud.Fs
             _bridge = null;
         }
 
-        // The service owns the mount host, filesystem, and bridge (all
-        // disposable). OnStop already tears them down on the service lifecycle;
-        // Dispose reuses it so the type honors IDisposable and is safe to
-        // dispose more than once (each field is null-guarded).
+        // The service owns the (disposable) host, filesystem, and bridge. Dispose
+        // reuses OnStop's teardown and is null-guarded, so it's idempotent.
         public void Dispose() => OnStop();
     }
 

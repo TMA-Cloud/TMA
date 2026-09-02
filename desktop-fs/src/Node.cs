@@ -16,11 +16,8 @@ namespace TmaCloud.Fs
         public DateTime Modified;  // UTC; DateTime.MinValue if unknown
         public string Path;        // normalized full path, root == "\"
 
-        // Last read time, reported to Windows as LastAccessTime. Left at
-        // DateTime.MinValue when the backend did not supply one — an older
-        // server, or a response that omits the field — and the write time is
-        // used in its place, which is what a filesystem shows for something
-        // that has been written but never read since.
+        // Last read time (LastAccessTime). DateTime.MinValue when the backend
+        // omits it, so the write time is shown instead.
         public DateTime Accessed;
 
         public static Node Root() => new Node
@@ -34,11 +31,8 @@ namespace TmaCloud.Fs
         };
     }
 
-    /// <summary>
-    /// Cached directory listing with an expiry, keyed by folder path. Kept short
-    /// so remote changes surface quickly; also invalidated explicitly on writes
-    /// and (later) by the SSE event stream forwarded through the bridge.
-    /// </summary>
+    // Cached directory listing with a short expiry, keyed by folder path; also
+    // invalidated on writes and by the forwarded SSE stream.
     public sealed class DirCache
     {
         public List<Node> Children;
@@ -46,11 +40,8 @@ namespace TmaCloud.Fs
         public bool IsFresh(TimeSpan ttl) => DateTime.UtcNow - FetchedUtc < ttl;
     }
 
-    /// <summary>
-    /// Per-open-handle state. WinFsp hands this back to us as the "FileDesc".
-    /// A directory handle carries just its node; a file handle additionally
-    /// owns a local staging file used for read caching and write-back.
-    /// </summary>
+    // Per-open-handle state (WinFsp's "FileDesc"). A directory handle carries
+    // just its node; a file handle also owns a local staging file.
     public sealed class OpenFile
     {
         public Node Node;

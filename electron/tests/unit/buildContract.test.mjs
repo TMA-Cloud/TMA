@@ -87,8 +87,8 @@ describe('electron-builder configuration', () => {
     const buildScript = read('scripts/build-clouddrive.js');
     expect(buildScript).toContain("path.join(electronDir, 'clouddrive-dist')");
     expect(buildScript).toContain('TmaCloudFs.exe');
-    // The runtime resolves resources/clouddrive/TmaCloudFs.exe.
-    expect(read('src/main/clouddrive.cjs')).toContain(
+    // The runtime resolves resources/clouddrive/TmaCloudFs.exe (in the host locator).
+    expect(read('src/main/clouddrive/locate.cjs')).toContain(
       "path.join(process.resourcesPath, 'clouddrive', 'TmaCloudFs.exe')"
     );
   });

@@ -12,20 +12,8 @@ function getInstallFileUrl(updatorUrl, version) {
 
 const MAX_FILENAME_LENGTH = 120;
 
-/**
- * Parse filename from Content-Disposition header.
- *
- * Handles:
- *  - RFC 5987 extended syntax (filename*=UTF-8''...)
- *  - Quoted form with backslash-escaped characters per RFC 6266
- *  - Unquoted "token" form
- *
- * Returns the raw extracted filename, or null if none is present. The caller
- * is responsible for sanitizing the result before using it on disk.
- *
- * @param {string} contentDisposition
- * @returns {string | null}
- */
+// Extract a filename from Content-Disposition (RFC 5987 filename*=, RFC 6266
+// quoted, or unquoted token), raw and unsanitised. Null if absent.
 function parseFilenameFromContentDisposition(contentDisposition) {
   if (!contentDisposition || typeof contentDisposition !== 'string') return null;
 
@@ -53,21 +41,9 @@ function parseFilenameFromContentDisposition(contentDisposition) {
   return null;
 }
 
-/**
- * Produce a filesystem-safe installer filename from an untrusted suggestion.
- *
- * Rules applied:
- *  - Strip any directory components (take only the basename).
- *  - Replace anything outside [A-Za-z0-9._-] with '_'.
- *  - Collapse any run of dots so the result cannot be '.', '..', or any
- *    traversal-style component.
- *  - Truncate to MAX_FILENAME_LENGTH characters.
- *  - Fall back to the default installer filename if the result is empty.
- *
- * @param {string} suggested
- * @param {string} version
- * @returns {string}
- */
+// Make a filesystem-safe installer filename from an untrusted suggestion:
+// basename only, non-[\w.-] -> '_', no leading dots (no traversal), length
+// capped, falling back to the default when empty.
 function sanitizeInstallerFilename(suggested, version) {
   const fallback = getDefaultInstallerFilename(version);
   if (typeof suggested !== 'string' || !suggested) return fallback;

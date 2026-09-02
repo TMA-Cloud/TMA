@@ -10,10 +10,8 @@ using System.Threading;
 
 namespace TmaCloud.Fs
 {
-    /// <summary>
-    /// Thrown when the Electron bridge returns an error for a request, or the
-    /// pipe connection fails. Message carries the backend error text.
-    /// </summary>
+    // Thrown when the bridge returns an error or the pipe fails; Message carries
+    // the backend error text.
     public sealed class BridgeException : Exception
     {
         public BridgeException(string message) : base(message) { }
@@ -21,21 +19,11 @@ namespace TmaCloud.Fs
 
     /// <summary>
     /// JSON-RPC client over a Windows named pipe to the Electron main process.
-    ///
-    /// Protocol: newline-delimited UTF-8 JSON. Each request is one line:
-    ///   { "rid": &lt;int&gt;, "op": "&lt;name&gt;", ...args }
-    /// Each response is one line:
-    ///   { "rid": &lt;int&gt;, "ok": true,  "result": &lt;any&gt; }
-    ///   { "rid": &lt;int&gt;, "ok": false, "error": "&lt;text&gt;" }
-    ///
-    /// Bulk file bytes never travel on the pipe. For reads/writes we exchange
-    /// temp-file paths on local disk (both processes share %TEMP%): Electron
-    /// downloads into a path we give it; we stage uploads to a path Electron
-    /// then streams. The pipe only carries control messages.
-    ///
-    /// WinFsp dispatches filesystem callbacks from multiple worker threads, so
-    /// this client supports concurrent in-flight requests: a single reader
-    /// thread demultiplexes responses by id and completes the matching waiter.
+    /// Protocol: newline-delimited UTF-8 JSON, one { rid, op, ...args } request
+    /// and one { rid, ok, result|error } response per line. Bulk bytes never use
+    /// the pipe — both processes share %TEMP% and exchange temp-file paths. A
+    /// single reader thread demultiplexes responses by rid, so the concurrent
+    /// callbacks WinFsp dispatches from its worker threads can be in flight at once.
     /// </summary>
     public sealed class Bridge : IDisposable
     {
@@ -53,11 +41,8 @@ namespace TmaCloud.Fs
         private volatile bool _faulted;
         private volatile string _faultReason;
 
-        /// <summary>
-        /// Raised for unsolicited server-to-client messages (no "rid"), e.g.
-        /// cache invalidation forwarded from the backend's event stream. The
-        /// argument is the parsed message object.
-        /// </summary>
+        // Raised for unsolicited server-to-client messages (no "rid"), e.g. a
+        // forwarded cache invalidation. The argument is the parsed message.
         public Action<JsonElement> OnPush;
 
         private int _nextId;
@@ -86,13 +71,9 @@ namespace TmaCloud.Fs
 
         public void Connect(int timeoutMs = 15000)
         {
-            // Asynchronous (overlapped) pipe is REQUIRED for concurrent
-            // read+write on one handle: a blocking read on a synchronous handle
-            // would block all writes, so the request that produces the reply
-            // could never be sent.
-            //
-            // Impersonation level is explicit, not defaulted: whatever answers
-            // on this pipe must not be able to borrow our security context.
+            // Async (overlapped) pipe is required for concurrent read+write on
+            // one handle; a blocking read would starve writes. Impersonation is
+            // set explicitly so the pipe's other end can't borrow our context.
             var pipe = new NamedPipeClientStream(".", _pipeName,
                 PipeDirection.InOut, PipeOptions.Asynchronous,
                 TokenImpersonationLevel.None);
@@ -241,10 +222,8 @@ namespace TmaCloud.Fs
             try { w.Done.Set(); } catch (ObjectDisposedException) { /* caller gave up */ }
         }
 
-        /// <summary>
-        /// Send a request and block until the matching response arrives.
-        /// Called from WinFsp worker threads. Throws BridgeException on error.
-        /// </summary>
+        // Send a request and block until the matching response arrives (called
+        // from WinFsp worker threads). Throws BridgeException on error.
         public JsonElement Call(string op, Action<Utf8JsonWriter> writeArgs = null, int timeoutMs = 120000)
         {
             if (_closed) throw new BridgeException("bridge is closed");
