@@ -249,13 +249,13 @@ export function useContextMenuActions({
               label: 'Link to Folder Share',
               action: async () => {
                 try {
-                  const links = await linkToParentShare(selectedFiles);
-                  const list = Object.values(links);
-                  if (list.length) setShareLinkModalOpen(true, list);
+                  // The items join the folder's existing share — no new link to
+                  // show, so confirm with a toast instead of opening the modal.
+                  await linkToParentShare(selectedFiles);
+                  showToast('Linked to folder share', 'success');
                   onActionComplete?.();
                 } catch {
-                  // Error handled by toast notification
-                  showToast('Failed to link to parent share', 'error');
+                  showToast('Failed to link to folder share', 'error');
                 }
               },
             },
@@ -467,7 +467,6 @@ export function useContextMenuActions({
     linkToParentShare,
     selectedFiles,
     selectedItems,
-    setShareLinkModalOpen,
     shareFiles,
     getShareLinks,
     allShared,

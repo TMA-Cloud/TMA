@@ -247,8 +247,11 @@ async function invalidateShareCache(shareId, userId = null) {
     const deletedExact = await deleteCache(exactKey);
     totalDeleted += deletedExact ? 1 : 0;
 
-    // Also delete pattern-based keys (folder contents, file shared checks, etc.)
+    // Also delete pattern-based keys (file shared checks, etc.)
     totalDeleted += await deleteCachePattern(`share:token:${shareId}:*`);
+    // Public folder listings are keyed share:folder:{token}:{folderId}; the
+    // token is the share id, so drop every listing cached under this share.
+    totalDeleted += await deleteCachePattern(`share:folder:${shareId}:*`);
   }
 
   if (userId) {

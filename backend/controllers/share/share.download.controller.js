@@ -81,7 +81,7 @@ async function downloadSharedItem(req, res) {
     );
     const file = res2.rows[0];
     if (!file) {
-      return renderErrorPage(res, 404, 'Not found', 'The requested file was not found in this share.');
+      return renderErrorPage(res, 404, 'Not found', 'The requested item was not found in this share.');
     }
 
     // Log share item download

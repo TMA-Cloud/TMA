@@ -10,7 +10,7 @@ import { redisClient } from '../../config/redis.js';
 import { cacheKeys } from '../../utils/cache.js';
 import { createShareLink, cleanupExpiredShareLinks } from '../../models/share.model.js';
 import { api, ensureOwner } from './helpers/app.js';
-import { countRows, makeFolder } from './helpers/factories.js';
+import { countRows, makeFile, makeFolder } from './helpers/factories.js';
 
 /** Collect a response body as a Buffer, for binary downloads. */
 const asBuffer = req =>
@@ -120,12 +120,25 @@ describe('creating a share link', () => {
 });
 
 describe('anonymous access', () => {
-  it('serves the file to a visitor with no session', async () => {
+  it('shows a download landing page for a single shared file', async () => {
+    const { client: c } = await ensureOwner();
+    const fileId = await uploadFile(c, { name: 'report.txt', content: 'public content' });
+    const token = await share(c, fileId);
+
+    const res = await visitor().get(`/s/${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toContain('text/html');
+    expect(res.text).toContain('report.txt'); // file name shown on the card
+    expect(res.text).toContain(`/s/${token}/file/${fileId}`); // download button target
+  });
+
+  it('serves the raw bytes to a visitor with no session', async () => {
     const { client: c } = await ensureOwner();
     const fileId = await uploadFile(c, { content: 'public content' });
     const token = await share(c, fileId);
 
-    const res = await asBuffer(visitor().get(`/s/${token}`));
+    const res = await asBuffer(visitor().get(`/s/${token}/file/${fileId}`));
 
     expect(res.status).toBe(200);
     expect(res.body.toString('utf8')).toBe('public content');
@@ -138,9 +151,10 @@ describe('anonymous access', () => {
       .post('/api/files/upload')
       .attach('file', binary, { filename: 'blob.bin', contentType: 'application/octet-stream' });
     const { rows } = await pool.query("SELECT id FROM files WHERE name = 'blob.bin'");
-    const token = await share(c, rows[0].id);
+    const fileId = rows[0].id;
+    const token = await share(c, fileId);
 
-    const res = await asBuffer(visitor().get(`/s/${token}`));
+    const res = await asBuffer(visitor().get(`/s/${token}/file/${fileId}`));
 
     expect(Buffer.compare(res.body, binary)).toBe(0);
   });
@@ -169,7 +183,7 @@ describe('anonymous access', () => {
     await uploadFile(c, { name: 'private.txt', content: 'SECRET-NOT-SHARED' });
     const token = await share(c, sharedId);
 
-    const res = await asBuffer(visitor().get(`/s/${token}`));
+    const res = await asBuffer(visitor().get(`/s/${token}/file/${sharedId}`));
 
     expect(res.body.toString('utf8')).not.toContain('SECRET-NOT-SHARED');
   });
@@ -268,6 +282,33 @@ describe('shared folders', () => {
     expect(res.text).toContain('inside.txt');
   });
 
+  it('auto-links a file uploaded into a shared folder and refreshes the listing', async () => {
+    const { client: c } = await ensureOwner();
+    const folder = await c.post('/api/files/folder').send({ name: 'Live Folder' });
+    const folderId = folder.body.folder?.id || folder.body.id;
+    const token = await share(c, folderId);
+
+    // Warm the public listing cache while the folder is still empty.
+    const before = await visitor().get(`/s/${token}`);
+    expect(before.text).not.toContain('added-later.txt');
+
+    // Add a file after sharing — it should join the share automatically.
+    const up = await c
+      .post('/api/files/upload')
+      .field('parentId', folderId)
+      .attach('file', Buffer.from('later'), { filename: 'added-later.txt', contentType: 'text/plain' });
+    const newId = up.body.file?.id || up.body.id;
+
+    // Marked shared on the owner's account.
+    const { rows } = await pool.query('SELECT shared FROM files WHERE id = $1', [newId]);
+    expect(rows[0].shared).toBe(true);
+
+    // Visible on the public page, and downloadable through the share.
+    const after = await visitor().get(`/s/${token}`);
+    expect(after.text).toContain('added-later.txt');
+    expect((await visitor().get(`/s/${token}/file/${newId}`)).status).toBe(200);
+  });
+
   it('refuses to create a folder whose name contains markup', async () => {
     const { client: c } = await ensureOwner();
     const res = await c.post('/api/files/folder').send({ name: '<script>alert(1)</script>' });
@@ -289,6 +330,31 @@ describe('shared folders', () => {
     expect(res.status).toBe(200);
     expect(res.text).not.toContain('<script>alert(1)</script>');
     expect(res.text).toContain('&lt;script&gt;');
+  });
+
+  it('browses into a subfolder and shows its contents with a breadcrumb to the root', async () => {
+    const { client: c, user } = await ensureOwner();
+    const root = await makeFolder(user.id, { name: 'Project' });
+    const sub = await makeFolder(user.id, { name: 'src', parentId: root.id });
+    await makeFile(user.id, { name: 'index.js', parentId: sub.id, mimeType: 'application/javascript' });
+
+    // Sharing the root recursively shares its whole subtree.
+    const token = await share(c, root.id);
+    const res = await visitor().get(`/s/${token}/folder/${sub.id}`);
+
+    expect(res.status).toBe(200);
+    expect(res.text).toContain('index.js'); // child of the subfolder is listed
+    expect(res.text).toContain('Project'); // breadcrumb links back to the shared root
+  });
+
+  it('refuses to browse a folder that is not part of the share', async () => {
+    const { client: c, user } = await ensureOwner();
+    const shared = await makeFolder(user.id, { name: 'Shared' });
+    const secret = await makeFolder(user.id, { name: 'Secret' }); // sibling, never shared
+    const token = await share(c, shared.id);
+
+    const res = await visitor().get(`/s/${token}/folder/${secret.id}`);
+    expect(res.status).toBe(404);
   });
 });
 

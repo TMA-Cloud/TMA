@@ -60,6 +60,8 @@ export const FileManager: React.FC = () => {
     restoreProgress,
     emptyTrash,
     shareFiles,
+    linkToParentShare,
+    folderSharedStack,
     starFiles,
     downloadFiles,
     setRenameTarget,
@@ -337,7 +339,12 @@ export const FileManager: React.FC = () => {
   // Calculate shared/starred status for selected files
   const selectedItems = files.filter(f => selectedFiles.includes(f.id));
   const allShared = selectedItems.length > 0 && selectedItems.every(f => f.shared);
+  const allUnshared = selectedItems.length > 0 && selectedItems.every(f => !f.shared);
   const allStarred = selectedItems.length > 0 && selectedItems.every(f => f.starred);
+  // Inside a shared folder, unshared items join that folder's share rather than
+  // minting a new link, so the share action becomes "Link to Folder Share".
+  const parentShared = !!folderSharedStack[folderSharedStack.length - 1];
+  const canLinkToParentShare = parentShared && allUnshared;
 
   const handleShare = () => {
     if (allShared) {
@@ -348,6 +355,17 @@ export const FileManager: React.FC = () => {
     } else {
       // Sharing — show expiry picker first
       setShareExpiryModalOpen(true);
+    }
+  };
+
+  const handleLinkToParentShare = async () => {
+    try {
+      await linkToParentShare(selectedFiles);
+      showToast('Linked to folder share', 'success');
+      closeMultiSelectIfMobile();
+    } catch {
+      showToast('Failed to link to folder share', 'error');
+      closeMultiSelectIfMobile();
     }
   };
 
@@ -453,6 +471,8 @@ export const FileManager: React.FC = () => {
           canCreateFolder={canCreateFolder}
           allShared={allShared}
           allStarred={allStarred}
+          canLinkToParentShare={canLinkToParentShare}
+          onLinkToParentShare={handleLinkToParentShare}
           isDownloading={isDownloading}
           isDeleting={isDeleting}
           isRestoring={isRestoring}

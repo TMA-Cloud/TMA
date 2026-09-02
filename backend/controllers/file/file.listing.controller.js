@@ -3,6 +3,7 @@ import { recordAccess } from '../../services/accessTracker.js';
 import { logAuditEvent } from '../../services/auditLogger.js';
 import { EventTypes, publishFileEvent } from '../../services/fileEvents.js';
 import { createFolder, getFiles, renameFile as renameFileModel } from '../../models/file.model.js';
+import { linkNewItemsToParentShare } from '../../services/shareLinking.js';
 import { validateParentId } from '../../utils/controllerHelpers.js';
 import { sendError, sendSuccess } from '../../utils/response.js';
 import { validateSortBy, validateSortOrder } from '../../utils/validation.js';
@@ -59,6 +60,8 @@ async function addFolder(req, res) {
     parentId,
     userId: req.ownerId,
   });
+
+  await linkNewItemsToParentShare({ ownerId: req.ownerId, parentId, itemIds: [folder.id] });
 
   sendSuccess(res, folder);
 }

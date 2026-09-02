@@ -10,7 +10,13 @@ import { validateMimeType } from '../../utils/mimeTypeDetection.js';
 import { sendError, sendSuccess } from '../../utils/response.js';
 import storage from '../../utils/storageDriver.js';
 import { validateFileName, validateFileUpload } from '../../utils/validation.js';
+import { linkNewItemsToParentShare } from '../../services/shareLinking.js';
 import { ensureFolderPath, enforceStorageLimitForUpload } from './file.upload.helpers.js';
+
+/** New item ids created by a bulk upload: the files plus any folders it made. */
+function createdItemIds(successful, folderIdCache) {
+  return [...successful.map(f => f.id), ...folderIdCache.values()];
+}
 
 /**
  * Bulk upload multiple files (multer disk/local or stream-to-S3 when S3 enabled)
@@ -113,6 +119,12 @@ async function uploadFilesBulk(req, res) {
     if (successful.length === 0) {
       return sendError(res, 400, failed[0]?.error || 'All uploads failed');
     }
+
+    await linkNewItemsToParentShare({
+      ownerId: req.ownerId,
+      parentId,
+      itemIds: createdItemIds(successful, folderIdCache),
+    });
 
     // Rejected-before-S3 files still count toward the total the client awaits.
     const total = uploads.length + streamFailures.length;
@@ -317,6 +329,12 @@ async function uploadFilesBulk(req, res) {
   if (successful.length === 0) {
     return sendError(res, 400, failed.length > 0 ? failed[0].error : 'All uploads failed');
   }
+
+  await linkNewItemsToParentShare({
+    ownerId: req.ownerId,
+    parentId,
+    itemIds: createdItemIds(successful, folderIdCache),
+  });
 
   await filesUploadedBulk(successful, req, {
     failedCount: failed.length,

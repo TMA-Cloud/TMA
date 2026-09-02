@@ -17,6 +17,7 @@ import { sendError, sendSuccess } from '../../utils/response.js';
 import storage from '../../utils/storageDriver.js';
 import { checkStorageLimitExceeded } from '../../utils/storageUtils.js';
 import { validateClientMtime, validateFileName, validateFileUpload } from '../../utils/validation.js';
+import { linkNewItemsToParentShare } from '../../services/shareLinking.js';
 import { enforceStorageLimitForUpload, validateDiskUploadOrRespond } from './file.upload.helpers.js';
 
 /**
@@ -87,6 +88,7 @@ async function uploadFile(req, res) {
       parentId,
       userId: req.ownerId,
     });
+    await linkNewItemsToParentShare({ ownerId: req.ownerId, parentId, itemIds: [file.id] });
     return sendSuccess(res, file);
   }
 
@@ -137,6 +139,7 @@ async function uploadFile(req, res) {
     parentId,
     userId: req.ownerId,
   });
+  await linkNewItemsToParentShare({ ownerId: req.ownerId, parentId, itemIds: [file.id] });
 
   sendSuccess(res, file);
 }
@@ -364,6 +367,11 @@ async function uploadDerivedFile(req, res) {
         parentId: newFile.parentId || existing.parentId || null,
         userId: req.ownerId,
       });
+      await linkNewItemsToParentShare({
+        ownerId: req.ownerId,
+        parentId: newFile.parentId || existing.parentId || null,
+        itemIds: [newFile.id],
+      });
 
       return sendSuccess(res, newFile);
     }
@@ -406,6 +414,11 @@ async function uploadDerivedFile(req, res) {
       mimeType: newFile.mimeType,
       parentId: newFile.parentId || existing.parentId || null,
       userId: req.ownerId,
+    });
+    await linkNewItemsToParentShare({
+      ownerId: req.ownerId,
+      parentId: newFile.parentId || existing.parentId || null,
+      itemIds: [newFile.id],
     });
 
     return sendSuccess(res, newFile);

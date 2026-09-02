@@ -15,6 +15,8 @@ interface FileManagerToolbarProps {
   canCreateFolder: boolean;
   allShared: boolean;
   allStarred: boolean;
+  /** Selection sits in a shared folder and is all unshared → link, don't re-share. */
+  canLinkToParentShare?: boolean;
   isDownloading: boolean;
   isDeleting: boolean;
   isRestoring: boolean;
@@ -22,6 +24,7 @@ interface FileManagerToolbarProps {
   onSortChange: (by: string, order: 'asc' | 'desc') => void;
   onCreateFolder: () => void;
   onShare: () => void;
+  onLinkToParentShare?: () => void;
   onStar: () => void;
   onDownload: () => void;
   onRename: () => void;
@@ -106,6 +109,7 @@ export const FileManagerToolbar: React.FC<FileManagerToolbarProps> = ({
   canCreateFolder,
   allShared,
   allStarred,
+  canLinkToParentShare = false,
   isDownloading,
   isDeleting,
   isRestoring,
@@ -113,6 +117,7 @@ export const FileManagerToolbar: React.FC<FileManagerToolbarProps> = ({
   onSortChange,
   onCreateFolder,
   onShare,
+  onLinkToParentShare,
   onStar,
   onDownload,
   onRename,
@@ -130,15 +135,23 @@ export const FileManagerToolbar: React.FC<FileManagerToolbarProps> = ({
     <div className={`flex items-center ${isMobile ? 'justify-end w-full flex-wrap gap-1' : 'gap-0.5'}`}>
       {selectedFiles.length > 0 && !isTrashView && !isMobile && (
         <>
-          {can('files.share') && (
-            <ToolbarButton
-              label={allShared ? 'Remove from Shared' : 'Add to Share'}
-              icon={Share2}
-              tint="positive"
-              active={allShared}
-              onClick={onShare}
-            />
-          )}
+          {can('files.share') &&
+            (canLinkToParentShare ? (
+              <ToolbarButton
+                label="Link to Folder Share"
+                icon={Share2}
+                tint="positive"
+                onClick={() => onLinkToParentShare?.()}
+              />
+            ) : (
+              <ToolbarButton
+                label={allShared ? 'Remove from Shared' : 'Add to Share'}
+                icon={Share2}
+                tint="positive"
+                active={allShared}
+                onClick={onShare}
+              />
+            ))}
 
           {can('files.edit') && (
             <ToolbarButton

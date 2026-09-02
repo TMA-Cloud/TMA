@@ -203,7 +203,7 @@ async function getFileByToken(token) {
   }
 
   const res = await pool.query(
-    `SELECT f.id, f.name, f.type, f.mime_type AS "mimeType", f.path, f.user_id AS "userId",
+    `SELECT f.id, f.name, f.type, f.mime_type AS "mimeType", f.size, f.path, f.user_id AS "userId",
             s.expires_at AS "expiresAt"
      FROM share_links s
      JOIN files f ON s.file_id = f.id
@@ -273,6 +273,50 @@ async function getFolderContentsByShare(token, folderId) {
   await setCache(cacheKey, files, 60); // 1 minute TTL
 
   return files;
+}
+
+/**
+ * Ancestor chain for a folder within a share, from the shared root down to the
+ * folder itself. Walks up via parent_id but only through rows that belong to
+ * this share, so the walk naturally stops at the shared root and never leaks
+ * folders outside the link. Returns [] when the folder is not a shared folder.
+ */
+async function getSharedFolderPath(token, folderId) {
+  const res = await pool.query(
+    `WITH RECURSIVE up AS (
+       SELECT f.id, f.name, f.type, f.parent_id
+       FROM files f
+       JOIN share_link_files slf ON slf.file_id = f.id
+       WHERE slf.share_id = $1 AND f.id = $2
+       UNION ALL
+       SELECT f.id, f.name, f.type, f.parent_id
+       FROM files f
+       JOIN share_link_files slf ON slf.file_id = f.id
+       JOIN up ON up.parent_id = f.id
+       WHERE slf.share_id = $1
+     )
+     SELECT id, name, type FROM up`,
+    [token, folderId]
+  );
+  // CTE yields leaf → root; callers want root → leaf.
+  return res.rows.reverse();
+}
+
+/**
+ * Share ids whose subtree contains this folder — i.e. shares the folder is a
+ * member of, whether it is the shared root or a nested subfolder. Used to link
+ * newly added items into the same share(s) as their parent folder.
+ */
+async function getShareIdsContainingFolder(folderId, userId) {
+  if (!folderId) return [];
+  const res = await pool.query(
+    `SELECT DISTINCT slf.share_id
+     FROM share_link_files slf
+     JOIN share_links sl ON sl.id = slf.share_id
+     WHERE slf.file_id = $1 AND sl.user_id = $2`,
+    [folderId, userId]
+  );
+  return res.rows.map(r => r.share_id);
 }
 
 async function isFileShared(token, fileId) {
@@ -381,6 +425,8 @@ export {
   getFileByToken,
   getFolderContents,
   getFolderContentsByShare,
+  getSharedFolderPath,
+  getShareIdsContainingFolder,
   isFileShared,
   getSharedTree,
   cleanupExpiredShareLinks,

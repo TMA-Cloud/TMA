@@ -8,6 +8,7 @@ import {
   moveFiles as moveFilesModel,
   resolveTargetFolderId,
 } from '../../models/file.model.js';
+import { linkNewItemsToParentShare } from '../../services/shareLinking.js';
 import { userOperationLock } from '../../utils/mutex.js';
 import { sendSuccess } from '../../utils/response.js';
 import { logBulkFileAudit } from '../../utils/controllerHelpers.js';
@@ -55,6 +56,8 @@ async function moveFilesController(req, res) {
     }))
   );
 
+  await linkNewItemsToParentShare({ ownerId: req.ownerId, parentId: actualParentId, itemIds: ids });
+
   sendSuccess(res, { message: 'Files moved successfully.' });
 }
 
@@ -95,6 +98,8 @@ async function copyFilesController(req, res) {
       },
     }))
   );
+
+  await linkNewItemsToParentShare({ ownerId: req.ownerId, parentId: actualParentId, itemIds: newFileIds });
 
   sendSuccess(res, { message: 'Files copied successfully.' });
 }

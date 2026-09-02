@@ -1,11 +1,10 @@
 import { logger } from '../../config/logger.js';
-import { getFileByToken, getFolderContentsByShare } from '../../models/share.model.js';
+import { getFileByToken, getFolderContentsByShare, getSharedFolderPath } from '../../models/share.model.js';
 import { recordAccess } from '../../services/accessTracker.js';
 import { shareAccessed } from '../../services/auditLogger.js';
-import { validateAndResolveFile, streamEncryptedFile, streamUnencryptedFile } from '../../utils/fileDownload.js';
 import { sendError } from '../../utils/response.js';
 
-import { escapeHtml, renderErrorPage } from './share.utils.js';
+import { renderErrorPage, renderFolderPage, renderFilePage } from './share.utils.js';
 
 /**
  * Handle shared file/folder access
@@ -35,40 +34,61 @@ async function handleShared(req, res) {
 
     if (file.type === 'folder') {
       const items = await getFolderContentsByShare(token, file.id);
-      const escapedFileName = escapeHtml(file.name);
-      const escapedToken = escapeHtml(token);
-      let html = `<html><head><title>${escapedFileName}</title><style>body{font-family:sans-serif;padding:20px;}a{color:#0366d6;text-decoration:none;}li{margin-bottom:8px;}</style></head><body>`;
-      html += `<h2>${escapedFileName}</h2>`;
-      html += `<ul>`;
-      for (const item of items) {
-        const escapedItemName = escapeHtml(item.name);
-        const escapedItemId = escapeHtml(item.id);
-        html += `<li>${item.type === 'folder' ? '📁' : '📄'} ${escapedItemName} - <a href="/s/${escapedToken}/file/${escapedItemId}">Download</a></li>`;
-      }
-      html += `</ul>`;
-      html += `<p><a href="/s/${escapedToken}/zip">Download All as ZIP</a></p>`;
-      html += `</body></html>`;
-      res.send(html);
+      res.send(
+        renderFolderPage(items, token, {
+          heading: file.name,
+          trail: [{ id: file.id, name: file.name }],
+          zipHref: `/s/${token}/zip`,
+        })
+      );
     } else {
-      const { success, storageKey, ciphertextSize, isEncrypted, error } = await validateAndResolveFile(file);
-      if (!success) {
-        return res.status(400).send(error || 'Invalid file path');
-      }
-
-      // If file is encrypted, stream decrypted content (Range-aware)
-      if (isEncrypted) {
-        return streamEncryptedFile(res, storageKey, file.name, file.mime_type || 'application/octet-stream', {
-          req,
-          ciphertextSize,
-        });
-      }
-
-      // For unencrypted files, use streaming
-      return streamUnencryptedFile(res, storageKey, file.name, file.mime_type || 'application/octet-stream', true);
+      // A single-file share shows a landing page; its Download button streams
+      // the bytes through /s/:token/file/:id.
+      res.send(renderFilePage(file, token));
     }
   } catch (err) {
     sendError(res, 500, 'Server error', err);
   }
 }
 
-export { handleShared };
+/**
+ * Browse into a subfolder of a shared folder.
+ * The folder must belong to this share and be a folder; the breadcrumb path
+ * doubles as the access check (empty path ⇒ not a shared folder ⇒ 404).
+ */
+async function browseSharedFolder(req, res) {
+  try {
+    const { token, id: folderId } = req.params;
+    const file = await getFileByToken(token);
+
+    if (!file) {
+      return renderErrorPage(res, 404, 'Link not found', 'This share link does not exist or has been removed.');
+    }
+    if (file.expired) {
+      return renderErrorPage(res, 410, 'Link expired', 'This share link has expired and is no longer available.');
+    }
+
+    const trail = await getSharedFolderPath(token, folderId);
+    const current = trail[trail.length - 1];
+    if (!current || current.type !== 'folder') {
+      return renderErrorPage(res, 404, 'Not found', 'The requested item was not found in this share.');
+    }
+
+    await shareAccessed(token, req);
+    recordAccess(folderId, file.userId);
+    logger.info({ shareToken: token, folderId }, 'Share subfolder browsed');
+
+    const items = await getFolderContentsByShare(token, folderId);
+    res.send(
+      renderFolderPage(items, token, {
+        heading: current.name,
+        trail,
+        zipHref: `/s/${token}/file/${folderId}`,
+      })
+    );
+  } catch (err) {
+    sendError(res, 500, 'Server error', err);
+  }
+}
+
+export { handleShared, browseSharedFolder };

@@ -228,7 +228,7 @@ async function linkParentShareController(req, res) {
 
     await addFilesToShare(shareId, treeIds);
 
-    const shareUrl = buildShareLink(shareId, req);
+    const shareUrl = await buildShareLink(shareId, req);
     for (const fileId of fileIds) {
       links[fileId] = shareUrl;
     }
