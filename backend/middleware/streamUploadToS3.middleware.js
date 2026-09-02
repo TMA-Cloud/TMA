@@ -1,17 +1,10 @@
 /**
- * Stream upload middleware for S3: parses multipart and pipes file stream
- * directly through encryption to S3 (no temp dir, minimal RAM).
- * Use only when STORAGE_DRIVER=s3.
- *
- * The file's type is detected from its leading bytes so the stored MIME type
- * reflects the content, not the client-declared header. This never blocks: any
- * file is stored regardless of whether its content matches its extension.
- *
- * Because the rest of validation (parentId, permissions, file-name checks) runs
- * in the controller *after* the stream finishes, every successful S3 put is
- * tracked on `req._s3UploadedKeys`.  A one-time `res.on('finish', …)` listener
- * automatically deletes those objects when the response is an error (4xx/5xx)
- * and the controller hasn't already consumed them — preventing orphan files.
+ * Stream upload middleware for S3 (STORAGE_DRIVER=s3 only): parses multipart and
+ * pipes each file through encryption to S3 with no temp dir and minimal RAM. The
+ * stored MIME type is sniffed from the content, not the client header; this never
+ * blocks. Since the rest of validation runs in the controller after the stream
+ * finishes, every successful put is tracked on `req._s3UploadedKeys` and a
+ * `res.on('finish')` listener deletes them on an error response, avoiding orphans.
  */
 
 import path from 'path';
@@ -107,13 +100,9 @@ function streamUploadToS3(singleOrBulk = 'single') {
           defParamCharset: 'utf8',
         });
         const fields = {};
-        // Keep uploads in original multipart order (by file part order).
-        // We store each upload at its fileIndex to avoid reordering caused by async S3 uploads finishing out of order.
+        // Stored by fileIndex so async puts finishing out of order don't reorder.
         const uploadsByIndex = [];
-        // Why individual files were rejected, so the response can name them
-        // instead of failing silently. Each carries the ordinal of its own file
-        // part, which is what ties it back to the metadata the client sent
-        // alongside it.
+        // Per-file rejections (with their part ordinal) so the response can name them.
         const fileFailures = [];
         let fileCount = 0;
         let finished = false;
@@ -121,12 +110,10 @@ function streamUploadToS3(singleOrBulk = 'single') {
         let pending = 0;
         let fileIndex = 0;
 
-        // Set once the client hangs up, which is the point after which there is
-        // no one to answer and nothing worth recording.
+        // Set once the client hangs up — no one left to answer.
         let clientGone = false;
 
-        // Busboy can still error after the last part settled; only the first
-        // outcome may hand control on.
+        // Busboy can error after the last part settled; only the first outcome wins.
         let handedOff = false;
         const handOff = err => {
           if (handedOff || clientGone) return;
@@ -134,11 +121,8 @@ function streamUploadToS3(singleOrBulk = 'single') {
           next(err);
         };
 
-        /**
-         * Ends a single upload as soon as it is doomed (too large, stream error),
-         * closing the socket without draining the remaining body so the client's
-         * transfer aborts early to save bandwidth.
-         */
+        // Abort a doomed single upload without draining the rest of the body,
+        // so the client's transfer stops early.
         let stoppedEarly = false;
         const rejectWithoutReadingRest = reason => {
           if (stoppedEarly) return;
@@ -153,13 +137,11 @@ function streamUploadToS3(singleOrBulk = 'single') {
           handOff(err);
         };
 
-        // Track every S3 key we successfully PUT so we can delete them if the
-        // controller later rejects the request (bad parentId, invalid name, etc.).
+        // Track every successful PUT so a later controller rejection can delete them.
         if (!req._s3UploadedKeys) {
           req._s3UploadedKeys = [];
 
-          // Auto-cleanup: when the response finishes with an error status and the
-          // controller hasn't explicitly marked the uploads as consumed, delete them.
+          // Auto-cleanup: delete tracked objects when the response is an error.
           res.on('finish', () => {
             if (res.statusCode >= 400 && req._s3UploadedKeys.length > 0) {
               logger.info(
@@ -173,7 +155,7 @@ function streamUploadToS3(singleOrBulk = 'single') {
         }
 
         busboy.on('field', (name, value) => {
-          // Support repeated fields (e.g. relativePaths, clientIds) by collecting into arrays.
+          // Collect repeated fields (relativePaths, clientIds) into arrays.
           if (Object.prototype.hasOwnProperty.call(fields, name)) {
             const existing = fields[name];
             if (Array.isArray(existing)) {
@@ -205,12 +187,8 @@ function streamUploadToS3(singleOrBulk = 'single') {
           const ext = path.extname(filename);
           const storageName = id + ext;
 
-          // Detect the type from the file's own bytes so the stored MIME type
-          // reflects the content, not the client-declared header or the filename
-          // (either can lie). This never blocks: a file whose content contradicts
-          // its extension is still stored, and a spoofed type is defused on the
-          // way out (attachment + nosniff). Detection falls back to the declared
-          // type when the content is not recognisable.
+          // Sniff the type from content (the header/filename can lie); never
+          // blocks, and falls back to the declared type when unrecognisable.
           let detectedMimeType = null;
           const sniffStream = createMimeSniffStream(mime => {
             detectedMimeType = mime;
@@ -220,14 +198,9 @@ function streamUploadToS3(singleOrBulk = 'single') {
 
           let failed = false;
 
-          /**
-           * Records why this file was rejected and unwinds its streams.
-           *
-           * Nothing downstream ends on its own when a transform is destroyed, so
-           * without this the S3 put would wait forever on a stream that will never
-           * end and the request would never answer. Draining the part keeps busboy
-           * moving on to the remaining files.
-           */
+          // Record the rejection and unwind the streams: a destroyed transform
+          // doesn't end downstream, so the put would hang; draining the part
+          // lets busboy move on to the remaining files.
           const failFile = (err, message, level = 'warn') => {
             if (failed || clientGone) return;
             failed = true;
@@ -249,19 +222,15 @@ function streamUploadToS3(singleOrBulk = 'single') {
             }
           });
 
-          // Set when the chain down without a reason of its own, so the put
-          // which is holding the real one gets to speak first.
+          // A teardown error with no real reason of its own; let the put speak first.
           let shrapnel = null;
 
           fileStream.pipe(sniffStream);
-          // pipeline (not pipe) so a rejected file tears the whole chain down and
-          // the S3 put rejects instead of hanging on a stream that stopped early.
+          // pipeline (not pipe) so a rejected file tears down the chain and the
+          // put rejects instead of hanging on a stream that stopped early.
           const chainSettled = pipeline(sniffStream, counterStream, encryptStream).catch(err => {
-            // When the destination dies it destroys the body it was reading, and
-            // the chain reports that teardown as an abort. Racing to record it
-            // would bury the storage error behind "The operation was aborted"
-            // and answer 400 for an outage so the put settles a tick later and
-            // knows what actually happened.
+            // A dying destination reports its teardown as an abort; recording it
+            // would bury the real storage error, so defer to the put a tick later.
             if (isShrapnel(err)) {
               shrapnel = err;
               return;
@@ -271,10 +240,9 @@ function streamUploadToS3(singleOrBulk = 'single') {
 
           fileStream.on('error', err => failFile(err, '[StreamUpload] File stream error'));
 
-          // Both outcomes as values, so the verdict below waits for each. A put
-          // can report success before the chain's abort has surfaced, and
-          // judging on whichever landed first is how a truncated file gets
-          // written to the database as a whole one.
+          // Capture both outcomes as values so the verdict waits for each — a put
+          // can report success before the chain's abort surfaces, and judging on
+          // whichever lands first would store a truncated file as a whole one.
           const putSettled = storage.putStream(storageName, encryptStream).then(
             () => null,
             err => err
@@ -283,27 +251,22 @@ function streamUploadToS3(singleOrBulk = 'single') {
           Promise.all([putSettled, chainSettled])
             .then(([putError]) => {
               if (clientGone) {
-                // No row will be written for a request nobody is waiting on, so
-                // anything that did reach storage is already an orphan.
+                // No row is written for an abandoned request; a stored object is an orphan.
                 if (!putError) cleanupS3Keys([storageName]);
                 return;
               }
               if (putError) {
-                // A file we already rejected drags the put down with it, and
-                // failFile keeps the first reason.
                 failFile(putError, '[StreamUpload] Upload failed', 'error');
                 return;
               }
               if (failed || shrapnel) {
-                // Either the put beat the rejection to the finish line, or it
-                // called a body that stopped early a success. Neither is a file
-                // worth keeping, and an object left behind for one is an orphan.
+                // Put beat the rejection, or called an early-ended body a success.
+                // Neither is worth keeping; the stored object is an orphan.
                 cleanupS3Keys([storageName]);
                 if (shrapnel) failFile(shrapnel, '[StreamUpload] Upload stream ended early');
                 return;
               }
               const size = getByteCount();
-              // Track for automatic orphan cleanup on controller rejection.
               req._s3UploadedKeys.push(storageName);
               uploadsByIndex[currentIndex] = {
                 id,
@@ -326,9 +289,8 @@ function streamUploadToS3(singleOrBulk = 'single') {
           clientGone = true;
           logger.info('[StreamUpload] Upload cancelled by the client');
 
-          // The response will never finish, so the listener that normally sweeps
-          // these never runs. Whatever already reached storage has no request
-          // left to claim it.
+          // The response never finishes, so the res.finish sweeper won't run —
+          // clean up whatever already reached storage here.
           if (req._s3UploadedKeys?.length > 0) {
             cleanupS3Keys(req._s3UploadedKeys);
             req._s3UploadedKeys = [];
@@ -344,8 +306,7 @@ function streamUploadToS3(singleOrBulk = 'single') {
         function checkDone() {
           if (finished && pending === 0) {
             req.body = fields;
-            // The controller folds these into its own per-file failure list so the
-            // client learns which files were rejected and why.
+            // The controller folds these into its per-file failures for the client.
             req.streamedUploadFailures = fileFailures;
             if (singleOrBulk === 'single') {
               const first = uploadsByIndex.find(Boolean) || null;
@@ -379,8 +340,7 @@ function streamUploadToS3(singleOrBulk = 'single') {
         });
 
         busboy.on('error', err => {
-          // This is the parser noticing the body stopped mid-part,
-          // which is what cancelling looks like from here.
+          // The parser seeing the body stop mid-part — what a cancel looks like.
           if (clientGone) return;
           logger.error({ err }, '[StreamUpload] Busboy error');
           handOff(err);

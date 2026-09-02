@@ -8,18 +8,15 @@ import { getCache, setCache, deleteCache, cacheKeys, DEFAULT_TTL } from '../../u
  * @returns {number|null} Token version or null if user not found
  */
 async function getUserTokenVersion(id) {
-  // Try to get from cache first
   const cacheKey = cacheKeys.userTokenVersion(id);
   const cached = await getCache(cacheKey);
   if (cached !== null) {
     return cached;
   }
 
-  // Cache miss - query database
   const result = await pool.query('SELECT token_version FROM users WHERE id = $1', [id]);
   const tokenVersion = result.rows[0]?.token_version ?? null;
 
-  // Cache the result (5 minutes TTL)
   if (tokenVersion !== null) {
     await setCache(cacheKey, tokenVersion, DEFAULT_TTL);
   }

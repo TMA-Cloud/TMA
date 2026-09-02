@@ -7,14 +7,12 @@ import { getCache, setCache, cacheKeys, DEFAULT_TTL } from '../utils/cache.js';
  * This service is separate from shareLink.js to avoid circular dependencies
  */
 async function getShareBaseUrlSettings() {
-  // Try to get from cache first
   const cacheKey = cacheKeys.shareBaseUrlSettings();
   const cached = await getCache(cacheKey);
   if (cached !== null) {
     return cached;
   }
 
-  // Cache miss - query database
   const result = await pool.query('SELECT share_base_url FROM app_settings WHERE id = $1', ['app_settings']);
 
   const settings = {
@@ -25,7 +23,6 @@ async function getShareBaseUrlSettings() {
     settings.url = result.rows[0].share_base_url || null;
   }
 
-  // Cache the result (5 minutes TTL)
   await setCache(cacheKey, settings, DEFAULT_TTL);
 
   return settings;

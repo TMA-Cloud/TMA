@@ -49,10 +49,8 @@ async function cleanupExpiredTrash() {
   await pool.query("DELETE FROM files WHERE deleted_at IS NOT NULL AND deleted_at < NOW() - INTERVAL '15 days'");
 }
 
-// Orphan cleanup used to live here as an unattended job. It compared storage
-// against the database and deleted both sides of any mismatch, which meant an
-// upload or paste whose row had not been inserted yet could be destroyed
-// mid-write. It is replaced by the review-then-delete flow in
-// `file.orphan.model.js`, driven by the first user from the admin UI.
+// Unattended orphan cleanup used to live here but could destroy an in-flight
+// upload whose row wasn't inserted yet; replaced by the admin-driven
+// review-then-delete flow in `file.orphan.model.js`.
 
 export { cleanupExpiredTrash };

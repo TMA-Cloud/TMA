@@ -28,12 +28,8 @@ async function createSession(userId, tokenVersion, userAgent, ipAddress) {
 }
 
 /**
- * Check if a session exists and is still within its idle window.
- *
- * `last_activity` is refreshed on every authenticated request, so this is what
- * makes the session window sliding: a session only falls out of scope after
- * `idleTtlSeconds` with no activity at all.
- *
+ * Check if a session exists and is still within its idle window. `last_activity`
+ * is refreshed on every authenticated request, making the window sliding.
  * @param {string} sessionId - Session ID
  * @param {string} userId - User ID
  * @param {number} tokenVersion - Token version
@@ -41,14 +37,12 @@ async function createSession(userId, tokenVersion, userAgent, ipAddress) {
  * @returns {Promise<boolean>} True if session exists and is valid
  */
 async function sessionExists(sessionId, userId, tokenVersion, idleTtlSeconds = null) {
-  // Try to get from cache first
   const cacheKey = cacheKeys.session(sessionId, userId, tokenVersion);
   const cached = await getCache(cacheKey);
   if (cached !== null) {
     return cached;
   }
 
-  // Cache miss - query database
   const result = await pool.query(
     `SELECT id FROM sessions
      WHERE id = $1 AND user_id = $2 AND token_version = $3
@@ -72,14 +66,12 @@ async function sessionExists(sessionId, userId, tokenVersion, idleTtlSeconds = n
  * @returns {Promise<Array>} Array of active sessions
  */
 async function getActiveSessions(userId, currentTokenVersion) {
-  // Try to get from cache first
   const cacheKey = cacheKeys.activeSessions(userId, currentTokenVersion);
   const cached = await getCache(cacheKey);
   if (cached !== null) {
     return cached;
   }
 
-  // Cache miss - query database
   const result = await pool.query(
     `SELECT id, user_id, token_version, user_agent, ip_address, created_at, last_activity
      FROM sessions
@@ -89,7 +81,6 @@ async function getActiveSessions(userId, currentTokenVersion) {
   );
   const sessions = result.rows;
 
-  // Cache the result (2 minutes TTL)
   await setCache(cacheKey, sessions, 120);
 
   return sessions;

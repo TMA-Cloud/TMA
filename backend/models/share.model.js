@@ -38,14 +38,12 @@ async function createShareLink(fileId, userId, fileIds = [fileId], expiresAt = n
 }
 
 async function getShareLink(fileId, userId) {
-  // Try to get from cache first
   const cacheKey = cacheKeys.shareLink(fileId, userId);
   const cached = await getCache(cacheKey);
   if (cached !== null) {
     return cached;
   }
 
-  // Cache miss - query database
   const res = await pool.query('SELECT id FROM share_links WHERE file_id = $1 AND user_id = $2', [fileId, userId]);
   const shareId = res.rows[0]?.id || null;
 
@@ -232,14 +230,12 @@ async function getFileByToken(token) {
 }
 
 async function getFolderContents(folderId, userId) {
-  // Try to get from cache first
   const cacheKey = cacheKeys.shareFolderContents(folderId, userId);
   const cached = await getCache(cacheKey);
   if (cached !== null) {
     return cached;
   }
 
-  // Cache miss - query database
   const res = await pool.query(
     `SELECT f.id, f.name, f.type, f.mime_type AS "mimeType", f.size, f.path,
             sl.id AS token
@@ -251,21 +247,18 @@ async function getFolderContents(folderId, userId) {
   );
   const files = res.rows;
 
-  // Cache the result (1 minute TTL)
   await setCache(cacheKey, files, 60);
 
   return files;
 }
 
 async function getFolderContentsByShare(token, folderId) {
-  // Try to get from cache first
   const cacheKey = cacheKeys.shareFolderContents(token, folderId);
   const cached = await getCache(cacheKey);
   if (cached !== null) {
     return cached;
   }
 
-  // Cache miss - query database
   const res = await pool.query(
     `SELECT f.id, f.name, f.type, f.mime_type AS "mimeType", f.size, f.path
      FROM share_link_files s
@@ -283,18 +276,15 @@ async function getFolderContentsByShare(token, folderId) {
 }
 
 async function isFileShared(token, fileId) {
-  // Try to get from cache first
   const cacheKey = cacheKeys.fileShared(token, fileId);
   const cached = await getCache(cacheKey);
   if (cached !== null) {
     return cached;
   }
 
-  // Cache miss - query database
   const res = await pool.query('SELECT 1 FROM share_link_files WHERE share_id = $1 AND file_id = $2', [token, fileId]);
   const isShared = res.rowCount > 0;
 
-  // Cache the result (5 minutes TTL)
   await setCache(cacheKey, isShared, DEFAULT_TTL);
 
   return isShared;

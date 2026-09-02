@@ -106,4 +106,20 @@ export default defineConfig([
       'no-new-func': 'error',
     },
   },
+
+  {
+    /**
+     * A ceiling on file size — the "god file" smell. Past ~550 real lines a
+     * file is almost always juggling several concerns; the fix is to split it
+     * into focused modules behind a barrel (see CLAUDE.md), not to raise the
+     * limit. Blank lines and comments are not counted, so this measures
+     * substance, not padding. Tests, one-off scripts and migrations are
+     * legitimately long, so they are exempt.
+     */
+    files: ['**/*.js'],
+    ignores: ['tests/**', 'scripts/**', 'migrations/**', 'audit-worker.js'],
+    rules: {
+      'max-lines': ['error', { max: 550, skipBlankLines: true, skipComments: true }],
+    },
+  },
 ]);

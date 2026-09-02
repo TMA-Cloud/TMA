@@ -34,14 +34,9 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 
-// Trust the reverse proxy so `req.ip` is the real client address rather than
-// the proxy's. Without this every user behind the proxy shares a single
-// rate-limit bucket and one busy client can 429 everybody else.
-//
-// TRUST_PROXY accepts anything Express understands: a hop count ('1'), a
-// comma-separated list of proxy IPs/subnets, or 'loopback'. It defaults to 1
-// hop, which matches the single nginx/traefik in front of the app in the
-// shipped compose files. Set it to '0' to disable when running with no proxy.
+// Trust the reverse proxy so `req.ip` is the real client, not the proxy (else
+// everyone shares one rate-limit bucket). TRUST_PROXY takes anything Express
+// understands (hop count, proxy IP list, 'loopback'); defaults to 1 hop, '0' off.
 const trustProxySetting = process.env.TRUST_PROXY ?? '1';
 if (trustProxySetting !== '0' && trustProxySetting !== 'false') {
   const numericHops = Number(trustProxySetting);
@@ -57,15 +52,13 @@ const METRICS_ALLOWED_IPS = (process.env.METRICS_ALLOWED_IPS || '127.0.0.1,::fff
 // FIRST: Request ID middleware (must be first for proper context propagation)
 app.use(requestIdMiddleware);
 
-// Block main app access on share domain (must be very early, before logging and JSON parsing)
-// This stops requests immediately without logging or processing body
+// Block main app on the share domain — very early, before logging/body parsing.
 app.use(blockMainAppOnShareDomain);
 
-// Optionally require Electron desktop client based on app_settings (admin/first user toggle)
-// Must run very early so blocked requests are cheap and not logged.
+// Optionally require the Electron client (admin toggle); early so blocks are cheap.
 app.use(requireElectronClientIfEnabled);
 
-// SECOND: HTTP request logging (after requestId so it can use it, after blocking so blocked requests aren't logged)
+// HTTP request logging (after requestId and blocking, so blocked requests aren't logged).
 app.use(httpLogger);
 
 // Security headers
@@ -129,10 +122,8 @@ app.get(
   metricsEndpoint
 );
 
-// API routes
-// csrfProtection is mounted at '/api' and runs for every /api/* request that
-// reaches it, so CSRF-exempt routes (public, OnlyOffice callbacks, version) are
-// registered BEFORE the csrf-bearing line so they respond before it runs.
+// API routes. CSRF-exempt routes (public, OnlyOffice callbacks, version) are
+// registered before the csrfProtection-bearing lines so they respond first.
 app.use('/api', publicRoutes);
 app.use('/api/onlyoffice', onlyofficeRoutes);
 app.use('/api/version', versionRoutes);

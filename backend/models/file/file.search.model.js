@@ -19,7 +19,6 @@ async function searchFiles(userId, query, limit = 100) {
   const searchTerm = query.trim();
   const searchLength = searchTerm.length;
 
-  // Try to get from cache first
   const cacheKey = cacheKeys.search(userId, searchTerm, limit);
   const cached = await getCache(cacheKey);
   if (cached !== null) {
@@ -105,7 +104,6 @@ async function searchFiles(userId, query, limit = 100) {
   // Fill folder sizes for folders (only if needed, in batches)
   await fillFolderSizes(files, userId);
 
-  // Cache the result (shorter TTL for search results)
   await setCache(cacheKey, files, 120); // 2 minutes TTL
 
   return files;
@@ -118,14 +116,12 @@ async function searchFiles(userId, query, limit = 100) {
  * @returns {Promise<Object>} Object with totalFiles, totalFolders, sharedCount, starredCount
  */
 async function getFileStats(userId) {
-  // Try to get from cache first
   const cacheKey = cacheKeys.fileStats(userId);
   const cached = await getCache(cacheKey);
   if (cached !== null) {
     return cached;
   }
 
-  // Cache miss - query database
   const result = await pool.query(
     `SELECT 
       COUNT(*) FILTER (WHERE f.type = 'file' AND f.deleted_at IS NULL) AS "totalFiles",

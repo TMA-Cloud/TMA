@@ -18,14 +18,12 @@ async function setStarred(ids, starred, userId) {
  * Get starred files
  */
 async function getStarredFiles(userId, sortBy = 'modified', order = 'DESC') {
-  // Try to get from cache first
   const cacheKey = cacheKeys.starredFiles(userId, sortBy, order);
   const cached = await getCache(cacheKey);
   if (cached !== null) {
     return cached;
   }
 
-  // Cache miss - query database
   const orderClause = sortBy === 'size' ? '' : buildOrderClause(sortBy, order);
   const result = await pool.query(
     `SELECT id, name, type, size, modified, accessed_at AS "accessedAt", mime_type AS "mimeType", starred, shared FROM files WHERE user_id = $1 AND starred = TRUE AND deleted_at IS NULL ${orderClause}`,
@@ -40,7 +38,6 @@ async function getStarredFiles(userId, sortBy = 'modified', order = 'DESC') {
     });
   }
 
-  // Cache the result (1 minute TTL)
   await setCache(cacheKey, files, 60);
 
   return files;

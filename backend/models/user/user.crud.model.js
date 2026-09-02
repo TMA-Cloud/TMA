@@ -17,10 +17,8 @@ async function createUser(email, password, name) {
     { id: user.id, email: user.email, name: user.name, token_version: 0 },
     DEFAULT_TTL * 2
   );
-  // Note: We don't cache userByEmail on creation to avoid caching password
-  // The password will be cached on first lookup if needed, but we should avoid that too
+  // Don't cache userByEmail on creation — it would cache the password hash.
 
-  // Invalidate user count cache
   await deleteCache(cacheKeys.userCount());
   await deleteCache(cacheKeys.allUsers());
   await deleteCache(cacheKeys.signupEnabled());
@@ -29,10 +27,8 @@ async function createUser(email, password, name) {
 }
 
 async function getUserByEmail(email) {
-  // SECURITY: Do NOT cache getUserByEmail because it's used for authentication
-  // and contains password hashes. Password hashes should never be cached.
-  // Always query from database to ensure we have the latest password hash
-  // and to avoid storing sensitive data in Redis.
+  // SECURITY: never cache — this is the auth path and the row holds the password
+  // hash. Always read from the DB.
   const result = await pool.query(
     'SELECT id, email, password, name, created_at, mfa_enabled FROM users WHERE email = $1',
     [email]
@@ -41,21 +37,18 @@ async function getUserByEmail(email) {
 }
 
 async function getUserById(id) {
-  // Try to get from cache first
   const cacheKey = cacheKeys.userById(id);
   const cached = await getCache(cacheKey);
   if (cached !== null) {
     return cached;
   }
 
-  // Cache miss - query database
   const result = await pool.query(
     'SELECT id, email, name, token_version, created_at, mfa_enabled FROM users WHERE id = $1',
     [id]
   );
   const user = result.rows[0];
 
-  // Cache the result (longer TTL for user data)
   if (user) {
     await setCache(cacheKey, user, DEFAULT_TTL * 2); // 10 minutes TTL
   }
@@ -74,18 +67,15 @@ async function updateUserPassword(userId, hashedPassword) {
 }
 
 async function getUserByGoogleId(googleId) {
-  // Try to get from cache first
   const cacheKey = cacheKeys.userByGoogleId(googleId);
   const cached = await getCache(cacheKey);
   if (cached !== null) {
     return cached;
   }
 
-  // Cache miss - query database
   const res = await pool.query('SELECT id, email, name, google_id FROM users WHERE google_id = $1', [googleId]);
   const user = res.rows[0];
 
-  // Cache the result (10 minutes TTL)
   if (user) {
     await setCache(cacheKey, user, DEFAULT_TTL * 2);
   }

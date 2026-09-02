@@ -1,31 +1,14 @@
 /**
- * Orphan inspection and admin-driven cleanup.
+ * Orphan inspection and admin-driven cleanup. An orphan is either a *storage
+ * orphan* (an object no `files` row points at) or a *database orphan* (a row
+ * whose `path` points at missing storage). Both are reported, never deleted
+ * automatically — deletion happens only when the first user picks entries in the
+ * admin UI, and each is re-verified at that moment.
  *
- * An "orphan" is one of two things:
- *   - a *storage orphan*: an object in the bucket / a file in UPLOAD_DIR that
- *     no row in `files` points at;
- *   - a *database orphan*: a `files` row whose `path` points at storage that
- *     no longer exists.
- *
- * Both are reported, never deleted automatically. Deletion only happens when
- * the first user explicitly picks entries in the admin UI, and every entry is
- * re-verified at that moment (the scan the admin is looking at may be minutes
- * or hours old).
- *
- * ## Why the grace window exists
- *
- * Writing a file is not atomic across storage and Postgres. An upload puts the
- * object first and inserts the row afterwards; a paste/copy writes the new
- * object, then inserts. In between — which can be minutes for a large upload —
- * the object legitimately has no row and looks exactly like a storage orphan.
- * Anything younger than the grace window is therefore treated as "in flight"
- * and is never reported or deleted.
- *
- * Row age is taken from `files.created_at`, NOT `files.modified`: uploads and
- * copies deliberately preserve the client's original mtime, so `modified` says
- * nothing about how long the row has existed. Renames and moves only touch
- * metadata and leave `path`/`created_at` alone, so they can never turn a live
- * file into an orphan.
+ * A grace window skips anything "in flight": writes aren't atomic across storage
+ * and Postgres (the object lands before the row), so a fresh object legitimately
+ * has no row yet. Age comes from `created_at`, not `modified` — uploads preserve
+ * the client's mtime, and renames/moves leave `path`/`created_at` alone.
  */
 
 import path from 'path';
@@ -84,13 +67,9 @@ async function loadStorageBackedRows() {
 }
 
 /**
- * Scan storage and the database for orphans without deleting anything.
- *
- * Runs a single pass over the bucket/upload dir. Memory stays bounded by the
- * number of DB rows rather than the number of stored objects: keys that match
- * a known row are tracked in a set that can never exceed the row count, and
- * unreferenced keys are counted but only retained up to the report cap.
- *
+ * Scan storage and the database for orphans without deleting anything. A single
+ * pass over the bucket/upload dir, with memory bounded by DB row count (matched
+ * keys tracked in a set; unreferenced keys retained only up to the report cap).
  * @param {Object} [options]
  * @param {number} [options.graceMinutes] - Minimum age before an item is reported
  * @returns {Promise<Object>} Report with both orphan categories and their totals
@@ -266,12 +245,9 @@ async function deleteDatabaseOrphan(id, cutoff) {
 }
 
 /**
- * Delete the orphans an admin selected, re-verifying each one first.
- *
- * Nothing is deleted on the basis of the scan alone: every key is re-checked
- * against the database and the storage timestamp, and every row is re-checked
- * against storage. Entries that no longer qualify are reported back as skipped.
- *
+ * Delete the orphans an admin selected, re-verifying each first (against the DB
+ * and storage timestamp) — nothing is deleted on the scan alone. Entries that no
+ * longer qualify come back as skipped.
  * @param {Object} selection
  * @param {string[]} [selection.storageKeys] - Storage orphan keys to delete
  * @param {string[]} [selection.fileIds] - Database orphan row ids to delete

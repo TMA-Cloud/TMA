@@ -29,14 +29,12 @@ function buildOrderClause(sortBy = 'modified', order = 'DESC', tableAlias = null
  * Calculate folder size recursively
  */
 async function calculateFolderSize(id, userId) {
-  // Try to get from cache first
   const cacheKey = cacheKeys.folderSize(id, userId);
   const cached = await getCache(cacheKey);
   if (cached !== null) {
     return cached;
   }
 
-  // Cache miss - query database
   const MAX_DEPTH = 50;
   const res = await pool.query(
     `WITH RECURSIVE sub AS (
@@ -54,7 +52,6 @@ async function calculateFolderSize(id, userId) {
   const sizeValue = res.rows[0].size;
   const size = typeof sizeValue === 'string' ? Number(sizeValue) || 0 : sizeValue || 0;
 
-  // Cache the result (5 minutes TTL - folder sizes change less frequently)
   await setCache(cacheKey, size, DEFAULT_TTL);
 
   return size;

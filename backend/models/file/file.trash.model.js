@@ -57,11 +57,8 @@ async function deleteFiles(ids, userId) {
 async function getTrashFiles(userId, sortBy = 'deletedAt', order = 'DESC', topLevelOnly = false) {
   const orderClause = sortBy === 'size' ? '' : buildOrderClause(sortBy, order, 'f');
 
-  // When listing trash, we usually don't want to render thousands of child rows
-  // for a single deleted folder. Instead, show only "top-level" items where:
-  // - the item has no parent, OR
-  // - its parent is NOT also in trash.
-  //
+  // Show only top-level trash items (no parent, or parent not also trashed) so
+  // a deleted folder doesn't render thousands of child rows.
   const topLevelFilter = topLevelOnly
     ? ` AND (
           f.parent_id IS NULL
@@ -128,9 +125,8 @@ async function restoreFiles(ids, userId) {
       [allIds, userId]
     );
 
-    // Process files in parent-first order (by depth within the restore set).
-    // This prevents children from being restored before their parent,
-    // which would otherwise cause us to restore them to root (and create duplicates).
+    // Restore parent-first (by depth), else a child restored before its parent
+    // lands at root and creates duplicates.
     const idsSet = new Set(allIds);
     const parentById = new Map(filesToRestore.rows.map(f => [f.id, f.parent_id]));
     const depthMemo = new Map();
@@ -140,8 +136,7 @@ async function restoreFiles(ids, userId) {
       const cached = depthMemo.get(id);
       if (cached != null) return cached;
 
-      // Defensive: if there is an unexpected cycle in the DB,
-      // avoid infinite recursion/stack overflow.
+      // Defensive: guard against an unexpected DB cycle.
       if (visiting.has(id)) {
         depthMemo.set(id, 0);
         return 0;
@@ -219,8 +214,7 @@ async function restoreFiles(ids, userId) {
 
       // Restore file: clear deleted_at and update parent_id
       await client.query(
-        // Preserve original metadata timestamps/values (e.g. `modified`)
-        // and only "undelete" + reattach to the correct parent.
+        // Only undelete + reattach; preserve original metadata (e.g. `modified`).
         'UPDATE files SET deleted_at = NULL, parent_id = $1 WHERE id = $2 AND user_id = $3',
         [targetParentId, file.id, userId]
       );

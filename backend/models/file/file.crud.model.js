@@ -17,14 +17,12 @@ import { buildOrderClause, fillFolderSizes, getUniqueDbFileName } from './file.u
  * Get files in a directory
  */
 async function getFiles(userId, parentId = null, sortBy = 'modified', order = 'DESC') {
-  // Try to get from cache first
   const cacheKey = cacheKeys.files(userId, parentId, sortBy, order);
   const cached = await getCache(cacheKey);
   if (cached !== null) {
     return cached;
   }
 
-  // Cache miss - query database
   const orderClause = sortBy === 'size' ? '' : buildOrderClause(sortBy, order);
   const result = await pool.query(
     `SELECT id, name, type, size, modified, accessed_at AS "accessedAt", mime_type AS "mimeType", starred, shared, path
@@ -45,7 +43,6 @@ async function getFiles(userId, parentId = null, sortBy = 'modified', order = 'D
     });
   }
 
-  // Cache the result (shorter TTL for file listings as they change frequently)
   await setCache(cacheKey, files, 60); // 1 minute TTL
 
   return files;
@@ -160,21 +157,18 @@ async function createFileFromStreamedUpload(upload, parentId, userId) {
  * Get a single file by ID
  */
 async function getFile(id, userId) {
-  // Try to get from cache first
   const cacheKey = cacheKeys.file(id, userId);
   const cached = await getCache(cacheKey);
   if (cached !== null) {
     return cached;
   }
 
-  // Cache miss - query database
   const result = await pool.query(
     'SELECT id, name, type, mime_type AS "mimeType", path, parent_id AS "parentId" FROM files WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL',
     [id, userId]
   );
   const file = result.rows[0];
 
-  // Cache the result (5 minutes TTL)
   if (file) {
     await setCache(cacheKey, file, DEFAULT_TTL);
   }
@@ -248,10 +242,8 @@ async function renameFile(id, name, userId) {
   const oldFile = fileResult.rows[0];
   const parentId = oldFile.parent_id || null;
 
-  // For both S3 and local storage, keep the underlying storage key/path stable
-  // and only update the logical metadata. This ensures we don't leak real file
-  // names via bucket object keys or disk paths, and that the "modified"
-  // timestamp reflects the rename operation.
+  // Rename touches only the logical metadata; the storage key/path stays stable
+  // so real names never leak into bucket keys or disk paths.
   await pool.query('UPDATE files SET name = $1, modified = NOW() WHERE id = $2 AND user_id = $3', [name, id, userId]);
 
   // Get updated file info
@@ -306,9 +298,8 @@ async function replaceFileData(id, size, mimeType, tempPath, userId, modified = 
     try {
       await fs.promises.rename(tempPath, tempDest);
     } catch (err) {
-      // On Windows, EPERM/EACCES can happen if the destination is locked or already exists.
-      // EXDEV occurs when crossing device/drive boundaries (e.g. C: -> D:).
-      // Fall back to copy + unlink to avoid leaving the original temp file around.
+      // Windows can EPERM/EACCES (locked/existing dest) or EXDEV (cross-drive);
+      // fall back to copy + unlink so no temp file is left behind.
       if (err && (err.code === 'EPERM' || err.code === 'EACCES' || err.code === 'EXDEV')) {
         await fs.promises.copyFile(tempPath, tempDest);
         await safeUnlink(tempPath);
@@ -326,10 +317,8 @@ async function replaceFileData(id, size, mimeType, tempPath, userId, modified = 
     }
   }
 
-  // Writing an item counts as accessing it, the same way NTFS stamps both
-  // timestamps on a write. It is free here — the row is being updated anyway.
-  // `accessed_at` is ours to stamp; `modified` belongs to the incoming bytes, so
-  // it defers to the replacing file's mtime whenever the client sent one.
+  // A write also counts as access (like NTFS). We stamp accessed_at; modified
+  // defers to the replacing file's mtime when the client sent one.
   const result = await pool.query(
     'UPDATE files SET size = $1, mime_type = $2, modified = COALESCE($3, NOW()), accessed_at = NOW() WHERE id = $4 AND user_id = $5 RETURNING id, name, type, size, modified, accessed_at AS "accessedAt", mime_type AS "mimeType", starred, shared',
     [size, mimeType, modified, id, userId]

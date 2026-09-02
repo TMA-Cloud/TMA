@@ -210,20 +210,11 @@ async function invalidateSearchCache(userId) {
 }
 
 /**
- * Invalidate the full bundle of caches affected by a file mutation.
- *
- * Replaces the common block:
- *   await invalidateFileCache(userId, parentId);
- *   await invalidateSearchCache(userId);
- *   await deleteCache(cacheKeys.fileStats(userId));
- *   await deleteCache(cacheKeys.userStorage(userId));
- *
+ * Invalidate the full bundle of caches affected by a file mutation (file cache,
+ * search, and optionally fileStats + userStorage).
  * @param {string} userId - User ID
  * @param {string|null} [parentId] - Parent folder ID (optional)
- * @param {Object} [options]
- * @param {string|null} [options.oldParentId] - Additional folder to invalidate (e.g. move source)
- * @param {boolean} [options.includeStats=true] - Also invalidate fileStats
- * @param {boolean} [options.includeStorage=true] - Also invalidate userStorage
+ * @param {Object} [options] - oldParentId (e.g. move source), includeStats, includeStorage
  */
 async function invalidateAllFileCaches(userId, parentId = null, options = {}) {
   const { oldParentId = null, includeStats = true, includeStorage = true } = options;
@@ -277,10 +268,9 @@ const cacheKeys = {
     return `files:${userId}:${parent}:${sortBy}:${order}`;
   },
 
-  // Search cache keys (hashed to prevent cache key injection and ensure uniform key length)
+  // Search keys hash the query (prevents key injection, uniform length).
   search: (userId, query, limit = 100) => {
     const normalizedQuery = query.toLowerCase().trim();
-    // Hash the query to prevent cache key injection and ensure uniform key length
     const queryHash = crypto.createHash('sha256').update(normalizedQuery).digest('hex').slice(0, 16);
     return `search:${userId}:${queryHash}:${limit}`;
   },

@@ -3,33 +3,11 @@ import { logger } from '../config/logger.js';
 import { cacheKeys, deleteCache } from '../utils/cache.js';
 
 /**
- * Last-access tracking for files and folders.
- *
- * Recording "this was opened" is cheap to describe and expensive to implement
- * naively: every read becomes a row update, every row update invalidates a
- * cache entry, and a directory listing multiplies both by the number of
- * children. Filesystems hit this problem decades ago and answered it the same
- * way twice — coalesce the writes and accept a loose timestamp:
- *
- *   NTFS promises the value is accurate only to within an hour.
- *   Linux's `relatime` rewrites atime only when it predates the last write or
- *   is more than a day stale, and `lazytime` holds the update in memory and
- *   lets something else carry it to disk later.
- *
- * This module does both:
- *
- *   1. A per-item suppression window (default one hour). Re-reading the same
- *      item inside its window costs nothing at all — no query, no queue entry.
- *   2. A write-behind buffer. Everything that survives step 1 lands in memory
- *      and is written by one bulk UPDATE per flush interval, so the database
- *      cost is bounded by wall-clock time rather than by traffic.
- *
- * The result is at most one row write per item per hour, batched. A user who
- * downloads the same file forty times in a morning produces one.
- *
- * Callers treat this as fire-and-forget: nothing here is awaited on a request
- * path and nothing here throws. A lost timestamp is not worth a failed
- * download.
+ * Last-access tracking for files and folders. Like NTFS/relatime, it coalesces
+ * writes and accepts a loose timestamp: a per-item suppression window (default
+ * one hour) drops repeat reads for free, and a write-behind buffer flushes the
+ * survivors as one bulk UPDATE per interval — at most one write per item/hour.
+ * Fire-and-forget: nothing here is awaited on a request path or throws.
  */
 
 /** Read a positive number from the environment, falling back when unset or junk. */
@@ -40,9 +18,7 @@ function envNumber(name, fallback) {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 }
 
-// Windows exposes an off switch for exactly this feature
-// (NtfsDisableLastAccessUpdate) because on a busy volume the writes cost more
-// than the timestamps are worth. Deployments that feel the same can say so.
+// Off switch, like NTFS's NtfsDisableLastAccessUpdate, for busy deployments.
 const TRACKING_DISABLED = ['0', 'false', 'off', 'no'].includes(
   String(process.env.ACCESS_TIME_TRACKING || '').toLowerCase()
 );
@@ -53,19 +29,13 @@ const WINDOW_MS = envNumber('ACCESS_TIME_WINDOW_MINUTES', 60) * 60 * 1000;
 /** How long buffered timestamps may sit in memory before being written. */
 const FLUSH_INTERVAL_MS = envNumber('ACCESS_TIME_FLUSH_SECONDS', 10) * 1000;
 
-/**
- * Flush early once this many items are waiting. A folder download can push a
- * whole tree in at once; this keeps the buffer from tracking the tree's size.
- */
+/** Flush early once this many items are waiting (a folder download bursts many). */
 const MAX_PENDING = 2000;
 
 /** Rows per UPDATE statement, so one huge flush cannot build a huge query. */
 const CHUNK_SIZE = 500;
 
-/**
- * Ceiling on remembered suppression windows. Hitting it costs some redundant
- * writes, never correctness, so the recovery is simply to forget.
- */
+/** Ceiling on remembered suppression windows; overflow just forgets (costs redundant writes). */
 const MAX_SUPPRESSED = 50000;
 
 /** key -> { id, ownerId, at } awaiting a write. */
@@ -111,8 +81,7 @@ function recordAccess(ids, ownerId) {
     if (!id) continue;
     const k = key(ownerId, id);
 
-    // Inside its window the stored value is already "recent enough" by the
-    // same standard NTFS applies, so there is nothing to do.
+    // Inside its window the stored value is already recent enough.
     const openAgainAt = suppressed.get(k);
     if (openAgainAt !== undefined && openAgainAt > now) continue;
 
@@ -130,20 +99,10 @@ function recordAccess(ids, ownerId) {
 }
 
 /**
- * Write one batch.
- *
- * Deliberately touches `accessed_at` and nothing else: `modified` must keep
- * meaning "when the contents changed", or sorting by it becomes sorting by
- * whoever browsed most recently.
- *
- * The `f.accessed_at < v.accessed_at` guard makes the statement idempotent and
- * stops a delayed flush from dragging a newer timestamp backwards.
- *
- * Folder listings are not invalidated afterwards, and that is deliberate. They
- * are cached for a minute; dropping those entries on every read would trade the
- * cache's whole value for precision this timestamp does not claim to have — it
- * is already allowed to lag by an hour. The recently-opened list is the one
- * exception, handled in flushAccessTimes.
+ * Write one batch. Touches only `accessed_at` (never `modified`); the
+ * `accessed_at < v.accessed_at` guard is idempotent and won't move a timestamp
+ * backwards. Folder listings are left to expire on their own — only the
+ * recently-opened list is invalidated, in flushAccessTimes.
  */
 async function flushChunk(entries) {
   const tuples = [];
@@ -170,16 +129,9 @@ async function flushChunk(entries) {
 }
 
 /**
- * Drop the cached "recently opened" list for every account in a flushed batch.
- *
- * This is the one cache the timestamps genuinely order, so leaving it to expire
- * would mean a file you just opened not appearing until the TTL ran out. The
- * cost stays negligible because it rides on the flush rather than on the read:
- * one exact-key DEL per account per flush interval, however many items that
- * account touched, and nothing at all while it touches none.
- *
- * A failure here means a stale panel for one TTL, which is not worth
- * propagating into a download's response path.
+ * Drop the cached "recently opened" list per account in a flushed batch — the
+ * one cache these timestamps genuinely order. Rides the flush (one DEL per
+ * account per interval); a failure just means a stale panel for one TTL.
  */
 async function invalidateRecentLists(batch) {
   const owners = new Set(batch.map(([, entry]) => entry.ownerId));
@@ -203,8 +155,7 @@ async function flushAccessTimes() {
   const batch = Array.from(pending.entries());
   pending.clear();
 
-  // A stable row order keeps two concurrent flushes from taking the same locks
-  // in opposite orders.
+  // Stable order so concurrent flushes don't take locks in opposite orders.
   batch.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
 
   let written = 0;
@@ -215,8 +166,7 @@ async function flushAccessTimes() {
     }
     if (written > 0) await invalidateRecentLists(batch);
   } catch (err) {
-    // Nothing was stored, so the suppression windows are lies. Forget them and
-    // let the next read try again rather than going quiet for an hour.
+    // Nothing stored — forget the suppression windows so the next read retries.
     for (const [k] of batch) suppressed.delete(k);
     logger.warn({ err, count: batch.length }, '[AccessTime] Failed to flush access times');
   } finally {

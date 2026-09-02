@@ -277,12 +277,8 @@ function validateFileUpload(mimeType, filename, { suppressSpoofingWarning = fals
   // Flag if file should be forced to download instead of inline display
   const requiresDownload = fileExtension && executableExtensions.includes(fileExtension);
 
-  // All file types are allowed for cloud storage
-  // Security is handled by:
-  // 1. Not executing uploaded files
-  // 2. Serving with proper Content-Disposition headers
-  // 3. Storing outside of web-accessible directories
-  // 4. Proper authentication/authorization
+  // All types are allowed; security comes from not executing uploads, serving
+  // with Content-Disposition, storing outside web root, and auth — not blocklists.
   return {
     valid: true,
     error: null,
