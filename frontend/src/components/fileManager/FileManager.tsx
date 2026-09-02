@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { useApp, type FileItem, type FileSortBy, type ShareExpiry } from '../../contexts/AppContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -15,21 +15,16 @@ import { isElectron } from '../../utils/electronDesktop';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { useToast } from '../../hooks/useToast';
 import { getErrorMessage } from '../../utils/errorUtils';
-import {
-  createDragPreview,
-  moveDragPreview,
-  removeDragPreview,
-  animateFlyToFolder,
-  getTransparentImage,
-} from './utils/dragPreview';
 import { EmptyTrashModal, DeleteModal, DeleteForeverModal } from './FileManagerModals';
 import { FileManagerToolbar } from './FileManagerToolbar';
 import { FileList } from './FileList';
 import { MultiSelectIndicator } from './MultiSelectIndicator';
 import { ShareExpiryModal } from './ShareLinkModal';
 import { FileInfoModal } from './FileInfoModal';
-import { entriesFromDataTransfer } from '../../utils/folderUpload';
-import { throttleTrailing } from '../../utils/scheduling';
+import { useFileSelection } from './hooks/useFileSelection';
+import { useFileDragAndDrop } from './hooks/useFileDragAndDrop';
+import { useExternalFileDrop } from './hooks/useExternalFileDrop';
+import { useFileManagerShortcuts } from './hooks/useFileManagerShortcuts';
 
 export const FileManager: React.FC = () => {
   const {
@@ -92,88 +87,34 @@ export const FileManager: React.FC = () => {
     desktopOpenProgress,
   } = useApp();
 
-  // Sub-users only see the actions they were granted; the rest are omitted
-  // rather than shown and rejected by the server.
+  // Sub-users only see actions they were granted; the rest are omitted.
   const { can } = useAuth();
   const { showToast } = useToast();
+  const isMobile = useIsMobile();
+
   const [emptyTrashModalOpen, setEmptyTrashModalOpen] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [deleteForeverModalOpen, setDeleteForeverModalOpen] = useState(false);
   const [shareExpiryModalOpen, setShareExpiryModalOpen] = useState(false);
   const [infoModalOpen, setInfoModalOpen] = useState(false);
   const [infoModalFile, setInfoModalFile] = useState<FileItem | null>(null);
-  const [isExternalDragOver, setIsExternalDragOver] = useState(false);
+  const [contextMenu, setContextMenu] = useState<{
+    isOpen: boolean;
+    position: { x: number; y: number };
+    targetId: string | null;
+  }>({ isOpen: false, position: { x: 0, y: 0 }, targetId: null });
 
-  const activeUploadProcessingRequestIdRef = React.useRef<string | null>(uploadModalProcessingRequestId);
-  const uploadModalProcessingRef = React.useRef(uploadModalProcessing);
-  useEffect(() => {
-    activeUploadProcessingRequestIdRef.current = uploadModalProcessingRequestId;
-  }, [uploadModalProcessingRequestId]);
-  useEffect(() => {
-    uploadModalProcessingRef.current = uploadModalProcessing;
-  }, [uploadModalProcessing]);
+  const managerRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLDivElement>(null);
+  /** Set while a marquee drag is active; shared between selection and drag hooks. */
+  const dragSelectingRef = useRef(false);
 
-  // Creating folders, uploading and dropping files all need the upload
-  // grant; without it the drop zone and its affordances stay hidden.
+  // Folder creation, upload and drop all need the upload grant.
   const canUpload = can('files.upload');
   const canCreateFolder = currentPath[0] === 'My Files' && canUpload;
   const isTrashView = currentPath[0] === 'Trash';
   const hasTrashFiles = isTrashView && files.length > 0;
   const isMyFilesView = currentPath[0] === 'My Files';
-
-  // Paste (Ctrl+V): upload clipboard files only in My Files
-  useEffect(() => {
-    if (!isMyFilesView || !canUpload) return;
-
-    const onPaste = (e: ClipboardEvent) => {
-      const fileList = e.clipboardData?.files;
-      if (!fileList || fileList.length === 0) return;
-
-      const target = e.target as Node;
-      if (
-        target &&
-        (target instanceof HTMLInputElement ||
-          target instanceof HTMLTextAreaElement ||
-          (target instanceof HTMLElement && target.isContentEditable))
-      ) {
-        return; // let input handle paste
-      }
-
-      e.preventDefault();
-      const pastedFiles = Array.from(fileList);
-      if (pastedFiles.length === 1) {
-        const file = pastedFiles[0];
-        if (file) void uploadFile(file);
-      } else if (pastedFiles.length > 1) {
-        void uploadFilesBulk(pastedFiles);
-      }
-    };
-
-    document.addEventListener('paste', onPaste);
-    return () => document.removeEventListener('paste', onPaste);
-  }, [isMyFilesView, canUpload, uploadFile, uploadFilesBulk]);
-
-  // Mouse back/forward (e.g. G502 X side buttons): button 3 = back, button 4 = forward
-  useEffect(() => {
-    const onMouseUp = (e: MouseEvent) => {
-      if (e.button !== 3 && e.button !== 4) return;
-      const target = e.target as HTMLElement;
-      if (target?.closest('input, textarea, select, [contenteditable="true"]') || target?.closest('[role="dialog"]')) {
-        return;
-      }
-      if (e.button === 3 && canGoBack) {
-        e.preventDefault();
-        e.stopPropagation();
-        goBack();
-      } else if (e.button === 4 && canGoForward) {
-        e.preventDefault();
-        e.stopPropagation();
-        goForward();
-      }
-    };
-    window.addEventListener('mouseup', onMouseUp, { capture: true });
-    return () => window.removeEventListener('mouseup', onMouseUp, { capture: true });
-  }, [canGoBack, canGoForward, goBack, goForward]);
 
   const openInfoModalForSelection = useCallback(() => {
     if (isTrashView) return;
@@ -187,84 +128,93 @@ export const FileManager: React.FC = () => {
     setInfoModalOpen(true);
   }, [files, isTrashView, selectedFiles]);
 
-  // Electron desktop: unified clipboard shortcuts.
-  // - Ctrl+C: copy (cloud + OS clipboard for files that fit)
-  // - Ctrl+X: cut (cloud only)
-  // - Ctrl+V: smart paste — cloud clipboard if set, otherwise upload from OS clipboard
-  // - Ctrl+Shift+I: Get Info for selected item
-  // - Ctrl+A: select all
-  useEffect(() => {
-    if (!isElectron()) return;
+  // Selection state machine (single/ctrl/shift/marquee, mobile multi-select,
+  // click-outside-to-clear, scroll-return-after-navigate-up).
+  const {
+    isSelecting,
+    multiSelectMode,
+    setMultiSelectMode,
+    closeMultiSelectIfMobile,
+    handleClearSelection,
+    handleSelectingChange,
+    handleFileClick,
+    handleMarqueeSelection,
+    listScrollRequest,
+    clearListScrollRequest,
+  } = useFileSelection({
+    files,
+    selectedFiles,
+    setSelectedFiles,
+    addSelectedFile,
+    removeSelectedFile,
+    clearSelection,
+    isMobile,
+    folderStack,
+    managerRef,
+    dragSelectingRef,
+  });
 
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (!(e.ctrlKey || e.metaKey)) return;
+  // Internal move drag-and-drop (drag items onto a folder).
+  const {
+    draggingIds,
+    dragOverFolder,
+    handleDragStart,
+    handleDragEnd,
+    handleFolderDragOver,
+    handleFolderDragLeave,
+    handleFolderDrop,
+  } = useFileDragAndDrop({
+    selectedFiles,
+    setSelectedFiles,
+    isMobile,
+    dragSelectingRef,
+    can,
+    moveFiles,
+    closeMultiSelectIfMobile,
+    showToast,
+  });
 
-      const target = e.target as Node | null;
-      if (
-        target &&
-        (target instanceof HTMLInputElement ||
-          target instanceof HTMLTextAreaElement ||
-          (target instanceof HTMLElement && target.isContentEditable))
-      ) {
-        return;
-      }
+  // External OS drop → upload modal.
+  const { isExternalDragOver, handleExternalDragOver, handleExternalDragLeave, handleExternalDrop } =
+    useExternalFileDrop({
+      draggingIds,
+      isMyFilesView,
+      canUpload,
+      managerRef,
+      uploadModalProcessing,
+      uploadModalProcessingRequestId,
+      setUploadModalOpen,
+      setUploadModalProcessing,
+      setUploadModalProcessingRequestId,
+      setUploadScanCount,
+      clearUploadModalInitialEntries,
+      openUploadModalWithEntries,
+      showToast,
+    });
 
-      const key = e.key.toLowerCase();
-
-      if (key === 'a') {
-        e.preventDefault();
-        if (!files.length) return;
-        const allIds = files.map(f => f.id);
-        setSelectedFiles(allIds);
-        return;
-      }
-
-      if (key === 'c') {
-        if (!selectedFiles.length) return;
-        e.preventDefault();
-        clipboardCopy(selectedFiles);
-        return;
-      }
-
-      if (key === 'x') {
-        if (!selectedFiles.length) return;
-        e.preventDefault();
-        setClipboard({ ids: selectedFiles, action: 'cut' });
-        showToast(
-          `Cut ${selectedFiles.length} item${selectedFiles.length !== 1 ? 's' : ''} — paste to move`,
-          'success'
-        );
-        return;
-      }
-
-      if (key === 'v') {
-        e.preventDefault();
-        void clipboardPaste(folderStack[folderStack.length - 1] ?? null).catch(error => {
-          const message = error instanceof Error ? error.message : String(error);
-          showToast(message || 'Failed to paste files', 'error');
-        });
-      }
-
-      if (key === 'i' && e.shiftKey) {
-        if (!selectedFiles.length) return;
-        e.preventDefault();
-        void openInfoModalForSelection();
-      }
-    };
-
-    document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
-  }, [
+  // Global keyboard/mouse/paste shortcuts.
+  useFileManagerShortcuts({
+    files,
+    selectedFiles,
+    folderStack,
+    isMyFilesView,
+    isTrashView,
+    canUpload,
+    isDeleting,
+    canGoBack,
+    canGoForward,
+    goBack,
+    goForward,
+    uploadFile,
+    uploadFilesBulk,
     clipboardCopy,
     clipboardPaste,
-    files,
-    folderStack,
-    openInfoModalForSelection,
-    selectedFiles,
     setClipboard,
     setSelectedFiles,
+    openInfoModalForSelection,
+    setDeleteModalOpen,
     showToast,
-  ]);
+  });
 
   const handleEmptyTrash = async () => {
     setEmptyTrashModalOpen(false);
@@ -318,202 +268,6 @@ export const FileManager: React.FC = () => {
     }
   };
 
-  const dragSelectingRef = useRef(false);
-  const managerRef = useRef<HTMLDivElement>(null);
-  const headerRef = useRef<HTMLDivElement>(null);
-  const [isSelecting, setIsSelecting] = useState(false);
-  const [draggingIds, setDraggingIds] = useState<string[]>([]);
-  const [dragOverFolder, setDragOverFolder] = useState<string | null>(null);
-  const [multiSelectMode, setMultiSelectMode] = useState(false);
-
-  // Clean up is-dragging class on unmount or when drag ends unexpectedly
-  useEffect(() => {
-    if (draggingIds.length === 0) {
-      document.body.classList.remove('is-dragging');
-    }
-    return () => {
-      document.body.classList.remove('is-dragging');
-    };
-  }, [draggingIds]);
-  const multiSelectModeRef = useRef(multiSelectMode);
-
-  // Keep ref in sync with state
-  useEffect(() => {
-    multiSelectModeRef.current = multiSelectMode;
-  }, [multiSelectMode]);
-
-  // track marquee‐drag state in a ref only (we never read dragSelecting)
-  const handleSelectingChange = useCallback((selecting: boolean) => {
-    dragSelectingRef.current = selecting;
-    setIsSelecting(selecting);
-  }, []);
-
-  const [contextMenu, setContextMenu] = useState<{
-    isOpen: boolean;
-    position: { x: number; y: number };
-    targetId: string | null;
-  }>({ isOpen: false, position: { x: 0, y: 0 }, targetId: null });
-
-  const isMobile = useIsMobile();
-
-  // Helper to close multi-select mode on mobile
-  const closeMultiSelectIfMobile = useCallback(() => {
-    if (isMobile && multiSelectModeRef.current) {
-      setMultiSelectMode(false);
-    }
-  }, [isMobile, setMultiSelectMode]);
-
-  // Wrapper for clearSelection that also exits multi-select mode on mobile
-  const handleClearSelection = useCallback(() => {
-    clearSelection();
-    closeMultiSelectIfMobile();
-  }, [clearSelection, closeMultiSelectIfMobile]);
-
-  // Wrapper for removeSelectedFile that exits multi-select mode when last file is deselected
-  const handleRemoveSelectedFile = useCallback(
-    (fileId: string) => {
-      removeSelectedFile(fileId);
-      if (isMobile && multiSelectMode && selectedFiles.length === 1) {
-        // If this was the last selected file, exit multi-select mode
-        setMultiSelectMode(false);
-      }
-    },
-    [removeSelectedFile, isMobile, multiSelectMode, selectedFiles.length, setMultiSelectMode]
-  );
-
-  // Filter out deleted files from selection
-  useEffect(() => {
-    const validSelectedFiles = selectedFiles.filter(id => files.some(f => f.id === id));
-    if (validSelectedFiles.length !== selectedFiles.length) {
-      setSelectedFiles(validSelectedFiles);
-    }
-  }, [files, selectedFiles, setSelectedFiles]);
-
-  const prevFolderStackLenRef = useRef(folderStack.length);
-  /** True after navigating up; cleared after we scroll to the restored selection (applied async after fetch) */
-  const scrollReturnHighlightRef = useRef(false);
-
-  useEffect(() => {
-    const prevLen = prevFolderStackLenRef.current;
-    const len = folderStack.length;
-    if (len < prevLen) scrollReturnHighlightRef.current = true;
-    if (len > prevLen) scrollReturnHighlightRef.current = false;
-    prevFolderStackLenRef.current = len;
-  }, [folderStack.length]);
-
-  const [listScrollRequest, setListScrollRequest] = useState<{ fileId: string; token: number } | null>(null);
-  const listScrollTokenRef = useRef(0);
-  const clearListScrollRequest = useCallback(() => setListScrollRequest(null), []);
-
-  useEffect(() => {
-    if (!scrollReturnHighlightRef.current) return;
-    if (selectedFiles.length > 1) {
-      scrollReturnHighlightRef.current = false;
-      return;
-    }
-    if (selectedFiles.length !== 1) return;
-    const id = selectedFiles[0];
-    if (!id || !files.some(f => f.id === id)) return;
-
-    scrollReturnHighlightRef.current = false;
-    listScrollTokenRef.current += 1;
-    setListScrollRequest({ fileId: id, token: listScrollTokenRef.current });
-  }, [files, selectedFiles]);
-
-  useEffect(() => {
-    const handleDocumentClick = (e: MouseEvent) => {
-      if (dragSelectingRef.current) return;
-
-      const manager = managerRef.current;
-      if (manager && !manager.contains(e.target as Node)) {
-        handleClearSelection();
-      }
-    };
-
-    document.addEventListener('click', handleDocumentClick);
-
-    const handleDrag = (ev: DragEvent) => {
-      if (!isMobile) {
-        moveDragPreview(ev.clientX, ev.clientY);
-      }
-    };
-    document.addEventListener('dragover', handleDrag);
-
-    return () => {
-      document.removeEventListener('click', handleDocumentClick);
-      document.removeEventListener('dragover', handleDrag);
-    };
-  }, [handleClearSelection, isMobile]);
-
-  // Keyboard Delete: move selected files/folders to trash
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== 'Delete') return;
-
-      const target = e.target as Node | null;
-      if (
-        target &&
-        (target instanceof HTMLInputElement ||
-          target instanceof HTMLTextAreaElement ||
-          (target instanceof HTMLElement && target.isContentEditable))
-      ) {
-        return;
-      }
-
-      if (!selectedFiles.length) return;
-      if (isTrashView) return;
-      if (isDeleting) return;
-
-      e.preventDefault();
-      setDeleteModalOpen(true);
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [isTrashView, isDeleting, selectedFiles.length, setDeleteModalOpen]);
-
-  const handleFileClick = (fileId: string, e: React.MouseEvent) => {
-    if (dragSelectingRef.current) return;
-
-    e.preventDefault();
-    e.stopPropagation(); // ← prevent the container's onClick from firing
-
-    // Mobile multi-select mode
-    if (isMobile && multiSelectMode) {
-      if (selectedFiles.includes(fileId)) {
-        handleRemoveSelectedFile(fileId);
-      } else {
-        addSelectedFile(fileId);
-      }
-      return;
-    }
-
-    if (e.ctrlKey || e.metaKey) {
-      // Multi-select with Ctrl/Cmd
-      if (selectedFiles.includes(fileId)) {
-        handleRemoveSelectedFile(fileId);
-      } else {
-        addSelectedFile(fileId);
-      }
-    } else if (e.shiftKey && selectedFiles.length > 0) {
-      // Range select with Shift
-      const fileIds = files.map(f => f.id);
-      const lastSelectedId = selectedFiles[selectedFiles.length - 1];
-      if (!lastSelectedId) return; // Safety check
-      const lastSelectedIndex = fileIds.indexOf(lastSelectedId);
-      const clickedIndex = fileIds.indexOf(fileId);
-
-      const start = Math.min(lastSelectedIndex, clickedIndex);
-      const end = Math.max(lastSelectedIndex, clickedIndex);
-      const rangeIds = fileIds.slice(start, end + 1);
-
-      setSelectedFiles([...new Set([...selectedFiles, ...rangeIds])]);
-    } else {
-      // Single select
-      setSelectedFiles([fileId]);
-    }
-  };
-
   const handleFileDoubleClick = (file: FileItem) => {
     // Don't allow opening anything from Trash
     if (currentPath[0] === 'Trash') {
@@ -525,16 +279,13 @@ export const FileManager: React.FC = () => {
     } else {
       const mime = (file.mimeType || '').toLowerCase();
 
-      // In the Electron desktop app, open images, videos, and audio directly
-      // in the system default application.
+      // In Electron, open image/video/audio in the system default app.
       if (isElectron() && (mime.startsWith('image/') || mime.startsWith('video/') || mime.startsWith('audio/'))) {
         void editFileWithDesktop(file.id);
       } else if (mime.startsWith('image/')) {
         setImageViewerFile(file);
       } else if (isElectron() && ONLYOFFICE_EXTS.has(getExt(file.name))) {
-        // In the Electron desktop app, open Office documents directly
-        // in the native desktop application (Word/Excel/PowerPoint, etc.)
-        // instead of routing through ONLYOFFICE in the browser.
+        // In Electron, open Office docs in the native app rather than ONLYOFFICE.
         void editFileWithDesktop(file.id);
       } else if (ONLYOFFICE_EXTS.has(getExt(file.name))) {
         // Validate MIME type before opening (prevents unnecessary API calls)
@@ -581,78 +332,6 @@ export const FileManager: React.FC = () => {
       position: { x: e.clientX, y: e.clientY },
       targetId: fileId ?? null,
     });
-  };
-
-  const handleMarqueeSelection = useCallback(
-    (selectedIds: string[], additive: boolean) => {
-      if (additive) {
-        // merge current selection + new marquee hits
-        const merged = Array.from(new Set([...selectedFiles, ...selectedIds]));
-        setSelectedFiles(merged);
-      } else {
-        setSelectedFiles(selectedIds);
-      }
-    },
-    [selectedFiles, setSelectedFiles]
-  );
-
-  const handleDragStart = (fileId: string) => (e: React.DragEvent) => {
-    if (dragSelectingRef.current || isMobile) {
-      e.preventDefault();
-      return;
-    }
-    if (!selectedFiles.includes(fileId)) {
-      setSelectedFiles([fileId]);
-      setDraggingIds([fileId]);
-    } else {
-      setDraggingIds(selectedFiles);
-    }
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setDragImage(getTransparentImage(), 0, 0);
-    // mark global dragging state (used to suppress tooltips)
-    document.body.classList.add('is-dragging');
-    createDragPreview(selectedFiles.includes(fileId) ? selectedFiles : [fileId], e.clientX, e.clientY, isMobile);
-  };
-
-  const handleDragEnd = () => {
-    setDraggingIds([]);
-    setDragOverFolder(null);
-    removeDragPreview();
-    document.body.classList.remove('is-dragging');
-  };
-
-  const handleFolderDragOver = (folderId: string) => (e: React.DragEvent) => {
-    if (dragSelectingRef.current || draggingIds.length === 0) return;
-    if (folderId && draggingIds.includes(folderId)) return;
-    e.preventDefault();
-    if (dragOverFolder !== folderId) setDragOverFolder(folderId);
-  };
-
-  const handleFolderDragLeave = (folderId: string) => () => {
-    if (dragOverFolder === folderId) setDragOverFolder(null);
-  };
-
-  const handleFolderDrop = (folderId: string) => async (e: React.DragEvent) => {
-    e.preventDefault();
-    // Dropping onto a folder is a move, so it needs the modify grant.
-    if (dragSelectingRef.current || draggingIds.length === 0 || !can('files.edit')) return;
-    setDragOverFolder(null);
-    removeDragPreview();
-    try {
-      await animateFlyToFolder(draggingIds, folderId);
-      await moveFiles(draggingIds, folderId);
-      setDraggingIds([]);
-      document.body.classList.remove('is-dragging');
-      closeMultiSelectIfMobile();
-    } catch (error) {
-      // Show error toast if not already shown by moveFiles
-      const errorMessage = getErrorMessage(error, 'Failed to move files. Please try again.');
-      showToast(errorMessage, 'error');
-      // Reset drag state on error
-      setDraggingIds([]);
-      document.body.classList.remove('is-dragging');
-      closeMultiSelectIfMobile();
-    }
   };
 
   // Calculate shared/starred status for selected files
@@ -702,81 +381,6 @@ export const FileManager: React.FC = () => {
       closeMultiSelectIfMobile();
     }
   };
-
-  // Drag-and-drop from OS: open upload modal with dropped files/folders (My Files only)
-  const handleExternalDragOver = useCallback(
-    (e: React.DragEvent) => {
-      if (draggingIds.length > 0) return;
-      if (!isMyFilesView) return;
-      if (!e.dataTransfer.types.includes('Files')) return;
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'copy';
-      setIsExternalDragOver(true);
-    },
-    [draggingIds.length, isMyFilesView]
-  );
-
-  const handleExternalDragLeave = useCallback((e: React.DragEvent) => {
-    const related = e.relatedTarget as Node | null;
-    if (!related || !managerRef.current?.contains(related)) {
-      setIsExternalDragOver(false);
-    }
-  }, []);
-
-  const handleExternalDrop = useCallback(
-    async (e: React.DragEvent) => {
-      if (draggingIds.length > 0) return;
-      if (!canUpload) return;
-      if (!e.dataTransfer.files?.length) return;
-      if (uploadModalProcessingRef.current) return; // Prevent duplicate drops while we are still scanning folders.
-      e.preventDefault();
-      e.stopPropagation();
-      setIsExternalDragOver(false);
-      if (!isMyFilesView) return;
-      const requestId = `${Date.now()}-${Math.random()}`;
-      try {
-        // Open the modal immediately so users get feedback for large folder scans.
-        setUploadModalOpen(true);
-        setUploadModalProcessing(true);
-        setUploadModalProcessingRequestId(requestId);
-        clearUploadModalInitialEntries();
-
-        const reportScanned = throttleTrailing((scanned: number) => {
-          if (activeUploadProcessingRequestIdRef.current === requestId) setUploadScanCount(scanned);
-        }, 100);
-        const entries = await entriesFromDataTransfer(e.dataTransfer, { onProgress: reportScanned });
-        // User might have closed the modal while we were scanning.
-        if (activeUploadProcessingRequestIdRef.current !== requestId) return;
-
-        if (entries.length > 0) {
-          openUploadModalWithEntries(entries.map(en => ({ file: en.file, relativePath: en.relativePath })));
-          // We keep the modal in "processing" state until the modal consumes the initial entries.
-        } else {
-          setUploadModalProcessing(false);
-          setUploadModalOpen(false);
-          showToast('Nothing to upload in that drop', 'info');
-        }
-      } catch {
-        if (activeUploadProcessingRequestIdRef.current !== requestId) return;
-        // entriesFromDataTransfer can throw; reset state and close modal (matches previous behavior).
-        setUploadModalProcessing(false);
-        setUploadModalOpen(false);
-        showToast('Failed to read that folder', 'error');
-      }
-    },
-    [
-      draggingIds.length,
-      isMyFilesView,
-      canUpload,
-      openUploadModalWithEntries,
-      setUploadModalOpen,
-      setUploadModalProcessing,
-      setUploadModalProcessingRequestId,
-      setUploadScanCount,
-      clearUploadModalInitialEntries,
-      showToast,
-    ]
-  );
 
   return (
     <div

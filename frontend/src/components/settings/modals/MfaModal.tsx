@@ -1,354 +1,41 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React from 'react';
 import { Copy, Check, Loader2, Shield, ShieldCheck, ShieldOff, AlertTriangle } from 'lucide-react';
-import { useToast } from '../../../hooks/useToast';
 import { Modal } from '../../ui/Modal';
-import { useAuth } from '../../../contexts/AuthContext';
-import {
-  getMfaStatus,
-  setupMfa,
-  verifyAndEnableMfa,
-  disableMfa,
-  revokeOtherSessions,
-  regenerateBackupCodes,
-  getBackupCodesCount,
-} from '../../../utils/api';
-import { ApiError, getErrorMessage } from '../../../utils/errorUtils';
-import { copyToClipboard } from '../../../utils/clipboard';
-import { downloadBlob } from '../../../utils/download';
+import { useMfa } from './useMfa';
+import { formatCooldownTime } from './mfaBackupCodes';
 
 interface MfaModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
-type MfaStep = 'status' | 'setup' | 'verify' | 'disable' | 'sessionPrompt';
-
-/**
- * Mask email address for privacy (e.g., useremail****@***.com)
- */
-function maskEmail(email: string): string {
-  if (!email) return 'userema****@***.com';
-  const parts = email.split('@');
-  const localPart = parts[0];
-  const domain = parts[1];
-
-  if (!localPart || !domain) return 'userema****@***.com';
-
-  // Keep first 7 characters of local part, mask the rest
-  const maskedLocal =
-    localPart.length > 7
-      ? localPart.substring(0, 7) + '****'
-      : localPart.substring(0, Math.max(1, localPart.length - 4)) + '****';
-
-  // Mask domain (keep only last 3 characters if available)
-  const maskedDomain = domain.length > 3 ? '***' + domain.substring(domain.length - 3) : '***.com';
-
-  return `${maskedLocal}@${maskedDomain}`;
-}
-
-/**
- * Format backup codes in groups of 5 with numbered brackets
- */
-function formatBackupCodes(codes: string[]): string {
-  let result = '';
-  for (let i = 0; i < codes.length; i++) {
-    const num = i + 1;
-    const padding = num < 10 ? ' ' : '';
-    result += `[${padding}${num} ]  ${codes[i]}\n`;
-    if ((i + 1) % 5 === 0 && i < codes.length - 1) {
-      result += '\n';
-    }
-  }
-  return result.trim();
-}
-
-/**
- * Format cooldown time in milliseconds to human-readable string
- */
-function formatCooldownTime(ms: number): string {
-  const totalSeconds = Math.ceil(ms / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-
-  if (minutes > 0) {
-    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-  }
-  return `${seconds}s`;
-}
-
 export const MfaModal: React.FC<MfaModalProps> = ({ isOpen, onClose }) => {
-  const { showToast } = useToast();
-  const { user } = useAuth();
-  const [step, setStep] = useState<MfaStep>('status');
-  const [mfaEnabled, setMfaEnabled] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [qrCode, setQrCode] = useState<string | null>(null);
-  const [secret, setSecret] = useState<string | null>(null);
-  const [verificationCode, setVerificationCode] = useState('');
-  const [copied, setCopied] = useState(false);
-  const [revokingSessions, setRevokingSessions] = useState(false);
-  const [remainingCodesCount, setRemainingCodesCount] = useState<number | null>(null);
-  const [regenerating, setRegenerating] = useState(false);
-  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
-  const [cooldownRemaining, setCooldownRemaining] = useState<number | null>(null);
-  const mfaInputRef = useRef<HTMLInputElement>(null);
-
-  const loadMfaStatus = useCallback(async () => {
-    try {
-      const status = await getMfaStatus();
-      setMfaEnabled(status.enabled);
-      setStep('status');
-      if (status.enabled) {
-        try {
-          const countResult = await getBackupCodesCount();
-          setRemainingCodesCount(countResult.count);
-        } catch {
-          // Ignore if count fetch fails
-        }
-      }
-    } catch {
-      showToast('Failed to load MFA status', 'error');
-    }
-  }, [showToast]);
-
-  useEffect(() => {
-    if (isOpen) {
-      Promise.resolve().then(loadMfaStatus);
-    } else {
-      Promise.resolve().then(() => {
-        setStep('status');
-        setVerificationCode('');
-        setQrCode(null);
-        setSecret(null);
-        setRemainingCodesCount(null);
-        setCooldownRemaining(null);
-      });
-    }
-  }, [isOpen, loadMfaStatus]);
-
-  // Countdown timer for cooldown
-  useEffect(() => {
-    if (cooldownRemaining === null || cooldownRemaining <= 0) {
-      // Defer the clamp-to-null so it runs in a microtask callback
-      if (cooldownRemaining !== null) Promise.resolve().then(() => setCooldownRemaining(null));
-      return;
-    }
-
-    const interval = setInterval(() => {
-      setCooldownRemaining(prev => {
-        if (prev === null || prev <= 0) {
-          return null;
-        }
-        return prev - 1000;
-      });
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [cooldownRemaining]);
-
-  const handleSetup = async () => {
-    setLoading(true);
-    try {
-      const result = await setupMfa();
-      if (typeof result.qrCode !== 'string' || !result.qrCode.startsWith('data:image/')) {
-        throw new Error('Invalid QR code received from server');
-      }
-      setQrCode(result.qrCode);
-      setSecret(result.secret);
-      setStep('verify');
-    } catch (error) {
-      showToast(getErrorMessage(error, 'Failed to start MFA setup'), 'error');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleVerify = async () => {
-    if (!verificationCode || verificationCode.length !== 6) {
-      showToast('Enter the 6-digit code', 'error');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const result = await verifyAndEnableMfa(verificationCode);
-      setMfaEnabled(true);
-      setVerificationCode('');
-
-      // Set remaining codes count if provided
-      if (result.backupCodes && result.backupCodes.length > 0) {
-        setRemainingCodesCount(result.backupCodes.length);
-      }
-
-      // Show session prompt if needed, otherwise go to status
-      if (result.shouldPromptSessions) {
-        setStep('sessionPrompt');
-        // Download backup codes after setting step (small delay to ensure modal state is updated)
-        if (result.backupCodes && result.backupCodes.length > 0) {
-          setTimeout(() => {
-            downloadBackupCodes(result.backupCodes!);
-          }, 100);
-        }
-      } else {
-        setStep('status');
-        // Download backup codes if provided
-        if (result.backupCodes && result.backupCodes.length > 0) {
-          downloadBackupCodes(result.backupCodes);
-          showToast('MFA enabled — backup codes downloaded', 'success');
-        } else {
-          showToast('MFA enabled', 'success');
-        }
-      }
-    } catch (error) {
-      showToast(getErrorMessage(error, 'Invalid verification code'), 'error');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDisable = async () => {
-    if (!verificationCode || (verificationCode.length !== 6 && verificationCode.length !== 8)) {
-      showToast('Enter a 6-digit code or 8-character backup code', 'error');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const result = await disableMfa(verificationCode);
-      setMfaEnabled(false);
-      setVerificationCode('');
-      setRemainingCodesCount(null);
-
-      if (result.shouldPromptSessions) {
-        setStep('sessionPrompt');
-      } else {
-        setStep('status');
-        showToast('MFA disabled', 'success');
-      }
-    } catch (error) {
-      showToast(getErrorMessage(error, 'Invalid verification code'), 'error');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleRevokeOtherSessions = async () => {
-    setRevokingSessions(true);
-    try {
-      const result = await revokeOtherSessions();
-      showToast(
-        result.deletedCount > 0
-          ? `Signed out of ${result.deletedCount} other session${result.deletedCount === 1 ? '' : 's'}`
-          : 'No other sessions to sign out',
-        'success'
-      );
-      onClose();
-    } catch (error) {
-      showToast(getErrorMessage(error, 'Failed to revoke sessions'), 'error');
-    } finally {
-      setRevokingSessions(false);
-    }
-  };
-
-  const handleSkipSessions = () => {
-    showToast('MFA status updated', 'success');
-    onClose();
-  };
-
-  const copySecret = async () => {
-    if (!secret) return;
-    try {
-      await copyToClipboard(secret);
-      setCopied(true);
-      showToast('Secret copied', 'success');
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      showToast('Failed to copy secret', 'error');
-    }
-  };
-
-  const downloadBackupCodes = (codes: string[]) => {
-    const appName = 'TMA Cloud';
-    const maskedEmail = user?.email ? maskEmail(user.email) : 'userema****@***.com';
-    const now = new Date();
-    const dateTime = now.toLocaleString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: true,
-    });
-    const dateStr = now.toISOString().split('T')[0]; // YYYY-MM-DD
-    const fileName = `mfa-backup-codes_TMA-Cloud_${dateStr}.txt`;
-
-    const content = `Multi-Factor Authentication (MFA) Backup Codes
-
-Application: ${appName}
-Account: ${maskedEmail}
-Generated: ${dateTime}
-
----
-
-IMPORTANT — READ CAREFULLY
-
-• Each backup code can be used ONLY ONCE
-• Store this file in a SECURE LOCATION
-• Anyone with these codes can access your account
-• If this file is lost or exposed, REGENERATE CODES IMMEDIATELY
-
-Generating new backup codes will invalidate this entire list.
-
----
-
-BACKUP CODES
-
-${formatBackupCodes(codes)}
-
----
-
-HOW TO USE
-
-If you cannot access your authenticator app:
-
-1. Sign in with your username and password
-2. When prompted for MFA, enter ONE unused backup code
-3. The code will be invalid after successful use
-
----
-
-Need new backup codes?
-Go to: Account Settings → Security → Multi-Factor Authentication
-`;
-
-    downloadBlob(new Blob([content], { type: 'text/plain' }), fileName);
-  };
-
-  const handleRegenerateBackupCodes = () => {
-    setShowConfirmDialog(true);
-  };
-
-  const confirmRegenerateBackupCodes = async () => {
-    setShowConfirmDialog(false);
-    setRegenerating(true);
-    try {
-      const result = await regenerateBackupCodes();
-      setRemainingCodesCount(result.backupCodes.length);
-      setCooldownRemaining(5 * 60 * 1000); // 5 minutes cooldown
-      downloadBackupCodes(result.backupCodes);
-      showToast('Backup codes regenerated and downloaded', 'success');
-    } catch (error: unknown) {
-      // Check if error contains structured cooldown data
-      if (error instanceof ApiError && error.data?.retryAfterMs) {
-        setCooldownRemaining(error.data.retryAfterMs as number);
-      }
-
-      showToast(getErrorMessage(error, 'Failed to regenerate backup codes'), 'error');
-    } finally {
-      setRegenerating(false);
-    }
-  };
+  const {
+    step,
+    setStep,
+    mfaEnabled,
+    loading,
+    qrCode,
+    secret,
+    verificationCode,
+    setVerificationCode,
+    copied,
+    revokingSessions,
+    remainingCodesCount,
+    regenerating,
+    showConfirmDialog,
+    setShowConfirmDialog,
+    cooldownRemaining,
+    mfaInputRef,
+    handleSetup,
+    handleVerify,
+    handleDisable,
+    handleRevokeOtherSessions,
+    handleSkipSessions,
+    copySecret,
+    handleRegenerateBackupCodes,
+    confirmRegenerateBackupCodes,
+  } = useMfa({ isOpen, onClose });
 
   return (
     <>
@@ -556,7 +243,6 @@ Go to: Account Settings → Security → Multi-Factor Authentication
                   const value = e.target.value.toUpperCase();
                   // Allow dashes for readability (e.g., ABCD-EFGH) but strip them before storing
                   const filtered = value.replace(/[^A-Z0-9-]/g, '');
-                  // Strip dashes before setting state
                   const withoutDashes = filtered.replace(/-/g, '');
                   setVerificationCode(withoutDashes);
                 }}

@@ -58,6 +58,19 @@ export default defineConfig([
   },
   {
     /**
+     * A ceiling on file size — the "god file" smell. Past ~550 real lines a
+     * file is almost always juggling several concerns; the fix is to lift the
+     * logic into custom hooks and keep the component/provider a thin shell.
+     * Blank lines and comments are not counted, so this measures substance, not
+     * padding. Scoped to src/ because test fixtures are legitimately long.
+     */
+    files: ['src/**/*.{ts,tsx}'],
+    rules: {
+      'max-lines': ['error', { max: 550, skipBlankLines: true, skipComments: true }],
+    },
+  },
+  {
+    /**
      * The type ladder is enforced only where it already holds. Widen this list
      * as each surface moves off the Tailwind text-* sizes — an error people can
      * act on beats 200 warnings they learn to scroll past.

@@ -1,454 +1,49 @@
-import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react';
+import React from 'react';
 import { Upload, File, Folder, CheckCircle, AlertCircle, RefreshCw, FilePlus, Loader2 } from 'lucide-react';
 import { Modal } from '../ui/Modal';
-import { useApp, type UploadModalInitialEntry } from '../../contexts/AppContext';
 import { formatFileSize } from '../../utils/fileUtils';
 import { useIsMobile } from '../../hooks/useIsMobile';
-import { useToast } from '../../hooks/useToast';
-import {
-  entriesFromDataTransfer,
-  entriesFromFileListAsync,
-  plainEntriesFromFileListAsync,
-  isScanAborted,
-  type FolderUploadEntry,
-  type ScanOptions,
-} from '../../utils/folderUpload';
-import { throttleTrailing } from '../../utils/scheduling';
-
-/**
- * Staged files are listed, not counted, so the list has to stay bounded: a
- * folder of 20,000 files is 20,000 DOM nodes the browser lays out on every
- * keystroke, and nobody scrolls that far anyway.
- */
-const MAX_VISIBLE_PENDING = 100;
-
-/** Returns a unique name like "name (1).ext" not in existingNames or usedInBatch. */
-function getUniqueUploadName(originalName: string, existingNames: Set<string>, usedInBatch: Set<string>): string {
-  const lastDot = originalName.lastIndexOf('.');
-  const base = lastDot > 0 ? originalName.slice(0, lastDot) : originalName;
-  const ext = lastDot > 0 ? originalName.slice(lastDot) : '';
-  let n = 1;
-  let candidate: string;
-  do {
-    candidate = `${base} (${n})${ext}`;
-    n += 1;
-  } while (existingNames.has(candidate) || usedInBatch.has(candidate));
-  return candidate;
-}
-
-interface UploadFile {
-  id: string;
-  file: File;
-  relativePath?: string;
-  progress: number;
-  status: 'pending' | 'uploading' | 'completed' | 'error';
-}
+import { useUploadStaging } from './useUploadStaging';
 
 export const UploadModal: React.FC = () => {
+  const isMobile = useIsMobile();
   const {
     uploadModalOpen,
-    setUploadModalOpen,
     uploadModalProcessing,
-    setUploadModalProcessing,
-    setUploadModalProcessingRequestId,
     uploadScanCount,
-    setUploadScanCount,
-    uploadModalInitialEntries,
-    clearUploadModalInitialEntries,
-    files: contextFiles,
-    uploadFileWithProgress,
-    replaceFileWithProgress,
-    uploadEntriesBulk,
-    uploadProgress,
-    cancelUpload,
-    cancelUploadGroup,
-  } = useApp();
-  const [uploadFiles, setUploadFiles] = useState<UploadFile[]>([]);
-  const [isDragOver, setIsDragOver] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
-  const [hasStartedUpload, setHasStartedUpload] = useState(false);
-  const [duplicateModalOpen, setDuplicateModalOpen] = useState(false);
-  /** Conflicting upload items (id) and the existing file name. Resolutions stored in duplicateChoices. */
-  const [duplicateConflicts, setDuplicateConflicts] = useState<{ uploadId: string; fileName: string }[]>([]);
-  /** User choice per conflicting upload id: 'replace' | 'rename' */
-  const [duplicateChoices, setDuplicateChoices] = useState<Record<string, 'replace' | 'rename'>>({});
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const folderInputRef = useRef<HTMLInputElement>(null);
-  /** Lets a closed modal or a second selection abandon a scan already running. */
-  const scanAbortRef = useRef<AbortController | null>(null);
-  /** The dropped batch already staged, so a repeated effect run cannot stage it again. */
-  const consumedInitialEntriesRef = useRef<UploadModalInitialEntry[] | null>(null);
-  const isMobile = useIsMobile();
-  const { showToast } = useToast();
-
-  const existingFileNames = useMemo(
-    () => new Set(contextFiles.filter(f => f.type === 'file').map(f => f.name)),
-    [contextFiles]
-  );
-  const existingFileByName = useMemo(
-    () => new Map(contextFiles.filter(f => f.type === 'file').map(f => [f.name, f])),
-    [contextFiles]
-  );
-
-  const isFolderUploadOnly = useMemo(
-    () => uploadFiles.length > 0 && uploadFiles.every(f => !!f.relativePath),
-    [uploadFiles]
-  );
-
-  const folderUploadGroups = useMemo(() => {
-    if (!isFolderUploadOnly) return [];
-    const map = new Map<
-      string,
-      {
-        id: string;
-        name: string;
-        totalSize: number;
-        fileCount: number;
-      }
-    >();
-
-    const getRootFolderName = (relativePath: string | undefined, fallbackName: string): string => {
-      if (!relativePath) return fallbackName;
-      const normalized = relativePath.replace(/\\/g, '/').replace(/^\/+/, '').trim();
-      if (!normalized) return fallbackName;
-      const parts = normalized.split('/').filter(Boolean);
-      return parts[0] || fallbackName;
-    };
-
-    for (const item of uploadFiles) {
-      const rootName = getRootFolderName(item.relativePath, item.file.name);
-      const existing = map.get(rootName);
-      if (existing) {
-        existing.totalSize += item.file.size;
-        existing.fileCount += 1;
-      } else {
-        map.set(rootName, {
-          id: rootName,
-          name: rootName,
-          totalSize: item.file.size,
-          fileCount: 1,
-        });
-      }
-    }
-
-    return Array.from(map.values());
-  }, [isFolderUploadOnly, uploadFiles]);
-
-  const visiblePendingFiles = useMemo(() => uploadFiles.slice(0, MAX_VISIBLE_PENDING), [uploadFiles]);
-  const hiddenPendingCount = uploadFiles.length - visiblePendingFiles.length;
-
-  const handleEntries = useCallback((entries: { file: File; relativePath?: string }[]) => {
-    const now = Date.now();
-    const newUploadFiles: UploadFile[] = entries.map((entry, index) => ({
-      id: `${now}-${index}`,
-      file: entry.file,
-      relativePath: entry.relativePath,
-      progress: 0,
-      status: 'pending' as const,
-    }));
-    setUploadFiles(prev => [...prev, ...newUploadFiles]);
-  }, []);
-
-  /**
-   * Consumes entries handed over by a drop on the file manager.
-   *
-   * Staging must happen exactly once per batch, because a batch staged twice
-   * is every file uploaded twice. Two things make that harder than it looks:
-   * the provider rebuilds its callbacks on every render, so this effect's
-   * dependencies change constantly and it re-runs while the entries are still
-   * pending, and React invokes effects twice on mount in development. Clearing
-   * the entries is a state update that lands on a later render, so it cannot
-   * be the guard.
-   */
-  useEffect(() => {
-    if (!uploadModalOpen || !uploadModalInitialEntries?.length) return;
-    if (consumedInitialEntriesRef.current === uploadModalInitialEntries) return;
-    consumedInitialEntriesRef.current = uploadModalInitialEntries;
-
-    clearUploadModalInitialEntries();
-    handleEntries(uploadModalInitialEntries);
-    // Stop the "processing" UI as soon as we've staged the scanned entries
-    // (even if they later end up being removed/filtered elsewhere)
-    setUploadModalProcessing(false);
-    setUploadModalProcessingRequestId(null);
-    setUploadScanCount(0);
-  }, [
-    uploadModalOpen,
-    uploadModalInitialEntries,
-    clearUploadModalInitialEntries,
-    handleEntries,
-    setUploadModalProcessing,
-    setUploadModalProcessingRequestId,
-    setUploadScanCount,
-  ]);
-
-  /**
-   * Runs a scan with the modal in its "processing" state and a live count.
-   */
-  const runScan = useCallback(
-    async (scan: (options: ScanOptions) => Promise<FolderUploadEntry[]>) => {
-      scanAbortRef.current?.abort();
-      const controller = new AbortController();
-      scanAbortRef.current = controller;
-
-      setUploadModalProcessing(true);
-      setUploadScanCount(0);
-      const reportProgress = throttleTrailing((scanned: number) => {
-        if (!controller.signal.aborted) setUploadScanCount(scanned);
-      }, 100);
-
-      try {
-        const entries = await scan({ signal: controller.signal, onProgress: reportProgress });
-        if (controller.signal.aborted) return;
-        if (entries.length > 0) {
-          handleEntries(entries.map(en => ({ file: en.file, relativePath: en.relativePath })));
-        }
-      } catch (err) {
-        // An abandoned scan is the expected end of a superseded selection.
-        if (!isScanAborted(err)) showToast('Failed to read that folder', 'error');
-      } finally {
-        if (scanAbortRef.current === controller) {
-          scanAbortRef.current = null;
-          setUploadModalProcessing(false);
-          setUploadModalProcessingRequestId(null);
-          setUploadScanCount(0);
-        }
-      }
-    },
-    [handleEntries, setUploadModalProcessing, setUploadModalProcessingRequestId, setUploadScanCount, showToast]
-  );
-
-  const handleFiles = (files: FileList) => {
-    void runScan(options => plainEntriesFromFileListAsync(files, options));
-  };
-
-  const handleFolderFiles = (files: FileList) => {
-    void runScan(options => entriesFromFileListAsync(files, options));
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    if (uploadModalProcessing) return;
-    e.preventDefault();
-    setIsDragOver(false);
-    // The DataTransfer's entries must be read before the event returns, so the
-    // scan is started from inside the handler and awaited elsewhere.
-    const { dataTransfer } = e;
-    void runScan(options => entriesFromDataTransfer(dataTransfer, options));
-  };
-
-  const handleDropZoneClick = (e: React.MouseEvent) => {
-    if (uploadModalProcessing) return;
-    const target = e.target as HTMLElement | null;
-    if (target?.closest('[data-upload-action="true"]')) return;
-    if (target?.closest('input')) return;
-    fileInputRef.current?.click();
-  };
-
-  const handleDragOver = (e: React.DragEvent) => {
-    if (uploadModalProcessing) return;
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'copy';
-    setIsDragOver(true);
-  };
-
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
-    const related = e.relatedTarget as Node | null;
-    const current = e.currentTarget as Node;
-    if (!related || !current.contains(related)) {
-      setIsDragOver(false);
-    }
-  };
-
-  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (files) {
-      handleFiles(files);
-    }
-    e.target.value = '';
-  };
-
-  const handleFolderInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (files) {
-      handleFolderFiles(files);
-    }
-    e.target.value = '';
-  };
-
-  const removeFile = (fileId: string) => {
-    setUploadFiles(prev => prev.filter(f => f.id !== fileId));
-  };
-
-  const handleClose = () => {
-    scanAbortRef.current?.abort();
-    scanAbortRef.current = null;
-    consumedInitialEntriesRef.current = null;
-    setUploadScanCount(0);
-    setUploadFiles([]);
-    setDuplicateConflicts([]);
-    setDuplicateChoices({});
-    setHasStartedUpload(false);
-    setUploadModalOpen(false);
-    setUploadModalProcessing(false);
-    setUploadModalProcessingRequestId(null);
-    setDuplicateModalOpen(false);
-    clearUploadModalInitialEntries();
-  };
-
-  const pendingItems = useMemo(
-    () => uploadFiles.filter(f => f.status === 'pending' || f.status === 'error'),
-    [uploadFiles]
-  );
-
-  const conflicts = useMemo(
-    // Only check duplicates for direct uploads into the current folder.
-    // Folder uploads can contain the same filename in different subfolders.
-    () => pendingItems.filter(item => !item.relativePath && existingFileNames.has(item.file.name)),
-    [pendingItems, existingFileNames]
-  );
-
-  /** Build replace list and new-files list from current pending items and resolutions. */
-  const buildUploadPlan = (resolutions: Record<string, 'replace' | 'rename'>) => {
-    const replaceItems: { fileId: string; file: File }[] = [];
-    const usedInBatch = new Set(existingFileNames);
-    const newFiles: { file: File; relativePath?: string; clientId: string }[] = [];
-
-    for (const item of pendingItems) {
-      const clientId = item.id;
-      if (item.relativePath) {
-        newFiles.push({ file: item.file, relativePath: item.relativePath, clientId });
-        continue;
-      }
-
-      const choice = resolutions[item.id];
-      if (!choice) {
-        newFiles.push({ file: item.file, clientId });
-        continue;
-      }
-      if (choice === 'replace') {
-        const existing = existingFileByName.get(item.file.name);
-        if (existing?.id) {
-          replaceItems.push({ fileId: existing.id, file: item.file });
-        } else {
-          newFiles.push({ file: item.file, clientId });
-        }
-        continue;
-      }
-      if (choice === 'rename') {
-        const newName = getUniqueUploadName(item.file.name, existingFileNames, usedInBatch);
-        usedInBatch.add(newName);
-        const type = item.file.type || 'application/octet-stream';
-        const renamedFile = new (
-          window as Window & { File: new (b: BlobPart[], n: string, o?: FilePropertyBag) => File }
-        ).File([item.file], newName, { type, lastModified: Date.now() });
-        newFiles.push({ file: renamedFile, clientId });
-      }
-    }
-    return { replaceItems, newFiles };
-  };
-
-  /** Execute a pre-built upload plan (used after Confirm to avoid closure issues). */
-  const executeUploadPlan = async (plan: {
-    replaceItems: { fileId: string; file: File }[];
-    newFiles: { file: File; relativePath?: string; clientId: string }[];
-  }) => {
-    try {
-      await Promise.all(
-        plan.replaceItems.map(({ fileId, file }) =>
-          replaceFileWithProgress(fileId, file).catch(() => {
-            // Error handled by upload progress UI
-          })
-        )
-      );
-      if (plan.newFiles.length > 0) {
-        const entries = plan.newFiles.map(f => ({ file: f.file, relativePath: f.relativePath, clientId: f.clientId }));
-        if (entries.length === 1) {
-          const [first] = entries;
-          if (!first) return;
-          if (!first.relativePath) {
-            await uploadFileWithProgress(first.file);
-          } else {
-            await uploadEntriesBulk(entries);
-          }
-        } else {
-          await uploadEntriesBulk(entries);
-        }
-      }
-      setUploadFiles(prev => prev.filter(f => f.status === 'error'));
-    } catch {
-      // On errors, keep pending/error items so user can retry
-      setUploadFiles(prev => prev.filter(f => f.status === 'pending' || f.status === 'error'));
-    } finally {
-      setIsUploading(false);
-    }
-  };
-
-  /** Run the actual upload after duplicate resolution (or when no conflicts). */
-  const doActualUpload = async (resolutions: Record<string, 'replace' | 'rename'>) => {
-    const plan = buildUploadPlan(resolutions);
-    setIsUploading(true);
-    setUploadModalOpen(false);
-    setDuplicateModalOpen(false);
-    setDuplicateConflicts([]);
-    setDuplicateChoices({});
-    await executeUploadPlan(plan);
-  };
-
-  const startUpload = () => {
-    if (pendingItems.length === 0) return;
-
-    if (conflicts.length > 0) {
-      setDuplicateConflicts(conflicts.map(c => ({ uploadId: c.id, fileName: c.file.name })));
-      setDuplicateChoices(prev => {
-        const next = { ...prev };
-        conflicts.forEach(c => {
-          delete next[c.id];
-        });
-        return next;
-      });
-      setDuplicateModalOpen(true);
-      return;
-    }
-
-    setHasStartedUpload(true);
-    void doActualUpload({});
-  };
-
-  const confirmDuplicateAndUpload = () => {
-    const allChosen = duplicateConflicts.every(c => duplicateChoices[c.uploadId] != null);
-    if (!allChosen) return;
-    const plan = buildUploadPlan(duplicateChoices);
-    setHasStartedUpload(true);
-    setUploadModalOpen(false);
-    setDuplicateModalOpen(false);
-    setDuplicateConflicts([]);
-    setDuplicateChoices({});
-    setIsUploading(true);
-    void executeUploadPlan(plan);
-  };
-
-  /** Preview name for "Upload with Renamed" – use same order as doActualUpload (pendingItems). */
-  const renamedPreview = (uploadId: string): string => {
-    if (duplicateChoices[uploadId] !== 'rename') return '';
-    const usedInBatch = new Set(existingFileNames);
-    for (const item of pendingItems) {
-      if (duplicateChoices[item.id] !== 'rename') continue;
-      const name = getUniqueUploadName(item.file.name, existingFileNames, usedInBatch);
-      usedInBatch.add(name);
-      if (item.id === uploadId) return name;
-    }
-    return '';
-  };
-
-  const allDuplicateChoicesMade =
-    duplicateConflicts.length > 0 && duplicateConflicts.every(c => duplicateChoices[c.uploadId] != null);
-
-  // Derive current uploading items and the batch group they belong to. A
-  // batched upload reports as one aggregate row, so a single grouped item is
-  // still a group — cancelling it stops every batch behind it.
-  const uploadingProgressItems = uploadProgress.filter(u => u.status === 'uploading' || u.status === 'finalizing');
-  const bulkGroupId = uploadingProgressItems.find(item => item.groupId)?.groupId ?? null;
+    uploadFiles,
+    isDragOver,
+    isUploading,
+    hasStartedUpload,
+    isFolderUploadOnly,
+    folderUploadGroups,
+    visiblePendingFiles,
+    hiddenPendingCount,
+    uploadingProgressItems,
+    bulkGroupId,
+    duplicateModalOpen,
+    setDuplicateModalOpen,
+    duplicateConflicts,
+    duplicateChoices,
+    setDuplicateChoices,
+    allDuplicateChoicesMade,
+    renamedPreview,
+    confirmDuplicateAndUpload,
+    fileInputRef,
+    folderInputRef,
+    handleClose,
+    handleDrop,
+    handleDragOver,
+    handleDragLeave,
+    handleDropZoneClick,
+    handleFileInput,
+    handleFolderInput,
+    removeFile,
+    removeFolderGroup,
+    startUpload,
+    cancelBulkGroup,
+    cancelSingleUpload,
+  } = useUploadStaging();
 
   return (
     <Modal isOpen={uploadModalOpen} onClose={handleClose} title="Upload" size={isMobile ? 'full' : 'xl'}>
@@ -582,14 +177,7 @@ export const UploadModal: React.FC = () => {
               {bulkGroupId && (
                 <button
                   type="button"
-                  onClick={() => {
-                    cancelUploadGroup(bulkGroupId!);
-                    // Clear all staged files in the modal for this bulk upload.
-                    setUploadFiles([]);
-                    setHasStartedUpload(false);
-                    setDuplicateConflicts([]);
-                    setDuplicateChoices({});
-                  }}
+                  onClick={() => cancelBulkGroup(bulkGroupId)}
                   className={`px-2.5 py-1 rounded-full text-[10px] ${
                     isMobile ? '' : 'text-xs'
                   } font-medium text-red-700 dark:text-red-200 bg-red-50 dark:bg-red-900/30 hover:bg-red-100 dark:hover:bg-red-900/50 border border-red-200 dark:border-red-700 transition-colors duration-150 active:scale-95`}
@@ -667,10 +255,7 @@ export const UploadModal: React.FC = () => {
                   {!upload.groupId && (
                     <button
                       type="button"
-                      onClick={() => {
-                        cancelUpload(upload.id);
-                        setUploadFiles(prev => prev.filter(f => f.id !== upload.id));
-                      }}
+                      onClick={() => cancelSingleUpload(upload.id)}
                       className={`ml-2 flex-shrink-0 px-2.5 py-1 rounded-full text-[10px] ${
                         isMobile ? '' : 'text-xs'
                       } font-medium text-blue-700 dark:text-blue-200 bg-blue-100/80 dark:bg-blue-900/40 hover:bg-blue-200 dark:hover:bg-blue-800/70 border border-blue-300/80 dark:border-blue-700/80 transition-colors duration-150 active:scale-95`}
@@ -719,18 +304,7 @@ export const UploadModal: React.FC = () => {
                       {!hasStartedUpload && (
                         <button
                           type="button"
-                          onClick={() => {
-                            setUploadFiles(prev =>
-                              prev.filter(uploadFile => {
-                                const normalized = (uploadFile.relativePath || '')
-                                  .replace(/\\/g, '/')
-                                  .replace(/^\/+/, '')
-                                  .trim();
-                                const root = normalized.split('/').filter(Boolean)[0] || uploadFile.file.name;
-                                return root !== group.name;
-                              })
-                            );
-                          }}
+                          onClick={() => removeFolderGroup(group.name)}
                           className={`flex-shrink-0 px-2.5 py-1 rounded-full text-[10px] ${
                             isMobile ? '' : 'text-xs'
                           } font-medium text-gray-700 dark:text-gray-200 bg-gray-200/80 dark:bg-gray-600/80 hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors duration-150 active:scale-95`}
