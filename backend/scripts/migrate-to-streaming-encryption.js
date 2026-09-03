@@ -39,6 +39,47 @@ const LEGACY_IV_LENGTH = 16;
 const LEGACY_TAG_LENGTH = 16;
 
 const DEFAULT_CONCURRENCY = 10;
+const DEFAULT_RETRIES = 5;
+
+const sleep = ms =>
+  new Promise(resolve => {
+    setTimeout(resolve, ms);
+  });
+
+/** Transient network/S3 hiccups worth retrying rather than failing the object. */
+function isTransientError(err) {
+  const code = err?.code || err?.Code || err?.name || '';
+  const msg = (err?.message || '').toLowerCase();
+  const status = err?.$metadata?.httpStatusCode;
+  if (['ECONNRESET', 'ETIMEDOUT', 'EPIPE', 'ECONNREFUSED', 'EAI_AGAIN', 'ENOTFOUND'].includes(code)) return true;
+  if (status === 429 || (status >= 500 && status <= 599)) return true;
+  return (
+    msg.includes('aborted') ||
+    msg.includes('socket hang up') ||
+    msg.includes('timeout') ||
+    msg.includes('econnreset') ||
+    msg.includes('throttl') ||
+    msg.includes('slowdown')
+  );
+}
+
+/** Run `fn` with exponential backoff on transient errors. */
+async function withRetries(fn, { retries = DEFAULT_RETRIES, label = '' } = {}) {
+  let attempt = 0;
+  for (;;) {
+    try {
+      return await fn();
+    } catch (err) {
+      attempt += 1;
+      if (attempt > retries || !isTransientError(err)) throw err;
+      const backoff = Math.min(30000, 500 * 2 ** (attempt - 1)) + Math.floor(Math.random() * 250);
+      logger.warn(
+        `[Migration] Transient error${label ? ` on ${label}` : ''} (attempt ${attempt}/${retries}), retrying in ${backoff}ms: ${err?.message || err}`
+      );
+      await sleep(backoff);
+    }
+  }
+}
 
 /**
  * Streaming decrypt of a legacy [IV][ciphertext][TAG] blob. Self-contained so it
@@ -121,13 +162,16 @@ async function readFirstByte(key) {
 async function isAlreadyStreaming(key, masterKey) {
   const firstByte = await readFirstByte(key);
   if (firstByte !== HEADER_LENGTH) return false;
+  let src;
   try {
-    const src = await storage.getReadStream(key);
+    src = await storage.getReadStream(key);
     const { stream } = await createDecryptStreamFromStream(src, masterKey);
     await drain(stream);
     return true;
   } catch {
     return false;
+  } finally {
+    if (src) src.destroy();
   }
 }
 
@@ -165,15 +209,19 @@ async function convertS3(key, masterKey) {
   const { stream: counter, getByteCount } = createByteCountStream();
   const uploadStream = new PassThrough();
   const uploadPromise = storage.putStream(key, uploadStream);
+  // Handle up-front so a rejected upload can't become an unhandled rejection.
+  const uploadSettled = uploadPromise.catch(err => err);
 
   try {
     await pipeline(src, createLegacyDecryptTransform(masterKey), createEncryptStream(masterKey), counter, uploadStream);
+    await uploadPromise;
   } catch (err) {
+    src.destroy();
     uploadStream.destroy(err);
+    await uploadSettled;
     throw err;
   }
 
-  await uploadPromise;
   return getByteCount();
 }
 
@@ -249,11 +297,13 @@ async function main() {
       if (!row) break;
       const key = row.path;
       try {
-        if (await isAlreadyStreaming(key, masterKey)) {
+        if (await withRetries(() => isAlreadyStreaming(key, masterKey), { label: `check id=${row.id}` })) {
           skipped += 1;
         } else {
           const startedAt = Date.now();
-          const bytes = usingS3 ? await convertS3(key, masterKey) : await convertLocal(key, masterKey);
+          const bytes = await withRetries(() => (usingS3 ? convertS3(key, masterKey) : convertLocal(key, masterKey)), {
+            label: `id=${row.id}`,
+          });
           migrated += 1;
           const elapsed = Date.now() - startedAt;
           if (migrated % logEvery === 0) {
@@ -281,6 +331,13 @@ async function main() {
   }
   await pool.end();
 }
+
+// Safety net: a stray rejection must never abort a run over tens of thousands of
+// objects. Each object is rewritten atomically, so anything interrupted is left
+// legacy and picked up on the next run.
+process.on('unhandledRejection', reason => {
+  logger.error(`[Migration] Ignored unhandled rejection (run continues): ${reason?.message || reason}`);
+});
 
 main().catch(err => {
   console.error('Fatal error during migration:', err);
