@@ -7,7 +7,13 @@ import { logger } from '../../config/logger.js';
 import { UPLOAD_DIR } from '../../config/paths.js';
 import { invalidateAllFileCaches } from '../../utils/cache.js';
 import { safeUnlink } from '../../utils/fileCleanup.js';
-import { copyEncryptedFile, copyEncryptedFileStreams } from '../../utils/fileEncryption.js';
+import {
+  copyEncryptedFile,
+  copyEncryptedFileStreams,
+  getEncryptionKey,
+  newWrappedDek,
+  resolveIkm,
+} from '../../utils/fileEncryption.js';
 import { isFilePathEncrypted, resolveFilePath } from '../../utils/filePath.js';
 import { generateId } from '../../utils/id.js';
 import storage from '../../utils/storageDriver.js';
@@ -134,13 +140,22 @@ async function copyEntryWithFile(file, parentId, userId, client) {
     storageName = newId + ext;
     const isSourceEncrypted = isFilePathEncrypted(file.path);
 
+    // Decrypt the source under its own key; re-encrypt the copy under a fresh
+    // DEK (envelope on) or the master key (off), so the copy is independently
+    // keyed rather than sharing the source's key.
+    const sourceIkm = isSourceEncrypted
+      ? resolveIkm({ dekWrapped: file.dek_wrapped, dekKekVersion: file.dek_kek_version })
+      : getEncryptionKey();
+    const destDek = isSourceEncrypted ? newWrappedDek() : null;
+    const destIkm = destDek ? destDek.dek : getEncryptionKey();
+
     try {
       if (storage.useS3()) {
         const destKey = storageName;
         if (isSourceEncrypted) {
           const passThrough = new PassThrough();
           const uploadPromise = storage.putStream(destKey, passThrough);
-          await copyEncryptedFileStreams(await storage.getReadStream(file.path), passThrough);
+          await copyEncryptedFileStreams(await storage.getReadStream(file.path), passThrough, sourceIkm, destIkm);
           await uploadPromise;
         } else {
           const stream = await storage.getReadStream(file.path);
@@ -150,7 +165,7 @@ async function copyEntryWithFile(file, parentId, userId, client) {
         const sourcePath = resolveFilePath(file.path);
         const destPath = path.join(UPLOAD_DIR, storageName);
         if (isSourceEncrypted) {
-          await copyEncryptedFile(sourcePath, destPath);
+          await copyEncryptedFile(sourcePath, destPath, sourceIkm, destIkm);
         } else {
           await fs.promises.copyFile(sourcePath, destPath);
         }
@@ -173,7 +188,7 @@ async function copyEntryWithFile(file, parentId, userId, client) {
     const uniqueDisplayName = await getUniqueDbFileName(file.name, parentId, userId);
 
     const insertResult = await client.query(
-      'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id, starred, shared, modified) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING modified',
+      'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id, starred, shared, modified, dek_wrapped, dek_kek_version) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING modified',
       [
         newId,
         uniqueDisplayName,
@@ -186,6 +201,8 @@ async function copyEntryWithFile(file, parentId, userId, client) {
         file.starred,
         file.shared,
         file.modified,
+        destDek ? destDek.dekWrapped : null,
+        destDek ? destDek.kekVersion : null,
       ]
     );
 

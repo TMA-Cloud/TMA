@@ -19,6 +19,19 @@ export {
 } from './fileEncryption/streams.js';
 export { encryptFile, decryptFile, copyEncryptedFile, copyEncryptedFileStreams } from './fileEncryption/fileOps.js';
 export {
+  // Envelope encryption: per-file wrapped data keys + versioned KEK rotation
+  DEK_LENGTH,
+  WRAPPED_DEK_LENGTH,
+  primaryKekVersion,
+  kekForVersion,
+  generateDek,
+  wrapDek,
+  unwrapDek,
+  newWrappedDek,
+  rewrapDekToPrimary,
+  resolveIkm,
+} from './fileEncryption/keyWrap.js';
+export {
   // Key + layout helpers (used by download range math and migration/rotation scripts)
   getEncryptionKey,
   ciphertextSizeToPlaintextSize,

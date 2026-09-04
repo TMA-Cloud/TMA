@@ -39,7 +39,7 @@ import { createReadStream } from 'fs';
 
 import mime from 'mime-types';
 
-import { createByteCountStream, createEncryptStream } from '../utils/fileEncryption.js';
+import { createByteCountStream, createEncryptStream, newWrappedDek } from '../utils/fileEncryption.js';
 import { generateId } from '../utils/id.js';
 import storage from '../utils/storageDriver.js';
 
@@ -56,8 +56,9 @@ async function uploadOneFile(filePath, name, dryRun, modified = null) {
     return { id, storageName, name, size: stat.size, mimeType };
   }
 
+  const dekInfo = newWrappedDek();
   const byteCount = createByteCountStream();
-  const encryptStream = createEncryptStream();
+  const encryptStream = createEncryptStream(dekInfo.dek);
   const readStream = createReadStream(filePath);
 
   readStream.on('error', () => {});
@@ -77,7 +78,16 @@ async function uploadOneFile(filePath, name, dryRun, modified = null) {
 
   const size = byteCount.getByteCount();
 
-  return { id, storageName, name, size, mimeType, modified };
+  return {
+    id,
+    storageName,
+    name,
+    size,
+    mimeType,
+    modified,
+    dekWrapped: dekInfo.dekWrapped,
+    dekKekVersion: dekInfo.kekVersion,
+  };
 }
 
 runBulkImport({

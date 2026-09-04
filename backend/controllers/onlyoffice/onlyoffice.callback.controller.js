@@ -17,7 +17,7 @@ import {
   deleteCachePattern,
 } from '../../utils/cache.js';
 import { safeUnlink } from '../../utils/fileCleanup.js';
-import { createEncryptStream, encryptFile } from '../../utils/fileEncryption.js';
+import { createEncryptStream, encryptFile, newWrappedDek } from '../../utils/fileEncryption.js';
 import { isFilePathEncrypted, resolveFilePath } from '../../utils/filePath.js';
 import { validateId } from '../../utils/validation.js';
 
@@ -250,18 +250,25 @@ async function callback(req, res) {
         return res.status(200).json({ error: 0 });
       }
 
+      // Re-keys the body under a fresh DEK. Only the branches that actually
+      // encrypt keep the wrapped DEK (a local plaintext file stays null).
+      const dekInfo = newWrappedDek();
+      let usedDek = null;
+
       if (storage.useS3()) {
         const plainStream = Readable.from(fileBuffer);
-        const encryptStream = createEncryptStream();
+        const encryptStream = createEncryptStream(dekInfo.dek);
         plainStream.pipe(encryptStream);
         await storage.putStream(fileRow.path, encryptStream);
+        usedDek = dekInfo;
       } else {
         const filePath = resolveFilePath(fileRow.path);
         if (isFilePathEncrypted(fileRow.path)) {
           const tempPath = filePath + '.tmp';
           await fs.promises.writeFile(tempPath, fileBuffer);
           try {
-            await encryptFile(tempPath, filePath);
+            await encryptFile(tempPath, filePath, dekInfo.dek);
+            usedDek = dekInfo;
           } catch (error) {
             logger.error('[ONLYOFFICE] Error encrypting file after save:', error);
             await safeUnlink(tempPath);
@@ -272,9 +279,12 @@ async function callback(req, res) {
         }
       }
 
-      // Update file size and modified timestamp in database
+      // Update file size, modified timestamp, and (if re-keyed) the wrapped DEK.
       const newSize = fileBuffer.length;
-      await db.query('UPDATE files SET size = $1, modified = NOW() WHERE id = $2', [newSize, validatedFileId]);
+      await db.query(
+        'UPDATE files SET size = $1, modified = NOW(), dek_wrapped = $2, dek_kek_version = $3 WHERE id = $4',
+        [newSize, usedDek ? usedDek.dekWrapped : null, usedDek ? usedDek.kekVersion : null, validatedFileId]
+      );
 
       // Invalidate cache to ensure frontend sees updated file immediately
       const userId = fileRow.user_id;

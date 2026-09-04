@@ -295,6 +295,8 @@ async function runBulkImport({ scriptName, checkStorageDriver, writeVerb, writeV
           size: storedMeta.size,
           mimeType: storedMeta.mimeType,
           modified: storedMeta.modified,
+          dekWrapped: storedMeta.dekWrapped,
+          dekKekVersion: storedMeta.dekKekVersion,
         },
         parentId,
         userId

@@ -1,6 +1,7 @@
 import path from 'path';
 
 import { logger } from '../config/logger.js';
+import { resolveIkmForPath } from '../models/file/file.dek.model.js';
 import { isFilePathEncrypted, isValidPath } from './filePath.js';
 import {
   ciphertextSizeToPlaintextSize,
@@ -113,6 +114,7 @@ async function validateAndResolveFile(file) {
  * @param {import('express').Request} [options.req] - Request (read for its Range header)
  * @param {number} [options.ciphertextSize] - Encrypted object size, if already known
  * @param {'attachment'|'inline'} [options.disposition] - Content-Disposition type (default 'attachment')
+ * @param {Buffer} [options.ikm] - Streaming key; resolved from the object's wrapped DEK when omitted
  */
 async function streamEncryptedFile(res, storageKey, filename, mimeType, options = {}) {
   const { req, disposition = 'attachment' } = options;
@@ -155,6 +157,10 @@ async function streamEncryptedFile(res, storageKey, filename, mimeType, options 
       return res.status(416).end();
     }
 
+    // Envelope files decrypt under their own wrapped DEK; pre-envelope files
+    // resolve to the master key. Callers may pass a pre-resolved ikm.
+    const ikm = options.ikm ?? (await resolveIkmForPath(storageKey));
+
     let decryptResult;
     if (range) {
       res.status(206);
@@ -165,10 +171,11 @@ async function streamEncryptedFile(res, storageKey, filename, mimeType, options 
         plaintextSize,
         start: range.start,
         end: range.end,
+        ikm,
       });
     } else {
       res.setHeader('Content-Length', String(plaintextSize));
-      decryptResult = await createDecryptStreamFromStream(await storage.getReadStream(storageKey));
+      decryptResult = await createDecryptStreamFromStream(await storage.getReadStream(storageKey), ikm);
     }
 
     active = decryptResult;

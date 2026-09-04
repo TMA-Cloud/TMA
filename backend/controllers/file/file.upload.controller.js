@@ -188,7 +188,8 @@ async function replaceFileContents(req, res) {
         upload.mimeType || 'application/octet-stream',
         upload.storageName,
         req.ownerId,
-        validateClientMtime(req.body?.lastModifiedTimes)
+        validateClientMtime(req.body?.lastModifiedTimes),
+        { dekWrapped: upload.dekWrapped ?? null, dekKekVersion: upload.dekKekVersion ?? null }
       );
 
       if (!updated) {

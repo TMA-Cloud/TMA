@@ -33,53 +33,22 @@ import {
   HEADER_LENGTH,
 } from '../utils/fileEncryption.js';
 
+import { withRetries } from './lib/rotation-resilience.js';
+
 // Legacy single-blob parameters (kept here so the app can drop them entirely).
 const LEGACY_ALGORITHM = 'aes-256-gcm';
 const LEGACY_IV_LENGTH = 16;
 const LEGACY_TAG_LENGTH = 16;
 
 const DEFAULT_CONCURRENCY = 10;
-const DEFAULT_RETRIES = 5;
 
-const sleep = ms =>
-  new Promise(resolve => {
-    setTimeout(resolve, ms);
-  });
-
-/** Transient network/S3 hiccups worth retrying rather than failing the object. */
-function isTransientError(err) {
-  const code = err?.code || err?.Code || err?.name || '';
-  const msg = (err?.message || '').toLowerCase();
-  const status = err?.$metadata?.httpStatusCode;
-  if (['ECONNRESET', 'ETIMEDOUT', 'EPIPE', 'ECONNREFUSED', 'EAI_AGAIN', 'ENOTFOUND'].includes(code)) return true;
-  if (status === 429 || (status >= 500 && status <= 599)) return true;
-  return (
-    msg.includes('aborted') ||
-    msg.includes('socket hang up') ||
-    msg.includes('timeout') ||
-    msg.includes('econnreset') ||
-    msg.includes('throttl') ||
-    msg.includes('slowdown')
-  );
-}
-
-/** Run `fn` with exponential backoff on transient errors. */
-async function withRetries(fn, { retries = DEFAULT_RETRIES, label = '' } = {}) {
-  let attempt = 0;
-  for (;;) {
-    try {
-      return await fn();
-    } catch (err) {
-      attempt += 1;
-      if (attempt > retries || !isTransientError(err)) throw err;
-      const backoff = Math.min(30000, 500 * 2 ** (attempt - 1)) + Math.floor(Math.random() * 250);
-      logger.warn(
-        `[Migration] Transient error${label ? ` on ${label}` : ''} (attempt ${attempt}/${retries}), retrying in ${backoff}ms: ${err?.message || err}`
-      );
-      await sleep(backoff);
-    }
-  }
-}
+/** Log transient-error retries with the migration's own prefix and the row label. */
+const onRetry =
+  label =>
+  (err, { attempt, retries, backoff }) =>
+    logger.warn(
+      `[Migration] Transient error${label ? ` on ${label}` : ''} (attempt ${attempt}/${retries}), retrying in ${backoff}ms: ${err?.message || err}`
+    );
 
 /**
  * Streaming decrypt of a legacy [IV][ciphertext][TAG] blob. Self-contained so it
@@ -297,12 +266,12 @@ async function main() {
       if (!row) break;
       const key = row.path;
       try {
-        if (await withRetries(() => isAlreadyStreaming(key, masterKey), { label: `check id=${row.id}` })) {
+        if (await withRetries(() => isAlreadyStreaming(key, masterKey), { onRetry: onRetry(`check id=${row.id}`) })) {
           skipped += 1;
         } else {
           const startedAt = Date.now();
           const bytes = await withRetries(() => (usingS3 ? convertS3(key, masterKey) : convertLocal(key, masterKey)), {
-            label: `id=${row.id}`,
+            onRetry: onRetry(`id=${row.id}`),
           });
           migrated += 1;
           const elapsed = Date.now() - startedAt;

@@ -15,6 +15,7 @@
  */
 
 export * from './file/file.crud.model.js';
+export * from './file/file.dek.model.js';
 export * from './file/file.operations.model.js';
 export * from './file/file.metadata.model.js';
 export * from './file/file.trash.model.js';

@@ -6,7 +6,7 @@ import { logger } from '../../config/logger.js';
 import { UPLOAD_DIR } from '../../config/paths.js';
 import { getCache, setCache, deleteCache, cacheKeys, invalidateAllFileCaches, DEFAULT_TTL } from '../../utils/cache.js';
 import { safeUnlink } from '../../utils/fileCleanup.js';
-import { createEncryptStream, encryptFile } from '../../utils/fileEncryption.js';
+import { createEncryptStream, encryptFile, newWrappedDek } from '../../utils/fileEncryption.js';
 import { resolveFilePath } from '../../utils/filePath.js';
 import { generateId } from '../../utils/id.js';
 import storage from '../../utils/storageDriver.js';
@@ -92,12 +92,16 @@ async function createFile(name, size, mimeType, tempPath, parentId = null, userI
     throw new Error('createFile with temp path is not used when S3 is enabled; use createFileFromStreamedUpload');
   }
 
+  // Envelope encryption: encrypt the body under its own DEK and persist the
+  // wrapped DEK on the row.
+  const dekInfo = newWrappedDek();
+
   {
     const dest = path.join(UPLOAD_DIR, storageName);
     const tempDest = dest + '.tmp';
     await fs.promises.rename(tempPath, tempDest);
     try {
-      await encryptFile(tempDest, dest);
+      await encryptFile(tempDest, dest, dekInfo.dek);
     } catch (error) {
       logger.error('[File] Error encrypting file:', error);
       await safeUnlink(tempDest);
@@ -105,16 +109,18 @@ async function createFile(name, size, mimeType, tempPath, parentId = null, userI
     }
   }
 
+  const dekWrapped = dekInfo.dekWrapped;
+  const dekKekVersion = dekInfo.kekVersion;
   const uniqueName = await getUniqueDbFileName(name, parentId, userId);
   const result =
     modified != null
       ? await pool.query(
-          'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id, modified) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id, name, type, size, modified, mime_type AS "mimeType", starred, shared',
-          [id, uniqueName, 'file', size, mimeType, storageName, parentId, userId, modified]
+          'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id, modified, dek_wrapped, dek_kek_version) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id, name, type, size, modified, mime_type AS "mimeType", starred, shared',
+          [id, uniqueName, 'file', size, mimeType, storageName, parentId, userId, modified, dekWrapped, dekKekVersion]
         )
       : await pool.query(
-          'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id, name, type, size, modified, mime_type AS "mimeType", starred, shared',
-          [id, uniqueName, 'file', size, mimeType, storageName, parentId, userId]
+          'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id, dek_wrapped, dek_kek_version) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id, name, type, size, modified, mime_type AS "mimeType", starred, shared',
+          [id, uniqueName, 'file', size, mimeType, storageName, parentId, userId, dekWrapped, dekKekVersion]
         );
 
   // Invalidate cache
@@ -132,20 +138,23 @@ async function createFile(name, size, mimeType, tempPath, parentId = null, userI
  */
 async function createFileFromStreamedUpload(upload, parentId, userId) {
   const { id, storageName, name, size, mimeType, modified } = upload;
+  // The stream middleware minted and wrapped the DEK while piping to storage.
+  const dekWrapped = upload.dekWrapped ?? null;
+  const dekKekVersion = upload.dekKekVersion ?? null;
   const uniqueName = await getUniqueDbFileName(name, parentId, userId);
 
   if (modified != null) {
     const result = await pool.query(
-      'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id, modified) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id, name, type, size, modified, mime_type AS "mimeType", starred, shared',
-      [id, uniqueName, 'file', size, mimeType, storageName, parentId, userId, modified]
+      'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id, modified, dek_wrapped, dek_kek_version) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id, name, type, size, modified, mime_type AS "mimeType", starred, shared',
+      [id, uniqueName, 'file', size, mimeType, storageName, parentId, userId, modified, dekWrapped, dekKekVersion]
     );
     await invalidateAllFileCaches(userId, parentId);
     return result.rows[0];
   }
 
   const result = await pool.query(
-    'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id, name, type, size, modified, mime_type AS "mimeType", starred, shared',
-    [id, uniqueName, 'file', size, mimeType, storageName, parentId, userId]
+    'INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id, dek_wrapped, dek_kek_version) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id, name, type, size, modified, mime_type AS "mimeType", starred, shared',
+    [id, uniqueName, 'file', size, mimeType, storageName, parentId, userId, dekWrapped, dekKekVersion]
   );
 
   await invalidateAllFileCaches(userId, parentId);
@@ -282,9 +291,12 @@ async function replaceFileData(id, size, mimeType, tempPath, userId, modified = 
     return null;
   }
 
+  // Replacing the body re-keys it: give the new content its own DEK.
+  const dekInfo = newWrappedDek();
+
   if (storage.useS3()) {
     const readStream = fs.createReadStream(tempPath);
-    const encryptStream = createEncryptStream();
+    const encryptStream = createEncryptStream(dekInfo.dek);
     readStream.pipe(encryptStream);
     try {
       await storage.putStream(oldFile.path, encryptStream);
@@ -309,7 +321,7 @@ async function replaceFileData(id, size, mimeType, tempPath, userId, modified = 
       }
     }
     try {
-      await encryptFile(tempDest, dest);
+      await encryptFile(tempDest, dest, dekInfo.dek);
     } catch (error) {
       logger.error('[File] Error encrypting file on replace:', error);
       await safeUnlink(tempDest);
@@ -318,10 +330,11 @@ async function replaceFileData(id, size, mimeType, tempPath, userId, modified = 
   }
 
   // A write also counts as access (like NTFS). We stamp accessed_at; modified
-  // defers to the replacing file's mtime when the client sent one.
+  // defers to the replacing file's mtime when the client sent one. The body was
+  // re-keyed, so the wrapped-DEK columns move with it.
   const result = await pool.query(
-    'UPDATE files SET size = $1, mime_type = $2, modified = COALESCE($3, NOW()), accessed_at = NOW() WHERE id = $4 AND user_id = $5 RETURNING id, name, type, size, modified, accessed_at AS "accessedAt", mime_type AS "mimeType", starred, shared',
-    [size, mimeType, modified, id, userId]
+    'UPDATE files SET size = $1, mime_type = $2, modified = COALESCE($3, NOW()), accessed_at = NOW(), dek_wrapped = $4, dek_kek_version = $5 WHERE id = $6 AND user_id = $7 RETURNING id, name, type, size, modified, accessed_at AS "accessedAt", mime_type AS "mimeType", starred, shared',
+    [size, mimeType, modified, dekInfo.dekWrapped, dekInfo.kekVersion, id, userId]
   );
 
   await invalidateAllFileCaches(userId, parentId);
@@ -345,7 +358,7 @@ async function replaceFileData(id, size, mimeType, tempPath, userId, modified = 
  * @param {Date|null} [modified] - Replacing file's mtime; omit to stamp with now
  * @returns {Promise<Object|null>} Updated file row, or null if not found
  */
-async function replaceFileDataWithStorageKey(id, size, mimeType, newStorageKey, userId, modified = null) {
+async function replaceFileDataWithStorageKey(id, size, mimeType, newStorageKey, userId, modified = null, dek = {}) {
   const fileResult = await pool.query('SELECT path, parent_id FROM files WHERE id = $1 AND user_id = $2', [id, userId]);
   if (fileResult.rows.length === 0) {
     return null;
@@ -354,9 +367,11 @@ async function replaceFileDataWithStorageKey(id, size, mimeType, newStorageKey, 
   const oldFile = fileResult.rows[0];
   const parentId = oldFile.parent_id || null;
 
+  // The stream middleware already wrapped the DEK for the new bytes (null when
+  // envelope encryption is off); the new object carries its own key.
   const result = await pool.query(
-    'UPDATE files SET size = $1, mime_type = $2, path = $3, modified = COALESCE($4, NOW()), accessed_at = NOW() WHERE id = $5 AND user_id = $6 RETURNING id, name, type, size, modified, accessed_at AS "accessedAt", mime_type AS "mimeType", starred, shared',
-    [size, mimeType, newStorageKey, modified, id, userId]
+    'UPDATE files SET size = $1, mime_type = $2, path = $3, modified = COALESCE($4, NOW()), accessed_at = NOW(), dek_wrapped = $5, dek_kek_version = $6 WHERE id = $7 AND user_id = $8 RETURNING id, name, type, size, modified, accessed_at AS "accessedAt", mime_type AS "mimeType", starred, shared',
+    [size, mimeType, newStorageKey, modified, dek.dekWrapped ?? null, dek.dekKekVersion ?? null, id, userId]
   );
 
   const file = result.rows[0];

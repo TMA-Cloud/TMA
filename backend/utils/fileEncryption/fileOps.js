@@ -35,16 +35,24 @@ async function decryptFile(inputPath, outputPath, ikm = getEncryptionKey()) {
 /**
  * Copy an encrypted file on disk by decrypting and re-encrypting through a
  * pipeline, so plaintext is never written to disk and the copy gets a fresh
- * salt/nonce prefix.
+ * salt/nonce prefix. With envelope encryption the copy is re-encrypted under
+ * its own key, so pass `encryptIkm` (the destination's DEK) distinct from
+ * `decryptIkm` (the source's).
  * @param {string} sourceEncryptedPath
  * @param {string} destEncryptedPath
- * @param {Buffer} [ikm]
+ * @param {Buffer} [decryptIkm] - Key the source was encrypted under
+ * @param {Buffer} [encryptIkm] - Key to encrypt the copy under (defaults to decryptIkm)
  */
-async function copyEncryptedFile(sourceEncryptedPath, destEncryptedPath, ikm = getEncryptionKey()) {
+async function copyEncryptedFile(
+  sourceEncryptedPath,
+  destEncryptedPath,
+  decryptIkm = getEncryptionKey(),
+  encryptIkm = decryptIkm
+) {
   await pipeline(
     createReadStream(sourceEncryptedPath),
-    createSequentialDecryptTransform(ikm),
-    createEncryptStream(ikm),
+    createSequentialDecryptTransform(decryptIkm),
+    createEncryptStream(encryptIkm),
     createWriteStream(destEncryptedPath)
   );
 }
@@ -53,13 +61,19 @@ async function copyEncryptedFile(sourceEncryptedPath, destEncryptedPath, ikm = g
  * Copy encrypted content between streams (decrypt then re-encrypt) for S3 copies.
  * @param {import('stream').Readable} sourceEncryptedStream
  * @param {import('stream').Writable} destEncryptedStream
- * @param {Buffer} [ikm]
+ * @param {Buffer} [decryptIkm] - Key the source was encrypted under
+ * @param {Buffer} [encryptIkm] - Key to encrypt the copy under (defaults to decryptIkm)
  */
-async function copyEncryptedFileStreams(sourceEncryptedStream, destEncryptedStream, ikm = getEncryptionKey()) {
+async function copyEncryptedFileStreams(
+  sourceEncryptedStream,
+  destEncryptedStream,
+  decryptIkm = getEncryptionKey(),
+  encryptIkm = decryptIkm
+) {
   await pipeline(
     sourceEncryptedStream,
-    createSequentialDecryptTransform(ikm),
-    createEncryptStream(ikm),
+    createSequentialDecryptTransform(decryptIkm),
+    createEncryptStream(encryptIkm),
     destEncryptedStream
   );
 }

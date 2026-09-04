@@ -3,6 +3,7 @@ import path from 'path';
 import { ZipArchive } from 'archiver';
 
 import { logger } from '../config/logger.js';
+import { resolveIkmForPath } from '../models/file/file.dek.model.js';
 import { isFilePathEncrypted, isValidPath, resolveFilePath } from './filePath.js';
 import { createDecryptStream, createDecryptStreamFromStream } from './fileEncryption.js';
 import { contentDispositionValue } from './fileDownload.js';
@@ -56,7 +57,8 @@ async function addFileToArchive(archive, entry, nameInArchive) {
   if (storage.useS3()) {
     const readStream = await storage.getReadStream(entry.path);
     if (isEncrypted) {
-      const { stream } = await createDecryptStreamFromStream(readStream);
+      const ikm = await resolveIkmForPath(entry.path);
+      const { stream } = await createDecryptStreamFromStream(readStream, ikm);
       archive.append(stream, { name: nameInArchive });
     } else {
       archive.append(readStream, { name: nameInArchive });
@@ -66,7 +68,8 @@ async function addFileToArchive(archive, entry, nameInArchive) {
 
   const p = resolveFilePath(entry.path);
   if (isEncrypted) {
-    const { stream } = await createDecryptStream(p);
+    const ikm = await resolveIkmForPath(entry.path);
+    const { stream } = await createDecryptStream(p, ikm);
     archive.append(stream, { name: nameInArchive });
   } else {
     archive.file(p, { name: nameInArchive });

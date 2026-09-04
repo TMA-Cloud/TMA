@@ -42,6 +42,24 @@ const PLAINTEXT_SEGMENT_MAX = CIPHERTEXT_SEGMENT_SIZE - TAG_LENGTH;
 const ASSOCIATED_DATA = Buffer.alloc(0);
 
 /**
+ * Turn a raw key string into a 32-byte key: a 32-byte base64 or 64-char hex key
+ * is used directly; anything else is stretched with PBKDF2. Pure (no env, no
+ * dev fallback) so key-rotation and key-wrapping code can derive any key value.
+ * @param {string} raw
+ * @returns {Buffer} 32-byte key
+ */
+function deriveKeyFromRaw(raw) {
+  const decoded = Buffer.from(raw, 'base64');
+  if (decoded.length === KEY_LENGTH) {
+    return decoded;
+  }
+  if (raw.length === KEY_LENGTH * 2 && /^[0-9a-fA-F]+$/.test(raw)) {
+    return Buffer.from(raw, 'hex');
+  }
+  return crypto.pbkdf2Sync(raw, 'file-encryption-salt', 100000, KEY_LENGTH, 'sha256');
+}
+
+/**
  * Master key (HKDF ikm): a 32-byte base64/hex key, or a passphrase stretched
  * with PBKDF2. FILE_ENCRYPTION_KEY is required in production.
  * @returns {Buffer} 32-byte key
@@ -50,14 +68,7 @@ function getEncryptionKey() {
   const envKey = process.env.FILE_ENCRYPTION_KEY;
   if (envKey) {
     try {
-      const decoded = Buffer.from(envKey, 'base64');
-      if (decoded.length === KEY_LENGTH) {
-        return decoded;
-      }
-      if (envKey.length === KEY_LENGTH * 2 && /^[0-9a-fA-F]+$/.test(envKey)) {
-        return Buffer.from(envKey, 'hex');
-      }
-      return crypto.pbkdf2Sync(envKey, 'file-encryption-salt', 100000, KEY_LENGTH, 'sha256');
+      return deriveKeyFromRaw(envKey);
     } catch (error) {
       logger.error('[Encryption] Error processing encryption key from environment', error);
       throw new Error('Invalid encryption key format', { cause: error });
@@ -244,6 +255,7 @@ export {
   PLAINTEXT_SEGMENT_MAX,
   // Key + header
   getEncryptionKey,
+  deriveKeyFromRaw,
   deriveKey,
   buildHeader,
   parseHeader,

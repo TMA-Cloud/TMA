@@ -14,7 +14,7 @@ import Busboy from 'busboy';
 
 import { logger } from '../config/logger.js';
 import { getMaxUploadSizeSettings } from '../models/user.model.js';
-import { createByteCountStream, createEncryptStream } from '../utils/fileEncryption.js';
+import { createByteCountStream, createEncryptStream, newWrappedDek } from '../utils/fileEncryption.js';
 import { generateId } from '../utils/id.js';
 import { createMimeSniffStream } from '../utils/mimeTypeDetection.js';
 import storage from '../utils/storageDriver.js';
@@ -194,7 +194,10 @@ function streamUploadToS3(singleOrBulk = 'single') {
             detectedMimeType = mime;
           });
           const { stream: counterStream, getByteCount } = createByteCountStream();
-          const encryptStream = createEncryptStream();
+          // Envelope encryption: give the object its own DEK and carry the
+          // wrapped DEK to the row insert.
+          const dekInfo = newWrappedDek();
+          const encryptStream = createEncryptStream(dekInfo.dek);
 
           let failed = false;
 
@@ -275,6 +278,8 @@ function streamUploadToS3(singleOrBulk = 'single') {
                 size,
                 mimeType: detectedMimeType || mimeType || 'application/octet-stream',
                 index: currentIndex,
+                dekWrapped: dekInfo.dekWrapped,
+                dekKekVersion: dekInfo.kekVersion,
               };
             })
             .finally(() => {
