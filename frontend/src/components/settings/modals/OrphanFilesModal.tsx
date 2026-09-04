@@ -3,7 +3,7 @@ import { AlertTriangle, Database, HardDrive, Loader2, ShieldCheck, Trash2 } from
 import { format } from 'date-fns';
 import { Modal } from '../../ui/Modal';
 import { formatFileSize } from '../../../utils/fileUtils';
-import { deleteOrphans, fetchOrphans, type OrphanReport } from '../../../utils/api';
+import { deleteOrphansInBatches, fetchOrphans, ORPHAN_DELETE_BATCH_SIZE, type OrphanReport } from '../../../utils/api';
 import { useToast } from '../../../hooks/useToast';
 
 interface OrphanFilesModalProps {
@@ -56,6 +56,7 @@ export const OrphanFilesModal: React.FC<OrphanFilesModalProps> = ({ isOpen, onCl
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
+  const [deleteProgress, setDeleteProgress] = useState<{ done: number; total: number } | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [skippedNotes, setSkippedNotes] = useState<string[]>([]);
 
@@ -144,12 +145,19 @@ export const OrphanFilesModal: React.FC<OrphanFilesModalProps> = ({ isOpen, onCl
 
     setDeleting(true);
     setConfirming(false);
+    const total = selectedCount;
+    setDeleteProgress({ done: 0, total });
     try {
-      const result = await deleteOrphans({
-        storageKeys: [...selectedKeys],
-        fileIds: [...selectedIds],
-        graceMinutes,
-      });
+      // Chunked across multiple requests so selections larger than the backend's
+      // per-request cap are fully processed instead of silently truncated.
+      const result = await deleteOrphansInBatches(
+        {
+          storageKeys: [...selectedKeys],
+          fileIds: [...selectedIds],
+          graceMinutes,
+        },
+        (done, batchTotal) => setDeleteProgress({ done, total: batchTotal })
+      );
 
       const deleted = result.storage.deleted + result.database.deleted;
       const skipped = result.storage.skipped + result.database.skipped;
@@ -177,6 +185,7 @@ export const OrphanFilesModal: React.FC<OrphanFilesModalProps> = ({ isOpen, onCl
       showToast('Failed to delete orphaned entries', 'error');
     } finally {
       setDeleting(false);
+      setDeleteProgress(null);
     }
   };
 
@@ -469,7 +478,9 @@ export const OrphanFilesModal: React.FC<OrphanFilesModalProps> = ({ isOpen, onCl
             {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
             <span>
               {deleting
-                ? 'Deleting...'
+                ? deleteProgress && deleteProgress.total > ORPHAN_DELETE_BATCH_SIZE
+                  ? `Deleting ${deleteProgress.done.toLocaleString()} of ${deleteProgress.total.toLocaleString()}...`
+                  : 'Deleting...'
                 : confirming
                   ? `Confirm delete ${selectedCount}`
                   : `Delete ${selectedCount > 0 ? selectedCount : ''} selected`.replace('  ', ' ')}

@@ -69,3 +69,64 @@ export async function deleteOrphans(payload: {
 }): Promise<OrphanDeleteResult> {
   return apiPost<OrphanDeleteResult>('/api/user/orphans/delete', payload);
 }
+
+/**
+ * Max entries of each kind the backend accepts per delete request
+ * (MAX_DELETE_BATCH in models/file/file.orphan.model.js). Anything past this in a
+ * single request is silently dropped server-side, so the client must chunk to it.
+ */
+export const ORPHAN_DELETE_BATCH_SIZE = 500;
+
+function chunk<T>(items: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
+
+/**
+ * Delete a whole selection regardless of size by splitting it into sequential
+ * requests that each stay within ORPHAN_DELETE_BATCH_SIZE, then merging the
+ * per-item outcomes into a single result. Sequential (not parallel) because each
+ * entry drives per-object storage calls and cache invalidation on the server.
+ *
+ * @param onProgress - Called after each batch with entries processed so far and
+ *   the total, so the caller can show real progress.
+ */
+export async function deleteOrphansInBatches(
+  payload: { storageKeys?: string[]; fileIds?: string[]; graceMinutes: number },
+  onProgress?: (done: number, total: number) => void
+): Promise<OrphanDeleteResult> {
+  const storageKeys = payload.storageKeys ?? [];
+  const fileIds = payload.fileIds ?? [];
+  const total = storageKeys.length + fileIds.length;
+
+  const merged: OrphanDeleteResult = {
+    graceMinutes: payload.graceMinutes,
+    storage: { results: [], deleted: 0, skipped: 0 },
+    database: { results: [], deleted: 0, skipped: 0 },
+  };
+
+  const keyBatches = chunk(storageKeys, ORPHAN_DELETE_BATCH_SIZE);
+  const idBatches = chunk(fileIds, ORPHAN_DELETE_BATCH_SIZE);
+  const batchCount = Math.max(keyBatches.length, idBatches.length);
+
+  let done = 0;
+  for (let i = 0; i < batchCount; i += 1) {
+    const keys = keyBatches[i] ?? [];
+    const ids = idBatches[i] ?? [];
+    const result = await deleteOrphans({ storageKeys: keys, fileIds: ids, graceMinutes: payload.graceMinutes });
+
+    merged.graceMinutes = result.graceMinutes;
+    merged.storage.results.push(...result.storage.results);
+    merged.storage.deleted += result.storage.deleted;
+    merged.storage.skipped += result.storage.skipped;
+    merged.database.results.push(...result.database.results);
+    merged.database.deleted += result.database.deleted;
+    merged.database.skipped += result.database.skipped;
+
+    done += keys.length + ids.length;
+    onProgress?.(done, total);
+  }
+
+  return merged;
+}
