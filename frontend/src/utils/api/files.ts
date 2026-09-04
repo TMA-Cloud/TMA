@@ -1,6 +1,6 @@
 /** File-listing, upload-precheck, and single-file download endpoints. */
 import { authFetch } from '../authFetch';
-import { downloadBlob } from '../download';
+import { downloadBlob, streamResponseToBlob } from '../download';
 import type { FileItemResponse } from '../../contexts/AppContext';
 import { apiGet, apiPost } from './client';
 
@@ -16,9 +16,14 @@ export async function checkUploadStorage(fileSize: number): Promise<{ allowed: t
   return apiPost<{ allowed: true }>('/api/files/upload/check', { fileSize });
 }
 
-export async function downloadFile(id: string, fallbackFilename?: string): Promise<void> {
+export async function downloadFile(
+  id: string,
+  fallbackFilename?: string,
+  onProgress?: (loaded: number, total: number | null) => void,
+  signal?: AbortSignal
+): Promise<void> {
   const url = `/api/files/${id}/download`;
-  const response = await authFetch(url, { method: 'GET' });
+  const response = await authFetch(url, { method: 'GET', signal });
 
   if (!response.ok) {
     let errorMessage = response.statusText;
@@ -66,6 +71,6 @@ export async function downloadFile(id: string, fallbackFilename?: string): Promi
     filename = fallbackFilename || 'download';
   }
 
-  const blob = await response.blob();
+  const blob = await streamResponseToBlob(response, onProgress);
   downloadBlob(blob, filename);
 }

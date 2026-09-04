@@ -1,20 +1,27 @@
 import React from 'react';
-import { Download } from 'lucide-react';
-import { FixedProgress } from './FixedProgress';
+import type { TransferItem } from '../../utils/transferUtils';
+import { TransferProgress } from '../transfer/TransferProgress';
 
 interface DownloadProgressProps {
-  isDownloading: boolean;
-  hasFolders: boolean;
+  downloads: TransferItem[];
+  onDismiss: (id: string) => void;
+  onCancel?: (id: string) => void;
+  onInteractionChange?: (isInteracting: boolean) => void;
 }
 
-export const DownloadProgress: React.FC<DownloadProgressProps> = ({ isDownloading, hasFolders }) => {
-  if (!isDownloading) return null;
-
-  return (
-    <FixedProgress
-      icon={Download}
-      title={hasFolders ? 'Zipping and downloading...' : 'Downloading...'}
-      variant="blue-pulse"
-    />
-  );
-};
+/** Download progress stack — the shared transfer UI in the "download" direction. */
+export const DownloadProgress: React.FC<DownloadProgressProps> = ({
+  downloads,
+  onDismiss,
+  onCancel,
+  onInteractionChange,
+}) => (
+  <TransferProgress
+    items={downloads}
+    direction="download"
+    onDismiss={onDismiss}
+    onCancel={onCancel}
+    onInteractionChange={onInteractionChange}
+    position="right"
+  />
+);

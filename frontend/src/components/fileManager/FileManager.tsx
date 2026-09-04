@@ -6,7 +6,6 @@ import { Breadcrumbs } from './Breadcrumbs';
 import { Tooltip } from '../ui/Tooltip';
 import { ContextMenu } from './ContextMenu';
 import { PasteProgress } from './PasteProgress';
-import { DownloadProgress } from './DownloadProgress';
 import { DesktopOpenProgress } from './DesktopOpenProgress';
 import { DeleteProgress } from './DeleteProgress';
 import { RestoreProgress } from './RestoreProgress';
@@ -485,14 +484,9 @@ export const FileManager: React.FC = () => {
           onShare={handleShare}
           onStar={handleStar}
           onDownload={async () => {
-            try {
-              await downloadFiles(selectedFiles);
-              closeMultiSelectIfMobile();
-            } catch {
-              // Error already handled by downloadFiles (toast shown)
-              // Just prevent uncaught promise error
-              closeMultiSelectIfMobile();
-            }
+            // downloadFiles surfaces its own failures (cards + toast) and never throws.
+            await downloadFiles(selectedFiles);
+            closeMultiSelectIfMobile();
           }}
           onRename={handleRename}
           onDelete={() => {
@@ -559,10 +553,6 @@ export const FileManager: React.FC = () => {
       {desktopOpenProgress.length > 0 && <DesktopOpenProgress items={desktopOpenProgress} />}
       <DeleteProgress progress={deleteProgress} />
       <RestoreProgress progress={restoreProgress} />
-      <DownloadProgress
-        isDownloading={isDownloading}
-        hasFolders={selectedFiles.some(id => files.find(f => f.id === id)?.type === 'folder')}
-      />
 
       <EmptyTrashModal
         isOpen={emptyTrashModalOpen}

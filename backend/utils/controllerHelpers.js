@@ -5,6 +5,7 @@
 
 import { validateId, validateIdArray } from './validation.js';
 import { logAuditEvent } from '../services/auditLogger.js';
+import { logger } from '../config/logger.js';
 
 /**
  * Validate and get parent ID from request body or query
@@ -98,4 +99,83 @@ async function logBulkFileAudit(action, { ids, fileNames, fileTypes, metadata = 
   );
 }
 
-export { validateParentId, validateFileIds, validateSingleId, logBulkFileAudit };
+/**
+ * True when the client opted into a streamed NDJSON progress response
+ * (`Accept: application/x-ndjson`). Callers without it get the normal JSON reply,
+ * so existing consumers and tests are unaffected.
+ */
+function wantsProgressStream(req) {
+  return String(req.headers?.accept || '').includes('application/x-ndjson');
+}
+
+// Cap the number of progress updates so a huge selection can't spam the client,
+// while keeping each batch large enough that we don't multiply per-batch overhead
+// (recursive id expansion + cache invalidation) for ordinary selections. A batch
+// below this size is a single fast operation, so the bar just jumps 0→100.
+const MAX_PROGRESS_STEPS = 20;
+const MIN_BATCH_SIZE = 25;
+
+/** Batch size that bounds both the step count and per-batch overhead (see constants above). */
+function defaultBatchSize(total) {
+  return Math.max(MIN_BATCH_SIZE, Math.ceil(total / MAX_PROGRESS_STEPS));
+}
+
+/**
+ * Run a bulk operation over `ids` in batches, streaming one NDJSON line of real
+ * progress per batch, then a final `done` line carrying `finalize()`'s payload.
+ * Progress is tied to actual completion — each batch line is written only after
+ * `processChunk` for that batch resolves. Errors after streaming has begun are
+ * reported as a trailing `error` line (headers are already sent), never thrown.
+ *
+ * @param {Object} res - Express response.
+ * @param {Object} opts
+ * @param {string[]} opts.ids - Items to process, in order.
+ * @param {(chunk: string[]) => Promise<void>} opts.processChunk - Handles one batch.
+ * @param {() => Promise<Object>} [opts.finalize] - Runs after all batches; its result is spread into the `done` line.
+ * @param {number} [opts.chunkSize] - Batch size; defaults to {@link defaultBatchSize}.
+ */
+async function streamBulkProgress(res, { ids, processChunk, finalize, chunkSize }) {
+  res.writeHead(200, {
+    'Content-Type': 'application/x-ndjson; charset=utf-8',
+    'Cache-Control': 'no-cache, no-transform',
+    'X-Content-Type-Options': 'nosniff',
+    'X-Accel-Buffering': 'no', // don't let a proxy buffer away the progress
+  });
+  // Get headers (and the first line) to the client immediately rather than
+  // waiting for the OS/Node to fill a buffer.
+  if (typeof res.flushHeaders === 'function') res.flushHeaders();
+
+  const total = ids.length;
+  let done = 0;
+  const write = obj => {
+    res.write(`${JSON.stringify(obj)}\n`);
+    if (typeof res.flush === 'function') res.flush(); // flush past any compression middleware
+  };
+
+  try {
+    write({ type: 'progress', done, total });
+    const size = chunkSize && chunkSize > 0 ? chunkSize : defaultBatchSize(total);
+    for (let i = 0; i < total; i += size) {
+      const chunk = ids.slice(i, i + size);
+      await processChunk(chunk);
+      done += chunk.length;
+      write({ type: 'progress', done, total });
+    }
+    const payload = finalize ? await finalize() : {};
+    write({ type: 'done', ...payload });
+  } catch (err) {
+    logger.error({ err }, 'Streaming bulk operation failed mid-flight');
+    write({ type: 'error', message: err && err.message ? err.message : 'Operation failed' });
+  } finally {
+    res.end();
+  }
+}
+
+export {
+  validateParentId,
+  validateFileIds,
+  validateSingleId,
+  logBulkFileAudit,
+  wantsProgressStream,
+  streamBulkProgress,
+};

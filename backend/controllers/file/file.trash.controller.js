@@ -10,7 +10,7 @@ import {
 } from '../../models/file.model.js';
 import { sendError, sendSuccess } from '../../utils/response.js';
 import { validateSortBy, validateSortOrder } from '../../utils/validation.js';
-import { logBulkFileAudit } from '../../utils/controllerHelpers.js';
+import { logBulkFileAudit, wantsProgressStream, streamBulkProgress } from '../../utils/controllerHelpers.js';
 
 /**
  * Delete files/folders (move to trash)
@@ -23,11 +23,18 @@ async function deleteFilesController(req, res) {
   const fileNames = fileInfo.map(f => f.name);
   const fileTypes = fileInfo.map(f => f.type);
 
-  await deleteFiles(ids, req.ownerId);
+  const finalize = async () => {
+    // Log file deletion (soft delete to trash) with details
+    await logBulkFileAudit('file.delete', { ids, fileNames, fileTypes, metadata: { permanent: false } }, req);
+    return { message: 'Files moved to trash.' };
+  };
 
-  // Log file deletion (soft delete to trash) with details
-  await logBulkFileAudit('file.delete', { ids, fileNames, fileTypes, metadata: { permanent: false } }, req);
-  sendSuccess(res, { message: 'Files moved to trash.' });
+  if (wantsProgressStream(req)) {
+    return streamBulkProgress(res, { ids, processChunk: chunk => deleteFiles(chunk, req.ownerId), finalize });
+  }
+
+  await deleteFiles(ids, req.ownerId);
+  sendSuccess(res, await finalize());
 }
 
 /**
@@ -57,27 +64,34 @@ async function restoreFilesController(req, res) {
     return sendError(res, 404, 'No files found in trash to restore');
   }
 
+  const finalize = async () => {
+    // Log file restore with details
+    await logBulkFileAudit('file.restore', { ids, fileNames, fileTypes }, req);
+    logger.info({ fileIds: ids, fileNames }, 'Files restored from trash');
+
+    // Publish file restored events in batch (optimized)
+    await publishFileEventsBatch(
+      fileInfo.map(file => ({
+        eventType: EventTypes.FILE_RESTORED,
+        eventData: {
+          id: file.id,
+          name: file.name,
+          type: file.type,
+          parentId: file.parentId || null,
+          userId: req.ownerId,
+        },
+      }))
+    );
+
+    return { message: `Restored ${fileInfo.length} file(s) from trash` };
+  };
+
+  if (wantsProgressStream(req)) {
+    return streamBulkProgress(res, { ids, processChunk: chunk => restoreFiles(chunk, req.ownerId), finalize });
+  }
+
   await restoreFiles(ids, req.ownerId);
-
-  // Log file restore with details
-  await logBulkFileAudit('file.restore', { ids, fileNames, fileTypes }, req);
-  logger.info({ fileIds: ids, fileNames }, 'Files restored from trash');
-
-  // Publish file restored events in batch (optimized)
-  await publishFileEventsBatch(
-    fileInfo.map(file => ({
-      eventType: EventTypes.FILE_RESTORED,
-      eventData: {
-        id: file.id,
-        name: file.name,
-        type: file.type,
-        parentId: file.parentId || null,
-        userId: req.ownerId,
-      },
-    }))
-  );
-
-  sendSuccess(res, { message: `Restored ${fileInfo.length} file(s) from trash` });
+  sendSuccess(res, await finalize());
 }
 
 /**
@@ -91,28 +105,39 @@ async function deleteForeverController(req, res) {
   const fileNames = fileInfo.map(f => f.name);
   const fileTypes = fileInfo.map(f => f.type);
 
+  const finalize = async () => {
+    // Log permanent deletion with details
+    await logBulkFileAudit('file.delete.permanent', { ids, fileNames, fileTypes, metadata: { permanent: true } }, req);
+    logger.info({ fileIds: ids, fileNames }, 'Files permanently deleted');
+
+    // Publish file permanently deleted events in batch (optimized)
+    await publishFileEventsBatch(
+      fileInfo.map(file => ({
+        eventType: EventTypes.FILE_PERMANENTLY_DELETED,
+        eventData: {
+          id: file.id,
+          name: file.name,
+          type: file.type,
+          parentId: file.parentId || null,
+          userId: req.ownerId,
+          permanent: true,
+        },
+      }))
+    );
+
+    return { message: 'Files permanently deleted.' };
+  };
+
+  if (wantsProgressStream(req)) {
+    return streamBulkProgress(res, {
+      ids,
+      processChunk: chunk => permanentlyDeleteFiles(chunk, req.ownerId),
+      finalize,
+    });
+  }
+
   await permanentlyDeleteFiles(ids, req.ownerId);
-
-  // Log permanent deletion with details
-  await logBulkFileAudit('file.delete.permanent', { ids, fileNames, fileTypes, metadata: { permanent: true } }, req);
-  logger.info({ fileIds: ids, fileNames }, 'Files permanently deleted');
-
-  // Publish file permanently deleted events in batch (optimized)
-  await publishFileEventsBatch(
-    fileInfo.map(file => ({
-      eventType: EventTypes.FILE_PERMANENTLY_DELETED,
-      eventData: {
-        id: file.id,
-        name: file.name,
-        type: file.type,
-        parentId: file.parentId || null,
-        userId: req.ownerId,
-        permanent: true,
-      },
-    }))
-  );
-
-  sendSuccess(res, { message: 'Files permanently deleted.' });
+  sendSuccess(res, await finalize());
 }
 
 /**

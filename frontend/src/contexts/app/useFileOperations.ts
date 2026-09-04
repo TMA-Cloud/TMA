@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { type FileItemResponse, type ShareExpiry } from '../AppContext';
 import type { PromiseQueue } from '../../utils/debounce';
 import { extractResponseError } from '../../utils/errorUtils';
+import { consumeNdjsonProgress } from '../../utils/progressStream';
 import type { ProgressState } from './helpers';
 
 type ToastType = 'success' | 'error' | 'info';
@@ -41,17 +42,14 @@ export function useFileOperations({
     actionLabel: string;
     finalizeLabel: string;
     url: string;
-    onFetch?: (res: Response) => Promise<void>;
-  }) => {
-    const { ids, lockRef, dismissRef, setActive, setProgress, actionLabel, finalizeLabel, url, onFetch } = opts;
+  }): Promise<Record<string, unknown> | null> => {
+    const { ids, lockRef, dismissRef, setActive, setProgress, actionLabel, finalizeLabel, url } = opts;
 
     if (lockRef.current) {
       throw new Error(`${actionLabel} already in progress. Please wait.`);
     }
 
     const itemCount = ids.length;
-    const expectedMs = Math.min(30000, Math.max(3000, itemCount * 20));
-    const startedAt = Date.now();
 
     lockRef.current = true;
     if (dismissRef.current) {
@@ -61,36 +59,44 @@ export function useFileOperations({
     setActive(true);
     setProgress({
       itemCount,
-      percent: 5,
+      percent: 0,
       label: itemCount === 1 ? `${actionLabel} 1 item...` : `${actionLabel} ${itemCount} items...`,
     });
 
-    const timer = setInterval(() => {
-      const elapsed = Date.now() - startedAt;
-      const percent = Math.min(95, Math.max(5, Math.round((elapsed / expectedMs) * 90) + 5));
-      setProgress(prev => (prev ? { ...prev, percent } : prev));
-    }, 250);
+    const finalize = () => setProgress(prev => (prev ? { ...prev, percent: 100, label: `${finalizeLabel}...` } : prev));
 
     try {
+      // Ask for a streamed NDJSON response so the bar tracks real completion; the
+      // server falls back to a plain JSON reply for clients that don't opt in.
       const res = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+          Accept: 'application/x-ndjson',
+        },
         credentials: 'include',
         body: JSON.stringify({ ids }),
       });
 
-      if (onFetch) {
-        await onFetch(res);
+      let result: Record<string, unknown> | null = null;
+      if ((res.headers.get('Content-Type') || '').includes('ndjson')) {
+        result = await consumeNdjsonProgress(res, percent => setProgress(prev => (prev ? { ...prev, percent } : prev)));
       } else if (!res.ok) {
         throw new Error(await extractResponseError(res));
+      } else {
+        result = (await res.json().catch(() => null)) as Record<string, unknown> | null;
       }
 
-      clearInterval(timer);
-      setProgress(prev => (prev ? { ...prev, percent: 100, label: `${finalizeLabel}...` } : prev));
+      finalize();
       await refreshFiles();
       await new Promise(r => setTimeout(r, 450));
+      return result;
+    } catch (err) {
+      // A mid-stream failure may have processed some items; refresh so the list is truthful.
+      await refreshFiles().catch(() => {});
+      throw err;
     } finally {
-      clearInterval(timer);
       lockRef.current = false;
       setActive(false);
       dismissRef.current = setTimeout(() => {
@@ -223,9 +229,8 @@ export function useFileOperations({
 
   const restoreFilesApi = async (ids: string[]) => {
     if (!ids.length) return { success: true } as const;
-    type RestoreResponse = { success: boolean; message?: string };
-    let result: RestoreResponse | null = null;
-    await runProgressOperation({
+    // Errors throw (bad status or a stream error line); reaching here means success.
+    const result = await runProgressOperation({
       ids,
       lockRef: restoreInProgressRef,
       dismissRef: restoreProgressDismissTimeoutRef,
@@ -234,31 +239,9 @@ export function useFileOperations({
       actionLabel: 'Restoring',
       finalizeLabel: 'Finalizing restore',
       url: '/api/files/trash/restore',
-      onFetch: async res => {
-        const data: unknown = await res.json();
-        if (!res.ok) {
-          const message =
-            typeof (data as { message?: unknown }).message === 'string'
-              ? ((data as { message?: unknown }).message as string)
-              : undefined;
-          throw new Error(message ?? 'Failed to restore files');
-        }
-
-        // Best-effort typing: backend should return `{ success: boolean, message?: string }`
-        if (data && typeof data === 'object' && typeof (data as { success?: unknown }).success === 'boolean') {
-          const success = (data as { success: boolean }).success;
-          const message =
-            typeof (data as { message?: unknown }).message === 'string'
-              ? ((data as { message?: unknown }).message as string)
-              : undefined;
-          result = { success, ...(message ? { message } : {}) };
-          return;
-        }
-
-        result = { success: false, message: 'Unexpected restore response from server.' };
-      },
     });
-    return result ?? { success: false, message: 'Restore did not return a response.' };
+    const message = result && typeof result.message === 'string' ? result.message : undefined;
+    return { success: true, ...(message ? { message } : {}) };
   };
 
   const deleteForeverApi = async (ids: string[]) => {

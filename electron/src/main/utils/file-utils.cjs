@@ -3,7 +3,7 @@
  * (http, download, upload, names, tempdirs, clipboard, hash) under the same
  * names and import path they've always had, so no consumer moves.
  */
-const { getCookieHeader, getJson, apiPostJson } = require('./file-utils/http.cjs');
+const { getCookieHeader, getJson, apiPostJson, makeIpcProgressEmitter } = require('./file-utils/http.cjs');
 const {
   downloadToFile,
   downloadPostToFile,
@@ -42,6 +42,7 @@ module.exports = {
   validateOrigin,
   getJson,
   apiPostJson,
+  makeIpcProgressEmitter,
   listFilesFromBackend,
   uploadNewFile,
   getCookieHeader,

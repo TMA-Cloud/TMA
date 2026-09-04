@@ -1,5 +1,6 @@
 import { createContext, useContext } from 'react';
 import type { UploadProgressItem } from '../utils/uploadUtils';
+import type { TransferItem } from '../utils/transferUtils';
 
 export type ShareExpiry = '7d' | '30d' | 'never';
 
@@ -156,6 +157,13 @@ export interface AppContextType {
     label: string;
   } | null;
   downloadFiles: (ids: string[]) => Promise<void>;
+  /** Per-file download progress cards (shared UI with uploads). */
+  downloadProgress: TransferItem[];
+  /** Cancel an in-progress download by its card id. */
+  cancelDownload: (id: string) => void;
+  /** Dismiss a finished download card by its id. */
+  dismissDownload: (id: string) => void;
+  setIsDownloadProgressInteracting: (isInteracting: boolean) => void;
   /** Open a single file on the desktop (Windows) and save changes back */
   editFileWithDesktop: (id: string) => Promise<void>;
   uploadProgress: UploadProgressItem[];

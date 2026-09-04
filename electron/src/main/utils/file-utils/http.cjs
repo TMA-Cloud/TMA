@@ -40,13 +40,44 @@ function handleResponseError(response, reject, label) {
 }
 
 /**
+ * Build a throttled byte-progress emitter that sends `{ id, loaded, total }` to
+ * the renderer on `channel`. Returns undefined without an id (so callers pay
+ * nothing when no one is listening). Emits at most every 100ms, plus the final byte.
+ */
+function makeIpcProgressEmitter(win, channel, id) {
+  if (!id || !win) return undefined;
+  let last = 0;
+  return (loaded, total) => {
+    const now = Date.now();
+    const done = total > 0 && loaded >= total;
+    if (!done && now - last < 100) return;
+    last = now;
+    if (!win.isDestroyed()) win.webContents.send(channel, { id, loaded, total });
+  };
+}
+
+/** Content-Length off an Electron `net` response (headers are lowercased, values may be arrays). */
+function contentLengthOf(response) {
+  const raw = response?.headers?.['content-length'];
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  const total = Number(value);
+  return Number.isFinite(total) && total > 0 ? total : 0;
+}
+
+/**
  * Pipe a 2xx response body to the given file path with backpressure handling.
  * Resolves when the file is fully written, rejects on stream errors.
+ * `onProgress(loaded, total)` (optional) is called as bytes arrive; `total` is 0
+ * when the response carries no Content-Length.
  */
-function pipeResponseToFile(response, filePath, resolve, reject) {
+function pipeResponseToFile(response, filePath, resolve, reject, onProgress) {
   const fileStream = fs.createWriteStream(filePath);
+  const total = contentLengthOf(response);
+  let loaded = 0;
 
   response.on('data', chunk => {
+    loaded += chunk.length;
+    if (typeof onProgress === 'function') onProgress(loaded, total);
     if (!fileStream.write(chunk)) {
       response.pause();
     }
@@ -142,4 +173,11 @@ function apiPostJson(base, pathname, body) {
   );
 }
 
-module.exports = { getCookieHeader, handleResponseError, pipeResponseToFile, getJson, apiPostJson };
+module.exports = {
+  getCookieHeader,
+  handleResponseError,
+  pipeResponseToFile,
+  makeIpcProgressEmitter,
+  getJson,
+  apiPostJson,
+};

@@ -3,9 +3,18 @@
  * single file (or a bulk zip) from the backend to the chosen path.
  */
 const { ipcMain, dialog, BrowserWindow } = require('electron');
-const { sanitizeFileName, downloadToFile, downloadPostToFile, validateOrigin } = require('../../utils/file-utils.cjs');
+const {
+  sanitizeFileName,
+  downloadToFile,
+  downloadPostToFile,
+  makeIpcProgressEmitter,
+  validateOrigin,
+} = require('../../utils/file-utils.cjs');
 
 const SAVE_DIALOG_TITLE = 'TMA Cloud';
+
+/** Throttled byte-progress emitter on `files:saveProgress`, keyed by the payload's downloadId. */
+const makeProgressEmitter = (win, downloadId) => makeIpcProgressEmitter(win, 'files:saveProgress', downloadId);
 
 function registerSaveFileHandlers() {
   ipcMain.handle('files:saveFile', async (event, payload) => {
@@ -25,7 +34,7 @@ function registerSaveFileHandlers() {
 
     const downloadUrl = `${origin}/api/files/${encodeURIComponent(String(fileId))}/download`;
     try {
-      await downloadToFile(downloadUrl, filePath);
+      await downloadToFile(downloadUrl, filePath, makeProgressEmitter(win, payload?.downloadId));
       return { ok: true };
     } catch (e) {
       return { ok: false, error: e && e.message ? e.message : 'Failed to download file' };
@@ -48,7 +57,7 @@ function registerSaveFileHandlers() {
 
     const bulkUrl = `${origin}/api/files/download/bulk`;
     try {
-      await downloadPostToFile(bulkUrl, { ids }, filePath);
+      await downloadPostToFile(bulkUrl, { ids }, filePath, makeProgressEmitter(win, payload?.downloadId));
       return { ok: true };
     } catch (e) {
       return { ok: false, error: e && e.message ? e.message : 'Failed to download files' };

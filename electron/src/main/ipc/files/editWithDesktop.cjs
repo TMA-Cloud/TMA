@@ -16,6 +16,7 @@ const {
   hashFile,
   validateOrigin,
   getFileInfoFromBackend,
+  makeIpcProgressEmitter,
 } = require('../../utils/file-utils.cjs');
 
 // Office lock/temp files (~$doc.docx) and the set of real export extensions.
@@ -41,7 +42,7 @@ const ALLOWED_DERIVED_EXTS = new Set([
 
 // Resolve the local edit file: reuse a valid cached download for large files,
 // otherwise download fresh (and cache when big enough).
-async function resolveEditFile(registry, base, item, downloadUrl) {
+async function resolveEditFile(registry, base, item, downloadUrl, onProgress) {
   const { editCache, EDIT_CACHE_MIN_BYTES } = registry;
   const fileId = String(item.id);
 
@@ -67,7 +68,7 @@ async function resolveEditFile(registry, base, item, downloadUrl) {
 
   const editDir = createTempDir(EDIT_DIR_PREFIX);
   const filePath = path.join(editDir, sanitizeFileName(String(item.name)));
-  await downloadToFile(downloadUrl, filePath);
+  await downloadToFile(downloadUrl, filePath, onProgress);
 
   if (typeof remoteSize === 'number' && remoteSize >= EDIT_CACHE_MIN_BYTES) {
     editCache.set(fileId, { editDir, filePath, remoteSize, remoteModifiedMs });
@@ -210,7 +211,8 @@ function registerEditWithDesktopHandler(registry) {
       let editDir;
       let filePath;
       try {
-        ({ editDir, filePath } = await resolveEditFile(registry, base, item, downloadUrl));
+        const onProgress = makeIpcProgressEmitter(win, 'files:openProgress', fileId);
+        ({ editDir, filePath } = await resolveEditFile(registry, base, item, downloadUrl, onProgress));
       } catch (e) {
         return { ok: false, error: e && e.message ? e.message : 'Failed to download file' };
       }

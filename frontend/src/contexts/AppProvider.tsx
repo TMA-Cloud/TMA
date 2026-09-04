@@ -167,6 +167,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         // Downloads
         isDownloading: downloads.isDownloading,
         downloadFiles: downloads.downloadFiles,
+        downloadProgress: downloads.downloadProgress,
+        cancelDownload: downloads.cancelDownload,
+        dismissDownload: downloads.dismissDownload,
+        setIsDownloadProgressInteracting: downloads.setIsDownloadProgressInteracting,
 
         // Desktop edit (Electron)
         editFileWithDesktop: desktopEdit.editFileWithDesktop,

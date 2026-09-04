@@ -39,16 +39,25 @@ declare global {
           ok: boolean;
           error?: string;
         }>;
-        saveFile: (payload: { origin: string; fileId: string; suggestedFileName: string }) => Promise<{
+        saveFile: (payload: {
+          origin: string;
+          fileId: string;
+          suggestedFileName: string;
+          downloadId?: string;
+        }) => Promise<{
           ok: boolean;
           canceled?: boolean;
           error?: string;
         }>;
-        saveFilesBulk: (payload: { origin: string; ids: string[] }) => Promise<{
+        saveFilesBulk: (payload: { origin: string; ids: string[]; downloadId?: string }) => Promise<{
           ok: boolean;
           canceled?: boolean;
           error?: string;
         }>;
+        /** Byte progress for an in-flight save; `id` is the downloadId from the save payload. */
+        onSaveProgress?: (callback: (payload: { id: string; loaded: number; total: number }) => void) => () => void;
+        /** Byte progress while opening a file on the desktop; `id` is the file id. */
+        onOpenProgress?: (callback: (payload: { id: string; loaded: number; total: number }) => void) => () => void;
         onDerivedUploadStatus?: (
           callback: (payload: {
             state: 'started' | 'completed' | 'error';
@@ -254,6 +263,7 @@ export async function editFileWithDesktopElectron(payload: { id: string; name: s
 export async function saveFileViaElectron(payload: {
   fileId: string;
   suggestedFileName: string;
+  downloadId?: string;
 }): Promise<{ ok: boolean; canceled?: boolean; error?: string }> {
   const api = window.electronAPI;
   if (!isElectron() || !api?.files?.saveFile) {
@@ -264,6 +274,7 @@ export async function saveFileViaElectron(payload: {
       origin: window.location.origin,
       fileId: payload.fileId,
       suggestedFileName: payload.suggestedFileName,
+      ...(payload.downloadId ? { downloadId: payload.downloadId } : {}),
     });
     return result ?? { ok: false };
   } catch (e) {
@@ -273,7 +284,10 @@ export async function saveFileViaElectron(payload: {
 }
 
 /** Save multiple files as ZIP via Electron Save dialog. Returns ok: true on success so caller can show toast. */
-export async function saveFilesBulkViaElectron(ids: string[]): Promise<{
+export async function saveFilesBulkViaElectron(
+  ids: string[],
+  downloadId?: string
+): Promise<{
   ok: boolean;
   canceled?: boolean;
   error?: string;
@@ -286,10 +300,36 @@ export async function saveFilesBulkViaElectron(ids: string[]): Promise<{
     const result = await api.files.saveFilesBulk({
       origin: window.location.origin,
       ids,
+      ...(downloadId ? { downloadId } : {}),
     });
     return result ?? { ok: false };
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     return { ok: false, error: message };
   }
+}
+
+/**
+ * Subscribe to byte progress for Electron file saves. The callback fires with the
+ * downloadId passed to saveFile/saveFilesBulk. Returns an unsubscribe function;
+ * no-op outside the desktop app.
+ */
+export function subscribeToElectronSaveProgress(
+  callback: (payload: { id: string; loaded: number; total: number }) => void
+): () => void {
+  const api = typeof window !== 'undefined' ? window.electronAPI : undefined;
+  if (!isElectron() || !api?.files?.onSaveProgress) return () => {};
+  return api.files.onSaveProgress(callback);
+}
+
+/**
+ * Subscribe to byte progress while opening a file on the desktop. The callback
+ * fires with the file's id. Returns an unsubscribe function; no-op on the web.
+ */
+export function subscribeToElectronOpenProgress(
+  callback: (payload: { id: string; loaded: number; total: number }) => void
+): () => void {
+  const api = typeof window !== 'undefined' ? window.electronAPI : undefined;
+  if (!isElectron() || !api?.files?.onOpenProgress) return () => {};
+  return api.files.onOpenProgress(callback);
 }

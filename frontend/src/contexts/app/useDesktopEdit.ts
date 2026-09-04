@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { type FileItem } from '../AppContext';
-import { editFileWithDesktopElectron, isElectron } from '../../utils/electronDesktop';
+import { editFileWithDesktopElectron, isElectron, subscribeToElectronOpenProgress } from '../../utils/electronDesktop';
 import { formatBytes } from '../../utils/storageUtils';
 
 type ToastType = 'success' | 'error' | 'info';
@@ -16,6 +16,22 @@ interface DesktopEditDeps {
 export function useDesktopEdit({ showToast, files, debouncedRefreshFiles }: DesktopEditDeps) {
   const [desktopOpenProgress, setDesktopOpenProgress] = useState<DesktopOpenProgress[]>([]);
   const desktopEditInProgressRef = useRef<Set<string>>(new Set());
+
+  // Real byte progress for the file being downloaded to open on desktop. Held at
+  // 99% until the open resolves (hashing + launching the editor come after).
+  useEffect(() => {
+    return subscribeToElectronOpenProgress(({ id, loaded, total }) => {
+      if (!(total > 0)) return;
+      const percent = Math.min(99, Math.round((loaded / total) * 100));
+      setDesktopOpenProgress(prev => {
+        const idx = prev.findIndex(p => p.fileId === id);
+        if (idx === -1) return prev;
+        const next = [...prev];
+        next[idx] = { ...next[idx]!, percent: Math.max(next[idx]!.percent, percent) };
+        return next;
+      });
+    });
+  }, []);
 
   // Electron derived upload status
 
@@ -76,13 +92,10 @@ export function useDesktopEdit({ showToast, files, debouncedRefreshFiles }: Desk
     }
 
     desktopEditInProgressRef.current.add(id);
-    const isLarge = Number(file.size ?? 0) >= 50 * 1024 * 1024;
     let succeeded = false;
-    const BASE_DURATION = isLarge ? 20000 : 8000;
-    const MAX_PERCENT = 90;
-    const TICK = 300;
-    const startTime = Date.now();
 
+    // Start at 5% so the card appears immediately; real byte progress (from the
+    // open-progress subscription above) takes over as the file streams down.
     setDesktopOpenProgress(prev => {
       const base = { fileId: file.id, fileName: file.name, percent: 5 };
       const idx = prev.findIndex(p => p.fileId === file.id);
@@ -91,23 +104,6 @@ export function useDesktopEdit({ showToast, files, debouncedRefreshFiles }: Desk
       next[idx] = base;
       return next;
     });
-
-    const tick = () => {
-      if (!desktopEditInProgressRef.current.has(id)) return;
-      const percent = Math.max(
-        5,
-        Math.min(MAX_PERCENT, Math.round(((Date.now() - startTime) / BASE_DURATION) * MAX_PERCENT))
-      );
-      setDesktopOpenProgress(prev => {
-        const idx = prev.findIndex(p => p.fileId === file.id);
-        if (idx === -1) return prev;
-        const next = [...prev];
-        next[idx] = { ...next[idx]!, percent };
-        return next;
-      });
-      if (percent < MAX_PERCENT) setTimeout(tick, TICK);
-    };
-    setTimeout(tick, TICK);
 
     try {
       const result = await editFileWithDesktopElectron({ id: file.id, name: file.name });

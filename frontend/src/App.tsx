@@ -29,6 +29,11 @@ const UploadProgress = lazy(() =>
     default: mod.UploadProgress,
   }))
 );
+const DownloadProgress = lazy(() =>
+  import('./components/fileManager/DownloadProgress').then(mod => ({
+    default: mod.DownloadProgress,
+  }))
+);
 const CreateFolderModal = lazy(() =>
   import('./components/folder/CreateFolderModal').then(mod => ({
     default: mod.CreateFolderModal,
@@ -94,6 +99,10 @@ const AppContent: React.FC = () => {
     setUploadProgress,
     setIsUploadProgressInteracting,
     cancelUpload,
+    downloadProgress,
+    cancelDownload,
+    dismissDownload,
+    setIsDownloadProgressInteracting,
   } = useApp();
   const isMobile = useIsMobile();
   // One hook feeds both pieces of chrome that depend on this scroller: the
@@ -196,6 +205,12 @@ const AppContent: React.FC = () => {
           }}
           onInteractionChange={setIsUploadProgressInteracting}
           onCancel={cancelUpload}
+        />
+        <DownloadProgress
+          downloads={downloadProgress}
+          onDismiss={dismissDownload}
+          onInteractionChange={setIsDownloadProgressInteracting}
+          onCancel={cancelDownload}
         />
       </Suspense>
     </div>

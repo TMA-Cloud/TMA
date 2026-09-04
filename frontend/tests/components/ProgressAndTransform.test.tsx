@@ -20,8 +20,28 @@ describe('progress components', () => {
     expect(bar.style.width).toBe('42%');
   });
 
-  it('indeterminate progress pulses at full width', () => {
-    const { container } = render(<DownloadProgress isDownloading hasFolders={false} />);
+  it('DownloadProgress shows a determinate bar and filename for a tracked download', () => {
+    const { container } = render(
+      <DownloadProgress
+        downloads={[{ id: 'd1', fileName: 'report.pdf', fileSize: 1000, progress: 42, status: 'downloading' }]}
+        onDismiss={() => {}}
+      />
+    );
+    expect(container.textContent).toContain('report.pdf');
+    expect(container.textContent).toContain('42%');
+    const bar = container.querySelector('.bg-\\[var\\(--accent\\)\\]') as HTMLElement;
+    expect(bar.style.width).toBe('42%');
+  });
+
+  it('DownloadProgress pulses an indeterminate bar for a streamed ZIP', () => {
+    const { container } = render(
+      <DownloadProgress
+        downloads={[
+          { id: 'z1', fileName: '3 items', fileSize: 0, progress: 0, status: 'zipping', indeterminate: true },
+        ]}
+        onDismiss={() => {}}
+      />
+    );
     const bar = container.querySelector('.bg-blue-500') as HTMLElement;
     expect(bar.className).toContain('animate-pulse');
     expect(bar.style.width).toBe('100%');

@@ -56,6 +56,34 @@ describe('files:saveFile', () => {
     expect(__mock.lastRequest().url).toBe(`${SERVER_URL}/api/files/7/download`);
   });
 
+  it('streams real byte progress to the renderer, keyed by downloadId', async () => {
+    const { win, event } = windowEvent();
+    __mock.setSaveDialogResult({ canceled: false, filePath: path.join(createTempRoot(), 'saved.pdf') });
+    __mock.route('/download', { statusCode: 200, body: 'PDFDATA' });
+
+    await __mock.invoke(
+      'files:saveFile',
+      { origin: SERVER_URL, fileId: '7', suggestedFileName: 'report.pdf', downloadId: 'dl-1' },
+      event
+    );
+
+    const progress = win.webContents.sent.filter(s => s.channel === 'files:saveProgress');
+    expect(progress.length).toBeGreaterThan(0);
+    expect(progress[0].payload.id).toBe('dl-1');
+    // Real bytes, not a simulated percentage: the last event equals the body size.
+    expect(progress[progress.length - 1].payload.loaded).toBe(7);
+  });
+
+  it('emits no progress events when no downloadId is supplied', async () => {
+    const { win, event } = windowEvent();
+    __mock.setSaveDialogResult({ canceled: false, filePath: path.join(createTempRoot(), 'saved.pdf') });
+    __mock.route('/download', { statusCode: 200, body: 'PDFDATA' });
+
+    await __mock.invoke('files:saveFile', { origin: SERVER_URL, fileId: '7', suggestedFileName: 'r.pdf' }, event);
+
+    expect(win.webContents.sent.filter(s => s.channel === 'files:saveProgress')).toHaveLength(0);
+  });
+
   it('offers a sanitised default filename in the save dialog', async () => {
     const { event } = windowEvent();
     __mock.setSaveDialogResult({ canceled: true });
@@ -508,24 +536,28 @@ describe('files:editWithDesktop', () => {
       const { win, editDir } = await startSession();
       fs.writeFileSync(path.join(editDir, 'report.pdf'), 'PDFDATA');
 
+      const derivedSent = () => win.webContents.sent.filter(s => s.channel === 'files:derivedUploadStatus');
+
       dirWatcher().listener('rename', 'report.pdf');
       vi.advanceTimersByTime(1600);
       await waitFor(() => derivedRequests().length === 1, 'the export to be uploaded');
-      await waitFor(() => win.webContents.sent.length === 2, 'the completion notice');
+      await waitFor(() => derivedSent().length === 2, 'the completion notice');
 
       expect(derivedRequests()[0].url).toBe(`${SERVER_URL}/api/files/7/derived`);
-      expect(win.webContents.sent.map(s => s.payload.state)).toEqual(['started', 'completed']);
+      expect(derivedSent().map(s => s.payload.state)).toEqual(['started', 'completed']);
     });
 
     it('tells the renderer the exported name and size so it can show a toast', async () => {
       const { win, editDir } = await startSession();
       fs.writeFileSync(path.join(editDir, 'report.pdf'), 'PDFDATA');
 
+      const derivedSent = () => win.webContents.sent.filter(s => s.channel === 'files:derivedUploadStatus');
+
       dirWatcher().listener('rename', 'report.pdf');
       vi.advanceTimersByTime(1600);
-      await waitFor(() => win.webContents.sent.length > 0, 'the upload notice');
+      await waitFor(() => derivedSent().length > 0, 'the upload notice');
 
-      expect(win.webContents.sent[0]).toEqual({
+      expect(derivedSent()[0]).toEqual({
         channel: 'files:derivedUploadStatus',
         payload: { state: 'started', fileName: 'report.pdf', size: 7, originalId: '7' },
       });

@@ -6,6 +6,7 @@ import Dashboard from '../dashboard/Dashboard';
 import Settings from '../settings/Settings';
 import { UploadModal } from '../upload/UploadModal';
 import { UploadProgress } from '../upload/UploadProgress';
+import { DownloadProgress } from '../fileManager/DownloadProgress';
 import { UploadIssuesModal } from '../upload/UploadIssuesModal';
 import { CreateFolderModal } from '../folder/CreateFolderModal';
 import { ImageViewerModal } from '../viewer/ImageViewerModal';
@@ -44,6 +45,10 @@ export const MobileAppContent: React.FC = () => {
     uploadProgress,
     setUploadProgress,
     setIsUploadProgressInteracting,
+    downloadProgress,
+    cancelDownload,
+    dismissDownload,
+    setIsDownloadProgressInteracting,
   } = useApp();
   const { user, logout, can } = useAuth();
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -252,6 +257,12 @@ export const MobileAppContent: React.FC = () => {
           setUploadProgress(prev => prev.filter(item => item.id !== id));
         }}
         onInteractionChange={setIsUploadProgressInteracting}
+      />
+      <DownloadProgress
+        downloads={downloadProgress}
+        onDismiss={dismissDownload}
+        onInteractionChange={setIsDownloadProgressInteracting}
+        onCancel={cancelDownload}
       />
     </div>
   );

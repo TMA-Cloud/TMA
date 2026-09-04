@@ -27,6 +27,38 @@ const { contextBridge, ipcRenderer } = require('electron');
         saveFile: payload => ipcRenderer.invoke('files:saveFile', payload),
         saveFilesBulk: payload => ipcRenderer.invoke('files:saveFilesBulk', payload),
         /**
+         * Subscribe to byte progress for an in-flight saveFile/saveFilesBulk,
+         * keyed by the downloadId passed in the save payload. Returns unsubscribe.
+         */
+        onSaveProgress: callback => {
+          if (typeof callback !== 'function') return () => {};
+          const listener = (_e, payload) => {
+            try {
+              callback(payload);
+            } catch (err) {
+              console.error('[Electron preload] Error in onSaveProgress callback:', err);
+            }
+          };
+          ipcRenderer.on('files:saveProgress', listener);
+          return () => ipcRenderer.removeListener('files:saveProgress', listener);
+        },
+        /**
+         * Subscribe to byte progress while opening a file on the desktop, keyed by
+         * the file's id. Returns unsubscribe.
+         */
+        onOpenProgress: callback => {
+          if (typeof callback !== 'function') return () => {};
+          const listener = (_e, payload) => {
+            try {
+              callback(payload);
+            } catch (err) {
+              console.error('[Electron preload] Error in onOpenProgress callback:', err);
+            }
+          };
+          ipcRenderer.on('files:openProgress', listener);
+          return () => ipcRenderer.removeListener('files:openProgress', listener);
+        },
+        /**
          * Subscribe to status updates for derived uploads (e.g. exported PDFs).
          * Returns an unsubscribe function.
          */

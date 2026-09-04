@@ -6,7 +6,7 @@
 const { net } = require('electron');
 const { getCookieHeader, handleResponseError, pipeResponseToFile, getJson } = require('./http.cjs');
 
-async function downloadToFile(url, filePath) {
+async function downloadToFile(url, filePath, onProgress) {
   const cookieHeader = await getCookieHeader(url);
 
   return new Promise((resolve, reject) => {
@@ -16,7 +16,7 @@ async function downloadToFile(url, filePath) {
     }
     request.on('response', response => {
       if (handleResponseError(response, reject, 'Download failed')) return;
-      pipeResponseToFile(response, filePath, resolve, reject);
+      pipeResponseToFile(response, filePath, resolve, reject, onProgress);
     });
     request.on('error', reject);
     request.end();
@@ -27,7 +27,7 @@ async function downloadToFile(url, filePath) {
  * POST JSON body to a URL and stream the response to a file (e.g. bulk download zip).
  * Uses the same session cookies as downloadToFile.
  */
-async function downloadPostToFile(url, jsonBody, filePath) {
+async function downloadPostToFile(url, jsonBody, filePath, onProgress) {
   const cookieHeader = await getCookieHeader(url);
 
   return new Promise((resolve, reject) => {
@@ -44,7 +44,7 @@ async function downloadPostToFile(url, jsonBody, filePath) {
 
     request.on('response', response => {
       if (handleResponseError(response, reject, 'Download failed')) return;
-      pipeResponseToFile(response, filePath, resolve, reject);
+      pipeResponseToFile(response, filePath, resolve, reject, onProgress);
     });
     request.on('error', reject);
   });
