@@ -336,8 +336,10 @@ const electronMock = {
     on: () => {},
   },
   clipboard: {
-    readText: () => state.clipboardText,
-    writeText: text => {
+    // Electron 44 aligned the clipboard module with the W3C async API: readText
+    // and writeText now return Promises. Mirror that so a missing await surfaces.
+    readText: async () => state.clipboardText,
+    writeText: async text => {
       state.clipboardText = text;
     },
   },

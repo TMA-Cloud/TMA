@@ -100,7 +100,7 @@ async function readFilesFromClipboard() {
 
   // 3. Clipboard text containing file paths (Copy as path, IDEs, etc.).
   try {
-    const text = clipboard.readText();
+    const text = await clipboard.readText();
     const paths = parsePathsFromText(text);
     if (paths.length > 0) {
       const textFiles = await readFilesFromPaths(paths);
