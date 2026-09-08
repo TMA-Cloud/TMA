@@ -1,10 +1,10 @@
 /**
- * Integration setup: real Postgres, real Redis, real local storage.
+ * Integration setup: real Postgres, real Redis, in-memory bucket storage.
  *
  * Guardrails, because this connects to live infrastructure:
  *   - refuses to run unless the database name ends in `_test`
  *   - refuses to run against Redis database 0 (the dev cache)
- *   - refuses an UPLOAD_DIR outside the tests tree
+ *   - replaces bucket storage with an isolated in-memory double
  *
  * The schema is built by the project's own migrations, so the tests exercise
  * exactly the DDL that production runs.
@@ -17,6 +17,7 @@ import { fileURLToPath } from 'url';
 import { afterAll, beforeAll, beforeEach } from 'vitest';
 
 import pool from '../../config/db.js';
+import { resetStorageMock } from '../mocks/storage.mock.js';
 import { connectRedis, disconnectRedis, redisClient } from '../../config/redis.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -35,11 +36,6 @@ if (!/_test$/.test(process.env.DB_NAME || '')) {
 
 if (String(process.env.REDIS_DB || '0') === '0') {
   throw new Error('Refusing to run integration tests against Redis database 0. Set REDIS_DB to a scratch database.');
-}
-
-const uploadDir = process.env.UPLOAD_DIR || '';
-if (!uploadDir.replace(/\\/g, '/').includes('/tests/')) {
-  throw new Error(`Refusing to use UPLOAD_DIR "${uploadDir}" — integration uploads must live under tests/.`);
 }
 
 /* ------------------------------------------------------------------ *
@@ -93,11 +89,6 @@ async function truncateAll() {
   );
 }
 
-function resetUploadDir() {
-  fs.rmSync(uploadDir, { recursive: true, force: true });
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
-
 /* ------------------------------------------------------------------ *
  * Lifecycle
  * ------------------------------------------------------------------ */
@@ -109,7 +100,7 @@ beforeAll(async () => {
 
 beforeEach(async () => {
   await truncateAll();
-  resetUploadDir();
+  resetStorageMock();
   // Caches key off user ids, which are regenerated per test; a stale entry
   // would otherwise be served to a brand new account with the same key shape.
   if (redisClient.isReady) {
@@ -120,7 +111,6 @@ beforeEach(async () => {
 afterAll(async () => {
   await disconnectRedis().catch(() => {});
   await pool.end().catch(() => {});
-  fs.rmSync(uploadDir, { recursive: true, force: true });
 });
 
 export { runMigrations, truncateAll, DATA_TABLES };

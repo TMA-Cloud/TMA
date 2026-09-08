@@ -2,10 +2,6 @@
  * Storage utility functions
  */
 
-import checkDiskSpaceModule from 'check-disk-space';
-
-const checkDiskSpace = checkDiskSpaceModule?.default || checkDiskSpaceModule;
-
 /**
  * Format bytes to human-readable string
  * @param {number} bytes - Size in bytes
@@ -20,18 +16,7 @@ function formatFileSize(bytes) {
 }
 
 /**
- * Get actual disk size for a path (total size in bytes).
- * @param {string} basePath - Path to check (e.g. UPLOAD_DIR)
- * @returns {Promise<number>} Total disk size in bytes
- */
-async function getActualDiskSize(basePath) {
-  const { size } = await checkDiskSpace(basePath);
-  return size;
-}
-
-/**
- * Check if file size would exceed storage limit (DB-based usage; works for both local and S3).
- * Does not use UPLOAD_DIR or disk paths — safe to call when STORAGE_DRIVER=s3.
+ * Check if file size would exceed storage limit (DB-based usage).
  * @param {Object} params - Parameters
  * @param {number} fileSize - File size in bytes
  * @param {number} used - Currently used storage (e.g. from getUserStorageUsage)
@@ -58,4 +43,4 @@ async function checkStorageLimitExceeded({ fileSize, used, userStorageLimit }) {
   return { exceeded: false };
 }
 
-export { formatFileSize, getActualDiskSize, checkStorageLimitExceeded };
+export { formatFileSize, checkStorageLimitExceeded };

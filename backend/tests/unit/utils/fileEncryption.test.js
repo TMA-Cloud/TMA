@@ -1,3 +1,4 @@
+import { copyEncryptedFile, createDecryptStream, decryptFile, encryptFile } from '../../helpers/encryptionFiles.js';
 import crypto from 'crypto';
 import fs from 'fs/promises';
 import { createWriteStream } from 'fs';
@@ -9,16 +10,12 @@ import { pipeline } from 'stream/promises';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import {
-  copyEncryptedFile,
   copyEncryptedFileStreams,
   createByteCountStream,
-  createDecryptStream,
   createDecryptStreamFromStream,
   createEncryptStream,
   createRangeDecryptStream,
   ciphertextSizeToPlaintextSize,
-  decryptFile,
-  encryptFile,
   getEncryptionKey,
   HEADER_LENGTH,
   TAG_LENGTH,

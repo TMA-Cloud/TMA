@@ -10,11 +10,9 @@ import '../config/env.js';
 
 import { PutPublicAccessBlockCommand } from '@aws-sdk/client-s3';
 
-import { createS3Client, requireS3Config, s3Config } from './s3Utils.js';
+import { createS3Client, s3Config } from './s3Utils.js';
 
 async function blockPublicAccess() {
-  requireS3Config();
-
   const client = createS3Client();
 
   try {

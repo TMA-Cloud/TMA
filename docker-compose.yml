@@ -5,16 +5,6 @@
 # ----------------------------------------------------------------------------------------
 
 services:
-  # INIT SERVICE: Prepares filesystem permissions
-  # Runs once, fixes ownership of ./uploads, and exits.
-  init-permissions:
-    image: busybox:latest
-    container_name: tma-cloud-init
-    # Create directory if missing -> change ownership to 1001:1001
-    command: sh -c "mkdir -p /uploads && chown -R 1001:1001 /uploads"
-    volumes:
-      - ./uploads:/uploads
-
   # TMA Cloud App
   app:
     image: ghcr.io/tma-cloud/tma:latest
@@ -26,8 +16,6 @@ services:
       - .env
     environment:
       - LOG_FORMAT=json
-    volumes:
-      - ./uploads:/app/uploads
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:${BPORT:-3000}/health || exit 1"]
       interval: 30s
@@ -39,8 +27,6 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      init-permissions:
-        condition: service_completed_successfully
     networks:
       - tma-cloud-network
 
@@ -103,8 +89,6 @@ services:
       - .env
     environment:
       - LOG_FORMAT=json
-    volumes:
-      - ./uploads:/app/uploads
     command: node backend/audit-worker.js
     depends_on:
       app:
@@ -113,8 +97,6 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      init-permissions:
-        condition: service_completed_successfully
     networks:
       - tma-cloud-network
 

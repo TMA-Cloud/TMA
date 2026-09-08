@@ -1,5 +1,5 @@
 /**
- * Stream upload middleware for S3 (STORAGE_DRIVER=s3 only): parses multipart and
+ * Stream upload middleware for S3: parses multipart and
  * pipes each file through encryption to S3 with no temp dir and minimal RAM. The
  * stored MIME type is sniffed from the content, not the client header; this never
  * blocks. Since the rest of validation runs in the controller after the stream

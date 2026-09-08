@@ -15,12 +15,11 @@ import { Upload } from '@aws-sdk/lib-storage';
 import fs from 'fs';
 
 import { logger } from '../config/logger.js';
-import { s3 as s3Config, useS3 } from '../config/storage.js';
+import { s3 as s3Config } from '../config/storage.js';
 
 let s3Client = null;
 
 function getClient() {
-  if (!useS3) return null;
   if (s3Client) return s3Client;
   s3Client = new S3Client({
     endpoint: s3Config.endpoint,
@@ -42,7 +41,6 @@ function getClient() {
  */
 async function exists(key) {
   const client = getClient();
-  if (!client) return false;
   try {
     await client.send(
       new HeadObjectCommand({
@@ -68,7 +66,6 @@ async function exists(key) {
  */
 async function getReadStream(key, range) {
   const client = getClient();
-  if (!client) throw new Error('S3 client not configured');
   const params = {
     Bucket: s3Config.bucket,
     Key: key,
@@ -88,7 +85,6 @@ async function getReadStream(key, range) {
  */
 async function putFromPath(key, localPath) {
   const client = getClient();
-  if (!client) throw new Error('S3 client not configured');
   const body = fs.createReadStream(localPath);
   await client.send(
     new PutObjectCommand({
@@ -107,7 +103,6 @@ async function putFromPath(key, localPath) {
  */
 async function putBuffer(key, buffer) {
   const client = getClient();
-  if (!client) throw new Error('S3 client not configured');
   await client.send(
     new PutObjectCommand({
       Bucket: s3Config.bucket,
@@ -126,7 +121,6 @@ async function putBuffer(key, buffer) {
  */
 async function putStream(key, stream, contentLength) {
   const client = getClient();
-  if (!client) throw new Error('S3 client not configured');
 
   if (contentLength != null && contentLength >= 0) {
     await client.send(
@@ -161,7 +155,6 @@ async function putStream(key, stream, contentLength) {
  */
 async function deleteObject(key) {
   const client = getClient();
-  if (!client) throw new Error('S3 client not configured');
   await client.send(
     new DeleteObjectCommand({
       Bucket: s3Config.bucket,
@@ -178,7 +171,6 @@ async function deleteObject(key) {
  */
 async function copyObject(sourceKey, destKey) {
   const client = getClient();
-  if (!client) throw new Error('S3 client not configured');
   await client.send(
     new CopyObjectCommand({
       Bucket: s3Config.bucket,
@@ -195,7 +187,6 @@ async function copyObject(sourceKey, destKey) {
  */
 async function listKeys() {
   const client = getClient();
-  if (!client) return [];
   const keys = [];
   let continuationToken;
   do {
@@ -221,7 +212,6 @@ async function listKeys() {
  */
 async function* listKeysPaginated(pageSize = 1000) {
   const client = getClient();
-  if (!client) return;
   let continuationToken;
   do {
     const response = await client.send(
@@ -246,7 +236,6 @@ async function* listKeysPaginated(pageSize = 1000) {
  */
 async function* listObjectsPaginated(pageSize = 1000) {
   const client = getClient();
-  if (!client) return;
   let continuationToken;
   do {
     const response = await client.send(
@@ -275,7 +264,6 @@ async function* listObjectsPaginated(pageSize = 1000) {
  */
 async function statObject(key) {
   const client = getClient();
-  if (!client) return null;
   try {
     const response = await client.send(
       new HeadObjectCommand({
@@ -294,10 +282,6 @@ async function statObject(key) {
   }
 }
 
-function isEnabled() {
-  return useS3;
-}
-
 export {
   exists,
   getReadStream,
@@ -310,5 +294,4 @@ export {
   listKeysPaginated,
   listObjectsPaginated,
   statObject,
-  isEnabled,
 };

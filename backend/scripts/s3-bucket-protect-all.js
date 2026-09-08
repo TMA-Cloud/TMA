@@ -22,18 +22,9 @@ import {
   PutPublicAccessBlockCommand,
 } from '@aws-sdk/client-s3';
 
-import {
-  createS3Client,
-  requireS3Config,
-  s3Config,
-  buildLifecycleRules,
-  DAYS_AFTER_INITIATION,
-  NONCURRENT_DAYS,
-} from './s3Utils.js';
+import { createS3Client, s3Config, buildLifecycleRules, DAYS_AFTER_INITIATION, NONCURRENT_DAYS } from './s3Utils.js';
 
 async function runAll() {
-  requireS3Config();
-
   const bucket = s3Config.bucket;
   const client = createS3Client();
   let failed = false;

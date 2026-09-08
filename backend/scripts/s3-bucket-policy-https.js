@@ -13,7 +13,7 @@ import '../config/env.js';
 
 import { PutBucketPolicyCommand } from '@aws-sdk/client-s3';
 
-import { createS3Client, requireS3Config, s3Config } from './s3Utils.js';
+import { createS3Client, s3Config } from './s3Utils.js';
 
 function getHttpsOnlyPolicy(bucketName) {
   return JSON.stringify({
@@ -36,8 +36,6 @@ function getHttpsOnlyPolicy(bucketName) {
 }
 
 async function applyHttpsPolicy() {
-  requireS3Config();
-
   const client = createS3Client();
 
   const policy = getHttpsOnlyPolicy(s3Config.bucket);

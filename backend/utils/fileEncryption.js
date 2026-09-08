@@ -7,17 +7,16 @@
  * scripts, tests) do not move:
  * - fileEncryption/format.js  - wire-format primitives, key derivation, layout math
  * - fileEncryption/streams.js - encrypt/decrypt Transform + Range-aware factories
- * - fileEncryption/fileOps.js - whole-file encrypt/decrypt/copy helpers
+ * - fileEncryption/fileOps.js - encrypted stream copy helper
  */
 
 export {
   createEncryptStream,
   createByteCountStream,
-  createDecryptStream,
   createDecryptStreamFromStream,
   createRangeDecryptStream,
 } from './fileEncryption/streams.js';
-export { encryptFile, decryptFile, copyEncryptedFile, copyEncryptedFileStreams } from './fileEncryption/fileOps.js';
+export { copyEncryptedFileStreams } from './fileEncryption/fileOps.js';
 export {
   // Envelope encryption: per-file wrapped data keys + versioned KEK rotation
   DEK_LENGTH,

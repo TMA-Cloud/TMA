@@ -26,7 +26,7 @@
 import '../config/env.js';
 
 import readline from 'readline';
-import { createReadStream, createWriteStream } from 'fs';
+
 import fsPromises from 'fs/promises';
 import path from 'path';
 import { PassThrough } from 'stream';
@@ -34,8 +34,6 @@ import { pipeline } from 'stream/promises';
 
 import pool from '../config/db.js';
 import { logger } from '../config/logger.js';
-import { UPLOAD_DIR } from '../config/paths.js';
-import { resolveFilePath } from '../utils/filePath.js';
 import { generateId } from '../utils/id.js';
 import storage from '../utils/storageDriver.js';
 import {
@@ -111,29 +109,17 @@ async function rewriteS3(oldKey, newKey, masterKey, dek) {
   }
 }
 
-/** Re-encrypt one local file under `dek` into a new file; returns nothing. */
-async function rewriteLocal(oldPath, newKey, masterKey, dek) {
-  const absOld = resolveFilePath(oldPath);
-  const absNew = path.join(UPLOAD_DIR, newKey);
-  const { stream: decryptStream } = await createDecryptStreamFromStream(createReadStream(absOld), masterKey);
-  await pipeline(decryptStream, createEncryptStream(dek), createWriteStream(absNew));
-}
-
 /**
  * Convert one file to envelope form: re-encrypt to a NEW key, flip the row, then
  * delete the old object. The UPDATE is guarded on dek_wrapped IS NULL so a
  * resumed run cannot double-apply.
  */
-async function backfillOne(row, usingS3, masterKey) {
+async function backfillOne(row, masterKey) {
   const oldKey = row.path;
   const newKey = generateId(16) + path.extname(oldKey);
   const { dek, dekWrapped, kekVersion } = newWrappedDek();
 
-  if (usingS3) {
-    await rewriteS3(oldKey, newKey, masterKey, dek);
-  } else {
-    await rewriteLocal(oldKey, newKey, masterKey, dek);
-  }
+  await rewriteS3(oldKey, newKey, masterKey, dek);
 
   const res = await pool.query(
     'UPDATE files SET path = $1, dek_wrapped = $2, dek_kek_version = $3 WHERE id = $4 AND dek_wrapped IS NULL',
@@ -145,13 +131,10 @@ async function backfillOne(row, usingS3, masterKey) {
   // we just wrote is the orphan instead.
   const swapped = res.rowCount === 1;
   const orphan = swapped ? oldKey : newKey;
-  if (usingS3) {
-    await storage
-      .deleteObject(orphan)
-      .catch(err => logger.warn({ err, orphan }, '[EnvelopeBackfill] Orphan cleanup failed'));
-  } else {
-    await fsPromises.unlink(swapped ? resolveFilePath(oldKey) : path.join(UPLOAD_DIR, newKey)).catch(() => {});
-  }
+
+  await storage
+    .deleteObject(orphan)
+    .catch(err => logger.warn({ err, orphan }, '[EnvelopeBackfill] Orphan cleanup failed'));
 }
 
 async function main() {
@@ -169,8 +152,7 @@ async function main() {
     process.exit(1);
   }
 
-  const usingS3 = storage.useS3();
-  console.log(`Storage driver: ${usingS3 ? 's3' : 'local'}`);
+  console.log(`Storage driver: s3`);
   console.log('Connecting to database and counting files to convert...');
   const total = await countNeedingBackfill();
   if (!total) {
@@ -181,7 +163,7 @@ async function main() {
   console.log(`Found ${total} pre-envelope file(s) to convert.`);
 
   const confirm = await askQuestion(
-    `This re-encrypts ${total} ${usingS3 ? 'S3 object(s)' : 'file(s)'} under fresh per-file keys, in place of the master key.\n` +
+    `This re-encrypts ${total} S3 object(s) under fresh per-file keys, in place of the master key.\n` +
       'Each is rewritten to a new storage key and the old object deleted; safe to interrupt and re-run.\n' +
       'Make sure you have a backup and the app is stopped. Type YES (in all caps) to continue:'
   );
@@ -213,7 +195,7 @@ async function main() {
         const row = rows[index++];
         if (!row) break;
         try {
-          await withRetries(() => backfillOne(row, usingS3, masterKey), {
+          await withRetries(() => backfillOne(row, masterKey), {
             isTransient: isTransientError,
             onRetry: onRetry(`id=${row.id}`),
           });

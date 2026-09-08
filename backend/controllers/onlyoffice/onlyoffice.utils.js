@@ -3,7 +3,6 @@ import path from 'path';
 import jwt from 'jsonwebtoken';
 
 import { getOnlyOfficeSettings, getUserById } from '../../models/user.model.js';
-import storage from '../../utils/storageDriver.js';
 import { PERMISSIONS, hasPermission } from '../../utils/permissions.js';
 import { normalizeOnlyOfficeUrlSafe } from '../../utils/onlyofficeUrl.js';
 
@@ -251,7 +250,7 @@ async function validateFileForOnlyOffice(file, validateAndResolveFile, validateO
 
   // Stored files are always encrypted, so MIME validation uses the stored type
   // and never reads content from this key; the key is only a positional arg here.
-  const skipContentDetection = storage.useS3(); // S3 key is not a filesystem path
+  const skipContentDetection = true; // S3 key is not a filesystem path
   const mimeValidation = await validateOnlyOfficeMimeType(
     storageKey,
     file.name,

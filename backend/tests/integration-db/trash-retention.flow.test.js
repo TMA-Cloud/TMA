@@ -7,17 +7,13 @@
  * clears items after 15 days.
  */
 
-import fs from 'fs';
-import path from 'path';
-
+import { exists } from '../mocks/storage.mock.js';
 import { describe, expect, it } from 'vitest';
 
 import pool from '../../config/db.js';
 import { cleanupExpiredTrash } from '../../models/file/file.cleanup.model.js';
 import { ensureOwner } from './helpers/app.js';
 import { countRows, readFileRow } from './helpers/factories.js';
-
-const UPLOAD_DIR = process.env.UPLOAD_DIR;
 
 function upload(c, { name = 'notes.txt', bytes = 1000, parentId } = {}) {
   const req = c
@@ -158,7 +154,7 @@ describe('15-day retention job', () => {
 
     await cleanupExpiredTrash();
 
-    expect(fs.existsSync(path.join(UPLOAD_DIR, storageKey))).toBe(false);
+    expect(await exists(storageKey)).toBe(false);
   });
 
   it('leaves an item that is still inside the window', async () => {

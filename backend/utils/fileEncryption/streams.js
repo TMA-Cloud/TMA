@@ -5,7 +5,6 @@
  */
 
 import crypto from 'crypto';
-import { createReadStream } from 'fs';
 import { Transform, Readable } from 'stream';
 
 import {
@@ -161,30 +160,6 @@ function createByteCountStream() {
 }
 
 /**
- * Full-file decrypt stream from a local encrypted file.
- * @param {string} encryptedPath
- * @param {Buffer} [ikm]
- * @returns {Promise<{ stream: Transform, cleanup: Function }>}
- */
-async function createDecryptStream(encryptedPath, ikm = getEncryptionKey()) {
-  const fileStream = createReadStream(encryptedPath);
-  const decrypt = createSequentialDecryptTransform(ikm);
-  fileStream.on('error', err => decrypt.destroy(err));
-  fileStream.pipe(decrypt);
-  return {
-    stream: decrypt,
-    cleanup: () => {
-      try {
-        fileStream.destroy();
-        decrypt.destroy();
-      } catch {
-        // ignore
-      }
-    },
-  };
-}
-
-/**
  * Full-file decrypt stream from an already-open encrypted readable stream (S3).
  * @param {import('stream').Readable} encryptedStream
  * @param {Buffer} [ikm]
@@ -279,7 +254,6 @@ export {
   createEncryptStream,
   createSequentialDecryptTransform,
   createByteCountStream,
-  createDecryptStream,
   createDecryptStreamFromStream,
   createRangeDecryptStream,
 };

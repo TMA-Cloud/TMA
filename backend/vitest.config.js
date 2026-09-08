@@ -38,7 +38,7 @@ export default defineConfig({
     clearMocks: true,
     // Env is applied before any module in the graph is evaluated, which matters
     // because several modules read process.env at import time (JWT_SECRET,
-    // UPLOAD_DIR, SESSION_IDLE_DAYS).
+    // storage configuration, SESSION_IDLE_DAYS).
     env: {
       NODE_ENV: 'test',
       LOG_LEVEL: 'silent',
@@ -47,8 +47,10 @@ export default defineConfig({
       // 64 hex chars = a 32-byte key, taking the hex branch of getEncryptionKey().
       FILE_ENCRYPTION_KEY: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
       SESSION_IDLE_DAYS: '30',
-      STORAGE_DRIVER: 'local',
-      UPLOAD_DIR: abs('tests/.tmp/uploads'),
+      RUSTFS_ENDPOINT: 'http://127.0.0.1:9000',
+      RUSTFS_BUCKET: 'tma-test',
+      RUSTFS_ACCESS_KEY: 'test-key',
+      RUSTFS_SECRET_KEY: 'test-secret',
       BACKEND_URL: 'https://cloud.example.com',
     },
     coverage: {

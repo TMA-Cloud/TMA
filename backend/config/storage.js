@@ -1,10 +1,8 @@
 /**
- * Storage configuration for local disk or S3-compatible object storage.
+ * Storage configuration for S3-compatible object storage.
  * Supports: Cloudflare R2 (R2_*), RustFS/other S3 (RUSTFS_*), AWS S3 (AWS_*).
- * Set STORAGE_DRIVER=s3 and the appropriate env vars for your provider.
+ * Configure the environment variables for your bucket provider.
  */
-
-const STORAGE_DRIVER = process.env.STORAGE_DRIVER || 'local';
 
 // Cloudflare R2: R2_ACCOUNT_ID + R2_BUCKET + R2_ACCESS_KEY_ID + R2_SECRET_ACCESS_KEY
 // Or set R2_ENDPOINT to override the default https://<ACCOUNT_ID>.r2.cloudflarestorage.com
@@ -24,7 +22,11 @@ const S3_SECRET_KEY = R2_SECRET_KEY || process.env.RUSTFS_SECRET_KEY || process.
 const S3_REGION = isR2 ? 'auto' : process.env.RUSTFS_REGION || process.env.AWS_REGION || 'us-east-1';
 const S3_FORCE_PATH_STYLE = isR2 ? false : process.env.RUSTFS_FORCE_PATH_STYLE !== 'false';
 
-const useS3 = STORAGE_DRIVER === 's3' && S3_ENDPOINT && S3_BUCKET && S3_ACCESS_KEY && S3_SECRET_KEY;
+if (!S3_ENDPOINT || !S3_BUCKET || !S3_ACCESS_KEY || !S3_SECRET_KEY) {
+  throw new Error(
+    'S3 bucket configuration is required: set endpoint, bucket, access key and secret key using R2_*, RUSTFS_* or AWS_* variables.'
+  );
+}
 
 const s3 = {
   endpoint: S3_ENDPOINT,
@@ -37,11 +39,9 @@ const s3 = {
 
 const r2PublicUrl = R2_PUBLIC_URL;
 
-export { STORAGE_DRIVER, useS3, s3, r2PublicUrl };
+export { s3, r2PublicUrl };
 
 export default {
-  STORAGE_DRIVER,
-  useS3,
   s3,
   r2PublicUrl,
 };

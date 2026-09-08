@@ -11,11 +11,9 @@ import '../config/env.js';
 
 import { PutBucketEncryptionCommand } from '@aws-sdk/client-s3';
 
-import { createS3Client, requireS3Config, s3Config } from './s3Utils.js';
+import { createS3Client, s3Config } from './s3Utils.js';
 
 async function enableEncryption() {
-  requireS3Config();
-
   const client = createS3Client();
 
   try {

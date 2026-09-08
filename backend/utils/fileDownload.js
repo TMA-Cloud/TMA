@@ -67,7 +67,7 @@ function parseRange(rangeHeader, size) {
 
 /**
  * Validates and resolves a file for download. Returns the storage key (which is
- * the DB path for both local and S3) and the encrypted object's size.
+ * the object key stored in the database) and the encrypted object's size.
  * @param {Object} file - File object from database
  * @returns {Promise<{ success: boolean, storageKey?: string, ciphertextSize?: number, isEncrypted?: boolean, error?: string }>}
  */

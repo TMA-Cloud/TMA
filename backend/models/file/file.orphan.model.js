@@ -167,7 +167,7 @@ async function scanOrphans({ graceMinutes } = {}) {
   return {
     scannedAt: new Date().toISOString(),
     graceMinutes: grace,
-    driver: storage.useS3() ? 's3' : 'local',
+    driver: 's3',
     totals: {
       storedObjects: totalObjects,
       databaseRows: rows.length,

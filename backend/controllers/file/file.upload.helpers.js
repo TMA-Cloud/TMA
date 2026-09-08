@@ -7,11 +7,9 @@ import { logger } from '../../config/logger.js';
 import { EventTypes, publishFileEvent } from '../../services/fileEvents.js';
 import { createFolder, findFolderIdByName } from '../../models/file.model.js';
 import { getUserStorageLimit, getUserStorageUsage } from '../../models/user.model.js';
-import { safeUnlink } from '../../utils/fileCleanup.js';
-import { validateMimeType } from '../../utils/mimeTypeDetection.js';
 import { sendError } from '../../utils/response.js';
 import { checkStorageLimitExceeded } from '../../utils/storageUtils.js';
-import { validateFileName, validateFileUpload } from '../../utils/validation.js';
+import { validateFileName } from '../../utils/validation.js';
 
 async function ensureFolderPath({ userId, baseParentId, folderSegments, folderIdCache }) {
   let parentId = baseParentId || null;
@@ -74,29 +72,4 @@ async function enforceStorageLimitForUpload({ res, userId, fileSize, cleanup, lo
   }
 }
 
-async function validateDiskUploadOrRespond({ res, file }) {
-  if (!file) {
-    sendError(res, 400, 'No file uploaded');
-    return null;
-  }
-
-  if (!validateFileName(file.originalname)) {
-    await safeUnlink(file.path);
-    sendError(res, 400, 'Invalid file name');
-    return null;
-  }
-
-  const fallbackMimeType = file.mimetype || 'application/octet-stream';
-  const mimeValidation = await validateMimeType(file.path, file.mimetype, file.originalname);
-  if (!mimeValidation.valid) {
-    await safeUnlink(file.path);
-    sendError(res, 400, mimeValidation.error || 'Invalid file type');
-    return null;
-  }
-  const actualMimeType = mimeValidation.actualMimeType || fallbackMimeType;
-
-  validateFileUpload(actualMimeType, file.originalname);
-  return actualMimeType;
-}
-
-export { ensureFolderPath, enforceStorageLimitForUpload, validateDiskUploadOrRespond };
+export { ensureFolderPath, enforceStorageLimitForUpload };

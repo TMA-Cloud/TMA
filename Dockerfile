@@ -85,9 +85,6 @@ COPY --from=frontend-builder --chown=nodejs:nodejs /app/frontend/dist ./frontend
 # Copy database migrations
 COPY --chown=nodejs:nodejs backend/migrations ./backend/migrations
 
-# Create uploads directory with proper permissions
-RUN mkdir -p /app/uploads && \
-    chown -R nodejs:nodejs /app/uploads
 
 # Set production environment
 ENV NODE_ENV=production

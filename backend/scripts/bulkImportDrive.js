@@ -1,14 +1,11 @@
 /**
- * Shared driver for the bulk drive-import scripts.
+ * Bulk drive-import orchestration.
  *
- * Importing a folder tree is the same job for either storage backend: scan the
+ * Import a folder tree into bucket storage: scan the
  * tree, preflight it against the per-file and per-user limits, recreate the
  * folder hierarchy, then stream every file through encryption into storage and
- * insert the matching DB row. Only the write itself differs between local disk
- * and S3.
+ * insert the matching DB row for each encrypted bucket object.
  *
- * Keeping the orchestration here means a fix to the preflight, the concurrency
- * pool, or the rollback path applies to both entry points at once.
  */
 
 import path from 'path';
@@ -115,7 +112,7 @@ async function resolveUserId(userId, userEmail) {
 }
 
 function sanitizeFileName(name) {
-  let sanitized = name.replace(/\.{2,}/g, '.');
+  let sanitized = name.replace(/\.{2}/g, '.');
   sanitized = sanitized.replace(/[<>:"\\/|?*]/g, '_');
   sanitized = sanitized.replace(/^\.+/, '').replace(/\.+$/, '');
   if (!sanitized || sanitized === '') sanitized = 'file_' + Date.now();
@@ -125,14 +122,12 @@ function sanitizeFileName(name) {
 /**
  * @param {object} options
  * @param {string} options.scriptName   Script path shown in the usage hint (e.g. 'scripts/bulk-import-drive-to-s3.js').
- * @param {() => string | null} options.checkStorageDriver  Returns an error message when STORAGE_DRIVER does
- *   not match this entry point, or null when it is safe to run.
  * @param {string} options.writeVerb    Lowercase verb for messages ('upload', 'copy').
  * @param {string} options.writeVerbIng Progress-line verb ('Uploading', 'Copying').
  * @param {(filePath: string, name: string, dryRun: boolean, modified: Date | null) => Promise<object>}
  *   options.storeOneFile  Encrypts and writes a single file, resolving with its DB metadata.
  */
-async function runBulkImport({ scriptName, checkStorageDriver, writeVerb, writeVerbIng, storeOneFile }) {
+async function runBulkImport({ scriptName, writeVerb, writeVerbIng, storeOneFile }) {
   const args = parseArgs();
   if (!args.sourceDir) {
     console.error(`Missing --source-dir. Usage: node ${scriptName} --source-dir "D:\\MyDrive" --user-id YOUR_USER_ID`);
@@ -142,12 +137,6 @@ async function runBulkImport({ scriptName, checkStorageDriver, writeVerb, writeV
   const stat = await fs.stat(args.sourceDir).catch(() => null);
   if (!stat || !stat.isDirectory()) {
     console.error('Source path is not a directory:', args.sourceDir);
-    process.exit(1);
-  }
-
-  const driverError = checkStorageDriver();
-  if (driverError) {
-    console.error(driverError);
     process.exit(1);
   }
 

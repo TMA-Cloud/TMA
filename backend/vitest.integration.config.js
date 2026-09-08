@@ -13,6 +13,14 @@ const abs = rel => path.resolve(__dirname, rel).replace(/\\/g, '/');
 const { parsed = {} } = dotenv.config({ path: path.join(__dirname, '..', '.env'), processEnv: {} });
 
 export default defineConfig({
+  resolve: {
+    alias: [
+      {
+        find: /^(?:\.\.\/)+utils\/s3Storage\.js$|^\.\/s3Storage\.js$/,
+        replacement: abs('tests/mocks/storage.mock.js'),
+      },
+    ],
+  },
   test: {
     environment: 'node',
     globals: false,
@@ -39,9 +47,11 @@ export default defineConfig({
       // A Redis database of its own, so flushing cannot clear dev sessions.
       REDIS_DB: '15',
 
-      // Local disk under tests/, so nothing is written to the shared bucket.
-      STORAGE_DRIVER: 'local',
-      UPLOAD_DIR: abs('tests/.tmp/integration-uploads'),
+      // Isolated bucket double; nothing is written to a real bucket.
+      RUSTFS_ENDPOINT: 'http://127.0.0.1:9000',
+      RUSTFS_BUCKET: 'tma-test',
+      RUSTFS_ACCESS_KEY: 'test-key',
+      RUSTFS_SECRET_KEY: 'test-secret',
 
       // Deterministic, and unrelated to the key protecting real dev files.
       FILE_ENCRYPTION_KEY: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',

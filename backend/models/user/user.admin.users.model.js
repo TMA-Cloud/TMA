@@ -1,16 +1,9 @@
-import path from 'path';
-import { fileURLToPath } from 'url';
-
 import pool from '../../config/db.js';
 import { logger } from '../../config/logger.js';
-import { useS3 } from '../../config/storage.js';
 import { getCache, setCache, deleteCache, cacheKeys, DEFAULT_TTL } from '../../utils/cache.js';
-import { getActualDiskSize, formatFileSize } from '../../utils/storageUtils.js';
+import { formatFileSize } from '../../utils/storageUtils.js';
 import { verifyFirstUser } from './user.admin.helpers.model.js';
 import { setSignupEnabled } from './user.admin.settings.model.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 async function getTotalUserCount() {
   const cacheKey = cacheKeys.userCount();
@@ -45,17 +38,6 @@ async function getAllUsersBasic() {
       ORDER BY COALESCE(u.parent_user_id, u.id), u.parent_user_id NULLS FIRST, u.created_at ASC`
   );
 
-  // Disk capacity is measured once (same for every account). On S3 there is no
-  // disk cap — only an explicit limit applies, and its absence means unlimited.
-  let diskSize = null;
-  if (!useS3) {
-    try {
-      diskSize = await getActualDiskSize(process.env.UPLOAD_DIR || __dirname);
-    } catch (err) {
-      logger.warn({ err }, 'Could not determine disk size for user list');
-    }
-  }
-
   // A sub-user row reports its owner's capacity (the pool it draws from).
   const limitByAccount = new Map(
     result.rows
@@ -71,17 +53,10 @@ async function getAllUsersBasic() {
         ? Number(row.storage_limit)
         : null;
 
-    let storageTotal;
-    if (diskSize != null) {
-      storageTotal = Math.min(diskSize, limit ?? diskSize);
-    } else {
-      storageTotal = limit;
-    }
-
     return {
       ...row,
       storage_used: Number(row.storage_used) || 0,
-      storage_total: storageTotal,
+      storage_total: limit,
     };
   });
 }
@@ -162,18 +137,6 @@ async function setUserStorageLimit(userId, targetUserId, storageLimit) {
       if (limit > Number.MAX_SAFE_INTEGER) {
         await client.query('ROLLBACK');
         throw new Error('Storage limit exceeds maximum safe value');
-      }
-
-      // On local disk, cap by actual VM disk space; S3 capacity is independent.
-      if (!useS3) {
-        const basePath = process.env.UPLOAD_DIR || __dirname;
-        const actualDiskSize = await getActualDiskSize(basePath);
-        if (limit > actualDiskSize) {
-          const limitFormatted = formatFileSize(limit);
-          const actualFormatted = formatFileSize(actualDiskSize);
-          await client.query('ROLLBACK');
-          throw new Error(`Storage limit (${limitFormatted}) cannot exceed actual disk space (${actualFormatted})`);
-        }
       }
     }
 

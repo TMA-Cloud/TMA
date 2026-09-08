@@ -1,13 +1,7 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import errorHandler from '../../../middleware/error.middleware.js';
 import { mockNext, mockReq, mockRes } from '../../helpers/http.js';
-
-vi.mock('../../../utils/fileCleanup.js', () => ({
-  safeUnlink: vi.fn(async () => {}),
-}));
-
-const { safeUnlink } = await import('../../../utils/fileCleanup.js');
 
 function handle(err, reqOverrides = {}) {
   const req = mockReq({ method: 'POST', path: '/api/files/upload', ...reqOverrides });
@@ -18,46 +12,11 @@ function handle(err, reqOverrides = {}) {
 
 const withCode = (code, message = 'boom') => Object.assign(new Error(message), { code });
 
-describe('multer errors', () => {
-  it('maps LIMIT_FILE_SIZE to 400 FILE_TOO_LARGE', () => {
-    const res = handle(withCode('LIMIT_FILE_SIZE'));
-    expect(res.status).toHaveBeenCalledWith(400);
-    expect(res.body).toEqual({ message: 'File too large', error: 'FILE_TOO_LARGE' });
-  });
-
-  it('maps LIMIT_UNEXPECTED_FILE to 400 UNEXPECTED_FILE', () => {
-    const res = handle(withCode('LIMIT_UNEXPECTED_FILE'));
-    expect(res.status).toHaveBeenCalledWith(400);
-    expect(res.body.error).toBe('UNEXPECTED_FILE');
-  });
-});
-
 describe('client-aborted uploads', () => {
   it('answers 499 rather than treating a cancellation as a server error', () => {
     const res = handle(new Error('Request aborted'));
     expect(res.status).toHaveBeenCalledWith(499);
     expect(res.body).toEqual({ message: 'Upload cancelled by client', error: 'REQUEST_ABORTED' });
-  });
-
-  it('cleans up the temp file from a single-file upload', async () => {
-    safeUnlink.mockClear();
-    handle(new Error('Request aborted'), { file: { path: '/tmp/upload-1' } });
-    await vi.waitFor(() => expect(safeUnlink).toHaveBeenCalledWith('/tmp/upload-1'));
-  });
-
-  it('cleans up every temp file from an array upload', async () => {
-    safeUnlink.mockClear();
-    handle(new Error('Request aborted'), { files: [{ path: '/tmp/a' }, { path: '/tmp/b' }] });
-    await vi.waitFor(() => {
-      expect(safeUnlink).toHaveBeenCalledWith('/tmp/a');
-      expect(safeUnlink).toHaveBeenCalledWith('/tmp/b');
-    });
-  });
-
-  it('cleans up temp files when multer exposes them keyed by field name', async () => {
-    safeUnlink.mockClear();
-    handle(new Error('Request aborted'), { files: { avatar: [{ path: '/tmp/avatar' }] } });
-    await vi.waitFor(() => expect(safeUnlink).toHaveBeenCalledWith('/tmp/avatar'));
   });
 
   it('does not fail when there are no temp files to clean up', () => {

@@ -19,7 +19,6 @@ import {
   deleteObject,
   exists,
   getReadStream,
-  isEnabled,
   listObjectsPaginated,
   putBuffer,
   putFromPath,
@@ -59,22 +58,6 @@ afterAll(async () => {
 });
 
 describe('driver configuration', () => {
-  it('is enabled, so this suite is testing the real path', () => {
-    expect(isEnabled()).toBeTruthy();
-  });
-
-  it('returns the secret access key instead of a boolean from isEnabled()', () => {
-    // config/storage.js builds `useS3` as an && chain, which evaluates to the
-    // last truthy operand — S3_SECRET_KEY — rather than `true`. It works
-    // everywhere it is used in a boolean context, but a function named
-    // isEnabled() handing back a live credential is one console.log away from
-    // leaking it. Pinned so the fix (wrapping the chain in Boolean()) is
-    // visible as an intentional change.
-    const value = isEnabled();
-    expect(typeof value).toBe('string');
-    expect(value).toBe(process.env.RUSTFS_SECRET_KEY);
-  });
-
   it('is pointed at the configured bucket', () => {
     expect(s3.bucket).toBeTruthy();
     expect(s3.endpoint).toMatch(/^https?:\/\//);

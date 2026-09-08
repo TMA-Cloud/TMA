@@ -12,7 +12,7 @@
  * bulkImportDrive.js; this file only supplies the S3 write.
  *
  * Prerequisites:
- * - STORAGE_DRIVER=s3 and S3 env vars (RUSTFS_* or AWS_*) set in .env
+ * - S3 env vars (RUSTFS_* or AWS_*) set in .env
  * - FILE_ENCRYPTION_KEY set in .env (same key the app uses for decrypt)
  * - Database and (optionally) Redis running
  *
@@ -92,8 +92,6 @@ async function uploadOneFile(filePath, name, dryRun, modified = null) {
 
 runBulkImport({
   scriptName: 'scripts/bulk-import-drive-to-s3.js',
-  checkStorageDriver: () =>
-    storage.useS3() ? null : 'STORAGE_DRIVER must be s3. Set STORAGE_DRIVER=s3 and RUSTFS_* (or AWS_*) in .env.',
   writeVerb: 'upload',
   writeVerbIng: 'Uploading',
   storeOneFile: uploadOneFile,

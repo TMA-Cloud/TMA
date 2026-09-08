@@ -51,7 +51,7 @@ async function downloadFile(req, res) {
     }
   }
 
-  // storageKey is the DB path for both local and S3.
+  // storageKey is the object key stored in the database.
   const { success, storageKey, ciphertextSize, isEncrypted, error: fileError } = await validateAndResolveFile(file);
   if (!success) {
     return sendError(res, fileError?.startsWith('Invalid') ? 400 : 404, fileError);

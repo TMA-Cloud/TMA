@@ -1,20 +1,11 @@
-import fs from 'fs';
 import path from 'path';
 import { PassThrough } from 'stream';
 
 import pool from '../../config/db.js';
 import { logger } from '../../config/logger.js';
-import { UPLOAD_DIR } from '../../config/paths.js';
 import { invalidateAllFileCaches } from '../../utils/cache.js';
-import { safeUnlink } from '../../utils/fileCleanup.js';
-import {
-  copyEncryptedFile,
-  copyEncryptedFileStreams,
-  getEncryptionKey,
-  newWrappedDek,
-  resolveIkm,
-} from '../../utils/fileEncryption.js';
-import { isFilePathEncrypted, resolveFilePath } from '../../utils/filePath.js';
+import { copyEncryptedFileStreams, getEncryptionKey, newWrappedDek, resolveIkm } from '../../utils/fileEncryption.js';
+import { isFilePathEncrypted } from '../../utils/filePath.js';
 import { generateId } from '../../utils/id.js';
 import storage from '../../utils/storageDriver.js';
 
@@ -36,7 +27,7 @@ async function moveFiles(ids, parentId = null, userId) {
     const filesToMove = filesResult.rows;
     const oldParentIds = [...new Set(filesToMove.map(r => r.parent_id))];
 
-    // Bulk update all files (DB-only move; all paths are relative to UPLOAD_DIR)
+    // Bulk update all files (DB-only move; object keys stay unchanged)
     const allIds = ids;
     const allNewPaths = allIds.map(() => null);
 
@@ -150,37 +141,19 @@ async function copyEntryWithFile(file, parentId, userId, client) {
     const destIkm = destDek ? destDek.dek : getEncryptionKey();
 
     try {
-      if (storage.useS3()) {
-        const destKey = storageName;
-        if (isSourceEncrypted) {
-          const passThrough = new PassThrough();
-          const uploadPromise = storage.putStream(destKey, passThrough);
-          await copyEncryptedFileStreams(await storage.getReadStream(file.path), passThrough, sourceIkm, destIkm);
-          await uploadPromise;
-        } else {
-          const stream = await storage.getReadStream(file.path);
-          await storage.putStream(destKey, stream);
-        }
+      const destKey = storageName;
+      if (isSourceEncrypted) {
+        const passThrough = new PassThrough();
+        const uploadPromise = storage.putStream(destKey, passThrough);
+        await copyEncryptedFileStreams(await storage.getReadStream(file.path), passThrough, sourceIkm, destIkm);
+        await uploadPromise;
       } else {
-        const sourcePath = resolveFilePath(file.path);
-        const destPath = path.join(UPLOAD_DIR, storageName);
-        if (isSourceEncrypted) {
-          await copyEncryptedFile(sourcePath, destPath, sourceIkm, destIkm);
-        } else {
-          await fs.promises.copyFile(sourcePath, destPath);
-        }
+        const stream = await storage.getReadStream(file.path);
+        await storage.putStream(destKey, stream);
       }
     } catch (error) {
       logger.error('Failed to copy file:', error);
-      if (!storage.useS3()) {
-        try {
-          const destPath = path.join(UPLOAD_DIR, storageName);
-          await safeUnlink(destPath);
-          await safeUnlink(destPath + '.tmp');
-        } catch (_cleanupError) {
-          // Ignore
-        }
-      }
+
       throw new Error('File copy operation failed', { cause: error });
     }
     newPath = storageName;

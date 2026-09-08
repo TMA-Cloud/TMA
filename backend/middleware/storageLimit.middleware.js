@@ -4,14 +4,14 @@ import { checkStorageLimitExceeded } from '../utils/storageUtils.js';
 
 /**
  * Middleware to check storage limits before file upload.
- * Runs BEFORE multer processes the file. Uses DB-based usage only (no UPLOAD_DIR) — safe for S3.
+ * Runs before the upload stream is processed. Uses DB-based usage.
  */
 async function checkStorageLimit(req, res, next) {
   try {
     // Get file size from Content-Length header
     const contentLength = parseInt(req.headers['content-length'], 10);
 
-    // If no content length, let multer handle it (will fail if needed)
+    // If no content length, let stream upload middleware handle it (will fail if needed)
     if (!contentLength || isNaN(contentLength)) {
       return next();
     }
@@ -34,7 +34,7 @@ async function checkStorageLimit(req, res, next) {
         message: checkResult.message,
         error: 'STORAGE_LIMIT_EXCEEDED',
       });
-      return; // Don't call next() - this prevents multer from running
+      return; // Don't call next() - this prevents stream upload middleware from running
     }
 
     next();
@@ -45,7 +45,7 @@ async function checkStorageLimit(req, res, next) {
       message: 'Unable to verify storage limit. Please try again.',
       error: 'STORAGE_CHECK_FAILED',
     });
-    // Don't call next() - this prevents multer from running
+    // Don't call next() - this prevents stream upload middleware from running
   }
 }
 

@@ -36,16 +36,14 @@ import { streamUploadToS3 } from '../middleware/streamUploadToS3.middleware.js';
 import { apiRateLimiter, sseConnectionLimiter, uploadRateLimiter } from '../middleware/rateLimit.middleware.js';
 import { checkStorageLimit } from '../middleware/storageLimit.middleware.js';
 import { validate } from '../middleware/validation.middleware.js';
-import { uploadArrayWithDynamicLimit, uploadSingleWithDynamicLimit } from '../utils/multer.js';
 import { PERMISSIONS } from '../utils/permissions.js';
-import storage from '../utils/storageDriver.js';
 
-/** When S3: stream directly to bucket (no temp dir). Otherwise use multer disk with admin-configurable max file size. */
+/** Stream directly to the bucket with the admin-configurable max file size. */
 function uploadSingle() {
-  return storage.useS3() ? streamUploadToS3('single') : uploadSingleWithDynamicLimit();
+  return streamUploadToS3('single');
 }
 function uploadBulk() {
-  return storage.useS3() ? streamUploadToS3('bulk') : uploadArrayWithDynamicLimit();
+  return streamUploadToS3('bulk');
 }
 import {
   addFolderSchema,
@@ -120,7 +118,7 @@ router.post('/trash/delete', canManageTrash, deleteForeverSchema, validate, dele
 router.post('/trash/empty', canManageTrash, emptyTrash);
 
 // Upload a new file derived from an existing one (e.g. "Save as PDF" from desktop editor)
-// When S3 is enabled this uses streamUploadToS3, otherwise multer disk upload.
+// Derived files also stream directly to the bucket.
 router.post('/:id/derived', canUpload, uploadRateLimiter, uploadSingle(), uploadDerivedFile);
 
 export default router;

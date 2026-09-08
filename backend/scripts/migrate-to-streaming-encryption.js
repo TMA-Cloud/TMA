@@ -5,8 +5,8 @@
  *   legacy: [IV(16)][AES-256-GCM ciphertext][TAG(16)]
  *   new:    header(40) || segment_0 || segment_1 ...  (Tink AES256_GCM_HKDF_1MB)
  *
- * Same FILE_ENCRYPTION_KEY for both (no key change, only a re-wrap). Auto-detects
- * the storage driver; safe to re-run (already-streaming objects are skipped).
+ * Same FILE_ENCRYPTION_KEY for both formats (no key change, only a re-wrap).
+ * Safe to re-run (already-streaming objects are skipped).
  *
  * Run ONCE with the app stopped, and take a backup first. Usage:
  *   node scripts/migrate-to-streaming-encryption.js
@@ -16,14 +16,12 @@ import '../config/env.js';
 
 import crypto from 'crypto';
 import readline from 'readline';
-import { createReadStream, createWriteStream } from 'fs';
-import fsPromises from 'fs/promises';
+
 import { PassThrough, Transform } from 'stream';
 import { pipeline } from 'stream/promises';
 
 import pool from '../config/db.js';
 import { logger } from '../config/logger.js';
-import { resolveFilePath } from '../utils/filePath.js';
 import storage from '../utils/storageDriver.js';
 import {
   createByteCountStream,
@@ -144,34 +142,6 @@ async function isAlreadyStreaming(key, masterKey) {
   }
 }
 
-/** Convert one legacy object stored on local disk, in place. */
-async function convertLocal(storagePath, masterKey) {
-  const absPath = resolveFilePath(storagePath);
-  const tempPath = absPath + '.streaming';
-  const { stream: counter, getByteCount } = createByteCountStream();
-
-  try {
-    await pipeline(
-      createReadStream(absPath),
-      createLegacyDecryptTransform(masterKey),
-      createEncryptStream(masterKey),
-      counter,
-      createWriteStream(tempPath)
-    );
-  } catch (err) {
-    try {
-      await fsPromises.unlink(tempPath);
-    } catch {
-      /* ignore */
-    }
-    throw err;
-  }
-
-  await fsPromises.unlink(absPath);
-  await fsPromises.rename(tempPath, absPath);
-  return getByteCount();
-}
-
 /** Convert one legacy object stored in S3, overwriting the same key. */
 async function convertS3(key, masterKey) {
   const src = await storage.getReadStream(key);
@@ -222,8 +192,7 @@ async function main() {
     process.exit(1);
   }
 
-  const usingS3 = storage.useS3();
-  console.log(`Storage driver: ${usingS3 ? 's3' : 'local'}`);
+  console.log(`Storage driver: s3`);
   console.log('Connecting to database and fetching file list...');
   const res = await pool.query(
     "SELECT id, path FROM files WHERE type = 'file' AND deleted_at IS NULL AND path IS NOT NULL"
@@ -237,7 +206,7 @@ async function main() {
   console.log(`Found ${rows.length} files to consider.`);
 
   const confirm = await askQuestion(
-    `This will re-wrap ${rows.length} ${usingS3 ? 'S3 objects' : 'files on disk'} in place.\n` +
+    `This will re-wrap ${rows.length} S3 objects in place.\n` +
       'Objects already in the streaming format are skipped automatically.\n' +
       'Make sure you have a backup and the app is stopped.\n' +
       'Type YES (in all caps) to continue:'
@@ -270,7 +239,7 @@ async function main() {
           skipped += 1;
         } else {
           const startedAt = Date.now();
-          const bytes = await withRetries(() => (usingS3 ? convertS3(key, masterKey) : convertLocal(key, masterKey)), {
+          const bytes = await withRetries(() => convertS3(key, masterKey), {
             onRetry: onRetry(`id=${row.id}`),
           });
           migrated += 1;

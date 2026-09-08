@@ -33,7 +33,7 @@ interface OrphanGroup<T> {
 export interface OrphanReport {
   scannedAt: string;
   graceMinutes: number;
-  driver: 's3' | 'local';
+  driver: 's3';
   totals: {
     storedObjects: number;
     databaseRows: number;

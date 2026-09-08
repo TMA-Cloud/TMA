@@ -75,10 +75,6 @@ vi.mock('../../controllers/file/file.events.controller.js', () => ({
 
 // Upload middleware would otherwise try to parse multipart bodies and read the
 // max-upload-size setting; a pass-through keeps the focus on the guards.
-vi.mock('../../utils/multer.js', () => ({
-  uploadSingleWithDynamicLimit: () => (_req, _res, next) => next(),
-  uploadArrayWithDynamicLimit: () => (_req, _res, next) => next(),
-}));
 
 vi.mock('../../middleware/streamUploadToS3.middleware.js', () => ({
   streamUploadToS3: () => (_req, _res, next) => next(),

@@ -1,20 +1,16 @@
 /**
  * File lifecycle end to end: upload, organise, share, trash, restore, purge.
  *
- * Real multipart uploads, real AES-256-GCM encryption to real files on disk,
+ * Real multipart uploads, real AES-256-GCM encryption to an isolated in-memory bucket,
  * real rows in Postgres, real cache invalidation in Redis.
  */
 
-import fs from 'fs';
-import path from 'path';
-
+import { exists, readStoredBuffer } from '../mocks/storage.mock.js';
 import { describe, expect, it } from 'vitest';
 
 import pool from '../../config/db.js';
 import { createAndLogin, signUpAndLogin } from './helpers/app.js';
 import { countRows, readFileRow } from './helpers/factories.js';
-
-const UPLOAD_DIR = process.env.UPLOAD_DIR;
 
 /** Upload a buffer through the real multipart endpoint. */
 function upload(c, { name = 'notes.txt', content = 'hello world', parentId, mime = 'text/plain' } = {}) {
@@ -86,7 +82,7 @@ describe('upload', () => {
     await upload(c, { name: 'notes.txt', content: 'hello world' });
 
     const { rows } = await pool.query('SELECT path FROM files');
-    expect(fs.existsSync(path.join(UPLOAD_DIR, rows[0].path))).toBe(true);
+    expect(await exists(rows[0].path)).toBe(true);
   });
 
   it('encrypts at rest — the plaintext never appears in the stored object', async () => {
@@ -95,7 +91,7 @@ describe('upload', () => {
     await upload(c, { name: 'notes.txt', content: secret });
 
     const { rows } = await pool.query('SELECT path FROM files');
-    const stored = fs.readFileSync(path.join(UPLOAD_DIR, rows[0].path));
+    const stored = readStoredBuffer(rows[0].path);
 
     expect(stored.toString('latin1')).not.toContain(secret);
   });
@@ -398,7 +394,7 @@ describe('trash lifecycle', () => {
 
     await c.post('/api/files/delete').send({ ids: [file.id] });
 
-    expect(fs.existsSync(path.join(UPLOAD_DIR, file.path))).toBe(true);
+    expect(await exists(file.path)).toBe(true);
   });
 
   it('lists trashed files', async () => {
@@ -435,7 +431,7 @@ describe('trash lifecycle', () => {
 
     expect(res.status).toBeLessThan(400);
     expect(await readFileRow(file.id)).toBeUndefined();
-    expect(fs.existsSync(path.join(UPLOAD_DIR, file.path))).toBe(false);
+    expect(await exists(file.path)).toBe(false);
   });
 
   it('emptying the trash clears everything in it', async () => {

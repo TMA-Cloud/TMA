@@ -28,9 +28,6 @@ export default defineConfig({
       LOG_LEVEL: 'silent',
       LOG_FORMAT: 'json',
 
-      // The whole point of this project: exercise the S3 code path.
-      STORAGE_DRIVER: 's3',
-
       FILE_ENCRYPTION_KEY: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
       JWT_SECRET: 'integration-test-jwt-secret',
     },

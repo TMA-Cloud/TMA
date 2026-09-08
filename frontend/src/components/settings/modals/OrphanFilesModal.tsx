@@ -280,8 +280,8 @@ export const OrphanFilesModal: React.FC<OrphanFilesModalProps> = ({ isOpen, onCl
 
         {report && !loading && (
           <p className="text-xs text-gray-500 dark:text-gray-400">
-            Scanned {report.totals.storedObjects.toLocaleString()} stored {report.driver === 's3' ? 'objects' : 'files'}{' '}
-            against {report.totals.databaseRows.toLocaleString()} records
+            Scanned {report.totals.storedObjects.toLocaleString()} stored objects against{' '}
+            {report.totals.databaseRows.toLocaleString()} records
             {report.totals.skippedTooRecent > 0 && (
               <> &middot; {report.totals.skippedTooRecent.toLocaleString()} held back as too recent</>
             )}{' '}

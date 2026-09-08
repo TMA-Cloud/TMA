@@ -41,7 +41,7 @@ describe('checkStorageLimit', () => {
     expect(next).toHaveBeenCalled();
   });
 
-  it('rejects an oversized upload with 413 before multer ever runs', async () => {
+  it('rejects an oversized upload with 413 before stream upload middleware ever runs', async () => {
     const { next, res } = await run(5 * GB, { used: 9 * GB, limit: 10 * GB });
     expect(next).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(413);
@@ -67,17 +67,17 @@ describe('checkStorageLimit', () => {
     expect(next).toHaveBeenCalled();
   });
 
-  it('lets multer decide when Content-Length is missing', async () => {
+  it('lets stream upload middleware decide when Content-Length is missing', async () => {
     const { next } = await run(undefined, { used: 10 * GB, limit: 10 * GB });
     expect(next).toHaveBeenCalled();
   });
 
-  it('lets multer decide when Content-Length is not a number', async () => {
+  it('lets stream upload middleware decide when Content-Length is not a number', async () => {
     const { next } = await run('not-a-number', { used: 10 * GB, limit: 10 * GB });
     expect(next).toHaveBeenCalled();
   });
 
-  it('lets multer decide when Content-Length is zero', async () => {
+  it('lets stream upload middleware decide when Content-Length is zero', async () => {
     const { next } = await run(0, { used: 10 * GB, limit: 10 * GB });
     expect(next).toHaveBeenCalled();
   });

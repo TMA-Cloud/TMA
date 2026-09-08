@@ -115,12 +115,12 @@ export const UsersModal: React.FC<UsersModalProps> = ({
     setEditUnit('GB');
   };
 
-  /** Clearing the limit hands the account back the default (actual disk space). */
+  /** Clearing the limit restores unlimited account storage. */
   const handleResetLimit = async (userId: string) => {
     setUpdating(userId);
     try {
       await updateUserStorageLimit(userId, null);
-      showToast('Storage limit reset to disk size', 'success');
+      showToast('Storage limit removed', 'success');
       handleCancelEdit();
       onRefresh();
       if (userId === currentUserId) onStorageUpdated?.();

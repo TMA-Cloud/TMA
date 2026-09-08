@@ -1,4 +1,3 @@
-import fs from 'fs';
 import path from 'path';
 
 import pool from '../../config/db.js';
@@ -10,7 +9,6 @@ import {
   deleteCachePattern,
   cacheKeys,
 } from '../../utils/cache.js';
-import { resolveFilePath } from '../../utils/filePath.js';
 import storage from '../../utils/storageDriver.js';
 
 import { getRecursiveIds } from './file.metadata.model.js';
@@ -244,45 +242,24 @@ async function permanentlyDeleteFiles(ids, userId) {
   ]);
 
   const filesToDelete = [];
-  const foldersToDelete = [];
 
   for (const f of files.rows) {
     if (!f.path) continue;
 
     if (f.type === 'file') {
       filesToDelete.push({ key: f.path });
-    } else if (f.type === 'folder') {
-      if (path.isAbsolute(f.path)) {
-        foldersToDelete.push(f.path);
-      }
     }
   }
 
   const fileDeletePromises = filesToDelete.map(async ({ key }) => {
     try {
-      if (storage.useS3()) {
-        await storage.deleteObject(key);
-      } else {
-        const resolvedPath = resolveFilePath(key);
-        await fs.promises.unlink(resolvedPath);
-      }
+      await storage.deleteObject(key);
     } catch (error) {
       logger.error({ err: error, path: key }, `[File] Error deleting file ${key}`);
     }
   });
 
   await Promise.allSettled(fileDeletePromises);
-
-  foldersToDelete.sort((a, b) => b.length - a.length);
-  const folderDeletePromises = foldersToDelete.map(async folderPath => {
-    try {
-      await fs.promises.rm(folderPath, { recursive: true, force: true });
-    } catch (error) {
-      logger.error({ err: error, path: folderPath }, `[File] Error deleting folder ${folderPath}`);
-    }
-  });
-
-  await Promise.allSettled(folderDeletePromises);
 
   await pool.query('DELETE FROM files WHERE id = ANY($1::text[]) AND user_id = $2', [allIds, userId]);
 
