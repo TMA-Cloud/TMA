@@ -24,6 +24,7 @@ export const mapFileResponse = (f: FileItemResponse): FileItem => ({
   ...f,
   modified: new Date(f.modified),
   accessedAt: f.accessedAt ? new Date(f.accessedAt) : undefined,
+  sharedAt: f.sharedAt ? new Date(f.sharedAt) : undefined,
   deletedAt: f.deletedAt ? new Date(f.deletedAt) : undefined,
   expiresAt: f.expiresAt ? new Date(f.expiresAt) : f.expiresAt === null ? null : undefined,
 });
@@ -115,6 +116,37 @@ export const formatDate = (date: Date): string => {
 
   // For older dates, show absolute date
   return format(date, 'MMM d, yyyy');
+};
+
+/** Compact share-link countdown for the icon badge. */
+export const formatShareTimeRemaining = (expiresAt?: Date | null): string => {
+  if (expiresAt === undefined) return '';
+  if (expiresAt === null) return '∞';
+  const remainingMs = expiresAt.getTime() - Date.now();
+  if (!Number.isFinite(remainingMs) || remainingMs <= 0) return 'Expired';
+
+  const minutes = Math.ceil(remainingMs / 60000);
+  if (minutes >= 1440) return `${Math.ceil(minutes / 1440)}d`;
+  if (minutes >= 60) return `${Math.ceil(minutes / 60)}h`;
+  return `${minutes}m`;
+};
+
+/** Human-readable counterpart used by Get Info. */
+export const describeShareTimeRemaining = (expiresAt?: Date | null): string => {
+  if (expiresAt === undefined) return 'Not available';
+  if (expiresAt === null) return 'Never expires';
+  const remainingMs = expiresAt.getTime() - Date.now();
+  if (!Number.isFinite(remainingMs) || remainingMs <= 0) return 'Expired';
+
+  const totalMinutes = Math.ceil(remainingMs / 60000);
+  const days = Math.floor(totalMinutes / 1440);
+  const hours = Math.floor((totalMinutes % 1440) / 60);
+  const minutes = totalMinutes % 60;
+  const parts: string[] = [];
+  if (days) parts.push(`${days} day${days === 1 ? '' : 's'}`);
+  if (hours) parts.push(`${hours} hour${hours === 1 ? '' : 's'}`);
+  if (!days && minutes) parts.push(`${minutes} minute${minutes === 1 ? '' : 's'}`);
+  return `${parts.join(', ')} remaining`;
 };
 
 export const ONLYOFFICE_EXTS = new Set([

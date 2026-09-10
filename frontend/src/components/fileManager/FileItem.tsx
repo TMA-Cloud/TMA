@@ -1,6 +1,6 @@
 import React, { useRef, useLayoutEffect, useEffect } from 'react';
 import { type FileItem as FileItemType, useApp } from '../../contexts/AppContext';
-import { formatFileSize, formatDate, getDisplayFileName } from '../../utils/fileUtils';
+import { formatFileSize, formatDate, formatShareTimeRemaining, getDisplayFileName } from '../../utils/fileUtils';
 import { Star, Share2, Eye, Clock } from 'lucide-react';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { FileTypeIcon } from './FileTypeIcon';
@@ -48,6 +48,16 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
   const longPressTimeoutRef = useRef<number | null>(null);
   const longPressTriggeredRef = useRef(false);
   const isExpired = file.shared && file.expiresAt instanceof Date && file.expiresAt < new Date();
+  const shareTimeRemaining = formatShareTimeRemaining(file.expiresAt);
+  const expiryLabel =
+    file.expiresAt === undefined
+      ? null
+      : file.expiresAt === null
+        ? 'Never expires'
+        : `Expires ${file.expiresAt.toLocaleString()} (${shareTimeRemaining} remaining)`;
+  const sharedLabel = [file.sharedAt ? `Shared ${file.sharedAt.toLocaleString()}` : 'Shared', expiryLabel]
+    .filter(Boolean)
+    .join(' · ');
   const isCut = clipboard?.action === 'cut' && clipboard.ids.includes(file.id);
   const cutClass = isCut ? 'opacity-45' : '';
 
@@ -163,7 +173,16 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
         <Star className="absolute -top-1 -right-1 w-3.5 h-3.5 text-[var(--warning-text)] fill-[var(--warning-text)]" />
       )}
       {file.shared && !isExpired && (
-        <Share2 className="absolute -top-1 -left-1 w-3.5 h-3.5 text-[var(--positive-text)]" />
+        <span
+          className="absolute -top-1 -left-1 flex items-center gap-0.5 rounded-full bg-[var(--surface)]/95 px-0.5 shadow-sm"
+          aria-label={sharedLabel}
+          data-shared-at={file.sharedAt?.toISOString()}
+        >
+          <Share2 className="w-3.5 h-3.5 text-[var(--positive-text)]" />
+          {shareTimeRemaining && (
+            <span className="text-[8px] font-semibold leading-3 text-[var(--positive-text)]">{shareTimeRemaining}</span>
+          )}
+        </span>
       )}
       {isExpired && <Clock className="absolute -top-1 -left-1 w-3.5 h-3.5 text-[var(--destructive-text)]" />}
     </>

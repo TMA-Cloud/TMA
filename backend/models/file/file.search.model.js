@@ -45,6 +45,20 @@ async function searchFiles(userId, query, limit = 100) {
         mime_type AS "mimeType",
         starred, 
         shared,
+        shared_at AS "sharedAt",
+        CASE
+          WHEN NOT files.shared THEN NULL
+          WHEN EXISTS (
+            SELECT 1 FROM share_link_files slf
+            JOIN share_links sl ON sl.id = slf.share_id
+            WHERE slf.file_id = files.id AND sl.user_id = $1 AND sl.expires_at IS NULL
+          ) THEN NULL
+          ELSE (
+            SELECT MAX(sl.expires_at) FROM share_link_files slf
+            JOIN share_links sl ON sl.id = slf.share_id
+            WHERE slf.file_id = files.id AND sl.user_id = $1
+          )
+        END AS "expiresAt",
         parent_id AS "parentId"
       FROM files 
       WHERE user_id = $1 
@@ -74,6 +88,20 @@ async function searchFiles(userId, query, limit = 100) {
         mime_type AS "mimeType",
         starred, 
         shared,
+        shared_at AS "sharedAt",
+        CASE
+          WHEN NOT files.shared THEN NULL
+          WHEN EXISTS (
+            SELECT 1 FROM share_link_files slf
+            JOIN share_links sl ON sl.id = slf.share_id
+            WHERE slf.file_id = files.id AND sl.user_id = $1 AND sl.expires_at IS NULL
+          ) THEN NULL
+          ELSE (
+            SELECT MAX(sl.expires_at) FROM share_link_files slf
+            JOIN share_links sl ON sl.id = slf.share_id
+            WHERE slf.file_id = files.id AND sl.user_id = $1
+          )
+        END AS "expiresAt",
         parent_id AS "parentId"
       FROM files 
       WHERE user_id = $1 
@@ -184,12 +212,25 @@ async function getRecentFiles(userId, limit = 10) {
   }
 
   const result = await pool.query(
-    `SELECT id, name, type, size, modified, accessed_at AS "accessedAt",
-            mime_type AS "mimeType", starred, shared
-       FROM files
-      WHERE user_id = $1
-        AND deleted_at IS NULL
-        AND type = 'file'
+    `SELECT f.id, f.name, f.type, f.size, f.modified, f.accessed_at AS "accessedAt",
+            f.mime_type AS "mimeType", f.starred, f.shared, f.shared_at AS "sharedAt",
+            CASE
+              WHEN NOT f.shared THEN NULL
+              WHEN EXISTS (
+                SELECT 1 FROM share_link_files slf
+                JOIN share_links sl ON sl.id = slf.share_id
+                WHERE slf.file_id = f.id AND sl.user_id = $1 AND sl.expires_at IS NULL
+              ) THEN NULL
+              ELSE (
+                SELECT MAX(sl.expires_at) FROM share_link_files slf
+                JOIN share_links sl ON sl.id = slf.share_id
+                WHERE slf.file_id = f.id AND sl.user_id = $1
+              )
+            END AS "expiresAt"
+       FROM files f
+      WHERE f.user_id = $1
+        AND f.deleted_at IS NULL
+        AND f.type = 'file'
       ORDER BY accessed_at DESC
       LIMIT $2`,
     [userId, RECENT_CACHE_SIZE]

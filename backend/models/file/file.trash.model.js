@@ -70,7 +70,7 @@ async function getTrashFiles(userId, sortBy = 'deletedAt', order = 'DESC', topLe
     : '';
 
   const res = await pool.query(
-    `SELECT f.id, f.name, f.type, f.size, f.modified, f.mime_type AS "mimeType", f.starred, f.shared, f.deleted_at AS "deletedAt", f.parent_id AS "parentId"
+    `SELECT f.id, f.name, f.type, f.size, f.modified, f.mime_type AS "mimeType", f.starred, f.shared, f.shared_at AS "sharedAt", f.deleted_at AS "deletedAt", f.parent_id AS "parentId"
      FROM files f
      WHERE f.user_id = $1
        AND f.deleted_at IS NOT NULL${topLevelFilter}

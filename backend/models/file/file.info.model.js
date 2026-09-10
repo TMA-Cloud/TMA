@@ -15,9 +15,22 @@ import pool from '../../config/db.js';
 async function getFileInfo(fileIds, userId, includeDeleted = false) {
   const deletedClause = includeDeleted ? '' : 'AND deleted_at IS NULL';
   const result = await pool.query(
-    `SELECT id, name, type, parent_id, size, modified, accessed_at
-     FROM files
-     WHERE id = ANY($1) AND user_id = $2 ${deletedClause}`,
+    `SELECT f.id, f.name, f.type, f.parent_id, f.size, f.modified, f.accessed_at, f.starred, f.shared, f.shared_at,
+            CASE
+              WHEN NOT f.shared THEN NULL
+              WHEN EXISTS (
+                SELECT 1 FROM share_link_files slf
+                JOIN share_links sl ON sl.id = slf.share_id
+                WHERE slf.file_id = f.id AND sl.user_id = $2 AND sl.expires_at IS NULL
+              ) THEN NULL
+              ELSE (
+                SELECT MAX(sl.expires_at) FROM share_link_files slf
+                JOIN share_links sl ON sl.id = slf.share_id
+                WHERE slf.file_id = f.id AND sl.user_id = $2
+              )
+            END AS expires_at
+     FROM files f
+     WHERE f.id = ANY($1) AND f.user_id = $2 ${deletedClause}`,
     [fileIds, userId]
   );
 
@@ -29,6 +42,10 @@ async function getFileInfo(fileIds, userId, includeDeleted = false) {
     size: f.size,
     modified: f.modified,
     accessedAt: f.accessed_at,
+    starred: f.starred,
+    shared: f.shared,
+    sharedAt: f.shared_at,
+    expiresAt: f.expires_at,
   }));
 }
 

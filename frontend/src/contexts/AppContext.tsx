@@ -24,6 +24,7 @@ export interface FileItem {
   selected?: boolean;
   starred?: boolean;
   shared?: boolean;
+  sharedAt?: Date;
   deletedAt?: Date;
   expiresAt?: Date | null;
   folderInfo?: FolderInfo;
@@ -40,6 +41,7 @@ export interface FileItemResponse {
   selected?: boolean;
   starred?: boolean;
   shared?: boolean;
+  sharedAt?: string | null;
   deletedAt?: string | null;
   expiresAt?: string | null;
 }

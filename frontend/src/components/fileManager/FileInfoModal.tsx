@@ -3,7 +3,7 @@ import { Modal } from '../ui/Modal';
 import { useToast } from '../../hooks/useToast';
 import { formatBytes } from '../../utils/storageUtils';
 import { type FileItem, type FolderInfo, useApp } from '../../contexts/AppContext';
-import { getDisplayFileName } from '../../utils/fileUtils';
+import { describeShareTimeRemaining, getDisplayFileName } from '../../utils/fileUtils';
 
 interface FileInfoModalProps {
   isOpen: boolean;
@@ -51,8 +51,19 @@ export const FileInfoModal: React.FC<FileInfoModalProps> = ({ isOpen, onClose, f
           ...apiData,
           modified: apiData.modified != null ? new Date(apiData.modified) : file.modified,
           accessedAt: apiData.accessedAt != null ? new Date(apiData.accessedAt) : file.accessedAt,
+          sharedAt:
+            apiData.sharedAt !== undefined
+              ? apiData.sharedAt === null
+                ? undefined
+                : new Date(apiData.sharedAt)
+              : file.sharedAt,
           deletedAt: apiData.deletedAt != null ? new Date(apiData.deletedAt) : file.deletedAt,
-          expiresAt: apiData.expiresAt != null ? new Date(apiData.expiresAt) : (file.expiresAt ?? null),
+          expiresAt:
+            apiData.expiresAt !== undefined
+              ? apiData.expiresAt === null
+                ? null
+                : new Date(apiData.expiresAt)
+              : file.expiresAt,
         };
         setInfoItem(merged);
       } catch {
@@ -142,6 +153,27 @@ export const FileInfoModal: React.FC<FileInfoModalProps> = ({ isOpen, onClose, f
                   ? effectiveItem.accessedAt.toLocaleString()
                   : new Date(effectiveItem.accessedAt).toLocaleString()}
               </p>
+            </div>
+          )}
+          {effectiveItem.shared && effectiveItem.sharedAt && (
+            <div>
+              <p className="font-semibold">Shared</p>
+              <p className="mt-0.5">
+                {effectiveItem.sharedAt instanceof Date
+                  ? effectiveItem.sharedAt.toLocaleString()
+                  : new Date(effectiveItem.sharedAt).toLocaleString()}
+              </p>
+            </div>
+          )}
+          {effectiveItem.shared && (
+            <div>
+              <p className="font-semibold">Share remaining</p>
+              <p className="mt-0.5">{describeShareTimeRemaining(effectiveItem.expiresAt)}</p>
+              {effectiveItem.expiresAt && (
+                <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                  Expires {effectiveItem.expiresAt.toLocaleString()}
+                </p>
+              )}
             </div>
           )}
         </div>

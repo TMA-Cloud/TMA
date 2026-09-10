@@ -18,11 +18,24 @@ async function getFiles(userId, parentId = null, sortBy = 'modified', order = 'D
 
   const orderClause = sortBy === 'size' ? '' : buildOrderClause(sortBy, order);
   const result = await pool.query(
-    `SELECT id, name, type, size, modified, accessed_at AS "accessedAt", mime_type AS "mimeType", starred, shared, path
-     FROM files
-     WHERE user_id = $1
-       AND deleted_at IS NULL
-       AND ${parentId ? 'parent_id = $2' : 'parent_id IS NULL'}
+    `SELECT f.id, f.name, f.type, f.size, f.modified, f.accessed_at AS "accessedAt", f.shared_at AS "sharedAt", f.mime_type AS "mimeType", f.starred, f.shared, f.path,
+            CASE
+              WHEN NOT f.shared THEN NULL
+              WHEN EXISTS (
+                SELECT 1 FROM share_link_files slf
+                JOIN share_links sl ON sl.id = slf.share_id
+                WHERE slf.file_id = f.id AND sl.user_id = $1 AND sl.expires_at IS NULL
+              ) THEN NULL
+              ELSE (
+                SELECT MAX(sl.expires_at) FROM share_link_files slf
+                JOIN share_links sl ON sl.id = slf.share_id
+                WHERE slf.file_id = f.id AND sl.user_id = $1
+              )
+            END AS "expiresAt"
+     FROM files f
+     WHERE f.user_id = $1
+       AND f.deleted_at IS NULL
+       AND ${parentId ? 'f.parent_id = $2' : 'f.parent_id IS NULL'}
      ${orderClause}`,
     parentId ? [userId, parentId] : [userId]
   );
@@ -199,7 +212,7 @@ async function renameFile(id, name, userId) {
 
   // Get updated file info
   const result = await pool.query(
-    'SELECT id, name, type, size, modified, mime_type AS "mimeType", starred, shared FROM files WHERE id = $1 AND user_id = $2',
+    'SELECT id, name, type, size, modified, shared_at AS "sharedAt", mime_type AS "mimeType", starred, shared FROM files WHERE id = $1 AND user_id = $2',
     [id, userId]
   );
 

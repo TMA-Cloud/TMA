@@ -388,7 +388,7 @@ async function cleanupExpiredShareLinks() {
 
     for (const [userId, fileIds] of userFileMap) {
       await client.query(
-        `UPDATE files SET shared = FALSE
+        `UPDATE files SET shared = FALSE, shared_at = NULL
          WHERE id = ANY($1::text[]) AND user_id = $2
            AND NOT EXISTS (
              SELECT 1 FROM share_links sl WHERE sl.file_id = files.id AND sl.user_id = $2

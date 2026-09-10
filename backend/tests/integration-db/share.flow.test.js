@@ -61,14 +61,25 @@ describe('creating a share link', () => {
     expect(await countRows('share_links')).toBe(1);
   });
 
-  it('marks the file as shared', async () => {
+  it('marks the file as shared and records when it happened', async () => {
     const { client: c } = await ensureOwner();
     const fileId = await uploadFile(c);
 
     await share(c, fileId);
 
-    const { rows } = await pool.query('SELECT shared FROM files WHERE id = $1', [fileId]);
+    const { rows } = await pool.query('SELECT shared, shared_at FROM files WHERE id = $1', [fileId]);
     expect(rows[0].shared).toBe(true);
+    expect(rows[0].shared_at).toBeInstanceOf(Date);
+
+    const info = await c.get(`/api/files/${fileId}/info`);
+    expect(info.status).toBe(200);
+    expect(new Date(info.body.sharedAt).getTime()).toBe(rows[0].shared_at.getTime());
+    expect(new Date(info.body.expiresAt).getTime()).toBeGreaterThan(Date.now());
+
+    const listing = await c.get('/api/files');
+    const listedFile = listing.body.find(file => file.id === fileId);
+    expect(new Date(listedFile.sharedAt).getTime()).toBe(rows[0].shared_at.getTime());
+    expect(new Date(listedFile.expiresAt).getTime()).toBe(new Date(info.body.expiresAt).getTime());
   });
 
   it('returns a link on the configured origin', async () => {
@@ -93,10 +104,13 @@ describe('creating a share link', () => {
     const fileId = await uploadFile(c);
 
     const first = await share(c, fileId);
+    const firstSharedAt = (await pool.query('SELECT shared_at FROM files WHERE id = $1', [fileId])).rows[0].shared_at;
     const second = await share(c, fileId);
+    const secondSharedAt = (await pool.query('SELECT shared_at FROM files WHERE id = $1', [fileId])).rows[0].shared_at;
 
     expect(second).toBe(first);
     expect(await countRows('share_links')).toBe(1);
+    expect(secondSharedAt.getTime()).toBe(firstSharedAt.getTime());
   });
 
   it('gives different files different tokens', async () => {
@@ -200,10 +214,12 @@ describe('expiry', () => {
 
   it('honours an explicit never-expires choice', async () => {
     const { client: c } = await ensureOwner();
-    await share(c, await uploadFile(c), 'never');
+    const fileId = await uploadFile(c);
+    await share(c, fileId, 'never');
 
     const { rows } = await pool.query('SELECT expires_at FROM share_links');
     expect(rows[0].expires_at).toBeNull();
+    expect((await c.get(`/api/files/${fileId}/info`)).body.expiresAt).toBeNull();
   });
 
   it('refuses an expired link', async () => {
@@ -241,15 +257,16 @@ describe('revoking', () => {
     expect((await visitor().get(`/s/${token}`)).status).toBe(404);
   });
 
-  it('clears the shared flag on the file', async () => {
+  it('clears the shared flag and timestamp on the file', async () => {
     const { client: c } = await ensureOwner();
     const fileId = await uploadFile(c);
     await share(c, fileId);
 
     await c.post('/api/files/share').send({ ids: [fileId], shared: false });
 
-    const { rows } = await pool.query('SELECT shared FROM files WHERE id = $1', [fileId]);
+    const { rows } = await pool.query('SELECT shared, shared_at FROM files WHERE id = $1', [fileId]);
     expect(rows[0].shared).toBe(false);
+    expect(rows[0].shared_at).toBeNull();
   });
 
   it('a purged file is no longer reachable through its old link', async () => {
@@ -300,8 +317,9 @@ describe('shared folders', () => {
     const newId = up.body.file?.id || up.body.id;
 
     // Marked shared on the owner's account.
-    const { rows } = await pool.query('SELECT shared FROM files WHERE id = $1', [newId]);
+    const { rows } = await pool.query('SELECT shared, shared_at FROM files WHERE id = $1', [newId]);
     expect(rows[0].shared).toBe(true);
+    expect(rows[0].shared_at).toBeInstanceOf(Date);
 
     // Visible on the public page, and downloadable through the share.
     const after = await visitor().get(`/s/${token}`);

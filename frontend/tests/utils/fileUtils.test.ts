@@ -4,17 +4,36 @@ import {
   ONLYOFFICE_EXTS,
   formatDate,
   formatFileSize,
+  formatShareTimeRemaining,
+  describeShareTimeRemaining,
   getDisplayFileName,
   getExt,
   getFileIcon,
   getFullNameForRename,
   isOnlyOfficeSupported,
   validateOnlyOfficeMimeType,
+  mapFileResponse,
 } from '../../src/utils/fileUtils';
 import type { FileItem } from '../../src/contexts/AppContext';
 
 const item = (overrides: Partial<FileItem> = {}) =>
   ({ id: 'f1', name: 'file.txt', type: 'file', ...overrides }) as FileItem;
+
+describe('mapFileResponse', () => {
+  it('parses the shared timestamp for icon and Get Info rendering', () => {
+    const mapped = mapFileResponse({
+      id: 'f1',
+      name: 'file.txt',
+      type: 'file',
+      modified: '2026-09-11T08:00:00.000Z',
+      shared: true,
+      sharedAt: '2026-09-11T09:15:00.000Z',
+    });
+
+    expect(mapped.sharedAt).toBeInstanceOf(Date);
+    expect(mapped.sharedAt?.toISOString()).toBe('2026-09-11T09:15:00.000Z');
+  });
+});
 
 describe('getFileIcon', () => {
   it('returns the folder icon for a folder regardless of MIME type', () => {
@@ -105,6 +124,34 @@ describe('formatDate', () => {
 
   it('returns an empty string for an invalid date rather than "Invalid Date"', () => {
     expect(formatDate(new Date('nonsense'))).toBe('');
+  });
+});
+
+describe('share time remaining', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-11T10:00:00.000Z'));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('distinguishes seven-day, thirty-day, and non-expiring shares on the icon', () => {
+    expect(formatShareTimeRemaining(new Date('2026-09-18T10:00:00.000Z'))).toBe('7d');
+    expect(formatShareTimeRemaining(new Date('2026-10-11T10:00:00.000Z'))).toBe('30d');
+    expect(formatShareTimeRemaining(null)).toBe('∞');
+  });
+
+  it('counts down in hours and minutes near expiry', () => {
+    expect(formatShareTimeRemaining(new Date('2026-09-11T19:30:00.000Z'))).toBe('10h');
+    expect(formatShareTimeRemaining(new Date('2026-09-11T10:25:00.000Z'))).toBe('25m');
+  });
+
+  it('describes the remaining time for Get Info', () => {
+    expect(describeShareTimeRemaining(new Date('2026-09-13T15:00:00.000Z'))).toBe('2 days, 5 hours remaining');
+    expect(describeShareTimeRemaining(null)).toBe('Never expires');
+    expect(describeShareTimeRemaining(new Date('2026-09-11T09:00:00.000Z'))).toBe('Expired');
   });
 });
 

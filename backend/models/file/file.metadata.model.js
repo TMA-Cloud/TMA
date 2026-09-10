@@ -26,7 +26,21 @@ async function getStarredFiles(userId, sortBy = 'modified', order = 'DESC') {
 
   const orderClause = sortBy === 'size' ? '' : buildOrderClause(sortBy, order);
   const result = await pool.query(
-    `SELECT id, name, type, size, modified, accessed_at AS "accessedAt", mime_type AS "mimeType", starred, shared FROM files WHERE user_id = $1 AND starred = TRUE AND deleted_at IS NULL ${orderClause}`,
+    `SELECT f.id, f.name, f.type, f.size, f.modified, f.accessed_at AS "accessedAt", f.shared_at AS "sharedAt", f.mime_type AS "mimeType", f.starred, f.shared,
+            CASE
+              WHEN NOT f.shared THEN NULL
+              WHEN EXISTS (
+                SELECT 1 FROM share_link_files slf
+                JOIN share_links sl ON sl.id = slf.share_id
+                WHERE slf.file_id = f.id AND sl.user_id = $1 AND sl.expires_at IS NULL
+              ) THEN NULL
+              ELSE (
+                SELECT MAX(sl.expires_at) FROM share_link_files slf
+                JOIN share_links sl ON sl.id = slf.share_id
+                WHERE slf.file_id = f.id AND sl.user_id = $1
+              )
+            END AS "expiresAt"
+     FROM files f WHERE f.user_id = $1 AND f.starred = TRUE AND f.deleted_at IS NULL ${orderClause}`,
     [userId]
   );
   const files = result.rows;
@@ -50,7 +64,11 @@ async function setShared(ids, shared, userId) {
   const allIds = await getRecursiveIds(ids, userId);
   if (allIds.length === 0) return [];
   const res = await pool.query(
-    'UPDATE files SET shared = $1 WHERE id = ANY($2::text[]) AND user_id = $3 RETURNING id',
+    `UPDATE files
+     SET shared = $1,
+         shared_at = CASE WHEN $1 THEN COALESCE(shared_at, NOW()) ELSE NULL END
+     WHERE id = ANY($2::text[]) AND user_id = $3
+     RETURNING id`,
     [shared, allIds, userId]
   );
 
@@ -75,7 +93,7 @@ async function getSharedFiles(userId, sortBy = 'modified', order = 'DESC') {
   const orderClause = sortBy === 'size' ? '' : buildOrderClause(sortBy, order, 'f');
   const result = await pool.query(
     `SELECT f.id, f.name, f.type, f.size, f.modified, f.accessed_at AS "accessedAt", f.mime_type AS "mimeType",
-            f.starred, f.shared,
+            f.starred, f.shared, f.shared_at AS "sharedAt",
             s.expires_at AS "expiresAt"
      FROM files f
      LEFT JOIN files parent ON f.parent_id = parent.id AND parent.user_id = $1
