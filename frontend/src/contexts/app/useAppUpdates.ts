@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { fetchLatestVersions, getCurrentVersions, sendClientHeartbeat } from '../../utils/api';
+import {
+  fetchLatestVersions,
+  getCurrentVersions,
+  sendClientHeartbeat,
+  sendSessionHeartbeat,
+  sendSessionOffline,
+} from '../../utils/api';
 import {
   downloadAndInstallElectronUpdate,
   getElectronAppVersion,
@@ -26,17 +32,24 @@ export function useAppUpdates({ userId }: AppUpdatesDeps) {
 
   const electronAutoUpdateTriggeredRef = useRef(false);
 
-  // Desktop heartbeat
+  // Presence heartbeat. Desktop clients also report their app metadata; web
+  // clients only touch the authenticated session so a network change updates
+  // the IP shown in Active Sessions.
 
   useEffect(() => {
-    if (!isElectron() || !userId) return;
+    if (!userId) return;
 
     let timer: ReturnType<typeof setInterval> | null = null;
+    const runningInElectron = isElectron();
 
     const beat = async () => {
       try {
-        const v = await getElectronAppVersion();
-        await sendClientHeartbeat(v || 'unknown', window.electronAPI?.platform);
+        if (runningInElectron) {
+          const v = await getElectronAppVersion();
+          await sendClientHeartbeat(v || 'unknown', window.electronAPI?.platform);
+        } else {
+          await sendSessionHeartbeat();
+        }
       } catch {
         // heartbeat is best-effort
       }
@@ -45,8 +58,19 @@ export function useAppUpdates({ userId }: AppUpdatesDeps) {
     void beat();
     timer = setInterval(beat, 2 * 60 * 1000);
 
+    const markOffline = () => {
+      void sendSessionOffline().catch(() => {});
+    };
+    const markOnline = () => {
+      void beat();
+    };
+    window.addEventListener('pagehide', markOffline);
+    window.addEventListener('pageshow', markOnline);
+
     return () => {
       if (timer) clearInterval(timer);
+      window.removeEventListener('pagehide', markOffline);
+      window.removeEventListener('pageshow', markOnline);
     };
   }, [userId]);
 

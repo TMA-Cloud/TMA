@@ -141,7 +141,7 @@ describe('session validation', () => {
     sessionExists.mockResolvedValue(true);
     updateSessionActivity.mockClear();
     await run(sign({ id: USER, v: 1, sid: 'sess-1' }));
-    expect(updateSessionActivity).toHaveBeenCalledWith('sess-1');
+    expect(updateSessionActivity).toHaveBeenCalledWith('sess-1', '127.0.0.1');
   });
 
   it('does not check the session store for a token without a sid', async () => {

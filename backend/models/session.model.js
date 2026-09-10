@@ -65,18 +65,37 @@ async function sessionExists(sessionId, userId, tokenVersion, idleTtlSeconds = n
  * @param {number} currentTokenVersion - Current token version
  * @returns {Promise<Array>} Array of active sessions
  */
-async function getActiveSessions(userId, currentTokenVersion) {
+async function getActiveSessions(userId, currentTokenVersion, forceRefresh = false) {
   const cacheKey = cacheKeys.activeSessions(userId, currentTokenVersion);
-  const cached = await getCache(cacheKey);
-  if (cached !== null) {
-    return cached;
+  if (!forceRefresh) {
+    const cached = await getCache(cacheKey);
+    if (cached !== null) {
+      return cached;
+    }
   }
 
   const result = await pool.query(
-    `SELECT id, user_id, token_version, user_agent, ip_address, created_at, last_activity
-     FROM sessions
-     WHERE user_id = $1 AND token_version = $2
-     ORDER BY last_activity DESC`,
+    `SELECT
+       s.id,
+       s.user_id,
+       s.token_version,
+       s.user_agent,
+       COALESCE(online_client.ip_address, s.ip_address::text) AS ip_address,
+       s.created_at,
+       s.last_activity,
+       (online_client.last_seen_at IS NOT NULL) AS is_online
+     FROM sessions s
+     LEFT JOIN LATERAL (
+       SELECT h.ip_address, h.last_seen_at
+       FROM client_heartbeats h
+       WHERE h.user_id = s.user_id
+         AND h.session_id = s.id
+         AND h.last_seen_at > NOW() - INTERVAL '3 minutes'
+       ORDER BY h.last_seen_at DESC
+       LIMIT 1
+     ) online_client ON TRUE
+     WHERE s.user_id = $1 AND s.token_version = $2
+     ORDER BY s.last_activity DESC`,
     [userId, currentTokenVersion]
   );
   const sessions = result.rows;
@@ -91,8 +110,14 @@ async function getActiveSessions(userId, currentTokenVersion) {
  * @param {string} sessionId - Session ID
  * @returns {Promise<void>}
  */
-async function updateSessionActivity(sessionId) {
-  await pool.query('UPDATE sessions SET last_activity = NOW() WHERE id = $1', [sessionId]);
+async function updateSessionActivity(sessionId, ipAddress = null) {
+  await pool.query(
+    `UPDATE sessions
+     SET last_activity = NOW(),
+         ip_address = COALESCE($2, ip_address)
+     WHERE id = $1`,
+    [sessionId, ipAddress]
+  );
 }
 
 /**

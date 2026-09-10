@@ -453,7 +453,7 @@ export const Settings: React.FC = () => {
         activeSessions={activeSessions}
         loadingSessions={loadingSessions}
         revokingSessionId={revokingSessionId}
-        onRefresh={loadActiveSessions}
+        onRefresh={() => void loadActiveSessions(true)}
         onRevokeSession={handleRevokeSession}
       />
 

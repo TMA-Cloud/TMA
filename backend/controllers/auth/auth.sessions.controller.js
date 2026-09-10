@@ -1,6 +1,15 @@
 import { logger } from '../../config/logger.js';
-import { deleteHeartbeatBySession, deleteOtherHeartbeatsForUser } from '../../models/clientHeartbeat.model.js';
-import { deleteOtherUserSessions, deleteSession, getActiveSessions } from '../../models/session.model.js';
+import {
+  deleteHeartbeatBySession,
+  deleteOtherHeartbeatsForUser,
+  upsertClientHeartbeat,
+} from '../../models/clientHeartbeat.model.js';
+import {
+  deleteOtherUserSessions,
+  deleteSession,
+  getActiveSessions,
+  updateSessionActivity,
+} from '../../models/session.model.js';
 import { getUserById } from '../../models/user.model.js';
 import { logAuditEvent } from '../../services/auditLogger.js';
 import { getSessionIdFromRequest } from '../../utils/tokenExtractor.js';
@@ -23,8 +32,15 @@ async function getSessions(req, res) {
     // Get session ID from token to identify current session
     const currentSessionId = getSessionIdFromRequest(req);
 
+    const refreshIp = req.query.refreshIp === 'true';
+    if (refreshIp && currentSessionId) {
+      // The middleware touch is intentionally fire-and-forget. Await this one so
+      // an on-demand refresh always includes this device's IP from this request.
+      await updateSessionActivity(currentSessionId, req.ip || req.socket?.remoteAddress || null);
+    }
+
     const currentTokenVersion = user.token_version || 1;
-    const sessions = await getActiveSessions(req.userId, currentTokenVersion);
+    const sessions = await getActiveSessions(req.userId, currentTokenVersion, refreshIp);
 
     // Mark which session is the current one
     const sessionsWithCurrent = sessions.map(session => ({
@@ -36,6 +52,52 @@ async function getSessions(req, res) {
   } catch (err) {
     logger.error({ err, userId: req.userId }, 'Failed to get sessions');
     sendError(res, 500, 'Failed to get sessions', err);
+  }
+}
+
+/**
+ * Record that the current browser/device is still online. Besides keeping the
+ * activity window current, this captures the IP observed by the server after a
+ * device changes network.
+ */
+async function sessionHeartbeat(req, res) {
+  try {
+    if (!req.userId || !req.sessionId) {
+      return sendError(res, 401, 'Active session not found');
+    }
+
+    const ipAddress = req.ip || req.socket?.remoteAddress || null;
+    await Promise.all([
+      updateSessionActivity(req.sessionId, ipAddress),
+      upsertClientHeartbeat({
+        userId: req.userId,
+        clientId: null,
+        sessionId: req.sessionId,
+        appVersion: 'web',
+        platform: 'web',
+        userAgent: req.get('User-Agent') || null,
+        ipAddress,
+      }),
+    ]);
+    sendSuccess(res, { ok: true });
+  } catch (err) {
+    logger.error({ err, userId: req.userId, sessionId: req.sessionId }, 'Failed to record session heartbeat');
+    sendError(res, 500, 'Failed to record session heartbeat', err);
+  }
+}
+
+/** Remove the presence heartbeat without revoking the signed-in session. */
+async function sessionOffline(req, res) {
+  try {
+    if (!req.userId || !req.sessionId) {
+      return sendError(res, 401, 'Active session not found');
+    }
+
+    await deleteHeartbeatBySession(req.userId, req.sessionId);
+    sendSuccess(res, { ok: true });
+  } catch (err) {
+    logger.error({ err, userId: req.userId, sessionId: req.sessionId }, 'Failed to mark session offline');
+    sendError(res, 500, 'Failed to mark session offline', err);
   }
 }
 
@@ -126,4 +188,4 @@ async function revokeOtherSessions(req, res) {
   }
 }
 
-export { getSessions, revokeSession, revokeOtherSessions };
+export { getSessions, sessionHeartbeat, sessionOffline, revokeSession, revokeOtherSessions };

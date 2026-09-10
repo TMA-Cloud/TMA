@@ -10,6 +10,8 @@ import {
   logoutAllDevices,
   profile,
   getSessions,
+  sessionHeartbeat,
+  sessionOffline,
   revokeSession,
   revokeOtherSessions,
   googleAuthEnabled,
@@ -47,6 +49,8 @@ router.post('/logout', apiRateLimiter, logout);
 router.post('/logout-all', authMiddleware, apiRateLimiter, logoutAllDevices);
 router.get('/profile', authMiddleware, apiRateLimiter, profile);
 router.get('/sessions', authMiddleware, apiRateLimiter, getSessions);
+router.post('/sessions/heartbeat', authMiddleware, apiRateLimiter, sessionHeartbeat);
+router.post('/sessions/offline', authMiddleware, apiRateLimiter, sessionOffline);
 router.delete('/sessions/:sessionId', authMiddleware, apiRateLimiter, revokeSession);
 router.post('/sessions/revoke-others', authMiddleware, apiRateLimiter, revokeOtherSessions);
 router.post('/change-password', authMiddleware, authRateLimiter, changePasswordSchema, validate, changePassword);

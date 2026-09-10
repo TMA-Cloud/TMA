@@ -78,6 +78,15 @@ export const SessionsModal: React.FC<SessionsModalProps> = ({
                             Current
                           </span>
                         )}
+                        <span
+                          className={`px-2 py-0.5 text-xs rounded-full ${
+                            session.is_online
+                              ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
+                              : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
+                          }`}
+                        >
+                          {session.is_online ? 'Online' : 'Offline'}
+                        </span>
                       </div>
                       <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">
                         {userAgent.length > 60 ? `${userAgent.slice(0, 60)}...` : userAgent}

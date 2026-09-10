@@ -11,10 +11,10 @@ export function useSessions() {
   const [revokingSessionId, setRevokingSessionId] = useState<string | null>(null);
   const [loggingOutAll, setLoggingOutAll] = useState(false);
 
-  const loadActiveSessions = useCallback(async () => {
+  const loadActiveSessions = useCallback(async (refreshIp = false) => {
     try {
       setLoadingSessions(true);
-      const { sessions } = await getActiveSessions();
+      const { sessions } = await getActiveSessions(refreshIp);
       setActiveSessions(sessions);
     } catch {
       // Error handled silently - sessions list will be empty
@@ -89,7 +89,7 @@ export function useSessions() {
   };
 
   useEffect(() => {
-    Promise.resolve().then(loadActiveSessions);
+    Promise.resolve().then(() => loadActiveSessions());
   }, [loadActiveSessions]);
 
   return {

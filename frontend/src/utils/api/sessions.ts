@@ -16,13 +16,23 @@ export interface ActiveSession {
   ip_address: string | null;
   created_at: string;
   last_activity: string;
+  is_online?: boolean;
   isCurrent?: boolean;
 }
 
-export async function getActiveSessions(): Promise<{
+export async function getActiveSessions(refreshIp = false): Promise<{
   sessions: ActiveSession[];
 }> {
-  return await apiGet<{ sessions: ActiveSession[] }>('/api/sessions');
+  const endpoint = refreshIp ? '/api/sessions?refreshIp=true' : '/api/sessions';
+  return await apiGet<{ sessions: ActiveSession[] }>(endpoint);
+}
+
+export async function sendSessionHeartbeat(): Promise<{ ok: boolean }> {
+  return await apiPost<{ ok: boolean }>('/api/sessions/heartbeat');
+}
+
+export async function sendSessionOffline(): Promise<{ ok: boolean }> {
+  return await apiPost<{ ok: boolean }>('/api/sessions/offline', undefined, { keepalive: true });
 }
 
 export async function revokeSession(sessionId: string): Promise<{

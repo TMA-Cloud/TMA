@@ -15,7 +15,8 @@ async function upsertClientHeartbeat({ userId, clientId, sessionId, appVersion, 
     `INSERT INTO client_heartbeats (id, user_id, session_id, app_version, platform, user_agent, ip_address, last_seen_at, created_at)
      VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
      ON CONFLICT (id) DO UPDATE
-       SET app_version  = EXCLUDED.app_version,
+       SET session_id   = EXCLUDED.session_id,
+           app_version  = EXCLUDED.app_version,
            platform     = EXCLUDED.platform,
            user_agent   = EXCLUDED.user_agent,
            ip_address   = EXCLUDED.ip_address,
@@ -45,6 +46,7 @@ async function getActiveClients(withinMinutes = 5) {
      FROM client_heartbeats h
      JOIN users u ON u.id = h.user_id
      WHERE h.last_seen_at > NOW() - INTERVAL '1 minute' * $1
+       AND h.platform IS DISTINCT FROM 'web'
      ORDER BY h.last_seen_at DESC`,
     [withinMinutes]
   );

@@ -106,7 +106,7 @@ export default async function authMiddleware(req, res, next) {
 
         // Update last activity timestamp for this session (fire-and-forget, don't block request)
         // Only update if session is valid and not being revoked
-        updateSessionActivity(decoded.sid).catch(err => {
+        updateSessionActivity(decoded.sid, req.ip || req.socket?.remoteAddress || null).catch(err => {
           // Log error but don't fail the request if activity update fails
           logger.debug({ err, sessionId: decoded.sid }, 'Failed to update session activity');
         });
