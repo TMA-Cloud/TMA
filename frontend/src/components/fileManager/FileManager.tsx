@@ -97,6 +97,9 @@ export const FileManager: React.FC = () => {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [deleteForeverModalOpen, setDeleteForeverModalOpen] = useState(false);
   const [shareExpiryModalOpen, setShareExpiryModalOpen] = useState(false);
+  // Keep the selection that opened the modal. The live selection can change
+  // while the modal is open (for example after a click-outside handler runs).
+  const [pendingShareFiles, setPendingShareFiles] = useState<string[]>([]);
   const [infoModalOpen, setInfoModalOpen] = useState(false);
   const [infoModalFile, setInfoModalFile] = useState<FileItem | null>(null);
   const [contextMenu, setContextMenu] = useState<{
@@ -353,6 +356,7 @@ export const FileManager: React.FC = () => {
         .catch(() => closeMultiSelectIfMobile());
     } else {
       // Sharing — show expiry picker first
+      setPendingShareFiles([...selectedFiles]);
       setShareExpiryModalOpen(true);
     }
   };
@@ -370,8 +374,11 @@ export const FileManager: React.FC = () => {
 
   const handleShareConfirm = async (expiry: ShareExpiry) => {
     setShareExpiryModalOpen(false);
+    const ids = pendingShareFiles;
+    setPendingShareFiles([]);
+    if (ids.length === 0) return;
     try {
-      const links = await shareFiles(selectedFiles, true, expiry);
+      const links = await shareFiles(ids, true, expiry);
       const list = Object.values(links);
       setShareLinkModalOpen(true, list);
       closeMultiSelectIfMobile();
@@ -585,9 +592,12 @@ export const FileManager: React.FC = () => {
 
       <ShareExpiryModal
         isOpen={shareExpiryModalOpen}
-        onClose={() => setShareExpiryModalOpen(false)}
+        onClose={() => {
+          setShareExpiryModalOpen(false);
+          setPendingShareFiles([]);
+        }}
         onConfirm={handleShareConfirm}
-        fileCount={selectedFiles.length}
+        fileCount={pendingShareFiles.length}
       />
       <FileInfoModal
         isOpen={infoModalOpen}

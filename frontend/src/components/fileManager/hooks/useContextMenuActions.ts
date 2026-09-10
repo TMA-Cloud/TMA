@@ -82,6 +82,9 @@ export function useContextMenuActions({
 
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
   const [shareExpiryOpen, setShareExpiryOpen] = useState(false);
+  // The desktop context menu is portalled outside the file manager. Its click
+  // can therefore clear the live selection before the expiry modal is used.
+  const [pendingShareFiles, setPendingShareFiles] = useState<string[]>([]);
   const [infoOpen, setInfoOpen] = useState(false);
   const [infoFile, setInfoFile] = useState<FileItem | null>(null);
   const [pendingAction, setPendingAction] = useState<{
@@ -161,8 +164,11 @@ export function useContextMenuActions({
 
   const handleShareExpiry = async (expiry: ShareExpiry) => {
     setShareExpiryOpen(false);
+    const ids = pendingShareFiles;
+    setPendingShareFiles([]);
+    if (ids.length === 0) return;
     try {
-      const links = await shareFiles(selectedFiles, true, expiry);
+      const links = await shareFiles(ids, true, expiry);
       const list = Object.values(links);
       if (list.length) setShareLinkModalOpen(true, list);
       onActionComplete?.();
@@ -277,6 +283,7 @@ export function useContextMenuActions({
                   }
                 } else {
                   // Show expiry picker — action continues in handleShareExpiry
+                  setPendingShareFiles([...selectedFiles]);
                   setShareExpiryOpen(true);
                 }
               },
@@ -519,9 +526,12 @@ export function useContextMenuActions({
     isDeleting,
     // Share expiry modal
     shareExpiryOpen,
-    setShareExpiryOpen,
+    closeShareExpiry: () => {
+      setShareExpiryOpen(false);
+      setPendingShareFiles([]);
+    },
     handleShareExpiry,
-    selectedFilesCount: selectedFiles.length,
+    selectedFilesCount: pendingShareFiles.length,
     // Get-info modal
     infoOpen,
     setInfoOpen,

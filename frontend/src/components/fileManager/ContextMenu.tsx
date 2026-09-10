@@ -41,7 +41,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     confirmationMessage,
     isDeleting,
     shareExpiryOpen,
-    setShareExpiryOpen,
+    closeShareExpiry,
     handleShareExpiry,
     selectedFilesCount,
     infoOpen,
@@ -96,7 +96,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
   const shareExpiryElement = (
     <ShareExpiryModal
       isOpen={shareExpiryOpen}
-      onClose={() => setShareExpiryOpen(false)}
+      onClose={closeShareExpiry}
       onConfirm={handleShareExpiry}
       fileCount={selectedFilesCount}
     />

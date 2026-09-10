@@ -172,6 +172,9 @@ export function useFileOperations({
     shared: boolean,
     expiry?: ShareExpiry
   ): Promise<Record<string, string>> => {
+    if (ids.length === 0) {
+      throw new Error('Select at least one item to share');
+    }
     const res = await fetch('/api/files/share', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
