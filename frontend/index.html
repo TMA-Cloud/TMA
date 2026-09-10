@@ -1,9 +1,11 @@
 <!doctype html>
 <html lang="en">
   <head>
+    <meta name="theme-color" content="#1b1b19" />
     <script>
       (function () {
         var t = localStorage.getItem('theme');
+        var dark = t !== 'light';
         if (t === 'light') {
           document.documentElement.classList.remove('dark');
           document.documentElement.style.colorScheme = 'light';
@@ -11,6 +13,8 @@
           document.documentElement.classList.add('dark');
           document.documentElement.style.colorScheme = 'dark';
         }
+        document.documentElement.style.backgroundColor = dark ? '#1b1b19' : '#f3f3f0';
+        document.querySelector('meta[name="theme-color"]')?.setAttribute('content', dark ? '#1b1b19' : '#f3f3f0');
       })();
     </script>
     <meta charset="UTF-8" />
@@ -22,8 +26,15 @@
       href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..700&display=swap"
       rel="stylesheet"
     />
+    <meta name="application-name" content="TMA Cloud" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="TMA Cloud" />
+    <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" type="image/svg+xml" href="/tma.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="apple-touch-icon" href="/tma-192.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>TMA Cloud</title>
   </head>
   <body>

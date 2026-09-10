@@ -118,14 +118,16 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     return (
       <>
         <div
-          className="fixed inset-0 z-50 flex flex-col justify-end bg-black/20 dark:bg-black/40 backdrop-blur-sm animate-fadeIn"
+          className="fixed inset-x-0 top-0 z-50 flex h-screen flex-col justify-end overflow-hidden bg-black/20 dark:bg-black/40 backdrop-blur-sm animate-fadeIn"
+          style={{ height: '100dvh' }}
           role="dialog"
           aria-modal="true"
           onClick={onClose}
         >
           <div
             ref={menuRef}
-            className="material-thick material-edge scroller rounded-t-3xl pt-3 pb-4 px-4 max-h-[70vh] overflow-y-auto animate-slideUp"
+            className="material-thick material-edge scroller rounded-t-3xl pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] px-4 max-h-[70vh] overflow-y-auto animate-slideUp"
+            style={{ maxHeight: '70dvh' }}
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-center mb-3">

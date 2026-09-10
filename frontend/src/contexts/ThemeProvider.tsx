@@ -12,6 +12,7 @@ function getStoredTheme(): Theme {
 
 function applyThemeToDocument(theme: Theme) {
   const html = document.documentElement;
+  const themeColor = theme === 'dark' ? '#1b1b19' : '#f3f3f0';
   if (theme === 'dark') {
     html.classList.add('dark');
     html.style.colorScheme = 'dark';
@@ -19,6 +20,8 @@ function applyThemeToDocument(theme: Theme) {
     html.classList.remove('dark');
     html.style.colorScheme = 'light';
   }
+  html.style.backgroundColor = themeColor;
+  document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')?.setAttribute('content', themeColor);
 }
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {

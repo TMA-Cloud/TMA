@@ -215,9 +215,14 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
         : 'animate-modalIn';
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto" aria-modal="true" role="dialog">
+    <div
+      className="fixed inset-x-0 top-0 z-50 h-screen overflow-hidden"
+      style={{ height: '100dvh' }}
+      aria-modal="true"
+      role="dialog"
+    >
       <div
-        className={`flex min-h-screen ${isSheet ? 'items-end' : 'items-center'} justify-center ${
+        className={`flex h-full min-h-0 ${isSheet ? 'items-end' : 'items-center'} justify-center ${
           size === 'full' || isSheet ? 'p-0' : 'p-4'
         }`}
       >
@@ -241,9 +246,12 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
           style={{
             transformOrigin: isSheet ? 'bottom center' : 'center',
             willChange: 'transform, opacity',
+            // The vh class is the legacy fallback. Dynamic viewport units are
+            // applied inline so they win when Safari supports them.
+            maxHeight: size === 'full' ? undefined : isSheet ? '92dvh' : '90dvh',
           }}
           className={`
-            relative z-10 material-thick material-edge text-[var(--label)]
+            relative z-10 flex min-h-0 flex-col material-thick material-edge text-[var(--label)]
             ${sizeClasses[size]} w-full
             ${
               size === 'full'
@@ -286,8 +294,12 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
           </div>
 
           <div
-            className={`scroller ${size === 'full' ? 'p-4' : isSheet ? 'px-5 py-5' : 'p-6'} overflow-y-auto ${
-              size === 'full' ? 'max-h-[calc(100vh-5rem)]' : 'max-h-[calc(90vh-8rem)]'
+            className={`scroller min-h-0 flex-1 overflow-y-auto ${
+              size === 'full'
+                ? 'p-4 pb-[max(1rem,env(safe-area-inset-bottom))]'
+                : isSheet
+                  ? 'px-5 pt-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]'
+                  : 'p-6'
             }`}
           >
             {children}
