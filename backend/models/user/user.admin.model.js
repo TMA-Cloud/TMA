@@ -10,6 +10,7 @@
  */
 
 export { isFirstUser } from './user.admin.helpers.model.js';
+export { getKnownProxiesSettings, setKnownProxiesSettings } from './user.admin.network.model.js';
 export {
   getSignupEnabled,
   setSignupEnabled,

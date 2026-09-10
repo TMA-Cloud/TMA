@@ -1,6 +1,7 @@
 import { body, param, query } from 'express-validator';
 
 import { ALL_PERMISSIONS } from './permissions.js';
+import { normalizeKnownProxies } from './knownProxies.js';
 
 const MAX_EMAIL_LENGTH = 254;
 const MIN_PASSWORD_LENGTH = 8;
@@ -177,6 +178,19 @@ const updateElectronOnlyAccessConfigSchema = [body('enabled').isBoolean().withMe
 
 const updatePasswordChangeConfigSchema = [body('enabled').isBoolean().withMessage('Enabled must be a boolean')];
 
+const updateKnownProxiesConfigSchema = [
+  body('knownProxies').isArray({ max: 100 }).withMessage('Known proxies must be an array with at most 100 entries'),
+  body('knownProxies.*')
+    .isString()
+    .withMessage('Each known proxy must be a string')
+    .isLength({ max: 253 })
+    .withMessage('Each known proxy must not exceed 253 characters'),
+  body('knownProxies').custom(value => {
+    normalizeKnownProxies(value);
+    return true;
+  }),
+];
+
 const updateUserStorageLimitSchema = [
   body('targetUserId')
     .notEmpty()
@@ -322,4 +336,5 @@ export {
   checkUploadStorageSchema,
   updateElectronOnlyAccessConfigSchema,
   updatePasswordChangeConfigSchema,
+  updateKnownProxiesConfigSchema,
 };

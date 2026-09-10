@@ -33,6 +33,7 @@ const handlerNames = [
   'getElectronOnlyAccessConfig',
   'getHideFileExtensionsConfig',
   'getMaxUploadSizeConfig',
+  'getKnownProxiesConfig',
   'getOnlyOfficeConfig',
   'getOrphans',
   'getPasswordChangeConfig',
@@ -45,6 +46,7 @@ const handlerNames = [
   'updateElectronOnlyAccessConfig',
   'updateHideFileExtensionsConfig',
   'updateMaxUploadSizeConfig',
+  'updateKnownProxiesConfig',
   'updateOnlyOfficeConfig',
   'updatePasswordChangeConfig',
   'updateShareBaseUrlConfig',
@@ -309,6 +311,50 @@ describe('URL config endpoints', () => {
       (await request(app).put('/api/user/onlyoffice-config').send({ url: 'https://oo.example.com', jwtSecret: 's' }))
         .status
     ).toBe(200);
+  });
+});
+
+describe('known proxy config validation', () => {
+  it('accepts a list of proxy identities and an empty list', async () => {
+    expect(
+      (
+        await request(app)
+          .put('/api/user/known-proxies-config')
+          .send({ knownProxies: ['10.1.2.100', '172.18.0.0/16', 'proxy.example.com'] })
+      ).status
+    ).toBe(200);
+    expect((await request(app).put('/api/user/known-proxies-config').send({ knownProxies: [] })).status).toBe(200);
+  });
+
+  it('rejects missing, non-array, and non-string values', async () => {
+    expect((await request(app).put('/api/user/known-proxies-config').send({})).status).toBe(422);
+    expect((await request(app).put('/api/user/known-proxies-config').send({ knownProxies: '10.0.0.1' })).status).toBe(
+      422
+    );
+    expect(
+      (
+        await request(app)
+          .put('/api/user/known-proxies-config')
+          .send({ knownProxies: [123] })
+      ).status
+    ).toBe(422);
+  });
+
+  it('rejects malformed IP addresses and hostnames', async () => {
+    expect(
+      (
+        await request(app)
+          .put('/api/user/known-proxies-config')
+          .send({ knownProxies: ['999.1.1.1'] })
+      ).status
+    ).toBe(422);
+    expect(
+      (
+        await request(app)
+          .put('/api/user/known-proxies-config')
+          .send({ knownProxies: ['not a hostname'] })
+      ).status
+    ).toBe(422);
   });
 });
 

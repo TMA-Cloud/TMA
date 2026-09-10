@@ -10,6 +10,7 @@ import {
   getElectronOnlyAccessConfig,
   getHideFileExtensionsConfig,
   getMaxUploadSizeConfig,
+  getKnownProxiesConfig,
   getOnlyOfficeConfig,
   getOrphans,
   getPasswordChangeConfig,
@@ -22,6 +23,7 @@ import {
   updateElectronOnlyAccessConfig,
   updateHideFileExtensionsConfig,
   updateMaxUploadSizeConfig,
+  updateKnownProxiesConfig,
   updateOnlyOfficeConfig,
   updatePasswordChangeConfig,
   updateShareBaseUrlConfig,
@@ -41,6 +43,7 @@ import {
   updateElectronOnlyAccessConfigSchema,
   updateHideFileExtensionsConfigSchema,
   updateMaxUploadSizeConfigSchema,
+  updateKnownProxiesConfigSchema,
   updateOnlyOfficeConfigSchema,
   updatePasswordChangeConfigSchema,
   updateShareBaseUrlConfigSchema,
@@ -64,6 +67,8 @@ router.get('/share-base-url-config', getShareBaseUrlConfig);
 router.put('/share-base-url-config', updateShareBaseUrlConfigSchema, validate, updateShareBaseUrlConfig);
 router.get('/max-upload-size-config', getMaxUploadSizeConfig);
 router.put('/max-upload-size-config', updateMaxUploadSizeConfigSchema, validate, updateMaxUploadSizeConfig);
+router.get('/known-proxies-config', getKnownProxiesConfig);
+router.put('/known-proxies-config', updateKnownProxiesConfigSchema, validate, updateKnownProxiesConfig);
 router.get('/hide-file-extensions-config', getHideFileExtensionsConfig);
 router.put(
   '/hide-file-extensions-config',

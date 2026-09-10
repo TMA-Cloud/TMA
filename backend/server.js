@@ -26,6 +26,8 @@ import { initializeAuditQueue, shutdownAuditQueue } from './services/auditLogger
 import { startAccessTracker, shutdownAccessTracker } from './services/accessTracker.js';
 import { initializeMetrics, metricsEndpoint, startQueueMetricsUpdater } from './services/metrics.js';
 import { connectRedis, disconnectRedis } from './config/redis.js';
+import { getKnownProxiesSettings } from './models/user.model.js';
+import { resolveKnownProxies } from './utils/knownProxies.js';
 
 import { getCachedOnlyOfficeOrigin, warmOnlyOfficeOriginCache } from './utils/onlyofficeOriginCache.js';
 
@@ -33,16 +35,6 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-
-// Trust the reverse proxy so `req.ip` is the real client, not the proxy (else
-// everyone shares one rate-limit bucket). TRUST_PROXY takes anything Express
-// understands (hop count, proxy IP list, 'loopback'); defaults to 1 hop, '0' off.
-const trustProxySetting = process.env.TRUST_PROXY ?? '1';
-if (trustProxySetting !== '0' && trustProxySetting !== 'false') {
-  const numericHops = Number(trustProxySetting);
-  app.set('trust proxy', Number.isInteger(numericHops) ? numericHops : trustProxySetting);
-  logger.info({ trustProxy: trustProxySetting }, 'Trusting reverse proxy for client IP resolution');
-}
 
 // Metrics endpoint IP whitelist
 const METRICS_ALLOWED_IPS = (process.env.METRICS_ALLOWED_IPS || '127.0.0.1,::ffff:127.0.0.1,::1')
@@ -244,6 +236,19 @@ process.on('uncaughtException', error => {
 runMigrations()
   .then(async () => {
     const port = process.env.BPORT || 3000;
+
+    // Forwarded headers affect authentication logs and rate limits, so only
+    // enable them for explicitly configured proxy addresses.
+    const configuredProxies = await getKnownProxiesSettings();
+    const { resolved: trustedProxies, failures } = await resolveKnownProxies(configuredProxies);
+    app.set('trust proxy', trustedProxies.length > 0 ? trustedProxies : false);
+    if (failures.length > 0) {
+      logger.warn({ hostnames: failures }, 'Some known proxy hostnames could not be resolved and will not be trusted');
+    }
+    logger.info(
+      { configuredCount: configuredProxies.length, trustedAddressCount: trustedProxies.length },
+      'Known proxy trust configured'
+    );
 
     // Initialize Redis connection
     try {

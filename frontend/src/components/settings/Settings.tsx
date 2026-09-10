@@ -21,6 +21,7 @@ import { CloudDriveSection } from './sections/CloudDriveSection';
 import { AdministrationSection } from './sections/AdministrationSection';
 import { OnlyOfficeSection } from './sections/OnlyOfficeSection';
 import { ShareBaseUrlSection } from './sections/ShareBaseUrlSection';
+import { KnownProxiesSection } from './sections/KnownProxiesSection';
 import { UpdatesSection } from './sections/UpdatesSection';
 import { SecuritySection } from './sections/SecuritySection';
 import { SubUsersSection } from './sections/SubUsersSection';
@@ -268,6 +269,10 @@ export const Settings: React.FC = () => {
               onShowActiveClients={handleShowActiveClients}
               onShowOrphans={() => setOrphansModalOpen(true)}
             />
+            <div className="pt-1">
+              <p className="text-xs uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 mb-4">Networking</p>
+              <KnownProxiesSection canConfigure={canToggleSignup} />
+            </div>
             <div className="pt-1">
               <p className="text-xs uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 mb-4">Integrations</p>
               <div className="space-y-6">

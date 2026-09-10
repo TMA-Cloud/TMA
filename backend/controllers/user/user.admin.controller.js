@@ -29,3 +29,4 @@ export {
 } from './user.admin.config.controller.js';
 export { listUsers, updateUserStorageLimit } from './user.admin.users.controller.js';
 export { clientHeartbeat, getActiveClients } from './user.admin.clients.controller.js';
+export { getKnownProxiesConfig, updateKnownProxiesConfig } from './user.admin.network.controller.js';

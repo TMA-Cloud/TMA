@@ -130,3 +130,15 @@ export async function getMaxUploadSizeConfig(signal?: AbortSignal): Promise<{
 export async function updateMaxUploadSizeConfig(maxBytes: number): Promise<{ maxBytes: number }> {
   return await apiPut<{ maxBytes: number }>('/api/user/max-upload-size-config', { maxBytes });
 }
+
+export async function getKnownProxiesConfig(signal?: AbortSignal): Promise<{ knownProxies: string[] }> {
+  return await apiGet<{ knownProxies: string[] }>('/api/user/known-proxies-config', { signal });
+}
+
+export async function updateKnownProxiesConfig(
+  knownProxies: string[]
+): Promise<{ knownProxies: string[]; restartRequired: boolean }> {
+  return await apiPut<{ knownProxies: string[]; restartRequired: boolean }>('/api/user/known-proxies-config', {
+    knownProxies,
+  });
+}
