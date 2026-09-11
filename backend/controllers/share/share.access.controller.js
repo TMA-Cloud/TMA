@@ -33,9 +33,10 @@ async function handleShared(req, res) {
     logger.info({ shareToken: token, fileId: file.id, fileType: file.type }, 'Share link accessed');
 
     if (file.type === 'folder') {
-      const items = await getFolderContentsByShare(token, file.id);
+      const page = await getFolderContentsByShare(token, file.id, req.query);
+      if (req.accepts(['html', 'json']) === 'json') return res.json(page);
       res.send(
-        renderFolderPage(items, token, {
+        renderFolderPage(page, token, {
           heading: file.name,
           trail: [{ id: file.id, name: file.name }],
           zipHref: `/s/${token}/zip`,
@@ -78,9 +79,10 @@ async function browseSharedFolder(req, res) {
     recordAccess(folderId, file.userId);
     logger.info({ shareToken: token, folderId }, 'Share subfolder browsed');
 
-    const items = await getFolderContentsByShare(token, folderId);
+    const page = await getFolderContentsByShare(token, folderId, req.query);
+    if (req.accepts(['html', 'json']) === 'json') return res.json(page);
     res.send(
-      renderFolderPage(items, token, {
+      renderFolderPage(page, token, {
         heading: current.name,
         trail,
         zipHref: `/s/${token}/file/${folderId}`,

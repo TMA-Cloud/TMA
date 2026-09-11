@@ -1,16 +1,8 @@
-import pool from '../../config/db.js';
 import { logger } from '../../config/logger.js';
 import { logAuditEvent } from '../../services/auditLogger.js';
 import { EventTypes, publishFileEventsBatch } from '../../services/fileEvents.js';
-import { getFileInfo, getRecursiveIds, getSharedFiles, setShared } from '../../models/file.model.js';
-import {
-  addFilesToShare,
-  createShareLink,
-  deleteShareLinks,
-  getShareLinks,
-  removeFilesFromShares,
-  updateShareExpiry,
-} from '../../models/share.model.js';
+import { getFileInfo, getSharedFiles } from '../../models/file.model.js';
+import { getShareLinks, linkItemsToParentShares, unshareRoots, upsertShareRoots } from '../../models/share.model.js';
 import { buildShareLink } from '../../utils/shareLink.js';
 import { sendError, sendSuccess } from '../../utils/response.js';
 import { validateSortBy, validateSortOrder } from '../../utils/validation.js';
@@ -31,24 +23,16 @@ function computeExpiresAt(expiry) {
 async function shareFilesController(req, res) {
   const { ids, expiry, shared = true } = req.body;
 
-  const client = await pool.connect();
   try {
-    await client.query('BEGIN');
-
     const links = {};
 
     if (shared) {
       const expiresAt = computeExpiresAt(expiry || '7d');
 
-      const existingShareLinks = await getShareLinks(ids, req.ownerId);
-
-      const sharePromises = ids.map(async id => {
-        const treeIds = await getRecursiveIds([id], req.ownerId);
-        let token = existingShareLinks[id];
-
-        if (!token) {
-          token = await createShareLink(id, req.ownerId, treeIds, expiresAt);
-
+      const shareResult = await upsertShareRoots(ids, req.ownerId, expiresAt);
+      await Promise.all(
+        shareResult.created.map(async id => {
+          const token = shareResult.tokens[id];
           await logAuditEvent(
             'share.create',
             {
@@ -57,27 +41,23 @@ async function shareFilesController(req, res) {
               resourceId: token,
               metadata: {
                 fileId: id,
-                fileCount: treeIds.length,
+                fileCount: shareResult.counts[id],
                 expiry: expiry || '7d',
               },
             },
             req
           );
           logger.info(
-            { fileId: id, shareToken: token, fileCount: treeIds.length, expiry: expiry || '7d' },
+            { fileId: id, shareToken: token, fileCount: shareResult.counts[id], expiry: expiry || '7d' },
             'Share link created'
           );
-        } else {
-          await addFilesToShare(token, treeIds);
-          await updateShareExpiry(token, expiresAt);
-        }
-
-        links[id] = await buildShareLink(token, req);
-      });
-
-      await Promise.all(sharePromises);
-      await setShared(ids, true, req.ownerId);
-
+        })
+      );
+      await Promise.all(
+        ids.map(async id => {
+          links[id] = await buildShareLink(shareResult.tokens[id], req);
+        })
+      );
       const fileInfo = await getFileInfo(ids, req.ownerId);
 
       await publishFileEventsBatch(
@@ -94,12 +74,8 @@ async function shareFilesController(req, res) {
         }))
       );
     } else {
-      const treeIds = await getRecursiveIds(ids, req.ownerId);
-      await removeFilesFromShares(treeIds, req.ownerId);
-
       const fileInfo = await getFileInfo(ids, req.ownerId);
-
-      await deleteShareLinks(ids, req.ownerId);
+      await unshareRoots(ids, req.ownerId);
 
       await logAuditEvent(
         'share.delete',
@@ -115,8 +91,6 @@ async function shareFilesController(req, res) {
         req
       );
       logger.info({ fileIds: ids, fileCount: ids.length }, 'Share links deleted');
-
-      await setShared(ids, false, req.ownerId);
 
       // Publish file unshared events in batch (optimized)
       await publishFileEventsBatch(
@@ -134,17 +108,13 @@ async function shareFilesController(req, res) {
       );
     }
 
-    await client.query('COMMIT');
     if (shared) {
       sendSuccess(res, { links });
     } else {
       sendSuccess(res, { message: 'Files unshared successfully.' });
     }
   } catch (err) {
-    await client.query('ROLLBACK');
     sendError(res, 500, 'Server error', err);
-  } finally {
-    client.release();
   }
 }
 
@@ -154,7 +124,12 @@ async function shareFilesController(req, res) {
 async function listShared(req, res) {
   const sortBy = validateSortBy(req.query.sortBy) || 'modified';
   const order = validateSortOrder(req.query.order) || 'DESC';
-  const files = await getSharedFiles(req.ownerId, sortBy, order);
+  const result = await getSharedFiles(req.ownerId, sortBy, order, {
+    cursor: req.query.cursor,
+    limit: req.query.limit,
+  });
+  const files = result.files || result;
+  if (result.nextCursor) res.setHeader('X-Next-Cursor', result.nextCursor);
   sendSuccess(res, files);
 }
 
@@ -181,64 +156,11 @@ async function getShareLinksController(req, res) {
  */
 async function linkParentShareController(req, res) {
   const { ids } = req.body;
-
-  const parentRes = await pool.query('SELECT id, parent_id FROM files WHERE id = ANY($1::text[]) AND user_id = $2', [
-    ids,
-    req.ownerId,
-  ]);
-
-  const fileToParent = {};
-  const parentIds = [];
-  for (const row of parentRes.rows) {
-    if (row.parent_id) {
-      fileToParent[row.id] = row.parent_id;
-      parentIds.push(row.parent_id);
-    }
-  }
-
-  if (parentIds.length === 0) {
-    return sendSuccess(res, { links: {} });
-  }
-
-  const uniqueParentIds = [...new Set(parentIds)];
-  const parentShareLinks = await getShareLinks(uniqueParentIds, req.ownerId);
-
-  // Group files by their parent's share link.
-  const shareIdToFileIds = new Map();
-  for (const id of ids) {
-    const parentId = fileToParent[id];
-    if (!parentId) continue;
-    const shareId = parentShareLinks[parentId];
-    if (!shareId) continue;
-
-    if (!shareIdToFileIds.has(shareId)) {
-      shareIdToFileIds.set(shareId, []);
-    }
-    shareIdToFileIds.get(shareId).push(id);
-  }
-
+  const mappings = await linkItemsToParentShares(ids, req.ownerId);
   const links = {};
-  const allTreeIds = [];
-  const allFileIdsToShare = [];
-
-  for (const [shareId, fileIds] of shareIdToFileIds.entries()) {
-    const treeIds = await getRecursiveIds(fileIds, req.ownerId);
-    allTreeIds.push(...treeIds);
-    allFileIdsToShare.push(...fileIds);
-
-    await addFilesToShare(shareId, treeIds);
-
-    const shareUrl = await buildShareLink(shareId, req);
-    for (const fileId of fileIds) {
-      links[fileId] = shareUrl;
-    }
-  }
-
-  if (allFileIdsToShare.length > 0) {
-    await setShared(allFileIdsToShare, true, req.ownerId);
-  }
-
-  const fileInfo = await getFileInfo(allFileIdsToShare, req.ownerId);
+  for (const mapping of mappings) links[mapping.root_id] = await buildShareLink(mapping.share_id, req);
+  const linkedIds = [...new Set(mappings.map(mapping => mapping.root_id))];
+  const fileInfo = await getFileInfo(linkedIds, req.ownerId);
 
   // Publish file shared events in batch (optimized)
   await publishFileEventsBatch(

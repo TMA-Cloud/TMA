@@ -97,18 +97,22 @@ async function publishFileEventsBatch(events) {
     });
   }
 
-  // Publish all events in parallel (grouped by user)
+  // One publication per user. The browser already coalesces a burst into one
+  // refresh, so publishing hundreds of individual messages only multiplies
+  // Redis and SSE framing work without adding useful fidelity.
   const publishPromises = [];
   for (const [targetUserId, userEvents] of eventsByUser.entries()) {
     const channel = getUserEventsChannel(targetUserId);
-    // Publish events sequentially for each user to maintain order
-    for (const event of userEvents) {
-      publishPromises.push(
-        redisClient.publish(channel, JSON.stringify(event)).catch(err => {
-          logger.error({ err, eventType: event.type, userId: targetUserId }, 'Failed to publish batch event');
-        })
-      );
-    }
+    const envelope = {
+      type: 'file.batch',
+      timestamp: new Date().toISOString(),
+      data: { events: userEvents },
+    };
+    publishPromises.push(
+      redisClient.publish(channel, JSON.stringify(envelope)).catch(err => {
+        logger.error({ err, eventCount: userEvents.length, userId: targetUserId }, 'Failed to publish batch event');
+      })
+    );
   }
 
   // Wait for all publishes to complete (but don't block on errors)

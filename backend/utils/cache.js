@@ -5,6 +5,35 @@ import { redisClient, isRedisConnected } from '../config/redis.js';
 
 // Default TTL in seconds
 const DEFAULT_TTL = 300; // 5 minutes
+// A sorted-set registry records each cache key's own expiry. Unlike the old
+// Set registry, dead members can be pruned even when an active user keeps the
+// registry itself alive indefinitely.
+const CACHE_INDEX_PREFIX = '__cache_index_v2__:';
+
+function registryPrefixes(key) {
+  const parts = String(key).split(':');
+  switch (parts[0]) {
+    case 'files':
+    case 'file':
+    case 'search':
+    case 'session':
+    case 'user':
+    case 'storage':
+      return parts[1] ? [`${parts[0]}:${parts[1]}`] : [];
+    case 'share':
+      if (parts[1] === 'folder' || parts[1] === 'check') {
+        return parts[2] ? [`share:${parts[1]}:${parts[2]}`] : [];
+      }
+      if (parts[1] === 'token') {
+        return parts[2] ? [`share:token:${parts[2]}`] : [];
+      }
+      return parts[1] && parts[1] !== 'token' ? [`share:${parts[1]}`] : [];
+    case 'folder':
+      return parts[1] ? [`folder:${parts[1]}`] : [];
+    default:
+      return [];
+  }
+}
 
 /**
  * Get value from cache
@@ -28,6 +57,57 @@ async function getCache(key) {
   }
 }
 
+async function getCaches(keys) {
+  if (!isRedisConnected() || !Array.isArray(keys) || keys.length === 0) return keys?.map(() => null) || [];
+  try {
+    const values =
+      typeof redisClient.mGet === 'function'
+        ? await redisClient.mGet(keys)
+        : await Promise.all(keys.map(key => redisClient.get(key)));
+    return values.map(value => {
+      if (value === null) return null;
+      try {
+        return JSON.parse(value);
+      } catch {
+        return null;
+      }
+    });
+  } catch (err) {
+    logger.warn({ err, count: keys.length }, 'Error getting cache keys');
+    return keys.map(() => null);
+  }
+}
+
+async function setCaches(entries, ttl = DEFAULT_TTL) {
+  if (!isRedisConnected() || !Array.isArray(entries) || entries.length === 0) return false;
+  try {
+    if (typeof redisClient.multi !== 'function') {
+      await Promise.all(entries.map(([key, value]) => setCache(key, value, ttl)));
+      return true;
+    }
+    const batch = redisClient.multi();
+    const registries = new Set();
+    const expiresAt = Date.now() + ttl * 1000;
+    for (const [key, value] of entries) {
+      batch.setEx(key, ttl, JSON.stringify(value));
+      for (const prefix of registryPrefixes(key)) {
+        const registry = `${CACHE_INDEX_PREFIX}${prefix}`;
+        batch.zAdd(registry, { score: expiresAt, value: key });
+        registries.add(registry);
+      }
+    }
+    for (const registry of registries) {
+      batch.zRemRangeByScore(registry, 0, Date.now());
+      batch.expire(registry, ttl + 60);
+    }
+    await batch.exec();
+    return true;
+  } catch (err) {
+    logger.warn({ err, count: entries.length }, 'Error setting cache keys');
+    return false;
+  }
+}
+
 /**
  * Set value in cache
  * @param {string} key - Cache key
@@ -42,7 +122,31 @@ async function setCache(key, value, ttl = DEFAULT_TTL) {
 
   try {
     const serialized = JSON.stringify(value);
-    await redisClient.setEx(key, ttl, serialized);
+    const prefixes = registryPrefixes(key);
+    // Use one Redis round trip and only index prefixes that are actually
+    // invalidated by the application.
+    if (prefixes.length > 0 && typeof redisClient.multi === 'function') {
+      const batch = redisClient.multi().setEx(key, ttl, serialized);
+      for (const prefix of prefixes) {
+        const registry = `${CACHE_INDEX_PREFIX}${prefix}`;
+        batch
+          .zAdd(registry, { score: Date.now() + ttl * 1000, value: key })
+          .zRemRangeByScore(registry, 0, Date.now())
+          .expire(registry, ttl + 60);
+      }
+      await batch.exec();
+    } else {
+      await redisClient.setEx(key, ttl, serialized);
+      if (typeof redisClient.sAdd === 'function') {
+        await Promise.all(
+          prefixes.map(async prefix => {
+            const registry = `${CACHE_INDEX_PREFIX}${prefix}`;
+            await redisClient.sAdd(registry, key);
+            await redisClient.expire(registry, ttl + 60);
+          })
+        );
+      }
+    }
     return true;
   } catch (err) {
     logger.warn({ err, key }, 'Error setting cache');
@@ -69,6 +173,20 @@ async function deleteCache(key) {
   }
 }
 
+async function deleteCaches(keys) {
+  if (!isRedisConnected()) return 0;
+  const uniqueKeys = [...new Set((keys || []).filter(Boolean))];
+  if (uniqueKeys.length === 0) return 0;
+  try {
+    return typeof redisClient.unlink === 'function'
+      ? await redisClient.unlink(uniqueKeys)
+      : await redisClient.del(uniqueKeys);
+  } catch (err) {
+    logger.warn({ err, count: uniqueKeys.length }, 'Error deleting cache keys');
+    return 0;
+  }
+}
+
 /**
  * Delete multiple keys matching a pattern using SCAN (non-blocking)
  * @param {string} pattern - Pattern to match (e.g., 'user:*')
@@ -80,62 +198,25 @@ async function deleteCachePattern(pattern) {
   }
 
   try {
-    const keys = [];
-    let cursor = '0'; // Redis v5 requires cursor as string
-
-    // Use SCAN instead of KEYS to avoid blocking Redis
-    do {
-      const result = await redisClient.scan(cursor, {
-        MATCH: pattern,
-        COUNT: 100, // Process in batches of 100
-      });
-      // Redis v5 returns cursor as string, '0' means done
-      cursor = result.cursor;
-      keys.push(...result.keys);
-    } while (cursor !== '0');
-
-    if (keys.length === 0) {
-      return 0;
+    const wildcardIndex = pattern.indexOf('*');
+    const keyPrefix = wildcardIndex >= 0 ? pattern.slice(0, wildcardIndex) : pattern;
+    const indexedPrefix = registryPrefixes(keyPrefix)[0];
+    if (indexedPrefix && typeof redisClient.zRangeByScore === 'function') {
+      const registry = `${CACHE_INDEX_PREFIX}${indexedPrefix}`;
+      await redisClient.zRemRangeByScore(registry, 0, Date.now());
+      const indexedKeys = await redisClient.zRangeByScore(registry, Date.now(), '+inf');
+      const matchingKeys = indexedKeys.filter(key => key.startsWith(keyPrefix));
+      if (matchingKeys.length === 0) return 0;
+      const deleted = await deleteCaches(matchingKeys);
+      if (matchingKeys.length === indexedKeys.length) await redisClient.del(registry);
+      else if (typeof redisClient.zRem === 'function') await redisClient.zRem(registry, matchingKeys);
+      return deleted;
     }
 
-    const batchSize = 100;
-    const maxRetries = 2;
-    let totalDeleted = 0;
-    const failedKeys = [];
-
-    for (let i = 0; i < keys.length; i += batchSize) {
-      const batch = keys.slice(i, i + batchSize);
-      if (batch.length === 0) continue;
-
-      let deleted = 0;
-      let lastErr = null;
-      for (let attempt = 0; attempt <= maxRetries; attempt++) {
-        try {
-          deleted = await redisClient.del(batch);
-          lastErr = null;
-          break;
-        } catch (err) {
-          lastErr = err;
-          if (attempt < maxRetries) {
-            await new Promise(r => {
-              setTimeout(r, 50 * (attempt + 1));
-            });
-          }
-        }
-      }
-      if (lastErr) {
-        logger.warn({ err: lastErr, batchSize: batch.length, pattern }, 'Batch deletion failed after retries');
-        failedKeys.push(...batch);
-      } else {
-        totalDeleted += deleted;
-      }
-    }
-
-    if (failedKeys.length > 0) {
-      logger.warn({ pattern, failedCount: failedKeys.length, totalDeleted }, 'Partial cache pattern deletion');
-    }
-
-    return totalDeleted;
+    // All pattern-invalidated application caches have a short-lived prefix
+    // registry. Entries from releases predating the registry expire naturally;
+    // never traverse the entire Redis keyspace from a request path.
+    return 0;
   } catch (err) {
     logger.warn({ err, pattern }, 'Error deleting cache pattern');
     return 0;
@@ -160,6 +241,7 @@ async function invalidateEmailCache(email) {
 async function invalidateUserCache(userId) {
   const patterns = [
     `files:${userId}:*`,
+    `file:${userId}:*`,
     `user:${userId}:*`,
     `storage:${userId}:*`,
     `search:${userId}:*`,
@@ -224,6 +306,9 @@ async function invalidateAllFileCaches(userId, parentId = null, options = {}) {
     await invalidateFileCache(userId, oldParentId);
   }
   await invalidateSearchCache(userId);
+  // Folder totals can change for any ancestor; one per-user registry avoids a
+  // recursive invalidation query on every mutation.
+  await deleteCachePattern(`folder:${userId}:*`);
   if (includeStats) {
     await deleteCache(cacheKeys.fileStats(userId));
   }
@@ -248,6 +333,8 @@ async function invalidateShareCache(shareId, userId = null) {
     totalDeleted += deletedExact ? 1 : 0;
 
     // Also delete pattern-based keys (file shared checks, etc.)
+    totalDeleted += await deleteCachePattern(`share:check:${shareId}:*`);
+    // Compatibility with cache keys created by older releases.
     totalDeleted += await deleteCachePattern(`share:token:${shareId}:*`);
     // Public folder listings are keyed share:folder:{token}:{folderId}; the
     // token is the share id, so drop every listing cached under this share.
@@ -359,8 +446,11 @@ const cacheKeys = {
 
 export {
   getCache,
+  getCaches,
   setCache,
+  setCaches,
   deleteCache,
+  deleteCaches,
   deleteCachePattern,
   invalidateEmailCache,
   invalidateUserCache,

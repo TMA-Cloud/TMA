@@ -4,6 +4,15 @@ import { logger } from '../config/logger.js';
 import { generateId } from '../utils/id.js';
 import { getCache, setCache, deleteCache, deleteCachePattern, cacheKeys, DEFAULT_TTL } from '../utils/cache.js';
 
+// Session validity is cached for five minutes, so persisting last_activity more
+// often than that adds write amplification without improving idle-time accuracy.
+// Keep this process-local suppression deliberately bounded; in a multi-process
+// deployment each process may write once per window, which is still a large
+// reduction from one write per authenticated request.
+const ACTIVITY_WRITE_WINDOW_MS = 5 * 60 * 1000;
+const MAX_ACTIVITY_SUPPRESSIONS = 50000;
+const activitySuppressions = new Map();
+
 /**
  * Create a new session record
  * @param {string} userId - User ID
@@ -111,13 +120,33 @@ async function getActiveSessions(userId, currentTokenVersion, forceRefresh = fal
  * @returns {Promise<void>}
  */
 async function updateSessionActivity(sessionId, ipAddress = null) {
-  await pool.query(
-    `UPDATE sessions
-     SET last_activity = NOW(),
-         ip_address = COALESCE($2, ip_address)
-     WHERE id = $1`,
-    [sessionId, ipAddress]
-  );
+  if (!sessionId) return false;
+  const now = Date.now();
+  const previous = activitySuppressions.get(sessionId);
+  if (previous && previous.until > now && previous.ipAddress === ipAddress) return false;
+
+  if (activitySuppressions.size >= MAX_ACTIVITY_SUPPRESSIONS) {
+    for (const [id, value] of activitySuppressions) {
+      if (value.until <= now) activitySuppressions.delete(id);
+    }
+    if (activitySuppressions.size >= MAX_ACTIVITY_SUPPRESSIONS) activitySuppressions.clear();
+  }
+
+  activitySuppressions.set(sessionId, { until: now + ACTIVITY_WRITE_WINDOW_MS, ipAddress });
+  try {
+    await pool.query(
+      `UPDATE sessions
+       SET last_activity = NOW(),
+           ip_address = COALESCE($2, ip_address)
+       WHERE id = $1
+         AND (last_activity < NOW() - INTERVAL '5 minutes' OR ip_address IS DISTINCT FROM $2::inet)`,
+      [sessionId, ipAddress]
+    );
+    return true;
+  } catch (error) {
+    activitySuppressions.delete(sessionId);
+    throw error;
+  }
 }
 
 /**

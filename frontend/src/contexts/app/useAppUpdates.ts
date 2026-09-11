@@ -43,6 +43,7 @@ export function useAppUpdates({ userId }: AppUpdatesDeps) {
     const runningInElectron = isElectron();
 
     const beat = async () => {
+      if (document.visibilityState === 'hidden') return;
       try {
         if (runningInElectron) {
           const v = await getElectronAppVersion();
@@ -64,13 +65,19 @@ export function useAppUpdates({ userId }: AppUpdatesDeps) {
     const markOnline = () => {
       void beat();
     };
+    const handleVisibility = () => {
+      if (document.visibilityState === 'hidden') markOffline();
+      else markOnline();
+    };
     window.addEventListener('pagehide', markOffline);
     window.addEventListener('pageshow', markOnline);
+    document.addEventListener('visibilitychange', handleVisibility);
 
     return () => {
       if (timer) clearInterval(timer);
       window.removeEventListener('pagehide', markOffline);
       window.removeEventListener('pageshow', markOnline);
+      document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, [userId]);
 

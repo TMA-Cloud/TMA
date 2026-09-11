@@ -1,11 +1,11 @@
 import pool from '../../config/db.js';
 import { logger } from '../../config/logger.js';
-import { getFileByToken, getSharedTree } from '../../models/share.model.js';
+import { getFileByToken, streamSharedArchiveEntries } from '../../models/share.model.js';
 import { recordAccess } from '../../services/accessTracker.js';
 import { logAuditEvent } from '../../services/auditLogger.js';
 import { validateAndResolveFile, streamEncryptedFile, streamUnencryptedFile } from '../../utils/fileDownload.js';
 import { sendError } from '../../utils/response.js';
-import { createZipArchive } from '../../utils/zipArchive.js';
+import { createStreamingZipArchive } from '../../utils/zipArchive.js';
 
 import { renderErrorPage } from './share.utils.js';
 
@@ -40,14 +40,9 @@ async function downloadFolderZip(req, res) {
     );
     logger.info({ shareToken: token, folderId: file.id }, 'Share folder downloaded as ZIP');
 
-    const entries = await getSharedTree(token, file.id);
-
-    // Everything the archive pulls in was read. All shared rows belong to the
-    // link's owner, and the writer matches on user_id, so anything that somehow
-    // does not simply fails to match and is skipped.
-    recordAccess([file.id, ...entries.map(entry => entry.id)], file.userId);
-
-    await createZipArchive(res, file.name, entries, file.id, file.name);
+    await createStreamingZipArchive(res, file.name, streamSharedArchiveEntries(token, file.id), entry =>
+      recordAccess(entry.id, file.userId)
+    );
   } catch (err) {
     sendError(res, 500, 'Server error', err);
   }
@@ -114,12 +109,15 @@ async function downloadSharedItem(req, res) {
       }
 
       // For unencrypted files, use streaming
-      return streamUnencryptedFile(res, storageKey, file.name, file.mimeType || 'application/octet-stream', true);
+      return streamUnencryptedFile(res, storageKey, file.name, file.mimeType || 'application/octet-stream', true, {
+        req,
+        size: ciphertextSize,
+      });
     }
     // folder: create zip of shared contents under this folder
-    const entries = await getSharedTree(token, fileId);
-    recordAccess([file.id, ...entries.map(entry => entry.id)], shareFile.userId);
-    await createZipArchive(res, file.name, entries, file.id, file.name);
+    await createStreamingZipArchive(res, file.name, streamSharedArchiveEntries(token, fileId), entry =>
+      recordAccess(entry.id, shareFile.userId)
+    );
   } catch (err) {
     sendError(res, 500, 'Server error', err);
   }

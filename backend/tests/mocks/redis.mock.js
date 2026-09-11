@@ -12,6 +12,8 @@ import { vi } from 'vitest';
 const store = new Map();
 /** channel -> Set<(message, channel) => void> */
 const subscribers = new Map();
+const sets = new Map();
+const sortedSets = new Map();
 /** Every publish, for assertions. */
 const published = [];
 
@@ -89,6 +91,97 @@ const redisClient = {
     return 'OK';
   }),
 
+  mGet: vi.fn(async keys => Promise.all(keys.map(key => redisClient.get(key)))),
+
+  unlink: vi.fn(async keys => redisClient.del(keys)),
+
+  zAdd: vi.fn(async (key, entries) => {
+    if (!sortedSets.has(key)) sortedSets.set(key, new Map());
+    const target = sortedSets.get(key);
+    const list = Array.isArray(entries) ? entries : [entries];
+    let added = 0;
+    for (const entry of list) {
+      if (!target.has(entry.value)) added += 1;
+      target.set(entry.value, Number(entry.score));
+    }
+    return added;
+  }),
+
+  zRangeByScore: vi.fn(async (key, min, max) => {
+    const low = min === '-inf' ? -Infinity : Number(min);
+    const high = max === '+inf' ? Infinity : Number(max);
+    return [...(sortedSets.get(key) || new Map()).entries()]
+      .filter(([, score]) => score >= low && score <= high)
+      .sort((a, b) => a[1] - b[1] || a[0].localeCompare(b[0]))
+      .map(([member]) => member);
+  }),
+
+  zRemRangeByScore: vi.fn(async (key, min, max) => {
+    const target = sortedSets.get(key);
+    if (!target) return 0;
+    const low = min === '-inf' ? -Infinity : Number(min);
+    const high = max === '+inf' ? Infinity : Number(max);
+    let removed = 0;
+    for (const [member, score] of target) {
+      if (score >= low && score <= high) {
+        target.delete(member);
+        removed += 1;
+      }
+    }
+    return removed;
+  }),
+
+  zRem: vi.fn(async (key, members) => {
+    const target = sortedSets.get(key);
+    if (!target) return 0;
+    let removed = 0;
+    for (const member of Array.isArray(members) ? members : [members]) {
+      if (target.delete(member)) removed += 1;
+    }
+    return removed;
+  }),
+
+  multi: vi.fn(() => {
+    const actions = [];
+    const batch = {
+      setEx(key, ttl, value) {
+        actions.push(() => redisClient.setEx(key, ttl, value));
+        return batch;
+      },
+      zAdd(key, entries) {
+        actions.push(() => redisClient.zAdd(key, entries));
+        return batch;
+      },
+      zRemRangeByScore(key, min, max) {
+        actions.push(() => redisClient.zRemRangeByScore(key, min, max));
+        return batch;
+      },
+      expire(key, ttl) {
+        actions.push(() => redisClient.expire(key, ttl));
+        return batch;
+      },
+      async exec() {
+        return Promise.all(actions.map(action => action()));
+      },
+    };
+    return batch;
+  }),
+
+  sAdd: vi.fn(async (key, ...members) => {
+    if (!sets.has(key)) sets.set(key, new Set());
+    const target = sets.get(key);
+    let added = 0;
+    for (const member of members.flat()) {
+      if (!target.has(member)) added += 1;
+      target.add(member);
+    }
+    return added;
+  }),
+
+  sMembers: vi.fn(async key => [...(sets.get(key) || [])]),
+
+  expire: vi.fn(async () => 1),
+
   ttl: vi.fn(async key => {
     const entry = readEntry(key);
     if (!entry) return -2;
@@ -100,6 +193,8 @@ const redisClient = {
     const list = Array.isArray(keys) ? keys : [keys];
     let deleted = 0;
     for (const key of list) {
+      sets.delete(key);
+      sortedSets.delete(key);
       if (readEntry(key) !== null) {
         store.delete(key);
         deleted++;
@@ -208,6 +303,8 @@ function seedRedis(key, value, ttlSeconds = null) {
 /** Clear data, subscriptions and publish log; reconnect. */
 function resetRedisMock() {
   store.clear();
+  sets.clear();
+  sortedSets.clear();
   subscribers.clear();
   published.length = 0;
   forcedDown = false;

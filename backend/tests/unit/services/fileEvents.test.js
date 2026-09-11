@@ -77,7 +77,8 @@ describe('publishFileEventsBatch', () => {
       { eventType: EventTypes.FILE_UPLOADED, eventData: { fileId: 'f1' }, userId: USER },
       { eventType: EventTypes.FILE_UPLOADED, eventData: { fileId: 'f2' }, userId: USER },
     ]);
-    expect(publishedMessages()).toHaveLength(2);
+    expect(publishedMessages()).toHaveLength(1);
+    expect(JSON.parse(publishedMessages()[0].message).data.events).toHaveLength(2);
   });
 
   it('routes each event to its own user channel', async () => {
@@ -94,7 +95,7 @@ describe('publishFileEventsBatch', () => {
       { eventType: EventTypes.FILE_UPLOADED, eventData: { fileId: 'first' }, userId: USER },
       { eventType: EventTypes.FILE_UPLOADED, eventData: { fileId: 'second' }, userId: USER },
     ]);
-    const ids = publishedMessages().map(m => JSON.parse(m.message).data.fileId);
+    const ids = JSON.parse(publishedMessages()[0].message).data.events.map(event => event.data.fileId);
     expect(ids).toEqual(['first', 'second']);
   });
 

@@ -74,6 +74,21 @@ export function useServerEvents({ currentPathRef, folderStackRef, refreshFilesRe
           if (typeof data.type !== 'string') return;
           if (data.type === 'connected' || data.type === 'error') return;
           if (typeof data.data !== 'object' || data.data === null || Array.isArray(data.data)) return;
+          if (data.type === 'file.batch') {
+            const envelope = data.data as { events?: unknown[] };
+            const relevant = envelope.events?.some(item => {
+              if (typeof item !== 'object' || item === null || Array.isArray(item)) return false;
+              const nested = item as Record<string, unknown>;
+              if (typeof nested.type !== 'string' || typeof nested.data !== 'object' || nested.data === null)
+                return false;
+              return isEventRelevant(
+                nested.type,
+                nested.data as { parentId?: string | null; id?: string; starred?: boolean; shared?: boolean }
+              );
+            });
+            if (relevant) debouncedSSERefresh();
+            return;
+          }
           const eventPayload = data.data as {
             parentId?: string | null;
             id?: string;

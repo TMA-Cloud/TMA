@@ -67,18 +67,17 @@ async function sessionHeartbeat(req, res) {
     }
 
     const ipAddress = req.ip || req.socket?.remoteAddress || null;
-    await Promise.all([
-      updateSessionActivity(req.sessionId, ipAddress),
-      upsertClientHeartbeat({
-        userId: req.userId,
-        clientId: null,
-        sessionId: req.sessionId,
-        appVersion: 'web',
-        platform: 'web',
-        userAgent: req.get('User-Agent') || null,
-        ipAddress,
-      }),
-    ]);
+    // authMiddleware already coalesces the durable session-activity write.
+    // This endpoint only refreshes the short-lived presence record.
+    await upsertClientHeartbeat({
+      userId: req.userId,
+      clientId: null,
+      sessionId: req.sessionId,
+      appVersion: 'web',
+      platform: 'web',
+      userAgent: req.get('User-Agent') || null,
+      ipAddress,
+    });
     sendSuccess(res, { ok: true });
   } catch (err) {
     logger.error({ err, userId: req.userId, sessionId: req.sessionId }, 'Failed to record session heartbeat');

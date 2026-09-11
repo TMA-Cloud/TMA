@@ -1,6 +1,5 @@
 import { logger } from '../config/logger.js';
-import { setShared } from '../models/file.model.js';
-import { addFilesToShare, getShareIdsContainingFolder } from '../models/share.model.js';
+import { linkItemsToParentShares } from '../models/share.model.js';
 
 /**
  * Auto-link newly added items into any share their parent folder belongs to.
@@ -23,20 +22,11 @@ async function linkNewItemsToParentShare({ ownerId, parentId, itemIds }) {
   if (!parentId || !Array.isArray(itemIds) || itemIds.length === 0) return;
 
   try {
-    const shareIds = await getShareIdsContainingFolder(parentId, ownerId);
-    if (shareIds.length === 0) return;
-
-    // setShared marks the items (and their subtrees) shared and returns the
-    // recursive id list, which is exactly the set to add to each share.
-    const treeIds = await setShared(itemIds, true, ownerId);
-    if (treeIds.length === 0) return;
-
-    for (const shareId of shareIds) {
-      await addFilesToShare(shareId, treeIds);
-    }
+    const mappings = await linkItemsToParentShares(itemIds, ownerId);
+    if (mappings.length === 0) return;
 
     logger.debug(
-      { ownerId, parentId, count: treeIds.length, shares: shareIds.length },
+      { ownerId, parentId, roots: itemIds.length, shares: new Set(mappings.map(item => item.share_id)).size },
       'Auto-linked items to parent share'
     );
   } catch (err) {
