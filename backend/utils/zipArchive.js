@@ -1,4 +1,4 @@
-import path from 'path';
+import { finished } from 'stream/promises';
 
 import { ZipArchive } from 'archiver';
 
@@ -55,112 +55,38 @@ async function addFileToArchive(archive, entry, nameInArchive) {
   const isEncrypted = isFilePathEncrypted(entry.path);
 
   const readStream = await storage.getReadStream(entry.path);
+  let source;
   if (isEncrypted) {
     const ikm = await resolveIkmForPath(entry.path);
     const { stream } = await createDecryptStreamFromStream(readStream, ikm);
-    archive.append(stream, { name: nameInArchive });
+    source = stream;
   } else {
-    archive.append(readStream, { name: nameInArchive });
+    source = readStream;
   }
+  archive.append(source, { name: nameInArchive });
+  await finished(source);
 }
 
-async function appendEntryTree(archive, allEntries, parentId, base) {
-  const entriesToProcess = allEntries.filter(e => e.parent_id === parentId);
-  for (const entry of entriesToProcess) {
-    const relPath = base ? path.join(base, entry.name) : entry.name;
-    if (entry.type === 'file' && isValidPath(entry.path)) {
-      try {
-        await addFileToArchive(archive, entry, relPath);
-      } catch (err) {
-        logger.error(`[ZIP] Error adding file to archive: ${entry.name}`, err);
-        throw err;
-      }
-    } else if (entry.type === 'folder') {
-      await appendEntryTree(archive, allEntries, entry.id, relPath);
-    }
-  }
-}
-
-/**
- * Create a ZIP archive from a tree of entries and pipe it to a response
- * @param {Object} res - Express response object
- * @param {string} archiveName - Name of the ZIP file
- * @param {Array} entries - Array of file/folder entries with {id, parent_id, name, type, path}
- * @param {string} rootId - Root folder ID to start archiving from
- * @param {string} baseName - Base folder name to use in the archive
- * @param {Function} onSuccess - Optional callback to call after successful archive creation
- */
-async function createZipArchive(res, archiveName, entries, rootId, baseName, onSuccess) {
+/** Build a ZIP from an async DB cursor without retaining the whole tree. */
+async function createStreamingZipArchive(res, archiveName, entries, onEntry, onSuccess) {
   setZipHeaders(res, archiveName);
-
   const archive = new ZipArchive();
   const state = attachArchiveHandlers(archive, res, onSuccess);
-
   archive.pipe(res);
-
   try {
-    await appendEntryTree(archive, entries, rootId, baseName);
+    for await (const entry of entries) {
+      onEntry?.(entry);
+      if (entry.type === 'file' && isValidPath(entry.path)) {
+        await addFileToArchive(archive, entry, entry.archivePath);
+      }
+    }
     archive.finalize();
   } catch (err) {
-    logger.error('[ZIP] Error building archive:', err);
     state.markAborted(err);
     archive.abort();
-
-    if (!res.headersSent) {
-      res.status(500).json({ error: 'Failed to create archive' });
-    } else {
-      logger.error('[ZIP] Error after headers sent - cannot send error response');
-    }
+    if (!res.headersSent) res.status(500).json({ error: 'Failed to create archive' });
     throw err;
   }
 }
 
-/**
- * Create a ZIP archive from multiple files/folders and pipe it to a response
- * @param {Object} res - Express response object
- * @param {string} archiveName - Name of the ZIP file
- * @param {Array} allEntries - Array of all file/folder entries with {id, parent_id, name, type, path}
- * @param {Array} rootIds - Array of root file/folder IDs to include in the archive
- * @param {Function} onSuccess - Optional callback to call after successful archive creation
- */
-async function createBulkZipArchive(res, archiveName, allEntries, rootIds, onSuccess) {
-  setZipHeaders(res, archiveName);
-
-  const archive = new ZipArchive();
-  const state = attachArchiveHandlers(archive, res, onSuccess);
-
-  archive.pipe(res);
-
-  try {
-    for (const rootId of rootIds) {
-      const rootEntry = allEntries.find(e => e.id === rootId);
-      if (!rootEntry) continue;
-
-      if (rootEntry.type === 'file' && isValidPath(rootEntry.path)) {
-        try {
-          await addFileToArchive(archive, rootEntry, rootEntry.name);
-        } catch (err) {
-          logger.error(`[ZIP] Error adding root file to archive: ${rootEntry.name}`, err);
-          throw err;
-        }
-      } else if (rootEntry.type === 'folder') {
-        await appendEntryTree(archive, allEntries, rootId, rootEntry.name);
-      }
-    }
-
-    archive.finalize();
-  } catch (err) {
-    logger.error('[ZIP] Error building bulk archive:', err);
-    state.markAborted(err);
-    archive.abort();
-
-    if (!res.headersSent) {
-      res.status(500).json({ error: 'Failed to create archive' });
-    } else {
-      logger.error('[ZIP] Error after headers sent - cannot send error response');
-    }
-    throw err;
-  }
-}
-
-export { createZipArchive, createBulkZipArchive };
+export { createStreamingZipArchive };

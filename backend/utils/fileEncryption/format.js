@@ -40,6 +40,7 @@ const PLAINTEXT_SEGMENT_MAX = CIPHERTEXT_SEGMENT_SIZE - TAG_LENGTH;
 // Streaming AEAD feeds the associated data into HKDF as `info`, not into each
 // GCM segment. We bind no associated data to stored files, so it is empty.
 const ASSOCIATED_DATA = Buffer.alloc(0);
+const derivedRawKeys = new Map();
 
 /**
  * Turn a raw key string into a 32-byte key: a 32-byte base64 or 64-char hex key
@@ -49,14 +50,21 @@ const ASSOCIATED_DATA = Buffer.alloc(0);
  * @returns {Buffer} 32-byte key
  */
 function deriveKeyFromRaw(raw) {
+  const cached = derivedRawKeys.get(raw);
+  if (cached) return cached;
   const decoded = Buffer.from(raw, 'base64');
   if (decoded.length === KEY_LENGTH) {
+    derivedRawKeys.set(raw, decoded);
     return decoded;
   }
   if (raw.length === KEY_LENGTH * 2 && /^[0-9a-fA-F]+$/.test(raw)) {
-    return Buffer.from(raw, 'hex');
+    const key = Buffer.from(raw, 'hex');
+    derivedRawKeys.set(raw, key);
+    return key;
   }
-  return crypto.pbkdf2Sync(raw, 'file-encryption-salt', 100000, KEY_LENGTH, 'sha256');
+  const key = crypto.pbkdf2Sync(raw, 'file-encryption-salt', 100000, KEY_LENGTH, 'sha256');
+  derivedRawKeys.set(raw, key);
+  return key;
 }
 
 /**
@@ -82,13 +90,7 @@ function getEncryptionKey() {
   }
 
   logger.warn('[Encryption] FILE_ENCRYPTION_KEY not set, using development default key');
-  return crypto.pbkdf2Sync(
-    'development-key-change-in-production',
-    'file-encryption-salt',
-    100000,
-    KEY_LENGTH,
-    'sha256'
-  );
+  return deriveKeyFromRaw('development-key-change-in-production');
 }
 
 /**
@@ -229,6 +231,13 @@ function ciphertextSizeToPlaintextSize(ciphertextSize) {
   return lastCiphertext === 0 ? base : base + (lastCiphertext - TAG_LENGTH);
 }
 
+/** Exact stored size produced by this format for a plaintext length. */
+function plaintextSizeToCiphertextSize(plaintextSize) {
+  const size = Number(plaintextSize);
+  if (!Number.isSafeInteger(size) || size < 0) throw new Error(`Invalid plaintext size: ${plaintextSize}`);
+  return HEADER_LENGTH + size + totalSegments(size) * TAG_LENGTH;
+}
+
 /**
  * Read exactly `n` bytes from a readable stream (for the fixed-size header).
  */
@@ -270,6 +279,7 @@ export {
   ciphertextSegmentLength,
   segmentIndexForOffset,
   ciphertextSizeToPlaintextSize,
+  plaintextSizeToCiphertextSize,
   // Stream helper
   collectStream,
 };

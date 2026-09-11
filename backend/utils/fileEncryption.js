@@ -34,6 +34,7 @@ export {
   // Key + layout helpers (used by download range math and migration/rotation scripts)
   getEncryptionKey,
   ciphertextSizeToPlaintextSize,
+  plaintextSizeToCiphertextSize,
   // Format constants (exported for scripts and tests)
   HEADER_LENGTH,
   TAG_LENGTH,

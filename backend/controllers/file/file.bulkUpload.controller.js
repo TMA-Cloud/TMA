@@ -1,10 +1,9 @@
 import { logger } from '../../config/logger.js';
 import { filesUploadedBulk } from '../../services/auditLogger.js';
 import { EventTypes, publishFileEvent } from '../../services/fileEvents.js';
-import { createFileFromStreamedUpload } from '../../models/file.model.js';
+import { createFilesFromStreamedUploads } from '../../models/file.model.js';
 import { validateParentId } from '../../utils/controllerHelpers.js';
 import { collectUploadParts, extractFolderSegmentsFromRelativePath, metadataForPart } from '../../utils/uploadParts.js';
-import { userOperationLock } from '../../utils/mutex.js';
 import { sendError, sendSuccess } from '../../utils/response.js';
 import storage from '../../utils/storageDriver.js';
 import { validateFileName, validateFileUpload } from '../../utils/validation.js';
@@ -51,6 +50,7 @@ async function uploadFilesBulk(req, res) {
 
   const successful = [];
   const failed = [...streamFailures];
+  const planned = [];
 
   const orderedUploads = [...uploads].sort((a, b) => {
     const ai = Number.isFinite(a?.index) ? a.index : 0;
@@ -73,25 +73,7 @@ async function uploadFilesBulk(req, res) {
             })
           : parentId;
 
-      const file = await userOperationLock(req.ownerId, () => {
-        return createFileFromStreamedUpload({ ...upload, modified }, targetParentId, req.ownerId);
-      });
-      // Consumed — keep out of the middleware's auto-cleanup.
-      if (req._s3UploadedKeys) {
-        req._s3UploadedKeys = req._s3UploadedKeys.filter(k => k !== upload.storageName);
-      }
-      // One bulk audit event is logged below, so keep per-file quiet.
-      logger.debug({ fileId: file.id, fileName: file.name }, 'File uploaded (stream to S3, bulk)');
-      await publishFileEvent(EventTypes.FILE_UPLOADED, {
-        id: file.id,
-        name: file.name,
-        type: file.type,
-        size: file.size,
-        mimeType: file.mimeType,
-        parentId: targetParentId,
-        userId: req.ownerId,
-      });
-      successful.push(clientId ? { ...file, clientId } : file);
+      planned.push({ upload: { ...upload, modified }, modified, parentId: targetParentId, clientId });
     } catch (err) {
       // DB creation failed but the object is already in S3 — delete it here.
       if (upload?.storageName) {
@@ -109,6 +91,43 @@ async function uploadFilesBulk(req, res) {
       }
       const failure = { fileName: upload.name, error: err?.message || 'Upload failed' };
       failed.push(clientId ? { ...failure, clientId } : failure);
+    }
+  }
+
+  if (planned.length > 0) {
+    try {
+      successful.push(...(await createFilesFromStreamedUploads(planned, req.ownerId)));
+      const consumedKeys = new Set(planned.map(entry => entry.upload.storageName));
+      if (req._s3UploadedKeys) req._s3UploadedKeys = req._s3UploadedKeys.filter(key => !consumedKeys.has(key));
+      await Promise.all(
+        successful.map(file =>
+          publishFileEvent(EventTypes.FILE_UPLOADED, {
+            id: file.id,
+            name: file.name,
+            type: file.type,
+            size: file.size,
+            mimeType: file.mimeType,
+            parentId: file.parentId,
+            userId: req.ownerId,
+          })
+        )
+      );
+      logger.debug({ count: successful.length }, 'Bulk upload metadata committed');
+    } catch (err) {
+      const keys = planned.map(entry => entry.upload.storageName).filter(Boolean);
+      await storage
+        .deleteObjects(keys)
+        .catch(cleanupErr =>
+          logger.warn({ err: cleanupErr, count: keys.length }, 'Failed to clean up objects after bulk metadata failure')
+        );
+      if (req._s3UploadedKeys) {
+        const rejected = new Set(keys);
+        req._s3UploadedKeys = req._s3UploadedKeys.filter(key => !rejected.has(key));
+      }
+      for (const entry of planned) {
+        const failure = { fileName: entry.upload.name, error: err?.message || 'Upload failed' };
+        failed.push(entry.clientId ? { ...failure, clientId: entry.clientId } : failure);
+      }
     }
   }
 

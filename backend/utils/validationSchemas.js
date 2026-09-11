@@ -94,9 +94,13 @@ const downloadFileSchema = [
  * Factory for the common `body('ids')` + `body('ids.*')` validation pair
  * used by every bulk file operation. Extend with `...idsArrayRules(), ...extra` to add more fields.
  */
+const MAX_BULK_FILE_IDS = 500;
+
 function idsArrayRules() {
   return [
-    body('ids').isArray({ min: 1 }).withMessage('File IDs must be an array with at least one ID'),
+    body('ids')
+      .isArray({ min: 1, max: MAX_BULK_FILE_IDS })
+      .withMessage(`File IDs must contain between 1 and ${MAX_BULK_FILE_IDS} entries`),
     body('ids.*').isString().withMessage('All file IDs must be strings'),
   ];
 }
@@ -120,14 +124,14 @@ const shareFilesSchema = [
   body('ids')
     .custom(value => {
       if (Array.isArray(value)) {
-        return value.length > 0;
+        return value.length > 0 && value.length <= MAX_BULK_FILE_IDS;
       }
       if (typeof value === 'string' && value.trim().length > 0) {
         return true;
       }
       return false;
     })
-    .withMessage('File IDs must be an array with at least one ID'),
+    .withMessage(`File IDs must contain between 1 and ${MAX_BULK_FILE_IDS} entries`),
   body('ids').customSanitizer(value => {
     if (Array.isArray(value)) {
       return value.map(String);

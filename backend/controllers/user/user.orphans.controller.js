@@ -6,13 +6,11 @@
  */
 
 import { logger } from '../../config/logger.js';
-import {
-  DEFAULT_GRACE_MINUTES,
-  deleteOrphans as deleteOrphanEntries,
-  scanOrphans,
-} from '../../models/file/file.orphan.model.js';
+import { DEFAULT_GRACE_MINUTES } from '../../models/file/file.orphan.model.js';
 import { isFirstUser } from '../../models/user.model.js';
 import { logAuditEvent } from '../../services/auditLogger.js';
+import { getBoss } from '../../services/auditLogger/queue.js';
+import { ORPHAN_MAINTENANCE_QUEUE } from '../../services/backgroundQueue.js';
 import { sendError, sendSuccess } from '../../utils/response.js';
 
 /**
@@ -46,8 +44,22 @@ async function _getOrphans(req, res) {
   try {
     if (await rejectIfNotFirstUser(req, res, 'scan_orphans')) return;
 
+    const boss = getBoss();
+    if (!boss) return sendError(res, 503, 'Background worker queue is unavailable');
+    if (req.query.jobId) {
+      const job = await boss.getJobById(ORPHAN_MAINTENANCE_QUEUE, String(req.query.jobId));
+      if (!job || job.data?.requestedBy !== req.userId) return sendError(res, 404, 'Orphan scan job not found');
+      if (job.state === 'failed' || job.state === 'cancelled') return sendError(res, 500, 'Orphan scan failed');
+      if (job.state !== 'completed') return res.status(202).json({ jobId: job.id, status: job.state });
+      return sendSuccess(res, job.output);
+    }
+
     const graceMinutes = req.query.graceMinutes != null ? Number(req.query.graceMinutes) : DEFAULT_GRACE_MINUTES;
-    const report = await scanOrphans({ graceMinutes });
+    const jobId = await boss.send(ORPHAN_MAINTENANCE_QUEUE, {
+      task: 'scan',
+      graceMinutes,
+      requestedBy: req.userId,
+    });
 
     await logAuditEvent(
       'admin.orphans.scan',
@@ -55,15 +67,14 @@ async function _getOrphans(req, res) {
         status: 'success',
         resourceType: 'settings',
         metadata: {
-          graceMinutes: report.graceMinutes,
-          storageOrphans: report.storageOrphans.count,
-          databaseOrphans: report.databaseOrphans.count,
+          graceMinutes,
+          jobId,
         },
       },
       req
     );
 
-    sendSuccess(res, report);
+    res.status(202).json({ jobId, status: 'created' });
   } catch (err) {
     logger.error({ err }, 'Failed to scan for orphaned files');
     sendError(res, 500, 'Failed to scan for orphaned files', err);
@@ -78,12 +89,28 @@ async function _deleteOrphans(req, res) {
   try {
     if (await rejectIfNotFirstUser(req, res, 'delete_orphans')) return;
 
+    const boss = getBoss();
+    if (!boss) return sendError(res, 503, 'Background worker queue is unavailable');
+    if (req.body.jobId) {
+      const job = await boss.getJobById(ORPHAN_MAINTENANCE_QUEUE, String(req.body.jobId));
+      if (!job || job.data?.requestedBy !== req.userId) return sendError(res, 404, 'Orphan cleanup job not found');
+      if (job.state === 'failed' || job.state === 'cancelled') return sendError(res, 500, 'Orphan cleanup failed');
+      if (job.state !== 'completed') return res.status(202).json({ jobId: job.id, status: job.state });
+      return sendSuccess(res, job.output);
+    }
+
     const { storageKeys = [], fileIds = [], graceMinutes } = req.body;
     if (storageKeys.length === 0 && fileIds.length === 0) {
       return sendError(res, 400, 'Select at least one orphan to delete');
     }
 
-    const result = await deleteOrphanEntries({ storageKeys, fileIds, graceMinutes });
+    const jobId = await boss.send(ORPHAN_MAINTENANCE_QUEUE, {
+      task: 'delete',
+      storageKeys,
+      fileIds,
+      graceMinutes,
+      requestedBy: req.userId,
+    });
 
     await logAuditEvent(
       'admin.orphans.delete',
@@ -91,13 +118,10 @@ async function _deleteOrphans(req, res) {
         status: 'success',
         resourceType: 'file',
         metadata: {
-          graceMinutes: result.graceMinutes,
+          graceMinutes,
           requestedStorage: storageKeys.length,
           requestedDatabase: fileIds.length,
-          storageDeleted: result.storage.deleted,
-          databaseDeleted: result.database.deleted,
-          storageSkipped: result.storage.skipped,
-          databaseSkipped: result.database.skipped,
+          jobId,
         },
       },
       req
@@ -105,13 +129,12 @@ async function _deleteOrphans(req, res) {
     logger.info(
       {
         userId: req.userId,
-        storageDeleted: result.storage.deleted,
-        databaseDeleted: result.database.deleted,
+        jobId,
       },
       'Admin deleted orphaned entries'
     );
 
-    sendSuccess(res, result);
+    res.status(202).json({ jobId, status: 'created' });
   } catch (err) {
     logger.error({ err }, 'Failed to delete orphaned files');
     sendError(res, 500, 'Failed to delete orphaned files', err);

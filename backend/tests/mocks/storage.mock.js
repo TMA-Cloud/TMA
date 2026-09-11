@@ -31,6 +31,14 @@ export async function getReadStream(key, range) {
 export async function deleteObject(key) {
   objects.delete(key);
 }
+export async function deleteObjects(keys) {
+  const deleted = [];
+  for (const key of new Set(keys || [])) {
+    objects.delete(key);
+    deleted.push(key);
+  }
+  return { deleted, errors: [] };
+}
 export async function copyObject(source, dest) {
   await putBuffer(dest, readStoredBuffer(source));
 }

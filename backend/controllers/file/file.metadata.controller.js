@@ -13,7 +13,7 @@ import { EventTypes, publishFileEventsBatch } from '../../services/fileEvents.js
 import {
   getFileInfo,
   getFolderPathSegments,
-  getFolderTree,
+  getFolderTreeStats,
   getStarredFiles,
   setStarred,
 } from '../../models/file.model.js';
@@ -38,31 +38,10 @@ async function getFileInfoController(req, res) {
 
   // Folders also report recursive counts and total size.
   if (file.type === 'folder') {
-    const tree = await getFolderTree(id, req.ownerId);
-    let totalSize = 0;
-    let fileCount = 0;
-    let folderCount = 0;
-
-    for (const entry of tree) {
-      if (entry.type === 'file') {
-        fileCount += 1;
-        if (entry.size != null) {
-          const sizeValue = typeof entry.size === 'string' ? Number(entry.size) || 0 : entry.size || 0;
-          totalSize += sizeValue;
-        }
-      } else if (entry.type === 'folder' && entry.id !== id) {
-        folderCount += 1;
-      }
-    }
-
     return sendSuccess(res, {
       ...file,
       locationPath,
-      folderInfo: {
-        totalSize,
-        fileCount,
-        folderCount,
-      },
+      folderInfo: await getFolderTreeStats(id, req.ownerId),
     });
   }
 
@@ -122,7 +101,12 @@ async function starFilesController(req, res) {
 async function listStarred(req, res) {
   const sortBy = validateSortBy(req.query.sortBy) || 'modified';
   const order = validateSortOrder(req.query.order) || 'DESC';
-  const files = await getStarredFiles(req.ownerId, sortBy, order);
+  const result = await getStarredFiles(req.ownerId, sortBy, order, {
+    cursor: req.query.cursor,
+    limit: req.query.limit,
+  });
+  const files = result.files || result;
+  if (result.nextCursor) res.setHeader('X-Next-Cursor', result.nextCursor);
   sendSuccess(res, files);
 }
 

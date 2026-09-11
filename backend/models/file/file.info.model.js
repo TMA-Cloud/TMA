@@ -17,19 +17,17 @@ async function getFileInfo(fileIds, userId, includeDeleted = false) {
   const result = await pool.query(
     `SELECT f.id, f.name, f.type, f.parent_id, f.size, f.modified, f.accessed_at, f.starred, f.shared, f.shared_at,
             CASE
-              WHEN NOT f.shared THEN NULL
-              WHEN EXISTS (
-                SELECT 1 FROM share_link_files slf
-                JOIN share_links sl ON sl.id = slf.share_id
-                WHERE slf.file_id = f.id AND sl.user_id = $2 AND sl.expires_at IS NULL
-              ) THEN NULL
-              ELSE (
-                SELECT MAX(sl.expires_at) FROM share_link_files slf
-                JOIN share_links sl ON sl.id = slf.share_id
-                WHERE slf.file_id = f.id AND sl.user_id = $2
-              )
+              WHEN NOT f.shared OR share_info.has_perpetual THEN NULL
+              ELSE share_info.expires_at
             END AS expires_at
      FROM files f
+     LEFT JOIN LATERAL (
+       SELECT BOOL_OR(sl.expires_at IS NULL) AS has_perpetual,
+              MAX(sl.expires_at) AS expires_at
+         FROM share_link_files slf
+         JOIN share_links sl ON sl.id = slf.share_id
+        WHERE slf.file_id = f.id AND sl.user_id = $2
+     ) share_info ON f.shared
      WHERE f.id = ANY($1) AND f.user_id = $2 ${deletedClause}`,
     [fileIds, userId]
   );
@@ -61,15 +59,15 @@ async function getFolderPathSegments(folderId, userId) {
 
   const result = await pool.query(
     `
-      WITH RECURSIVE chain AS (
-        SELECT id, name, parent_id, 0 AS depth
+      WITH RECURSIVE chain(id, name, parent_id, depth, visited) AS (
+        SELECT id, name, parent_id, 0 AS depth, ARRAY[id]
         FROM files
         WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL
         UNION ALL
-        SELECT f.id, f.name, f.parent_id, chain.depth + 1 AS depth
+        SELECT f.id, f.name, f.parent_id, chain.depth + 1 AS depth, chain.visited || f.id
         FROM files f
         JOIN chain ON chain.parent_id = f.id
-        WHERE f.user_id = $2 AND f.deleted_at IS NULL
+        WHERE f.user_id = $2 AND f.deleted_at IS NULL AND NOT f.id = ANY(chain.visited)
       )
       SELECT name
       FROM chain

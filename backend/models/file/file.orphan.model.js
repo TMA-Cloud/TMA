@@ -51,25 +51,9 @@ function isStorageKey(filePath) {
 }
 
 /**
- * Load every `files` row that maps to a storage key, including trashed rows.
- * Trashed rows still own their objects, so they must count as "referenced".
- * @returns {Promise<Array<Object>>}
- */
-async function loadStorageBackedRows() {
-  const result = await pool.query(
-    `SELECT f.id, f.name, f.path, f.size, f.mime_type, f.modified, f.created_at, f.deleted_at,
-            f.user_id, u.email AS user_email, u.name AS user_name
-     FROM files f
-     LEFT JOIN users u ON u.id = f.user_id
-     WHERE f.type = 'file' AND f.path IS NOT NULL`
-  );
-  return result.rows.filter(row => isStorageKey(row.path));
-}
-
-/**
- * Scan storage and the database for orphans without deleting anything. A single
- * pass over the bucket/upload dir, with memory bounded by DB row count (matched
- * keys tracked in a set; unreferenced keys retained only up to the report cap).
+ * Scan storage and the database for orphans without deleting anything. Bucket
+ * pages are staged in a temporary PostgreSQL table, keeping application memory
+ * bounded by one S3 page plus the capped report.
  * @param {Object} [options]
  * @param {number} [options.graceMinutes] - Minimum age before an item is reported
  * @returns {Promise<Object>} Report with both orphan categories and their totals
@@ -78,170 +62,149 @@ async function scanOrphans({ graceMinutes } = {}) {
   const grace = normalizeGraceMinutes(graceMinutes);
   const cutoff = new Date(Date.now() - grace * 60 * 1000);
   const startedAt = Date.now();
-
-  const rows = await loadStorageBackedRows();
-  const referencedPaths = new Set(rows.map(row => row.path));
-
-  const storageOrphans = [];
-  let storageOrphanCount = 0;
-  let storageOrphanBytes = 0;
-  let skippedTooRecent = 0;
+  const client = await pool.connect();
   let totalObjects = 0;
-  const pathsSeenInStorage = new Set();
-
-  for await (const page of storage.listObjectsPaginated(1000)) {
-    for (const object of page) {
-      totalObjects += 1;
-
-      if (referencedPaths.has(object.key)) {
-        pathsSeenInStorage.add(object.key);
-        continue;
-      }
-
-      // Unreferenced. Only an orphan once it is past the grace window —
-      // otherwise it is very likely an upload or paste still in progress.
-      if (!object.lastModified || object.lastModified > cutoff) {
-        skippedTooRecent += 1;
-        continue;
-      }
-
-      storageOrphanCount += 1;
-      storageOrphanBytes += object.size || 0;
-      if (storageOrphans.length < MAX_REPORTED_PER_CATEGORY) {
-        storageOrphans.push({
-          key: object.key,
-          size: object.size || 0,
-          lastModified: object.lastModified ? object.lastModified.toISOString() : null,
-        });
-      }
-    }
-  }
-
-  const dbOrphans = [];
-  let dbOrphanCount = 0;
-  let dbOrphanBytes = 0;
-
-  for (const row of rows) {
-    if (pathsSeenInStorage.has(row.path)) continue;
-
-    // Row exists but its object does not. Same reasoning as above in reverse:
-    // the row may have been inserted moments ago by a write that has not
-    // finished putting the object yet.
-    const createdAt = row.created_at ? new Date(row.created_at) : null;
-    if (!createdAt || createdAt > cutoff) {
-      skippedTooRecent += 1;
-      continue;
+  try {
+    await client.query(
+      `CREATE TEMP TABLE orphan_storage_inventory (
+       key TEXT PRIMARY KEY,
+         size BIGINT NOT NULL,
+         last_modified TIMESTAMPTZ
+       )`
+    );
+    for await (const page of storage.listObjectsPaginated(1000)) {
+      totalObjects += page.length;
+      await client.query(
+        `INSERT INTO orphan_storage_inventory(key, size, last_modified)
+         SELECT * FROM unnest($1::text[], $2::bigint[], $3::timestamptz[])
+         ON CONFLICT (key) DO UPDATE
+           SET size = EXCLUDED.size, last_modified = EXCLUDED.last_modified`,
+        [
+          page.map(object => object.key),
+          page.map(object => object.size || 0),
+          page.map(object => object.lastModified || null),
+        ]
+      );
     }
 
-    dbOrphanCount += 1;
-    dbOrphanBytes += Number(row.size) || 0;
-    if (dbOrphans.length < MAX_REPORTED_PER_CATEGORY) {
-      dbOrphans.push({
-        id: row.id,
-        name: row.name,
-        path: row.path,
-        size: Number(row.size) || 0,
-        mimeType: row.mime_type,
-        modified: row.modified ? new Date(row.modified).toISOString() : null,
-        createdAt: createdAt.toISOString(),
-        trashed: Boolean(row.deleted_at),
-        ownerEmail: row.user_email || null,
-        ownerName: row.user_name || null,
-      });
-    }
-  }
+    const storageSummary = await client.query(
+      `SELECT COUNT(*)::int AS count, COALESCE(SUM(i.size), 0) AS bytes
+         FROM orphan_storage_inventory i
+        WHERE i.last_modified IS NOT NULL AND i.last_modified <= $1
+          AND NOT EXISTS (SELECT 1 FROM files f WHERE f.path = i.key)`,
+      [cutoff]
+    );
+    const storageItems = await client.query(
+      `SELECT i.key, i.size, i.last_modified
+         FROM orphan_storage_inventory i
+        WHERE i.last_modified IS NOT NULL AND i.last_modified <= $1
+          AND NOT EXISTS (SELECT 1 FROM files f WHERE f.path = i.key)
+        ORDER BY i.key
+        LIMIT $2`,
+      [cutoff, MAX_REPORTED_PER_CATEGORY]
+    );
+    const dbSummary = await client.query(
+      `SELECT COUNT(*)::int AS count, COALESCE(SUM(f.size), 0) AS bytes
+         FROM files f
+        WHERE f.type = 'file' AND f.path IS NOT NULL
+          AND f.path NOT LIKE '/%' AND f.path !~ '^[A-Za-z]:[\\\\/]'
+          AND f.created_at IS NOT NULL AND f.created_at <= $1
+          AND NOT EXISTS (SELECT 1 FROM orphan_storage_inventory i WHERE i.key = f.path)`,
+      [cutoff]
+    );
+    const dbItems = await client.query(
+      `SELECT f.id, f.name, f.path, f.size, f.mime_type, f.modified, f.created_at, f.deleted_at,
+              u.email AS user_email, u.name AS user_name
+         FROM files f
+         LEFT JOIN users u ON u.id = f.user_id
+        WHERE f.type = 'file' AND f.path IS NOT NULL
+          AND f.path NOT LIKE '/%' AND f.path !~ '^[A-Za-z]:[\\\\/]'
+          AND f.created_at IS NOT NULL AND f.created_at <= $1
+          AND NOT EXISTS (SELECT 1 FROM orphan_storage_inventory i WHERE i.key = f.path)
+        ORDER BY f.id
+        LIMIT $2`,
+      [cutoff, MAX_REPORTED_PER_CATEGORY]
+    );
+    const totals = await client.query(
+      `SELECT
+         (SELECT COUNT(*)::int FROM files f
+           WHERE f.type = 'file' AND f.path IS NOT NULL
+             AND f.path NOT LIKE '/%' AND f.path !~ '^[A-Za-z]:[\\\\/]') AS database_rows,
+         (SELECT COUNT(*)::int FROM orphan_storage_inventory i
+           WHERE (i.last_modified IS NULL OR i.last_modified > $1)
+             AND NOT EXISTS (SELECT 1 FROM files f WHERE f.path = i.key))
+         +
+         (SELECT COUNT(*)::int FROM files f
+           WHERE f.type = 'file' AND f.path IS NOT NULL
+             AND f.path NOT LIKE '/%' AND f.path !~ '^[A-Za-z]:[\\\\/]'
+             AND (f.created_at IS NULL OR f.created_at > $1)
+             AND NOT EXISTS (SELECT 1 FROM orphan_storage_inventory i WHERE i.key = f.path)) AS skipped`,
+      [cutoff]
+    );
 
-  logger.info(
-    {
+    const storageOrphanCount = Number(storageSummary.rows[0].count) || 0;
+    const storageOrphanBytes = Number(storageSummary.rows[0].bytes) || 0;
+    const dbOrphanCount = Number(dbSummary.rows[0].count) || 0;
+    const dbOrphanBytes = Number(dbSummary.rows[0].bytes) || 0;
+    const totalRows = Number(totals.rows[0].database_rows) || 0;
+    const skippedTooRecent = Number(totals.rows[0].skipped) || 0;
+    const storageOrphans = storageItems.rows.map(row => ({
+      key: row.key,
+      size: Number(row.size) || 0,
+      lastModified: row.last_modified ? new Date(row.last_modified).toISOString() : null,
+    }));
+    const dbOrphans = dbItems.rows.map(row => ({
+      id: row.id,
+      name: row.name,
+      path: row.path,
+      size: Number(row.size) || 0,
+      mimeType: row.mime_type,
+      modified: row.modified ? new Date(row.modified).toISOString() : null,
+      createdAt: new Date(row.created_at).toISOString(),
+      trashed: Boolean(row.deleted_at),
+      ownerEmail: row.user_email || null,
+      ownerName: row.user_name || null,
+    }));
+
+    logger.info(
+      {
+        graceMinutes: grace,
+        totalObjects,
+        totalRows,
+        storageOrphanCount,
+        dbOrphanCount,
+        skippedTooRecent,
+        durationMs: Date.now() - startedAt,
+      },
+      '[Orphans] Scan completed'
+    );
+
+    return {
+      scannedAt: new Date().toISOString(),
       graceMinutes: grace,
-      totalObjects,
-      totalRows: rows.length,
-      storageOrphanCount,
-      dbOrphanCount,
-      skippedTooRecent,
-      durationMs: Date.now() - startedAt,
-    },
-    '[Orphans] Scan completed'
-  );
-
-  return {
-    scannedAt: new Date().toISOString(),
-    graceMinutes: grace,
-    driver: 's3',
-    totals: {
-      storedObjects: totalObjects,
-      databaseRows: rows.length,
-      skippedTooRecent,
-    },
-    storageOrphans: {
-      items: storageOrphans,
-      count: storageOrphanCount,
-      totalBytes: storageOrphanBytes,
-      truncated: storageOrphanCount > storageOrphans.length,
-    },
-    databaseOrphans: {
-      items: dbOrphans,
-      count: dbOrphanCount,
-      totalBytes: dbOrphanBytes,
-      truncated: dbOrphanCount > dbOrphans.length,
-    },
-  };
-}
-
-/**
- * Re-check and delete a storage object the admin flagged as orphaned.
- * @param {string} key - Storage key
- * @param {Date} cutoff - Object must be older than this
- * @returns {Promise<{ key: string, deleted: boolean, reason?: string }>}
- */
-async function deleteStorageOrphan(key, cutoff) {
-  if (!isStorageKey(key)) {
-    return { key, deleted: false, reason: 'Not a valid storage key' };
+      driver: 's3',
+      totals: {
+        storedObjects: totalObjects,
+        databaseRows: totalRows,
+        skippedTooRecent,
+      },
+      storageOrphans: {
+        items: storageOrphans,
+        count: storageOrphanCount,
+        totalBytes: storageOrphanBytes,
+        truncated: storageOrphanCount > storageOrphans.length,
+      },
+      databaseOrphans: {
+        items: dbOrphans,
+        count: dbOrphanCount,
+        totalBytes: dbOrphanBytes,
+        truncated: dbOrphanCount > dbOrphans.length,
+      },
+    };
+  } finally {
+    await client.query('DROP TABLE IF EXISTS orphan_storage_inventory').catch(() => {});
+    client.release();
   }
-
-  const referencing = await pool.query('SELECT 1 FROM files WHERE path = $1 LIMIT 1', [key]);
-  if (referencing.rowCount > 0) {
-    return { key, deleted: false, reason: 'A file now references this object' };
-  }
-
-  const stat = await storage.statObject(key);
-  if (!stat) {
-    return { key, deleted: false, reason: 'Object no longer exists' };
-  }
-  if (!stat.lastModified || stat.lastModified > cutoff) {
-    return { key, deleted: false, reason: 'Object was written too recently' };
-  }
-
-  await storage.deleteObject(key);
-  return { key, deleted: true };
-}
-
-/**
- * Re-check and delete a database row the admin flagged as orphaned.
- * @param {string} id - File row id
- * @param {Date} cutoff - Row must be older than this
- * @returns {Promise<{ id: string, deleted: boolean, userId?: string, reason?: string }>}
- */
-async function deleteDatabaseOrphan(id, cutoff) {
-  const result = await pool.query("SELECT id, path, user_id, created_at FROM files WHERE id = $1 AND type = 'file'", [
-    id,
-  ]);
-  const row = result.rows[0];
-  if (!row) {
-    return { id, deleted: false, reason: 'Row no longer exists' };
-  }
-  if (!isStorageKey(row.path)) {
-    return { id, deleted: false, reason: 'Row does not map to a storage key' };
-  }
-  if (!row.created_at || new Date(row.created_at) > cutoff) {
-    return { id, deleted: false, reason: 'Row was created too recently' };
-  }
-  if (await storage.exists(row.path)) {
-    return { id, deleted: false, reason: 'Stored object exists again' };
-  }
-
-  await pool.query('DELETE FROM files WHERE id = $1', [id]);
-  return { id, deleted: true, userId: row.user_id };
 }
 
 /**
@@ -261,28 +224,124 @@ async function deleteOrphans({ storageKeys = [], fileIds = [], graceMinutes } = 
   const keys = [...new Set(storageKeys)].slice(0, MAX_DELETE_BATCH);
   const ids = [...new Set(fileIds)].slice(0, MAX_DELETE_BATCH);
 
-  const storageResults = [];
-  for (const key of keys) {
-    try {
-      storageResults.push(await deleteStorageOrphan(key, cutoff));
-    } catch (err) {
-      logger.error({ err, key }, '[Orphans] Failed to delete storage orphan');
-      storageResults.push({ key, deleted: false, reason: err.message || 'Deletion failed' });
+  const referenced = keys.length
+    ? await pool.query('SELECT path FROM files WHERE path = ANY($1::text[])', [keys])
+    : { rows: [] };
+  const referencedKeys = new Set(referenced.rows.map(row => row.path));
+  const storageResultsByKey = new Map();
+  const storageCandidates = keys.filter(key => {
+    if (!isStorageKey(key)) {
+      storageResultsByKey.set(key, { key, deleted: false, reason: 'Not a valid storage key' });
+      return false;
     }
-  }
+    if (referencedKeys.has(key)) {
+      storageResultsByKey.set(key, { key, deleted: false, reason: 'A file now references this object' });
+      return false;
+    }
+    return true;
+  });
 
-  const databaseResults = [];
-  const affectedUserIds = new Set();
-  for (const id of ids) {
-    try {
-      const outcome = await deleteDatabaseOrphan(id, cutoff);
-      if (outcome.userId) affectedUserIds.add(outcome.userId);
-      databaseResults.push({ id: outcome.id, deleted: outcome.deleted, reason: outcome.reason });
-    } catch (err) {
-      logger.error({ err, fileId: id }, '[Orphans] Failed to delete database orphan');
-      databaseResults.push({ id, deleted: false, reason: err.message || 'Deletion failed' });
+  let nextStorage = 0;
+  const deletableStorageKeys = [];
+  await Promise.all(
+    Array.from({ length: Math.min(8, storageCandidates.length) }, async () => {
+      while (nextStorage < storageCandidates.length) {
+        const key = storageCandidates[nextStorage++];
+        try {
+          const stat = await storage.statObject(key);
+          if (!stat) storageResultsByKey.set(key, { key, deleted: false, reason: 'Object no longer exists' });
+          else if (!stat.lastModified || stat.lastModified > cutoff) {
+            storageResultsByKey.set(key, { key, deleted: false, reason: 'Object was written too recently' });
+          } else deletableStorageKeys.push(key);
+        } catch (err) {
+          logger.error({ err, key }, '[Orphans] Failed to verify storage orphan');
+          storageResultsByKey.set(key, { key, deleted: false, reason: err.message || 'Verification failed' });
+        }
+      }
+    })
+  );
+
+  if (deletableStorageKeys.length > 0) {
+    const rechecked = await pool.query('SELECT path FROM files WHERE path = ANY($1::text[])', [deletableStorageKeys]);
+    const nowReferenced = new Set(rechecked.rows.map(row => row.path));
+    const safeKeys = deletableStorageKeys.filter(key => {
+      if (!nowReferenced.has(key)) return true;
+      storageResultsByKey.set(key, { key, deleted: false, reason: 'A file now references this object' });
+      return false;
+    });
+    if (safeKeys.length > 0) {
+      const deletion = await storage.deleteObjects(safeKeys);
+      const errors = new Map((deletion.errors || []).map(error => [error.Key, error.Message || 'Deletion failed']));
+      for (const key of safeKeys) {
+        storageResultsByKey.set(
+          key,
+          errors.has(key) ? { key, deleted: false, reason: errors.get(key) } : { key, deleted: true }
+        );
+      }
     }
   }
+  const storageResults = keys.map(key => storageResultsByKey.get(key));
+
+  const selectedRows = ids.length
+    ? await pool.query("SELECT id, path, user_id, created_at FROM files WHERE id = ANY($1::text[]) AND type = 'file'", [
+        ids,
+      ])
+    : { rows: [] };
+  const rowsById = new Map(selectedRows.rows.map(row => [row.id, row]));
+  const databaseResultsById = new Map();
+  const databaseCandidates = ids.filter(id => {
+    const row = rowsById.get(id);
+    if (!row) {
+      databaseResultsById.set(id, { id, deleted: false, reason: 'Row no longer exists' });
+      return false;
+    }
+    if (!isStorageKey(row.path)) {
+      databaseResultsById.set(id, { id, deleted: false, reason: 'Row does not map to a storage key' });
+      return false;
+    }
+    if (!row.created_at || new Date(row.created_at) > cutoff) {
+      databaseResultsById.set(id, { id, deleted: false, reason: 'Row was created too recently' });
+      return false;
+    }
+    return true;
+  });
+  let nextDatabase = 0;
+  const missingObjectIds = [];
+  await Promise.all(
+    Array.from({ length: Math.min(8, databaseCandidates.length) }, async () => {
+      while (nextDatabase < databaseCandidates.length) {
+        const id = databaseCandidates[nextDatabase++];
+        const row = rowsById.get(id);
+        try {
+          if (await storage.exists(row.path)) {
+            databaseResultsById.set(id, { id, deleted: false, reason: 'Stored object exists again' });
+          } else missingObjectIds.push(id);
+        } catch (err) {
+          logger.error({ err, fileId: id }, '[Orphans] Failed to verify database orphan');
+          databaseResultsById.set(id, { id, deleted: false, reason: err.message || 'Verification failed' });
+        }
+      }
+    })
+  );
+
+  const affectedUserIds = new Set();
+  if (missingObjectIds.length > 0) {
+    const deleted = await pool.query(
+      `DELETE FROM files
+        WHERE id = ANY($1::text[]) AND type = 'file' AND created_at <= $2
+        RETURNING id, user_id`,
+      [missingObjectIds, cutoff]
+    );
+    const deletedIds = new Set(deleted.rows.map(row => row.id));
+    for (const row of deleted.rows) affectedUserIds.add(row.user_id);
+    for (const id of missingObjectIds) {
+      databaseResultsById.set(
+        id,
+        deletedIds.has(id) ? { id, deleted: true } : { id, deleted: false, reason: 'Row changed during verification' }
+      );
+    }
+  }
+  const databaseResults = ids.map(id => databaseResultsById.get(id));
 
   for (const userId of affectedUserIds) {
     await invalidateAllFileCaches(userId);

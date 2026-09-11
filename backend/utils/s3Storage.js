@@ -3,13 +3,18 @@
  */
 
 import {
+  AbortMultipartUploadCommand,
+  CompleteMultipartUploadCommand,
   CopyObjectCommand,
+  CreateMultipartUploadCommand,
   DeleteObjectCommand,
+  DeleteObjectsCommand,
   GetObjectCommand,
   HeadObjectCommand,
   ListObjectsV2Command,
   PutObjectCommand,
   S3Client,
+  UploadPartCopyCommand,
 } from '@aws-sdk/client-s3';
 import { Upload } from '@aws-sdk/lib-storage';
 import fs from 'fs';
@@ -163,21 +168,108 @@ async function deleteObject(key) {
   );
 }
 
+/** Delete up to any number of objects using S3's 1,000-key batch API. */
+async function deleteObjects(keys) {
+  const uniqueKeys = [...new Set((keys || []).filter(Boolean))];
+  if (uniqueKeys.length === 0) return { deleted: [], errors: [] };
+
+  const client = getClient();
+  const deleted = [];
+  const errors = [];
+  for (let offset = 0; offset < uniqueKeys.length; offset += 1000) {
+    const chunk = uniqueKeys.slice(offset, offset + 1000);
+    const response = await client.send(
+      new DeleteObjectsCommand({
+        Bucket: s3Config.bucket,
+        Delete: { Objects: chunk.map(Key => ({ Key })), Quiet: true },
+      })
+    );
+    const chunkErrors = response.Errors || [];
+    const failedKeys = new Set(chunkErrors.map(error => error.Key));
+    deleted.push(...chunk.filter(key => !failedKeys.has(key)));
+    errors.push(...chunkErrors);
+  }
+  return { deleted, errors };
+}
+
 /**
  * Copy object to new key (same bucket)
  * @param {string} sourceKey - Source object key
  * @param {string} destKey - Destination object key
  * @returns {Promise<void>}
  */
-async function copyObject(sourceKey, destKey) {
+async function copyObject(sourceKey, destKey, knownSourceSize) {
   const client = getClient();
-  await client.send(
-    new CopyObjectCommand({
-      Bucket: s3Config.bucket,
-      CopySource: `${s3Config.bucket}/${encodeURIComponent(sourceKey)}`,
-      Key: destKey,
-    })
-  );
+  const source = `${s3Config.bucket}/${encodeURIComponent(sourceKey)}`;
+  let sourceSize = Number(knownSourceSize);
+  if (!Number.isSafeInteger(sourceSize) || sourceSize < 0) {
+    const sourceMetadata = await statObject(sourceKey);
+    if (!sourceMetadata) throw Object.assign(new Error('Source object not found'), { name: 'NoSuchKey' });
+    sourceSize = sourceMetadata.size;
+  }
+
+  // CopyObject is limited to 5 GiB. Keep small copies to one server-side
+  // request and use multipart UploadPartCopy for larger objects, so bytes never
+  // traverse this application process.
+  const COPY_OBJECT_LIMIT = 5 * 1024 ** 3;
+  if (sourceSize <= COPY_OBJECT_LIMIT) {
+    await client.send(
+      new CopyObjectCommand({
+        Bucket: s3Config.bucket,
+        CopySource: source,
+        Key: destKey,
+      })
+    );
+    return;
+  }
+
+  const PART_SIZE = 256 * 1024 ** 2;
+  const created = await client.send(new CreateMultipartUploadCommand({ Bucket: s3Config.bucket, Key: destKey }));
+  const uploadId = created.UploadId;
+  if (!uploadId) throw new Error('Object store did not return a multipart upload id');
+
+  try {
+    const ranges = [];
+    for (let start = 0, partNumber = 1; start < sourceSize; start += PART_SIZE, partNumber += 1) {
+      const end = Math.min(start + PART_SIZE, sourceSize) - 1;
+      ranges.push({ start, end, partNumber });
+    }
+    const parts = [];
+    let next = 0;
+    const workers = Array.from({ length: Math.min(4, ranges.length) }, async () => {
+      while (next < ranges.length) {
+        const { start, end, partNumber } = ranges[next++];
+        const copied = await client.send(
+          new UploadPartCopyCommand({
+            Bucket: s3Config.bucket,
+            Key: destKey,
+            UploadId: uploadId,
+            PartNumber: partNumber,
+            CopySource: source,
+            CopySourceRange: `bytes=${start}-${end}`,
+          })
+        );
+        const ETag = copied.CopyPartResult?.ETag;
+        if (!ETag) throw new Error(`Object store did not return an ETag for copied part ${partNumber}`);
+        parts.push({ ETag, PartNumber: partNumber });
+      }
+    });
+    await Promise.all(workers);
+    parts.sort((a, b) => a.PartNumber - b.PartNumber);
+    await client.send(
+      new CompleteMultipartUploadCommand({
+        Bucket: s3Config.bucket,
+        Key: destKey,
+        UploadId: uploadId,
+        MultipartUpload: { Parts: parts },
+      })
+    );
+  } catch (error) {
+    await client
+      .send(new AbortMultipartUploadCommand({ Bucket: s3Config.bucket, Key: destKey, UploadId: uploadId }))
+      .catch(abortError => logger.warn({ err: abortError, destKey }, '[S3] Failed to abort multipart copy'));
+    throw error;
+  }
 }
 
 /**
@@ -289,6 +381,7 @@ export {
   putBuffer,
   putStream,
   deleteObject,
+  deleteObjects,
   copyObject,
   listKeys,
   listKeysPaginated,

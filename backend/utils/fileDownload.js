@@ -5,6 +5,7 @@ import { resolveIkmForPath } from '../models/file/file.dek.model.js';
 import { isFilePathEncrypted, isValidPath } from './filePath.js';
 import {
   ciphertextSizeToPlaintextSize,
+  plaintextSizeToCiphertextSize,
   createDecryptStreamFromStream,
   createRangeDecryptStream,
 } from './fileEncryption.js';
@@ -82,22 +83,27 @@ async function validateAndResolveFile(file) {
     return { success: false, error: 'Invalid file path' };
   }
 
-  let stat;
-  try {
-    stat = await storage.statObject(file.path);
-  } catch (err) {
-    logger.warn({ err, key: file.path }, 'Error checking stored object');
-    return { success: false, error: 'Error accessing file storage' };
-  }
-  if (!stat) {
-    return { success: false, error: 'File not found in storage' };
+  const isEncrypted = isFilePathEncrypted(file.path);
+  let ciphertextSize;
+  if (isEncrypted && Number.isSafeInteger(Number(file.size)) && Number(file.size) >= 0) {
+    ciphertextSize = plaintextSizeToCiphertextSize(Number(file.size));
+  } else {
+    let stat;
+    try {
+      stat = await storage.statObject(file.path);
+    } catch (err) {
+      logger.warn({ err, key: file.path }, 'Error checking stored object');
+      return { success: false, error: 'Error accessing file storage' };
+    }
+    if (!stat) return { success: false, error: 'File not found in storage' };
+    ciphertextSize = stat.size;
   }
 
   return {
     success: true,
     storageKey: file.path,
-    ciphertextSize: stat.size,
-    isEncrypted: isFilePathEncrypted(file.path),
+    ciphertextSize,
+    isEncrypted,
   };
 }
 
@@ -225,12 +231,34 @@ async function streamEncryptedFile(res, storageKey, filename, mimeType, options 
  * @param {string} mimeType - Content-Type
  * @param {boolean} attachment - If true, "attachment" disposition, else "inline"
  */
-async function streamUnencryptedFile(res, storageKey, filename, mimeType, attachment = false) {
+async function streamUnencryptedFile(res, storageKey, filename, mimeType, attachment = false, options = {}) {
   res.type(mimeType);
   const disposition = attachment ? 'attachment' : 'inline';
   res.setHeader('Content-Disposition', contentDispositionValue(disposition, filename));
 
-  const stream = await storage.getReadStream(storageKey);
+  const requestedRange = options.req?.headers?.range;
+  let range = null;
+  let size = options.size;
+  if (requestedRange) {
+    if (!Number.isSafeInteger(Number(size)) || Number(size) < 0) {
+      const stat = await storage.statObject(storageKey);
+      if (!stat) return res.status(404).end();
+      size = stat.size;
+    }
+    range = parseRange(requestedRange, Number(size));
+    res.setHeader('Accept-Ranges', 'bytes');
+    if (range?.unsatisfiable) {
+      res.setHeader('Content-Range', `bytes */${size}`);
+      return res.status(416).end();
+    }
+    if (range) {
+      res.status(206);
+      res.setHeader('Content-Range', `bytes ${range.start}-${range.end}/${size}`);
+      res.setHeader('Content-Length', String(range.end - range.start + 1));
+    }
+  }
+
+  const stream = await storage.getReadStream(storageKey, range || undefined);
 
   stream.on('error', error => {
     logger.error({ error, storageKey }, 'Error streaming file');
