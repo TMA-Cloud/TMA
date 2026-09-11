@@ -1,6 +1,8 @@
 import http from 'http';
 import https from 'https';
-import { Readable } from 'stream';
+import path from 'path';
+import { Transform } from 'stream';
+import { pipeline } from 'stream/promises';
 
 import db from '../../config/db.js';
 import { logger } from '../../config/logger.js';
@@ -16,6 +18,7 @@ import {
   deleteCachePattern,
 } from '../../utils/cache.js';
 import { createEncryptStream, newWrappedDek } from '../../utils/fileEncryption.js';
+import { generateId } from '../../utils/id.js';
 import { validateId } from '../../utils/validation.js';
 
 import { getOnlyOfficeConfig, verifyCallbackToken } from './onlyoffice.utils.js';
@@ -23,7 +26,7 @@ import { getOnlyOfficeConfig, verifyCallbackToken } from './onlyoffice.utils.js'
 /**
  * Download file from URL
  */
-function downloadFile(url) {
+function downloadFileStream(url) {
   return new Promise((resolve, reject) => {
     const protocol = url.startsWith('https') ? https : http;
 
@@ -34,9 +37,7 @@ function downloadFile(url) {
           return;
         }
 
-        const chunks = [];
-        response.on('data', chunk => chunks.push(chunk));
-        response.on('end', () => resolve(Buffer.concat(chunks)));
+        resolve(response);
         response.on('error', reject);
       })
       .on('error', reject);
@@ -99,7 +100,7 @@ async function callback(req, res) {
 
     // Handle document close (status 2 or 4) - unregister from auto-save
     if (status === 2 || status === 4) {
-      unregisterOpenDocument(body.key);
+      await unregisterOpenDocument(body.key);
       logger.debug({ status, key: body.key }, '[ONLYOFFICE] Document closed, unregistered from auto-save');
     }
 
@@ -219,7 +220,11 @@ async function callback(req, res) {
 
       // Strict DB permission: only accept callback when file belongs to user in key (User A cannot overwrite User B's file)
       const fileResult = await db.query(
-        'SELECT id, name, path, user_id, parent_id, size FROM files WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL',
+        `SELECT f.id, f.name, f.path, f.user_id, f.parent_id, f.size,
+                u.storage_used, u.storage_reserved, u.storage_limit
+           FROM files f
+           JOIN users u ON u.id = f.user_id
+          WHERE f.id = $1 AND f.user_id = $2 AND f.deleted_at IS NULL`,
         [validatedFileId, validatedUserId]
       );
 
@@ -239,9 +244,9 @@ async function callback(req, res) {
         return res.status(200).json({ error: 0 });
       }
 
-      let fileBuffer;
+      let sourceStream;
       try {
-        fileBuffer = await downloadFile(body.url);
+        sourceStream = await downloadFileStream(body.url);
       } catch (error) {
         logger.error('[ONLYOFFICE] Failed to download document:', error);
         return res.status(200).json({ error: 0 });
@@ -250,17 +255,98 @@ async function callback(req, res) {
       // Re-keys the body under a fresh DEK. Persist the wrapped DEK alongside the object metadata.
       const dekInfo = newWrappedDek();
 
-      const plainStream = Readable.from(fileBuffer);
       const encryptStream = createEncryptStream(dekInfo.dek);
-      plainStream.pipe(encryptStream);
-      await storage.putStream(fileRow.path, encryptStream);
+      let newSize = 0;
+      const limit = fileRow.storage_limit == null ? null : Number(fileRow.storage_limit);
+      const maximumReplacementSize =
+        limit == null
+          ? Number.POSITIVE_INFINITY
+          : Math.max(
+              0,
+              limit -
+                Number(fileRow.storage_used || 0) -
+                Number(fileRow.storage_reserved || 0) +
+                Number(fileRow.size || 0)
+            );
+      const byteCounter = new Transform({
+        transform(chunk, _encoding, callback) {
+          newSize += chunk.length;
+          if (newSize > maximumReplacementSize) {
+            const error = new Error('Storage limit exceeded');
+            error.code = 'STORAGE_LIMIT_EXCEEDED';
+            callback(error);
+            return;
+          }
+          callback(null, chunk);
+        },
+      });
+      const temporaryPath = `${generateId(16)}${path.extname(fileRow.name)}`;
+      try {
+        const uploadPromise = storage.putStream(temporaryPath, encryptStream);
+        await Promise.all([pipeline(sourceStream, byteCounter, encryptStream), uploadPromise]);
+      } catch (error) {
+        await storage.deleteObject(temporaryPath).catch(() => undefined);
+        if (error.code === 'STORAGE_LIMIT_EXCEEDED') {
+          logger.warn(
+            { fileId: validatedFileId },
+            '[ONLYOFFICE] Save rejected because storage quota would be exceeded'
+          );
+          return res.status(200).json({ error: 1 });
+        }
+        throw error;
+      }
 
-      // Update file size, modified timestamp, and the wrapped DEK.
-      const newSize = fileBuffer.length;
-      await db.query(
-        'UPDATE files SET size = $1, modified = NOW(), dek_wrapped = $2, dek_kek_version = $3 WHERE id = $4',
-        [newSize, dekInfo.dekWrapped, dekInfo.kekVersion, validatedFileId]
-      );
+      // Atomically point metadata at the completed temporary object only after
+      // rechecking quota under the same user-row lock used by normal uploads.
+      const client = await db.connect();
+      let replacedPath;
+      try {
+        await client.query('BEGIN');
+        const locked = await client.query(
+          `SELECT f.path, f.size, u.storage_used, u.storage_reserved, u.storage_limit
+             FROM files f
+             JOIN users u ON u.id = f.user_id
+            WHERE f.id = $1 AND f.user_id = $2 AND f.deleted_at IS NULL
+            FOR UPDATE OF f, u`,
+          [validatedFileId, validatedUserId]
+        );
+        if (locked.rows.length === 0) throw new Error('File no longer exists');
+        const current = locked.rows[0];
+        const currentLimit = current.storage_limit == null ? null : Number(current.storage_limit);
+        const projected =
+          Number(current.storage_used || 0) +
+          Number(current.storage_reserved || 0) -
+          Number(current.size || 0) +
+          newSize;
+        if (currentLimit !== null && projected > currentLimit) {
+          const error = new Error('Storage limit exceeded');
+          error.code = 'STORAGE_LIMIT_EXCEEDED';
+          throw error;
+        }
+        replacedPath = current.path;
+        await client.query(
+          `UPDATE files
+              SET path = $1, size = $2, modified = NOW(), dek_wrapped = $3, dek_kek_version = $4
+            WHERE id = $5 AND user_id = $6`,
+          [temporaryPath, newSize, dekInfo.dekWrapped, dekInfo.kekVersion, validatedFileId, validatedUserId]
+        );
+        await client.query('COMMIT');
+      } catch (error) {
+        await client.query('ROLLBACK');
+        await storage.deleteObject(temporaryPath).catch(() => undefined);
+        if (error.code === 'STORAGE_LIMIT_EXCEEDED') {
+          logger.warn({ fileId: validatedFileId }, '[ONLYOFFICE] Concurrent save rejected by storage quota');
+          return res.status(200).json({ error: 1 });
+        }
+        throw error;
+      } finally {
+        client.release();
+      }
+      if (replacedPath && replacedPath !== temporaryPath) {
+        await storage.deleteObject(replacedPath).catch(error => {
+          logger.warn({ err: error, replacedPath }, '[ONLYOFFICE] Could not remove superseded document object');
+        });
+      }
 
       // Invalidate cache to ensure frontend sees updated file immediately
       const userId = fileRow.user_id;

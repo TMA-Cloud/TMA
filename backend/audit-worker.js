@@ -1,15 +1,14 @@
 #!/usr/bin/env node
 
 /**
- * Audit Worker - Standalone process for processing audit events
+ * Standalone background worker
  *
  * This worker:
  * 1. Connects to pg-boss queue
- * 2. Subscribes to 'audit-events' queue
- * 3. Processes events concurrently (default: 5)
- * 4. Writes audit events to audit_log table
- * 5. Updates Prometheus metrics
- * 6. Handles graceful shutdown on SIGTERM/SIGINT
+ * 2. Processes batched audit writes
+ * 3. Runs durable scheduled maintenance
+ * 4. Executes ONLYOFFICE force-save commands
+ * 5. Handles graceful shutdown on SIGTERM/SIGINT
  *
  * Usage:
  *   node backend/audit-worker.js
@@ -25,9 +24,27 @@ import { PgBoss } from 'pg-boss';
 import { incrementEventsProcessed, incrementEventsFailed, recordProcessingDuration } from './services/metrics.js';
 import { createRequestLogger } from './config/logger.js';
 import { createPool, buildPoolConfig, pgbossSchema } from './config/db.js';
+import { connectRedis, disconnectRedis } from './config/redis.js';
 import { AUDIT_QUEUE, AUDIT_QUEUE_OPTIONS } from './services/auditQueue.js';
+import {
+  MAINTENANCE_QUEUE,
+  MAINTENANCE_TASKS,
+  ONLYOFFICE_FORCESAVE_QUEUE,
+  ORPHAN_MAINTENANCE_QUEUE,
+  FILE_OPERATION_QUEUE,
+  initializeBackgroundQueues,
+} from './services/backgroundQueue.js';
+import { cleanupExpiredTrash } from './models/file/file.cleanup.model.js';
+import { deleteFiles, permanentlyDeleteFiles, restoreFiles } from './models/file/file.trash.model.js';
+import { deleteOrphans, scanOrphans } from './models/file/file.orphan.model.js';
+import { cleanupExpiredShareLinks } from './models/share.model.js';
+import { purgeStaleHeartbeats } from './models/clientHeartbeat.model.js';
+import { cleanupOldAuditLogs } from './services/cleanup.js';
+import { forceSaveDocument } from './services/onlyofficeAutoSave.js';
+import { EventTypes, publishFileEventsBatch } from './services/fileEvents.js';
+import { cleanupExpiredStorageReservations } from './services/storageReservations.js';
 
-const logger = createRequestLogger({ service: 'audit-worker' });
+const logger = createRequestLogger({ service: 'background-worker' });
 
 // Database connection pool for writing audit logs
 const pool = createPool({ max: 20 });
@@ -165,6 +182,115 @@ async function processAuditEvent(job) {
   }
 }
 
+/** Insert one pg-boss delivery in a single statement, preserving one audit row per event. */
+async function processAuditEvents(jobs) {
+  if (jobs.length === 1) return processAuditEvent(jobs[0]);
+  const startedAt = Date.now();
+  try {
+    for (const job of jobs) validateEvent(job.data);
+
+    const values = [];
+    const tuples = jobs.map((job, rowIndex) => {
+      const event = job.data;
+      values.push(
+        event.requestId,
+        event.userId || null,
+        event.accountOwnerId || event.userId || null,
+        event.actorRole || null,
+        event.action,
+        event.resourceType || null,
+        event.resourceId || null,
+        event.status || 'success',
+        event.ipAddress || null,
+        event.userAgent || null,
+        event.metadata ? JSON.stringify(event.metadata) : null,
+        event.errorMessage || null,
+        event.processingTimeMs || null
+      );
+      const base = rowIndex * 13;
+      return `(${Array.from({ length: 13 }, (_, index) => `$${base + index + 1}`).join(',')})`;
+    });
+
+    await pool.query(
+      `INSERT INTO audit_log (
+         request_id, user_id, account_owner_id, actor_role, action,
+         resource_type, resource_id, status, ip_address, user_agent,
+         metadata, error_message, processing_time_ms
+       ) VALUES ${tuples.join(',')}`,
+      values
+    );
+
+    const duration = (Date.now() - startedAt) / 1000;
+    for (const _job of jobs) {
+      recordProcessingDuration(duration);
+      incrementEventsProcessed();
+    }
+  } catch (error) {
+    const reason = error.code ? 'database_error' : 'validation_error';
+    for (const _job of jobs) incrementEventsFailed(reason);
+    throw error;
+  }
+}
+
+async function processMaintenanceJob(job) {
+  switch (job.data?.task) {
+    case MAINTENANCE_TASKS.TRASH: {
+      const result = await cleanupExpiredTrash();
+      if (result.hasMore) {
+        await boss.send(FILE_OPERATION_QUEUE, { task: 'continue-trash-cleanup' }, { startAfter: 60 });
+      }
+      return result;
+    }
+    case MAINTENANCE_TASKS.AUDIT:
+      return cleanupOldAuditLogs();
+    case MAINTENANCE_TASKS.SHARES:
+      return cleanupExpiredShareLinks();
+    case MAINTENANCE_TASKS.HEARTBEATS:
+      return purgeStaleHeartbeats(10);
+    case MAINTENANCE_TASKS.RESERVATIONS:
+      return cleanupExpiredStorageReservations();
+    default:
+      throw new Error(`Unknown maintenance task: ${job.data?.task}`);
+  }
+}
+
+async function processFileOperation(job) {
+  const { task, ids = [], userId } = job.data || {};
+  if (task === 'continue-trash-cleanup') {
+    const result = await cleanupExpiredTrash();
+    if (result.hasMore) {
+      await boss.send(FILE_OPERATION_QUEUE, { task }, { startAfter: 60 });
+    }
+    return result;
+  }
+  if (!userId) throw new Error('Missing file-operation userId');
+  let count;
+  let eventType;
+  if (task === 'trash') {
+    count = await deleteFiles(ids, userId);
+    eventType = EventTypes.FILE_DELETED;
+  } else if (task === 'restore') {
+    count = await restoreFiles(ids, userId);
+    eventType = EventTypes.FILE_RESTORED;
+  } else if (task === 'delete-permanently') {
+    count = await permanentlyDeleteFiles(ids, userId);
+    eventType = EventTypes.FILE_PERMANENTLY_DELETED;
+  } else if (task === 'empty-trash') {
+    count = await permanentlyDeleteFiles([], userId, { allTrash: true });
+    eventType = EventTypes.FILE_PERMANENTLY_DELETED;
+  } else {
+    throw new Error(`Unknown file operation: ${task}`);
+  }
+  await publishFileEventsBatch([
+    {
+      eventType,
+      userId,
+      eventData: { userId, action: task, count: count || 0 },
+    },
+  ]);
+  return { count: count || 0 };
+}
+
 /**
  * Initialize the audit worker
  */
@@ -192,17 +318,51 @@ async function initializeWorker() {
     await boss.start();
     // Queues must be created before sending/working in pg-boss v10+
     await boss.createQueue(AUDIT_QUEUE, AUDIT_QUEUE_OPTIONS);
+    await initializeBackgroundQueues(boss);
+    await connectRedis();
     logger.info('pg-boss started successfully');
 
     // Subscribe to audit events queue
     await boss.work(AUDIT_QUEUE, { batchSize: CONCURRENCY }, async jobs => {
-      // Handler now receives an array in pg-boss v10+
-      for (const job of jobs) {
-        await processAuditEvent(job);
-      }
+      await processAuditEvents(jobs);
     });
 
-    logger.info({ queue: AUDIT_QUEUE, concurrency: CONCURRENCY }, 'Audit worker started successfully');
+    await boss.work(MAINTENANCE_QUEUE, { batchSize: 1 }, async ([job]) => {
+      await processMaintenanceJob(job);
+    });
+
+    await boss.work(ORPHAN_MAINTENANCE_QUEUE, { batchSize: 1 }, async ([job]) => {
+      if (job.data?.task === 'scan') return scanOrphans({ graceMinutes: job.data.graceMinutes });
+      if (job.data?.task === 'delete') {
+        return deleteOrphans({
+          storageKeys: job.data.storageKeys,
+          fileIds: job.data.fileIds,
+          graceMinutes: job.data.graceMinutes,
+        });
+      }
+      throw new Error(`Unknown orphan maintenance task: ${job.data?.task}`);
+    });
+
+    await boss.work(
+      FILE_OPERATION_QUEUE,
+      { batchSize: 1, localConcurrency: Math.min(2, CONCURRENCY) },
+      async ([job]) => {
+        await processFileOperation(job);
+      }
+    );
+
+    await boss.work(
+      ONLYOFFICE_FORCESAVE_QUEUE,
+      { batchSize: 1, localConcurrency: Math.min(4, CONCURRENCY) },
+      async ([job]) => {
+        const outcome = await forceSaveDocument(job.data.documentKey);
+        if (outcome.closed) {
+          await boss.unschedule(ONLYOFFICE_FORCESAVE_QUEUE, job.data.documentKey);
+        }
+      }
+    );
+
+    logger.info({ queue: AUDIT_QUEUE, concurrency: CONCURRENCY }, 'Background worker started successfully');
   } catch (error) {
     logger.error({ err: error }, 'Failed to initialize audit worker');
     process.exit(1);
@@ -221,6 +381,8 @@ async function shutdown() {
       await boss.stop();
       logger.info('pg-boss stopped');
     }
+
+    await disconnectRedis();
 
     // Close database pool
     await pool.end();

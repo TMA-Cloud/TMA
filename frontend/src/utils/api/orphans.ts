@@ -58,8 +58,34 @@ export interface OrphanDeleteResult {
   };
 }
 
+interface BackgroundJobState<T> {
+  jobId?: string;
+  status?: string;
+  result?: T;
+}
+
+const wait = (milliseconds: number) => new Promise(resolve => setTimeout(resolve, milliseconds));
+
+async function pollJob<T>(request: () => Promise<T | BackgroundJobState<T>>): Promise<T> {
+  const started = Date.now();
+  let delay = 1000;
+  for (;;) {
+    const response = await request();
+    if (!response || typeof response !== 'object' || !('jobId' in response)) return response as T;
+    if (Date.now() - started > 10 * 60 * 1000) throw new Error('Background maintenance timed out');
+    await wait(delay);
+    delay = Math.min(5000, delay * 2);
+  }
+}
+
 export async function fetchOrphans(graceMinutes: number): Promise<OrphanReport> {
-  return apiGet<OrphanReport>(`/api/user/orphans?graceMinutes=${encodeURIComponent(graceMinutes)}`);
+  const queued = await apiGet<BackgroundJobState<OrphanReport>>(
+    `/api/user/orphans?graceMinutes=${encodeURIComponent(graceMinutes)}`
+  );
+  if (!queued.jobId) return queued as unknown as OrphanReport;
+  return pollJob(() =>
+    apiGet<OrphanReport | BackgroundJobState<OrphanReport>>(`/api/user/orphans?jobId=${queued.jobId}`)
+  );
 }
 
 export async function deleteOrphans(payload: {
@@ -67,7 +93,13 @@ export async function deleteOrphans(payload: {
   fileIds?: string[];
   graceMinutes: number;
 }): Promise<OrphanDeleteResult> {
-  return apiPost<OrphanDeleteResult>('/api/user/orphans/delete', payload);
+  const queued = await apiPost<BackgroundJobState<OrphanDeleteResult>>('/api/user/orphans/delete', payload);
+  if (!queued.jobId) return queued as unknown as OrphanDeleteResult;
+  return pollJob(() =>
+    apiPost<OrphanDeleteResult | BackgroundJobState<OrphanDeleteResult>>('/api/user/orphans/delete', {
+      jobId: queued.jobId,
+    })
+  );
 }
 
 /**

@@ -10,10 +10,11 @@
 
 import path from 'path';
 import fs from 'fs/promises';
+import { randomUUID } from 'crypto';
 
 import pool from '../config/db.js';
 import { getMaxUploadSizeSettings } from '../models/user.model.js';
-import { createFolder, createFileFromStreamedUpload } from '../models/file/file.crud.model.js';
+import { createFolder, createFilesFromStreamedUploads } from '../models/file/file.crud.model.js';
 import { invalidateUserCache } from '../utils/cache.js';
 import storage from '../utils/storageDriver.js';
 import { checkStorageLimitExceeded } from '../utils/storageUtils.js';
@@ -23,12 +24,9 @@ if (!process.env.DOCKER && process.env.DB_HOST === 'postgres') process.env.DB_HO
 if (!process.env.DOCKER && process.env.REDIS_HOST === 'redis') process.env.REDIS_HOST = 'localhost';
 
 async function getStorageUsageAndLimit(userId) {
-  const [usageRes, limitRes] = await Promise.all([
-    pool.query("SELECT COALESCE(SUM(size), 0) AS used FROM files WHERE user_id = $1 AND type = 'file'", [userId]),
-    pool.query('SELECT storage_limit FROM users WHERE id = $1', [userId]),
-  ]);
-  const used = Number(usageRes.rows[0]?.used) || 0;
-  const raw = limitRes.rows[0]?.storage_limit;
+  const account = await pool.query('SELECT storage_used, storage_limit FROM users WHERE id = $1', [userId]);
+  const used = Number(account.rows[0]?.storage_used) || 0;
+  const raw = account.rows[0]?.storage_limit;
   const userStorageLimit = raw === null || raw === undefined ? null : typeof raw === 'number' ? raw : Number(raw);
   const limit = userStorageLimit !== null && Number.isFinite(userStorageLimit) ? userStorageLimit : null;
   return { used, userStorageLimit: limit };
@@ -74,27 +72,53 @@ function relPath(base, fullPath) {
   return rel.split(path.sep).join('/');
 }
 
-async function walkDir(dir, baseDir, dirs, files) {
+async function* walkTree(dir, baseDir) {
   const entries = await fs.readdir(dir, { withFileTypes: true });
   for (const e of entries) {
     const full = path.join(dir, e.name);
     const rel = relPath(baseDir, full);
     if (e.isDirectory()) {
-      dirs.push(rel);
-      await walkDir(full, baseDir, dirs, files);
+      yield { kind: 'directory', fullPath: full, relPath: rel, name: e.name };
+      yield* walkTree(full, baseDir);
     } else if (e.isFile()) {
-      files.push({ fullPath: full, relPath: rel, name: e.name });
+      yield { kind: 'file', fullPath: full, relPath: rel, name: e.name };
     }
   }
 }
 
-function sortDirsForCreation(dirs) {
-  return [...dirs].sort((a, b) => {
-    const depthA = (a.match(/\//g) || []).length;
-    const depthB = (b.match(/\//g) || []).length;
-    if (depthA !== depthB) return depthA - depthB;
-    return a.localeCompare(b);
-  });
+function pathDepth(rel) {
+  return rel ? rel.split('/').length : 0;
+}
+
+async function rollbackImport(runId, userId) {
+  let rolledBackFiles = 0;
+  let rolledBackFolders = 0;
+  for (;;) {
+    const result = await pool.query(
+      `SELECT file_id, storage_name, item_type
+         FROM bulk_import_items
+        WHERE run_id = $1 AND user_id = $2
+        ORDER BY CASE WHEN item_type = 'file' THEN 0 ELSE 1 END, depth DESC, file_id
+        LIMIT 500`,
+      [runId, userId]
+    );
+    if (result.rows.length === 0) break;
+    const storageNames = result.rows.filter(row => row.storage_name).map(row => row.storage_name);
+    if (storageNames.length > 0) {
+      if (typeof storage.deleteObjects === 'function') {
+        const deletion = await storage.deleteObjects(storageNames);
+        if (deletion?.errors?.length) throw new Error(`${deletion.errors.length} rollback object deletion(s) failed`);
+      } else {
+        await Promise.all(storageNames.map(key => storage.deleteObject(key)));
+      }
+    }
+    const ids = result.rows.map(row => row.file_id);
+    await pool.query('DELETE FROM files WHERE user_id = $1 AND id = ANY($2::text[])', [userId, ids]);
+    await pool.query('DELETE FROM bulk_import_items WHERE run_id = $1 AND file_id = ANY($2::text[])', [runId, ids]);
+    rolledBackFiles += result.rows.filter(row => row.item_type === 'file').length;
+    rolledBackFolders += result.rows.filter(row => row.item_type === 'folder').length;
+  }
+  return { rolledBackFiles, rolledBackFolders };
 }
 
 async function resolveUserId(userId, userEmail) {
@@ -152,102 +176,65 @@ async function runBulkImport({ scriptName, writeVerb, writeVerbIng, storeOneFile
   console.log('Max file size from settings:', formatSize(MAX_FILE_SIZE));
 
   const userId = await resolveUserId(args.userId, args.userEmail);
+  const runId = randomUUID();
 
-  console.log('Scanning directory tree...');
-  const dirs = [];
-  const files = [];
-  await walkDir(args.sourceDir, args.sourceDir, dirs, files);
-
-  const sortedDirs = sortDirsForCreation(dirs);
-  const relToFolderId = { '': null };
-  const createdFolderIds = [];
-  let aborted = false;
-  let firstError = null;
-  const committedFiles = [];
-
-  if (args.dryRun) {
-    console.log('Dry run: would create', sortedDirs.length, 'folders and', files.length, 'files.');
-    let totalBytes = 0;
-    for (const f of files) {
-      const s = await fs.stat(f.fullPath).catch(() => null);
-      if (s) totalBytes += s.size;
-    }
-    console.log('Total size (plain):', formatSize(totalBytes));
-    return;
-  }
-
-  console.log('Preflight: checking file sizes and storage limit...');
+  console.log('Preflight: scanning file sizes and storage limit...');
+  let directoryCount = 0;
+  let fileCount = 0;
   let totalSize = 0;
-  const oversize = [];
-  for (const f of files) {
-    const fileStat = await fs.stat(f.fullPath).catch(() => null);
+  let oversizeCount = 0;
+  const oversizeExamples = [];
+  for await (const item of walkTree(args.sourceDir, args.sourceDir)) {
+    if (item.kind === 'directory') {
+      directoryCount += 1;
+      continue;
+    }
+    fileCount += 1;
+    const fileStat = await fs.stat(item.fullPath).catch(() => null);
     if (!fileStat) continue;
     totalSize += fileStat.size;
     if (fileStat.size > MAX_FILE_SIZE) {
-      oversize.push({ path: f.relPath, size: fileStat.size });
+      oversizeCount += 1;
+      if (oversizeExamples.length < 20) oversizeExamples.push({ path: item.relPath, size: fileStat.size });
     }
   }
-  if (oversize.length > 0) {
-    const list = oversize.map(o => `${o.path} (${formatSize(o.size)})`).join(', ');
+
+  if (args.dryRun) {
+    console.log('Dry run: would create', directoryCount, 'folders and', fileCount, 'files.');
+    console.log('Total size (plain):', formatSize(totalSize));
+    return;
+  }
+  if (oversizeCount > 0) {
+    const list = oversizeExamples.map(o => `${o.path} (${formatSize(o.size)})`).join(', ');
+    const remainder =
+      oversizeCount > oversizeExamples.length ? `, and ${oversizeCount - oversizeExamples.length} more` : '';
     throw new Error(
-      `Import aborted before any ${writeVerb}. The following file(s) exceed the ${formatSize(MAX_FILE_SIZE)} per-file limit: ${list}. ` +
+      `Import aborted before any ${writeVerb}. ${oversizeCount} file(s) exceed the ${formatSize(MAX_FILE_SIZE)} per-file limit: ${list}${remainder}. ` +
         'Remove or split these files, or increase the max upload size in Settings.'
     );
   }
   const { used, userStorageLimit } = await getStorageUsageAndLimit(userId);
-  const check = await checkStorageLimitExceeded({
-    fileSize: totalSize,
-    used,
-    userStorageLimit,
-  });
+  const check = await checkStorageLimitExceeded({ fileSize: totalSize, used, userStorageLimit });
   if (check.exceeded) {
     throw new Error(
       `Import aborted before any ${writeVerb}. Total size would exceed storage limit: ${check.message || 'Storage limit exceeded'}`
     );
   }
-  console.log('Preflight OK. Total size:', formatSize(totalSize));
+  console.log('Preflight OK:', directoryCount, 'folders,', fileCount, 'files,', formatSize(totalSize));
 
-  console.log('Creating', sortedDirs.length, 'folders...');
-  for (const rel of sortedDirs) {
-    const dirName = path.basename(rel);
-    const parentRel = path.dirname(rel).replace(/\\/g, '/');
-    const parentId = relToFolderId[parentRel] ?? null;
-
-    if (!validateFileName(dirName)) {
-      console.warn('Skipping invalid folder name:', rel);
-      continue;
-    }
-    const fullDirPath = path.join(args.sourceDir, rel);
-    let modified = null;
-    try {
-      const dirStat = await fs.stat(fullDirPath);
-      modified = dirStat.mtime;
-    } catch {
-      /* ignore */
-    }
-    const folder = await createFolder(dirName, parentId, userId, modified);
-    relToFolderId[rel] = folder.id;
-    createdFolderIds.push(folder.id);
-  }
-
-  console.log(writeVerbIng, files.length, 'files (concurrency:', args.concurrency, ')...');
+  const relToFolderId = new Map([['', null]]);
+  let aborted = false;
+  let firstError = null;
+  console.log(writeVerbIng, fileCount, 'files (concurrency:', args.concurrency, ')...');
   let done = 0;
   let totalBytes = 0;
-  const failed = [];
-  const queue = [...files];
-  const inFlight = new Set();
 
   function getParentId(itemRelPath) {
     const dir = path.dirname(itemRelPath).replace(/\\/g, '/');
-    return relToFolderId[dir] ?? null;
+    return relToFolderId.get(dir) ?? null;
   }
 
-  async function processNext() {
-    if (aborted) return;
-    if (queue.length === 0) return;
-    const item = queue.shift();
-    if (!item) return;
-
+  async function uploadOne(item) {
     let { fullPath, relPath: itemRelPath, name } = item;
     const originalName = name;
     if (!validateFileName(name)) {
@@ -256,106 +243,101 @@ async function runBulkImport({ scriptName, writeVerb, writeVerbIng, storeOneFile
     }
 
     const parentId = getParentId(itemRelPath);
-    const key = fullPath;
-    inFlight.add(key);
-
     try {
       const fileStat = await fs.stat(fullPath);
       if (fileStat.size > MAX_FILE_SIZE) {
         throw new Error(`File exceeds ${formatSize(MAX_FILE_SIZE)} limit: ${itemRelPath}`);
       }
-      const usage = await getStorageUsageAndLimit(userId);
-      const fileCheck = await checkStorageLimitExceeded({
-        fileSize: fileStat.size,
-        used: usage.used,
-        userStorageLimit: usage.userStorageLimit,
-      });
-      if (fileCheck.exceeded) {
-        throw new Error(fileCheck.message || 'Storage limit exceeded');
-      }
-
       const modified = fileStat.mtime ? new Date(fileStat.mtime) : null;
       const storedMeta = await storeOneFile(fullPath, name, false, modified);
-      await createFileFromStreamedUpload(
-        {
-          id: storedMeta.id,
-          storageName: storedMeta.storageName,
-          name: storedMeta.name,
-          size: storedMeta.size,
-          mimeType: storedMeta.mimeType,
-          modified: storedMeta.modified,
-          dekWrapped: storedMeta.dekWrapped,
-          dekKekVersion: storedMeta.dekKekVersion,
-        },
+      return {
+        upload: storedMeta,
         parentId,
-        userId
-      );
-      committedFiles.push({ ...storedMeta, parentId });
-      totalBytes += storedMeta.size;
-      done++;
-      if (done % 50 === 0 || done === files.length) {
-        console.log(`Progress: ${done}/${files.length} files, ${formatSize(totalBytes)}`);
-      }
+        modified,
+        sourcePath: itemRelPath,
+        importDepth: pathDepth(itemRelPath),
+      };
     } catch (err) {
       const msg = err && typeof err.message === 'string' ? err.message : String(err);
-      failed.push({ path: itemRelPath, error: msg });
       console.error('Failed:', itemRelPath, msg);
-      done++;
-      if (!aborted) {
-        aborted = true;
-        firstError = err;
-      }
-    } finally {
-      inFlight.delete(key);
-      if (!aborted && queue.length > 0) await processNext();
+      throw err;
     }
   }
 
-  const concurrency = Math.min(args.concurrency, files.length);
-  await Promise.allSettled(Array.from({ length: concurrency }, () => processNext()));
+  const batchSize = 250;
+  let sourceBatch = [];
+  async function commitBatch() {
+    if (sourceBatch.length === 0) return;
+    const uploaded = [];
+    let next = 0;
+    try {
+      const workers = Array.from({ length: Math.min(args.concurrency, sourceBatch.length) }, async () => {
+        for (;;) {
+          const index = next++;
+          if (index >= sourceBatch.length) return;
+          uploaded.push(await uploadOne(sourceBatch[index]));
+        }
+      });
+      const workerResults = await Promise.allSettled(workers);
+      const rejected = workerResults.find(result => result.status === 'rejected');
+      if (rejected) throw rejected.reason;
+      await createFilesFromStreamedUploads(uploaded, userId, { importRunId: runId });
+      for (const entry of uploaded) {
+        totalBytes += Number(entry.upload.size) || 0;
+      }
+      done += uploaded.length;
+      console.log(`Progress: ${done}/${fileCount} files, ${formatSize(totalBytes)}`);
+    } catch (error) {
+      aborted = true;
+      firstError = error;
+      // The batch transaction is all-or-nothing, so none of these objects have
+      // durable metadata when finalization fails.
+      await Promise.allSettled(uploaded.map(entry => storage.deleteObject(entry.upload.storageName)));
+    }
+    sourceBatch = [];
+  }
+
+  try {
+    for await (const item of walkTree(args.sourceDir, args.sourceDir)) {
+      if (aborted) break;
+      if (item.kind === 'directory') {
+        await commitBatch();
+        if (!validateFileName(item.name)) throw new Error(`Invalid folder name: ${item.relPath}`);
+        const parentRel = path.dirname(item.relPath).replace(/\\/g, '/');
+        const parentId = relToFolderId.get(parentRel) ?? null;
+        const dirStat = await fs.stat(item.fullPath).catch(() => null);
+        const folder = await createFolder(item.name, parentId, userId, dirStat?.mtime || null, {
+          importRunId: runId,
+          importDepth: pathDepth(item.relPath),
+        });
+        relToFolderId.set(item.relPath, folder.id);
+      } else {
+        sourceBatch.push(item);
+        if (sourceBatch.length >= batchSize) await commitBatch();
+      }
+    }
+    await commitBatch();
+  } catch (error) {
+    aborted = true;
+    firstError ||= error;
+  }
 
   if (aborted && firstError) {
     console.error('Import aborted due to first error. Rolling back all changes...');
-    for (const fileMeta of committedFiles) {
-      try {
-        await pool.query('DELETE FROM files WHERE id = $1 AND user_id = $2', [fileMeta.id, userId]);
-      } catch (rollbackErr) {
-        console.error('Failed to roll back file DB record', fileMeta.id, rollbackErr.message || rollbackErr);
-      }
-      try {
-        await storage.deleteObject(fileMeta.storageName);
-      } catch (rollbackErr) {
-        console.error('Failed to delete stored object', fileMeta.storageName, rollbackErr.message || rollbackErr);
-      }
-    }
-    for (let i = createdFolderIds.length - 1; i >= 0; i -= 1) {
-      const folderId = createdFolderIds[i];
-      try {
-        await pool.query('DELETE FROM files WHERE id = $1 AND user_id = $2', [folderId, userId]);
-      } catch (rollbackErr) {
-        console.error('Failed to roll back folder with id', folderId, rollbackErr.message || rollbackErr);
-      }
-    }
-
+    const rollback = await rollbackImport(runId, userId);
     console.error(
       'Rollback complete. Rolled back',
-      committedFiles.length,
+      rollback.rolledBackFiles,
       'files and',
-      createdFolderIds.length,
+      rollback.rolledBackFolders,
       'folders.'
     );
     throw firstError;
   }
 
-  console.log('Done. Total files:', committedFiles.length, 'Total size:', formatSize(totalBytes));
-  const maxDisplayFailed = 20;
-  if (failed.length > 0) {
-    console.error('\n Import completed with errors. Failed count:', failed.length);
-    failed.slice(0, maxDisplayFailed).forEach(f => console.error(`  ${f.path}: ${f.error}`));
-    if (failed.length > maxDisplayFailed) console.error(`  ... and ${failed.length - maxDisplayFailed} more`);
-  } else {
-    console.log('✓ All files imported successfully!');
-  }
+  await pool.query('DELETE FROM bulk_import_items WHERE run_id = $1', [runId]);
+  console.log('Done. Total files:', done, 'Total size:', formatSize(totalBytes));
+  console.log('✓ All files imported successfully!');
 
   await invalidateUserCache(userId);
   console.log('User cache invalidated.');

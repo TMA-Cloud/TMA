@@ -9,11 +9,16 @@ BEGIN
     -- Calculate cutoff date
     cutoff_date := NOW() - (retention_days || ' days')::INTERVAL;
 
-    -- Delete old audit logs
-    DELETE FROM audit_log
-    WHERE created_at < cutoff_date;
+    -- Bound each statement so cleanup does not hold locks or create a single
+    -- enormous WAL burst. The daily scheduler calls the function again.
+    WITH doomed AS (
+        SELECT id FROM audit_log
+        WHERE created_at < cutoff_date
+        ORDER BY created_at
+        LIMIT 10000
+    )
+    DELETE FROM audit_log a USING doomed d WHERE a.id = d.id;
 
-    -- Get count of deleted rows
     GET DIAGNOSTICS deleted_count = ROW_COUNT;
 
     -- Log the cleanup operation to PostgreSQL logs

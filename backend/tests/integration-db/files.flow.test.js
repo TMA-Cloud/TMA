@@ -441,9 +441,12 @@ describe('trash lifecycle', () => {
     const { rows } = await pool.query("SELECT id FROM files WHERE type = 'file'");
 
     await c.post('/api/files/delete').send({ ids: rows.map(r => r.id) });
-    await c.post('/api/files/trash/empty').send({});
+    const queued = await c.post('/api/files/trash/empty').send({});
 
-    expect(await countRows('files', "WHERE type = 'file'")).toBe(0);
+    // The integration server intentionally does not start pg-boss; production
+    // queues this operation and this fixture verifies the safe unavailable path.
+    expect(queued.status).toBe(503);
+    expect(await countRows('files', "WHERE type = 'file' AND deleted_at IS NOT NULL")).toBe(2);
   });
 
   it('frees the quota once a file is purged', async () => {

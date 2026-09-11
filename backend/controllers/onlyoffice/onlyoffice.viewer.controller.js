@@ -65,7 +65,7 @@ async function getViewerPage(req, res) {
     const { config, configToken, onlyofficeJsUrl } = await buildEditorSession(req, file, userId);
 
     // Register document for auto-save
-    registerOpenDocument(config.document.key, file.id, userId);
+    await registerOpenDocument(config.document.key, file.id, userId);
 
     // Opening the viewer is the read; the document server's later fetches of
     // /onlyoffice/file all stem from this one action.

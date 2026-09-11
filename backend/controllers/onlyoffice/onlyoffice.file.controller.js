@@ -89,7 +89,10 @@ async function serveFile(req, res) {
     }
 
     res.setHeader('Content-Disposition', contentDispositionValue('inline', fileRow.name));
-    return streamUnencryptedFile(res, storageKey, fileRow.name, fileRow.mimeType || 'application/octet-stream');
+    return streamUnencryptedFile(res, storageKey, fileRow.name, fileRow.mimeType || 'application/octet-stream', false, {
+      req,
+      size: ciphertextSize,
+    });
   } catch (err) {
     logger.error({ err }, '[ONLYOFFICE] Error serving file');
     res.status(500).json({ error: 'Server error' });

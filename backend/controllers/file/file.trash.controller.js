@@ -3,20 +3,33 @@ import { logAuditEvent } from '../../services/auditLogger.js';
 import { EventTypes, publishFileEventsBatch } from '../../services/fileEvents.js';
 import {
   deleteFiles,
+  countFileTree,
   getFileInfo,
   getTrashFiles,
   permanentlyDeleteFiles,
   restoreFiles,
 } from '../../models/file.model.js';
+import { getBoss } from '../../services/auditLogger/queue.js';
+import { FILE_OPERATION_QUEUE } from '../../services/backgroundQueue.js';
 import { sendError, sendSuccess } from '../../utils/response.js';
 import { validateSortBy, validateSortOrder } from '../../utils/validation.js';
 import { logBulkFileAudit, wantsProgressStream, streamBulkProgress } from '../../utils/controllerHelpers.js';
+
+const ASYNC_TREE_THRESHOLD = 1000;
+
+async function enqueueLargeTreeOperation(task, ids, userId, count) {
+  if (count <= ASYNC_TREE_THRESHOLD) return null;
+  const boss = getBoss();
+  if (!boss) return null;
+  return boss.send(FILE_OPERATION_QUEUE, { task, ids, userId });
+}
 
 /**
  * Delete files/folders (move to trash)
  */
 async function deleteFilesController(req, res) {
   const { ids } = req.body;
+  const treeCount = await countFileTree(ids, req.ownerId);
 
   // Get file info for audit logging and events
   const fileInfo = await getFileInfo(ids, req.ownerId);
@@ -28,6 +41,12 @@ async function deleteFilesController(req, res) {
     await logBulkFileAudit('file.delete', { ids, fileNames, fileTypes, metadata: { permanent: false } }, req);
     return { message: 'Files moved to trash.' };
   };
+
+  const queuedJobId = await enqueueLargeTreeOperation('trash', ids, req.ownerId, treeCount);
+  if (queuedJobId) {
+    await logBulkFileAudit('file.delete.queued', { ids, fileNames, fileTypes, metadata: { treeCount } }, req);
+    return sendSuccess(res, { message: 'Move to trash queued.', queued: true, jobId: queuedJobId }, 202);
+  }
 
   if (wantsProgressStream(req)) {
     return streamBulkProgress(res, { ids, processChunk: chunk => deleteFiles(chunk, req.ownerId), finalize });
@@ -45,7 +64,12 @@ async function listTrash(req, res) {
   const order = validateSortOrder(req.query.order) || 'DESC';
   // In the UI, we don't want to render every child row of a deleted folder
   // Return only top-level trashed items (hide items whose parent is also trashed)
-  const files = await getTrashFiles(req.ownerId, sortBy, order, true);
+  const result = await getTrashFiles(req.ownerId, sortBy, order, true, {
+    cursor: req.query.cursor,
+    limit: req.query.limit,
+  });
+  const files = result.files || result;
+  if (result.nextCursor) res.setHeader('X-Next-Cursor', result.nextCursor);
   sendSuccess(res, files);
 }
 
@@ -54,6 +78,7 @@ async function listTrash(req, res) {
  */
 async function restoreFilesController(req, res) {
   const { ids } = req.body;
+  const treeCount = await countFileTree(ids, req.ownerId, { deleted: true });
 
   // Get file info for audit logging and events (from trash)
   const fileInfo = await getFileInfo(ids, req.ownerId, true);
@@ -62,6 +87,12 @@ async function restoreFilesController(req, res) {
 
   if (fileInfo.length === 0) {
     return sendError(res, 404, 'No files found in trash to restore');
+  }
+
+  const queuedJobId = await enqueueLargeTreeOperation('restore', ids, req.ownerId, treeCount);
+  if (queuedJobId) {
+    await logBulkFileAudit('file.restore.queued', { ids, fileNames, fileTypes, metadata: { treeCount } }, req);
+    return sendSuccess(res, { message: 'Restore queued.', queued: true, jobId: queuedJobId }, 202);
   }
 
   const finalize = async () => {
@@ -99,6 +130,7 @@ async function restoreFilesController(req, res) {
  */
 async function deleteForeverController(req, res) {
   const { ids } = req.body;
+  const treeCount = await countFileTree(ids, req.ownerId, { deleted: true });
 
   // Get file info for audit logging and events (from trash)
   const fileInfo = await getFileInfo(ids, req.ownerId, true);
@@ -128,6 +160,12 @@ async function deleteForeverController(req, res) {
     return { message: 'Files permanently deleted.' };
   };
 
+  const queuedJobId = await enqueueLargeTreeOperation('delete-permanently', ids, req.ownerId, treeCount);
+  if (queuedJobId) {
+    await logBulkFileAudit('file.delete.permanent.queued', { ids, fileNames, fileTypes, metadata: { treeCount } }, req);
+    return sendSuccess(res, { message: 'Permanent deletion queued.', queued: true, jobId: queuedJobId }, 202);
+  }
+
   if (wantsProgressStream(req)) {
     return streamBulkProgress(res, {
       ids,
@@ -144,56 +182,28 @@ async function deleteForeverController(req, res) {
  * Empty trash (permanently delete all files in trash)
  */
 async function emptyTrashController(req, res) {
-  // Get all trash files for the user
-  const trashFiles = await getTrashFiles(req.ownerId);
-
-  if (trashFiles.length === 0) {
-    sendSuccess(res, { message: 'Trash is already empty' });
-  }
-
-  const allIds = trashFiles.map(f => f.id);
-  const fileNames = trashFiles.map(f => f.name);
-  const fileTypes = trashFiles.map(f => f.type);
-
-  await permanentlyDeleteFiles(allIds, req.ownerId);
-
-  // Log empty trash action with details
+  const treeCount = await countFileTree([], req.ownerId, { deleted: true, allTrash: true });
+  if (treeCount === 0) return sendSuccess(res, { message: 'Trash is already empty' });
+  const boss = getBoss();
+  if (!boss) return sendError(res, 503, 'Background worker queue is unavailable');
+  const jobId = await boss.send(FILE_OPERATION_QUEUE, { task: 'empty-trash', ids: [], userId: req.ownerId });
   await logAuditEvent(
-    'file.delete.permanent',
+    'file.delete.permanent.queued',
     {
       status: 'success',
       resourceType: 'file',
-      resourceId: allIds[0] || null,
+      resourceId: null,
       metadata: {
-        fileCount: allIds.length,
-        fileIds: allIds,
-        fileNames,
-        fileTypes,
+        fileCount: treeCount,
         permanent: true,
         action: 'empty_trash',
+        jobId,
       },
     },
     req
   );
-  logger.info({ fileCount: allIds.length, fileNames }, 'Trash emptied');
-
-  // Publish file permanently deleted events in batch (optimized)
-  await publishFileEventsBatch(
-    trashFiles.map(file => ({
-      eventType: EventTypes.FILE_PERMANENTLY_DELETED,
-      eventData: {
-        id: file.id,
-        name: file.name,
-        type: file.type,
-        parentId: file.parentId || file.parent_id || null,
-        userId: req.ownerId,
-        permanent: true,
-        action: 'empty_trash',
-      },
-    }))
-  );
-
-  sendSuccess(res, { message: `Deleted ${allIds.length} file(s) from trash` });
+  logger.info({ fileCount: treeCount, jobId }, 'Empty trash queued');
+  sendSuccess(res, { message: `Deletion of ${treeCount} item(s) queued`, queued: true, jobId }, 202);
 }
 
 const deleteFilesExport = deleteFilesController;

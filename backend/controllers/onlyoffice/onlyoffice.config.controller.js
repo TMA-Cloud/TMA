@@ -36,7 +36,7 @@ async function getConfig(req, res) {
     const { config, configToken, onlyofficeJsUrl } = await buildEditorSession(req, file, userId);
 
     // Register document for auto-save
-    registerOpenDocument(config.document.key, file.id, userId);
+    await registerOpenDocument(config.document.key, file.id, userId);
 
     // Opening the document is the read. The document server's own fetches of
     // /onlyoffice/file are a consequence of this one action, so they are not

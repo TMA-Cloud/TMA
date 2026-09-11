@@ -80,7 +80,7 @@ services:
       timeout: 3s
       retries: 3
 
-  # TMA Cloud Audit Worker
+  # TMA Cloud background worker
   worker:
     image: ghcr.io/tma-cloud/tma:latest
     container_name: tma-cloud-worker

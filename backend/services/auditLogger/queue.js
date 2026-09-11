@@ -5,6 +5,7 @@ import { getRequestId, getUserId, getAccountContext } from '../../middleware/req
 import { createPool, buildPoolConfig, pgbossSchema } from '../../config/db.js';
 
 import { AUDIT_QUEUE, AUDIT_QUEUE_OPTIONS } from '../auditQueue.js';
+import { initializeBackgroundQueues, initializeBackgroundSchedules } from '../backgroundQueue.js';
 
 let boss = null;
 let isInitialized = false;
@@ -48,6 +49,8 @@ async function initializeAuditQueue() {
     await boss.start();
     // pg-boss v10+ requires queues to be created explicitly.
     await boss.createQueue(AUDIT_QUEUE, AUDIT_QUEUE_OPTIONS);
+    await initializeBackgroundQueues(boss);
+    await initializeBackgroundSchedules(boss);
     isInitialized = true;
     logger.info('Audit queue initialized successfully');
 

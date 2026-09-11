@@ -15,7 +15,6 @@ import userRoutes from './routes/user.routes.js';
 import versionRoutes from './routes/version.routes.js';
 import publicRoutes from './routes/public.routes.js';
 
-import { startCleanupJobs } from './services/cleanup.js';
 import { csrfProtection } from './middleware/csrf.middleware.js';
 import errorHandler from './middleware/error.middleware.js';
 import { requestIdMiddleware } from './middleware/requestId.middleware.js';
@@ -266,8 +265,8 @@ runMigrations()
       initializeMetrics();
       logger.info('Metrics initialized');
 
-      // Start queue metrics updater (every 30 seconds)
-      startQueueMetricsUpdater(30);
+      // This gauge belongs to the HTTP process that exposes /metrics.
+      startQueueMetricsUpdater(Number(process.env.QUEUE_METRICS_INTERVAL_SECONDS) || 60);
       logger.info('Queue metrics updater started');
     } catch (error) {
       logger.error({ err: error }, 'Failed to initialize audit system');
@@ -289,8 +288,9 @@ runMigrations()
       logger.info({ port, environment: process.env.NODE_ENV || 'development' }, 'Server started successfully');
     });
 
-    // Start background services
-    startCleanupJobs();
+    // Access tracking buffers request-local activity in this process; durable
+    // scheduled maintenance is registered with pg-boss above and executed by
+    // the standalone worker.
     startAccessTracker();
 
     // Register shutdown handlers

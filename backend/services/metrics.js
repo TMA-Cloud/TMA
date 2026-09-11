@@ -85,6 +85,8 @@ const auditLastProcessedTimestamp = new promClient.Gauge({
   registers: [register],
 });
 
+let queueMetricsUpdate = null;
+
 // ============================================================================
 // Metric update functions
 // ============================================================================
@@ -145,30 +147,30 @@ function recordProcessingDuration(durationSeconds) {
  * the queue depth gauges.
  */
 async function updateQueueMetrics() {
+  if (queueMetricsUpdate) return queueMetricsUpdate;
+  queueMetricsUpdate = updateQueueMetricsOnce();
+  try {
+    return await queueMetricsUpdate;
+  } finally {
+    queueMetricsUpdate = null;
+  }
+}
+
+async function updateQueueMetricsOnce() {
   try {
     // pg-boss v10+ removed getQueueSize; query job table directly
     const queueName = 'audit-events';
 
-    const pendingQuery = `
-      SELECT COUNT(*)::int AS count
+    const depthQuery = `
+      SELECT COUNT(*) FILTER (WHERE state IN ('created', 'retry'))::int AS pending,
+             COUNT(*) FILTER (WHERE state = 'failed')::int AS failed
       FROM ${pgbossSchema}.job
       WHERE name = $1
-        AND state IN ('created', 'retry')
+        AND state IN ('created', 'retry', 'failed')
     `;
-    const failedQuery = `
-      SELECT COUNT(*)::int AS count
-      FROM ${pgbossSchema}.job
-      WHERE name = $1
-        AND state = 'failed'
-    `;
-
-    const [pendingResult, failedResult] = await Promise.all([
-      pool.query(pendingQuery, [queueName]),
-      pool.query(failedQuery, [queueName]),
-    ]);
-
-    const queueSize = pendingResult.rows[0]?.count || 0;
-    const failedCount = failedResult.rows[0]?.count || 0;
+    const result = await pool.query(depthQuery, [queueName]);
+    const queueSize = result.rows[0]?.pending || 0;
+    const failedCount = result.rows[0]?.failed || 0;
 
     auditQueueDepth.set(queueSize);
     auditQueueFailedDepth.set(failedCount);
@@ -181,12 +183,15 @@ async function updateQueueMetrics() {
 
 /**
  * Start periodic queue metrics updates
- * @param {number} intervalSeconds - Update interval in seconds (default: 30)
+ * @param {number} intervalSeconds - Update interval in seconds (default: 60, minimum: 10)
  * @returns {NodeJS.Timeout} The interval timer
  */
-function startQueueMetricsUpdater(intervalSeconds = 30) {
-  logger.info({ intervalSeconds }, 'Starting queue metrics updater');
-  return setInterval(updateQueueMetrics, intervalSeconds * 1000);
+function startQueueMetricsUpdater(intervalSeconds = 60) {
+  const configuredInterval = Number(intervalSeconds);
+  const effectiveInterval = Number.isFinite(configuredInterval) && configuredInterval >= 10 ? configuredInterval : 60;
+  logger.info({ intervalSeconds: effectiveInterval }, 'Starting queue metrics updater');
+  void updateQueueMetrics();
+  return setInterval(updateQueueMetrics, effectiveInterval * 1000);
 }
 
 /**
@@ -201,9 +206,6 @@ function initializeMetrics() {
  */
 async function metricsEndpoint(req, res) {
   try {
-    // Update queue metrics before serving (for real-time accuracy)
-    await updateQueueMetrics();
-
     res.setHeader('Content-Type', register.contentType);
     res.send(await register.metrics());
   } catch (error) {
