@@ -46,6 +46,7 @@ public static class OleClipboardHelper
     public static string ExtractToJson()
     {
         var list = new List<string>();
+        long totalBytes = 0;
         try
         {
             var data = Clipboard.GetDataObject();
@@ -112,8 +113,11 @@ public static class OleClipboardHelper
                     for (int i = 0; i < names.Length; i++)
                     {
                         var bytes = GetFileContents(com, (short)cf, i);
-                        if (bytes != null && bytes.Length > 0)
+                        if (bytes != null && bytes.Length > 0 && totalBytes + bytes.Length <= 104857600)
+                        {
                             list.Add("\"" + names[i].Replace("\\", "\\\\").Replace("\"", "\\\"") + "\":\"" + Convert.ToBase64String(bytes) + "\"");
+                            totalBytes += bytes.Length;
+                        }
                     }
                 }
             }
@@ -129,7 +133,7 @@ public static class OleClipboardHelper
                         {
                             img.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
                             var bytes = ms.ToArray();
-                            if (bytes.Length > 0)
+                            if (bytes.Length > 0 && bytes.Length <= 52428800)
                                 list.Add("\"clipboard-image.png\":\"" + Convert.ToBase64String(bytes) + "\"");
                         }
                     }
@@ -164,7 +168,7 @@ public static class OleClipboardHelper
                     try
                     {
                         int sz = GlobalSize(med.unionmember).ToInt32();
-                        if (sz <= 0 || sz > 524288000) return null;
+                        if (sz <= 0 || sz > 52428800) return null;
                         var b = new byte[sz];
                         Marshal.Copy(p, b, 0, sz);
                         return b;
@@ -177,7 +181,7 @@ public static class OleClipboardHelper
                     var stat = new System.Runtime.InteropServices.ComTypes.STATSTG();
                     stm.Stat(out stat, 0);
                     long sz = stat.cbSize;
-                    if (sz <= 0 || sz > 524288000) return null;
+                    if (sz <= 0 || sz > 52428800) return null;
                     var b = new byte[(int)sz];
                     stm.Read(b, (int)sz, IntPtr.Zero);
                     return b;
@@ -195,7 +199,7 @@ public static class OleClipboardHelper
                     System.Runtime.InteropServices.ComTypes.STATSTG st;
                     iLockBytes.Stat(out st, 1);
                     long sz = st.cbSize;
-                    if (sz <= 0 || sz > 524288000) return null;
+                    if (sz <= 0 || sz > 52428800) return null;
                     var b = new byte[(int)sz];
                     int[] read = new int[1];
                     iLockBytes.ReadAt(0, b, (int)sz, read);

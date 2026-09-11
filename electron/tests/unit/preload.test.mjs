@@ -37,6 +37,12 @@ describe('channel mapping', () => {
   const cases = [
     ['clipboard.peekFileNames', () => api.clipboard.peekFileNames(), 'clipboard:peekFileNames', undefined],
     ['clipboard.readFiles', () => api.clipboard.readFiles(), 'clipboard:readFiles', undefined],
+    [
+      'clipboard.uploadVirtualFiles',
+      () => api.clipboard.uploadVirtualFiles({ parentId: null }),
+      'clipboard:uploadVirtualFiles',
+      { parentId: null },
+    ],
     ['clipboard.writeFiles', () => api.clipboard.writeFiles(['C:\\a.txt']), 'clipboard:writeFiles', ['C:\\a.txt']],
     [
       'clipboard.writeFilesFromData',

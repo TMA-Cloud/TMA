@@ -4,10 +4,10 @@ import type { PromiseQueue } from '../../utils/debounce';
 import { extractResponseError } from '../../utils/errorUtils';
 import {
   copyFilesToPcClipboard,
-  getFilesFromElectronClipboard,
   isElectron,
   MAX_COPY_TO_PC_BYTES,
   peekElectronClipboardFileNames,
+  uploadElectronClipboardFiles,
 } from '../../utils/electronDesktop';
 
 type ToastType = 'success' | 'error' | 'info';
@@ -17,11 +17,10 @@ interface ClipboardDeps {
   operationQueue: Pick<PromiseQueue, 'add'>;
   files: FileItem[];
   refreshFiles: (skipSearchCheck?: boolean) => Promise<void>;
-  uploadFilesBulk: (files: File[]) => Promise<void>;
 }
 
 /** Unified clipboard: an in-app cloud clipboard, mirrored best-effort to the OS clipboard in Electron. */
-export function useClipboard({ showToast, operationQueue, files, refreshFiles, uploadFilesBulk }: ClipboardDeps) {
+export function useClipboard({ showToast, operationQueue, files, refreshFiles }: ClipboardDeps) {
   const [clipboard, setClipboard] = useState<{ ids: string[]; action: 'copy' | 'cut' } | null>(null);
   const [pasteProgress, setPasteProgress] = useState<number | null>(null);
 
@@ -128,12 +127,16 @@ export function useClipboard({ showToast, operationQueue, files, refreshFiles, u
         showToast('Nothing to paste', 'info');
         return;
       }
-      const clipFiles = await getFilesFromElectronClipboard();
-      if (clipFiles.length === 0) {
-        showToast('Nothing to paste', 'info');
+      const direct = await uploadElectronClipboardFiles(parentId);
+      if (direct.ok) {
+        await refreshFiles();
         return;
       }
-      await uploadFilesBulk(clipFiles);
+      if (!direct.fallback) {
+        showToast(direct.error || 'Clipboard upload failed', 'error');
+        return;
+      }
+      showToast('Nothing to paste', 'info');
       return;
     }
 
@@ -150,15 +153,17 @@ export function useClipboard({ showToast, operationQueue, files, refreshFiles, u
         osNames.every(n => synced.includes(n));
 
       if (osHasFiles && !matchesSync) {
-        // OS clipboard was set after our cloud copy (or we never synced). Treat as external paste.
-        const clipFiles = await getFilesFromElectronClipboard();
-        if (clipFiles.length > 0) {
-          // Drop the now-stale cloud clipboard so subsequent pastes don't re-trigger this branch.
+        const direct = await uploadElectronClipboardFiles(parentId);
+        if (direct.ok) {
           setClipboard(null);
-          await uploadFilesBulk(clipFiles);
+          await refreshFiles();
           return;
         }
-        // Peek saw names but readFiles returned nothing; fall through to cloud paste.
+        if (!direct.fallback) {
+          showToast(direct.error || 'Clipboard upload failed', 'error');
+          return;
+        }
+        // Peek may race with clipboard ownership changes; fall through to cloud paste.
       }
     }
 

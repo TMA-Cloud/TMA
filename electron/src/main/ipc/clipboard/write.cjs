@@ -15,8 +15,10 @@ const {
   downloadToFile,
   validateOrigin,
   cleanTempDirsByPrefix,
+  uploadNewFile,
+  uploadNewFileData,
 } = require('../../utils/file-utils.cjs');
-const { readFilesFromClipboard, peekClipboardFileNames } = require('./read.cjs');
+const { readFilesFromClipboard, peekClipboardFileNames, readClipboardFilePaths } = require('./read.cjs');
 
 function registerClipboardHandlers() {
   ipcMain.handle('clipboard:peekFileNames', async () => {
@@ -32,6 +34,75 @@ function registerClipboardHandlers() {
       return { files: await readFilesFromClipboard() };
     } catch (_) {
       return { files: [] };
+    }
+  });
+
+  // Physical clipboard files are uploaded from disk streams in the main
+  // process. Their bytes never become base64 or cross IPC into the renderer.
+  ipcMain.handle('clipboard:uploadFiles', async (_event, payload) => {
+    const origin = validateOrigin(payload?.origin);
+    if (process.platform !== 'win32' || !origin) return { ok: false, error: 'Invalid request' };
+    const paths = await readClipboardFilePaths();
+    if (paths.length === 0) return { ok: false, fallback: true };
+    const MAX_TOTAL_BYTES = 500 * 1024 * 1024;
+    const MAX_PER_FILE_BYTES = 200 * 1024 * 1024;
+    let total = 0;
+    for (const filePath of paths) {
+      const stat = await fs.promises.stat(filePath);
+      if (stat.size > MAX_PER_FILE_BYTES || total + stat.size > MAX_TOTAL_BYTES) {
+        return { ok: false, error: 'Clipboard files exceed the 500 MB total or 200 MB per-file limit' };
+      }
+      total += stat.size;
+    }
+    const uploaded = [];
+    let next = 0;
+    const workers = Array.from({ length: Math.min(3, paths.length) }, async () => {
+      for (;;) {
+        const index = next++;
+        if (index >= paths.length) return;
+        const filePath = paths[index];
+        await uploadNewFile(origin, payload.parentId || null, filePath, path.basename(filePath));
+        uploaded.push(path.basename(filePath));
+      }
+    });
+    try {
+      await Promise.all(workers);
+      return { ok: true, names: uploaded };
+    } catch (error) {
+      return { ok: false, error: error.message || 'Clipboard upload failed' };
+    }
+  });
+
+  // Virtual OLE clipboard files have no filesystem path. Extract them in the
+  // main process and upload from memory so plaintext upload data never touches
+  // the host temp directory or crosses renderer IPC.
+  ipcMain.handle('clipboard:uploadVirtualFiles', async (_event, payload) => {
+    const origin = validateOrigin(payload?.origin);
+    if (process.platform !== 'win32' || !origin) return { ok: false, error: 'Invalid request' };
+    try {
+      const files = await readFilesFromClipboard();
+      if (files.length === 0) return { ok: false, empty: true };
+      const MAX_TOTAL_BYTES = 100 * 1024 * 1024;
+      const MAX_PER_FILE_BYTES = 50 * 1024 * 1024;
+      let totalBytes = 0;
+      const uploaded = [];
+      for (const file of files) {
+        if (!file?.name || typeof file.data !== 'string') continue;
+        const estimatedBytes = Math.floor((file.data.length * 3) / 4);
+        if (estimatedBytes > MAX_PER_FILE_BYTES || totalBytes + estimatedBytes > MAX_TOTAL_BYTES) {
+          return { ok: false, error: 'Virtual clipboard files exceed the 100 MB total or 50 MB per-file limit' };
+        }
+        const data = Buffer.from(file.data, 'base64');
+        if (data.length > MAX_PER_FILE_BYTES || totalBytes + data.length > MAX_TOTAL_BYTES) {
+          return { ok: false, error: 'Virtual clipboard files exceed the allowed size' };
+        }
+        totalBytes += data.length;
+        await uploadNewFileData(origin, payload.parentId || null, data, file.name);
+        uploaded.push(file.name);
+      }
+      return uploaded.length > 0 ? { ok: true, names: uploaded } : { ok: false, empty: true };
+    } catch (error) {
+      return { ok: false, error: error.message || 'Virtual clipboard upload failed' };
     }
   });
 
@@ -56,7 +127,7 @@ function registerClipboardHandlers() {
     const MAX_PER_FILE_BYTES = 200 * 1024 * 1024; // 200 MB
     const tmpRoot = os.tmpdir();
     try {
-      cleanTempDirsByPrefix(PASTE_DIR_PREFIX, 0);
+      await cleanTempDirsByPrefix(PASTE_DIR_PREFIX, 0);
       const pasteDir = path.join(tmpRoot, `${PASTE_DIR_PREFIX}${Date.now()}`);
       fs.mkdirSync(pasteDir, { recursive: true });
       const writtenPaths = [];
@@ -112,7 +183,7 @@ function registerClipboardHandlers() {
     const tmpRoot = os.tmpdir();
 
     try {
-      cleanTempDirsByPrefix(PASTE_DIR_PREFIX, 0);
+      await cleanTempDirsByPrefix(PASTE_DIR_PREFIX, 0);
 
       const pasteDir = path.join(tmpRoot, `${PASTE_DIR_PREFIX}${Date.now()}`);
       fs.mkdirSync(pasteDir, { recursive: true });

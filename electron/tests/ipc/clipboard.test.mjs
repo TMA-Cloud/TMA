@@ -59,6 +59,8 @@ describe('handler registration', () => {
     expect(__mock.handlerChannels().sort()).toEqual([
       'clipboard:peekFileNames',
       'clipboard:readFiles',
+      'clipboard:uploadFiles',
+      'clipboard:uploadVirtualFiles',
       'clipboard:writeFiles',
       'clipboard:writeFilesFromData',
       'clipboard:writeFilesFromServer',
@@ -95,26 +97,14 @@ describe('clipboard:peekFileNames', () => {
 });
 
 describe('clipboard:readFiles', () => {
-  it('reads the files Explorer put on the clipboard, with contents and type', async () => {
+  it('does not materialise Explorer files through the legacy base64 endpoint', async () => {
     const dir = createTempRoot();
     const file = writeFile(dir, 'note.txt', 'hello');
     fakePowerShell({ dropList: `${file}\r\n` });
 
-    const { files } = await __mock.invoke('clipboard:readFiles');
-
-    expect(files).toEqual([{ name: 'note.txt', mime: 'text/plain', data: Buffer.from('hello').toString('base64') }]);
-  });
-
-  it('skips directories and unreadable entries in the drop list', async () => {
-    const dir = createTempRoot();
-    const file = writeFile(dir, 'note.txt', 'hello');
-    const subdir = path.join(dir, 'folder');
-    fs.mkdirSync(subdir);
-    fakePowerShell({ dropList: `${subdir}\r\n${path.join(dir, 'missing.txt')}\r\n${file}\r\n` });
-
-    const { files } = await __mock.invoke('clipboard:readFiles');
-
-    expect(files.map(f => f.name)).toEqual(['note.txt']);
+    const readFile = vi.spyOn(fs.promises, 'readFile');
+    await expect(__mock.invoke('clipboard:readFiles')).resolves.toEqual({ files: [] });
+    expect(readFile).not.toHaveBeenCalled();
   });
 
   it('falls back to the OLE clipboard for Outlook attachments and screenshots', async () => {
@@ -126,22 +116,15 @@ describe('clipboard:readFiles', () => {
     expect(files).toEqual([{ name: 'shot.png', mime: 'image/png', data: Buffer.from('PNG').toString('base64') }]);
   });
 
-  it('falls through to clipboard text that contains file paths', async () => {
+  it('does not materialise clipboard text paths through renderer IPC', async () => {
     fakePowerShell({ dropList: '', ole: '{}' });
     // Only drive-letter and UNC paths are recognised, so the fixture is a
     // Windows path with the filesystem stubbed — this runs on Linux CI too.
     const copied = 'C:\\Users\\me\\copied.txt';
     __mock.setClipboardText(`"${copied}"`);
-    vi.spyOn(fs.promises, 'stat').mockResolvedValue({ isFile: () => true });
-    vi.spyOn(fs.promises, 'readFile').mockResolvedValue(Buffer.from('body'));
-
-    const { files } = await __mock.invoke('clipboard:readFiles');
-
-    expect(files).toEqual([
-      // path.basename splits Windows separators only on Windows; the name is
-      // derived the same way the handler derives it.
-      { name: path.basename(copied), mime: 'text/plain', data: Buffer.from('body').toString('base64') },
-    ]);
+    const readFile = vi.spyOn(fs.promises, 'readFile');
+    await expect(__mock.invoke('clipboard:readFiles')).resolves.toEqual({ files: [] });
+    expect(readFile).not.toHaveBeenCalled();
   });
 
   it('ignores a relative path in clipboard text, which could point anywhere', async () => {
@@ -180,12 +163,30 @@ describe('clipboard:readFiles', () => {
   });
 
   it('assigns a binary type to files it cannot classify', async () => {
-    const file = writeFile(createTempRoot(), 'thing.zzzzz', 'x');
-    fakePowerShell({ dropList: `${file}\r\n` });
+    const payload = JSON.stringify({ 'thing.zzzzz': Buffer.from('x').toString('base64') });
+    fakePowerShell({ dropList: '', ole: payload });
 
     const { files } = await __mock.invoke('clipboard:readFiles');
 
     expect(files[0].mime).toBe('application/octet-stream');
+  });
+});
+
+describe('direct clipboard uploads', () => {
+  it('uploads virtual OLE bytes without creating a plaintext temp file', async () => {
+    const encoded = Buffer.from('VIRTUAL-DATA').toString('base64');
+    fakePowerShell({ ole: JSON.stringify({ 'attachment.txt': encoded }) });
+    __mock.route('/api/files/upload', { statusCode: 201, body: '{}' });
+
+    const result = await __mock.invoke('clipboard:uploadVirtualFiles', {
+      origin: SERVER_URL,
+      parentId: 'folder-1',
+    });
+
+    expect(result).toEqual({ ok: true, names: ['attachment.txt'] });
+    const request = __mock.requests().find(item => item.url.endsWith('/api/files/upload'));
+    expect(request.bodyText()).toContain('VIRTUAL-DATA');
+    expect(pasteDir()).toBeNull();
   });
 });
 

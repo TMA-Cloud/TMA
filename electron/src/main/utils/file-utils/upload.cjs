@@ -44,6 +44,7 @@ function postMultipartFile(url, filePath, fileName, cookieHeader) {
   return new Promise((resolve, reject) => {
     const request = net.request({ method: 'POST', url });
     request.setHeader('Content-Type', `multipart/form-data; boundary=${boundary}`);
+    request.setHeader('X-TMA-Desktop-Client', '1');
     if (cookieHeader) {
       request.setHeader('Cookie', cookieHeader);
     }
@@ -123,6 +124,7 @@ function uploadNewFile(base, parentId, filePath, fileName) {
     return new Promise((resolve, reject) => {
       const request = net.request({ method: 'POST', url });
       request.setHeader('Content-Type', `multipart/form-data; boundary=${boundary}`);
+      request.setHeader('X-TMA-Desktop-Client', '1');
       if (cookieHeader) request.setHeader('Cookie', cookieHeader);
 
       let body = '';
@@ -163,10 +165,84 @@ function uploadNewFile(base, parentId, filePath, fileName) {
   });
 }
 
+/**
+ * Upload virtual clipboard bytes without staging a plaintext file on disk.
+ * The buffer is written in bounded chunks and honors Chromium net backpressure.
+ */
+function uploadNewFileData(base, parentId, data, fileName) {
+  if (!Buffer.isBuffer(data)) throw new TypeError('Upload data must be a Buffer');
+  const url = `${base}/api/files/upload`;
+  return getCookieHeader(base).then(cookieHeader => {
+    const boundary = `----ElectronFormBoundary${crypto.randomBytes(16).toString('hex')}`;
+    const safeFileName = String(fileName).replace(/"/g, '\\"');
+    const contentType = mimeForFilename(fileName) || 'application/octet-stream';
+    let preamble = '';
+    if (parentId) {
+      preamble += `--${boundary}\r\nContent-Disposition: form-data; name="parentId"\r\n\r\n${parentId}\r\n`;
+    }
+    preamble +=
+      `--${boundary}\r\n` +
+      `Content-Disposition: form-data; name="file"; filename="${safeFileName}"\r\n` +
+      `Content-Type: ${contentType}\r\n\r\n`;
+    const closing = `\r\n--${boundary}--\r\n`;
+
+    return new Promise((resolve, reject) => {
+      const request = net.request({ method: 'POST', url });
+      request.setHeader('Content-Type', `multipart/form-data; boundary=${boundary}`);
+      request.setHeader('X-TMA-Desktop-Client', '1');
+      if (cookieHeader) request.setHeader('Cookie', cookieHeader);
+
+      let body = '';
+      request.on('response', response => {
+        const status = response.statusCode || 0;
+        response.on('data', chunk => {
+          if (body.length < 8192) body += chunk.toString('utf8');
+        });
+        response.on('end', () => {
+          if (status < 200 || status >= 300) {
+            reject(new Error(body ? `Upload failed (${status}): ${body}` : `Upload failed (${status})`));
+            return;
+          }
+          try {
+            resolve(body ? JSON.parse(body) : {});
+          } catch {
+            resolve({});
+          }
+        });
+        response.on('error', reject);
+      });
+      request.on('error', reject);
+
+      const CHUNK_BYTES = 64 * 1024;
+      let offset = 0;
+      let writing = false;
+      const writeNext = () => {
+        if (writing) return;
+        writing = true;
+        while (offset < data.length) {
+          const end = Math.min(offset + CHUNK_BYTES, data.length);
+          const canContinue = request.write(data.subarray(offset, end));
+          offset = end;
+          if (!canContinue) {
+            writing = false;
+            return;
+          }
+        }
+        request.end(closing);
+      };
+      request.on('drain', writeNext);
+      request.write(preamble);
+      writing = false;
+      writeNext();
+    });
+  });
+}
+
 module.exports = {
   clientMtimeField,
   postMultipartFile,
   uploadFileToReplace,
   uploadDerivedFile,
   uploadNewFile,
+  uploadNewFileData,
 };

@@ -32,6 +32,8 @@ describe('startup', () => {
       'app:setTheme',
       'clipboard:peekFileNames',
       'clipboard:readFiles',
+      'clipboard:uploadFiles',
+      'clipboard:uploadVirtualFiles',
       'clipboard:writeFiles',
       'clipboard:writeFilesFromData',
       'clipboard:writeFilesFromServer',
@@ -115,9 +117,9 @@ describe('temp cleanup', () => {
     fs.utimesSync(stale, old, old);
     await startApp();
 
-    vi.advanceTimersByTime(60 * 60 * 1000);
+    await vi.advanceTimersByTimeAsync(60 * 60 * 1000);
 
-    expect(fs.existsSync(stale)).toBe(false);
+    await vi.waitFor(() => expect(fs.existsSync(stale)).toBe(false));
     vi.useRealTimers();
   });
 

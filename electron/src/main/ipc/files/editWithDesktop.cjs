@@ -145,45 +145,66 @@ function startDerivedWatcher(registry, { editDir, originalBaseName, base, item, 
   return dirWatcher;
 }
 
-// Watch the edited file itself and re-upload (replace) when its hash changes,
-// throttled so a burst of saves doesn't spam the backend.
+// Watch the edited file itself and re-upload after a quiet period. Editors can
+// emit many events for one save; debouncing avoids repeatedly hashing a large
+// file and guarantees the final event is not lost behind a throttle window.
 function startMainFileWatcher(registry, { filePath, base, item }, initialHash) {
   let lastHash = initialHash;
-  let lastUploadTime = 0;
   let uploadInProgress = false;
-  const THROTTLE_MS = 5000;
+  let uploadPending = false;
+  let debounceTimer = null;
+  const DEBOUNCE_MS = 1500;
 
-  async function uploadIfChangedThrottled() {
-    const now = Date.now();
-    if (now - lastUploadTime < THROTTLE_MS) return;
-    if (uploadInProgress) return;
+  const finishUploadAttempt = () => {
+    uploadInProgress = false;
+    if (uploadPending) {
+      uploadPending = false;
+      scheduleUpload();
+    }
+  };
+
+  async function uploadIfChanged() {
+    if (uploadInProgress) {
+      uploadPending = true;
+      return;
+    }
     uploadInProgress = true;
     let newHash;
     try {
       newHash = await hashFile(filePath);
     } catch {
-      uploadInProgress = false;
+      finishUploadAttempt();
       return;
     }
     if (lastHash && newHash && lastHash === newHash) {
-      uploadInProgress = false;
+      finishUploadAttempt();
       return;
     }
     try {
       await uploadFileToReplace(base, String(item.id), filePath, String(item.name));
       lastHash = newHash;
-      lastUploadTime = Date.now();
     } catch {
       /* backend/logs capture upload errors */
     } finally {
-      uploadInProgress = false;
+      finishUploadAttempt();
     }
+  }
+
+  function scheduleUpload() {
+    if (debounceTimer) clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+      debounceTimer = null;
+      void uploadIfChanged();
+    }, DEBOUNCE_MS);
   }
 
   let watcher;
   try {
-    watcher = fs.watch(filePath, () => void uploadIfChangedThrottled());
+    watcher = fs.watch(filePath, scheduleUpload);
     watcher.on('error', () => registry.closeWatcherSafely(watcher));
+    watcher.on('close', () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+    });
   } catch {
     watcher = null;
   }

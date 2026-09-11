@@ -25,6 +25,18 @@ declare global {
         readFiles: () => Promise<{
           files: { name: string; mime: string; data: string }[];
         }>;
+        uploadFiles?: (payload: { origin: string; parentId: string | null }) => Promise<{
+          ok: boolean;
+          fallback?: boolean;
+          names?: string[];
+          error?: string;
+        }>;
+        uploadVirtualFiles?: (payload: { origin: string; parentId: string | null }) => Promise<{
+          ok: boolean;
+          empty?: boolean;
+          names?: string[];
+          error?: string;
+        }>;
         writeFiles: (paths: string[]) => Promise<{ ok: boolean; error?: string }>;
         writeFilesFromData: (payload: {
           files: { name: string; data: string }[];
@@ -205,6 +217,26 @@ export async function getFilesFromElectronClipboard(): Promise<File[]> {
     return files.map(f => base64ToFile(f.data, f.name, f.mime));
   } catch {
     return [];
+  }
+}
+
+/** Upload physical or virtual clipboard files directly from Electron's main process. */
+export async function uploadElectronClipboardFiles(parentId: string | null): Promise<{
+  ok: boolean;
+  fallback?: boolean;
+  error?: string;
+}> {
+  const uploadFiles = window.electronAPI?.clipboard?.uploadFiles;
+  if (!isElectron() || !uploadFiles) return { ok: false, fallback: true };
+  try {
+    const physical = await uploadFiles({ origin: window.location.origin, parentId });
+    if (!physical.fallback) return physical;
+    const uploadVirtualFiles = window.electronAPI?.clipboard?.uploadVirtualFiles;
+    if (!uploadVirtualFiles) return { ok: false, fallback: true };
+    const virtual = await uploadVirtualFiles({ origin: window.location.origin, parentId });
+    return virtual.empty ? { ok: false, fallback: true } : virtual;
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : String(error) };
   }
 }
 

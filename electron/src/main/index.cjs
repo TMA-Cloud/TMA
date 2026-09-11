@@ -74,8 +74,8 @@ app.whenReady().then(() => {
   const MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
   cleanupInterval = setInterval(() => {
     if (process.platform === 'win32') {
-      cleanTempClipboardDirs(MAX_AGE_MS);
-      cleanTempEditDirs(MAX_AGE_MS, getActiveEditDirs());
+      void cleanTempClipboardDirs(MAX_AGE_MS);
+      void cleanTempEditDirs(MAX_AGE_MS, getActiveEditDirs());
     }
   }, CLEAN_INTERVAL_MS);
   // Allow the app to exit even if this timer is still pending.
@@ -98,12 +98,12 @@ app.on('before-quit', event => {
   // so a wedged host can never block the quit.
   event.preventDefault();
 
-  const finalize = () => {
+  const finalize = async () => {
     try {
-      cleanTempClipboardDirs(0);
+      await cleanTempClipboardDirs(0);
       // Still pass the exclusion set: files.cjs before-quit runs too and may not
       // have fired yet when this handler runs (order is not guaranteed).
-      cleanTempEditDirs(0, getActiveEditDirs());
+      await cleanTempEditDirs(0, getActiveEditDirs());
     } catch {
       /* ignore */
     }

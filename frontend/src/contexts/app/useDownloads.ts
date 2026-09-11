@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { type FileItem } from '../AppContext';
 import { downloadFile as downloadFileApi } from '../../utils/api';
-import { downloadBlob, streamResponseToBlob } from '../../utils/download';
+import { openDownloadFileSink, saveResponseDownload } from '../../utils/download';
 import { extractResponseError } from '../../utils/errorUtils';
 import {
   isElectron,
@@ -194,6 +194,7 @@ export function useDownloads({ showToast, files }: DownloadsDeps) {
 
     const baseName = firstFile?.name || (isFolder ? 'folder' : 'file');
     const fileName = isBulk ? `${ids.length} items` : isFolder ? `${baseName}.zip` : baseName;
+    const downloadName = isBulk ? `download_${Date.now()}.zip` : fileName;
     // Electron saves report no byte progress over IPC, so those bars stay
     // indeterminate; on the web only a single known file gets a determinate bar
     // (ZIPs are streamed without a Content-Length).
@@ -216,6 +217,10 @@ export function useDownloads({ showToast, files }: DownloadsDeps) {
         return;
       }
 
+      // The picker must open while this call still has user activation. Once a
+      // sink exists, response bytes flow directly to disk instead of a Blob.
+      const sink = await openDownloadFileSink(downloadName);
+
       if (isBulk) {
         await runWebDownload(id, item, async signal => {
           const res = await fetch('/api/files/download/bulk', {
@@ -230,12 +235,11 @@ export function useDownloads({ showToast, files }: DownloadsDeps) {
             res.headers.get('Content-Disposition'),
             `download_${Date.now()}.zip`
           );
-          const blob = await streamResponseToBlob(res, onStreamProgress(id, true));
-          downloadBlob(blob, filename);
+          await saveResponseDownload(res, filename, onStreamProgress(id, true), sink);
         });
       } else {
         await runWebDownload(id, item, async signal => {
-          await downloadFileApi(firstId, fileName, onStreamProgress(id, isZip), signal);
+          await downloadFileApi(firstId, fileName, onStreamProgress(id, isZip), signal, sink);
         });
       }
     } finally {

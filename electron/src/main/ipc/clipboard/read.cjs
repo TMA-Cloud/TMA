@@ -4,7 +4,6 @@
  * text interpreted as file paths.
  */
 const path = require('path');
-const fs = require('fs');
 const fsPromises = require('fs').promises;
 const { clipboard } = require('electron');
 const { runPowerShell, runPowerShellEnv } = require('../../utils/powershell.cjs');
@@ -17,29 +16,38 @@ const CLIPBOARD_DEBUG = process.env.TMA_CLOUD_CLIPBOARD_DEBUG === '1';
 const ABS_PATH_REGEX = /^[a-zA-Z]:[\\/]|^\\\\/;
 const MAX_PATHS_FROM_TEXT = 100;
 
-async function readFileDropList() {
-  const stdout = await runPowerShell(
-    'Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.Clipboard]::GetFileDropList() | ForEach-Object { $_ }',
-    5000
-  );
-  const paths = stdout
-    .split(/\r?\n/)
-    .map(p => p.trim())
-    .filter(Boolean);
-  if (paths.length === 0) return [];
-  const files = [];
-  for (const p of paths) {
-    try {
-      const stat = fs.statSync(p);
-      if (!stat.isFile()) continue;
-      const buf = fs.readFileSync(p);
-      const name = path.basename(p);
-      files.push({ name, mime: getMimeForName(name), data: buf.toString('base64') });
-    } catch (_) {
-      /* ignore */
+async function readClipboardFilePaths() {
+  if (process.platform !== 'win32') return [];
+  try {
+    const stdout = await runPowerShell(
+      'Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.Clipboard]::GetFileDropList() | ForEach-Object { $_ }',
+      5000
+    );
+    const paths = stdout
+      .split(/\r?\n/)
+      .map(p => p.trim())
+      .filter(Boolean)
+      .slice(0, MAX_PATHS_FROM_TEXT);
+    const valid = [];
+    for (const filePath of paths) {
+      const stat = await fsPromises.stat(filePath).catch(() => null);
+      if (stat?.isFile()) valid.push(filePath);
     }
+    if (valid.length > 0) return valid;
+  } catch {
+    // Fall through to text paths.
   }
-  return files;
+  try {
+    const paths = parsePathsFromText(await clipboard.readText());
+    const valid = [];
+    for (const filePath of paths) {
+      const stat = await fsPromises.stat(filePath).catch(() => null);
+      if (stat?.isFile()) valid.push(filePath);
+    }
+    return valid;
+  } catch {
+    return [];
+  }
 }
 
 function parsePathsFromText(text) {
@@ -51,37 +59,11 @@ function parsePathsFromText(text) {
     .slice(0, MAX_PATHS_FROM_TEXT);
 }
 
-async function readFilesFromPaths(paths) {
-  const files = [];
-  for (const p of paths) {
-    try {
-      const stat = await fsPromises.stat(p);
-      if (!stat.isFile()) continue;
-      const buf = await fsPromises.readFile(p);
-      const name = path.basename(p);
-      files.push({ name, mime: getMimeForName(name), data: buf.toString('base64') });
-    } catch (_) {
-      /* ignore */
-    }
-  }
-  return files;
-}
-
 async function readFilesFromClipboard() {
   if (process.platform !== 'win32') return [];
-
-  // 1. FileDropList (Explorer/desktop copy): one small PowerShell call, no C# compile.
-  try {
-    const fileDropFiles = await readFileDropList();
-    if (fileDropFiles.length > 0) {
-      if (CLIPBOARD_DEBUG) console.log('[clipboard] FileDropList:', fileDropFiles.length, 'files');
-      return fileDropFiles;
-    }
-  } catch (_) {
-    /* ignore */
-  }
-
-  // 2. OLE FileContents (Outlook attachments, Snipping Tool): heavier C# compile + extraction.
+  // Physical and text paths use clipboard:uploadFiles and stream from disk.
+  // This compatibility endpoint is only for virtual OLE content, which has no
+  // filesystem path for Node to stream.
   try {
     const scriptContent = getOleExtractScriptContent();
     const stdout = await runPowerShellEnv(scriptContent, 15000);
@@ -92,21 +74,6 @@ async function readFilesFromClipboard() {
       if (psFiles.length > 0) {
         if (CLIPBOARD_DEBUG) console.log('[clipboard] OLE extracted', psFiles.length, 'files');
         return psFiles.map(f => ({ name: f.name, mime: getMimeForName(f.name), data: f.data }));
-      }
-    }
-  } catch (_) {
-    /* ignore */
-  }
-
-  // 3. Clipboard text containing file paths (Copy as path, IDEs, etc.).
-  try {
-    const text = await clipboard.readText();
-    const paths = parsePathsFromText(text);
-    if (paths.length > 0) {
-      const textFiles = await readFilesFromPaths(paths);
-      if (textFiles.length > 0) {
-        if (CLIPBOARD_DEBUG) console.log('[clipboard] text-as-paths:', textFiles.length, 'files');
-        return textFiles;
       }
     }
   } catch (_) {
@@ -137,9 +104,8 @@ async function peekClipboardFileNames() {
 }
 
 module.exports = {
-  readFileDropList,
   parsePathsFromText,
-  readFilesFromPaths,
   readFilesFromClipboard,
   peekClipboardFileNames,
+  readClipboardFilePaths,
 };

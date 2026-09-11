@@ -40,6 +40,67 @@ export async function streamResponseToBlob(
   return new Blob(chunks as BlobPart[], { type: contentType });
 }
 
+export interface DownloadFileSink {
+  writeResponse: (response: Response, onProgress?: (loaded: number, total: number | null) => void) => Promise<void>;
+}
+
+/**
+ * Ask for the destination before starting network I/O, preserving browser user
+ * activation. Unsupported browsers return null and use the Blob fallback.
+ */
+export async function openDownloadFileSink(filename: string): Promise<DownloadFileSink | null> {
+  const picker = (
+    window as Window & {
+      showSaveFilePicker?: (options?: { suggestedName?: string }) => Promise<{
+        createWritable: () => Promise<WritableStream<Uint8Array>>;
+      }>;
+    }
+  ).showSaveFilePicker;
+  if (!picker) return null;
+
+  const handle = await picker({ suggestedName: filename });
+  const writable = await handle.createWritable();
+  return {
+    async writeResponse(response, onProgress) {
+      if (!response.body) {
+        const blob = await response.blob();
+        const writer = writable.getWriter();
+        await writer.write(new Uint8Array(await blob.arrayBuffer()));
+        await writer.close();
+        onProgress?.(blob.size, blob.size || null);
+        return;
+      }
+      const header = response.headers.get('Content-Length');
+      const parsed = header ? Number(header) : NaN;
+      const total = Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+      let loaded = 0;
+      const progress = new TransformStream<Uint8Array, Uint8Array>({
+        transform(chunk, controller) {
+          loaded += chunk.byteLength;
+          onProgress?.(loaded, total !== null ? Math.max(total, loaded) : null);
+          controller.enqueue(chunk);
+        },
+      });
+      onProgress?.(0, total);
+      await response.body.pipeThrough(progress).pipeTo(writable);
+    },
+  };
+}
+
+export async function saveResponseDownload(
+  response: Response,
+  filename: string,
+  onProgress?: (loaded: number, total: number | null) => void,
+  sink?: DownloadFileSink | null
+): Promise<void> {
+  if (sink) {
+    await sink.writeResponse(response, onProgress);
+    return;
+  }
+  const blob = await streamResponseToBlob(response, onProgress);
+  downloadBlob(blob, filename);
+}
+
 /**
  * Trigger a browser download for an in-memory blob.
  */

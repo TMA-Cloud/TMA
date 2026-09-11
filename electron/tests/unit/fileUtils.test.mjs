@@ -485,82 +485,80 @@ describe('cleanTempDirsByPrefix', () => {
     return dir;
   }
 
-  it('removes directories older than the cutoff', () => {
+  it('removes directories older than the cutoff', async () => {
     const root = redirectTmpdir(vi);
     const old = agedDir(root, `${PASTE_DIR_PREFIX}old`, 48 * 60 * 60 * 1000);
-    cleanTempDirsByPrefix(PASTE_DIR_PREFIX, 24 * 60 * 60 * 1000);
+    await cleanTempDirsByPrefix(PASTE_DIR_PREFIX, 24 * 60 * 60 * 1000);
     expect(fs.existsSync(old)).toBe(false);
   });
 
-  it('keeps directories that are still within the cutoff', () => {
+  it('keeps directories that are still within the cutoff', async () => {
     const root = redirectTmpdir(vi);
     const fresh = agedDir(root, `${PASTE_DIR_PREFIX}fresh`, 60 * 1000);
-    cleanTempDirsByPrefix(PASTE_DIR_PREFIX, 24 * 60 * 60 * 1000);
+    await cleanTempDirsByPrefix(PASTE_DIR_PREFIX, 24 * 60 * 60 * 1000);
     expect(fs.existsSync(fresh)).toBe(true);
   });
 
-  it('removes everything when the cutoff is zero, as it is on quit', () => {
+  it('removes everything when the cutoff is zero, as it is on quit', async () => {
     const root = redirectTmpdir(vi);
     const fresh = agedDir(root, `${PASTE_DIR_PREFIX}fresh`, 1000);
-    cleanTempDirsByPrefix(PASTE_DIR_PREFIX, 0);
+    await cleanTempDirsByPrefix(PASTE_DIR_PREFIX, 0);
     expect(fs.existsSync(fresh)).toBe(false);
   });
 
-  it('leaves a directory stamped in the future alone, so clock skew deletes nothing', () => {
+  it('leaves a directory stamped in the future alone, so clock skew deletes nothing', async () => {
     const root = redirectTmpdir(vi);
     const future = agedDir(root, `${PASTE_DIR_PREFIX}future`, -60 * 1000);
 
-    cleanTempDirsByPrefix(PASTE_DIR_PREFIX, 0);
+    await cleanTempDirsByPrefix(PASTE_DIR_PREFIX, 0);
 
     // The same rule means a folder created within the current millisecond can
     // survive one quit-time sweep; the next sweep collects it.
     expect(fs.existsSync(future)).toBe(true);
   });
 
-  it('never touches directories with a different prefix', () => {
+  it('never touches directories with a different prefix', async () => {
     const root = redirectTmpdir(vi);
     const other = agedDir(root, `${EDIT_DIR_PREFIX}old`, 48 * 60 * 60 * 1000);
     const unrelated = agedDir(root, 'something-else', 48 * 60 * 60 * 1000);
-    cleanTempDirsByPrefix(PASTE_DIR_PREFIX, 0);
+    await cleanTempDirsByPrefix(PASTE_DIR_PREFIX, 0);
     expect(fs.existsSync(other)).toBe(true);
     expect(fs.existsSync(unrelated)).toBe(true);
   });
 
-  it('skips directories an active session still needs', () => {
+  it('skips directories an active session still needs', async () => {
     const root = redirectTmpdir(vi);
     const active = agedDir(root, `${EDIT_DIR_PREFIX}active`, 48 * 60 * 60 * 1000);
     const stale = agedDir(root, `${EDIT_DIR_PREFIX}stale`, 48 * 60 * 60 * 1000);
 
-    cleanTempDirsByPrefix(EDIT_DIR_PREFIX, 0, new Set([active]));
+    await cleanTempDirsByPrefix(EDIT_DIR_PREFIX, 0, new Set([active]));
 
     expect(fs.existsSync(active)).toBe(true);
     expect(fs.existsSync(stale)).toBe(false);
   });
 
-  it('ignores loose files that happen to share the prefix', () => {
+  it('ignores loose files that happen to share the prefix', async () => {
     const root = redirectTmpdir(vi);
     const file = writeFile(root, `${PASTE_DIR_PREFIX}notadir`, 'x');
-    cleanTempDirsByPrefix(PASTE_DIR_PREFIX, 0);
+    await cleanTempDirsByPrefix(PASTE_DIR_PREFIX, 0);
     expect(fs.existsSync(file)).toBe(true);
   });
 
-  it('does nothing when the temp root cannot be read', () => {
-    vi.spyOn(fs, 'readdirSync').mockImplementation(() => {
-      throw new Error('EACCES');
-    });
-    expect(() => cleanTempDirsByPrefix(PASTE_DIR_PREFIX, 0)).not.toThrow();
+  it('does nothing when the temp root cannot be read', async () => {
+    vi.spyOn(fs.promises, 'readdir').mockRejectedValue(new Error('EACCES'));
+    await expect(cleanTempDirsByPrefix(PASTE_DIR_PREFIX, 0)).resolves.toBeUndefined();
   });
 
-  it('exposes the two prefixes through their own named cleaners', () => {
+  it('exposes the two prefixes through their own named cleaners', async () => {
     const root = redirectTmpdir(vi);
     const paste = agedDir(root, `${PASTE_DIR_PREFIX}a`, 0);
     const edit = agedDir(root, `${EDIT_DIR_PREFIX}a`, 0);
 
-    cleanTempClipboardDirs(0);
+    await cleanTempClipboardDirs(0);
     expect(fs.existsSync(paste)).toBe(false);
     expect(fs.existsSync(edit)).toBe(true);
 
-    cleanTempEditDirs(0);
+    await cleanTempEditDirs(0);
     expect(fs.existsSync(edit)).toBe(false);
   });
 });

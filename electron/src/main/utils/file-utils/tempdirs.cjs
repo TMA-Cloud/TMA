@@ -17,22 +17,22 @@ function createTempDir(prefix) {
   return dir;
 }
 
-function cleanTempDirsByPrefix(prefix, maxAgeMs, excludeDirs) {
+async function cleanTempDirsByPrefix(prefix, maxAgeMs, excludeDirs) {
   const tmpRoot = os.tmpdir();
   const now = Date.now();
   const exclude = excludeDirs instanceof Set ? excludeDirs : null;
   try {
-    const existing = fs.readdirSync(tmpRoot, { withFileTypes: true });
+    const existing = await fs.promises.readdir(tmpRoot, { withFileTypes: true });
     for (const e of existing) {
       if (!e.isDirectory() || !e.name.startsWith(prefix)) continue;
       const dirPath = path.join(tmpRoot, e.name);
       // Skip directories that are still in use by an active session.
       if (exclude && exclude.has(dirPath)) continue;
       try {
-        const stat = fs.statSync(dirPath);
+        const stat = await fs.promises.stat(dirPath);
         const age = now - stat.mtimeMs;
         if (age >= maxAgeMs) {
-          fs.rmSync(dirPath, { recursive: true });
+          await fs.promises.rm(dirPath, { recursive: true });
         }
       } catch {
         /* ignore */
@@ -44,11 +44,11 @@ function cleanTempDirsByPrefix(prefix, maxAgeMs, excludeDirs) {
 }
 
 function cleanTempClipboardDirs(maxAgeMs, excludeDirs) {
-  cleanTempDirsByPrefix(PASTE_DIR_PREFIX, maxAgeMs, excludeDirs);
+  return cleanTempDirsByPrefix(PASTE_DIR_PREFIX, maxAgeMs, excludeDirs);
 }
 
 function cleanTempEditDirs(maxAgeMs, excludeDirs) {
-  cleanTempDirsByPrefix(EDIT_DIR_PREFIX, maxAgeMs, excludeDirs);
+  return cleanTempDirsByPrefix(EDIT_DIR_PREFIX, maxAgeMs, excludeDirs);
 }
 
 module.exports = {
