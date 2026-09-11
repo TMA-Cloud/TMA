@@ -121,12 +121,12 @@ describe('setUserStorageLimit', () => {
     await expect(setUserStorageLimit(ADMIN, TARGET, 5 * GB)).resolves.not.toThrow();
   });
 
-  it('counts usage across the whole account, owner plus sub-users', async () => {
+  it('locks and reads the maintained account usage counter', async () => {
     stub({ used: 0 });
     await setUserStorageLimit(ADMIN, TARGET, 10 * GB);
 
-    const usageQuery = clientQuery.mock.calls.find(c => String(c[0]).includes('SUM(f.size)'));
-    expect(usageQuery[0]).toContain('COALESCE(o.parent_user_id, o.id) = $1');
+    const usageQuery = clientQuery.mock.calls.find(c => String(c[0]).includes('storage_used AS used'));
+    expect(usageQuery[0]).toContain('FOR UPDATE');
   });
 
   it('skips the usage check entirely when clearing the limit', async () => {

@@ -4,9 +4,11 @@ import { alwaysReturn, executedCalls, queueQueryResults } from '../../mocks/db.m
 import { cacheKeys, getCache, setCache } from '../../../utils/cache.js';
 import {
   SORT_FIELDS,
+  buildKeysetPage,
   buildOrderClause,
   calculateFolderSize,
   fillFolderSizes,
+  finishKeysetPage,
   generateUniqueName,
   getUniqueDbFileName,
 } from '../../../models/file/file.utils.model.js';
@@ -16,7 +18,9 @@ const USER = 'user000000000001';
 describe('buildOrderClause', () => {
   it('maps each allowed sort key to its column', () => {
     expect(buildOrderClause('name', 'ASC')).toBe('ORDER BY name ASC');
-    expect(buildOrderClause('size', 'ASC')).toBe('ORDER BY size ASC NULLS LAST');
+    expect(buildOrderClause('size', 'ASC')).toBe(
+      "ORDER BY (CASE WHEN files.type = 'folder' THEN files.aggregate_size ELSE files.size END) ASC NULLS LAST"
+    );
     expect(buildOrderClause('modified', 'DESC')).toBe('ORDER BY modified DESC');
     expect(buildOrderClause('deletedAt', 'DESC')).toBe('ORDER BY deleted_at DESC');
   });
@@ -63,6 +67,39 @@ describe('buildOrderClause', () => {
   });
 });
 
+describe('keyset pagination', () => {
+  it('builds a stable folder-first first page with one extra row', () => {
+    const page = buildKeysetPage('name', 'ASC', null, 'f', 2, 2);
+    expect(page.orderClause).toBe('ORDER BY f.type DESC, f.name ASC, f.id ASC');
+    expect(page.params).toEqual([3]);
+    expect(page.limitParam).toBe('$2');
+  });
+
+  it('continues strictly after the last compound cursor', () => {
+    const cursor = Buffer.from(JSON.stringify({ type: 'folder', value: 'Docs', id: 'f2' })).toString('base64url');
+    const page = buildKeysetPage('name', 'ASC', cursor, 'f', 3, 200);
+    expect(page.whereClause).toContain('f.type < $3');
+    expect(page.whereClause).toContain('f.name > $4');
+    expect(page.whereClause).toContain('f.id > $5');
+    expect(page.limitParam).toBe('$6');
+    expect(page.params).toEqual(['folder', 'Docs', 'f2', 201]);
+  });
+
+  it('emits a cursor only when an extra row proves another page exists', () => {
+    const page = buildKeysetPage('modified', 'DESC', null, 'f', 1, 2);
+    const result = finishKeysetPage(
+      [
+        { id: '3', type: 'file', modified: '2026-01-03' },
+        { id: '2', type: 'file', modified: '2026-01-02' },
+        { id: '1', type: 'file', modified: '2026-01-01' },
+      ],
+      page
+    );
+    expect(result.files.map(row => row.id)).toEqual(['3', '2']);
+    expect(result.nextCursor).toBeTruthy();
+  });
+});
+
 describe('generateUniqueName', () => {
   it('inserts the counter before the extension', () => {
     expect(generateUniqueName('report', '.pdf', 1)).toBe('report (1).pdf');
@@ -84,22 +121,22 @@ describe('getUniqueDbFileName', () => {
   });
 
   it('appends a counter on the first collision', async () => {
-    queueQueryResults({ rows: [{ id: 'x' }] }, { rows: [] });
+    queueQueryResults({ rows: [{ name: 'report.pdf' }] });
     expect(await getUniqueDbFileName('report.pdf', null, USER)).toBe('report (1).pdf');
   });
 
   it('keeps incrementing while names remain taken', async () => {
-    queueQueryResults({ rows: [{ id: 'x' }] }, { rows: [{ id: 'y' }] }, { rows: [{ id: 'z' }] }, { rows: [] });
+    queueQueryResults({ rows: [{ name: 'report.pdf' }, { name: 'report (1).pdf' }, { name: 'report (2).pdf' }] });
     expect(await getUniqueDbFileName('report.pdf', null, USER)).toBe('report (3).pdf');
   });
 
   it('handles a name with no extension', async () => {
-    queueQueryResults({ rows: [{ id: 'x' }] }, { rows: [] });
+    queueQueryResults({ rows: [{ name: 'README' }] });
     expect(await getUniqueDbFileName('README', null, USER)).toBe('README (1)');
   });
 
   it('preserves a multi-dot base name', async () => {
-    queueQueryResults({ rows: [{ id: 'x' }] }, { rows: [] });
+    queueQueryResults({ rows: [{ name: 'backup.2024.tar.gz' }] });
     expect(await getUniqueDbFileName('backup.2024.tar.gz', null, USER)).toBe('backup.2024.tar (1).gz');
   });
 
@@ -109,11 +146,17 @@ describe('getUniqueDbFileName', () => {
     const { sql, params } = executedCalls()[0];
     expect(sql).toContain('parent_id IS NOT DISTINCT FROM');
     expect(sql).toContain('deleted_at IS NULL');
-    expect(params).toEqual(['report.pdf', 'parent0000000001', USER, 'file']);
+    expect(params).toEqual(['parent0000000001', USER, 'report.pdf', 'report (%).pdf']);
+    expect(executedCalls()).toHaveLength(1);
   });
 
   it('gives up rather than looping forever after 10000 collisions', async () => {
-    alwaysReturn({ rows: [{ id: 'taken' }] });
+    alwaysReturn({
+      rows: [
+        { name: 'report.pdf' },
+        ...Array.from({ length: 10000 }, (_, index) => ({ name: `report (${index + 1}).pdf` })),
+      ],
+    });
     await expect(getUniqueDbFileName('report.pdf', null, USER)).rejects.toThrow(/Too many duplicate names/);
   });
 });
@@ -139,13 +182,14 @@ describe('calculateFolderSize', () => {
     expect(await calculateFolderSize('folder0000000001', USER)).toBe(0);
   });
 
-  it('bounds the recursion depth, so a cyclic parent chain cannot hang the query', async () => {
+  it('tracks ancestors, so a cyclic parent chain cannot hang or truncate valid depth', async () => {
     alwaysReturn({ rows: [{ size: 0 }] });
     await calculateFolderSize('folder0000000001', USER);
     const { sql, params } = executedCalls()[0];
     expect(sql).toContain('RECURSIVE');
-    expect(sql).toContain('depth <');
-    expect(params[2]).toBe(50);
+    expect(sql).toContain('ancestors');
+    expect(sql).toContain('NOT f.id = ANY(s.ancestors)');
+    expect(params).toEqual(['folder0000000001', USER]);
   });
 
   it('scopes the recursive walk to the requesting user', async () => {
@@ -170,13 +214,19 @@ describe('calculateFolderSize', () => {
 
 describe('fillFolderSizes', () => {
   it('computes a size for every folder entry', async () => {
-    alwaysReturn({ rows: [{ size: 100 }] });
+    alwaysReturn({
+      rows: [
+        { root_id: 'a', size: 100 },
+        { root_id: 'b', size: 100 },
+      ],
+    });
     const files = [
       { id: 'a', type: 'folder' },
       { id: 'b', type: 'folder' },
     ];
     await fillFolderSizes(files, USER);
     expect(files.every(f => f.size === 100)).toBe(true);
+    expect(executedCalls()).toHaveLength(1);
   });
 
   it('leaves file entries untouched', async () => {

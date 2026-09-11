@@ -44,7 +44,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     operationQueue,
     files: browser.files,
     refreshFiles: browser.refreshFiles,
-    uploadFilesBulk: uploads.uploadFilesBulk,
   });
 
   const downloads = useDownloads({ showToast, files: browser.files });
@@ -74,6 +73,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         files: browser.files,
         setFiles: browser.setFiles,
         refreshFiles: browser.refreshFiles,
+        hasMoreFiles: browser.hasMoreFiles,
+        isLoadingMore: browser.isLoadingMore,
+        loadMoreFiles: browser.loadMoreFiles,
         setCurrentPath: browser.setCurrentPath,
         openFolder: browser.openFolder,
         navigateTo: browser.navigateTo,

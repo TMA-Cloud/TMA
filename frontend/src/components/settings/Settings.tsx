@@ -106,6 +106,8 @@ export const Settings: React.FC = () => {
   const [usersList, setUsersList] = useState<UserSummary[]>([]);
   const [loadingUsersList, setLoadingUsersList] = useState(false);
   const [usersListError, setUsersListError] = useState<string | null>(null);
+  const [usersNextCursor, setUsersNextCursor] = useState<string | null>(null);
+  const [loadingMoreUsers, setLoadingMoreUsers] = useState(false);
   const [sessionsModalOpen, setSessionsModalOpen] = useState(false);
   const [mfaModalOpen, setMfaModalOpen] = useState(false);
   const [changePasswordModalOpen, setChangePasswordModalOpen] = useState(false);
@@ -148,13 +150,31 @@ export const Settings: React.FC = () => {
     try {
       setLoadingUsersList(true);
       setUsersListError(null);
-      const { users } = await fetchAllUsers();
+      const { users, nextCursor } = await fetchAllUsers();
       setUsersList(users);
+      setUsersNextCursor(nextCursor);
     } catch {
       setUsersListError('Unable to load users right now');
       showToast('Failed to load user list', 'error');
     } finally {
       setLoadingUsersList(false);
+    }
+  };
+
+  const loadMoreUsers = async () => {
+    if (!usersNextCursor || loadingMoreUsers) return;
+    try {
+      setLoadingMoreUsers(true);
+      const { users, nextCursor } = await fetchAllUsers(usersNextCursor);
+      setUsersList(previous => {
+        const known = new Set(previous.map(user => user.id));
+        return [...previous, ...users.filter(user => !known.has(user.id))];
+      });
+      setUsersNextCursor(nextCursor);
+    } catch {
+      showToast('Failed to load more users', 'error');
+    } finally {
+      setLoadingMoreUsers(false);
     }
   };
 
@@ -442,6 +462,9 @@ export const Settings: React.FC = () => {
         usersList={usersList}
         loadingUsersList={loadingUsersList}
         usersListError={usersListError}
+        hasMoreUsers={Boolean(usersNextCursor)}
+        loadingMoreUsers={loadingMoreUsers}
+        onLoadMore={loadMoreUsers}
         onRefresh={loadUsersList}
         onStorageUpdated={refreshStorage}
         currentUserId={user?.id}

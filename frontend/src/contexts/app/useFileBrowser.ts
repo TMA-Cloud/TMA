@@ -16,6 +16,8 @@ export function useFileBrowser(setSelectedFiles: (ids: string[]) => void) {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [navHistory, setNavHistory] = useState<{ entries: NavEntry[]; index: number }>(() => ({
     entries: [{ path: ['My Files'], ids: [null], shared: [false] }],
     index: 0,
@@ -60,6 +62,7 @@ export function useFileBrowser(setSelectedFiles: (ids: string[]) => void) {
     async (skipSearchCheck = false) => {
       if (!skipSearchCheck && searchQuery.trim().length > 0) return;
       if (!isFileManagerPage(currentPath[0])) {
+        setNextCursor(null);
         returnHighlightAfterRefreshRef.current = null;
         return;
       }
@@ -69,6 +72,7 @@ export function useFileBrowser(setSelectedFiles: (ids: string[]) => void) {
       const controller = new AbortController();
       listRefreshControllerRef.current = controller;
       const requestId = ++listRefreshSeqRef.current;
+      setNextCursor(null);
 
       const parentId = folderStack[folderStack.length - 1];
       let urlPath = '/api/files';
@@ -82,6 +86,7 @@ export function useFileBrowser(setSelectedFiles: (ids: string[]) => void) {
       if (parentId) url.searchParams.append('parentId', parentId);
       url.searchParams.append('sortBy', sortBy);
       if (sortOrder?.trim()) url.searchParams.append('order', sortOrder);
+      url.searchParams.append('limit', '200');
 
       try {
         const res = await fetch(url.toString(), {
@@ -95,8 +100,10 @@ export function useFileBrowser(setSelectedFiles: (ids: string[]) => void) {
         // A newer refresh superseded this one while awaiting — discard the stale result.
         if (requestId !== listRefreshSeqRef.current) return;
 
-        const sorted = sortFilesWithFoldersFirst(data.map(mapFileResponse), sortBy, sortOrder);
+        const mapped = data.map(mapFileResponse);
+        const sorted = sortBy === 'size' ? sortFilesWithFoldersFirst(mapped, sortBy, sortOrder) : mapped;
         setFiles(sorted);
+        setNextCursor(res.headers.get('X-Next-Cursor'));
 
         const highlightId = returnHighlightAfterRefreshRef.current;
         returnHighlightAfterRefreshRef.current = null;
@@ -118,6 +125,42 @@ export function useFileBrowser(setSelectedFiles: (ids: string[]) => void) {
     },
     [folderStack, currentPath, sortBy, sortOrder, searchQuery, setSelectedFiles]
   );
+
+  const loadMoreFiles = useCallback(async () => {
+    if (!nextCursor || isLoadingMore || searchQueryRef.current.trim()) return;
+    setIsLoadingMore(true);
+    try {
+      const parentId = folderStack[folderStack.length - 1];
+      let urlPath = '/api/files';
+      if (folderStack.length === 1) {
+        if (currentPath[0] === 'Starred') urlPath = '/api/files/starred';
+        else if (currentPath[0] === 'Shared') urlPath = '/api/files/shared';
+        else if (currentPath[0] === 'Trash') urlPath = '/api/files/trash';
+      }
+      const url = new URL(urlPath, window.location.origin);
+      if (parentId) url.searchParams.append('parentId', parentId);
+      url.searchParams.append('sortBy', sortBy);
+      url.searchParams.append('order', sortOrder);
+      url.searchParams.append('limit', '200');
+      url.searchParams.append('cursor', nextCursor);
+      const res = await fetch(url.toString(), {
+        credentials: 'include',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+      });
+      if (!res.ok) throw new Error(`Failed to fetch more files: ${res.status}`);
+      const data: FileItemResponse[] = await res.json();
+      setFiles(previous => {
+        const known = new Set(previous.map(file => file.id));
+        const additional = data.map(mapFileResponse).filter(file => !known.has(file.id));
+        return [...previous, ...additional];
+      });
+      setNextCursor(res.headers.get('X-Next-Cursor'));
+    } catch {
+      // Keep the cursor so the user can retry the same page.
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [currentPath, folderStack, isLoadingMore, nextCursor, sortBy, sortOrder]);
 
   const [debouncedRefreshFiles] = useDebouncedCallback((...args: unknown[]) => {
     void refreshFiles((args[0] as boolean | undefined) ?? false);
@@ -143,6 +186,7 @@ export function useFileBrowser(setSelectedFiles: (ids: string[]) => void) {
       abortControllerRef.current = controller;
 
       setIsSearching(true);
+      setNextCursor(null);
       try {
         const url = new URL('/api/files/search', window.location.origin);
         url.searchParams.append('q', trimmed);
@@ -319,6 +363,9 @@ export function useFileBrowser(setSelectedFiles: (ids: string[]) => void) {
     refreshFiles,
     debouncedRefreshFiles,
     refreshOrResearch,
+    hasMoreFiles: nextCursor !== null,
+    isLoadingMore,
+    loadMoreFiles,
 
     // Navigation state
     currentPath,

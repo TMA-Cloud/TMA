@@ -1,6 +1,6 @@
 /** File-listing, upload-precheck, and single-file download endpoints. */
 import { authFetch } from '../authFetch';
-import { downloadBlob, streamResponseToBlob } from '../download';
+import { saveResponseDownload, type DownloadFileSink } from '../download';
 import type { FileItemResponse } from '../../contexts/AppContext';
 import { apiGet, apiPost } from './client';
 
@@ -20,7 +20,8 @@ export async function downloadFile(
   id: string,
   fallbackFilename?: string,
   onProgress?: (loaded: number, total: number | null) => void,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  sink?: DownloadFileSink | null
 ): Promise<void> {
   const url = `/api/files/${id}/download`;
   const response = await authFetch(url, { method: 'GET', signal });
@@ -71,6 +72,5 @@ export async function downloadFile(
     filename = fallbackFilename || 'download';
   }
 
-  const blob = await streamResponseToBlob(response, onProgress);
-  downloadBlob(blob, filename);
+  await saveResponseDownload(response, filename, onProgress, sink);
 }

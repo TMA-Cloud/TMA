@@ -62,10 +62,13 @@ export async function deleteSubUser(id: string): Promise<{ message: string }> {
   return apiDelete<{ message: string }>(`/api/user/sub-users/${encodeURIComponent(id)}`);
 }
 
-export async function fetchAllUsers(): Promise<{
+export async function fetchAllUsers(cursor?: string | null): Promise<{
   users: UserSummary[];
+  nextCursor: string | null;
 }> {
-  return apiGet<{ users: UserSummary[] }>('/api/user/all');
+  const query = new URLSearchParams({ limit: '50' });
+  if (cursor) query.set('cursor', cursor);
+  return apiGet<{ users: UserSummary[]; nextCursor: string | null }>(`/api/user/all?${query}`);
 }
 
 export async function updateUserStorageLimit(

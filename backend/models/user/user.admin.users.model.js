@@ -20,22 +20,42 @@ async function getTotalUserCount() {
   return count;
 }
 
-async function getAllUsersBasic() {
-  // Sub-users are grouped under their owner, and usage is aggregated per account
-  // (a sub-user's uploads are stored against the owner) via one grouped subquery.
+function decodeUserCursor(cursor) {
+  if (!cursor) return null;
+  try {
+    const parsed = JSON.parse(Buffer.from(String(cursor), 'base64url').toString('utf8'));
+    return parsed?.createdAt && parsed?.id ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+async function getAllUsersBasic({ limit = 50, cursor = null } = {}) {
+  const pageSize = Math.min(100, Math.max(1, Number(limit) || 50));
+  const decoded = decodeUserCursor(cursor);
+  const owners = await pool.query(
+    `SELECT id, created_at
+       FROM users
+      WHERE parent_user_id IS NULL
+        AND ($1::timestamptz IS NULL OR (created_at, id) > ($1::timestamptz, $2::text))
+      ORDER BY created_at, id
+      LIMIT $3`,
+    [decoded?.createdAt || null, decoded?.id || null, pageSize + 1]
+  );
+  const pageOwners = owners.rows.slice(0, pageSize);
+  if (pageOwners.length === 0) return { users: [], nextCursor: null };
+
+  // Each page contains complete accounts: owner followed by its sub-users.
   const result = await pool.query(
     `SELECT u.id, u.email, u.name, u.created_at, u.mfa_enabled, u.storage_limit,
             u.parent_user_id, u.permissions,
-            COALESCE(acct_usage.used, 0) AS storage_used
+            COALESCE(account.storage_used, 0) AS storage_used
        FROM users u
-       LEFT JOIN (
-         SELECT COALESCE(o.parent_user_id, o.id) AS account_id, SUM(f.size) AS used
-           FROM files f
-           JOIN users o ON o.id = f.user_id
-          WHERE f.type = 'file'
-          GROUP BY 1
-       ) acct_usage ON acct_usage.account_id = COALESCE(u.parent_user_id, u.id)
-      ORDER BY COALESCE(u.parent_user_id, u.id), u.parent_user_id NULLS FIRST, u.created_at ASC`
+       JOIN users account ON account.id = COALESCE(u.parent_user_id, u.id)
+      WHERE account.id = ANY($1::text[])
+      ORDER BY array_position($1::text[], account.id),
+               u.parent_user_id NULLS FIRST, u.created_at ASC`,
+    [pageOwners.map(row => row.id)]
   );
 
   // A sub-user row reports its owner's capacity (the pool it draws from).
@@ -45,7 +65,7 @@ async function getAllUsersBasic() {
       .map(row => [row.id, row.storage_limit != null ? Number(row.storage_limit) : null])
   );
 
-  return result.rows.map(row => {
+  const users = result.rows.map(row => {
     const accountId = row.parent_user_id || row.id;
     const limit = limitByAccount.has(accountId)
       ? limitByAccount.get(accountId)
@@ -59,6 +79,14 @@ async function getAllUsersBasic() {
       storage_total: limit,
     };
   });
+  const lastOwner = pageOwners[pageOwners.length - 1];
+  return {
+    users,
+    nextCursor:
+      owners.rows.length > pageSize
+        ? Buffer.from(JSON.stringify({ createdAt: lastOwner.created_at, id: lastOwner.id })).toString('base64url')
+        : null,
+  };
 }
 
 /**
@@ -161,14 +189,12 @@ async function setUserStorageLimit(userId, targetUserId, storageLimit) {
     // quota and unable to upload.
     if (storageLimit !== null) {
       const usedResult = await client.query(
-        `SELECT COALESCE(SUM(f.size), 0) AS used
-           FROM files f
-           JOIN users o ON o.id = f.user_id
-          WHERE f.type = 'file' AND COALESCE(o.parent_user_id, o.id) = $1`,
+        'SELECT storage_used AS used, storage_reserved AS reserved FROM users WHERE id = $1 FOR UPDATE',
         [targetUserId]
       );
       const used = Number(usedResult.rows[0].used) || 0;
-      if (Number(storageLimit) < used) {
+      const reserved = Number(usedResult.rows[0].reserved) || 0;
+      if (Number(storageLimit) < used + reserved) {
         const limitFormatted = formatFileSize(Number(storageLimit));
         const usedFormatted = formatFileSize(used);
         await client.query('ROLLBACK');

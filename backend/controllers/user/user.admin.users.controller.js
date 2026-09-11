@@ -23,7 +23,8 @@ async function listUsers(req, res) {
       return sendError(res, 403, 'Only the first user can view all users');
     }
 
-    const usersBasic = await getAllUsersBasic();
+    const page = await getAllUsersBasic({ limit: req.query.limit, cursor: req.query.cursor });
+    const usersBasic = page.users;
 
     const users = usersBasic.map(user => ({
       id: user.id,
@@ -50,7 +51,7 @@ async function listUsers(req, res) {
     );
     logger.info({ userId: req.userId, userCount: users.length }, 'Users list viewed');
 
-    sendSuccess(res, { users });
+    sendSuccess(res, { users, nextCursor: page.nextCursor });
   } catch (err) {
     logger.error({ err }, 'Failed to fetch users list');
     sendError(res, 500, 'Server error', err);

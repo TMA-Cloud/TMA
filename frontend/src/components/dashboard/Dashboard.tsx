@@ -77,7 +77,7 @@ export const Dashboard: React.FC = () => {
     const startPolling = () => {
       // Only poll if tab is visible
       if (document.visibilityState === 'visible') {
-        interval = setInterval(fetchStats, 60000); // Refresh every 60 seconds (reduced from 30s)
+        interval = setInterval(fetchStats, 5 * 60 * 1000);
       }
     };
 

@@ -19,7 +19,12 @@ async function listFiles(req, res) {
 
   const sortBy = validateSortBy(req.query.sortBy) || 'modified';
   const order = validateSortOrder(req.query.order) || 'DESC';
-  const files = await getFiles(req.ownerId, parentId, sortBy, order);
+  const result = await getFiles(req.ownerId, parentId, sortBy, order, {
+    cursor: req.query.cursor,
+    limit: req.query.limit,
+  });
+  const files = result.files || result;
+  if (result.nextCursor) res.setHeader('X-Next-Cursor', result.nextCursor);
 
   // Stamp the directory as accessed, not its children (root is not a row).
   recordAccess(parentId, req.ownerId);

@@ -1,6 +1,5 @@
 import pool from '../../config/db.js';
 import { getCache, setCache, cacheKeys, DEFAULT_TTL } from '../../utils/cache.js';
-import { fillFolderSizes } from './file.utils.model.js';
 
 /**
  * Search files and folders using optimized trigram similarity
@@ -39,7 +38,7 @@ async function searchFiles(userId, query, limit = 100) {
         id, 
         name, 
         type, 
-        size, 
+        CASE WHEN type = 'folder' THEN aggregate_size ELSE size END AS size,
         modified,
         accessed_at AS "accessedAt",
         mime_type AS "mimeType",
@@ -47,20 +46,18 @@ async function searchFiles(userId, query, limit = 100) {
         shared,
         shared_at AS "sharedAt",
         CASE
-          WHEN NOT files.shared THEN NULL
-          WHEN EXISTS (
-            SELECT 1 FROM share_link_files slf
-            JOIN share_links sl ON sl.id = slf.share_id
-            WHERE slf.file_id = files.id AND sl.user_id = $1 AND sl.expires_at IS NULL
-          ) THEN NULL
-          ELSE (
-            SELECT MAX(sl.expires_at) FROM share_link_files slf
-            JOIN share_links sl ON sl.id = slf.share_id
-            WHERE slf.file_id = files.id AND sl.user_id = $1
-          )
+          WHEN NOT files.shared OR share_info.has_perpetual THEN NULL
+          ELSE share_info.expires_at
         END AS "expiresAt",
         parent_id AS "parentId"
-      FROM files 
+      FROM files
+      LEFT JOIN LATERAL (
+        SELECT BOOL_OR(sl.expires_at IS NULL) AS has_perpetual,
+               MAX(sl.expires_at) AS expires_at
+          FROM share_link_files slf
+          JOIN share_links sl ON sl.id = slf.share_id
+         WHERE slf.file_id = files.id AND sl.user_id = $1
+      ) share_info ON files.shared
       WHERE user_id = $1 
         AND deleted_at IS NULL
         AND lower(name) LIKE lower($2) || '%'
@@ -82,7 +79,7 @@ async function searchFiles(userId, query, limit = 100) {
         id, 
         name, 
         type, 
-        size, 
+        CASE WHEN type = 'folder' THEN aggregate_size ELSE size END AS size,
         modified,
         accessed_at AS "accessedAt",
         mime_type AS "mimeType",
@@ -90,20 +87,18 @@ async function searchFiles(userId, query, limit = 100) {
         shared,
         shared_at AS "sharedAt",
         CASE
-          WHEN NOT files.shared THEN NULL
-          WHEN EXISTS (
-            SELECT 1 FROM share_link_files slf
-            JOIN share_links sl ON sl.id = slf.share_id
-            WHERE slf.file_id = files.id AND sl.user_id = $1 AND sl.expires_at IS NULL
-          ) THEN NULL
-          ELSE (
-            SELECT MAX(sl.expires_at) FROM share_link_files slf
-            JOIN share_links sl ON sl.id = slf.share_id
-            WHERE slf.file_id = files.id AND sl.user_id = $1
-          )
+          WHEN NOT files.shared OR share_info.has_perpetual THEN NULL
+          ELSE share_info.expires_at
         END AS "expiresAt",
         parent_id AS "parentId"
-      FROM files 
+      FROM files
+      LEFT JOIN LATERAL (
+        SELECT BOOL_OR(sl.expires_at IS NULL) AS has_perpetual,
+               MAX(sl.expires_at) AS expires_at
+          FROM share_link_files slf
+          JOIN share_links sl ON sl.id = slf.share_id
+         WHERE slf.file_id = files.id AND sl.user_id = $1
+      ) share_info ON files.shared
       WHERE user_id = $1 
         AND deleted_at IS NULL
         AND (
@@ -111,7 +106,7 @@ async function searchFiles(userId, query, limit = 100) {
           lower(name) LIKE lower($2) || '%'
           OR 
           -- Full text match (uses trigram index)
-          (lower(name) LIKE '%' || lower($2) || '%' AND similarity(lower(name), lower($2)) > 0.15)
+          lower(name) % lower($2)
         )
       ORDER BY 
         CASE
@@ -128,9 +123,6 @@ async function searchFiles(userId, query, limit = 100) {
 
   const result = await pool.query(sqlQuery, queryParams);
   const files = result.rows;
-
-  // Fill folder sizes for folders (only if needed, in batches)
-  await fillFolderSizes(files, userId);
 
   await setCache(cacheKey, files, 120); // 2 minutes TTL
 
@@ -215,19 +207,17 @@ async function getRecentFiles(userId, limit = 10) {
     `SELECT f.id, f.name, f.type, f.size, f.modified, f.accessed_at AS "accessedAt",
             f.mime_type AS "mimeType", f.starred, f.shared, f.shared_at AS "sharedAt",
             CASE
-              WHEN NOT f.shared THEN NULL
-              WHEN EXISTS (
-                SELECT 1 FROM share_link_files slf
-                JOIN share_links sl ON sl.id = slf.share_id
-                WHERE slf.file_id = f.id AND sl.user_id = $1 AND sl.expires_at IS NULL
-              ) THEN NULL
-              ELSE (
-                SELECT MAX(sl.expires_at) FROM share_link_files slf
-                JOIN share_links sl ON sl.id = slf.share_id
-                WHERE slf.file_id = f.id AND sl.user_id = $1
-              )
+              WHEN NOT f.shared OR share_info.has_perpetual THEN NULL
+              ELSE share_info.expires_at
             END AS "expiresAt"
        FROM files f
+       LEFT JOIN LATERAL (
+         SELECT BOOL_OR(sl.expires_at IS NULL) AS has_perpetual,
+                MAX(sl.expires_at) AS expires_at
+           FROM share_link_files slf
+           JOIN share_links sl ON sl.id = slf.share_id
+          WHERE slf.file_id = f.id AND sl.user_id = $1
+       ) share_info ON f.shared
       WHERE f.user_id = $1
         AND f.deleted_at IS NULL
         AND f.type = 'file'

@@ -112,6 +112,9 @@ export interface AppContextType {
   removeSelectedFile: (id: string) => void;
   clearSelection: () => void;
   refreshFiles: () => Promise<void>;
+  hasMoreFiles: boolean;
+  isLoadingMore: boolean;
+  loadMoreFiles: () => Promise<void>;
   createFolder: (name: string) => Promise<void>;
   uploadFile: (file: File) => Promise<void>;
   moveFiles: (ids: string[], parentId: string | null) => Promise<void>;

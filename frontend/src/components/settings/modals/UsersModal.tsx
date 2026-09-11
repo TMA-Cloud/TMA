@@ -18,6 +18,9 @@ export interface UsersModalProps {
   onRefresh: () => void;
   onStorageUpdated?: () => void;
   currentUserId?: string;
+  hasMoreUsers?: boolean;
+  loadingMoreUsers?: boolean;
+  onLoadMore?: () => void;
 }
 
 /**
@@ -62,12 +65,26 @@ export const UsersModal: React.FC<UsersModalProps> = ({
   onRefresh,
   onStorageUpdated,
   currentUserId,
+  hasMoreUsers = false,
+  loadingMoreUsers = false,
+  onLoadMore,
 }) => {
   const { showToast } = useToast();
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState<string>('');
   const [editUnit, setEditUnit] = useState<StorageUnit>('GB');
   const [updating, setUpdating] = useState<string | null>(null);
+  const loadMoreRef = React.useRef<HTMLDivElement | null>(null);
+
+  React.useEffect(() => {
+    const sentinel = loadMoreRef.current;
+    if (!sentinel || !hasMoreUsers || !onLoadMore) return;
+    const observer = new IntersectionObserver(entries => {
+      if (entries[0]?.isIntersecting && !loadingMoreUsers) onLoadMore();
+    });
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMoreUsers, loadingMoreUsers, onLoadMore]);
 
   const accounts = useMemo(() => groupByAccount(usersList), [usersList]);
   const subUserCount = usersList.length - accounts.length;
@@ -392,6 +409,11 @@ export const UsersModal: React.FC<UsersModalProps> = ({
                 })}
               </tbody>
             </table>
+            {hasMoreUsers && (
+              <div ref={loadMoreRef} className="flex h-10 items-center justify-center" aria-hidden="true">
+                {loadingMoreUsers && <Loader2 className="h-4 w-4 animate-spin text-gray-500" />}
+              </div>
+            )}
           </div>
         )}
       </div>
