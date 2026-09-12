@@ -7,6 +7,30 @@ import type { ProgressState } from './helpers';
 
 type ToastType = 'success' | 'error' | 'info';
 
+type QueuedFileResult = Record<string, unknown> & { queued?: boolean; jobId?: string };
+
+const wait = (milliseconds: number) => new Promise(resolve => setTimeout(resolve, milliseconds));
+
+/** Poll a durable file job so worker failures are visible to the initiating UI. */
+async function waitForQueuedFileJob(initial: QueuedFileResult): Promise<QueuedFileResult> {
+  if (!initial.queued || typeof initial.jobId !== 'string') return initial;
+
+  const startedAt = Date.now();
+  let delay = 750;
+  for (;;) {
+    if (Date.now() - startedAt > 30 * 60 * 1000) throw new Error('Background file operation timed out');
+    await wait(delay);
+    const response = await fetch(`/api/files/jobs/${encodeURIComponent(initial.jobId)}`, {
+      credentials: 'include',
+      headers: { 'X-Requested-With': 'XMLHttpRequest' },
+    });
+    if (!response.ok) throw new Error(await extractResponseError(response));
+    const status = (await response.json()) as QueuedFileResult;
+    if (status.status === 'completed') return status;
+    delay = Math.min(5000, Math.ceil(delay * 1.6));
+  }
+}
+
 interface FileOperationsDeps {
   showToast: (message: string, type?: ToastType) => void;
   operationQueue: Pick<PromiseQueue, 'add'>;
@@ -86,6 +110,7 @@ export function useFileOperations({
         throw new Error(await extractResponseError(res));
       } else {
         result = (await res.json().catch(() => null)) as Record<string, unknown> | null;
+        if (result) result = await waitForQueuedFileJob(result as QueuedFileResult);
       }
 
       finalize();
@@ -139,6 +164,8 @@ export function useFileOperations({
         body: JSON.stringify({ ids, parentId }),
       });
       if (!res.ok) throw new Error(await extractResponseError(res));
+      const result = (await res.json()) as QueuedFileResult;
+      await waitForQueuedFileJob(result);
       await refreshFiles();
     });
   };

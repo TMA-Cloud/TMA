@@ -1,16 +1,16 @@
-import pool from '../../config/db.js';
 import { logger } from '../../config/logger.js';
 import { EventTypes, publishFileEventsBatch } from '../../services/fileEvents.js';
 import {
-  copyFiles as copyFilesModel,
   getFileInfo,
   getTargetFolderName,
   moveFiles as moveFilesModel,
   resolveTargetFolderId,
 } from '../../models/file.model.js';
+import { getBoss } from '../../services/auditLogger/queue.js';
+import { ACCOUNT_FILE_OPERATION_QUEUE } from '../../services/backgroundQueue.js';
 import { linkNewItemsToParentShare } from '../../services/shareLinking.js';
 import { userOperationLock } from '../../utils/mutex.js';
-import { sendSuccess } from '../../utils/response.js';
+import { sendError, sendSuccess } from '../../utils/response.js';
 import { logBulkFileAudit } from '../../utils/controllerHelpers.js';
 
 async function getPasteContext(req) {
@@ -66,42 +66,31 @@ async function moveFilesController(req, res) {
  */
 async function copyFilesController(req, res) {
   const { ids, actualParentId, fileNames, fileTypes, targetFolderName } = await getPasteContext(req);
+  const boss = getBoss();
+  if (!boss) return sendError(res, 503, 'Background worker queue is unavailable');
 
-  const newFileIds = await userOperationLock(req.ownerId, async () => {
-    return copyFilesModel(ids, actualParentId, req.ownerId);
-  });
+  // Copying a tree can require many server-side multipart object copies. The
+  // request only needs a durable handoff; the worker reports completion through
+  // the job-status endpoint and emits the normal file event afterwards.
+  const jobId = await boss.send(
+    ACCOUNT_FILE_OPERATION_QUEUE,
+    {
+      task: 'copy',
+      ids,
+      userId: req.ownerId,
+      parentId: actualParentId,
+      targetFolderName,
+    },
+    { singletonKey: req.ownerId }
+  );
 
   await logBulkFileAudit(
-    'file.copy',
-    { ids, fileNames, fileTypes, metadata: { targetParentId: actualParentId, targetFolderName } },
+    'file.copy.queued',
+    { ids, fileNames, fileTypes, metadata: { targetParentId: actualParentId, targetFolderName, jobId } },
     req
   );
-  logger.info({ fileIds: ids, fileNames, targetFolderName }, 'Files copied');
-
-  // Fetch the newly-created copies by their exact IDs (returned by the model)
-  // instead of guessing via name+type which is racy with concurrent operations.
-  const newFilesResult = await pool.query(
-    'SELECT id, name, type FROM files WHERE id = ANY($1::text[]) AND user_id = $2',
-    [newFileIds, req.ownerId]
-  );
-
-  await publishFileEventsBatch(
-    newFilesResult.rows.map(file => ({
-      eventType: EventTypes.FILE_COPIED,
-      eventData: {
-        id: file.id,
-        name: file.name,
-        type: file.type,
-        parentId: actualParentId,
-        targetFolderName,
-        userId: req.ownerId,
-      },
-    }))
-  );
-
-  await linkNewItemsToParentShare({ ownerId: req.ownerId, parentId: actualParentId, itemIds: newFileIds });
-
-  sendSuccess(res, { message: 'Files copied successfully.' });
+  logger.info({ fileIds: ids, fileNames, targetFolderName, jobId }, 'File copy queued');
+  sendSuccess(res, { message: 'Copy queued.', queued: true, jobId }, 202);
 }
 
 const moveFiles = moveFilesController;

@@ -15,3 +15,4 @@ export * from './file/file.operations.controller.js';
 export * from './file/file.metadata.controller.js';
 export * from './file/file.trash.controller.js';
 export * from './file/file.search.controller.js';
+export * from './file/file.jobs.controller.js';

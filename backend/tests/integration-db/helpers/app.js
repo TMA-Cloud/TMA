@@ -61,6 +61,21 @@ function client() {
   };
 }
 
+/** Wait for a 202 file mutation using the same authenticated test client. */
+async function waitForFileJob(c, response, timeoutMs = 10000) {
+  if (response.status !== 202 || !response.body?.jobId) return response.body;
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const status = await c.get(`/api/files/jobs/${response.body.jobId}`);
+    if (status.status === 200) return status.body;
+    if (status.status !== 202) throw new Error(`background file job failed (${status.status})`);
+    if (Date.now() >= deadline) throw new Error('background file job timed out');
+    await new Promise(resolve => {
+      setTimeout(resolve, 25);
+    });
+  }
+}
+
 /**
  * Sign up a fresh account and return a logged-in client.
  * @returns {Promise<{client, user, email, password}>}
@@ -119,4 +134,4 @@ async function createAndLogin(options = {}) {
   return { client: c, user: response.body.user, email: owner.email, password: owner.password };
 }
 
-export { api, buildApi, client, signUpAndLogin, loginAs, createAndLogin, ensureOwner };
+export { api, buildApi, client, signUpAndLogin, loginAs, createAndLogin, ensureOwner, waitForFileJob };

@@ -12,7 +12,7 @@ import { describe, expect, it } from 'vitest';
 
 import pool from '../../config/db.js';
 import { cleanupExpiredTrash } from '../../models/file/file.cleanup.model.js';
-import { ensureOwner } from './helpers/app.js';
+import { ensureOwner, waitForFileJob } from './helpers/app.js';
 import { countRows, readFileRow } from './helpers/factories.js';
 
 function upload(c, { name = 'notes.txt', bytes = 1000, parentId } = {}) {
@@ -66,7 +66,8 @@ describe('trash still occupies quota', () => {
     const fileId = await fileIdByName('notes.txt');
 
     await c.post('/api/files/delete').send({ ids: [fileId] });
-    await c.post('/api/files/trash/delete').send({ ids: [fileId] });
+    const purged = await c.post('/api/files/trash/delete').send({ ids: [fileId] });
+    await waitForFileJob(c, purged);
 
     expect(await usedBytes(c)).toBe(0);
   });

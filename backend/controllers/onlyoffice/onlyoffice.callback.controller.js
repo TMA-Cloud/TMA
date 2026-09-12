@@ -9,6 +9,7 @@ import { logger } from '../../config/logger.js';
 import { logAuditEvent } from '../../services/auditLogger.js';
 import { unregisterOpenDocument } from '../../services/onlyofficeAutoSave.js';
 import { EventTypes, publishFileEvent } from '../../services/fileEvents.js';
+import { enqueueObjectCleanup } from '../../services/objectCleanup.js';
 import storage from '../../utils/storageDriver.js';
 import {
   invalidateFileCache,
@@ -285,7 +286,7 @@ async function callback(req, res) {
         const uploadPromise = storage.putStream(temporaryPath, encryptStream);
         await Promise.all([pipeline(sourceStream, byteCounter, encryptStream), uploadPromise]);
       } catch (error) {
-        await storage.deleteObject(temporaryPath).catch(() => undefined);
+        await enqueueObjectCleanup(temporaryPath, 'onlyoffice-failed-upload').catch(() => undefined);
         if (error.code === 'STORAGE_LIMIT_EXCEEDED') {
           logger.warn(
             { fileId: validatedFileId },
@@ -333,7 +334,7 @@ async function callback(req, res) {
         await client.query('COMMIT');
       } catch (error) {
         await client.query('ROLLBACK');
-        await storage.deleteObject(temporaryPath).catch(() => undefined);
+        await enqueueObjectCleanup(temporaryPath, 'onlyoffice-failed-metadata-swap').catch(() => undefined);
         if (error.code === 'STORAGE_LIMIT_EXCEEDED') {
           logger.warn({ fileId: validatedFileId }, '[ONLYOFFICE] Concurrent save rejected by storage quota');
           return res.status(200).json({ error: 1 });
@@ -343,7 +344,7 @@ async function callback(req, res) {
         client.release();
       }
       if (replacedPath && replacedPath !== temporaryPath) {
-        await storage.deleteObject(replacedPath).catch(error => {
+        await enqueueObjectCleanup(replacedPath, 'onlyoffice-superseded-object').catch(error => {
           logger.warn({ err: error, replacedPath }, '[ONLYOFFICE] Could not remove superseded document object');
         });
       }

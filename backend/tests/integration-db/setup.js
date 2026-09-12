@@ -19,6 +19,10 @@ import { afterAll, beforeAll, beforeEach } from 'vitest';
 import pool from '../../config/db.js';
 import { resetStorageMock } from '../mocks/storage.mock.js';
 import { connectRedis, disconnectRedis, redisClient } from '../../config/redis.js';
+import { initializeAuditQueue, shutdownAuditQueue } from '../../services/auditLogger.js';
+import { ACCOUNT_FILE_OPERATION_QUEUE, OBJECT_CLEANUP_QUEUE } from '../../services/backgroundQueue.js';
+import { processFileOperation } from '../../services/fileOperationWorker.js';
+import { deleteQueuedObjects } from '../../services/objectCleanup.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const MIGRATIONS_DIR = path.join(__dirname, '..', '..', 'migrations');
@@ -77,6 +81,7 @@ const DATA_TABLES = [
   'share_link_files',
   'share_links',
   'files',
+  'file_operation_results',
   'app_settings',
   'users',
 ];
@@ -96,6 +101,9 @@ async function truncateAll() {
 beforeAll(async () => {
   await connectRedis();
   await runMigrations();
+  const boss = await initializeAuditQueue();
+  await boss.work(ACCOUNT_FILE_OPERATION_QUEUE, { batchSize: 1 }, async ([job]) => processFileOperation(job));
+  await boss.work(OBJECT_CLEANUP_QUEUE, { batchSize: 1 }, async ([job]) => deleteQueuedObjects(job.data));
 });
 
 beforeEach(async () => {
@@ -109,6 +117,7 @@ beforeEach(async () => {
 });
 
 afterAll(async () => {
+  await shutdownAuditQueue().catch(() => {});
   await disconnectRedis().catch(() => {});
   await pool.end().catch(() => {});
 });

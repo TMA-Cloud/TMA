@@ -32,17 +32,20 @@ import {
   ONLYOFFICE_FORCESAVE_QUEUE,
   ORPHAN_MAINTENANCE_QUEUE,
   FILE_OPERATION_QUEUE,
+  ACCOUNT_FILE_OPERATION_QUEUE,
+  OBJECT_CLEANUP_QUEUE,
   initializeBackgroundQueues,
 } from './services/backgroundQueue.js';
 import { cleanupExpiredTrash } from './models/file/file.cleanup.model.js';
-import { deleteFiles, permanentlyDeleteFiles, restoreFiles } from './models/file/file.trash.model.js';
 import { deleteOrphans, scanOrphans } from './models/file/file.orphan.model.js';
 import { cleanupExpiredShareLinks } from './models/share.model.js';
+import { cleanupOldSessions } from './models/session.model.js';
 import { purgeStaleHeartbeats } from './models/clientHeartbeat.model.js';
-import { cleanupOldAuditLogs } from './services/cleanup.js';
+import { cleanupOldAuditLogs, cleanupOldFileOperationResults } from './services/cleanup.js';
 import { forceSaveDocument } from './services/onlyofficeAutoSave.js';
-import { EventTypes, publishFileEventsBatch } from './services/fileEvents.js';
 import { cleanupExpiredStorageReservations } from './services/storageReservations.js';
+import { deleteQueuedObjects } from './services/objectCleanup.js';
+import { processFileOperation } from './services/fileOperationWorker.js';
 
 const logger = createRequestLogger({ service: 'background-worker' });
 
@@ -249,46 +252,13 @@ async function processMaintenanceJob(job) {
       return purgeStaleHeartbeats(10);
     case MAINTENANCE_TASKS.RESERVATIONS:
       return cleanupExpiredStorageReservations();
+    case MAINTENANCE_TASKS.SESSIONS:
+      return cleanupOldSessions();
+    case MAINTENANCE_TASKS.OPERATION_RESULTS:
+      return cleanupOldFileOperationResults();
     default:
       throw new Error(`Unknown maintenance task: ${job.data?.task}`);
   }
-}
-
-async function processFileOperation(job) {
-  const { task, ids = [], userId } = job.data || {};
-  if (task === 'continue-trash-cleanup') {
-    const result = await cleanupExpiredTrash();
-    if (result.hasMore) {
-      await boss.send(FILE_OPERATION_QUEUE, { task }, { startAfter: 60 });
-    }
-    return result;
-  }
-  if (!userId) throw new Error('Missing file-operation userId');
-  let count;
-  let eventType;
-  if (task === 'trash') {
-    count = await deleteFiles(ids, userId);
-    eventType = EventTypes.FILE_DELETED;
-  } else if (task === 'restore') {
-    count = await restoreFiles(ids, userId);
-    eventType = EventTypes.FILE_RESTORED;
-  } else if (task === 'delete-permanently') {
-    count = await permanentlyDeleteFiles(ids, userId);
-    eventType = EventTypes.FILE_PERMANENTLY_DELETED;
-  } else if (task === 'empty-trash') {
-    count = await permanentlyDeleteFiles([], userId, { allTrash: true });
-    eventType = EventTypes.FILE_PERMANENTLY_DELETED;
-  } else {
-    throw new Error(`Unknown file operation: ${task}`);
-  }
-  await publishFileEventsBatch([
-    {
-      eventType,
-      userId,
-      eventData: { userId, action: task, count: count || 0 },
-    },
-  ]);
-  return { count: count || 0 };
 }
 
 /**
@@ -347,7 +317,23 @@ async function initializeWorker() {
       FILE_OPERATION_QUEUE,
       { batchSize: 1, localConcurrency: Math.min(2, CONCURRENCY) },
       async ([job]) => {
-        await processFileOperation(job);
+        await processFileOperation(job, { boss });
+      }
+    );
+
+    await boss.work(
+      ACCOUNT_FILE_OPERATION_QUEUE,
+      { batchSize: 1, localConcurrency: Math.min(4, CONCURRENCY) },
+      async ([job]) => {
+        return processFileOperation(job);
+      }
+    );
+
+    await boss.work(
+      OBJECT_CLEANUP_QUEUE,
+      { batchSize: 1, localConcurrency: Math.min(4, CONCURRENCY) },
+      async ([job]) => {
+        return deleteQueuedObjects(job.data);
       }
     );
 

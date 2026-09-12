@@ -38,11 +38,13 @@ const putStream = vi.fn(
     })
 );
 const deleteObject = vi.fn(async () => {});
+const deleteObjects = vi.fn(async keys => ({ deleted: keys, errors: [] }));
 
 vi.mock('../../../utils/storageDriver.js', () => ({
   default: {
     putStream: (...args) => putStream(...args),
     deleteObject: (...args) => deleteObject(...args),
+    deleteObjects: (...args) => deleteObjects(...args),
   },
 }));
 
@@ -93,6 +95,7 @@ function run(mode, files) {
 beforeEach(() => {
   putStream.mockClear();
   deleteObject.mockClear();
+  deleteObjects.mockClear();
 });
 
 describe('streamUploadToS3', () => {
@@ -225,7 +228,10 @@ describe('streamUploadToS3', () => {
 
     expect(req.streamedUploads).toEqual([]);
     expect(req.streamedUploadFailures.map(f => f.error)).toEqual(['Upload failed']);
-    expect(deleteObject).toHaveBeenCalled();
+    await new Promise(resolve => {
+      setImmediate(resolve);
+    });
+    expect(deleteObjects).toHaveBeenCalled();
   });
 
   /**
@@ -273,7 +279,10 @@ describe('streamUploadToS3', () => {
     req._s3UploadedKeys.push('already-there.pdf');
     req.emit('aborted');
 
-    expect(deleteObject).toHaveBeenCalledWith('already-there.pdf');
+    await new Promise(resolve => {
+      setImmediate(resolve);
+    });
+    expect(deleteObjects).toHaveBeenCalledWith(['already-there.pdf']);
     expect(req._s3UploadedKeys).toEqual([]);
   });
 

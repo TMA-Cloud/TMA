@@ -41,6 +41,7 @@ const handlerNames = [
   'downloadFilesBulk',
   'emptyTrash',
   'getFileInfo',
+  'getFileJob',
   'getFileStats',
   'getShareLinks',
   'linkParentShare',
@@ -116,6 +117,7 @@ describe('browse routes are open to every member of the account', () => {
     ['get', '/api/files/shared'],
     ['get', '/api/files/trash'],
     ['get', `/api/files/${ID}/info`],
+    ['get', `/api/files/jobs/${ID}`],
     ['get', '/api/files/events'],
   ];
 

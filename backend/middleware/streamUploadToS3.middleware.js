@@ -14,6 +14,7 @@ import Busboy from 'busboy';
 
 import { logger } from '../config/logger.js';
 import { getMaxUploadSizeSettings } from '../models/user.model.js';
+import { enqueueObjectCleanup } from '../services/objectCleanup.js';
 import { createByteCountStream, createEncryptStream, newWrappedDek } from '../utils/fileEncryption.js';
 import { generateId } from '../utils/id.js';
 import { createMimeSniffStream } from '../utils/mimeTypeDetection.js';
@@ -24,11 +25,9 @@ import storage from '../utils/storageDriver.js';
  * @param {string[]} keys - S3 storage keys to remove
  */
 function cleanupS3Keys(keys) {
-  for (const key of keys) {
-    storage.deleteObject(key).catch(err => {
-      logger.warn({ err, storageName: key }, '[StreamUpload] Failed to clean up orphaned S3 object');
-    });
-  }
+  void enqueueObjectCleanup(keys, 'stream-upload-abandoned').catch(err => {
+    logger.warn({ err, count: keys.length }, '[StreamUpload] Failed to queue orphaned S3 object cleanup');
+  });
 }
 
 /**

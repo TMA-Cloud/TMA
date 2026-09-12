@@ -10,6 +10,7 @@ import {
   downloadFilesBulk,
   emptyTrash,
   getFileInfo,
+  getFileJob,
   getFileStats,
   getShareLinks,
   linkParentShare,
@@ -80,6 +81,7 @@ router.get('/recent', listRecent);
 router.get('/starred', listStarred);
 router.get('/shared', listShared);
 router.get('/trash', listTrash);
+router.get('/jobs/:jobId', getFileJob);
 
 // Everything below needs an explicit grant. Each guard runs before any upload
 // middleware so a rejected request never streams its body.

@@ -92,7 +92,7 @@ function allocateUniqueName(desiredName, occupiedNames) {
  * The tree is planned with one recursive read, object-store copies happen with
  * bounded concurrency, and the database transaction contains inserts only.
  */
-async function copyFiles(ids, parentId = null, userId) {
+async function copyFiles(ids, parentId = null, userId, { operationId = null } = {}) {
   if (!Array.isArray(ids) || ids.length === 0) return [];
   const client = await pool.connect();
   let reservationId = null;
@@ -116,6 +116,18 @@ async function copyFiles(ids, parentId = null, userId) {
   };
 
   try {
+    if (operationId) {
+      const completed = await client.query(
+        `SELECT output FROM file_operation_results
+          WHERE job_id = $1 AND user_id = $2 AND task = 'copy'`,
+        [operationId, userId]
+      );
+      if (completed.rows.length > 0) {
+        await invalidateAllFileCaches(userId, parentId);
+        return completed.rows[0].output?.ids || [];
+      }
+    }
+
     await client.query(
       `CREATE TEMP TABLE copy_stage ON COMMIT PRESERVE ROWS AS
        WITH RECURSIVE tree AS (
@@ -129,7 +141,9 @@ async function copyFiles(ids, parentId = null, userId) {
            FROM files child JOIN tree ON child.parent_id = tree.id
           WHERE child.user_id = $2 AND child.deleted_at IS NULL AND NOT child.id = ANY(tree.ancestors)
        ), planned AS (
-         SELECT tree.*, SUBSTRING(MD5(RANDOM()::text || id || root_order::text), 1, 16) AS new_id
+         SELECT tree.*,
+                SUBSTRING(MD5(COALESCE($3::text, RANDOM()::text) || ':' || id || ':' || root_order::text), 1, 16)
+                  AS new_id
            FROM tree
        )
        SELECT id AS source_id, parent_id AS source_parent_id, root_order, depth,
@@ -139,7 +153,7 @@ async function copyFiles(ids, parentId = null, userId) {
                    ELSE NULL END AS new_path,
               NULL::text AS new_parent_id, starred, modified, dek_wrapped, dek_kek_version
          FROM planned`,
-      [ids, userId]
+      [ids, userId, operationId]
     );
     stageCreated = true;
     const countResult = await client.query('SELECT COUNT(*)::integer AS count FROM copy_stage');
@@ -252,9 +266,18 @@ async function copyFiles(ids, parentId = null, userId) {
       [userId]
     );
     await releaseStorageReservation(reservationId, client);
+    const copiedIds = roots.rows.map(entry => entry.new_id);
+    if (operationId) {
+      await client.query(
+        `INSERT INTO file_operation_results(job_id, user_id, task, output)
+         VALUES($1, $2, 'copy', $3::jsonb)
+         ON CONFLICT (job_id) DO NOTHING`,
+        [operationId, userId, JSON.stringify({ ids: copiedIds, count: copiedIds.length })]
+      );
+    }
     await client.query('COMMIT');
     await invalidateAllFileCaches(userId, parentId);
-    return roots.rows.map(entry => entry.new_id);
+    return copiedIds;
   } catch (error) {
     await client.query('ROLLBACK').catch(() => undefined);
     await releaseStorageReservation(reservationId).catch(() => undefined);

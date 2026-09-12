@@ -13,7 +13,7 @@ import {
   DEFAULT_TTL,
 } from '../../utils/cache.js';
 import { generateId } from '../../utils/id.js';
-import storage from '../../utils/storageDriver.js';
+import { enqueueObjectCleanup } from '../../services/objectCleanup.js';
 
 import { buildKeysetPage, buildOrderClause, finishKeysetPage, getUniqueDbFileName } from './file.utils.model.js';
 
@@ -478,11 +478,9 @@ async function replaceFileDataWithStorageKey(id, size, mimeType, newStorageKey, 
 
   // Drop the old object (best-effort).
   if (oldFile.path && oldFile.path !== newStorageKey) {
-    storage
-      .deleteObject(oldFile.path)
-      .catch(err =>
-        logger.warn({ err, storageName: oldFile.path }, '[File] Failed to delete old object after replace')
-      );
+    enqueueObjectCleanup(oldFile.path, 'replaced-file-object').catch(err =>
+      logger.warn({ err, storageName: oldFile.path }, '[File] Failed to delete old object after replace')
+    );
   }
 
   // Clear the cached file record or downloads 404 on the old path until TTL.

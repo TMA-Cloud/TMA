@@ -1,27 +1,20 @@
 import { logger } from '../../config/logger.js';
 import { logAuditEvent } from '../../services/auditLogger.js';
 import { EventTypes, publishFileEventsBatch } from '../../services/fileEvents.js';
-import {
-  deleteFiles,
-  countFileTree,
-  getFileInfo,
-  getTrashFiles,
-  permanentlyDeleteFiles,
-  restoreFiles,
-} from '../../models/file.model.js';
+import { deleteFiles, countFileTree, getFileInfo, getTrashFiles, restoreFiles } from '../../models/file.model.js';
 import { getBoss } from '../../services/auditLogger/queue.js';
-import { FILE_OPERATION_QUEUE } from '../../services/backgroundQueue.js';
+import { ACCOUNT_FILE_OPERATION_QUEUE } from '../../services/backgroundQueue.js';
 import { sendError, sendSuccess } from '../../utils/response.js';
 import { validateSortBy, validateSortOrder } from '../../utils/validation.js';
 import { logBulkFileAudit, wantsProgressStream, streamBulkProgress } from '../../utils/controllerHelpers.js';
 
 const ASYNC_TREE_THRESHOLD = 1000;
 
-async function enqueueLargeTreeOperation(task, ids, userId, count) {
-  if (count <= ASYNC_TREE_THRESHOLD) return null;
+async function enqueueTreeOperation(task, ids, userId, count, { force = false } = {}) {
+  if (!force && count <= ASYNC_TREE_THRESHOLD) return null;
   const boss = getBoss();
   if (!boss) return null;
-  return boss.send(FILE_OPERATION_QUEUE, { task, ids, userId });
+  return boss.send(ACCOUNT_FILE_OPERATION_QUEUE, { task, ids, userId }, { singletonKey: userId });
 }
 
 /**
@@ -42,7 +35,7 @@ async function deleteFilesController(req, res) {
     return { message: 'Files moved to trash.' };
   };
 
-  const queuedJobId = await enqueueLargeTreeOperation('trash', ids, req.ownerId, treeCount);
+  const queuedJobId = await enqueueTreeOperation('trash', ids, req.ownerId, treeCount);
   if (queuedJobId) {
     await logBulkFileAudit('file.delete.queued', { ids, fileNames, fileTypes, metadata: { treeCount } }, req);
     return sendSuccess(res, { message: 'Move to trash queued.', queued: true, jobId: queuedJobId }, 202);
@@ -89,7 +82,7 @@ async function restoreFilesController(req, res) {
     return sendError(res, 404, 'No files found in trash to restore');
   }
 
-  const queuedJobId = await enqueueLargeTreeOperation('restore', ids, req.ownerId, treeCount);
+  const queuedJobId = await enqueueTreeOperation('restore', ids, req.ownerId, treeCount);
   if (queuedJobId) {
     await logBulkFileAudit('file.restore.queued', { ids, fileNames, fileTypes, metadata: { treeCount } }, req);
     return sendSuccess(res, { message: 'Restore queued.', queued: true, jobId: queuedJobId }, 202);
@@ -137,45 +130,15 @@ async function deleteForeverController(req, res) {
   const fileNames = fileInfo.map(f => f.name);
   const fileTypes = fileInfo.map(f => f.type);
 
-  const finalize = async () => {
-    // Log permanent deletion with details
-    await logBulkFileAudit('file.delete.permanent', { ids, fileNames, fileTypes, metadata: { permanent: true } }, req);
-    logger.info({ fileIds: ids, fileNames }, 'Files permanently deleted');
-
-    // Publish file permanently deleted events in batch (optimized)
-    await publishFileEventsBatch(
-      fileInfo.map(file => ({
-        eventType: EventTypes.FILE_PERMANENTLY_DELETED,
-        eventData: {
-          id: file.id,
-          name: file.name,
-          type: file.type,
-          parentId: file.parentId || null,
-          userId: req.ownerId,
-          permanent: true,
-        },
-      }))
-    );
-
-    return { message: 'Files permanently deleted.' };
-  };
-
-  const queuedJobId = await enqueueLargeTreeOperation('delete-permanently', ids, req.ownerId, treeCount);
+  // Physical object deletion is retryable, potentially multi-batch I/O and is
+  // not needed to validate the request. Always hand it to the durable worker.
+  const queuedJobId = await enqueueTreeOperation('delete-permanently', ids, req.ownerId, treeCount, { force: true });
   if (queuedJobId) {
     await logBulkFileAudit('file.delete.permanent.queued', { ids, fileNames, fileTypes, metadata: { treeCount } }, req);
     return sendSuccess(res, { message: 'Permanent deletion queued.', queued: true, jobId: queuedJobId }, 202);
   }
 
-  if (wantsProgressStream(req)) {
-    return streamBulkProgress(res, {
-      ids,
-      processChunk: chunk => permanentlyDeleteFiles(chunk, req.ownerId),
-      finalize,
-    });
-  }
-
-  await permanentlyDeleteFiles(ids, req.ownerId);
-  sendSuccess(res, await finalize());
+  return sendError(res, 503, 'Background worker queue is unavailable');
 }
 
 /**
@@ -186,7 +149,11 @@ async function emptyTrashController(req, res) {
   if (treeCount === 0) return sendSuccess(res, { message: 'Trash is already empty' });
   const boss = getBoss();
   if (!boss) return sendError(res, 503, 'Background worker queue is unavailable');
-  const jobId = await boss.send(FILE_OPERATION_QUEUE, { task: 'empty-trash', ids: [], userId: req.ownerId });
+  const jobId = await boss.send(
+    ACCOUNT_FILE_OPERATION_QUEUE,
+    { task: 'empty-trash', ids: [], userId: req.ownerId },
+    { singletonKey: req.ownerId }
+  );
   await logAuditEvent(
     'file.delete.permanent.queued',
     {

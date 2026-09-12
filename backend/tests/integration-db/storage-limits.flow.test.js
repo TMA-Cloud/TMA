@@ -11,7 +11,7 @@ import { describe, expect, it } from 'vitest';
 
 import pool from '../../config/db.js';
 import { PERMISSIONS } from '../../utils/permissions.js';
-import { ensureOwner, loginAs } from './helpers/app.js';
+import { ensureOwner, loginAs, waitForFileJob } from './helpers/app.js';
 import { countRows } from './helpers/factories.js';
 
 const KB = 1024;
@@ -80,7 +80,8 @@ describe('quota enforcement on upload', () => {
 
     const { rows } = await pool.query("SELECT id FROM files WHERE type = 'file'");
     await c.post('/api/files/delete').send({ ids: [rows[0].id] });
-    await c.post('/api/files/trash/delete').send({ ids: [rows[0].id] });
+    const purged = await c.post('/api/files/trash/delete').send({ ids: [rows[0].id] });
+    await waitForFileJob(c, purged);
 
     expect((await upload(c, { name: 'b.txt', bytes: 4 * KB })).status).toBeLessThan(400);
   });

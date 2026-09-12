@@ -231,13 +231,24 @@ async function deleteAllUserSessions(userId) {
  * @param {number} daysOld - Delete sessions older than this many days
  * @returns {Promise<number>} Number of sessions deleted
  */
-async function cleanupOldSessions(daysOld = 30) {
-  const result = await pool.query(
-    `DELETE FROM sessions
-     WHERE created_at < NOW() - INTERVAL '1 day' * $1`,
-    [daysOld]
-  );
-  const deletedCount = result.rowCount || 0;
+async function cleanupOldSessions(daysOld = 30, { batchSize = 5000, maxBatches = 20 } = {}) {
+  let deletedCount = 0;
+  for (let batch = 0; batch < maxBatches; batch += 1) {
+    const result = await pool.query(
+      `WITH doomed AS (
+         SELECT id FROM sessions
+          WHERE created_at < NOW() - INTERVAL '1 day' * $1
+          ORDER BY created_at, id
+          LIMIT $2
+       )
+       DELETE FROM sessions s USING doomed
+        WHERE s.id = doomed.id`,
+      [daysOld, batchSize]
+    );
+    const deleted = result.rowCount || 0;
+    deletedCount += deleted;
+    if (deleted < batchSize) break;
+  }
   if (deletedCount > 0) {
     logger.info({ deletedCount, daysOld }, 'Cleaned up old sessions');
   }

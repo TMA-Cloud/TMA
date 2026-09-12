@@ -6,10 +6,10 @@ import { getUserStorageLimit, getUserStorageUsage } from '../../models/user.mode
 import { validateParentId } from '../../utils/controllerHelpers.js';
 import { userOperationLock } from '../../utils/mutex.js';
 import { sendError, sendSuccess } from '../../utils/response.js';
-import storage from '../../utils/storageDriver.js';
 import { checkStorageLimitExceeded } from '../../utils/storageUtils.js';
 import { validateClientMtime, validateFileName, validateFileUpload } from '../../utils/validation.js';
 import { linkNewItemsToParentShare } from '../../services/shareLinking.js';
+import { enqueueObjectCleanup } from '../../services/objectCleanup.js';
 import { enforceStorageLimitForUpload } from './file.upload.helpers.js';
 
 /**
@@ -102,11 +102,9 @@ async function replaceFileContents(req, res) {
     if (req._s3UploadedKeys) {
       req._s3UploadedKeys = req._s3UploadedKeys.filter(k => k !== upload.storageName);
     }
-    storage
-      .deleteObject(upload.storageName)
-      .catch(err =>
-        logger.warn({ err, storageName: upload.storageName }, 'Failed to delete orphaned S3 object after replace')
-      );
+    enqueueObjectCleanup(upload.storageName, 'replace-upload-discarded').catch(err =>
+      logger.warn({ err, storageName: upload.storageName }, 'Failed to delete orphaned S3 object after replace')
+    );
   };
 
   try {

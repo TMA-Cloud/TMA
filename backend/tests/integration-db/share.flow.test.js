@@ -9,7 +9,7 @@ import pool from '../../config/db.js';
 import { redisClient } from '../../config/redis.js';
 import { cacheKeys } from '../../utils/cache.js';
 import { createShareLink, cleanupExpiredShareLinks } from '../../models/share.model.js';
-import { api, ensureOwner } from './helpers/app.js';
+import { api, ensureOwner, waitForFileJob } from './helpers/app.js';
 import { countRows, makeFile, makeFolder } from './helpers/factories.js';
 
 /** Collect a response body as a Buffer, for binary downloads. */
@@ -275,7 +275,8 @@ describe('revoking', () => {
     const token = await share(c, fileId);
 
     await c.post('/api/files/delete').send({ ids: [fileId] });
-    await c.post('/api/files/trash/delete').send({ ids: [fileId] });
+    const purged = await c.post('/api/files/trash/delete').send({ ids: [fileId] });
+    await waitForFileJob(c, purged);
 
     expect((await visitor().get(`/s/${token}`)).status).toBe(404);
   });

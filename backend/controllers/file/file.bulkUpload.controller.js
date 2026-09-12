@@ -5,9 +5,9 @@ import { createFilesFromStreamedUploads } from '../../models/file.model.js';
 import { validateParentId } from '../../utils/controllerHelpers.js';
 import { collectUploadParts, extractFolderSegmentsFromRelativePath, metadataForPart } from '../../utils/uploadParts.js';
 import { sendError, sendSuccess } from '../../utils/response.js';
-import storage from '../../utils/storageDriver.js';
 import { validateFileName, validateFileUpload } from '../../utils/validation.js';
 import { linkNewItemsToParentShare } from '../../services/shareLinking.js';
+import { enqueueObjectCleanup } from '../../services/objectCleanup.js';
 import { ensureFolderPath } from './file.upload.helpers.js';
 
 /** New item ids created by a bulk upload: the files plus any folders it made. */
@@ -80,14 +80,12 @@ async function uploadFilesBulk(req, res) {
         if (req._s3UploadedKeys) {
           req._s3UploadedKeys = req._s3UploadedKeys.filter(k => k !== upload.storageName);
         }
-        storage
-          .deleteObject(upload.storageName)
-          .catch(cleanupErr =>
-            logger.warn(
-              { err: cleanupErr, storageName: upload.storageName },
-              'Failed to delete orphaned S3 object after bulk upload failure'
-            )
-          );
+        await enqueueObjectCleanup(upload.storageName, 'bulk-upload-planning-failure').catch(cleanupErr =>
+          logger.warn(
+            { err: cleanupErr, storageName: upload.storageName },
+            'Failed to delete orphaned S3 object after bulk upload failure'
+          )
+        );
       }
       const failure = { fileName: upload.name, error: err?.message || 'Upload failed' };
       failed.push(clientId ? { ...failure, clientId } : failure);
@@ -115,11 +113,9 @@ async function uploadFilesBulk(req, res) {
       logger.debug({ count: successful.length }, 'Bulk upload metadata committed');
     } catch (err) {
       const keys = planned.map(entry => entry.upload.storageName).filter(Boolean);
-      await storage
-        .deleteObjects(keys)
-        .catch(cleanupErr =>
-          logger.warn({ err: cleanupErr, count: keys.length }, 'Failed to clean up objects after bulk metadata failure')
-        );
+      await enqueueObjectCleanup(keys, 'bulk-upload-metadata-failure').catch(cleanupErr =>
+        logger.warn({ err: cleanupErr, count: keys.length }, 'Failed to clean up objects after bulk metadata failure')
+      );
       if (req._s3UploadedKeys) {
         const rejected = new Set(keys);
         req._s3UploadedKeys = req._s3UploadedKeys.filter(key => !rejected.has(key));

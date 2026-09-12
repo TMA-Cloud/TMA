@@ -6,10 +6,12 @@
  */
 
 import { exists, readStoredBuffer } from '../mocks/storage.mock.js';
+import { randomUUID } from 'crypto';
 import { describe, expect, it } from 'vitest';
 
 import pool from '../../config/db.js';
-import { createAndLogin, signUpAndLogin } from './helpers/app.js';
+import { processFileOperation } from '../../services/fileOperationWorker.js';
+import { createAndLogin, signUpAndLogin, waitForFileJob } from './helpers/app.js';
 import { countRows, readFileRow } from './helpers/factories.js';
 
 /** Upload a buffer through the real multipart endpoint. */
@@ -301,6 +303,19 @@ describe('move', () => {
 });
 
 describe('copy', () => {
+  it('does not duplicate a committed copy when pg-boss retries the job', async () => {
+    const { client: c, user } = await signUpAndLogin();
+    await upload(c, { name: 'notes.txt', content: 'copy once' });
+    const source = (await pool.query("SELECT id FROM files WHERE type = 'file'")).rows[0];
+    const job = { id: randomUUID(), data: { task: 'copy', ids: [source.id], userId: user.id } };
+
+    const first = await processFileOperation(job);
+    const retry = await processFileOperation(job);
+
+    expect(retry).toEqual(first);
+    expect(await countRows('files', "WHERE type = 'file'")).toBe(2);
+  });
+
   it('produces a second independent row', async () => {
     const { client: c } = await signUpAndLogin();
     const folderId = await createFolder(c, 'Target');
@@ -310,6 +325,7 @@ describe('copy', () => {
     const res = await c.post('/api/files/copy').send({ ids: [rows[0].id], parentId: folderId });
 
     expect(res.status).toBeLessThan(400);
+    await waitForFileJob(c, res);
     expect(await countRows('files', "WHERE type = 'file'")).toBe(2);
   });
 
@@ -319,7 +335,8 @@ describe('copy', () => {
     await upload(c, { name: 'notes.txt', content: 'copy me' });
     const original = (await pool.query("SELECT id, path FROM files WHERE type = 'file'")).rows[0];
 
-    await c.post('/api/files/copy').send({ ids: [original.id], parentId: folderId });
+    const copied = await c.post('/api/files/copy').send({ ids: [original.id], parentId: folderId });
+    await waitForFileJob(c, copied);
 
     const { rows } = await pool.query("SELECT path FROM files WHERE type = 'file'");
     expect(new Set(rows.map(r => r.path)).size).toBe(2);
@@ -331,7 +348,8 @@ describe('copy', () => {
     await upload(c, { name: 'notes.txt', content: 'copy me exactly' });
     const original = (await pool.query("SELECT id FROM files WHERE type = 'file'")).rows[0];
 
-    await c.post('/api/files/copy').send({ ids: [original.id], parentId: folderId });
+    const copied = await c.post('/api/files/copy').send({ ids: [original.id], parentId: folderId });
+    await waitForFileJob(c, copied);
     const copy = (await pool.query("SELECT id FROM files WHERE type = 'file' AND id <> $1", [original.id])).rows[0];
 
     const res = await c
@@ -430,6 +448,7 @@ describe('trash lifecycle', () => {
     const res = await c.post('/api/files/trash/delete').send({ ids: [file.id] });
 
     expect(res.status).toBeLessThan(400);
+    await waitForFileJob(c, res);
     expect(await readFileRow(file.id)).toBeUndefined();
     expect(await exists(file.path)).toBe(false);
   });
@@ -443,10 +462,9 @@ describe('trash lifecycle', () => {
     await c.post('/api/files/delete').send({ ids: rows.map(r => r.id) });
     const queued = await c.post('/api/files/trash/empty').send({});
 
-    // The integration server intentionally does not start pg-boss; production
-    // queues this operation and this fixture verifies the safe unavailable path.
-    expect(queued.status).toBe(503);
-    expect(await countRows('files', "WHERE type = 'file' AND deleted_at IS NOT NULL")).toBe(2);
+    expect(queued.status).toBe(202);
+    await waitForFileJob(c, queued);
+    expect(await countRows('files', "WHERE type = 'file' AND deleted_at IS NOT NULL")).toBe(0);
   });
 
   it('frees the quota once a file is purged', async () => {
@@ -455,7 +473,8 @@ describe('trash lifecycle', () => {
     const { rows } = await pool.query("SELECT id FROM files WHERE type = 'file'");
 
     await c.post('/api/files/delete').send({ ids: [rows[0].id] });
-    await c.post('/api/files/trash/delete').send({ ids: [rows[0].id] });
+    const purged = await c.post('/api/files/trash/delete').send({ ids: [rows[0].id] });
+    await waitForFileJob(c, purged);
 
     const usage = await c.get('/api/user/storage');
     expect(Number(usage.body.used ?? usage.body.storageUsed)).toBe(0);
