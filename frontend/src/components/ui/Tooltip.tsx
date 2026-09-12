@@ -14,6 +14,8 @@ let lastShownAt = 0;
 interface TooltipProps {
   text: string;
   children: ReactNode;
+  /** Override the anchor's layout when its width must follow a parent constraint. */
+  anchorClassName?: string;
 }
 
 interface Position {
@@ -24,7 +26,7 @@ interface Position {
 
 // Portaled to document.body with fixed positioning so it escapes every
 // overflow/sticky/stacking ancestor (a sticky toolbar would otherwise shear it).
-export const Tooltip: React.FC<TooltipProps> = ({ text, children }) => {
+export const Tooltip: React.FC<TooltipProps> = ({ text, children, anchorClassName = 'inline-block' }) => {
   // mounted keeps it in the DOM through the fade-out; visible drives opacity/scale.
   const [mounted, setMounted] = useState(false);
   const [visible, setVisible] = useState(false);
@@ -113,7 +115,7 @@ export const Tooltip: React.FC<TooltipProps> = ({ text, children }) => {
   return (
     <span
       ref={anchorRef}
-      className="relative inline-block"
+      className={`relative ${anchorClassName}`}
       onMouseEnter={() => show(false)}
       onMouseLeave={hide}
       // Keyboard focus is a commitment — no delay.

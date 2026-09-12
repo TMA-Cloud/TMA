@@ -73,4 +73,16 @@ describe('RecentFiles', () => {
 
     expect(within(row).getByText('2KB')).toBeInTheDocument();
   });
+
+  it('constrains long names to the available row width', () => {
+    const longName = `${'very-long-file-name-'.repeat(12)}.png`;
+    const { container } = render(<RecentFiles files={[file({ name: longName })]} />);
+    const row = container.querySelector('.space-y-0\\.5 > div') as HTMLElement;
+    const name = within(row).getByText(longName);
+    const tooltipAnchor = name.parentElement as HTMLElement;
+
+    expect(row).toHaveClass('w-full', 'min-w-0', 'overflow-hidden');
+    expect(tooltipAnchor).toHaveClass('block', 'w-full', 'min-w-0');
+    expect(name).toHaveClass('w-full', 'truncate');
+  });
 });
