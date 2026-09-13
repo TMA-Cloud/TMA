@@ -4,19 +4,12 @@ A self-hosted cloud storage platform with file storage and management capabiliti
 
 ## Features
 
-- **Authentication** --- JWT-based auth with optional Google OAuth and MFA
-- **Signup Control** --- Self-hosted deployments can control user registration
-- **Sub-users** --- Extra logins that share one account's files with its own permissions
-- **File Management** --- Upload, download, organize, and manage files and folders
-- **Sharing** --- Create shareable links for files and folders
-- **Custom Share Domain** --- Dedicated domain for share links to isolate traffic
-- **Document Editing** --- OnlyOffice integration for online document editing
-- **Redis Caching** --- High-performance caching layer for improved response times
-- **Modern UI** --- React + TypeScript frontend with Tailwind CSS
-- **PostgreSQL** --- Robust database with automatic migrations
-- **Background Services** --- Durable worker background jobs
-- **Orphan Review** --- Screen to review and clean up orphaned files and broken records
-- **Audit Logging** --- Comprehensive audit trail with queue-based event tracking
+- **[Encrypted storage](https://tma-cloud.github.io/Wiki/docs/concepts/file-system#storage)** --- Encrypt files with AES-256-GCM in any S3-compatible bucket
+- **[Windows cloud drive](https://tma-cloud.github.io/Wiki/docs/getting-started/desktop-app#cloud-drive-mounted-windows-drive)** --- Open and save cloud files from any Windows app
+- **[Document editing](https://tma-cloud.github.io/Wiki/docs/getting-started/desktop-app#open-on-desktop)** --- Edit with OnlyOffice or desktop apps and sync changes back
+- **[Controlled sharing](https://tma-cloud.github.io/Wiki/docs/concepts/sharing-model)** --- Create read-only links with expiry and a separate domain
+- **[Sub-user access](https://tma-cloud.github.io/Wiki/docs/guides/user/sub-users)** --- Give each login separate permissions over the same files
+- **[Large-file workflows](https://tma-cloud.github.io/Wiki/docs/concepts/file-system#large-file-handling)** --- Stream transfers and queue bulk file operations
 
 ## Quick Start
 
