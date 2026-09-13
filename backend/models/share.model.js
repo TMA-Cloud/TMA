@@ -107,6 +107,10 @@ async function upsertShareRoots(rootIds, userId, expiresAt) {
     await Promise.all([
       ...shareIds.map(shareId => invalidateShareCache(shareId, userId)),
       ...rootIds.map(rootId => deleteCache(cacheKeys.shareLink(rootId, userId))),
+      // Sharing changes fields returned by My Files, Shared, search, and stats.
+      // Drop those cache-aside entries only after the transaction commits so
+      // the next request repopulates them from the committed rows.
+      invalidateAllFileCaches(userId, null, { includeStorage: false }),
     ]);
     return {
       tokens,

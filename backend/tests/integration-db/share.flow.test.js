@@ -82,6 +82,30 @@ describe('creating a share link', () => {
     expect(new Date(listedFile.expiresAt).getTime()).toBe(new Date(info.body.expiresAt).getTime());
   });
 
+  it('refreshes warmed My Files and Shared listings immediately', async () => {
+    const { client: c } = await ensureOwner();
+    const fileId = await uploadFile(c, { name: 'cached-file.txt' });
+    const folder = await c.post('/api/files/folder').send({ name: 'Cached Folder' });
+    const folderId = folder.body.folder?.id || folder.body.id;
+
+    // Reproduce the UI sequence: both list endpoints are cached before the
+    // share mutation, then the UI requests them again immediately afterwards.
+    const beforeMyFiles = await c.get('/api/files').query({ sortBy: 'name', order: 'asc', limit: 200 });
+    const beforeShared = await c.get('/api/files/shared').query({ sortBy: 'name', order: 'asc', limit: 200 });
+    expect(beforeMyFiles.body.find(item => item.id === fileId)?.shared).toBe(false);
+    expect(beforeMyFiles.body.find(item => item.id === folderId)?.shared).toBe(false);
+    expect(beforeShared.body).toEqual([]);
+
+    const response = await c.post('/api/files/share').send({ ids: [fileId, folderId], shared: true });
+    expect(response.status).toBe(200);
+
+    const afterMyFiles = await c.get('/api/files').query({ sortBy: 'name', order: 'asc', limit: 200 });
+    const afterShared = await c.get('/api/files/shared').query({ sortBy: 'name', order: 'asc', limit: 200 });
+    expect(afterMyFiles.body.find(item => item.id === fileId)?.shared).toBe(true);
+    expect(afterMyFiles.body.find(item => item.id === folderId)?.shared).toBe(true);
+    expect(new Set(afterShared.body.map(item => item.id))).toEqual(new Set([fileId, folderId]));
+  });
+
   it('returns a link on the configured origin', async () => {
     const { client: c } = await ensureOwner();
     const fileId = await uploadFile(c);
