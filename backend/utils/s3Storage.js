@@ -21,6 +21,16 @@ import fs from 'fs';
 
 import { logger } from '../config/logger.js';
 import { s3 as s3Config } from '../config/storage.js';
+import { MAX_MAX_UPLOAD_BYTES } from '../config/uploadLimits.js';
+import { plaintextSizeToCiphertextSize } from './fileEncryption.js';
+import {
+  DEFAULT_COPY_PART_SIZE,
+  DEFAULT_UPLOAD_PART_SIZE,
+  multipartPartSizeFor,
+  requiresMultipart,
+} from './storageSizing.js';
+
+const MAX_ENCRYPTED_UPLOAD_BYTES = plaintextSizeToCiphertextSize(MAX_MAX_UPLOAD_BYTES);
 
 let s3Client = null;
 
@@ -89,15 +99,9 @@ async function getReadStream(key, range) {
  * @returns {Promise<void>}
  */
 async function putFromPath(key, localPath) {
-  const client = getClient();
+  const { size } = await fs.promises.stat(localPath);
   const body = fs.createReadStream(localPath);
-  await client.send(
-    new PutObjectCommand({
-      Bucket: s3Config.bucket,
-      Key: key,
-      Body: body,
-    })
-  );
+  await putStream(key, body, size);
 }
 
 /**
@@ -107,47 +111,50 @@ async function putFromPath(key, localPath) {
  * @returns {Promise<void>}
  */
 async function putBuffer(key, buffer) {
-  const client = getClient();
-  await client.send(
-    new PutObjectCommand({
-      Bucket: s3Config.bucket,
-      Key: key,
-      Body: buffer,
-    })
-  );
+  await putStream(key, buffer, buffer.byteLength);
 }
 
 /**
- * Upload from stream (unknown length: use Upload/multipart to avoid x-amz-decoded-content-length).
+ * Upload a body using a portable single request when possible and multipart
+ * otherwise. Unknown-length streams use the largest application object as the
+ * sizing hint so they cannot unexpectedly run through S3/R2's 10,000-part cap.
  * @param {string} key - Object key
- * @param {import('stream').Readable} stream - Readable stream
- * @param {number} [contentLength] - Optional content length (if known, uses PutObject; else Upload)
+ * @param {import('stream').Readable|Buffer|Uint8Array} body - Upload body
+ * @param {number} [contentLength] - Exact byte length, when known
+ * @param {number} [maximumLength] - Upper bound for an unknown-length body
  * @returns {Promise<void>}
  */
-async function putStream(key, stream, contentLength) {
+async function putStream(key, body, contentLength, maximumLength = MAX_ENCRYPTED_UPLOAD_BYTES) {
   const client = getClient();
+  let exactLength;
+  if (contentLength != null) {
+    exactLength = Number(contentLength);
+    if (!Number.isSafeInteger(exactLength) || exactLength < 0) {
+      throw new TypeError('Content length must be a non-negative safe integer');
+    }
+  }
 
-  if (contentLength != null && contentLength >= 0) {
+  if (exactLength != null && !requiresMultipart(exactLength)) {
     await client.send(
       new PutObjectCommand({
         Bucket: s3Config.bucket,
         Key: key,
-        Body: stream,
-        ContentLength: contentLength,
+        Body: body,
+        ContentLength: exactLength,
       })
     );
     return;
   }
 
+  const sizeHint = exactLength ?? Number(maximumLength);
+  const partSize = multipartPartSizeFor(sizeHint, DEFAULT_UPLOAD_PART_SIZE);
+  const params = { Bucket: s3Config.bucket, Key: key, Body: body };
+  if (exactLength != null) params.ContentLength = exactLength;
   const upload = new Upload({
     client,
-    params: {
-      Bucket: s3Config.bucket,
-      Key: key,
-      Body: stream,
-    },
+    params,
     queueSize: 4,
-    partSize: 5 * 1024 * 1024,
+    partSize,
     leavePartsOnError: false,
   });
   await upload.done();
@@ -198,63 +205,51 @@ async function deleteObjects(keys) {
  * @param {string} destKey - Destination object key
  * @returns {Promise<void>}
  */
-async function copyObject(sourceKey, destKey, knownSourceSize) {
+async function multipartCopyObject(sourceKey, destKey, sourceSize) {
   const client = getClient();
   const source = `${s3Config.bucket}/${encodeURIComponent(sourceKey)}`;
-  let sourceSize = Number(knownSourceSize);
-  if (!Number.isSafeInteger(sourceSize) || sourceSize < 0) {
-    const sourceMetadata = await statObject(sourceKey);
-    if (!sourceMetadata) throw Object.assign(new Error('Source object not found'), { name: 'NoSuchKey' });
-    sourceSize = sourceMetadata.size;
+  const size = Number(sourceSize);
+  if (!Number.isSafeInteger(size) || size <= 0) {
+    throw new TypeError('Multipart copy source size must be a positive safe integer');
   }
-
-  // CopyObject is limited to 5 GiB. Keep small copies to one server-side
-  // request and use multipart UploadPartCopy for larger objects, so bytes never
-  // traverse this application process.
-  const COPY_OBJECT_LIMIT = 5 * 1024 ** 3;
-  if (sourceSize <= COPY_OBJECT_LIMIT) {
-    await client.send(
-      new CopyObjectCommand({
-        Bucket: s3Config.bucket,
-        CopySource: source,
-        Key: destKey,
-      })
-    );
-    return;
-  }
-
-  const PART_SIZE = 256 * 1024 ** 2;
+  const partSize = multipartPartSizeFor(size, DEFAULT_COPY_PART_SIZE);
   const created = await client.send(new CreateMultipartUploadCommand({ Bucket: s3Config.bucket, Key: destKey }));
   const uploadId = created.UploadId;
   if (!uploadId) throw new Error('Object store did not return a multipart upload id');
 
   try {
     const ranges = [];
-    for (let start = 0, partNumber = 1; start < sourceSize; start += PART_SIZE, partNumber += 1) {
-      const end = Math.min(start + PART_SIZE, sourceSize) - 1;
+    for (let start = 0, partNumber = 1; start < size; start += partSize, partNumber += 1) {
+      const end = Math.min(start + partSize, size) - 1;
       ranges.push({ start, end, partNumber });
     }
     const parts = [];
     let next = 0;
+    let firstError = null;
     const workers = Array.from({ length: Math.min(4, ranges.length) }, async () => {
-      while (next < ranges.length) {
+      while (!firstError && next < ranges.length) {
         const { start, end, partNumber } = ranges[next++];
-        const copied = await client.send(
-          new UploadPartCopyCommand({
-            Bucket: s3Config.bucket,
-            Key: destKey,
-            UploadId: uploadId,
-            PartNumber: partNumber,
-            CopySource: source,
-            CopySourceRange: `bytes=${start}-${end}`,
-          })
-        );
-        const ETag = copied.CopyPartResult?.ETag;
-        if (!ETag) throw new Error(`Object store did not return an ETag for copied part ${partNumber}`);
-        parts.push({ ETag, PartNumber: partNumber });
+        try {
+          const copied = await client.send(
+            new UploadPartCopyCommand({
+              Bucket: s3Config.bucket,
+              Key: destKey,
+              UploadId: uploadId,
+              PartNumber: partNumber,
+              CopySource: source,
+              CopySourceRange: `bytes=${start}-${end}`,
+            })
+          );
+          const ETag = copied.CopyPartResult?.ETag;
+          if (!ETag) throw new Error(`Object store did not return an ETag for copied part ${partNumber}`);
+          parts.push({ ETag, PartNumber: partNumber });
+        } catch (error) {
+          firstError ||= error;
+        }
       }
     });
     await Promise.all(workers);
+    if (firstError) throw firstError;
     parts.sort((a, b) => a.PartNumber - b.PartNumber);
     await client.send(
       new CompleteMultipartUploadCommand({
@@ -270,6 +265,23 @@ async function copyObject(sourceKey, destKey, knownSourceSize) {
       .catch(abortError => logger.warn({ err: abortError, destKey }, '[S3] Failed to abort multipart copy'));
     throw error;
   }
+}
+
+async function copyObject(sourceKey, destKey, knownSourceSize) {
+  const client = getClient();
+  const source = `${s3Config.bucket}/${encodeURIComponent(sourceKey)}`;
+  let sourceSize = Number(knownSourceSize);
+  if (!Number.isSafeInteger(sourceSize) || sourceSize < 0) {
+    const sourceMetadata = await statObject(sourceKey);
+    if (!sourceMetadata) throw Object.assign(new Error('Source object not found'), { name: 'NoSuchKey' });
+    sourceSize = sourceMetadata.size;
+  }
+
+  if (!requiresMultipart(sourceSize)) {
+    await client.send(new CopyObjectCommand({ Bucket: s3Config.bucket, CopySource: source, Key: destKey }));
+    return;
+  }
+  await multipartCopyObject(sourceKey, destKey, sourceSize);
 }
 
 /**
@@ -383,6 +395,7 @@ export {
   deleteObject,
   deleteObjects,
   copyObject,
+  multipartCopyObject,
   listKeys,
   listKeysPaginated,
   listObjectsPaginated,

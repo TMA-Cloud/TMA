@@ -17,15 +17,18 @@ import { s3 } from '../../config/storage.js';
 import {
   copyObject,
   deleteObject,
+  deleteObjects,
   exists,
   getReadStream,
   listObjectsPaginated,
+  multipartCopyObject,
   putBuffer,
   putFromPath,
   putStream,
   statObject,
 } from '../../utils/s3Storage.js';
 import { createDecryptStreamFromStream, createEncryptStream } from '../../utils/fileEncryption.js';
+import { DEFAULT_UPLOAD_PART_SIZE } from '../../utils/storageSizing.js';
 
 /** Unique to this run, so concurrent runs and leftover data cannot interfere. */
 const PREFIX = `tma-test/${Date.now().toString(36)}-${crypto.randomBytes(4).toString('hex')}`;
@@ -51,9 +54,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   // Best effort: a failed test must not leave objects behind.
-  for (const k of written) {
-    await deleteObject(k).catch(() => {});
-  }
+  await deleteObjects([...written]).catch(() => {});
   await fs.rm(tmpDir, { recursive: true, force: true });
 });
 
@@ -94,6 +95,16 @@ describe('putBuffer and getReadStream', () => {
 
     expect(Buffer.compare(await collect(await getReadStream(k)), payload)).toBe(0);
   });
+
+  it('returns exactly an inclusive byte range', async () => {
+    const k = key('range.bin');
+    const payload = crypto.randomBytes(64 * 1024);
+    await putBuffer(k, payload);
+
+    const ranged = await collect(await getReadStream(k, { start: 123, end: 4567 }));
+
+    expect(Buffer.compare(ranged, payload.subarray(123, 4568))).toBe(0);
+  });
 });
 
 describe('exists', () => {
@@ -117,12 +128,13 @@ describe('putStream', () => {
     expect((await collect(await getReadStream(k))).toString('utf8')).toBe('chunk-achunk-b');
   });
 
-  it('uploads a payload large enough to exercise multipart', async () => {
+  it('uploads an unknown-length payload through genuine multipart', async () => {
     const k = key('large.bin');
-    const payload = crypto.randomBytes(6 * 1024 * 1024);
-    await putStream(k, Readable.from([payload]), payload.length);
+    const payload = crypto.randomBytes(DEFAULT_UPLOAD_PART_SIZE + 1024);
+    await putStream(k, Readable.from([payload]));
 
     expect((await statObject(k)).size).toBe(payload.length);
+    expect(Buffer.compare(await collect(await getReadStream(k)), payload)).toBe(0);
   });
 });
 
@@ -158,6 +170,17 @@ describe('copyObject', () => {
 
     expect(await exists(src)).toBe(true);
   });
+
+  it('duplicates an object through the multipart-copy API sequence', async () => {
+    const src = key('multipart-copy-source.bin');
+    const dst = key('multipart-copy-dest.bin');
+    const payload = crypto.randomBytes(6 * 1024 * 1024);
+    await putBuffer(src, payload);
+
+    await multipartCopyObject(src, dst, payload.length);
+
+    expect(Buffer.compare(await collect(await getReadStream(dst)), payload)).toBe(0);
+  });
 });
 
 describe('deleteObject', () => {
@@ -172,6 +195,21 @@ describe('deleteObject', () => {
 
   it('is not an error to delete something that is already gone', async () => {
     await expect(deleteObject(`${PREFIX}/never-existed.bin`)).resolves.not.toThrow();
+  });
+});
+
+describe('deleteObjects', () => {
+  it('deletes a batch and tolerates duplicate and missing keys', async () => {
+    const first = key('batch-delete-a.bin');
+    const second = key('batch-delete-b.bin');
+    const missing = `${PREFIX}/batch-delete-missing.bin`;
+    await Promise.all([putBuffer(first, Buffer.from('a')), putBuffer(second, Buffer.from('b'))]);
+
+    const result = await deleteObjects([first, second, first, missing]);
+
+    expect(result.errors).toEqual([]);
+    expect(result.deleted).toEqual(expect.arrayContaining([first, second, missing]));
+    await expect(Promise.all([exists(first), exists(second)])).resolves.toEqual([false, false]);
   });
 });
 

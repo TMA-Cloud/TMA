@@ -25,6 +25,7 @@ vi.mock('../../../utils/fileEncryption.js', () => ({
     });
     return { stream, getByteCount: () => byteCount };
   },
+  plaintextSizeToCiphertextSize: size => size + 40,
   // Every upload is enveloped: the middleware mints a DEK and carries the wrap.
   newWrappedDek: () => ({ dek: Buffer.alloc(32), dekWrapped: Buffer.alloc(60), kekVersion: 1 }),
 }));

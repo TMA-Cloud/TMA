@@ -15,7 +15,12 @@ import Busboy from 'busboy';
 import { logger } from '../config/logger.js';
 import { getMaxUploadSizeSettings } from '../models/user.model.js';
 import { enqueueObjectCleanup } from '../services/objectCleanup.js';
-import { createByteCountStream, createEncryptStream, newWrappedDek } from '../utils/fileEncryption.js';
+import {
+  createByteCountStream,
+  createEncryptStream,
+  newWrappedDek,
+  plaintextSizeToCiphertextSize,
+} from '../utils/fileEncryption.js';
 import { generateId } from '../utils/id.js';
 import { createMimeSniffStream } from '../utils/mimeTypeDetection.js';
 import storage from '../utils/storageDriver.js';
@@ -245,7 +250,8 @@ function streamUploadToS3(singleOrBulk = 'single') {
           // Capture both outcomes as values so the verdict waits for each — a put
           // can report success before the chain's abort surfaces, and judging on
           // whichever lands first would store a truncated file as a whole one.
-          const putSettled = storage.putStream(storageName, encryptStream).then(
+          const maximumCiphertextSize = plaintextSizeToCiphertextSize(maxFileSize);
+          const putSettled = storage.putStream(storageName, encryptStream, undefined, maximumCiphertextSize).then(
             () => null,
             err => err
           );

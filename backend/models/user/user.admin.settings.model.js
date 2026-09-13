@@ -1,5 +1,6 @@
 import pool from '../../config/db.js';
 import { logger } from '../../config/logger.js';
+import { DEFAULT_MAX_UPLOAD_BYTES, MAX_MAX_UPLOAD_BYTES, MIN_MAX_UPLOAD_BYTES } from '../../config/uploadLimits.js';
 import { getCache, setCache, deleteCache, cacheKeys, DEFAULT_TTL } from '../../utils/cache.js';
 import { normalizeOnlyOfficeUrl } from '../../utils/onlyofficeUrl.js';
 // Re-export from the canonical service to avoid duplication
@@ -170,13 +171,6 @@ async function setShareBaseUrlSettings(url, userId) {
     client.release();
   }
 }
-
-/** Default max single-file upload size (10GB) when not set in DB */
-const DEFAULT_MAX_UPLOAD_BYTES = 10 * 1024 * 1024 * 1024;
-
-/** Min 1MB, max 100GB */
-const MIN_MAX_UPLOAD_BYTES = 1024 * 1024;
-const MAX_MAX_UPLOAD_BYTES = 100 * 1024 * 1024 * 1024;
 
 async function getMaxUploadSizeSettings() {
   const cacheKey = cacheKeys.maxUploadSizeSettings();
