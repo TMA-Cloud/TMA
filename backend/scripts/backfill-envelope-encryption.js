@@ -48,7 +48,10 @@ import { isTransientError, withRetries } from './lib/rotation-resilience.js';
 const DEFAULT_CONCURRENCY = 8;
 const DB_PAGE_SIZE = 500;
 
-const NEEDS_BACKFILL_WHERE = "type = 'file' AND deleted_at IS NULL AND path IS NOT NULL AND dek_wrapped IS NULL";
+// Include trashed rows as well: they still own storage objects and can be
+// restored, so a complete one-time upgrade must not leave them on the legacy
+// master-key path.
+const NEEDS_BACKFILL_WHERE = "type = 'file' AND path IS NOT NULL AND dek_wrapped IS NULL";
 
 /** Concurrency from `--concurrency N` (falls back to the default). */
 function parseConcurrency() {

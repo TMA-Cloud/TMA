@@ -22,6 +22,7 @@ import { pipeline } from 'stream/promises';
 
 import pool from '../config/db.js';
 import { logger } from '../config/logger.js';
+import { resolveIkmForPath } from '../models/file/file.dek.model.js';
 import storage from '../utils/storageDriver.js';
 import {
   createByteCountStream,
@@ -184,9 +185,8 @@ async function main() {
     process.exit(1);
   }
 
-  let masterKey;
   try {
-    masterKey = getEncryptionKey();
+    getEncryptionKey();
   } catch (err) {
     console.error('Failed to load FILE_ENCRYPTION_KEY:', err?.message || err);
     process.exit(1);
@@ -194,9 +194,7 @@ async function main() {
 
   console.log(`Storage driver: s3`);
   console.log('Connecting to database and fetching file list...');
-  const res = await pool.query(
-    "SELECT id, path FROM files WHERE type = 'file' AND deleted_at IS NULL AND path IS NOT NULL"
-  );
+  const res = await pool.query("SELECT id, path FROM files WHERE type = 'file' AND path IS NOT NULL");
   const rows = res.rows;
   if (!rows.length) {
     console.log('No files found to migrate. Nothing to do.');
@@ -235,11 +233,16 @@ async function main() {
       if (!row) break;
       const key = row.path;
       try {
-        if (await withRetries(() => isAlreadyStreaming(key, masterKey), { onRetry: onRetry(`check id=${row.id}`) })) {
+        // Current installations can contain both pre-envelope objects (master
+        // key) and per-file envelope objects (DEK). Resolve the row's actual
+        // IKM before checking it so already-current envelope objects are not
+        // mistaken for legacy ciphertext.
+        const ikm = await resolveIkmForPath(key);
+        if (await withRetries(() => isAlreadyStreaming(key, ikm), { onRetry: onRetry(`check id=${row.id}`) })) {
           skipped += 1;
         } else {
           const startedAt = Date.now();
-          const bytes = await withRetries(() => convertS3(key, masterKey), {
+          const bytes = await withRetries(() => convertS3(key, ikm), {
             onRetry: onRetry(`id=${row.id}`),
           });
           migrated += 1;

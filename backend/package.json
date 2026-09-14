@@ -16,6 +16,7 @@
     "s3:versioning": "node scripts/s3-bucket-versioning.js",
     "s3:encryption": "node scripts/s3-bucket-encryption.js",
     "migrate:streaming": "node scripts/migrate-to-streaming-encryption.js",
+    "migrate:sizes": "node scripts/reconcile-encrypted-file-sizes.js",
     "rotate:kek": "node scripts/rotate-kek.js",
     "backfill:envelope": "node scripts/backfill-envelope-encryption.js",
     "test": "vitest run",
