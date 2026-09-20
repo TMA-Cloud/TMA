@@ -30,6 +30,7 @@ describe('startup', () => {
       'app:downloadAndInstallUpdate',
       'app:getVersion',
       'app:setTheme',
+      'clipboard:cancelUpload',
       'clipboard:peekFileNames',
       'clipboard:readFiles',
       'clipboard:uploadFiles',

@@ -11,6 +11,11 @@ import {
   type UploadProgressItem,
 } from '../../utils/uploadUtils';
 import { appendClientMtime } from '../../utils/folderUpload';
+import {
+  cancelElectronClipboardUpload,
+  subscribeToElectronClipboardUploadProgress,
+  subscribeToElectronClipboardUploadStatus,
+} from '../../utils/electronDesktop';
 import { runWithConcurrency, throttleTrailing } from '../../utils/scheduling';
 import { formatBytes } from '../../utils/storageUtils';
 import {
@@ -52,6 +57,8 @@ export function useUploads({
   const uploadXhrRef = useRef<Map<string, XMLHttpRequest>>(new Map());
   /** Every request belonging to a batched upload, so one Cancel stops all of them. */
   const uploadGroupRef = useRef<Map<string, { xhrs: Set<XMLHttpRequest>; cancelled: boolean }>>(new Map());
+  /** Cards backed by an Electron clipboard upload: Cancel has to abort those over IPC. */
+  const clipboardUploadIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     isUploadProgressInteractingRef.current = isUploadProgressInteracting;
@@ -84,6 +91,21 @@ export function useUploads({
       showToast(msg, 'error');
       throw e;
     }
+  };
+
+  /** Auto-dismiss a finished card, quicker when it succeeded, never mid-interaction. */
+  const scheduleUploadDismiss = (uploadId: string, isSuccess: boolean) => {
+    const timeout = isSuccess
+      ? createAutoDismissTimeout(
+          uploadId,
+          isUploadProgressInteractingRef,
+          setUploadProgress,
+          uploadDismissTimeoutsRef,
+          3000,
+          2000
+        )
+      : createAutoDismissTimeout(uploadId, isUploadProgressInteractingRef, setUploadProgress, uploadDismissTimeoutsRef);
+    uploadDismissTimeoutsRef.current.set(uploadId, timeout);
   };
 
   const executeXhrUpload = (config: {
@@ -124,24 +146,7 @@ export function useUploads({
         }
       });
 
-      const scheduleAutoDismiss = (isSuccess: boolean) => {
-        const timeout = isSuccess
-          ? createAutoDismissTimeout(
-              uploadId,
-              isUploadProgressInteractingRef,
-              setUploadProgress,
-              uploadDismissTimeoutsRef,
-              3000,
-              2000
-            )
-          : createAutoDismissTimeout(
-              uploadId,
-              isUploadProgressInteractingRef,
-              setUploadProgress,
-              uploadDismissTimeoutsRef
-            );
-        uploadDismissTimeoutsRef.current.set(uploadId, timeout);
-      };
+      const scheduleAutoDismiss = (isSuccess: boolean) => scheduleUploadDismiss(uploadId, isSuccess);
 
       const handleError = (fallbackMsg: string) => {
         setUploadProgress(prev => updateUploadProgress(prev, uploadId, { status: 'error' }));
@@ -207,6 +212,59 @@ export function useUploads({
       uploadDismissTimeoutsRef.current.clear();
     }
   }, [isUploadProgressInteracting]);
+
+  // A clipboard paste uploads in Electron's main process, so there is no XHR
+  // here to hang progress off; these two subscriptions feed the same cards.
+  useEffect(() => {
+    const stopStatus = subscribeToElectronClipboardUploadStatus(payload => {
+      // End of a paste: the reasons belong in the same dialog a bulk upload fills.
+      if (payload.state === 'finished') {
+        if (payload.failed.length > 0) reportUploadFailures(payload.failed, payload.saved);
+        return;
+      }
+
+      const { id } = payload;
+      if (!id) return;
+
+      if (payload.state === 'started') {
+        clipboardUploadIdsRef.current.add(id);
+        setUploadProgress(prev => [
+          ...prev.filter(item => item.id !== id),
+          { id, fileName: payload.fileName, fileSize: payload.fileSize ?? 0, progress: 0, status: 'uploading' },
+        ]);
+        return;
+      }
+
+      clipboardUploadIdsRef.current.delete(id);
+      if (payload.state === 'completed') {
+        setUploadProgress(prev => updateUploadProgress(prev, id, { progress: 100, status: 'completed' }));
+        debouncedRefreshFiles(false);
+      } else {
+        setUploadProgress(prev => updateUploadProgress(prev, id, { status: 'error' }));
+      }
+      scheduleUploadDismiss(id, payload.state === 'completed');
+    });
+
+    const stopProgress = subscribeToElectronClipboardUploadProgress(({ id, loaded, total }) => {
+      if (!(total > 0)) return;
+      const progress = getInFlightUploadProgress(loaded, total);
+      // At 99% the bytes are sent and the backend is finalizing; say so.
+      const status: UploadProgressItem['status'] = progress >= 99 ? 'finalizing' : 'uploading';
+      setUploadProgress(prev =>
+        prev.map(item =>
+          item.id === id && (item.status === 'uploading' || item.status === 'finalizing')
+            ? { ...item, progress, status }
+            : item
+        )
+      );
+    });
+
+    return () => {
+      stopStatus();
+      stopProgress();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const uploadFile = async (file: File) => {
     return operationQueue.add(async () => {
@@ -315,24 +373,7 @@ export function useUploads({
         setUploadProgress(prev => updateUploadProgress(prev, aggregateId, { progress, status }));
       }, BULK_PROGRESS_THROTTLE_MS);
 
-      const scheduleAggregateDismiss = (isSuccess: boolean) => {
-        const timeout = isSuccess
-          ? createAutoDismissTimeout(
-              aggregateId,
-              isUploadProgressInteractingRef,
-              setUploadProgress,
-              uploadDismissTimeoutsRef,
-              3000,
-              2000
-            )
-          : createAutoDismissTimeout(
-              aggregateId,
-              isUploadProgressInteractingRef,
-              setUploadProgress,
-              uploadDismissTimeoutsRef
-            );
-        uploadDismissTimeoutsRef.current.set(aggregateId, timeout);
-      };
+      const scheduleAggregateDismiss = (isSuccess: boolean) => scheduleUploadDismiss(aggregateId, isSuccess);
 
       const sendBatch = (batch: typeof normalized, batchIndex: number) =>
         new Promise<void>((resolve, reject) => {
@@ -521,6 +562,13 @@ export function useUploads({
   };
 
   const cancelUpload = (uploadId: string) => {
+    // Clipboard uploads stream from the main process; abort them over IPC.
+    if (clipboardUploadIdsRef.current.delete(uploadId)) {
+      void cancelElectronClipboardUpload(uploadId);
+      setUploadProgress(prev => removeUploadProgress(prev, uploadId));
+      debouncedRefreshFiles(true);
+      return;
+    }
     if (cancelUploadBatchGroup(uploadId)) {
       setUploadProgress(prev => removeUploadProgress(prev, uploadId));
       debouncedRefreshFiles(true);

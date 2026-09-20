@@ -10,6 +10,13 @@
 /** Cloud drive behavior: 'full' = files openable; 'saveOnly' = browse + Save-As, content reads denied. */
 export type CloudDriveMode = 'full' | 'saveOnly';
 
+/** One event per file as its card opens and closes, then a summary per paste. */
+export type ClipboardUploadStatus =
+  | { state: 'started'; id: string; fileName: string; fileSize?: number }
+  | { state: 'completed'; id: string; fileName: string }
+  | { state: 'error'; id: string; fileName: string; error?: string }
+  | { state: 'finished'; batchId: string; saved: number; failed: { fileName: string; reason: string }[] };
+
 declare global {
   interface Window {
     electronAPI?: {
@@ -25,18 +32,27 @@ declare global {
         readFiles: () => Promise<{
           files: { name: string; mime: string; data: string }[];
         }>;
+        // A refused file lands in `failed`, not in `ok`: see onUploadStatus.
         uploadFiles?: (payload: { origin: string; parentId: string | null }) => Promise<{
           ok: boolean;
           fallback?: boolean;
           names?: string[];
+          failed?: { fileName: string; reason: string }[];
           error?: string;
         }>;
         uploadVirtualFiles?: (payload: { origin: string; parentId: string | null }) => Promise<{
           ok: boolean;
           empty?: boolean;
           names?: string[];
+          failed?: { fileName: string; reason: string }[];
           error?: string;
         }>;
+        /** Abort an in-flight clipboard upload by its upload id. */
+        cancelUpload?: (uploadId: string) => Promise<{ ok: boolean }>;
+        /** Per-file card events, then one `finished` summary per paste. */
+        onUploadStatus?: (callback: (payload: ClipboardUploadStatus) => void) => () => void;
+        /** Byte progress for an in-flight clipboard upload; `id` matches onUploadStatus. */
+        onUploadProgress?: (callback: (payload: { id: string; loaded: number; total: number }) => void) => () => void;
         writeFiles: (paths: string[]) => Promise<{ ok: boolean; error?: string }>;
         writeFilesFromData: (payload: {
           files: { name: string; data: string }[];
@@ -352,6 +368,42 @@ export function subscribeToElectronSaveProgress(
   const api = typeof window !== 'undefined' ? window.electronAPI : undefined;
   if (!isElectron() || !api?.files?.onSaveProgress) return () => {};
   return api.files.onSaveProgress(callback);
+}
+
+/**
+ * Subscribe to clipboard upload cards opening and closing in the main process.
+ * Returns an unsubscribe function; no-op on the web.
+ */
+export function subscribeToElectronClipboardUploadStatus(
+  callback: (payload: ClipboardUploadStatus) => void
+): () => void {
+  const api = typeof window !== 'undefined' ? window.electronAPI : undefined;
+  if (!isElectron() || !api?.clipboard?.onUploadStatus) return () => {};
+  return api.clipboard.onUploadStatus(callback);
+}
+
+/**
+ * Subscribe to byte progress for an in-flight clipboard upload, keyed by the id
+ * from the status event. Returns an unsubscribe function.
+ */
+export function subscribeToElectronClipboardUploadProgress(
+  callback: (payload: { id: string; loaded: number; total: number }) => void
+): () => void {
+  const api = typeof window !== 'undefined' ? window.electronAPI : undefined;
+  if (!isElectron() || !api?.clipboard?.onUploadProgress) return () => {};
+  return api.clipboard.onUploadProgress(callback);
+}
+
+/** Abort a clipboard upload running in the main process. True when it was still in flight. */
+export async function cancelElectronClipboardUpload(uploadId: string): Promise<boolean> {
+  const api = typeof window !== 'undefined' ? window.electronAPI : undefined;
+  if (!isElectron() || !api?.clipboard?.cancelUpload) return false;
+  try {
+    const result = await api.clipboard.cancelUpload(uploadId);
+    return !!result?.ok;
+  } catch {
+    return false;
+  }
 }
 
 /**

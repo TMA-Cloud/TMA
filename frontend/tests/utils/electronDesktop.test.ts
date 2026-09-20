@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   MAX_COPY_TO_PC_BYTES,
   base64ToFile,
+  cancelElectronClipboardUpload,
   copyFilesToPcClipboard,
   editFileWithDesktopElectron,
   getElectronAppVersion,
@@ -16,6 +17,8 @@ import {
   saveFileViaElectron,
   saveFilesBulkViaElectron,
   setElectronCloudDriveMode,
+  subscribeToElectronClipboardUploadProgress,
+  subscribeToElectronClipboardUploadStatus,
   subscribeToUpdateDownloadProgress,
 } from '../../src/utils/electronDesktop';
 
@@ -267,6 +270,47 @@ describe('clipboard bridge', () => {
 
   it('caps "Copy to computer" at 200 MB', () => {
     expect(MAX_COPY_TO_PC_BYTES).toBe(200 * 1024 * 1024);
+  });
+});
+
+describe('clipboard upload progress bridge', () => {
+  it('passes the status and progress subscriptions through to the bridge', () => {
+    const stopStatus = vi.fn();
+    const stopProgress = vi.fn();
+    const api = installElectron();
+    api.clipboard.onUploadStatus = vi.fn(() => stopStatus);
+    api.clipboard.onUploadProgress = vi.fn(() => stopProgress);
+
+    expect(subscribeToElectronClipboardUploadStatus(vi.fn())).toBe(stopStatus);
+    expect(subscribeToElectronClipboardUploadProgress(vi.fn())).toBe(stopProgress);
+  });
+
+  it('returns harmless no-ops in a browser, so the hook can subscribe unconditionally', () => {
+    expect(() => subscribeToElectronClipboardUploadStatus(vi.fn())()).not.toThrow();
+    expect(() => subscribeToElectronClipboardUploadProgress(vi.fn())()).not.toThrow();
+  });
+
+  it('cancels an in-flight clipboard upload by id', async () => {
+    const api = installElectron();
+    api.clipboard.cancelUpload = vi.fn(async () => ({ ok: true }));
+
+    expect(await cancelElectronClipboardUpload('clip-1')).toBe(true);
+    expect(api.clipboard.cancelUpload).toHaveBeenCalledWith('clip-1');
+  });
+
+  it('reports false when the upload already settled, or the bridge throws', async () => {
+    const api = installElectron();
+    api.clipboard.cancelUpload = vi.fn(async () => ({ ok: false }));
+    expect(await cancelElectronClipboardUpload('clip-1')).toBe(false);
+
+    api.clipboard.cancelUpload = vi.fn(async () => {
+      throw new Error('gone');
+    });
+    expect(await cancelElectronClipboardUpload('clip-1')).toBe(false);
+  });
+
+  it('reports false in a browser', async () => {
+    expect(await cancelElectronClipboardUpload('clip-1')).toBe(false);
   });
 });
 

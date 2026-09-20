@@ -103,7 +103,24 @@ class FakeClientRequest extends EventEmitter {
     this.body = [];
     this.destroyed = false;
     this._ended = false;
+    this._chunkedEncoding = false;
     state.netRequests.push(this);
+  }
+
+  /**
+   * Electron buffers the whole body unless this is set, and refuses to set it
+   * once bytes are written. A streaming upload that forgets it is not
+   * streaming, so the double holds the same line.
+   */
+  get chunkedEncoding() {
+    return this._chunkedEncoding;
+  }
+
+  set chunkedEncoding(value) {
+    if (this.body.length > 0) {
+      throw new Error('chunkedEncoding can only be set before the first write');
+    }
+    this._chunkedEncoding = value;
   }
 
   setHeader(name, value) {
@@ -115,6 +132,13 @@ class FakeClientRequest extends EventEmitter {
   }
 
   write(chunk) {
+    // Electron throws once a request is aborted or destroyed; a double that
+    // accepted late writes would hide a stream that keeps feeding a dead socket.
+    if (this.destroyed) {
+      // Counted as well as thrown: a throw inside a 'data' handler is easy to lose.
+      this.writesAfterAbort = (this.writesAfterAbort || 0) + 1;
+      throw new Error('Request is already aborted');
+    }
     this.body.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)));
     // Report a full buffer once when a test asked for back-pressure, then drain
     // on the next tick, which is the sequence the streaming helpers handle.
@@ -127,6 +151,10 @@ class FakeClientRequest extends EventEmitter {
   }
 
   end(chunk) {
+    if (this.destroyed) {
+      this.writesAfterAbort = (this.writesAfterAbort || 0) + 1;
+      throw new Error('Request is already aborted');
+    }
     if (chunk) this.write(chunk);
     if (this._ended) return;
     this._ended = true;

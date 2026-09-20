@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { __mock } from 'electron';
+import electron, { __mock } from 'electron';
 import { freshRequire } from '../helpers/loadModule.cjs';
 import { SERVER_URL, useBuildConfig } from '../helpers/buildConfig.cjs';
 import { createTempRoot, redirectTmpdir, writeFile } from '../helpers/tempDirs.cjs';
@@ -10,8 +10,30 @@ import { fakeSpawn } from '../helpers/childProcess.cjs';
 import { usePlatform } from '../helpers/platform.cjs';
 
 const PASTE_DIR_PREFIX = 'tma-cloud-paste-';
+const { BrowserWindow } = electron;
 
 let tmpRoot;
+
+/** A window plus the IPC event shape a renderer call arrives with. */
+function windowEvent() {
+  const win = new BrowserWindow();
+  return { win, event: { sender: win.webContents } };
+}
+
+/** The preflight every upload runs: per-file maximum, then the storage quota. */
+function routeUploadPreflight({ maxBytes = 10 * 1024 * 1024 * 1024, quota } = {}) {
+  __mock.route('/api/user/max-upload-size-config', { statusCode: 200, body: JSON.stringify({ maxBytes }) });
+  __mock.route(
+    '/api/files/upload/check',
+    quota || { statusCode: 200, body: JSON.stringify({ allowed: true }) },
+    'POST'
+  );
+}
+
+/** The upload cards a paste opened, in the order the renderer received them. */
+function uploadStatuses(win) {
+  return win.webContents.sent.filter(s => s.channel === 'clipboard:uploadStatus').map(s => s.payload);
+}
 
 /**
  * Answer the two PowerShell scripts the clipboard code runs: the file-drop-list
@@ -57,6 +79,7 @@ beforeEach(() => {
 describe('handler registration', () => {
   it('registers every clipboard channel the preload bridge exposes', () => {
     expect(__mock.handlerChannels().sort()).toEqual([
+      'clipboard:cancelUpload',
       'clipboard:peekFileNames',
       'clipboard:readFiles',
       'clipboard:uploadFiles',
@@ -176,6 +199,7 @@ describe('direct clipboard uploads', () => {
   it('uploads virtual OLE bytes without creating a plaintext temp file', async () => {
     const encoded = Buffer.from('VIRTUAL-DATA').toString('base64');
     fakePowerShell({ ole: JSON.stringify({ 'attachment.txt': encoded }) });
+    routeUploadPreflight();
     __mock.route('/api/files/upload', { statusCode: 201, body: '{}' });
 
     const result = await __mock.invoke('clipboard:uploadVirtualFiles', {
@@ -183,10 +207,159 @@ describe('direct clipboard uploads', () => {
       parentId: 'folder-1',
     });
 
-    expect(result).toEqual({ ok: true, names: ['attachment.txt'] });
+    expect(result).toEqual({ ok: true, names: ['attachment.txt'], failed: [] });
     const request = __mock.requests().find(item => item.url.endsWith('/api/files/upload'));
     expect(request.bodyText()).toContain('VIRTUAL-DATA');
+    expect(request.chunkedEncoding).toBe(true);
     expect(pasteDir()).toBeNull();
+  });
+
+  it('opens and closes an upload card for each pasted file, with byte progress', async () => {
+    const { win, event } = windowEvent();
+    const file = writeFile(createTempRoot(), 'pasted.txt', 'CLIPBOARD-BYTES');
+    fakePowerShell({ dropList: `${file}\r\n` });
+    routeUploadPreflight();
+    __mock.route('/api/files/upload', { statusCode: 201, body: '{}' });
+
+    const result = await __mock.invoke('clipboard:uploadFiles', { origin: SERVER_URL, parentId: null }, event);
+
+    expect(result).toEqual({ ok: true, names: ['pasted.txt'], failed: [] });
+    const statuses = uploadStatuses(win);
+    expect(statuses[0]).toMatchObject({ state: 'started', fileName: 'pasted.txt', fileSize: 15 });
+    expect(statuses[1]).toMatchObject({ state: 'completed', id: statuses[0].id });
+    expect(statuses[2]).toMatchObject({ state: 'finished', saved: 1, failed: [] });
+
+    // Real bytes, not a simulated percentage: the last event equals the file size.
+    const progress = win.webContents.sent.filter(s => s.channel === 'clipboard:uploadProgress');
+    expect(progress.length).toBeGreaterThan(0);
+    expect(progress[progress.length - 1].payload).toMatchObject({ id: statuses[0].id, loaded: 15, total: 15 });
+  });
+
+  it('reports a refused file to the upload-issues dialog and still uploads the rest', async () => {
+    const { win, event } = windowEvent();
+    const dir = createTempRoot();
+    const bad = writeFile(dir, 'refused.txt', 'NOPE');
+    const good = writeFile(dir, 'fine.txt', 'YES');
+    fakePowerShell({ dropList: `${bad}\r\n${good}\r\n` });
+    routeUploadPreflight();
+    __mock.route(request => request.bodyText().includes('NOPE'), { statusCode: 415, body: 'Unsupported file' });
+    __mock.route('/api/files/upload', { statusCode: 201, body: '{}' });
+
+    const result = await __mock.invoke('clipboard:uploadFiles', { origin: SERVER_URL, parentId: null }, event);
+
+    expect(result.ok).toBe(true);
+    expect(result.names).toEqual(['fine.txt']);
+    expect(result.failed).toHaveLength(1);
+    expect(result.failed[0].fileName).toBe('refused.txt');
+    const statuses = uploadStatuses(win);
+    expect(statuses.some(s => s.state === 'error' && s.fileName === 'refused.txt')).toBe(true);
+    expect(statuses[statuses.length - 1]).toMatchObject({ state: 'finished', saved: 1 });
+    expect(statuses[statuses.length - 1].failed).toHaveLength(1);
+  });
+
+  it('counts a cancelled file as neither saved nor failed, and shows no error card', async () => {
+    const { win, event } = windowEvent();
+    const file = writeFile(createTempRoot(), 'big.bin', 'x'.repeat(4096));
+    fakePowerShell({ dropList: `${file}\r\n` });
+    routeUploadPreflight();
+    // Consulted once the bytes are on the wire and before any reply: the one
+    // deterministic moment to cancel an upload still in flight.
+    __mock.route(() => {
+      const started = uploadStatuses(win).find(s => s.state === 'started');
+      if (started) void __mock.invoke('clipboard:cancelUpload', started.id);
+      return false;
+    }, {});
+
+    const result = await __mock.invoke('clipboard:uploadFiles', { origin: SERVER_URL, parentId: null }, event);
+
+    expect(result).toEqual({ ok: true, names: [], failed: [] });
+    const statuses = uploadStatuses(win);
+    // No error card: the renderer already took the row away when the user cancelled.
+    expect(statuses.some(s => s.state === 'error')).toBe(false);
+    expect(statuses[statuses.length - 1]).toMatchObject({ state: 'finished', saved: 0, failed: [] });
+  });
+
+  it('runs the same preflight a browser upload runs, before sending any bytes', async () => {
+    const { event } = windowEvent();
+    const file = writeFile(createTempRoot(), 'pasted.txt', 'CLIPBOARD-BYTES');
+    fakePowerShell({ dropList: `${file}\r\n` });
+    routeUploadPreflight();
+    __mock.route('/api/files/upload', { statusCode: 201, body: '{}' });
+
+    await __mock.invoke('clipboard:uploadFiles', { origin: SERVER_URL, parentId: null }, event);
+
+    const calls = __mock.requests().map(r => `${r.method} ${r.url.replace(SERVER_URL, '')}`);
+    expect(calls).toEqual([
+      'GET /api/user/max-upload-size-config',
+      'POST /api/files/upload/check',
+      'POST /api/files/upload',
+    ]);
+  });
+
+  it('refuses a file over the configured maximum without uploading it', async () => {
+    const { event } = windowEvent();
+    const file = writeFile(createTempRoot(), 'huge.bin', 'x'.repeat(4096));
+    fakePowerShell({ dropList: `${file}\r\n` });
+    routeUploadPreflight({ maxBytes: 1024 });
+
+    const result = await __mock.invoke('clipboard:uploadFiles', { origin: SERVER_URL, parentId: null }, event);
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe('"huge.bin" is too large. Maximum upload size is 1 KB.');
+    expect(__mock.requests().some(r => r.url.endsWith('/api/files/upload'))).toBe(false);
+  });
+
+  it("passes the server's own quota message through, rather than a limit of its own", async () => {
+    const { event } = windowEvent();
+    const file = writeFile(createTempRoot(), 'pasted.txt', 'CLIPBOARD-BYTES');
+    fakePowerShell({ dropList: `${file}\r\n` });
+    routeUploadPreflight({
+      quota: { statusCode: 413, body: JSON.stringify({ message: 'Storage limit reached. Free up 2 GB.' }) },
+    });
+
+    const result = await __mock.invoke('clipboard:uploadFiles', { origin: SERVER_URL, parentId: null }, event);
+
+    expect(result).toEqual({ ok: false, error: 'Storage limit reached. Free up 2 GB.' });
+    expect(__mock.requests().some(r => r.url.endsWith('/api/files/upload'))).toBe(false);
+  });
+
+  it('tears the request down mid-stream, so the server sees the client hang up', async () => {
+    const { win, event } = windowEvent();
+    // Big enough to stream in several chunks, so the cancel lands between them.
+    const file = writeFile(createTempRoot(), 'big.bin', 'x'.repeat(512 * 1024));
+    fakePowerShell({ dropList: `${file}\r\n` });
+    routeUploadPreflight();
+    __mock.route('/api/files/upload', { statusCode: 201, body: '{}' });
+
+    // The first byte-progress event fires from inside the read stream: the same
+    // mid-upload moment the user's click lands in.
+    const send = win.webContents.send.bind(win.webContents);
+    let cancelled = false;
+    win.webContents.send = (channel, payload) => {
+      send(channel, payload);
+      if (channel === 'clipboard:uploadProgress' && !cancelled) {
+        cancelled = true;
+        __mock.invoke('clipboard:cancelUpload', payload.id);
+      }
+    };
+
+    const result = await __mock.invoke('clipboard:uploadFiles', { origin: SERVER_URL, parentId: null }, event);
+
+    expect(cancelled).toBe(true);
+    expect(result).toEqual({ ok: true, names: [], failed: [] });
+    const upload = __mock.requests().find(r => r.url.endsWith('/api/files/upload'));
+    // Buffered instead, the abort would cancel a request the server never saw.
+    expect(upload.chunkedEncoding).toBe(true);
+    // Aborted, not quietly finished: an ended request would have reached the route.
+    expect(upload.destroyed).toBe(true);
+    expect(upload._ended).toBeFalsy();
+    // And nothing kept writing into it afterwards, which Electron throws on.
+    expect(upload.writesAfterAbort).toBeUndefined();
+  });
+
+  it('reports nothing to cancel for an upload that already settled', async () => {
+    expect(__mock.invoke('clipboard:cancelUpload', 'clipboard-0-0')).toEqual({ ok: false });
+    expect(__mock.invoke('clipboard:cancelUpload', undefined)).toEqual({ ok: false });
   });
 });
 

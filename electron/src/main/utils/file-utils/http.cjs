@@ -154,9 +154,17 @@ function apiPostJson(base, pathname, body) {
           });
           response.on('end', () => {
             if (status < 200 || status >= 300) {
-              return reject(
-                new Error(resp ? `${pathname} failed (${status}): ${resp}` : `${pathname} failed (${status})`)
+              const error = new Error(
+                resp ? `${pathname} failed (${status}): ${resp}` : `${pathname} failed (${status})`
               );
+              // Parsed too, so a caller can show the server's own wording.
+              error.status = status;
+              try {
+                error.body = resp ? JSON.parse(resp) : null;
+              } catch {
+                error.body = null;
+              }
+              return reject(error);
             }
             try {
               resolve(resp ? JSON.parse(resp) : {});

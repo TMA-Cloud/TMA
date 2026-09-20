@@ -10,7 +10,13 @@ const {
   getFileInfoFromBackend,
   listFilesFromBackend,
 } = require('./file-utils/download.cjs');
-const { uploadFileToReplace, uploadDerivedFile, uploadNewFile, uploadNewFileData } = require('./file-utils/upload.cjs');
+const {
+  precheckUploads,
+  uploadFileToReplace,
+  uploadDerivedFile,
+  uploadNewFile,
+  uploadNewFileData,
+} = require('./file-utils/upload.cjs');
 const { validateOrigin, sanitizeFileName, deduplicateFileName } = require('./file-utils/names.cjs');
 const {
   PASTE_DIR_PREFIX,
@@ -44,6 +50,7 @@ module.exports = {
   apiPostJson,
   makeIpcProgressEmitter,
   listFilesFromBackend,
+  precheckUploads,
   uploadNewFile,
   uploadNewFileData,
   getCookieHeader,

@@ -20,6 +20,38 @@ const { contextBridge, ipcRenderer } = require('electron');
         readFiles: () => ipcRenderer.invoke('clipboard:readFiles'),
         uploadFiles: payload => ipcRenderer.invoke('clipboard:uploadFiles', payload),
         uploadVirtualFiles: payload => ipcRenderer.invoke('clipboard:uploadVirtualFiles', payload),
+        /** Abort an in-flight clipboard upload by the id from onUploadStatus. */
+        cancelUpload: uploadId => ipcRenderer.invoke('clipboard:cancelUpload', uploadId),
+        /**
+         * Subscribe to start/finish of a clipboard upload running in the main
+         * process, so the renderer can show its usual upload card. Returns
+         * unsubscribe.
+         */
+        onUploadStatus: callback => {
+          if (typeof callback !== 'function') return () => {};
+          const listener = (_e, payload) => {
+            try {
+              callback(payload);
+            } catch (err) {
+              console.error('[Electron preload] Error in onUploadStatus callback:', err);
+            }
+          };
+          ipcRenderer.on('clipboard:uploadStatus', listener);
+          return () => ipcRenderer.removeListener('clipboard:uploadStatus', listener);
+        },
+        /** Byte progress for an in-flight clipboard upload, keyed by its upload id. */
+        onUploadProgress: callback => {
+          if (typeof callback !== 'function') return () => {};
+          const listener = (_e, payload) => {
+            try {
+              callback(payload);
+            } catch (err) {
+              console.error('[Electron preload] Error in onUploadProgress callback:', err);
+            }
+          };
+          ipcRenderer.on('clipboard:uploadProgress', listener);
+          return () => ipcRenderer.removeListener('clipboard:uploadProgress', listener);
+        },
         writeFiles: paths => ipcRenderer.invoke('clipboard:writeFiles', paths),
         writeFilesFromData: payload => ipcRenderer.invoke('clipboard:writeFilesFromData', payload),
         writeFilesFromServer: payload => ipcRenderer.invoke('clipboard:writeFilesFromServer', payload),
