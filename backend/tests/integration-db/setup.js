@@ -20,9 +20,14 @@ import pool from '../../config/db.js';
 import { resetStorageMock } from '../mocks/storage.mock.js';
 import { connectRedis, disconnectRedis, redisClient } from '../../config/redis.js';
 import { initializeAuditQueue, shutdownAuditQueue } from '../../services/auditLogger.js';
-import { ACCOUNT_FILE_OPERATION_QUEUE, OBJECT_CLEANUP_QUEUE } from '../../services/backgroundQueue.js';
+import {
+  ACCOUNT_FILE_OPERATION_QUEUE,
+  OBJECT_CLEANUP_QUEUE,
+  SHARE_LINK_QUEUE,
+} from '../../services/backgroundQueue.js';
 import { processFileOperation } from '../../services/fileOperationWorker.js';
 import { deleteQueuedObjects } from '../../services/objectCleanup.js';
+import { applyShareLinking } from '../../services/shareLinking.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const MIGRATIONS_DIR = path.join(__dirname, '..', '..', 'migrations');
@@ -78,6 +83,7 @@ const DATA_TABLES = [
   'client_heartbeats',
   'mfa_backup_codes',
   'sessions',
+  'bulk_import_items',
   'share_link_files',
   'share_links',
   'files',
@@ -104,6 +110,7 @@ beforeAll(async () => {
   const boss = await initializeAuditQueue();
   await boss.work(ACCOUNT_FILE_OPERATION_QUEUE, { batchSize: 1 }, async ([job]) => processFileOperation(job));
   await boss.work(OBJECT_CLEANUP_QUEUE, { batchSize: 1 }, async ([job]) => deleteQueuedObjects(job.data));
+  await boss.work(SHARE_LINK_QUEUE, { batchSize: 1 }, async ([job]) => applyShareLinking(job.data));
 });
 
 beforeEach(async () => {

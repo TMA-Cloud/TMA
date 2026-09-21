@@ -273,6 +273,26 @@ async function unshareRoots(rootIds, userId) {
 }
 
 /** Link selected trees to every share containing their direct parent. */
+/**
+ * Whether a folder is itself a member of any of the account's share links.
+ *
+ * One indexed lookup, so the overwhelmingly common "parent isn't shared" case
+ * can skip the recursive subtree walk linkItemsToParentShares would otherwise
+ * do on every upload.
+ */
+async function parentHasShares(parentId, userId) {
+  if (!parentId) return false;
+  const result = await pool.query(
+    `SELECT 1
+       FROM share_link_files slf
+       JOIN share_links sl ON sl.id = slf.share_id AND sl.user_id = $2
+      WHERE slf.file_id = $1
+      LIMIT 1`,
+    [parentId, userId]
+  );
+  return result.rows.length > 0;
+}
+
 async function linkItemsToParentShares(rootIds, userId) {
   if (!Array.isArray(rootIds) || rootIds.length === 0) return [];
   const client = await pool.connect();
@@ -309,6 +329,9 @@ async function linkItemsToParentShares(rootIds, userId) {
     );
     const mappings = await client.query('SELECT DISTINCT root_id, share_id FROM link_stage ORDER BY root_id, share_id');
     await client.query('COMMIT');
+    if (mappings.rows.length === 0) return [];
+    // Only a real membership change alters the `shared` flag that My Files,
+    // Shared, search and stats return, so a no-op link must not drop them.
     const shareIds = [...new Set(mappings.rows.map(row => row.share_id))];
     await Promise.all(shareIds.map(shareId => invalidateShareCache(shareId, userId)));
     await invalidateAllFileCaches(userId);
@@ -633,6 +656,7 @@ export {
   removeFilesFromShares,
   unshareRoots,
   linkItemsToParentShares,
+  parentHasShares,
   deleteShareLink,
   deleteShareLinks,
   getFileByToken,

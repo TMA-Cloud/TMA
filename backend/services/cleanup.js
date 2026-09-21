@@ -47,4 +47,34 @@ async function cleanupOldFileOperationResults(daysOld = 30, { batchSize = 5000, 
   return deletedCount;
 }
 
-export { cleanupOldAuditLogs, cleanupOldFileOperationResults };
+/**
+ * Drop bulk-import manifests left behind by a run that never finished.
+ *
+ * `scripts/bulkImportDrive.js` deletes its own rows on success and on rollback;
+ * only a killed process leaves them. The age threshold is what keeps this safe:
+ * an in-flight import's rows are minutes old, so nothing an operator could
+ * still roll back is ever removed.
+ */
+async function cleanupStaleImportManifests(daysOld = 7, { batchSize = 5000, maxBatches = 20 } = {}) {
+  let deletedCount = 0;
+  for (let batch = 0; batch < maxBatches; batch += 1) {
+    const result = await pool.query(
+      `WITH doomed AS (
+         SELECT run_id, file_id FROM bulk_import_items
+          WHERE created_at < NOW() - INTERVAL '1 day' * $1
+          ORDER BY created_at, run_id
+          LIMIT $2
+       )
+       DELETE FROM bulk_import_items i USING doomed
+        WHERE i.run_id = doomed.run_id AND i.file_id = doomed.file_id`,
+      [daysOld, batchSize]
+    );
+    const deleted = result.rowCount || 0;
+    deletedCount += deleted;
+    if (deleted < batchSize) break;
+  }
+  if (deletedCount > 0) logger.info({ deletedCount, daysOld }, 'Purged stale bulk-import manifests');
+  return deletedCount;
+}
+
+export { cleanupOldAuditLogs, cleanupOldFileOperationResults, cleanupStaleImportManifests };

@@ -7,6 +7,10 @@ const FILE_OPERATION_QUEUE = 'file-operations';
 // while the keyed queue serializes new mutations for each account.
 const ACCOUNT_FILE_OPERATION_QUEUE = 'account-file-operations';
 const OBJECT_CLEANUP_QUEUE = 'object-cleanup';
+// Auto-linking newly created items into an ancestor's share is a recursive
+// subtree write that no response body depends on, so it rides its own queue
+// instead of the upload request.
+const SHARE_LINK_QUEUE = 'share-linking';
 
 const MAINTENANCE_TASKS = Object.freeze({
   TRASH: 'cleanup-expired-trash',
@@ -16,6 +20,7 @@ const MAINTENANCE_TASKS = Object.freeze({
   RESERVATIONS: 'cleanup-storage-reservations',
   SESSIONS: 'cleanup-old-sessions',
   OPERATION_RESULTS: 'cleanup-file-operation-results',
+  IMPORT_MANIFESTS: 'cleanup-bulk-import-manifests',
 });
 
 const BACKGROUND_QUEUE_OPTIONS = {
@@ -65,6 +70,16 @@ async function initializeBackgroundQueues(boss) {
     retentionSeconds: 24 * 60 * 60,
     deleteAfterSeconds: 24 * 60 * 60,
   });
+  await boss.createQueue(SHARE_LINK_QUEUE, {
+    policy: 'key_strict_fifo',
+    retryLimit: 5,
+    retryDelay: 15,
+    retryBackoff: true,
+    retryDelayMax: 900,
+    expireInSeconds: 15 * 60,
+    retentionSeconds: 24 * 60 * 60,
+    deleteAfterSeconds: 60 * 60,
+  });
   await boss.createQueue(OBJECT_CLEANUP_QUEUE, {
     retryLimit: 5,
     retryDelay: 30,
@@ -78,14 +93,18 @@ async function initializeBackgroundQueues(boss) {
 
 /** Durable cron schedules; pg-boss de-duplicates them by schedule key. */
 async function initializeBackgroundSchedules(boss) {
+  // Spread across the window rather than stacked on the hour: a single worker
+  // runs these serially, so coinciding start times only queue them behind each
+  // other and pile their load onto the same minutes of database time.
   const schedules = [
     [MAINTENANCE_TASKS.TRASH, '0 2 * * *'],
-    [MAINTENANCE_TASKS.AUDIT, '15 2 * * *'],
-    [MAINTENANCE_TASKS.SHARES, '0 3 * * 0'],
-    [MAINTENANCE_TASKS.HEARTBEATS, '0 * * * *'],
-    [MAINTENANCE_TASKS.RESERVATIONS, '30 * * * *'],
-    [MAINTENANCE_TASKS.SESSIONS, '45 2 * * *'],
-    [MAINTENANCE_TASKS.OPERATION_RESULTS, '50 2 * * *'],
+    [MAINTENANCE_TASKS.AUDIT, '40 3 * * *'],
+    [MAINTENANCE_TASKS.SESSIONS, '20 4 * * *'],
+    [MAINTENANCE_TASKS.OPERATION_RESULTS, '50 4 * * *'],
+    [MAINTENANCE_TASKS.IMPORT_MANIFESTS, '25 5 * * *'],
+    [MAINTENANCE_TASKS.SHARES, '10 6 * * 0'],
+    [MAINTENANCE_TASKS.HEARTBEATS, '7 * * * *'],
+    [MAINTENANCE_TASKS.RESERVATIONS, '37 * * * *'],
   ];
   for (const [task, cron] of schedules) {
     await boss.schedule(MAINTENANCE_QUEUE, cron, { task }, { key: task, tz: 'UTC', singletonKey: task });
@@ -99,6 +118,7 @@ export {
   FILE_OPERATION_QUEUE,
   ACCOUNT_FILE_OPERATION_QUEUE,
   OBJECT_CLEANUP_QUEUE,
+  SHARE_LINK_QUEUE,
   MAINTENANCE_TASKS,
   initializeBackgroundQueues,
   initializeBackgroundSchedules,

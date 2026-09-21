@@ -5,7 +5,7 @@ import { getRequestId, getUserId, getAccountContext } from '../../middleware/req
 import { createPool, buildPoolConfig, pgbossSchema } from '../../config/db.js';
 
 import { AUDIT_QUEUE, AUDIT_QUEUE_OPTIONS } from '../auditQueue.js';
-import { initializeBackgroundQueues, initializeBackgroundSchedules } from '../backgroundQueue.js';
+import { initializeBackgroundQueues } from '../backgroundQueue.js';
 
 let boss = null;
 let isInitialized = false;
@@ -32,14 +32,19 @@ async function initializeAuditQueue() {
     await pool.query(`CREATE SCHEMA IF NOT EXISTS ${pgbossSchema}`);
     await pool.end();
 
+    // Producer only: this process sends jobs and never works them, so it opts
+    // out of pg-boss maintenance and cron dispatch. Both belong to the
+    // standalone worker (audit-worker.js), which is the supervising instance.
+    // `migrate` stays on so the API can boot against a fresh database before
+    // the worker has started; retention is a per-queue setting now, applied by
+    // createQueue in backgroundQueue.js / auditQueue.js.
     boss = new PgBoss({
       ...buildPoolConfig(),
       schema: pgbossSchema,
       max: 10,
       migrate: true, // build schema/tables
-      archiveCompletedAfterSeconds: 60 * 60 * 24,
-      deleteArchivedJobsAfterDays: 30,
-      monitorStateIntervalSeconds: 60,
+      supervise: false,
+      schedule: false,
     });
 
     boss.on('error', error => {
@@ -50,7 +55,6 @@ async function initializeAuditQueue() {
     // pg-boss v10+ requires queues to be created explicitly.
     await boss.createQueue(AUDIT_QUEUE, AUDIT_QUEUE_OPTIONS);
     await initializeBackgroundQueues(boss);
-    await initializeBackgroundSchedules(boss);
     isInitialized = true;
     logger.info('Audit queue initialized successfully');
 

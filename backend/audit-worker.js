@@ -34,18 +34,25 @@ import {
   FILE_OPERATION_QUEUE,
   ACCOUNT_FILE_OPERATION_QUEUE,
   OBJECT_CLEANUP_QUEUE,
+  SHARE_LINK_QUEUE,
   initializeBackgroundQueues,
+  initializeBackgroundSchedules,
 } from './services/backgroundQueue.js';
 import { cleanupExpiredTrash } from './models/file/file.cleanup.model.js';
 import { deleteOrphans, scanOrphans } from './models/file/file.orphan.model.js';
 import { cleanupExpiredShareLinks } from './models/share.model.js';
 import { cleanupOldSessions } from './models/session.model.js';
 import { purgeStaleHeartbeats } from './models/clientHeartbeat.model.js';
-import { cleanupOldAuditLogs, cleanupOldFileOperationResults } from './services/cleanup.js';
+import {
+  cleanupOldAuditLogs,
+  cleanupOldFileOperationResults,
+  cleanupStaleImportManifests,
+} from './services/cleanup.js';
 import { forceSaveDocument } from './services/onlyofficeAutoSave.js';
 import { cleanupExpiredStorageReservations } from './services/storageReservations.js';
 import { deleteQueuedObjects } from './services/objectCleanup.js';
 import { processFileOperation } from './services/fileOperationWorker.js';
+import { applyShareLinking } from './services/shareLinking.js';
 
 const logger = createRequestLogger({ service: 'background-worker' });
 
@@ -256,6 +263,8 @@ async function processMaintenanceJob(job) {
       return cleanupOldSessions();
     case MAINTENANCE_TASKS.OPERATION_RESULTS:
       return cleanupOldFileOperationResults();
+    case MAINTENANCE_TASKS.IMPORT_MANIFESTS:
+      return cleanupStaleImportManifests();
     default:
       throw new Error(`Unknown maintenance task: ${job.data?.task}`);
   }
@@ -274,11 +283,16 @@ async function initializeWorker() {
     await schemaPool.end();
 
     // Initialize pg-boss
+    // The worker is the only supervising instance: it owns pg-boss maintenance
+    // (retention, expiry, monitoring) and cron dispatch, so the API tier never
+    // spends request capacity on them.
     boss = new PgBoss({
       ...buildPoolConfig(),
       schema: pgbossSchema,
       max: 10,
       migrate: true,
+      supervise: true,
+      schedule: true,
     });
 
     boss.on('error', error => {
@@ -289,6 +303,7 @@ async function initializeWorker() {
     // Queues must be created before sending/working in pg-boss v10+
     await boss.createQueue(AUDIT_QUEUE, AUDIT_QUEUE_OPTIONS);
     await initializeBackgroundQueues(boss);
+    await initializeBackgroundSchedules(boss);
     await connectRedis();
     logger.info('pg-boss started successfully');
 
@@ -336,6 +351,10 @@ async function initializeWorker() {
         return deleteQueuedObjects(job.data);
       }
     );
+
+    await boss.work(SHARE_LINK_QUEUE, { batchSize: 1, localConcurrency: Math.min(4, CONCURRENCY) }, async ([job]) => {
+      return applyShareLinking(job.data);
+    });
 
     await boss.work(
       ONLYOFFICE_FORCESAVE_QUEUE,

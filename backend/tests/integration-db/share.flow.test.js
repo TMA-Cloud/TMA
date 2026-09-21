@@ -41,6 +41,24 @@ async function expireShare(token) {
   await redisClient.del(cacheKeys.shareByToken(token));
 }
 
+/**
+ * Wait for the background share-linking job to mark a new item as shared.
+ *
+ * Auto-linking a new item into its parent's share is a recursive subtree write
+ * that no upload response depends on, so it runs on the worker.
+ */
+async function waitForShareLink(fileId, timeoutMs = 10000) {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const { rows } = await pool.query('SELECT shared, shared_at FROM files WHERE id = $1', [fileId]);
+    if (rows[0]?.shared) return rows;
+    if (Date.now() >= deadline) throw new Error('share auto-link timed out');
+    await new Promise(resolve => {
+      setTimeout(resolve, 25);
+    });
+  }
+}
+
 /** Share a file and return its public token. */
 async function share(c, fileId, expiry) {
   const res = await c.post('/api/files/share').send({ ids: [fileId], shared: true, ...(expiry ? { expiry } : {}) });
@@ -341,8 +359,9 @@ describe('shared folders', () => {
       .attach('file', Buffer.from('later'), { filename: 'added-later.txt', contentType: 'text/plain' });
     const newId = up.body.file?.id || up.body.id;
 
-    // Marked shared on the owner's account.
-    const { rows } = await pool.query('SELECT shared, shared_at FROM files WHERE id = $1', [newId]);
+    // Marked shared on the owner's account. The link is applied by the
+    // background worker, so the upload response can land just before it.
+    const rows = await waitForShareLink(newId);
     expect(rows[0].shared).toBe(true);
     expect(rows[0].shared_at).toBeInstanceOf(Date);
 

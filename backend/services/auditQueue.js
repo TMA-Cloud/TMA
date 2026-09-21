@@ -14,7 +14,11 @@ const AUDIT_QUEUE_OPTIONS = {
   retryLimit: 3,
   retryDelay: 60,
   retryBackoff: true,
-  retentionDays: 30,
+  // Seconds, not days: pg-boss v10+ dropped `retentionDays`, and an unknown
+  // key is ignored rather than rejected, so the old spelling silently left the
+  // queue on the 14-day default.
+  retentionSeconds: 30 * 24 * 60 * 60,
+  deleteAfterSeconds: 7 * 24 * 60 * 60,
 };
 
 export { AUDIT_QUEUE, AUDIT_QUEUE_OPTIONS };
