@@ -1,13 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import { alwaysReturn, executedCalls, queueQueryResults } from '../../mocks/db.mock.js';
-import { cacheKeys, getCache, setCache } from '../../../utils/cache.js';
 import {
   SORT_FIELDS,
   buildKeysetPage,
   buildOrderClause,
-  calculateFolderSize,
-  fillFolderSizes,
   finishKeysetPage,
   generateUniqueName,
   getUniqueDbFileName,
@@ -158,90 +155,5 @@ describe('getUniqueDbFileName', () => {
       ],
     });
     await expect(getUniqueDbFileName('report.pdf', null, USER)).rejects.toThrow(/Too many duplicate names/);
-  });
-});
-
-describe('calculateFolderSize', () => {
-  it('sums the file sizes returned by the recursive query', async () => {
-    alwaysReturn({ rows: [{ size: 4096 }] });
-    expect(await calculateFolderSize('folder0000000001', USER)).toBe(4096);
-  });
-
-  it('converts a BIGINT returned as a string', async () => {
-    alwaysReturn({ rows: [{ size: '9007199254740' }] });
-    expect(await calculateFolderSize('folder0000000001', USER)).toBe(9007199254740);
-  });
-
-  it('treats a null sum as zero', async () => {
-    alwaysReturn({ rows: [{ size: null }] });
-    expect(await calculateFolderSize('folder0000000001', USER)).toBe(0);
-  });
-
-  it('treats an unparseable string as zero rather than NaN', async () => {
-    alwaysReturn({ rows: [{ size: 'not-a-number' }] });
-    expect(await calculateFolderSize('folder0000000001', USER)).toBe(0);
-  });
-
-  it('tracks ancestors, so a cyclic parent chain cannot hang or truncate valid depth', async () => {
-    alwaysReturn({ rows: [{ size: 0 }] });
-    await calculateFolderSize('folder0000000001', USER);
-    const { sql, params } = executedCalls()[0];
-    expect(sql).toContain('RECURSIVE');
-    expect(sql).toContain('ancestors');
-    expect(sql).toContain('NOT f.id = ANY(s.ancestors)');
-    expect(params).toEqual(['folder0000000001', USER]);
-  });
-
-  it('scopes the recursive walk to the requesting user', async () => {
-    alwaysReturn({ rows: [{ size: 0 }] });
-    await calculateFolderSize('folder0000000001', USER);
-    expect(executedCalls()[0].params).toContain(USER);
-  });
-
-  it('serves a cached size without querying', async () => {
-    await setCache(cacheKeys.folderSize('folder0000000001', USER), 1234);
-    alwaysReturn({ rows: [{ size: 9999 }] });
-    expect(await calculateFolderSize('folder0000000001', USER)).toBe(1234);
-    expect(executedCalls()).toHaveLength(0);
-  });
-
-  it('caches the computed size for the next call', async () => {
-    alwaysReturn({ rows: [{ size: 4096 }] });
-    await calculateFolderSize('folder0000000001', USER);
-    expect(await getCache(cacheKeys.folderSize('folder0000000001', USER))).toBe(4096);
-  });
-});
-
-describe('fillFolderSizes', () => {
-  it('computes a size for every folder entry', async () => {
-    alwaysReturn({
-      rows: [
-        { root_id: 'a', size: 100 },
-        { root_id: 'b', size: 100 },
-      ],
-    });
-    const files = [
-      { id: 'a', type: 'folder' },
-      { id: 'b', type: 'folder' },
-    ];
-    await fillFolderSizes(files, USER);
-    expect(files.every(f => f.size === 100)).toBe(true);
-    expect(executedCalls()).toHaveLength(1);
-  });
-
-  it('leaves file entries untouched', async () => {
-    alwaysReturn({ rows: [{ size: 100 }] });
-    const files = [{ id: 'a', type: 'file', size: 42 }];
-    await fillFolderSizes(files, USER);
-    expect(files[0].size).toBe(42);
-  });
-
-  it('returns the same array it was given', async () => {
-    const files = [];
-    expect(await fillFolderSizes(files, USER)).toBe(files);
-  });
-
-  it('handles an empty list', async () => {
-    await expect(fillFolderSizes([], USER)).resolves.toEqual([]);
   });
 });

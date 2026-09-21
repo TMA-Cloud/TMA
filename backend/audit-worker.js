@@ -47,6 +47,7 @@ import {
   cleanupOldAuditLogs,
   cleanupOldFileOperationResults,
   cleanupStaleImportManifests,
+  reconcileFolderAggregates,
 } from './services/cleanup.js';
 import { forceSaveDocument } from './services/onlyofficeAutoSave.js';
 import { cleanupExpiredStorageReservations } from './services/storageReservations.js';
@@ -265,6 +266,8 @@ async function processMaintenanceJob(job) {
       return cleanupOldFileOperationResults();
     case MAINTENANCE_TASKS.IMPORT_MANIFESTS:
       return cleanupStaleImportManifests();
+    case MAINTENANCE_TASKS.FOLDER_AGGREGATES:
+      return reconcileFolderAggregates();
     default:
       throw new Error(`Unknown maintenance task: ${job.data?.task}`);
   }

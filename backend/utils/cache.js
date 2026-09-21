@@ -28,8 +28,6 @@ function registryPrefixes(key) {
         return parts[2] ? [`share:token:${parts[2]}`] : [];
       }
       return parts[1] && parts[1] !== 'token' ? [`share:${parts[1]}`] : [];
-    case 'folder':
-      return parts[1] ? [`folder:${parts[1]}`] : [];
     default:
       return [];
   }
@@ -306,9 +304,6 @@ async function invalidateAllFileCaches(userId, parentId = null, options = {}) {
     await invalidateFileCache(userId, oldParentId);
   }
   await invalidateSearchCache(userId);
-  // Folder totals can change for any ancestor; one per-user registry avoids a
-  // recursive invalidation query on every mutation.
-  await deleteCachePattern(`folder:${userId}:*`);
   if (includeStats) {
     await deleteCache(cacheKeys.fileStats(userId));
   }
@@ -402,9 +397,6 @@ const cacheKeys = {
 
   // Single file cache keys
   file: (fileId, userId) => `file:${userId}:${fileId}`,
-
-  // Folder size cache keys
-  folderSize: (folderId, userId) => `folder:${userId}:${folderId}:size`,
 
   // Session cache keys
   session: (sessionId, userId, tokenVersion) => `session:${userId}:${sessionId}:${tokenVersion}`,

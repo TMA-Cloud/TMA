@@ -1,7 +1,6 @@
 import path from 'path';
 
 import pool from '../../config/db.js';
-import { getCache, getCaches, setCache, setCaches, cacheKeys, DEFAULT_TTL } from '../../utils/cache.js';
 
 const SORT_FIELDS = {
   name: 'name',
@@ -113,86 +112,6 @@ function finishKeysetPage(rows, page) {
   return { files, nextCursor };
 }
 
-/**
- * Calculate folder size recursively
- */
-async function calculateFolderSize(id, userId) {
-  const cacheKey = cacheKeys.folderSize(id, userId);
-  const cached = await getCache(cacheKey);
-  if (cached !== null) {
-    return cached;
-  }
-
-  const res = await pool.query(
-    `WITH RECURSIVE sub AS (
-       SELECT id, size, type, ARRAY[id]::text[] AS ancestors
-         FROM files WHERE id = $1 AND user_id = $2
-       UNION ALL
-       SELECT f.id, f.size, f.type, s.ancestors || f.id
-         FROM files f
-         JOIN sub s ON f.parent_id = s.id
-        WHERE f.user_id = $2 AND NOT f.id = ANY(s.ancestors)
-     )
-     SELECT COALESCE(SUM(size), 0) AS size FROM sub WHERE type = 'file'`,
-    [id, userId]
-  );
-  // PostgreSQL BIGINT can be returned as string for very large numbers
-  // Convert to number if it's a valid number string, otherwise default to 0
-  const sizeValue = res.rows[0].size;
-  const size = typeof sizeValue === 'string' ? Number(sizeValue) || 0 : sizeValue || 0;
-
-  await setCache(cacheKey, size, DEFAULT_TTL);
-
-  return size;
-}
-
-/**
- * Fill folder sizes for all folders in the files array
- */
-async function fillFolderSizes(files, userId) {
-  const folders = files.filter(file => file.type === 'folder');
-  if (folders.length === 0) return files;
-
-  // One recursive walk for the whole result set.  The previous implementation
-  // issued one recursive query per folder (an N+1 query pattern).
-  const folderIds = [...new Set(folders.map(folder => folder.id))];
-  const cacheKeyById = new Map(folderIds.map(id => [id, cacheKeys.folderSize(id, userId)]));
-  const cachedValues = await getCaches(folderIds.map(id => cacheKeyById.get(id)));
-  const cachedSizes = new Map();
-  const missingIds = [];
-  folderIds.forEach((id, index) => {
-    if (cachedValues[index] === null) missingIds.push(id);
-    else cachedSizes.set(id, Number(cachedValues[index]) || 0);
-  });
-  if (missingIds.length === 0) {
-    for (const folder of folders) folder.size = cachedSizes.get(folder.id) || 0;
-    return files;
-  }
-  const result = await pool.query(
-    `WITH RECURSIVE sub AS (
-       SELECT f.id AS root_id, f.id, f.size, f.type, ARRAY[f.id]::text[] AS ancestors
-         FROM files f
-        WHERE f.id = ANY($1::text[]) AND f.user_id = $2
-       UNION ALL
-       SELECT s.root_id, f.id, f.size, f.type, s.ancestors || f.id
-         FROM files f
-         JOIN sub s ON f.parent_id = s.id
-        WHERE f.user_id = $2 AND NOT f.id = ANY(s.ancestors)
-     )
-     SELECT root_id, COALESCE(SUM(size) FILTER (WHERE type = 'file'), 0) AS size
-       FROM sub
-      GROUP BY root_id`,
-    [missingIds, userId]
-  );
-  const sizes = new Map([...cachedSizes, ...result.rows.map(row => [row.root_id, Number(row.size) || 0])]);
-  for (const folder of folders) folder.size = sizes.get(folder.id) || 0;
-  await setCaches(
-    missingIds.map(id => [cacheKeyById.get(id), sizes.get(id) || 0]),
-    DEFAULT_TTL
-  );
-  return files;
-}
-
 function generateUniqueName(baseName, ext, counter) {
   return `${baseName} (${counter})${ext}`;
 }
@@ -225,13 +144,4 @@ async function getUniqueDbFileName(desiredName, parentId, userId, queryable = po
   throw new Error('Too many duplicate names in database');
 }
 
-export {
-  SORT_FIELDS,
-  buildOrderClause,
-  buildKeysetPage,
-  finishKeysetPage,
-  calculateFolderSize,
-  fillFolderSizes,
-  generateUniqueName,
-  getUniqueDbFileName,
-};
+export { SORT_FIELDS, buildOrderClause, buildKeysetPage, finishKeysetPage, generateUniqueName, getUniqueDbFileName };

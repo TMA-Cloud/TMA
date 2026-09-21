@@ -21,6 +21,7 @@ const MAINTENANCE_TASKS = Object.freeze({
   SESSIONS: 'cleanup-old-sessions',
   OPERATION_RESULTS: 'cleanup-file-operation-results',
   IMPORT_MANIFESTS: 'cleanup-bulk-import-manifests',
+  FOLDER_AGGREGATES: 'reconcile-folder-aggregates',
 });
 
 const BACKGROUND_QUEUE_OPTIONS = {
@@ -102,6 +103,7 @@ async function initializeBackgroundSchedules(boss) {
     [MAINTENANCE_TASKS.SESSIONS, '20 4 * * *'],
     [MAINTENANCE_TASKS.OPERATION_RESULTS, '50 4 * * *'],
     [MAINTENANCE_TASKS.IMPORT_MANIFESTS, '25 5 * * *'],
+    [MAINTENANCE_TASKS.FOLDER_AGGREGATES, '15 1 * * 0'],
     [MAINTENANCE_TASKS.SHARES, '10 6 * * 0'],
     [MAINTENANCE_TASKS.HEARTBEATS, '7 * * * *'],
     [MAINTENANCE_TASKS.RESERVATIONS, '37 * * * *'],

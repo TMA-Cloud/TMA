@@ -77,4 +77,38 @@ async function cleanupStaleImportManifests(daysOld = 7, { batchSize = 5000, maxB
   return deletedCount;
 }
 
-export { cleanupOldAuditLogs, cleanupOldFileOperationResults, cleanupStaleImportManifests };
+/**
+ * Recompute folder aggregates per account and report what was wrong.
+ *
+ * The aggregate columns are the only source of a folder's size and counts, and
+ * incremental trigger maintenance can drift: adjust_file_ancestor_aggregates()
+ * clamps at zero, so a delta that would go negative is lost rather than
+ * corrected. A repaired count above zero means a write path is not maintaining
+ * them, which is worth looking at even though this run has already fixed it.
+ */
+async function reconcileFolderAggregates({ maxRuntimeMs = 20 * 60 * 1000 } = {}) {
+  const startedAt = Date.now();
+  const { rows: accounts } = await pool.query('SELECT id FROM users ORDER BY id');
+  let scanned = 0;
+  let repaired = 0;
+
+  for (const account of accounts) {
+    if (Date.now() - startedAt >= maxRuntimeMs) break;
+    const result = await pool.query('SELECT reconcile_folder_aggregates($1) AS repaired', [account.id]);
+    const drifted = Number(result.rows[0].repaired) || 0;
+    scanned += 1;
+    repaired += drifted;
+    if (drifted > 0) {
+      logger.warn({ userId: account.id, folders: drifted }, 'Repaired drifted folder aggregates');
+    }
+  }
+
+  const incomplete = scanned < accounts.length;
+  logger.info(
+    { scanned, accounts: accounts.length, repaired, incomplete },
+    'Folder aggregate reconciliation completed'
+  );
+  return { scanned, repaired, incomplete };
+}
+
+export { cleanupOldAuditLogs, cleanupOldFileOperationResults, cleanupStaleImportManifests, reconcileFolderAggregates };
