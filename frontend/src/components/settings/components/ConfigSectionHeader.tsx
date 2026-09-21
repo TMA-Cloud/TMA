@@ -1,6 +1,7 @@
 import React from 'react';
-import { Pencil, CheckCircle2, XCircle } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import { StatusChip, type StatusTone } from './StatusChip';
 
 interface ConfigSectionHeaderProps {
   icon: LucideIcon;
@@ -13,18 +14,23 @@ interface ConfigSectionHeaderProps {
   isCollapsed: boolean;
   isEditing: boolean;
   hasLoadedSettings: boolean;
-  /** Names the section in the edit button's accessible label. */
+  /** Names the section in the header's accessible label. */
   editLabel: string;
   onEdit: () => void;
+  /**
+   * Replaces the Configured / Not set up chip when the section has a more
+   * useful thing to report — a current value, say, rather than a yes/no.
+   */
+  status?: { text: string; tone: StatusTone };
 }
 
 /**
  * Header for a collapsible admin configuration section.
  *
- * While collapsed the section has to say whether it is set up without the
- * reader opening it, so the status reads as an icon-and-text chip next to the
- * title, falling back to plain text beside the description when there is no
- * icon to show (during loading).
+ * The whole header is the control: a pencil sitting alone at the end of a row
+ * asks the reader to guess that the row opens, whereas a row that is itself a
+ * button with a chevron says so. The status chip stays visible while collapsed
+ * so the section reports whether it is set up without being opened.
  */
 export const ConfigSectionHeader: React.FC<ConfigSectionHeaderProps> = ({
   icon: Icon,
@@ -38,50 +44,47 @@ export const ConfigSectionHeader: React.FC<ConfigSectionHeaderProps> = ({
   hasLoadedSettings,
   editLabel,
   onEdit,
+  status,
 }) => {
-  const status = loading
-    ? { text: 'Loading...', icon: null, color: 'text-gray-500 dark:text-gray-400' }
-    : isConfigured
-      ? { text: 'Configured', icon: CheckCircle2, color: 'text-green-600 dark:text-green-400' }
-      : { text: 'Not configured', icon: XCircle, color: 'text-gray-500 dark:text-gray-400' };
+  const resolvedStatus: { text: string; tone: StatusTone } = loading
+    ? { text: 'Loading...', tone: 'neutral' }
+    : (status ?? (isConfigured ? { text: 'Configured', tone: 'success' } : { text: 'Not set up', tone: 'info' }));
 
-  const StatusIcon = status.icon;
-  const showStatus = isCollapsed && hasLoadedSettings;
+  const disabled = !hasLoadedSettings || loading || saving;
 
   return (
-    <div className="flex items-center gap-4 mb-6">
-      <div className="p-3 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-300">
-        <Icon className="w-6 h-6 icon-muted" />
+    <button
+      type="button"
+      onClick={onEdit}
+      disabled={disabled}
+      aria-expanded={!isCollapsed}
+      aria-label={isEditing ? `Stop editing ${editLabel}` : `Edit ${editLabel}`}
+      className={`
+        w-full flex items-center gap-3 text-left rounded-xl px-1 py-1 -mx-1
+        transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500
+        ${disabled ? 'cursor-default opacity-80' : 'cursor-pointer hover:bg-slate-500/5 dark:hover:bg-slate-400/5'}
+      `}
+    >
+      <div className="p-2.5 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-300 shrink-0">
+        <Icon className="w-5 h-5 icon-muted" />
       </div>
 
-      <div className="flex-1">
-        <div className="flex items-center gap-2">
-          <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100 tracking-tight">{title}</h3>
-
-          {showStatus && StatusIcon && (
-            <div className={`flex items-center gap-1 ${status.color}`}>
-              <StatusIcon className="w-4 h-4" />
-              <span className="text-sm font-medium">{status.text}</span>
-            </div>
-          )}
-        </div>
-
-        <p className="text-sm text-gray-500/80 dark:text-gray-400/80 mt-0.5">
-          {description}
-          {showStatus && !StatusIcon && <span className={`ml-2 ${status.color}`}>{status.text}</span>}
-        </p>
+      <div className="flex-1 min-w-0">
+        <p className="type-callout font-medium text-gray-900 dark:text-gray-100 truncate">{title}</p>
+        <p className="type-caption text-gray-500 dark:text-gray-400 mt-0.5">{description}</p>
       </div>
 
       {hasLoadedSettings && (
-        <button
-          onClick={onEdit}
-          disabled={loading || saving}
-          className="p-2 rounded-lg text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-          aria-label={isEditing ? 'Cancel editing' : `Edit ${editLabel}`}
-        >
-          <Pencil className="w-5 h-5" />
-        </button>
+        <StatusChip tone={resolvedStatus.tone} className="hidden sm:inline-flex">
+          {resolvedStatus.text}
+        </StatusChip>
       )}
-    </div>
+
+      <ChevronDown
+        className={`w-5 h-5 shrink-0 text-gray-400 dark:text-gray-500 transition-motion duration-200 ${
+          isCollapsed ? '' : 'rotate-180'
+        }`}
+      />
+    </button>
   );
 };

@@ -115,7 +115,7 @@ export const OnlyOfficeSection: React.FC<OnlyOfficeSectionProps> = ({ canConfigu
   const isConfigured = !!originalUrl && jwtSecretSet;
 
   return (
-    <div className="relative">
+    <div className="rounded-xl bg-white/60 dark:bg-gray-900/50 border border-slate-200/50 dark:border-slate-700/30 px-4 py-3 transition-all duration-200 hover:border-blue-500/30 dark:hover:border-blue-500/30">
       <ConfigSectionHeader
         icon={FileText}
         title="OnlyOffice Integration"
@@ -131,7 +131,7 @@ export const OnlyOfficeSection: React.FC<OnlyOfficeSectionProps> = ({ canConfigu
       />
 
       {!isCollapsed && (
-        <form autoComplete="off" onSubmit={e => e.preventDefault()}>
+        <form className="mt-4" autoComplete="off" onSubmit={e => e.preventDefault()}>
           {/* Hidden dummy fields to distract password managers */}
           <input
             type="text"

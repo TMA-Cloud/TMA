@@ -84,7 +84,7 @@ export const Settings: React.FC = () => {
   } = useSignupStatus({ onHideFileExtensionsChange: setHideFileExtensions });
 
   const {
-    versionStatusText,
+    versionStatus,
     versionDescription,
     checkingVersions,
     versionError,
@@ -242,6 +242,8 @@ export const Settings: React.FC = () => {
             userEmail={user?.email}
             userCreatedAt={user?.created_at}
             userMfaEnabled={user?.mfa_enabled}
+            isSubUser={isSubUser}
+            onManageSecurity={() => setActiveSection('security')}
           />
         );
       case 'storage':
@@ -261,51 +263,45 @@ export const Settings: React.FC = () => {
         );
       case 'administration':
         return canToggleSignup ? (
-          <div className="space-y-8">
-            <AdministrationSection
-              loadingSignupStatus={loadingSignupStatus}
-              additionalUsers={additionalUsers}
-              totalUsers={totalUsers}
-              signupEnabled={signupEnabled}
-              loadingUsersList={loadingUsersList}
-              onToggleSignup={handleToggleSignup}
-              togglingSignup={togglingSignup}
-              onShowUsers={handleShowUsers}
-              hideFileExtensions={hideFileExtensions}
-              canToggleHideFileExtensions={canToggleHideFileExtensions}
-              togglingHideFileExtensions={togglingHideFileExtensions}
-              onToggleHideFileExtensions={handleToggleHideFileExtensions}
-              electronOnlyAccess={electronOnlyAccess}
-              canToggleElectronOnlyAccess={canToggleElectronOnlyAccess}
-              togglingElectronOnlyAccess={togglingElectronOnlyAccess}
-              onToggleElectronOnlyAccess={handleToggleElectronOnlyAccess}
-              showElectronOnlyAccessToggle={runningInElectron}
-              allowPasswordChange={allowPasswordChange}
-              canToggleAllowPasswordChange={canToggleAllowPasswordChange}
-              togglingAllowPasswordChange={togglingAllowPasswordChange}
-              onToggleAllowPasswordChange={handleToggleAllowPasswordChange}
-              activeClientsCount={loadingActiveClients ? null : activeClientsList.length}
-              loadingActiveClients={loadingActiveClients}
-              onShowActiveClients={handleShowActiveClients}
-              onShowOrphans={() => setOrphansModalOpen(true)}
-            />
-            <div className="pt-1">
-              <p className="text-xs uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 mb-4">Networking</p>
-              <KnownProxiesSection canConfigure={canToggleSignup} />
-            </div>
-            <div className="pt-1">
-              <p className="text-xs uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 mb-4">Integrations</p>
-              <div className="space-y-6">
+          <AdministrationSection
+            loadingSignupStatus={loadingSignupStatus}
+            additionalUsers={additionalUsers}
+            totalUsers={totalUsers}
+            signupEnabled={signupEnabled}
+            loadingUsersList={loadingUsersList}
+            onToggleSignup={handleToggleSignup}
+            togglingSignup={togglingSignup}
+            onShowUsers={handleShowUsers}
+            hideFileExtensions={hideFileExtensions}
+            canToggleHideFileExtensions={canToggleHideFileExtensions}
+            togglingHideFileExtensions={togglingHideFileExtensions}
+            onToggleHideFileExtensions={handleToggleHideFileExtensions}
+            electronOnlyAccess={electronOnlyAccess}
+            canToggleElectronOnlyAccess={canToggleElectronOnlyAccess}
+            togglingElectronOnlyAccess={togglingElectronOnlyAccess}
+            onToggleElectronOnlyAccess={handleToggleElectronOnlyAccess}
+            showElectronOnlyAccessToggle={runningInElectron}
+            allowPasswordChange={allowPasswordChange}
+            canToggleAllowPasswordChange={canToggleAllowPasswordChange}
+            togglingAllowPasswordChange={togglingAllowPasswordChange}
+            onToggleAllowPasswordChange={handleToggleAllowPasswordChange}
+            activeClientsCount={loadingActiveClients ? null : activeClientsList.length}
+            loadingActiveClients={loadingActiveClients}
+            onShowActiveClients={handleShowActiveClients}
+            onShowOrphans={() => setOrphansModalOpen(true)}
+            networking={<KnownProxiesSection canConfigure={canToggleSignup} />}
+            integrations={
+              <>
                 <OnlyOfficeSection canConfigure={canToggleSignup} />
                 <ShareBaseUrlSection canConfigure={canToggleSignup} />
-              </div>
-            </div>
-          </div>
+              </>
+            }
+          />
         ) : null;
       case 'updates':
         return canToggleSignup ? (
           <UpdatesSection
-            versionStatusText={versionStatusText}
+            versionStatus={versionStatus}
             versionDescription={versionDescription}
             checkingVersions={checkingVersions}
             versionError={versionError}

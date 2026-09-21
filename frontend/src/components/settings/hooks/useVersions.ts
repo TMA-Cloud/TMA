@@ -1,5 +1,14 @@
 import { useState, useCallback, useEffect } from 'react';
 import { getCurrentVersions, fetchLatestVersions, type VersionInfo } from '../../../utils/api';
+
+/** Where a component stands against the published release feed. */
+export type VersionState = 'loading' | 'unchecked' | 'upToDate' | 'outdated';
+
+export interface VersionStatus {
+  state: VersionState;
+  current: string | null;
+  latest: string | null;
+}
 import { getElectronAppVersion, isElectron } from '../../../utils/electronDesktop';
 import { useToast } from '../../../hooks/useToast';
 
@@ -58,30 +67,25 @@ export function useVersions() {
     }
   }, [checkingVersions, showToast]);
 
-  const versionStatusText = (key: keyof VersionInfo) => {
-    const current = currentVersions?.[key];
-    if (!current) {
-      return 'Loading current version...';
-    }
+  /**
+   * The comparison itself, rather than a sentence about it.
+   *
+   * This used to return strings with emoji baked in ("☑️ Up to date (v3.1.2)"),
+   * which forced the view to parse meaning back out of prose. Returning the
+   * state and the two versions lets the view decide how to show them.
+   */
+  const versionStatus = (key: keyof VersionInfo): VersionStatus => {
+    const current = currentVersions?.[key] ?? null;
+    if (!current) return { state: 'loading', current: null, latest: null };
 
-    if (!versionChecked || !latestVersions) {
-      return `Current v${current}`;
-    }
+    const latest = versionChecked ? (latestVersions?.[key] ?? null) : null;
+    if (!latest) return { state: 'unchecked', current, latest: null };
 
-    const latest = latestVersions[key];
-    if (!latest) {
-      return `Current v${current}`;
-    }
-
-    if (current === latest) {
-      return `☑️ Up to date (v${current})`;
-    }
-
-    return `⚠️ Outdated (current v${current}, latest v${latest})`;
+    return { state: current === latest ? 'upToDate' : 'outdated', current, latest };
   };
 
+  // The error itself is surfaced once as a banner, so it is not repeated here.
   const versionDescription = (key: keyof VersionInfo) => {
-    if (versionError) return versionError;
     if (checkingVersions && !versionChecked) return 'Checking update feed...';
     if (latestVersions?.[key]) return `Latest available: v${latestVersions[key]}`;
     return 'Version reported by this installation';
@@ -100,7 +104,7 @@ export function useVersions() {
     versionError,
     loadCurrentVersions,
     handleCheckVersions,
-    versionStatusText,
+    versionStatus,
     versionDescription,
   };
 }

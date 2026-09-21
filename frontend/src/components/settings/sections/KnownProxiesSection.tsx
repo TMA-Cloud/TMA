@@ -70,7 +70,7 @@ export const KnownProxiesSection: React.FC<KnownProxiesSectionProps> = ({ canCon
   if (!canConfigure) return null;
 
   return (
-    <div className="relative">
+    <div className="rounded-xl bg-white/60 dark:bg-gray-900/50 border border-slate-200/50 dark:border-slate-700/30 px-4 py-3 transition-all duration-200 hover:border-blue-500/30 dark:hover:border-blue-500/30">
       <ConfigSectionHeader
         icon={Network}
         title="Known Proxies"
@@ -86,13 +86,13 @@ export const KnownProxiesSection: React.FC<KnownProxiesSectionProps> = ({ canCon
       />
 
       {restartRequired && (
-        <p className="mb-4 rounded-lg border border-amber-300/60 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-700/60 dark:bg-amber-950/30 dark:text-amber-200">
+        <p className="mt-3 rounded-lg border border-amber-300/60 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-700/60 dark:bg-amber-950/30 dark:text-amber-200">
           Restart the server to apply this change.
         </p>
       )}
 
       {!isCollapsed && (
-        <form autoComplete="off" onSubmit={event => event.preventDefault()}>
+        <form className="mt-4" autoComplete="off" onSubmit={event => event.preventDefault()}>
           <div className="space-y-4">
             {isEditing ? (
               <>

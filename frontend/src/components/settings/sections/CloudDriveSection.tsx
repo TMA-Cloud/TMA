@@ -2,6 +2,8 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { FolderSync } from 'lucide-react';
 import { SettingsSection } from '../components/SettingsSection';
 import { SettingsItem } from '../components/SettingsItem';
+import { SettingsGroup } from '../components/SettingsGroup';
+import { SettingsNote } from '../components/SettingsNote';
 import { useToast } from '../../../hooks/useToast';
 import {
   hasElectronCloudDrive,
@@ -70,20 +72,32 @@ export const CloudDriveSection: React.FC = () => {
     <SettingsSection
       title="Cloud Drive"
       icon={FolderSync}
-      description={
-        mountPoint
-          ? `Mounted as ${mountPoint} — save to it from any app's Save As dialog`
-          : "Save to TMA Cloud from any app's Save As dialog"
-      }
+      description="Save to TMA Cloud from any app's Save As dialog"
     >
-      <SettingsItem
-        label="Save-only Mode"
-        description="Folders stay browsable; opening and copying are blocked"
-        toggle
-        toggleValue={saveOnly}
-        onToggle={handleToggle}
-        toggleDisabled={!loaded || saving}
-      />
+      <div className="space-y-8">
+        <SettingsGroup title="Mount" description="Where the drive appears on this computer.">
+          <SettingsItem
+            label="Mount point"
+            value={mountPoint ?? (loaded ? 'Not mounted' : 'Checking...')}
+            description="The drive letter or path other apps will see"
+          />
+        </SettingsGroup>
+
+        <SettingsGroup title="Access mode" description="What other apps may do with files on the drive.">
+          <SettingsItem
+            label="Save-only Mode"
+            description="Folders stay browsable; opening and copying are blocked"
+            toggle
+            toggleValue={saveOnly}
+            onToggle={handleToggle}
+            toggleDisabled={!loaded || saving}
+          />
+          <SettingsNote>
+            Save-only keeps people viewing files in the app: other programs can still browse the drive and save into it,
+            but cannot read file contents off it.
+          </SettingsNote>
+        </SettingsGroup>
+      </div>
     </SettingsSection>
   );
 };

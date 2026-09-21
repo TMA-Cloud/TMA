@@ -1,13 +1,15 @@
 import React, { useState, useCallback } from 'react';
-import { HardDrive, Pencil, CheckCircle2 } from 'lucide-react';
+import { HardDrive, FileUp } from 'lucide-react';
 import { useToast } from '../../../hooks/useToast';
 import { useAuth } from '../../../contexts/AuthContext';
 import { getMaxUploadSizeConfig, updateMaxUploadSizeConfig } from '../../../utils/api';
 import { SettingsSection } from '../components/SettingsSection';
-import { SettingsItem } from '../components/SettingsItem';
+import { SettingsGroup } from '../components/SettingsGroup';
+import { SettingsNote } from '../components/SettingsNote';
+import { StorageMeter } from '../components/StorageMeter';
+import { ConfigSectionHeader } from '../components/ConfigSectionHeader';
 import { SettingsField, SettingsFormActions } from '../components/SettingsField';
 import { NumberInput } from '../../ui/NumberInput';
-import { formatFileSize } from '../../../utils/fileUtils';
 import { BYTES_PER_MB, BYTES_PER_GB } from '../../../utils/storageUtils';
 import { useAbortableLoader } from '../../../hooks/useAbortableLoader';
 import { useAsyncAction } from '../../../hooks/useAsyncAction';
@@ -135,87 +137,83 @@ export const StorageSection: React.FC<StorageSectionProps> = ({ usage, loading, 
     runSaveMaxUpload(newBytes);
   };
 
-  const totalLabel = usage && usage.total !== null ? formatFileSize(usage.total) : 'Unlimited';
-  const availableLabel = usage && usage.free !== null ? formatFileSize(usage.free) : 'Unlimited';
-
   return (
     <SettingsSection title="Storage" icon={HardDrive} description="Usage and upload limits">
-      <div className="space-y-4">
-        <SettingsItem
-          label="Used Space"
-          value={loading || !usage ? 'Loading...' : `${formatFileSize(usage.used)} of ${totalLabel}`}
-        />
-        <SettingsItem label="Available Space" value={loading || !usage ? 'Loading...' : availableLabel} />
+      <div className="space-y-8">
+        <SettingsGroup title="Usage" description="How much of this account's space is taken.">
+          <StorageMeter
+            used={usage?.used ?? 0}
+            total={usage?.total ?? null}
+            free={usage?.free ?? null}
+            loading={loading || !usage}
+          />
+        </SettingsGroup>
 
         {canConfigure && (
-          <>
-            {hasLoadedMaxUpload && !isEditingMaxUpload && (
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-xl bg-white/60 dark:bg-gray-900/50 border border-slate-200/50 dark:border-slate-700/30 px-5 py-4 hover:border-blue-500/30 transition-all duration-200">
-                <div>
-                  <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Max upload size</p>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">
-                    Maximum size for a single uploaded file (applies to all users)
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="flex items-center gap-1 text-green-600 dark:text-green-400">
-                    <CheckCircle2 className="w-4 h-4" />
-                    <span className="text-base font-semibold">
-                      {maxUploadLoading ? 'Loading...' : formatMaxUploadSize(maxBytes)}
-                    </span>
-                  </div>
-                  <button
-                    onClick={handleEditMaxUpload}
-                    disabled={maxUploadLoading || saving}
-                    className="p-2 rounded-lg text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                    aria-label="Edit max upload size"
-                  >
-                    <Pencil className="w-5 h-5" />
-                  </button>
-                </div>
-              </div>
-            )}
+          <SettingsGroup title="Limits" description="Applies to every user on this deployment.">
+            <div className="rounded-xl bg-white/60 dark:bg-gray-900/50 border border-slate-200/50 dark:border-slate-700/30 px-4 py-3 transition-all duration-200 hover:border-blue-500/30 dark:hover:border-blue-500/30">
+              <ConfigSectionHeader
+                icon={FileUp}
+                title="Max upload size"
+                description="The largest single file anyone can upload"
+                isConfigured
+                loading={maxUploadLoading}
+                saving={saving}
+                isCollapsed={!isEditingMaxUpload}
+                isEditing={isEditingMaxUpload}
+                hasLoadedSettings={hasLoadedMaxUpload}
+                editLabel="max upload size"
+                onEdit={isEditingMaxUpload ? handleCancelMaxUpload : handleEditMaxUpload}
+                status={{ text: formatMaxUploadSize(maxBytes), tone: 'neutral' }}
+              />
 
-            {isEditingMaxUpload && (
-              <form autoComplete="off" onSubmit={e => e.preventDefault()}>
-                <div className="space-y-4">
-                  <SettingsField
-                    htmlFor="max-upload-size-value"
-                    label="Max upload size"
-                    description={`Allowed range: ${MIN_LABEL} to ${MAX_LABEL} per file`}
-                  >
-                    <div className="mt-1 flex gap-2">
-                      <NumberInput
-                        id="max-upload-size-value"
-                        value={sizeInput}
-                        onValueChange={setSizeInput}
-                        disabled={maxUploadLoading || saving}
-                        data-form-type="other"
-                        className="flex-1 min-w-0 px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-[#ffffff] dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
-                      />
-                      <select
-                        aria-label="Unit"
-                        value={sizeUnit}
-                        onChange={e => handleUnitChange(e.target.value as SizeUnit)}
-                        disabled={maxUploadLoading || saving}
-                        className="px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-[#ffffff] dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        <option value="MB">MB</option>
-                        <option value="GB">GB</option>
-                      </select>
-                    </div>
-                  </SettingsField>
-                  <SettingsFormActions
-                    onCancel={handleCancelMaxUpload}
-                    onSave={handleSaveMaxUpload}
-                    saving={saving}
-                    disabled={maxUploadLoading || saving}
-                    saveLabel="Save"
-                  />
-                </div>
-              </form>
-            )}
-          </>
+              {isEditingMaxUpload && (
+                <form className="mt-4" autoComplete="off" onSubmit={e => e.preventDefault()}>
+                  <div className="space-y-4">
+                    <SettingsField
+                      htmlFor="max-upload-size-value"
+                      label="Max upload size"
+                      description={`Allowed range: ${MIN_LABEL} to ${MAX_LABEL} per file`}
+                    >
+                      <div className="mt-1 flex gap-2">
+                        <NumberInput
+                          id="max-upload-size-value"
+                          value={sizeInput}
+                          onValueChange={setSizeInput}
+                          disabled={maxUploadLoading || saving}
+                          data-form-type="other"
+                          className="flex-1 min-w-0 px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-[#ffffff] dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+                        />
+                        <select
+                          aria-label="Unit"
+                          value={sizeUnit}
+                          onChange={e => handleUnitChange(e.target.value as SizeUnit)}
+                          disabled={maxUploadLoading || saving}
+                          className="px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-[#ffffff] dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <option value="MB">MB</option>
+                          <option value="GB">GB</option>
+                        </select>
+                      </div>
+                    </SettingsField>
+                    <SettingsFormActions
+                      onCancel={handleCancelMaxUpload}
+                      onSave={handleSaveMaxUpload}
+                      saving={saving}
+                      disabled={maxUploadLoading || saving}
+                      saveLabel="Save"
+                    />
+                  </div>
+                </form>
+              )}
+            </div>
+          </SettingsGroup>
+        )}
+
+        {!canConfigure && (
+          <SettingsNote>
+            Storage limits and the maximum upload size are set by whoever administers this deployment.
+          </SettingsNote>
         )}
       </div>
     </SettingsSection>
