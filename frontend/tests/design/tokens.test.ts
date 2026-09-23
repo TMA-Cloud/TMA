@@ -19,8 +19,12 @@ import { describe, expect, it } from 'vitest';
  */
 
 const SRC = join(__dirname, '..', '..', 'src');
-const indexCss = readFileSync(join(SRC, 'index.css'), 'utf-8');
-const cursorsCss = readFileSync(join(SRC, 'cursors.css'), 'utf-8');
+const read = (path: string) => readFileSync(join(SRC, path), 'utf-8');
+
+/** Every local partial the entry imports, concatenated in import order. */
+const indexCss = [...read('index.css').matchAll(/@import '\.\/([^']+)'/g)].map(m => read(m[1]!)).join('\n');
+const themeCss = read('styles/tokens/theme.css');
+const cursorsCss = read('styles/base/cursors.css');
 
 // --- CSS extraction -------------------------------------------------------
 
@@ -67,7 +71,7 @@ function themes(css: string) {
   };
 }
 
-const T = themes(indexCss);
+const T = themes(themeCss);
 const C = themes(cursorsCss);
 
 /** Dark inherits everything it does not restate. */

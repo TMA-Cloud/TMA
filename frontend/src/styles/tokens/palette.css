@@ -1,0 +1,131 @@
+/* One neutral ramp and one accent, wired into Tailwind's built-in scales so
+   plain Tailwind classes stay on-palette too. */
+
+@theme {
+  /* Neutral ramp. The light end stops short of #fff to avoid glare. */
+  --color-neutral-0: #faf9f6;
+  --color-white: #faf9f6;
+  --color-neutral-50: #f9f9f7;
+  --color-neutral-100: #f3f3f0;
+  --color-neutral-200: #e7e6e1;
+  --color-neutral-300: #d4d3cc;
+  --color-neutral-400: #b0aea6;
+  --color-neutral-500: #8f8d85;
+  --color-neutral-600: #66645d;
+  --color-neutral-700: #4a4944;
+  --color-neutral-800: #2c2c28;
+  --color-neutral-900: #1b1b19;
+  --color-neutral-950: #0d0d0c;
+
+  /* slate / gray / zinc all resolve to the ramp above. */
+  --color-slate-50: #f9f9f7;
+  --color-slate-100: #f3f3f0;
+  --color-slate-200: #e7e6e1;
+  --color-slate-300: #d4d3cc;
+  --color-slate-400: #b0aea6;
+  --color-slate-500: #8f8d85;
+  --color-slate-600: #66645d;
+  --color-slate-700: #4a4944;
+  --color-slate-800: #2c2c28;
+  --color-slate-900: #1b1b19;
+  --color-slate-950: #0d0d0c;
+
+  --color-gray-50: #f9f9f7;
+  --color-gray-100: #f3f3f0;
+  --color-gray-200: #e7e6e1;
+  --color-gray-300: #d4d3cc;
+  --color-gray-400: #b0aea6;
+  --color-gray-500: #8f8d85;
+  --color-gray-600: #66645d;
+  --color-gray-700: #4a4944;
+  --color-gray-800: #2c2c28;
+  --color-gray-900: #1b1b19;
+  --color-gray-950: #0d0d0c;
+
+  --color-zinc-50: #f9f9f7;
+  --color-zinc-100: #f3f3f0;
+  --color-zinc-200: #e7e6e1;
+  --color-zinc-300: #d4d3cc;
+  --color-zinc-400: #b0aea6;
+  --color-zinc-500: #8f8d85;
+  --color-zinc-600: #66645d;
+  --color-zinc-700: #4a4944;
+  --color-zinc-800: #2c2c28;
+  --color-zinc-900: #1b1b19;
+  --color-zinc-950: #0d0d0c;
+
+  /* Blue */
+  --color-blue-50: #eaf4ff;
+  --color-blue-100: #d5e9ff;
+  --color-blue-200: #a9d2ff;
+  --color-blue-300: #64b5ff;
+  --color-blue-400: #0a84ff;
+  --color-blue-500: #007aff;
+  --color-blue-600: #0069e0;
+  --color-blue-700: #0055b8;
+  --color-blue-800: #004494;
+  --color-blue-900: #003670;
+
+  /* Green: success, share, restore */
+  --color-emerald-300: #6ee7a8;
+  --color-emerald-400: #30d158;
+  --color-emerald-500: #34c759;
+  --color-emerald-600: #248a3d;
+  --color-emerald-700: #1c6b30;
+  --color-green-400: #30d158;
+  --color-green-500: #34c759;
+  --color-green-600: #248a3d;
+
+  /* Red: destructive */
+  --color-red-300: #ff8a84;
+  --color-red-400: #ff453a;
+  --color-red-500: #ff3b30;
+  --color-red-600: #d70015;
+  --color-red-700: #a60009;
+
+  /* Orange / yellow: starred, warnings */
+  --color-amber-200: #ffe08a;
+  --color-amber-300: #ffd60a;
+  --color-amber-400: #ffd60a;
+  --color-amber-500: #ff9f0a;
+  --color-amber-600: #c93400;
+  --color-amber-700: #8f2400;
+  --color-yellow-400: #ffd60a;
+  --color-yellow-500: #ff9f0a;
+
+  /* Purple */
+  --color-violet-300: #d7a3f0;
+  --color-violet-400: #bf5af2;
+  --color-violet-500: #af52de;
+  --color-violet-600: #8944ab;
+  --color-purple-400: #bf5af2;
+  --color-purple-500: #af52de;
+
+  /* Teal / indigo */
+  --color-teal-400: #40c8e0;
+  --color-teal-500: #30b0c7;
+  --color-indigo-200: #c5c3ff;
+  --color-indigo-400: #7d7aff;
+  --color-indigo-500: #5e5ce6;
+
+  /* Larger surfaces get larger corners. */
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+  --radius-2xl: 22px;
+  --radius-3xl: 28px;
+
+  /* CSS stand-ins for springs, only where nothing is grabbable.
+     Gesture-driven motion uses the springs in src/motion. */
+  --animate-fadeIn: fadeIn 200ms cubic-bezier(0.25, 0.1, 0.25, 1);
+  --animate-modalIn: modalIn 400ms cubic-bezier(0.22, 1, 0.36, 1);
+  --animate-menuIn: menuIn 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  --animate-toastIn: toastIn 400ms cubic-bezier(0.22, 1, 0.36, 1);
+  --animate-bounceIn: fadeIn 200ms cubic-bezier(0.25, 0.1, 0.25, 1);
+  --animate-slideUp: slideUp 300ms cubic-bezier(0.22, 1, 0.36, 1);
+  --animate-slideDown: slideDown 300ms cubic-bezier(0.22, 1, 0.36, 1);
+  --animate-scaleIn: scaleIn 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  --animate-shimmer: shimmer 1.6s cubic-bezier(0.25, 0.1, 0.25, 1) infinite;
+  --animate-rotate360: rotate360 400ms cubic-bezier(0.25, 0.1, 0.25, 1);
+}

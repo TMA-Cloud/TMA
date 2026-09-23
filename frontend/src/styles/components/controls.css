@@ -1,0 +1,82 @@
+/* Shared form field and buttons. */
+
+.field {
+  width: 100%;
+  padding: 0.65rem 0.85rem;
+  border-radius: var(--radius-lg);
+  background: var(--fill-quaternary);
+  border: 1px solid transparent;
+  color: var(--label);
+  font: inherit;
+  font-size: 1.154rem;
+  letter-spacing: -0.006em;
+  transition:
+    background-color var(--dur-fast) var(--ease-standard),
+    border-color var(--dur-fast) var(--ease-standard),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+
+.field::placeholder {
+  color: var(--label-tertiary);
+}
+
+.field:focus {
+  outline: none;
+  background: var(--surface);
+  border-color: var(--accent-ring);
+  box-shadow: 0 0 0 4px var(--accent-fill);
+}
+
+.field[aria-invalid='true'] {
+  border-color: var(--destructive);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.65rem 1.1rem;
+  border-radius: var(--radius-lg);
+  font-size: 1.077rem;
+  font-weight: 600;
+  letter-spacing: -0.003em;
+  cursor: pointer;
+  transition:
+    transform var(--dur-instant) var(--ease-out),
+    scale var(--dur-instant) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-standard),
+    color var(--dur-fast) var(--ease-standard);
+}
+
+.btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: var(--label-on-accent);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.btn-secondary {
+  background: var(--fill-quaternary);
+  color: var(--label);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: var(--fill-tertiary);
+}
+
+.btn-destructive {
+  background: var(--destructive);
+  color: #ffffff;
+}

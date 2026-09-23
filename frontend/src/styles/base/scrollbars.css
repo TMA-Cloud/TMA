@@ -1,0 +1,66 @@
+/* Overlay scrollbars on a transparent track. Faint at rest, then stronger
+   while scrolling, on pane hover, and on thumb hover or drag. */
+
+::-webkit-scrollbar {
+  width: 14px;
+  height: 14px;
+}
+
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--fill-quaternary);
+  border-radius: 999px;
+  /* Transparent border insets the thumb: 6px visible, 14px hit target. */
+  border: 4px solid transparent;
+  background-clip: content-box;
+  transition:
+    background-color var(--dur-base) var(--ease-standard),
+    border-width var(--dur-fast) var(--ease-out);
+}
+
+[data-scrolling='true']::-webkit-scrollbar-thumb {
+  background-color: var(--fill-secondary);
+}
+
+:hover::-webkit-scrollbar-thumb {
+  background-color: var(--fill-primary);
+  border-width: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--label-tertiary);
+  border-width: 3px;
+}
+
+::-webkit-scrollbar-thumb:active {
+  background-color: var(--label-secondary);
+  border-width: 3px;
+}
+
+/* Firefox only supports the resting and hover states. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--fill-secondary) transparent;
+}
+
+*:hover {
+  scrollbar-color: var(--fill-primary) transparent;
+}
+
+/* Reserve the gutter so the bar appearing never reflows content. */
+.scroller {
+  scrollbar-gutter: stable;
+}
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}

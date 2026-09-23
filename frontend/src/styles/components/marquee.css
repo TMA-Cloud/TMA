@@ -1,0 +1,47 @@
+/* Selection rectangle: accent fill, one hairline, corner marks. */
+
+.marquee-selection {
+  position: absolute;
+  will-change: left, top, width, height;
+}
+
+.marquee-glow {
+  position: absolute;
+  inset: 0;
+  background: var(--accent-fill);
+  border-radius: var(--radius-sm);
+}
+
+.marquee-border {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--accent);
+  box-shadow: 0 0 0 0.5px var(--accent-ring);
+}
+
+.marquee-corner {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  background: var(--surface);
+  border: 1.5px solid var(--accent);
+  border-radius: 50%;
+}
+
+.marquee-corner-tl {
+  top: -3px;
+  left: -3px;
+}
+.marquee-corner-tr {
+  top: -3px;
+  right: -3px;
+}
+.marquee-corner-bl {
+  bottom: -3px;
+  left: -3px;
+}
+.marquee-corner-br {
+  bottom: -3px;
+  right: -3px;
+}

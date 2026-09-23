@@ -1,0 +1,17 @@
+.spacing-section {
+  padding: 1.5rem 0;
+}
+
+.spacing-card {
+  padding: 1.25rem;
+}
+
+@media (min-width: 768px) {
+  .spacing-section {
+    padding: 2rem 0;
+  }
+
+  .spacing-card {
+    padding: 1.75rem;
+  }
+}

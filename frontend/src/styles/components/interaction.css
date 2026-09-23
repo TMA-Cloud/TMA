@@ -1,0 +1,90 @@
+/* Press feedback is instant, on press rather than on click. */
+
+/* Tailwind emits scale/translate/rotate as standalone properties, so all of
+   them must be listed next to transform or they snap. */
+.transition-motion {
+  transition-property:
+    opacity,
+    transform,
+    scale,
+    translate,
+    rotate,
+    backdrop-filter,
+    -webkit-backdrop-filter;
+  transition-duration: var(--dur-base);
+  transition-timing-function: var(--ease-out);
+}
+
+.pressable {
+  transition:
+    transform var(--dur-instant) var(--ease-out),
+    scale var(--dur-instant) var(--ease-out),
+    translate var(--dur-instant) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-standard),
+    color var(--dur-fast) var(--ease-standard),
+    opacity var(--dur-fast) var(--ease-standard);
+  will-change: transform;
+}
+
+.pressable:active,
+.pressable[data-pressed='true'] {
+  transform: scale(0.97);
+}
+
+/* Larger surfaces scale less. */
+.pressable-lg:active,
+.pressable-lg[data-pressed='true'] {
+  transform: scale(0.985);
+}
+
+.hover-lift {
+  transition:
+    transform var(--dur-base) var(--ease-out),
+    scale var(--dur-base) var(--ease-out),
+    translate var(--dur-base) var(--ease-out),
+    box-shadow var(--dur-base) var(--ease-out);
+}
+
+.hover-lift:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-2);
+}
+
+.hover-lift:active {
+  transform: translateY(0) scale(0.99);
+  transition-duration: var(--dur-instant);
+}
+
+.icon-muted {
+  opacity: 0.75;
+  transition:
+    opacity var(--dur-fast) var(--ease-standard),
+    color var(--dur-fast) var(--ease-standard);
+}
+
+.icon-muted:hover {
+  opacity: 1;
+}
+
+.btn-glow {
+  transition:
+    transform var(--dur-instant) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-standard),
+    box-shadow var(--dur-base) var(--ease-out);
+}
+
+.btn-glow:active {
+  transform: scale(0.97);
+}
+
+.icon-rotate-on-hover {
+  transition: transform var(--dur-slow) var(--ease-momentum);
+}
+
+.group:hover .icon-rotate-on-hover {
+  transform: rotate(180deg);
+}
+
+.icon-rotate-active {
+  animation: rotate360 var(--dur-slow) var(--ease-momentum);
+}

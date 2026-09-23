@@ -1,0 +1,48 @@
+html {
+  font-size: var(--wf-font-base);
+  scroll-behavior: smooth;
+  background: var(--canvas);
+  /* Ease theme flips rather than cutting. */
+  transition:
+    background-color var(--dur-slow) var(--ease-standard),
+    color var(--dur-slow) var(--ease-standard);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  min-height: 100%;
+  width: 100%;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: 1.154rem; /* 15px at the 13px base */
+  line-height: 1.47;
+  letter-spacing: -0.006em;
+  color: var(--label);
+  background: var(--canvas);
+  font-optical-sizing: auto;
+  font-synthesis-weight: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* No tap highlight or double-tap zoom delay on press targets. */
+button,
+[role='button'] {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+::selection {
+  background: var(--accent-fill-strong);
+}

@@ -125,7 +125,7 @@ export const Tooltip: React.FC<TooltipProps> = ({ text, children, anchorClassNam
       {children}
       {mounted &&
         createPortal(
-          // Hidden during drag via body.is-dragging (see index.css).
+          // Hidden during drag via body.is-dragging (see styles/components/drag.css).
           <span
             ref={bubbleRef}
             className={`

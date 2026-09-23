@@ -1,0 +1,133 @@
+/* OS accessibility preferences. Imported last so these overrides win. */
+
+/* Reduced motion: slides and springs become short cross-fades. */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .stagger-item,
+  [class*='animate-'] {
+    animation: fadeIn 160ms var(--ease-standard) !important;
+    transform: none !important;
+  }
+
+  .pressable:active,
+  .pressable[data-pressed='true'],
+  .pressable-lg:active,
+  .hover-lift:hover,
+  .hover-lift:active,
+  .btn-glow:active {
+    transform: none;
+  }
+
+  .hover-lift:hover {
+    box-shadow: var(--shadow-2);
+  }
+}
+
+/* Reduced transparency: opaque surfaces, no blur. */
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --material-chrome: #f2f1ed;
+    --material-thin: #faf9f6;
+    --material-regular: #faf9f6;
+    --material-thick: #faf9f6;
+    --scrim: rgba(0, 0, 0, 0.45);
+  }
+
+  .dark,
+  html.dark {
+    --material-chrome: #1b1b19;
+    --material-thin: #2c2c28;
+    --material-regular: #262628;
+    --material-thick: #1b1b19;
+  }
+
+  .material-chrome,
+  .material-thin,
+  .material-regular,
+  .material-thick,
+  .drag-chip,
+  .drag-preview .preview-item {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  /* Without translucency the scrollbar needs its own channel. */
+  ::-webkit-scrollbar-track {
+    background: var(--fill-quaternary);
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background-color: var(--label-tertiary);
+  }
+}
+
+/* More contrast: near-solid surfaces and defined borders. */
+@media (prefers-contrast: more) {
+  /* Scoped away from dark: this unlayered block would outrank its tokens. */
+  :root:not(.dark) {
+    --canvas: #f3f3f0;
+    --surface: #ffffff;
+    --surface-raised: #ffffff;
+    --label: #131313;
+  }
+
+  :root {
+    --separator: rgba(0, 0, 0, 0.55);
+    --separator-strong: rgba(0, 0, 0, 0.8);
+    --label-secondary: rgba(19, 19, 19, 0.92);
+    --label-tertiary: rgba(19, 19, 19, 0.82);
+    --material-chrome: #ffffff;
+    --material-regular: #ffffff;
+    --material-thick: #ffffff;
+  }
+
+  .dark,
+  html.dark {
+    --canvas: #000000;
+    --surface-sunken: #000000;
+    --label: #ffffff;
+    --separator: rgba(255, 255, 255, 0.55);
+    --separator-strong: rgba(255, 255, 255, 0.8);
+    --label-secondary: rgba(235, 235, 245, 0.92);
+    --label-tertiary: rgba(235, 235, 245, 0.78);
+    --material-chrome: #000000;
+    --material-regular: #1b1b19;
+    --material-thick: #000000;
+  }
+
+  .card,
+  .card-premium,
+  .surface,
+  .surface-raised,
+  .material-regular,
+  .material-thick {
+    border: 1px solid var(--separator-strong);
+  }
+
+  /* Solid, full-width bar in its own channel. */
+  ::-webkit-scrollbar-track {
+    background: var(--fill-tertiary);
+    border-radius: 999px;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background-color: var(--label);
+    border-width: 3px;
+  }
+
+  * {
+    scrollbar-color: var(--label) var(--fill-tertiary);
+  }
+}

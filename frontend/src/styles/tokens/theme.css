@@ -1,0 +1,169 @@
+/* Semantic tokens. Components use these, not raw hex. Each is redefined for
+   dark mode, and contrast ratios are enforced by tests/design/tokens.test.ts. */
+
+@layer base {
+  :root {
+    color-scheme: light;
+
+    /* Spacing is in rem, so raising the base scales the whole UI. */
+    --wf-font-base: 13px;
+    --wf-font-max: calc(2 * var(--wf-font-base));
+
+    /* Platform UI face first, Inter as the fallback. */
+    --font-sans:
+      -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter var', Inter, 'Segoe UI Variable Text', 'Segoe UI',
+      system-ui, sans-serif;
+    --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', 'Cascadia Mono', Menlo, Consolas, monospace;
+
+    /* Backgrounds: warm off-white, below pure white to target comfortable
+       (APCA Lc ~90) rather than maximum contrast. */
+    --canvas: #edece8;
+    --surface: #f7f6f3;
+    --surface-raised: #faf9f6;
+    --surface-sunken: #e6e5e0;
+    --fill-quaternary: rgba(120, 118, 110, 0.09);
+    --fill-tertiary: rgba(120, 118, 110, 0.14);
+    --fill-secondary: rgba(120, 118, 110, 0.19);
+    --fill-primary: rgba(124, 122, 112, 0.25);
+
+    /* Text: warm charcoal. Secondary/tertiary alphas are derived from target
+       ratios (≈6.3:1 and ≥4.8:1 on every layer), not copied from dark. */
+    --label: #2b2a26;
+    --label-secondary: rgba(43, 42, 38, 0.78);
+    --label-tertiary: rgba(43, 42, 38, 0.7);
+    --label-quaternary: rgba(43, 42, 38, 0.42);
+    --label-on-accent: #ffffff;
+
+    /* Separators */
+    --separator: rgba(43, 42, 38, 0.17);
+    --separator-strong: rgba(43, 42, 38, 0.3);
+
+    /* Accent: deeper than system blue so it clears 4.5:1 as text and under
+       white button labels. */
+    --accent: #0866cc;
+    --accent-hover: #0059b8;
+    --accent-active: #004d9e;
+    --accent-fill: rgba(8, 102, 204, 0.1);
+    --accent-fill-strong: rgba(8, 102, 204, 0.16);
+    --accent-ring: rgba(8, 102, 204, 0.35);
+
+    /* Status fills, for backgrounds only; too light to read as text. */
+    --positive: #34c759;
+    --warning: #ff9f0a;
+    --destructive: #ff3b30;
+
+    /* Status text: darkened to clear 4.5:1. */
+    --positive-text: #1c6b30;
+    --warning-text: #a2540a;
+    --destructive-text: #d70015;
+
+    /* Folder artwork: two tones so it reads as a pocket at small sizes. */
+    --folder-back: #e07c00;
+    --folder-front: #ff9f0a;
+
+    /* Materials: bigger surfaces get more blur and deeper shadow. */
+    --material-chrome: rgba(242, 241, 237, 0.78);
+    --material-thin: rgba(249, 248, 245, 0.62);
+    --material-regular: rgba(249, 248, 245, 0.78);
+    --material-thick: rgba(249, 248, 245, 0.9);
+    --material-blur-thin: 20px;
+    --material-blur-regular: 30px;
+    --material-blur-thick: 44px;
+    --material-saturate: 180%;
+    --material-edge: rgba(255, 255, 255, 0.5);
+
+    /* Scrim behind modal tasks only. */
+    --scrim: rgba(0, 0, 0, 0.28);
+
+    /* Shadows */
+    --shadow-1: 0 1px 1px rgba(0, 0, 0, 0.03), 0 1px 2px rgba(0, 0, 0, 0.04);
+    --shadow-2: 0 1px 2px rgba(0, 0, 0, 0.04), 0 4px 10px rgba(0, 0, 0, 0.06);
+    --shadow-3: 0 2px 4px rgba(0, 0, 0, 0.05), 0 10px 24px rgba(0, 0, 0, 0.08);
+    --shadow-4: 0 4px 8px rgba(0, 0, 0, 0.06), 0 24px 56px rgba(0, 0, 0, 0.14);
+
+    /* Timing */
+    --dur-instant: 100ms;
+    --dur-fast: 160ms;
+    --dur-base: 240ms;
+    --dur-slow: 320ms;
+    --dur-sheet: 400ms;
+
+    /* In and out curves mirror each other so reversals retrace their path. */
+    --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+    --ease-in: cubic-bezier(0.64, 0, 0.78, 0);
+    --ease-standard: cubic-bezier(0.25, 0.1, 0.25, 1);
+    /* Slight overshoot, only for gesture-thrown motion. */
+    --ease-momentum: cubic-bezier(0.34, 1.35, 0.64, 1);
+  }
+
+  /* Light mode only uses the dark grays and blues as text, so point them at
+     the softer label and accent tones. */
+  :root:not(.dark) {
+    --color-gray-900: #2b2a26;
+    --color-slate-900: #2b2a26;
+    --color-zinc-900: #2b2a26;
+    --color-gray-800: #3a3934;
+    --color-slate-800: #3a3934;
+    --color-zinc-800: #3a3934;
+
+    --color-blue-500: #0866cc;
+    --color-blue-600: #0059b8;
+    --color-blue-700: #004d9e;
+  }
+
+  .dark,
+  html.dark {
+    color-scheme: dark;
+
+    /* Depth comes from lighter layers, not shadow. */
+    --canvas: #1b1b19;
+    --surface: #232320;
+    --surface-raised: #2c2c28;
+    --surface-sunken: #141413;
+    --fill-quaternary: rgba(140, 138, 128, 0.14);
+    --fill-tertiary: rgba(140, 138, 128, 0.2);
+    --fill-secondary: rgba(140, 138, 128, 0.27);
+    --fill-primary: rgba(142, 140, 130, 0.38);
+
+    --label: #f5f4f1;
+    --label-secondary: rgba(240, 239, 233, 0.62);
+    /* 0.54 keeps 4.5:1 on the raised surface, not just the canvas. */
+    --label-tertiary: rgba(240, 239, 233, 0.54);
+    --label-quaternary: rgba(240, 239, 233, 0.24);
+
+    --separator: rgba(132, 130, 120, 0.34);
+    --separator-strong: rgba(142, 140, 130, 0.52);
+
+    --accent: #0a84ff;
+    --accent-hover: #3d9bff;
+    --accent-active: #64b5ff;
+    --accent-fill: rgba(10, 132, 255, 0.16);
+    --accent-fill-strong: rgba(10, 132, 255, 0.26);
+    --accent-ring: rgba(10, 132, 255, 0.45);
+
+    --positive: #30d158;
+    --warning: #ffd60a;
+    --destructive: #ff453a;
+
+    /* Red is lifted to clear 4.5:1 on raised surfaces. */
+    --positive-text: #30d158;
+    --warning-text: #ffd60a;
+    --destructive-text: #ff6961;
+
+    --folder-back: #e08c1a;
+    --folder-front: #ffb340;
+
+    --material-chrome: rgba(25, 25, 23, 0.72);
+    --material-thin: rgba(44, 44, 40, 0.6);
+    --material-regular: rgba(38, 38, 34, 0.76);
+    --material-thick: rgba(28, 28, 25, 0.9);
+    --material-edge: rgba(255, 255, 255, 0.08);
+
+    --scrim: rgba(0, 0, 0, 0.62);
+
+    --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-2: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 12px rgba(0, 0, 0, 0.32);
+    --shadow-3: 0 2px 6px rgba(0, 0, 0, 0.34), 0 12px 28px rgba(0, 0, 0, 0.38);
+    --shadow-4: 0 4px 12px rgba(0, 0, 0, 0.38), 0 28px 64px rgba(0, 0, 0, 0.46);
+  }
+}
