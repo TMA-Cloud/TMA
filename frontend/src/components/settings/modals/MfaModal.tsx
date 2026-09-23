@@ -85,7 +85,7 @@ export const MfaModal: React.FC<MfaModalProps> = ({ isOpen, onClose }) => {
                     <button
                       onClick={handleRegenerateBackupCodes}
                       disabled={regenerating || (cooldownRemaining !== null && cooldownRemaining > 0)}
-                      className="w-full px-4 py-3 border-2 border-gray-300 dark:border-gray-600 hover:bg-[#f9f9f7] dark:hover:bg-gray-800 rounded-xl transition-colors font-medium text-gray-700 dark:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                      className="w-full px-4 py-3 border-2 border-gray-300 dark:border-gray-600 hover:bg-[var(--fill-quaternary)] dark:hover:bg-gray-800 rounded-xl transition-colors font-medium text-gray-700 dark:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                     >
                       {regenerating ? (
                         <>
@@ -153,7 +153,7 @@ export const MfaModal: React.FC<MfaModalProps> = ({ isOpen, onClose }) => {
                 <div className="space-y-2">
                   <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">Or enter this code manually:</p>
                   <div className="flex items-center gap-2">
-                    <code className="flex-1 px-4 py-3 bg-[#f9f9f7] dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-xl text-xs font-mono text-gray-900 dark:text-gray-100 break-all">
+                    <code className="flex-1 px-4 py-3 bg-[var(--surface)] dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-xl text-xs font-mono text-gray-900 dark:text-gray-100 break-all">
                       {secret}
                     </code>
                     <button
@@ -184,7 +184,7 @@ export const MfaModal: React.FC<MfaModalProps> = ({ isOpen, onClose }) => {
                 maxLength={6}
                 value={verificationCode}
                 onChange={e => setVerificationCode(e.target.value.replace(/\D/g, ''))}
-                className="w-full px-4 py-4 border-2 border-gray-300 dark:border-gray-600 rounded-xl bg-[#f9f9f7] dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-center text-3xl tracking-[0.5em] font-mono font-semibold"
+                className="w-full px-4 py-4 border-2 border-gray-300 dark:border-gray-600 rounded-xl bg-[var(--surface)] dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-center text-3xl tracking-[0.5em] font-mono font-semibold"
                 placeholder="000000"
                 autoFocus
               />
@@ -199,7 +199,7 @@ export const MfaModal: React.FC<MfaModalProps> = ({ isOpen, onClose }) => {
                   setStep('status');
                   setVerificationCode('');
                 }}
-                className="flex-1 px-4 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-xl hover:bg-[#f9f9f7] dark:hover:bg-gray-800 transition-colors font-medium text-gray-700 dark:text-gray-300"
+                className="flex-1 px-4 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-xl hover:bg-[var(--fill-quaternary)] dark:hover:bg-gray-800 transition-colors font-medium text-gray-700 dark:text-gray-300"
               >
                 Cancel
               </button>
@@ -246,7 +246,7 @@ export const MfaModal: React.FC<MfaModalProps> = ({ isOpen, onClose }) => {
                   const withoutDashes = filtered.replace(/-/g, '');
                   setVerificationCode(withoutDashes);
                 }}
-                className="w-full px-4 py-4 border-2 border-gray-300 dark:border-gray-600 rounded-xl bg-[#f9f9f7] dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 text-center text-2xl tracking-[0.3em] font-mono font-semibold uppercase"
+                className="w-full px-4 py-4 border-2 border-gray-300 dark:border-gray-600 rounded-xl bg-[var(--surface)] dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 text-center text-2xl tracking-[0.3em] font-mono font-semibold uppercase"
                 placeholder="000000 or ABCD-EFGH"
                 autoFocus
               />
@@ -262,7 +262,7 @@ export const MfaModal: React.FC<MfaModalProps> = ({ isOpen, onClose }) => {
                   setStep('status');
                   setVerificationCode('');
                 }}
-                className="flex-1 px-4 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-xl hover:bg-[#f9f9f7] dark:hover:bg-gray-800 transition-colors font-medium text-gray-700 dark:text-gray-300"
+                className="flex-1 px-4 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-xl hover:bg-[var(--fill-quaternary)] dark:hover:bg-gray-800 transition-colors font-medium text-gray-700 dark:text-gray-300"
               >
                 Cancel
               </button>
@@ -302,7 +302,7 @@ export const MfaModal: React.FC<MfaModalProps> = ({ isOpen, onClose }) => {
               <button
                 onClick={handleSkipSessions}
                 disabled={revokingSessions}
-                className="flex-1 px-4 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-xl hover:bg-[#f9f9f7] dark:hover:bg-gray-800 transition-colors font-medium text-gray-700 dark:text-gray-300 disabled:opacity-50"
+                className="flex-1 px-4 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-xl hover:bg-[var(--fill-quaternary)] dark:hover:bg-gray-800 transition-colors font-medium text-gray-700 dark:text-gray-300 disabled:opacity-50"
               >
                 Skip
               </button>
@@ -350,7 +350,7 @@ export const MfaModal: React.FC<MfaModalProps> = ({ isOpen, onClose }) => {
             <button
               onClick={() => setShowConfirmDialog(false)}
               disabled={regenerating}
-              className="flex-1 px-4 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-xl hover:bg-[#f9f9f7] dark:hover:bg-gray-800 transition-colors font-medium text-gray-700 dark:text-gray-300 disabled:opacity-50"
+              className="flex-1 px-4 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-xl hover:bg-[var(--fill-quaternary)] dark:hover:bg-gray-800 transition-colors font-medium text-gray-700 dark:text-gray-300 disabled:opacity-50"
             >
               Cancel
             </button>

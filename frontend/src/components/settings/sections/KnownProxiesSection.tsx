@@ -108,7 +108,7 @@ export const KnownProxiesSection: React.FC<KnownProxiesSectionProps> = ({ canCon
                     onChange={event => setValue(event.target.value)}
                     disabled={loading || saving}
                     placeholder="10.1.2.100, 172.18.0.0/16, proxy.example.com"
-                    className="mt-1 w-full resize-y px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-[#ffffff] dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="mt-1 w-full resize-y px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-[var(--surface-raised)] dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
                   />
                 </SettingsField>
                 <SettingsFormActions

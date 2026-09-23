@@ -15,7 +15,12 @@
 
 @theme {
   /* Neutral ramp, light end to dark end */
-  --color-neutral-0: #ffffff;
+  /* The light end stops short of paper-white. A #ffffff field is the brightest
+     thing on the display, and when it fills most of the window it sets the
+     eye's adaptation point there: text on it reads harsh and the glare tires
+     the eye long before the words do. */
+  --color-neutral-0: #faf9f6;
+  --color-white: #faf9f6;
   --color-neutral-50: #f9f9f7;
   --color-neutral-100: #f3f3f0;
   --color-neutral-200: #e7e6e1;
@@ -171,21 +176,31 @@
     /* --- Backgrounds ---
        A warm off-white ground, so both themes share one temperature: the
        ground is warm in each, and only the direction flips. An untinted
-       white page next to a warm dark one reads as two different products. */
-    --canvas: #f3f3f0;
-    --surface: #ffffff;
-    --surface-raised: #ffffff;
-    --surface-sunken: #f0efec;
+       white page next to a warm dark one reads as two different products.
+
+       Every layer sits below white (L* ~93-98). The target is comfortable
+       contrast, not maximum contrast: APCA puts body text at Lc 90 preferred,
+       and the old #131313-on-#ffffff pairing measured Lc 105 (18.6:1), which
+       is into the glare range that causes halation and fatigue over a long
+       session. Surfaces still step up in brightness toward the viewer, so
+       the layering reads the same as before. */
+    --canvas: #edece8;
+    --surface: #f7f6f3;
+    --surface-raised: #faf9f6;
+    --surface-sunken: #e6e5e0;
     /* Slightly heavier than the platform's own light fills. A grey at 8% over
        white is close to invisible — the search field and row hovers both read
        as missing rather than subtle. Warm-tinted. */
-    --fill-quaternary: rgba(120, 118, 110, 0.1);
-    --fill-tertiary: rgba(120, 118, 110, 0.15);
-    --fill-secondary: rgba(120, 118, 110, 0.2);
-    --fill-primary: rgba(124, 122, 112, 0.26);
+    --fill-quaternary: rgba(120, 118, 110, 0.09);
+    --fill-tertiary: rgba(120, 118, 110, 0.14);
+    --fill-secondary: rgba(120, 118, 110, 0.19);
+    --fill-primary: rgba(124, 122, 112, 0.25);
 
-    /* --- Text --- */
-    --label: #131313;
+    /* --- Text ---
+       A warm charcoal rather than near-black. Measured with APCA: Lc 90 on
+       the canvas, Lc 96-97 on surfaces (WCAG 12-13.6:1) — squarely in the
+       preferred band for body text without the vibration of black on white. */
+    --label: #2b2a26;
     /* Contrast is not symmetric between the two themes: white text at 62% on
        near-black lands around 6:1, while black text at the same alpha on white
        lands near 4:1. Matching the platform's alpha values in both directions
@@ -197,25 +212,36 @@
 
        Deriving them is also what keeps the quiet end legible: the reference
        palette's own muted grey measures 3.91:1 on this ground and 4.35:1 on
-       white, both under AA for the file-size and date line. */
-    --label-secondary: rgba(19, 19, 19, 0.7);
-    --label-tertiary: rgba(19, 19, 19, 0.6);
-    --label-quaternary: rgba(19, 19, 19, 0.4);
+       white, both under AA for the file-size and date line.
+
+       With the softer label the alphas rise to hold their floor: secondary
+       is Lc 75+ (6.3:1) everywhere, tertiary stays above 4.8:1 even on the
+       sunken layer. */
+    --label-secondary: rgba(43, 42, 38, 0.78);
+    --label-tertiary: rgba(43, 42, 38, 0.7);
+    --label-quaternary: rgba(43, 42, 38, 0.42);
     --label-on-accent: #ffffff;
 
     /* --- Separators --- */
     /* Same correction as the labels: a hairline needs more alpha on white to
        carry the weight it has on black. */
-    --separator: rgba(30, 30, 29, 0.22);
-    --separator-strong: rgba(30, 30, 29, 0.36);
+    /* Eased slightly with the text: a hairline that out-weighs the words next
+       to it reads as a grid rather than a boundary. */
+    --separator: rgba(43, 42, 38, 0.17);
+    --separator-strong: rgba(43, 42, 38, 0.3);
 
     /* --- Accent --- */
-    --accent: #007aff;
-    --accent-hover: #0069e0;
-    --accent-active: #0055b8;
-    --accent-fill: rgba(0, 122, 255, 0.1);
-    --accent-fill-strong: rgba(0, 122, 255, 0.16);
-    --accent-ring: rgba(0, 122, 255, 0.35);
+    /* A step deeper than the system blue. #007aff is tuned for a white ground
+       and measured 4.0:1 under white button text and 3.4:1 as link text on
+       this canvas; #0866cc clears 4.5:1 for both (5.6:1 and 4.7:1), and a
+       less luminous blue also stops the primary button glowing against the
+       dimmer surfaces. */
+    --accent: #0866cc;
+    --accent-hover: #0059b8;
+    --accent-active: #004d9e;
+    --accent-fill: rgba(8, 102, 204, 0.1);
+    --accent-fill-strong: rgba(8, 102, 204, 0.16);
+    --accent-ring: rgba(8, 102, 204, 0.35);
 
     /* Fills. These are tuned to be sat on, not read: as text on white they
        measure 2.2:1 (positive) and 2.1:1 (warning), nowhere near legible. */
@@ -240,16 +266,16 @@
     /* --- Materials ---
        Bigger surfaces read as thicker: more blur, deeper shadow. Chrome is the
        floating nav layer content scrolls beneath. */
-    --material-chrome: rgba(249, 249, 247, 0.72);
-    --material-thin: rgba(255, 255, 254, 0.62);
-    --material-regular: rgba(255, 255, 254, 0.76);
-    --material-thick: rgba(255, 255, 254, 0.88);
+    --material-chrome: rgba(242, 241, 237, 0.78);
+    --material-thin: rgba(249, 248, 245, 0.62);
+    --material-regular: rgba(249, 248, 245, 0.78);
+    --material-thick: rgba(249, 248, 245, 0.9);
     --material-blur-thin: 20px;
     --material-blur-regular: 30px;
     --material-blur-thick: 44px;
     --material-saturate: 180%;
     /* A bright top edge reads as light catching the surface. */
-    --material-edge: rgba(255, 255, 255, 0.7);
+    --material-edge: rgba(255, 255, 255, 0.5);
 
     /* Scrim behind a modal task. A parallel panel gets no scrim. */
     --scrim: rgba(0, 0, 0, 0.28);
@@ -276,6 +302,26 @@
     --ease-standard: cubic-bezier(0.25, 0.1, 0.25, 1);
     /* Slight overshoot — only for motion a gesture threw. */
     --ease-momentum: cubic-bezier(0.34, 1.35, 0.64, 1);
+  }
+
+  /* The dark end of the ramp is the dark theme's ground, so it can't move —
+     but in light mode those same steps are only ever used as text colour
+     (text-gray-900 on headings and names). Point them at the label tones
+     there, so a component that names a Tailwind grey instead of --label
+     doesn't bring the black-on-white glare back. */
+  :root:not(.dark) {
+    --color-gray-900: #2b2a26;
+    --color-slate-900: #2b2a26;
+    --color-zinc-900: #2b2a26;
+    --color-gray-800: #3a3934;
+    --color-slate-800: #3a3934;
+    --color-zinc-800: #3a3934;
+
+    /* Same story for the blues components name directly (bg-blue-500 buttons,
+       text-blue-600 links): track the deeper light-mode accent above. */
+    --color-blue-500: #0866cc;
+    --color-blue-600: #0059b8;
+    --color-blue-700: #004d9e;
   }
 
   .dark,
@@ -1441,10 +1487,10 @@ body.is-dragging [role='tooltip'] {
    blur, so nothing behind the surface competes with what is on it. */
 @media (prefers-reduced-transparency: reduce) {
   :root {
-    --material-chrome: #f9f9f7;
-    --material-thin: #ffffff;
-    --material-regular: #ffffff;
-    --material-thick: #ffffff;
+    --material-chrome: #f2f1ed;
+    --material-thin: #faf9f6;
+    --material-regular: #faf9f6;
+    --material-thick: #faf9f6;
     --scrim: rgba(0, 0, 0, 0.45);
   }
 
@@ -1479,6 +1525,16 @@ body.is-dragging [role='tooltip'] {
 
 /* Near-solid surfaces, and every edge gets a defined border to lean on. */
 @media (prefers-contrast: more) {
+  /* Asked-for contrast is the one place black on white belongs. Scoped away
+     from dark mode: this block is unlayered, so it would outrank the dark
+     theme's layered surfaces. */
+  :root:not(.dark) {
+    --canvas: #f3f3f0;
+    --surface: #ffffff;
+    --surface-raised: #ffffff;
+    --label: #131313;
+  }
+
   :root {
     --separator: rgba(0, 0, 0, 0.55);
     --separator-strong: rgba(0, 0, 0, 0.8);

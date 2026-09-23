@@ -103,7 +103,7 @@ export const TransferProgress: React.FC<TransferProgressProps> = ({
         {items.map((item, index) => (
           <div
             key={item.id}
-            className={`bg-[#ffffff] dark:bg-gray-900 border border-gray-200/50 dark:border-gray-700/50 rounded-xl shadow-xl backdrop-blur-xl transition-all duration-300 ease-out animate-fadeIn ${
+            className={`bg-[var(--surface-raised)] dark:bg-gray-900 border border-gray-200/50 dark:border-gray-700/50 rounded-xl shadow-xl backdrop-blur-xl transition-all duration-300 ease-out animate-fadeIn ${
               isMobile ? 'p-3' : 'p-4 hover:shadow-2xl'
             }`}
             style={{ animationDelay: `${index * 50}ms`, transform: 'translateY(0)' }}
@@ -136,7 +136,7 @@ export const TransferProgress: React.FC<TransferProgressProps> = ({
       onMouseLeave={() => setIsHovered(false)}
     >
       <div
-        className={`bg-[#ffffff] dark:bg-gray-900 border border-gray-200/50 dark:border-gray-700/50 rounded-xl shadow-xl backdrop-blur-xl transition-all duration-300 ease-out animate-fadeIn overflow-hidden ${
+        className={`bg-[var(--surface-raised)] dark:bg-gray-900 border border-gray-200/50 dark:border-gray-700/50 rounded-xl shadow-xl backdrop-blur-xl transition-all duration-300 ease-out animate-fadeIn overflow-hidden ${
           isMobile ? '' : 'hover:shadow-2xl'
         }`}
         style={{ transform: 'translateY(0) scale(1)' }}
@@ -220,7 +220,7 @@ export const TransferProgress: React.FC<TransferProgressProps> = ({
               key={item.id}
               className={`${
                 isMobile ? 'px-3 py-2' : 'px-5 py-3'
-              } border-b border-gray-100 dark:border-gray-800/50 last:border-b-0 hover:bg-[#ffffff]/50 dark:hover:bg-gray-800/30 transition-all duration-200 ease-out`}
+              } border-b border-gray-100 dark:border-gray-800/50 last:border-b-0 hover:bg-[var(--surface-raised)]/50 dark:hover:bg-gray-800/30 transition-all duration-200 ease-out`}
               style={{ animationDelay: `${index * 30}ms` }}
             >
               <TransferItemCard
@@ -241,7 +241,7 @@ export const TransferProgress: React.FC<TransferProgressProps> = ({
             <div
               className={`${isMobile ? 'px-3 py-2' : 'px-5 py-3'} text-center ${
                 isMobile ? 'text-[10px]' : 'text-xs'
-              } font-medium text-gray-500 dark:text-gray-400 bg-[#ffffff]/50 dark:bg-gray-800/30`}
+              } font-medium text-gray-500 dark:text-gray-400 bg-[var(--surface-raised)]/50 dark:bg-gray-800/30`}
             >
               +{remainingCount} more file{remainingCount !== 1 ? 's' : ''}
             </div>
@@ -254,7 +254,7 @@ export const TransferProgress: React.FC<TransferProgressProps> = ({
           onMouseLeave={() => setTimeout(() => setIsHovered(false), 100)}
           className={`w-full ${isMobile ? 'px-3 py-2.5' : 'px-5 py-3'} ${
             isMobile ? 'text-xs' : 'text-sm'
-          } font-medium text-gray-700 dark:text-gray-300 hover:bg-[#ffffff] dark:hover:bg-gray-800/50 transition-all duration-200 flex items-center justify-center space-x-2 border-t border-gray-100 dark:border-gray-800/50 active:scale-95 touch-manipulation`}
+          } font-medium text-gray-700 dark:text-gray-300 hover:bg-[var(--surface-raised)] dark:hover:bg-gray-800/50 transition-all duration-200 flex items-center justify-center space-x-2 border-t border-gray-100 dark:border-gray-800/50 active:scale-95 touch-manipulation`}
         >
           {isExpanded ? (
             <>

@@ -271,7 +271,7 @@ export const UsersModal: React.FC<UsersModalProps> = ({
                   return (
                     <tr
                       key={listedUser.id}
-                      className={`border-b border-gray-100 dark:border-gray-800 last:border-b-0 hover:bg-[#f9f9f7]/80 dark:hover:bg-gray-900/40 transition-colors ${
+                      className={`border-b border-gray-100 dark:border-gray-800 last:border-b-0 hover:bg-[var(--surface)]/80 dark:hover:bg-gray-900/40 transition-colors ${
                         owner ? 'bg-slate-100/50 dark:bg-gray-900/25' : ''
                       }`}
                     >
@@ -321,7 +321,7 @@ export const UsersModal: React.FC<UsersModalProps> = ({
                               onValueChange={setEditValue}
                               maxLength={15}
                               placeholder="0"
-                              className="px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-[#ffffff] dark:bg-gray-800 text-gray-900 dark:text-gray-100 w-20 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                              className="px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-[var(--surface-raised)] dark:bg-gray-800 text-gray-900 dark:text-gray-100 w-20 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                               disabled={isUpdating}
                               onKeyDown={e => {
                                 if (e.key === 'Enter') {
@@ -336,7 +336,7 @@ export const UsersModal: React.FC<UsersModalProps> = ({
                               value={editUnit}
                               onChange={e => setEditUnit(e.target.value as 'MB' | 'GB' | 'TB')}
                               disabled={isUpdating}
-                              className="px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-[#ffffff] dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 cursor-pointer"
+                              className="px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-[var(--surface-raised)] dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 cursor-pointer"
                             >
                               <option value="MB">MB</option>
                               <option value="GB">GB</option>
