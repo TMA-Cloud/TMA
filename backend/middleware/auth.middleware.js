@@ -65,8 +65,12 @@ export default async function authMiddleware(req, res, next) {
     req.userId = decoded.id;
     req.sessionId = decoded.sid || null;
 
-    // Verify token version - protects against stolen tokens after "logout all devices"
-    const currentTokenVersion = await getUserTokenVersion(decoded.id);
+    // Verify token version - protects against stolen tokens after "logout all devices".
+    // The account lookup is independent, so fetch both in one round trip.
+    const [currentTokenVersion, account] = await Promise.all([
+      getUserTokenVersion(decoded.id),
+      getAccountContext(decoded.id),
+    ]);
     if (currentTokenVersion === null) {
       logger.warn({ userId: decoded.id }, 'Token validation failed: user not found');
       return res.status(401).json({ message: 'Invalid token' });
@@ -118,7 +122,6 @@ export default async function authMiddleware(req, res, next) {
     // Resolve which account this identity acts under. Owners act for
     // themselves; a sub-user acts on its parent's files and storage quota, so
     // every data-access path keys off `req.ownerId` rather than `req.userId`.
-    const account = await getAccountContext(decoded.id);
     if (!account) {
       logger.warn({ userId: decoded.id }, 'Token validation failed: account not found');
       return res.status(401).json({ message: 'Invalid token' });

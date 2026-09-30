@@ -39,9 +39,16 @@ router.get('/', (_req, res) => {
   res.json({ backend: backendVersion });
 });
 
+// Releases are rare; without this every user's update check refetches from GitHub.
+const LATEST_CACHE_MS = 10 * 60 * 1000;
+let latestCache = null;
+
 // Proxy endpoint to fetch latest versions from GitHub (avoids CORS issues)
 // Any authenticated user can check for updates
 router.get('/latest', (req, res) => {
+  if (latestCache && Date.now() - latestCache.at < LATEST_CACHE_MS) {
+    return res.json(latestCache.body);
+  }
   const url = 'https://tma-cloud.github.io/updates/versions.json';
   let responseSent = false;
 
@@ -77,11 +84,13 @@ router.get('/latest', (req, res) => {
       try {
         const versions = JSON.parse(data);
         responseSent = true;
-        res.json({
+        const body = {
           frontend: versions.frontend ?? 'unknown',
           backend: versions.backend ?? 'unknown',
           electron: versions.electron ?? 'unknown',
-        });
+        };
+        latestCache = { at: Date.now(), body };
+        res.json(body);
       } catch (error) {
         logger.error({ err: error }, 'Error parsing versions JSON');
         sendLocalError(500, 'Failed to parse versions data');
