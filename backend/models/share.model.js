@@ -70,7 +70,11 @@ async function upsertShareRoots(rootIds, userId, expiresAt) {
     const shareIds = rootIds.map(rootId => tokens[rootId]);
     result = await client.query(
       `WITH RECURSIVE mapping(root_id, share_id) AS (
-         SELECT * FROM unnest($1::text[], $2::text[])
+         -- Only roots the caller owns: a link row for anyone else's file made
+         -- its public page resolve.
+         SELECT u.root_id, u.share_id
+           FROM unnest($1::text[], $2::text[]) AS u(root_id, share_id)
+           JOIN files f ON f.id = u.root_id AND f.user_id = $3 AND f.deleted_at IS NULL
        ), inserted_links AS (
          INSERT INTO share_links(id, file_id, user_id, expires_at)
          SELECT m.share_id, m.root_id, $3, $4
@@ -414,8 +418,8 @@ async function getFileByToken(token) {
     `SELECT f.id, f.name, f.type, f.mime_type AS "mimeType", f.size, f.path, f.user_id AS "userId",
             s.expires_at AS "expiresAt"
      FROM share_links s
-     JOIN files f ON s.file_id = f.id
-     WHERE s.id = $1`,
+     JOIN files f ON s.file_id = f.id AND f.user_id = s.user_id
+     WHERE s.id = $1 AND f.deleted_at IS NULL`,
     [token]
   );
   const file = res.rows[0] || null;
@@ -499,13 +503,13 @@ async function getSharedFolderPath(token, folderId) {
        SELECT f.id, f.name, f.type, f.parent_id, ARRAY[f.id]
        FROM files f
        JOIN share_link_files slf ON slf.file_id = f.id
-       WHERE slf.share_id = $1 AND f.id = $2
+       WHERE slf.share_id = $1 AND f.id = $2 AND f.deleted_at IS NULL
        UNION ALL
        SELECT f.id, f.name, f.type, f.parent_id, up.visited || f.id
        FROM files f
        JOIN share_link_files slf ON slf.file_id = f.id
        JOIN up ON up.parent_id = f.id
-       WHERE slf.share_id = $1 AND NOT f.id = ANY(up.visited)
+       WHERE slf.share_id = $1 AND f.deleted_at IS NULL AND NOT f.id = ANY(up.visited)
      )
      SELECT id, name, type FROM up`,
     [token, folderId]

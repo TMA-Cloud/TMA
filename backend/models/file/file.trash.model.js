@@ -1,6 +1,6 @@
 import pool from '../../config/db.js';
 import { logger } from '../../config/logger.js';
-import { invalidateAllFileCaches } from '../../utils/cache.js';
+import { invalidateAllFileCaches, invalidateShareCache } from '../../utils/cache.js';
 import storage from '../../utils/storageDriver.js';
 
 import { buildKeysetPage, buildOrderClause, finishKeysetPage } from './file.utils.model.js';
@@ -24,7 +24,18 @@ async function deleteFiles(ids, userId) {
     [ids, userId]
   );
   await invalidateAllFileCaches(userId);
+  // A cached share-token lookup would keep serving the trashed item publicly.
+  await invalidateSharesContaining(result.rows.map(row => row.id));
   return result.rowCount || 0;
+}
+
+/** Drop cached lookups and listings for every share that includes these items. */
+async function invalidateSharesContaining(fileIds) {
+  if (fileIds.length === 0) return;
+  const shares = await pool.query('SELECT DISTINCT share_id FROM share_link_files WHERE file_id = ANY($1::text[])', [
+    fileIds,
+  ]);
+  await Promise.all(shares.rows.map(row => invalidateShareCache(row.share_id)));
 }
 
 /**

@@ -27,6 +27,12 @@ async function shareFilesController(req, res) {
     const links = {};
 
     if (shared) {
+      // Without this, another account's file id got a live public link to its
+      // metadata page: the share row was written before ownership was checked.
+      const owned = await getFileInfo(ids, req.ownerId);
+      if (owned.length !== new Set(ids).size) {
+        return sendError(res, 404, 'File not found');
+      }
       const expiresAt = computeExpiresAt(expiry || '7d');
 
       const shareResult = await upsertShareRoots(ids, req.ownerId, expiresAt);

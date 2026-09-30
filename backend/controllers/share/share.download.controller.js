@@ -71,7 +71,7 @@ async function downloadSharedItem(req, res) {
       `SELECT f.id, f.name, f.type, f.mime_type AS "mimeType", f.path
        FROM files f
        INNER JOIN share_link_files slf ON slf.file_id = f.id AND slf.share_id = $1
-       WHERE f.id = $2`,
+       WHERE f.id = $2 AND f.deleted_at IS NULL`,
       [token, fileId]
     );
     const file = res2.rows[0];
