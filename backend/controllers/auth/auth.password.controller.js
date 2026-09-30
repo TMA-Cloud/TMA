@@ -1,4 +1,4 @@
-import bcrypt from 'bcryptjs';
+import bcrypt from '@node-rs/bcrypt';
 
 import { logger } from '../../config/logger.js';
 import { deleteAllUserSessions, isSessionRecent } from '../../models/session.model.js';

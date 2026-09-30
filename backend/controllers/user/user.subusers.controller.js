@@ -8,7 +8,7 @@
  * as in the schema.
  */
 
-import bcrypt from 'bcryptjs';
+import bcrypt from '@node-rs/bcrypt';
 
 import { logger } from '../../config/logger.js';
 import {

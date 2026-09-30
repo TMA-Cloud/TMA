@@ -1,4 +1,4 @@
-import bcrypt from 'bcryptjs';
+import bcrypt from '@node-rs/bcrypt';
 import { OAuth2Client } from 'google-auth-library';
 import jwt from 'jsonwebtoken';
 

@@ -1,4 +1,4 @@
-import bcrypt from 'bcryptjs';
+import bcrypt from '@node-rs/bcrypt';
 
 import { logger } from '../../config/logger.js';
 import { createUser, getUserByEmail, getSignupEnabled, handleFirstUserSetup } from '../../models/user.model.js';

@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 
-import bcrypt from 'bcryptjs';
+import bcrypt from '@node-rs/bcrypt';
 
 import pool from '../../config/db.js';
 import { logger } from '../../config/logger.js';
