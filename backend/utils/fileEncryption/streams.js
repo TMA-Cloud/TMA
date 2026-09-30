@@ -7,6 +7,8 @@
 import crypto from 'crypto';
 import { Transform, Readable } from 'stream';
 
+import { ChunkQueue } from './chunkQueue.js';
+
 import {
   CIPHERTEXT_SEGMENT_SIZE,
   DERIVED_KEY_LENGTH,
@@ -43,7 +45,7 @@ function createEncryptStream(ikm = getEncryptionKey()) {
 
   let headerPushed = false;
   let segIndex = 0;
-  let pending = Buffer.alloc(0);
+  const pending = new ChunkQueue();
 
   const segmentCap = () => (segIndex === 0 ? PLAINTEXT_FIRST_SEGMENT_MAX : PLAINTEXT_SEGMENT_MAX);
 
@@ -54,12 +56,10 @@ function createEncryptStream(ikm = getEncryptionKey()) {
           this.push(header);
           headerPushed = true;
         }
-        pending = pending.length === 0 ? chunk : Buffer.concat([pending, chunk]);
+        pending.push(chunk);
         // Emit only when more data follows, so the remainder can become the last.
         while (pending.length > segmentCap()) {
-          const cap = segmentCap();
-          const seg = pending.subarray(0, cap);
-          pending = pending.subarray(cap);
+          const seg = pending.take(segmentCap());
           this.push(encryptSegment(derivedKey, noncePrefix, segIndex, false, seg));
           segIndex += 1;
         }
@@ -75,7 +75,7 @@ function createEncryptStream(ikm = getEncryptionKey()) {
           headerPushed = true;
         }
         // Final segment (an empty file yields a segment that is just the tag).
-        this.push(encryptSegment(derivedKey, noncePrefix, segIndex, true, pending));
+        this.push(encryptSegment(derivedKey, noncePrefix, segIndex, true, pending.takeAll()));
         callback();
       } catch (err) {
         callback(err);
@@ -94,7 +94,7 @@ function createSequentialDecryptTransform(ikm = getEncryptionKey()) {
   let headerParsed = false;
   let derivedKey = null;
   let noncePrefix = null;
-  let buf = Buffer.alloc(0);
+  const buf = new ChunkQueue();
   let segIndex = 0;
 
   const currentCiphertextCap = () =>
@@ -103,22 +103,19 @@ function createSequentialDecryptTransform(ikm = getEncryptionKey()) {
   return new Transform({
     transform(chunk, _encoding, callback) {
       try {
-        buf = buf.length === 0 ? chunk : Buffer.concat([buf, chunk]);
+        buf.push(chunk);
 
         if (!headerParsed) {
           if (buf.length < HEADER_LENGTH) return callback();
-          const { salt, noncePrefix: np } = parseHeader(buf);
+          const { salt, noncePrefix: np } = parseHeader(buf.take(HEADER_LENGTH));
           derivedKey = deriveKey(ikm, salt);
           noncePrefix = np;
           headerParsed = true;
-          buf = buf.subarray(HEADER_LENGTH);
         }
 
         // Emit any segment followed by more bytes (so it is not last).
         while (buf.length > currentCiphertextCap()) {
-          const cap = currentCiphertextCap();
-          const ct = buf.subarray(0, cap);
-          buf = buf.subarray(cap);
+          const ct = buf.take(currentCiphertextCap());
           this.push(decryptSegment(derivedKey, noncePrefix, segIndex, false, ct));
           segIndex += 1;
         }
@@ -135,7 +132,7 @@ function createSequentialDecryptTransform(ikm = getEncryptionKey()) {
         if (buf.length < TAG_LENGTH) {
           return callback(new Error('Invalid encrypted stream: truncated final segment'));
         }
-        this.push(decryptSegment(derivedKey, noncePrefix, segIndex, true, buf));
+        this.push(decryptSegment(derivedKey, noncePrefix, segIndex, true, buf.takeAll()));
         callback();
       } catch (err) {
         callback(err);
@@ -212,17 +209,16 @@ async function createRangeDecryptStream({ readRange, plaintextSize, start, end, 
   const ciphertextStream = await readRange(ctStart, ctEnd);
 
   async function* decryptRange() {
-    let pending = Buffer.alloc(0);
+    const pending = new ChunkQueue();
     let seg = firstSeg;
     let emitted = 0;
 
     for await (const chunk of ciphertextStream) {
-      pending = pending.length === 0 ? chunk : Buffer.concat([pending, chunk]);
+      pending.push(chunk);
       while (seg <= lastSeg) {
         const need = ciphertextSegmentLength(seg, plaintextSize);
         if (pending.length < need) break;
-        const ct = pending.subarray(0, need);
-        pending = pending.subarray(need);
+        const ct = pending.take(need);
 
         let pt = decryptSegment(derivedKey, noncePrefix, seg, seg === total - 1, ct);
         if (seg === firstSeg && frontTrim > 0) pt = pt.subarray(frontTrim);
