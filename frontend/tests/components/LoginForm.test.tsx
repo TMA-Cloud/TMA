@@ -135,6 +135,14 @@ describe('auth validation rules', () => {
     expect(validateNewPassword('a'.repeat(129))).toMatch(/128/);
   });
 
+  it('caps a new password at the 72 bytes bcrypt actually reads', () => {
+    expect(validateNewPassword('a'.repeat(72))).toBeNull();
+    expect(validateNewPassword('a'.repeat(73))).toMatch(/72 bytes/);
+    // 24 three-byte characters is 72 bytes; one more crosses the line.
+    expect(validateNewPassword('€'.repeat(24))).toBeNull();
+    expect(validateNewPassword('€'.repeat(25))).toMatch(/72 bytes/);
+  });
+
   it('takes a 6-digit code or an 8-character backup code', () => {
     expect(validateMfaCode('123456')).toBeNull();
     expect(validateMfaCode('ABCD1234')).toBeNull();

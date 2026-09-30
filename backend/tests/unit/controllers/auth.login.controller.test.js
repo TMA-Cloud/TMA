@@ -330,3 +330,21 @@ describe('googleMfaVerify', () => {
     expect(JSON.stringify(res.body)).not.toContain('ECONNREFUSED');
   });
 });
+
+describe('login without a usable password hash', () => {
+  it('answers an unknown email with 401 after the same bcrypt work as a wrong password', async () => {
+    models.getUserByEmail.mockResolvedValue(null);
+    const started = performance.now();
+    const { res } = await attemptLogin({ email: 'nobody@example.com', password: 'whatever-pw' });
+    expect(res.statusCode).toBe(401);
+    // A real bcrypt compare (cost 10) takes tens of ms; an early return takes ~0.
+    expect(performance.now() - started).toBeGreaterThan(5);
+  });
+
+  it('answers a Google-only account (no hash) with 401 rather than crashing', async () => {
+    models.getUserByEmail.mockResolvedValue(userRow({ password: null }));
+    const { res } = await attemptLogin({ email: 'user@example.com', password: 'whatever-pw' });
+    expect(res.statusCode).toBe(401);
+    expect(session.createSessionAndToken).not.toHaveBeenCalled();
+  });
+});

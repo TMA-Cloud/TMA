@@ -7,6 +7,21 @@ const MAX_EMAIL_LENGTH = 254;
 const MIN_PASSWORD_LENGTH = 8;
 const MAX_PASSWORD_LENGTH = 128;
 const MAX_NAME_LENGTH = 100;
+// bcrypt ignores input past 72 bytes (OWASP: cap there), so longer new
+// passwords would silently match anything sharing their first 72 bytes.
+const MAX_PASSWORD_BYTES = 72;
+
+/** Rules for a password being set (signup, change, sub-user creation). */
+const newPasswordRule = (field, label = 'Password') =>
+  body(field)
+    .isString()
+    .withMessage(`${label} is required`)
+    .bail()
+    .isLength({ min: MIN_PASSWORD_LENGTH, max: MAX_PASSWORD_LENGTH })
+    .withMessage(`${label} must be between ${MIN_PASSWORD_LENGTH} and ${MAX_PASSWORD_LENGTH} characters`)
+    .bail()
+    .custom(value => Buffer.byteLength(value, 'utf8') <= MAX_PASSWORD_BYTES)
+    .withMessage(`${label} must not exceed ${MAX_PASSWORD_BYTES} bytes`);
 // Allow letters (including Unicode), numbers, and special characters; forbid path/control and Windows-reserved
 // eslint-disable-next-line no-control-regex -- Intentional: exclude control chars for security
 const FILE_NAME_REGEX = /^[^\x00-\x1F\x7F/\\:*?"<>|]+$/;
@@ -18,9 +33,7 @@ const signupSchema = [
     .isLength({ max: MAX_EMAIL_LENGTH })
     .withMessage(`Email must not exceed ${MAX_EMAIL_LENGTH} characters`)
     .normalizeEmail(),
-  body('password')
-    .isLength({ min: MIN_PASSWORD_LENGTH, max: MAX_PASSWORD_LENGTH })
-    .withMessage(`Password must be between ${MIN_PASSWORD_LENGTH} and ${MAX_PASSWORD_LENGTH} characters`),
+  newPasswordRule('password'),
   body('name')
     .optional()
     .isString()
@@ -39,6 +52,9 @@ const loginSchema = [
     .withMessage(`Email must not exceed ${MAX_EMAIL_LENGTH} characters`)
     .normalizeEmail(),
   body('password')
+    .isString()
+    .withMessage('Password is required')
+    .bail()
     .isLength({ max: MAX_PASSWORD_LENGTH })
     .withMessage(`Password must not exceed ${MAX_PASSWORD_LENGTH} characters`),
 ];
@@ -49,11 +65,7 @@ const changePasswordSchema = [
     .withMessage('Current password is required')
     .isLength({ min: 1, max: MAX_PASSWORD_LENGTH })
     .withMessage(`Current password must not exceed ${MAX_PASSWORD_LENGTH} characters`),
-  body('newPassword')
-    .isString()
-    .withMessage('New password is required')
-    .isLength({ min: MIN_PASSWORD_LENGTH, max: MAX_PASSWORD_LENGTH })
-    .withMessage(`New password must be between ${MIN_PASSWORD_LENGTH} and ${MAX_PASSWORD_LENGTH} characters`),
+  newPasswordRule('newPassword', 'New password'),
   body('mfaCode')
     .optional()
     .isString()
@@ -280,9 +292,7 @@ const createSubUserSchema = [
     .isLength({ max: MAX_EMAIL_LENGTH })
     .withMessage(`Email must not exceed ${MAX_EMAIL_LENGTH} characters`)
     .normalizeEmail(),
-  body('password')
-    .isLength({ min: MIN_PASSWORD_LENGTH, max: MAX_PASSWORD_LENGTH })
-    .withMessage(`Password must be between ${MIN_PASSWORD_LENGTH} and ${MAX_PASSWORD_LENGTH} characters`),
+  newPasswordRule('password'),
   body('name')
     .isString()
     .withMessage('Name is required')

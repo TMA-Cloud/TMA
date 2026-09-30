@@ -1,5 +1,7 @@
 import bcrypt from '@node-rs/bcrypt';
-import { OAuth2Client } from 'google-auth-library';
+import crypto from 'crypto';
+
+import { CodeChallengeMethod, OAuth2Client } from 'google-auth-library';
 import jwt from 'jsonwebtoken';
 
 import { logger } from '../../config/logger.js';
@@ -38,6 +40,27 @@ if (!GOOGLE_AUTH_ENABLED) {
   logger.warn('Google OAuth credentials missing. Google login endpoints will be disabled.');
 }
 
+const OAUTH_FLOW_COOKIE = 'oauth_flow';
+const OAUTH_FLOW_TTL_MS = 10 * 60 * 1000;
+
+function readCookie(req, name) {
+  const header = req.headers.cookie;
+  if (!header) return null;
+  for (const part of header.split(';')) {
+    const eq = part.indexOf('=');
+    if (eq > 0 && part.slice(0, eq).trim() === name) return decodeURIComponent(part.slice(eq + 1).trim());
+  }
+  return null;
+}
+
+// Hash of a random secret, compared against when there is no real hash so a
+// miss costs the same bcrypt time as a wrong password.
+let dummyHashPromise = null;
+function getDummyHash() {
+  dummyHashPromise ??= bcrypt.hash(crypto.randomBytes(16).toString('hex'), 10);
+  return dummyHashPromise;
+}
+
 /**
  * User login with email and password
  */
@@ -46,12 +69,14 @@ async function login(req, res) {
     const { email, password, mfaCode } = req.body;
 
     const user = await getUserByEmail(email);
-    if (!user) {
+    // Always run bcrypt: skipping it for unknown emails (or Google-only accounts
+    // with no hash, which also made compare throw) let response time reveal
+    // which addresses have accounts.
+    const valid = await bcrypt.compare(password, user?.password || (await getDummyHash()));
+    if (!user || !user.password) {
       await loginFailure(email, 'user_not_found', req);
       return sendError(res, 401, 'Invalid credentials');
     }
-
-    const valid = await bcrypt.compare(password, user.password);
     if (!valid) {
       await loginFailure(email, 'invalid_password', req);
       return sendError(res, 401, 'Invalid credentials');
@@ -101,16 +126,41 @@ async function login(req, res) {
 /**
  * Initiate Google OAuth login flow
  */
-function googleLogin(req, res) {
+async function googleLogin(req, res) {
   if (!GOOGLE_AUTH_ENABLED) {
     return res.status(503).send('Google OAuth disabled');
   }
+  // state blocks login CSRF (a victim signed into an attacker's account); PKCE
+  // binds the code to this browser. Only an id token is needed, so no offline
+  // refresh token and no forced consent screen.
+  const state = crypto.randomBytes(24).toString('base64url');
+  const { codeVerifier, codeChallenge } = await googleClient.generateCodeVerifierAsync();
+  res.cookie(OAUTH_FLOW_COOKIE, `${state}.${codeVerifier}`, {
+    ...getCookieOptions(),
+    maxAge: OAUTH_FLOW_TTL_MS,
+  });
   const url = googleClient.generateAuthUrl({
-    scope: ['profile', 'email'],
-    access_type: 'offline',
-    prompt: 'consent',
+    scope: ['openid', 'profile', 'email'],
+    state,
+    code_challenge_method: CodeChallengeMethod.S256,
+    code_challenge: codeChallenge,
+    prompt: 'select_account',
   });
   res.redirect(url);
+}
+
+/** The verifier for this flow, or null when state is missing or doesn't match. */
+function consumeOAuthFlow(req, res) {
+  res.clearCookie(OAUTH_FLOW_COOKIE, getCookieOptions());
+  const raw = readCookie(req, OAUTH_FLOW_COOKIE);
+  const returned = typeof req.query.state === 'string' ? req.query.state : '';
+  if (!raw || !returned) return null;
+  const dot = raw.indexOf('.');
+  if (dot <= 0) return null;
+  const expected = Buffer.from(raw.slice(0, dot));
+  const actual = Buffer.from(returned);
+  if (expected.length !== actual.length || !crypto.timingSafeEqual(expected, actual)) return null;
+  return raw.slice(dot + 1);
 }
 
 /**
@@ -121,10 +171,15 @@ async function googleCallback(req, res) {
     if (!GOOGLE_AUTH_ENABLED) {
       return res.status(503).send('Google OAuth disabled');
     }
+    const codeVerifier = consumeOAuthFlow(req, res);
+    if (!codeVerifier) {
+      logger.warn('Google OAuth callback rejected: missing or mismatched state');
+      return res.redirect('/?error=oauth_state');
+    }
     const { code } = req.query;
-    if (!code) return res.status(400).send('Missing code');
+    if (!code || typeof code !== 'string') return res.status(400).send('Missing code');
 
-    const { tokens } = await googleClient.getToken(code);
+    const { tokens } = await googleClient.getToken({ code, codeVerifier });
     const ticket = await googleClient.verifyIdToken({
       idToken: tokens.id_token,
       audience: GOOGLE_CLIENT_ID,
@@ -135,6 +190,12 @@ async function googleCallback(req, res) {
     const name = payload.name;
 
     let user = await getUserByGoogleId(googleId);
+    // Linking by email (or creating an account for it) trusts Google's claim to
+    // own the address; an unverified one would let anyone take over that user.
+    if (!user && payload.email_verified !== true) {
+      logger.warn({ googleId }, 'Google OAuth rejected: email not verified');
+      return res.redirect('/?error=email_unverified');
+    }
     if (!user) {
       user = await getUserByEmail(email);
       if (user) {

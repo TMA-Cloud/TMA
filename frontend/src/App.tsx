@@ -187,12 +187,19 @@ const AppContent: React.FC = () => {
   );
 };
 
+/** Messages for the `?error=` codes the backend's OAuth redirects carry. */
+const AUTH_ERROR_MESSAGES: Record<string, string> = {
+  signup_disabled: 'Signup is currently disabled',
+  oauth_state: 'Google sign-in expired or was tampered with.',
+  email_unverified: 'Your Google account email is not verified, so it cannot be used to sign in.',
+};
+
 const AuthGate: React.FC = () => {
   const { user, loading } = useAuth();
   const [view, setView] = useState<'login' | 'signup'>('login');
   const [error, setError] = useState<string | null>(() => {
-    const params = new URLSearchParams(window.location.search);
-    return params.get('error') === 'signup_disabled' ? 'Signup is currently disabled' : null;
+    const code = new URLSearchParams(window.location.search).get('error');
+    return (code && AUTH_ERROR_MESSAGES[code]) || null;
   });
 
   const { signupEnabled, loadingSignupStatus } = useSignupStatus();

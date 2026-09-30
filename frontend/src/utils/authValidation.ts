@@ -17,6 +17,8 @@ export const MAX_NAME_LENGTH = 100;
 
 // Matches MIN_PASSWORD_LENGTH in the server's validationSchemas.js.
 export const MIN_PASSWORD_LENGTH = 8;
+// bcrypt reads only the first 72 bytes; matches MAX_PASSWORD_BYTES on the server.
+export const MAX_PASSWORD_BYTES = 72;
 
 // Deliberately loose. Precise email grammar is not decidable with a regular
 // expression, and a form that argues with a valid address. This catches
@@ -48,6 +50,9 @@ export const validateNewPassword = (password: string): string | null => {
   if (!password) return 'Choose a password';
   if (password.length < MIN_PASSWORD_LENGTH) return `Password must be at least ${MIN_PASSWORD_LENGTH} characters`;
   if (password.length > MAX_PASSWORD_LENGTH) return `Password must not exceed ${MAX_PASSWORD_LENGTH} characters`;
+  if (new TextEncoder().encode(password).length > MAX_PASSWORD_BYTES) {
+    return `Password is too long (max ${MAX_PASSWORD_BYTES} bytes; accented letters and emoji count as several)`;
+  }
   return null;
 };
 
