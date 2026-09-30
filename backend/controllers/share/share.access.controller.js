@@ -40,6 +40,7 @@ async function handleShared(req, res) {
           heading: file.name,
           trail: [{ id: file.id, name: file.name }],
           zipHref: `/s/${token}/zip`,
+          nonce: res.locals.cspNonce,
         })
       );
     } else {
@@ -86,6 +87,7 @@ async function browseSharedFolder(req, res) {
         heading: current.name,
         trail,
         zipHref: `/s/${token}/file/${folderId}`,
+        nonce: res.locals.cspNonce,
       })
     );
   } catch (err) {

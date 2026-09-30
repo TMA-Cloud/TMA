@@ -1,5 +1,6 @@
 import './config/env.js';
 
+import crypto from 'crypto';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -52,16 +53,33 @@ app.use(requireElectronClientIfEnabled);
 // HTTP request logging (after requestId and blocking, so blocked requests aren't logged).
 app.use(httpLogger);
 
+// The SPA's index.html is static, so its one inline script (the theme
+// bootstrap) is allowed by hash; server-rendered pages get a per-request nonce.
+const spaInlineScriptHashes = (() => {
+  try {
+    const html = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'dist', 'index.html'), 'utf8');
+    return [...html.matchAll(/<script(?![^>]*\ssrc=)[^>]*>([\s\S]*?)<\/script>/gi)].map(
+      m => `'sha256-${crypto.createHash('sha256').update(m[1]).digest('base64')}'`
+    );
+  } catch {
+    return [];
+  }
+})();
+
 // Security headers
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
-  res.setHeader('X-XSS-Protection', '1; mode=block');
+  // OWASP: turn the legacy XSS auditor off; it can be abused and CSP replaces it.
+  res.setHeader('X-XSS-Protection', '0');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
 
   // Allow ONLYOFFICE Document Server for scripts / connections / iframes, if configured
-  let scriptSrc = "script-src 'self' 'unsafe-inline' 'unsafe-eval'";
+  // No 'unsafe-inline'/'unsafe-eval': with them CSP could not stop an injected script.
+  const nonce = crypto.randomBytes(16).toString('base64');
+  res.locals.cspNonce = nonce;
+  let scriptSrc = ["script-src 'self'", `'nonce-${nonce}'`, ...spaInlineScriptHashes].join(' ');
   let connectSrc = "connect-src 'self'";
   let frameSrc = "frame-src 'self'";
 
@@ -74,7 +92,8 @@ app.use((req, res, next) => {
 
   const csp = [
     "default-src 'self'",
-    scriptSrc, // unsafe-inline/eval needed for some frameworks
+    scriptSrc,
+    "object-src 'none'",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "img-src 'self' data: blob:",
     "font-src 'self' data: https://fonts.gstatic.com",

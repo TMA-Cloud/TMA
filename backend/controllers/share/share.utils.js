@@ -218,7 +218,7 @@ function renderCrumbs(trail, t) {
  * @param {Array}  opts.trail    [{id,name}] root → current, for breadcrumbs.
  * @param {string} opts.zipHref  URL that zips the current folder.
  */
-function renderFolderPage(page, token, { heading, trail, zipHref }) {
+function renderFolderPage(page, token, { heading, trail, zipHref, nonce }) {
   const { items, nextCursor } = page;
   const t = escapeHtml(token);
   const title = escapeHtml(heading);
@@ -259,7 +259,7 @@ function renderFolderPage(page, token, { heading, trail, zipHref }) {
 
   const loader = nextCursor
     ? `<div id="page-loader" data-cursor="${escapeHtml(nextCursor)}" aria-live="polite" class="foot">Loading more…</div>
-<script>
+<script nonce="${escapeHtml(nonce || '')}">
 (()=>{const list=document.getElementById('share-list'),loader=document.getElementById('page-loader');if(!list||!loader)return;
 const bytes=n=>{n=Number(n);if(!Number.isFinite(n)||n<=0)return'';const u=['B','KB','MB','GB','TB'],i=Math.min(Math.floor(Math.log(n)/Math.log(1024)),u.length-1),v=n/1024**i;return (i===0?v:v.toFixed(v>=10?0:1))+' '+u[i]};
 const add=item=>{const folder=item.type==='folder',a=document.createElement('a');a.className='row';a.href=folder?'/s/${t}/folder/'+encodeURIComponent(item.id):'/s/${t}/file/'+encodeURIComponent(item.id);if(!folder)a.download='';const ic=document.createElementNS('http://www.w3.org/2000/svg','svg');ic.setAttribute('class','ic'+(folder?' folder':''));const use=document.createElementNS('http://www.w3.org/2000/svg','use');use.setAttribute('href',folder?'#i-folder':'#i-file');ic.append(use);const meta=document.createElement('span');meta.className='meta';const name=document.createElement('span');name.className='name';name.textContent=item.name;meta.append(name);const detail=document.createElement('span');detail.className='size';detail.textContent=folder?'Folder':bytes(item.size);meta.append(detail);a.append(ic,meta);list.append(a)};

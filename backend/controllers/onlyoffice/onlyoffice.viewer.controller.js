@@ -1,3 +1,5 @@
+import escapeHtml from 'escape-html';
+
 import { logger } from '../../config/logger.js';
 import { getFile } from '../../models/file.model.js';
 import { recordAccess } from '../../services/accessTracker.js';
@@ -5,6 +7,7 @@ import { logAuditEvent } from '../../services/auditLogger.js';
 import { registerOpenDocument } from '../../services/onlyofficeAutoSave.js';
 import { validateSingleId } from '../../utils/controllerHelpers.js';
 import { validateAndResolveFile } from '../../utils/fileDownload.js';
+import { jsonForScript } from '../../utils/htmlSafe.js';
 import { validateOnlyOfficeMimeType } from '../../utils/mimeTypeDetection.js';
 
 import { buildEditorSession, getOnlyOfficeConfig, validateFileForOnlyOffice } from './onlyoffice.utils.js';
@@ -54,9 +57,10 @@ async function getViewerPage(req, res) {
         <head><title>Error</title></head>
         <body style="font-family: sans-serif; padding: 40px; text-align: center;">
           <h1 style="color: #dc2626;">Cannot Open File</h1>
-          <p>${file.name.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>
-          <p style="color: #6b7280;">${validation.error.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>
-          <button onclick="window.close()" style="padding: 10px 20px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer;">Close</button>
+          <p>${escapeHtml(file.name)}</p>
+          <p style="color: #6b7280;">${escapeHtml(validation.error)}</p>
+          <button id="close-tab" style="padding: 10px 20px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer;">Close</button>
+          <script nonce="${res.locals.cspNonce}">document.getElementById('close-tab').addEventListener('click', () => window.close());</script>
         </body>
         </html>
       `);
@@ -103,7 +107,7 @@ async function getViewerPage(req, res) {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${file.name} - ONLYOFFICE</title>
+  <title>${escapeHtml(file.name)} - ONLYOFFICE</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { 
@@ -199,19 +203,21 @@ async function getViewerPage(req, res) {
 </head>
 <body>
   <div class="header">
-    <h1>${file.name.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</h1>
-    <button onclick="window.close()">Close</button>
+    <h1>${escapeHtml(file.name)}</h1>
+    <button id="close-tab">Close</button>
   </div>
   <div class="editor-wrapper">
     <div id="onlyoffice-editor-container" class="loading">Loading editor...</div>
   </div>
-  <script src="${onlyofficeJsUrl}"></script>
-  <script>
+  <script src="${escapeHtml(onlyofficeJsUrl)}"></script>
+  <script nonce="${res.locals.cspNonce}">
+    // Inline handlers are blocked by the CSP, so wire the button here.
+    document.getElementById('close-tab').addEventListener('click', () => window.close());
     // The app hands its theme over in the ?theme= query param. This tab is often
     // a different origin than the app, so localStorage.theme isn't shared here so
     // the query param is the authoritative signal, with localStorage/OS as a
     // fallback only for stale links that lack it.
-    var appTheme = ${JSON.stringify(req.query?.theme === 'dark' || req.query?.theme === 'light' ? req.query.theme : null)};
+    var appTheme = ${jsonForScript(req.query?.theme === 'dark' || req.query?.theme === 'light' ? req.query.theme : null)};
     function applyTheme() {
       var isDark = appTheme
         ? appTheme === 'dark'
@@ -229,7 +235,7 @@ async function getViewerPage(req, res) {
       window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme);
     }
 
-    const config = ${JSON.stringify(config)};
+    const config = ${jsonForScript(config)};
     new DocsAPI.DocEditor('onlyoffice-editor-container', config);
   </script>
 </body>
