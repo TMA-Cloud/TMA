@@ -9,8 +9,17 @@
     "desktop",
     "client"
   ],
-  "author": "ZIDAN44",
+  "author": "TMA Cloud",
   "license": "MIT",
+  "homepage": "https://tma-cloud.github.io/Wiki",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/TMA-Cloud/TMA.git",
+    "directory": "electron"
+  },
+  "bugs": {
+    "url": "https://github.com/TMA-Cloud/TMA/issues"
+  },
   "main": "src/main/index.cjs",
   "engines": {
     "node": "^22 || ^24 || >=26"

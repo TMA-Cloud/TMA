@@ -1,6 +1,7 @@
 {
   "appId": "com.tmacloud.app",
   "productName": "TMA Cloud",
+  "copyright": "Copyright © ${author}",
   "directories": { "output": "dist-client" },
   "extraMetadata": { "main": "dist-electron/main/index.cjs" },
   "files": ["dist-electron/**/*"],

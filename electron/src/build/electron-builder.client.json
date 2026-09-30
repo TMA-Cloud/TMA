@@ -1,6 +1,7 @@
 {
   "appId": "com.tmacloud.app",
   "productName": "TMA Cloud",
+  "copyright": "Copyright © ${author}",
   "directories": { "output": "dist-client" },
   "extraMetadata": { "main": "dist-electron/main/index.cjs" },
   "files": ["dist-electron/**/*"],
@@ -14,6 +15,8 @@
     "oneClick": true,
     "perMachine": true,
     "runAfterFinish": true,
-    "include": "src/build/installer.nsh"
+    "include": "src/build/installer.nsh",
+    "uninstallUrlHelp": "https://tma-cloud.github.io/Wiki/docs/getting-started/desktop-app",
+    "uninstallUrlUpdateInfo": "https://github.com/TMA-Cloud/TMA/releases"
   }
 }
