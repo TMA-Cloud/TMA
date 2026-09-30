@@ -17,6 +17,9 @@ async function searchFiles(userId, query, limit = 100) {
 
   const searchTerm = query.trim();
   const searchLength = searchTerm.length;
+  // % and _ are LIKE wildcards: unescaped, "50%" matched far too much and a
+  // bare "%" matched every file. Backslash is PostgreSQL's default LIKE escape.
+  const prefixPattern = `${searchTerm.replace(/[\\%_]/g, '\\$&')}%`;
 
   const cacheKey = cacheKeys.search(userId, searchTerm, limit);
   const cached = await getCache(cacheKey);
@@ -60,7 +63,7 @@ async function searchFiles(userId, query, limit = 100) {
       ) share_info ON files.shared
       WHERE user_id = $1 
         AND deleted_at IS NULL
-        AND lower(name) LIKE lower($2) || '%'
+        AND lower(name) LIKE lower($4)
       ORDER BY 
         CASE
           WHEN lower(name) = lower($2) THEN 1
@@ -70,7 +73,7 @@ async function searchFiles(userId, query, limit = 100) {
         modified DESC
       LIMIT $3
     `;
-    queryParams = [userId, searchTerm, limit];
+    queryParams = [userId, searchTerm, limit, prefixPattern];
   } else {
     // Longer queries: Use trigram similarity for fuzzy matching
     // Optimized to use index scans where possible
@@ -103,7 +106,7 @@ async function searchFiles(userId, query, limit = 100) {
         AND deleted_at IS NULL
         AND (
           -- Prefix match (fast with index)
-          lower(name) LIKE lower($2) || '%'
+          lower(name) LIKE lower($4)
           OR 
           -- Full text match (uses trigram index)
           lower(name) % lower($2)
@@ -111,14 +114,14 @@ async function searchFiles(userId, query, limit = 100) {
       ORDER BY 
         CASE
           WHEN lower(name) = lower($2) THEN 1
-          WHEN lower(name) LIKE lower($2) || '%' THEN 2
+          WHEN lower(name) LIKE lower($4) THEN 2
           ELSE 3
         END ASC,
         similarity(lower(name), lower($2)) DESC NULLS LAST,
         modified DESC
       LIMIT $3
     `;
-    queryParams = [userId, searchTerm, limit];
+    queryParams = [userId, searchTerm, limit, prefixPattern];
   }
 
   const result = await pool.query(sqlQuery, queryParams);
