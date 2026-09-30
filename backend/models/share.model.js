@@ -2,6 +2,7 @@ import pool from '../config/db.js';
 import { logger } from '../config/logger.js';
 import Cursor from 'pg-cursor';
 
+import { streamCursorRows } from './cursorRows.model.js';
 import { generateId } from '../utils/id.js';
 import {
   getCache,
@@ -547,38 +548,30 @@ async function isFileShared(token, fileId) {
 
 /** Stream a shared subtree with bounded memory and precomputed ZIP paths. */
 async function* streamSharedArchiveEntries(token, rootId, batchSize = 200) {
-  const client = await pool.connect();
-  const cursor = client.query(
+  yield* streamCursorRows(
+    pool,
     new Cursor(
-      `WITH RECURSIVE tree(id, name, type, path, parent_id, archive_path, visited) AS (
-         SELECT f.id, f.name, f.type, f.path, f.parent_id, f.name::text, ARRAY[f.id]
+      `WITH RECURSIVE tree(id, name, type, path, parent_id, dek_wrapped, dek_kek_version, archive_path, visited) AS (
+         SELECT f.id, f.name, f.type, f.path, f.parent_id, f.dek_wrapped, f.dek_kek_version, f.name::text, ARRAY[f.id]
            FROM files f
            JOIN share_link_files slf ON slf.file_id = f.id AND slf.share_id = $1
           WHERE f.id = $2 AND f.deleted_at IS NULL
          UNION ALL
-         SELECT f.id, f.name, f.type, f.path, f.parent_id,
+         SELECT f.id, f.name, f.type, f.path, f.parent_id, f.dek_wrapped, f.dek_kek_version,
                 tree.archive_path || '/' || f.name, tree.visited || f.id
            FROM files f
            JOIN share_link_files slf ON slf.file_id = f.id AND slf.share_id = $1
            JOIN tree ON f.parent_id = tree.id
           WHERE f.deleted_at IS NULL AND NOT f.id = ANY(tree.visited)
        )
-       SELECT id, name, type, path, parent_id, archive_path AS "archivePath"
+       SELECT id, name, type, path, parent_id, archive_path AS "archivePath",
+              dek_wrapped AS "dekWrapped", dek_kek_version AS "dekKekVersion"
          FROM tree
         ORDER BY archive_path, id`,
       [token, rootId]
-    )
+    ),
+    batchSize
   );
-  try {
-    for (;;) {
-      const rows = await cursor.read(batchSize);
-      if (rows.length === 0) break;
-      for (const row of rows) yield row;
-    }
-  } finally {
-    await cursor.close().catch(() => {});
-    client.release();
-  }
 }
 
 /**

@@ -5,7 +5,7 @@ import { ZipArchive } from 'archiver';
 import { logger } from '../config/logger.js';
 import { resolveIkmForPath } from '../models/file/file.dek.model.js';
 import { isFilePathEncrypted, isValidPath } from './filePath.js';
-import { createDecryptStreamFromStream } from './fileEncryption.js';
+import { createDecryptStreamFromStream, resolveIkm } from './fileEncryption.js';
 import { contentDispositionValue } from './fileDownload.js';
 import storage from './storageDriver.js';
 
@@ -50,21 +50,29 @@ function attachArchiveHandlers(archive, res, onSuccess) {
   };
 }
 
-async function addFileToArchive(archive, entry, nameInArchive) {
+async function addFileToArchive(archive, entry, nameInArchive, signal) {
   if (!isValidPath(entry.path)) return;
   const isEncrypted = isFilePathEncrypted(entry.path);
 
   const readStream = await storage.getReadStream(entry.path);
   let source;
   if (isEncrypted) {
-    const ikm = await resolveIkmForPath(entry.path);
+    // Tree queries carry the wrapped DEK, sparing a lookup per archived file.
+    const ikm = entry.dekWrapped !== undefined ? resolveIkm(entry) : await resolveIkmForPath(entry.path);
     const { stream } = await createDecryptStreamFromStream(readStream, ikm);
     source = stream;
   } else {
     source = readStream;
   }
   archive.append(source, { name: nameInArchive });
-  await finished(source);
+  try {
+    // Without the signal a vanished client leaves the source paused forever.
+    await finished(source, { signal });
+  } catch (err) {
+    readStream.destroy();
+    source.destroy();
+    throw err;
+  }
 }
 
 /** Build a ZIP from an async DB cursor without retaining the whole tree. */
@@ -72,18 +80,25 @@ async function createStreamingZipArchive(res, archiveName, entries, onEntry, onS
   setZipHeaders(res, archiveName);
   const archive = new ZipArchive();
   const state = attachArchiveHandlers(archive, res, onSuccess);
+  const clientGone = new AbortController();
+  res.on('close', () => {
+    if (!res.writableFinished) clientGone.abort();
+  });
   archive.pipe(res);
   try {
     for await (const entry of entries) {
+      clientGone.signal.throwIfAborted();
       onEntry?.(entry);
       if (entry.type === 'file' && isValidPath(entry.path)) {
-        await addFileToArchive(archive, entry, entry.archivePath);
+        await addFileToArchive(archive, entry, entry.archivePath, clientGone.signal);
       }
     }
     archive.finalize();
   } catch (err) {
     state.markAborted(err);
     archive.abort();
+    // A cancelled download is not a failure; returning still releases the cursor.
+    if (clientGone.signal.aborted) return;
     if (!res.headersSent) res.status(500).json({ error: 'Failed to create archive' });
     throw err;
   }

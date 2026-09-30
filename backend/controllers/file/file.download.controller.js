@@ -3,7 +3,6 @@ import { recordAccess } from '../../services/accessTracker.js';
 import { fileDownloaded, logAuditEvent } from '../../services/auditLogger.js';
 import { getFile, getFilesByIds, streamArchiveEntries } from '../../models/file.model.js';
 import { streamEncryptedFile, streamUnencryptedFile, validateAndResolveFile } from '../../utils/fileDownload.js';
-import { userOperationLock } from '../../utils/mutex.js';
 import { sendError } from '../../utils/response.js';
 import { validateFileUpload } from '../../utils/validation.js';
 import { createStreamingZipArchive } from '../../utils/zipArchive.js';
@@ -22,32 +21,33 @@ async function downloadFile(req, res) {
   // If it's a folder, zip it first
   if (file.type === 'folder') {
     try {
-      return await userOperationLock(req.ownerId, async () => {
-        await createStreamingZipArchive(
-          res,
-          file.name,
-          streamArchiveEntries([fileId], req.ownerId),
-          entry => recordAccess(entry.id, req.ownerId),
-          async () => {
-            await logAuditEvent(
-              'folder.download',
-              {
-                status: 'success',
-                resourceType: 'folder',
-                resourceId: fileId,
-                metadata: { folderName: file.name },
-              },
-              req
-            );
-            logger.info({ folderId: fileId, name: file.name }, 'Folder downloaded (zipped)');
-          }
-        );
-      });
+      // No account lock: the tree is one snapshot query, and holding the lock
+      // for the whole transfer stalled every upload and move on the account.
+      return await createStreamingZipArchive(
+        res,
+        file.name,
+        streamArchiveEntries([fileId], req.ownerId),
+        entry => recordAccess(entry.id, req.ownerId),
+        async () => {
+          await logAuditEvent(
+            'folder.download',
+            {
+              status: 'success',
+              resourceType: 'folder',
+              resourceId: fileId,
+              metadata: { folderName: file.name },
+            },
+            req
+          );
+          logger.info({ folderId: fileId, name: file.name }, 'Folder downloaded (zipped)');
+        }
+      );
     } catch (error) {
       if (!res.headersSent) {
         throw error;
       }
       logger.error({ folderId: fileId, error: error.message }, 'Error during folder download (headers already sent)');
+      return;
     }
   }
 
@@ -88,48 +88,46 @@ async function downloadFilesBulk(req, res) {
   const { ids } = req.body;
 
   try {
-    return await userOperationLock(req.ownerId, async () => {
-      // Get all files/folders to download in a single query (bulk operation)
-      const filesToDownload = await getFilesByIds(ids, req.ownerId);
+    // Get all files/folders to download in a single query (bulk operation)
+    const filesToDownload = await getFilesByIds(ids, req.ownerId);
 
-      if (filesToDownload.length === 0) {
-        return sendError(res, 404, 'No files found to download');
-      }
+    if (filesToDownload.length === 0) {
+      return sendError(res, 404, 'No files found to download');
+    }
 
-      const rootIds = [];
-      const fileNames = [];
+    const rootIds = [];
+    const fileNames = [];
 
-      for (const file of filesToDownload) {
-        fileNames.push(file.name);
-        rootIds.push(file.id);
-      }
+    for (const file of filesToDownload) {
+      fileNames.push(file.name);
+      rootIds.push(file.id);
+    }
 
-      const archiveName = filesToDownload.length === 1 ? filesToDownload[0].name : `download_${Date.now()}`;
-      const entries = streamArchiveEntries(rootIds, req.ownerId);
-      await createStreamingZipArchive(
-        res,
-        archiveName,
-        entries,
-        entry => recordAccess(entry.id, req.ownerId),
-        async () => {
-          await logAuditEvent(
-            'file.download.bulk',
-            {
-              status: 'success',
-              resourceType: 'file',
-              resourceId: ids[0],
-              metadata: {
-                fileCount: ids.length,
-                fileIds: ids,
-                fileNames,
-              },
+    const archiveName = filesToDownload.length === 1 ? filesToDownload[0].name : `download_${Date.now()}`;
+    const entries = streamArchiveEntries(rootIds, req.ownerId);
+    await createStreamingZipArchive(
+      res,
+      archiveName,
+      entries,
+      entry => recordAccess(entry.id, req.ownerId),
+      async () => {
+        await logAuditEvent(
+          'file.download.bulk',
+          {
+            status: 'success',
+            resourceType: 'file',
+            resourceId: ids[0],
+            metadata: {
+              fileCount: ids.length,
+              fileIds: ids,
+              fileNames,
             },
-            req
-          );
-          logger.info({ fileIds: ids, fileNames, count: ids.length }, 'Files downloaded (bulk zip)');
-        }
-      );
-    });
+          },
+          req
+        );
+        logger.info({ fileIds: ids, fileNames, count: ids.length }, 'Files downloaded (bulk zip)');
+      }
+    );
   } catch (error) {
     if (!res.headersSent) {
       throw error;
