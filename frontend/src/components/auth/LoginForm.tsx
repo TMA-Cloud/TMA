@@ -112,7 +112,7 @@ export const LoginForm: React.FC<{
           <HardDrive className="w-5 h-5 text-[var(--label-on-accent)]" strokeWidth={2.25} />
         </div>
         <div className="text-center">
-          <h1 className="type-title-2 text-[var(--label)]">Sign in to CloudStore</h1>
+          <h1 className="type-title-2 text-[var(--label)]">Sign in to TMA Cloud</h1>
           <p className="type-footnote text-[var(--label-tertiary)] mt-1">Your files, wherever you are</p>
         </div>
       </div>

@@ -141,7 +141,7 @@ export const Sidebar: React.FC = () => {
                 <div className="w-8 h-8 bg-[var(--accent)] rounded-[10px] grid place-items-center">
                   <HardDrive className="w-4 h-4 text-[var(--label-on-accent)]" strokeWidth={2.25} />
                 </div>
-                <span className="type-title-3 text-[var(--label)]">CloudStore</span>
+                <span className="type-title-3 text-[var(--label)]">TMA Cloud</span>
               </div>
               <button
                 onClick={() => setSidebarOpen(false)}

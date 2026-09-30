@@ -146,7 +146,7 @@ export const MobileAppContent: React.FC = () => {
             <HardDrive className="w-4 h-4 text-[var(--label-on-accent)]" strokeWidth={2.25} />
           </div>
           <div className="flex flex-col">
-            <span className="type-caption type-emphasized text-[var(--label)]">CloudStore</span>
+            <span className="type-caption type-emphasized text-[var(--label)]">TMA Cloud</span>
             {/* Answers "where am I?" without spending a row on a title bar. */}
             <span className="type-caption-2 text-[var(--label-tertiary)]">{currentPage}</span>
           </div>
