@@ -29,6 +29,36 @@ const authRateLimiter = rateLimit({
 });
 
 /**
+ * Failed-login limits beyond the per-(IP, email) bucket above: one IP spraying
+ * many emails, and many IPs hammering one account. Only failures count, so a
+ * user who signs in successfully never burns their allowance.
+ */
+const loginFailuresPerIpLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  skipSuccessfulRequests: true,
+  message: { error: 'Too many failed sign-in attempts from this network, please try again later' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: req => `login-ip:${ipKeyGenerator(req.ip || req.socket?.remoteAddress || 'unknown')}`,
+  skip: req => req.method === 'OPTIONS',
+});
+
+const loginFailuresPerAccountLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  skipSuccessfulRequests: true,
+  message: { error: 'Too many failed sign-in attempts for this account, please try again later' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: req =>
+    `login-account:${String(req.body?.email || '')
+      .trim()
+      .toLowerCase()}`,
+  skip: req => req.method === 'OPTIONS' || !req.body?.email,
+});
+
+/**
  * Rate limiter for MFA verification endpoints (very strict)
  * 5 attempts per minute per IP/User to prevent DoS via CPU-intensive bcrypt operations
  */
@@ -176,6 +206,8 @@ const sseConnectionLimiter = createSSEConnectionLimiter(20); // Max 20 concurren
 
 export {
   authRateLimiter,
+  loginFailuresPerIpLimiter,
+  loginFailuresPerAccountLimiter,
   mfaRateLimiter,
   backupCodeRegenerationRateLimiter,
   apiRateLimiter,

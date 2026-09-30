@@ -27,6 +27,8 @@ import authMiddleware from '../middleware/auth.middleware.js';
 import {
   authRateLimiter,
   mfaRateLimiter,
+  loginFailuresPerIpLimiter,
+  loginFailuresPerAccountLimiter,
   backupCodeRegenerationRateLimiter,
   apiRateLimiter,
 } from '../middleware/rateLimit.middleware.js';
@@ -36,7 +38,15 @@ import { signupSchema, loginSchema, changePasswordSchema } from '../utils/valida
 const router = express.Router();
 
 router.post('/signup', authRateLimiter, signupSchema, validate, signup);
-router.post('/login', authRateLimiter, loginSchema, validate, login);
+router.post(
+  '/login',
+  authRateLimiter,
+  loginFailuresPerIpLimiter,
+  loginFailuresPerAccountLimiter,
+  loginSchema,
+  validate,
+  login
+);
 router.get('/google/enabled', (req, res) => {
   res.json({ enabled: googleAuthEnabled });
 });

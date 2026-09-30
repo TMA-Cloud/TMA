@@ -204,6 +204,8 @@ describe('documented limits', () => {
       'authRateLimiter',
       'backupCodeRegenerationRateLimiter',
       'createSSEConnectionLimiter',
+      'loginFailuresPerAccountLimiter',
+      'loginFailuresPerIpLimiter',
       'mfaRateLimiter',
       'sseConnectionLimiter',
       'uploadRateLimiter',
