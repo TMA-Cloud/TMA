@@ -9,7 +9,6 @@ import { PasteProgress } from './PasteProgress';
 import { DesktopOpenProgress } from './DesktopOpenProgress';
 import { DeleteProgress } from './DeleteProgress';
 import { RestoreProgress } from './RestoreProgress';
-import { ONLYOFFICE_EXTS, getExt, validateOnlyOfficeMimeType } from '../../utils/fileUtils';
 import { isElectron } from '../../utils/electronDesktop';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { useToast } from '../../hooks/useToast';
@@ -24,6 +23,7 @@ import { useFileSelection } from './hooks/useFileSelection';
 import { useFileDragAndDrop } from './hooks/useFileDragAndDrop';
 import { useExternalFileDrop } from './hooks/useExternalFileDrop';
 import { useFileManagerShortcuts } from './hooks/useFileManagerShortcuts';
+import { useFileOpen } from './hooks/useFileOpen';
 
 export const FileManager: React.FC = () => {
   const {
@@ -40,16 +40,13 @@ export const FileManager: React.FC = () => {
     addSelectedFile,
     removeSelectedFile,
     clearSelection,
-    openFolder,
     setCreateFolderModalOpen,
     moveFiles,
-    setImageViewerFile,
     pasteProgress,
     sortBy,
     sortOrder,
     setSortBy,
     setSortOrder,
-    setDocumentViewerFile,
     searchQuery,
     isSearching,
     isDownloading,
@@ -68,11 +65,8 @@ export const FileManager: React.FC = () => {
     restoreFiles,
     deleteForever,
     setShareLinkModalOpen,
-    onlyOfficeConfigured,
-    canConfigureOnlyOffice,
     uploadFile,
     uploadFilesBulk,
-    editFileWithDesktop,
     canGoBack,
     canGoForward,
     goBack,
@@ -272,56 +266,7 @@ export const FileManager: React.FC = () => {
     }
   };
 
-  const handleFileDoubleClick = (file: FileItem) => {
-    // Don't allow opening anything from Trash
-    if (currentPath[0] === 'Trash') {
-      return;
-    }
-
-    if (file.type === 'folder') {
-      openFolder(file);
-    } else {
-      const mime = (file.mimeType || '').toLowerCase();
-
-      // In Electron, open image/video/audio in the system default app.
-      if (isElectron() && (mime.startsWith('image/') || mime.startsWith('video/') || mime.startsWith('audio/'))) {
-        void editFileWithDesktop(file.id);
-      } else if (mime.startsWith('image/')) {
-        setImageViewerFile(file);
-      } else if (isElectron() && ONLYOFFICE_EXTS.has(getExt(file.name))) {
-        // In Electron, open Office docs in the native app rather than ONLYOFFICE.
-        void editFileWithDesktop(file.id);
-      } else if (ONLYOFFICE_EXTS.has(getExt(file.name))) {
-        // Validate MIME type before opening (prevents unnecessary API calls)
-        if (!validateOnlyOfficeMimeType(file.name, file.mimeType)) {
-          const ext = getExt(file.name);
-          showToast(`Can't open — this isn't a valid .${ext.slice(1)} file`, 'error');
-          return;
-        }
-        // Check if OnlyOffice is configured before opening (using cached value)
-        if (!onlyOfficeConfigured) {
-          if (isElectron()) {
-            void editFileWithDesktop(file.id);
-          } else {
-            if (canConfigureOnlyOffice) {
-              showToast("OnlyOffice isn't set up — configure it in Settings", 'error');
-            } else {
-              showToast("OnlyOffice isn't set up — ask your administrator", 'error');
-            }
-          }
-          return;
-        }
-        // On mobile, open in new tab instead of modal
-        if (isMobile) {
-          const url = `/api/onlyoffice/viewer/${file.id}`;
-          window.open(url, '_blank', 'noopener,noreferrer');
-        } else {
-          setDocumentViewerFile?.(file);
-        }
-      }
-    }
-    closeMultiSelectIfMobile();
-  };
+  const handleFileDoubleClick = useFileOpen(closeMultiSelectIfMobile);
 
   const handleContextMenu = (e: React.MouseEvent, fileId?: string) => {
     e.preventDefault();
