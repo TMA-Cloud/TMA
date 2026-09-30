@@ -237,8 +237,9 @@ describe('download and launch', () => {
     __mock.route('/v1.0.9', { statusCode: 200, body: 'MZ' });
     await downloadAndInstallUpdate('1.0.9');
 
+    vi.advanceTimersByTime(2999);
     expect(__mock.state.quitCalls).toBe(0);
-    vi.advanceTimersByTime(1500);
+    vi.advanceTimersByTime(1);
     expect(__mock.state.quitCalls).toBe(1);
   });
 

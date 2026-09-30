@@ -97,6 +97,20 @@
   }
 }
 
+/* Progress with no known end: a segment sweeping across the track. */
+@keyframes indeterminate {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(300%);
+  }
+}
+
+.animate-indeterminate {
+  animation: indeterminate 1.4s var(--ease-standard) infinite;
+}
+
 /* Staggered list entry, capped so the whole run stays fast. */
 .stagger-item {
   animation: slideUp var(--dur-base) var(--ease-out) backwards;

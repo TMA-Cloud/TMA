@@ -15,6 +15,7 @@
     "oneClick": true,
     "perMachine": true,
     "runAfterFinish": true,
+    "installerHeaderIcon": "src/build/installerHeaderIcon.ico",
     "include": "src/build/installer.nsh",
     "uninstallUrlHelp": "https://tma-cloud.github.io/Wiki/docs/getting-started/desktop-app",
     "uninstallUrlUpdateInfo": "https://github.com/TMA-Cloud/TMA/releases"

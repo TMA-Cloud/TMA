@@ -99,6 +99,12 @@ describe('electron-builder configuration', () => {
     expect(buildScript).toContain('WinFsp MSI hash mismatch');
   });
 
+  it('builds a one-click, all-users installer that shows the app icon while installing', () => {
+    const { nsis } = readJson('src/build/electron-builder.client.json');
+    expect(nsis).toMatchObject({ oneClick: true, perMachine: true });
+    expect(fs.existsSync(path.join(electronDir, nsis.installerHeaderIcon))).toBe(true);
+  });
+
   it('installs WinFsp from the location the build stages it to', () => {
     const installer = read('src/build/installer.nsh');
     expect(installer).toContain('$INSTDIR\\resources\\clouddrive\\winfsp.msi');

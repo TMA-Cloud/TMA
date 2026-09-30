@@ -10,6 +10,7 @@ import { useSignupStatus } from './components/settings/hooks/useSignupStatus';
 import { useIsMobile } from './hooks/useIsMobile';
 import { Sidebar } from './components/layout/Sidebar';
 import { Header } from './components/layout/Header';
+import { UpdateInstallingOverlay } from './components/layout/UpdateInstallingOverlay';
 import { useScrollEdge, scrollToTopFast } from './motion';
 
 // Lazy load main page components (using default exports for cleaner syntax)
@@ -150,9 +151,12 @@ const AppContent: React.FC = () => {
   if (isMobile) {
     // Dedicated mobile layout / UX
     return (
-      <Suspense fallback={<PageLoadingFallback />}>
-        <MobileAppContent />
-      </Suspense>
+      <>
+        <Suspense fallback={<PageLoadingFallback />}>
+          <MobileAppContent />
+        </Suspense>
+        <UpdateInstallingOverlay />
+      </>
     );
   }
 
@@ -183,6 +187,8 @@ const AppContent: React.FC = () => {
         <UploadIssuesModal />
         <TransferPanels />
       </Suspense>
+
+      <UpdateInstallingOverlay />
     </div>
   );
 };

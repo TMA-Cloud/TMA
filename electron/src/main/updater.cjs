@@ -16,6 +16,7 @@ const MAX_FILENAME_LENGTH = 120;
 // downloaded file is then executed; keep both tightly constrained.
 const VERSION_RE = /^\d{1,4}\.\d{1,4}\.\d{1,6}(?:-[0-9A-Za-z.-]{1,32})?$/;
 const INSTALLER_EXT_RE = /\.exe$/i;
+const QUIT_AFTER_LAUNCH_MS = 3000;
 
 // Extract a filename from Content-Disposition (RFC 5987 filename*=, RFC 6266
 // quoted, or unquoted token), raw and unsanitised. Null if absent.
@@ -228,9 +229,9 @@ async function downloadAndInstallUpdate(version, onProgress) {
     if (launchError) {
       return { ok: false, error: launchError };
     }
-    // Give the installer a moment to start (and its UAC prompt to appear) before
-    // we exit and release the files it replaces.
-    setTimeout(() => app.quit(), 1500);
+    // Long enough for the renderer's "Updating" screen to be read and the UAC
+    // prompt to appear; the installer waits for us to exit before replacing files.
+    setTimeout(() => app.quit(), QUIT_AFTER_LAUNCH_MS);
     return { ok: true };
   } catch (err) {
     const message = err && err.message ? err.message : String(err);
