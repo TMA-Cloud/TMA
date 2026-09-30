@@ -11,9 +11,9 @@
     "icon": "src/build/icon.png"
   },
   "nsis": {
-    "oneClick": false,
+    "oneClick": true,
     "perMachine": true,
-    "allowToChangeInstallationDirectory": true,
+    "runAfterFinish": true,
     "include": "src/build/installer.nsh"
   }
 }

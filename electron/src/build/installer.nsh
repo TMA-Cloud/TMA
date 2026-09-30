@@ -27,7 +27,8 @@
       DetailPrint "WinFsp installer finished (exit code $1)."
       ${If} $1 != 0
       ${AndIf} $1 != 3010
-        MessageBox MB_ICONEXCLAMATION|MB_OK "TMA Cloud Drive could not install WinFsp (exit code $1). The app will still work, but the Cloud Drive feature stays unavailable until WinFsp is installed."
+        ; /SD IDOK: a silent (/S) update must never block on a dialog.
+        MessageBox MB_ICONEXCLAMATION|MB_OK "TMA Cloud Drive could not install WinFsp (exit code $1). The app will still work, but the Cloud Drive feature stays unavailable until WinFsp is installed." /SD IDOK
       ${EndIf}
     winfsp_skip:
   ${EndIf}

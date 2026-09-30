@@ -1,5 +1,6 @@
 const path = require('path');
 const fs = require('fs');
+const childProcess = require('child_process');
 const { net, shell, app } = require('electron');
 const { getUpdatorUrl } = require('./config.cjs');
 
@@ -14,7 +15,7 @@ const MAX_FILENAME_LENGTH = 120;
 // The version arrives from the renderer and lands in the download URL, and the
 // downloaded file is then executed; keep both tightly constrained.
 const VERSION_RE = /^\d{1,4}\.\d{1,4}\.\d{1,6}(?:-[0-9A-Za-z.-]{1,32})?$/;
-const INSTALLER_EXT_RE = /\.(exe|msi)$/i;
+const INSTALLER_EXT_RE = /\.exe$/i;
 
 // Extract a filename from Content-Disposition (RFC 5987 filename*=, RFC 6266
 // quoted, or unquoted token), raw and unsanitised. Null if absent.
@@ -69,7 +70,7 @@ function sanitizeInstallerFilename(suggested, version) {
   }
   if (!name || name === '.' || name === '..') return fallback;
   // shell.openPath runs whatever it is given: a server-suggested .bat/.cmd/.hta
-  // would execute, so only installer extensions survive.
+  // would execute, so only the installer's .exe survives.
   if (!INSTALLER_EXT_RE.test(name)) return fallback;
   return name;
 }
@@ -89,8 +90,49 @@ function getDefaultInstallerFilename(version) {
   return `TMA-Cloud-Setup-${version}.exe`;
 }
 
+// Same flags electron-updater uses: /S no UI, --updated keeps shortcuts,
+// --force-run relaunches. The perMachine installer needs admin, and a silent
+// one cannot ask for it, so elevate.exe (shipped by electron-builder) does.
+function getSilentInstallCommand(installerPath) {
+  const nsisArgs = ['--updated', '/S', '--force-run'];
+  const elevate = process.resourcesPath ? path.join(process.resourcesPath, 'elevate.exe') : null;
+  if (elevate && fs.existsSync(elevate)) {
+    return { file: elevate, args: [installerPath, ...nsisArgs] };
+  }
+  return null;
+}
+
+// Resolve once the process is running (or reject if it could not start), then
+// detach so it outlives our quit.
+function spawnDetached(file, args) {
+  return new Promise((resolve, reject) => {
+    const child = childProcess.spawn(file, args, { detached: true, stdio: 'ignore' });
+    child.once('error', reject);
+    child.once('spawn', () => {
+      child.unref();
+      resolve();
+    });
+  });
+}
+
+// Start the installer without any wizard; fall back to opening it through the
+// shell (still a one-click install, just not silent) when that is not possible,
+// e.g. an unpacked dev build that has no elevate.exe.
+async function launchInstaller(installerPath) {
+  const command = getSilentInstallCommand(installerPath);
+  if (command) {
+    try {
+      await spawnDetached(command.file, command.args);
+      return '';
+    } catch {
+      // fall through to the shell
+    }
+  }
+  return shell.openPath(installerPath);
+}
+
 /**
- * Download the installer from <updatorUrl>/v<version> and run it.
+ * Download the installer from <updatorUrl>/v<version> and run it silently.
  * @param {string} version - Latest version tag from the feed (e.g. "1.0.3" or "v1.0.3")
  * @param {(percent: number) => void} [onProgress] - Optional; called with 0-100 when Content-Length is known
  * @returns {{ ok: boolean; error?: string }}
@@ -182,11 +224,12 @@ async function downloadAndInstallUpdate(version, onProgress) {
       throw streamErr;
     }
 
-    const openResult = await shell.openPath(tempPath);
-    if (openResult) {
-      return { ok: false, error: openResult || 'Failed to launch installer.' };
+    const launchError = await launchInstaller(tempPath);
+    if (launchError) {
+      return { ok: false, error: launchError };
     }
-    // Delay quit so the installer process can start and show its window before we exit
+    // Give the installer a moment to start (and its UAC prompt to appear) before
+    // we exit and release the files it replaces.
     setTimeout(() => app.quit(), 1500);
     return { ok: true };
   } catch (err) {

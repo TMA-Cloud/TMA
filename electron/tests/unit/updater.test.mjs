@@ -1,3 +1,5 @@
+import childProcess from 'child_process';
+import { EventEmitter } from 'events';
 import fs from 'fs';
 import path from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -19,9 +21,23 @@ const UPDATOR_URL = 'https://updates.example.com/tma';
  */
 
 let tempRoot;
+let spawnCalls;
+let spawnError;
+const realResourcesPath = process.resourcesPath;
 
 beforeEach(() => {
   tempRoot = createTempRoot('tma-cloud-updatetmp-');
+  // Never start a real installer: record the launch and report it started
+  // (or failed, when a test sets spawnError).
+  spawnCalls = [];
+  spawnError = null;
+  vi.spyOn(childProcess, 'spawn').mockImplementation((file, args, options) => {
+    spawnCalls.push({ file, args, options });
+    const child = new EventEmitter();
+    child.unref = vi.fn();
+    setImmediate(() => (spawnError ? child.emit('error', spawnError) : child.emit('spawn')));
+    return child;
+  });
   __mock.state.paths.temp = tempRoot;
   useBuildConfig({ serverUrl: SERVER_URL, updatorUrl: UPDATOR_URL });
   vi.useFakeTimers({ shouldAdvanceTime: true });
@@ -29,7 +45,16 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers();
+  process.resourcesPath = realResourcesPath;
 });
+
+/** Pretend to be a packaged build whose resources folder ships elevate.exe. */
+function withElevateHelper() {
+  const resources = createTempRoot('tma-cloud-resources-');
+  fs.writeFileSync(path.join(resources, 'elevate.exe'), 'MZ');
+  process.resourcesPath = resources;
+  return path.join(resources, 'elevate.exe');
+}
 
 /** The installer file the updater staged in the temp directory, if any. */
 function stagedInstaller() {
@@ -139,8 +164,8 @@ describe('installer filename', () => {
     }
   );
 
-  it('keeps an .msi installer name', async () => {
-    expect(await downloadWith('attachment; filename="TMA-Cloud-1.0.9.msi"')).toContain('TMA-Cloud-1.0.9.msi');
+  it('replaces an .msi name with the .exe fallback, since only NSIS is built', async () => {
+    expect(await downloadWith('attachment; filename="TMA-Cloud-1.0.9.msi"')).toMatch(/TMA-Cloud-Setup-1\.0\.9\.exe$/);
   });
 
   it('collapses a name that is only dots into the safe fallback', async () => {
@@ -175,9 +200,36 @@ describe('download and launch', () => {
     expect(fs.readFileSync(stagedInstaller(), 'utf8')).toBe('MZPAYLOAD');
   });
 
-  it('launches the downloaded installer', async () => {
+  it('runs the NSIS installer silently through elevate.exe and relaunches the app', async () => {
+    const elevate = withElevateHelper();
+    __mock.route('/v1.0.9', { statusCode: 200, body: 'MZ' });
+
+    const result = await downloadAndInstallUpdate('1.0.9');
+
+    expect(result).toEqual({ ok: true });
+    expect(spawnCalls).toHaveLength(1);
+    expect(spawnCalls[0].file).toBe(elevate);
+    expect(spawnCalls[0].args).toEqual([stagedInstaller(), '--updated', '/S', '--force-run']);
+    expect(spawnCalls[0].options).toMatchObject({ detached: true, stdio: 'ignore' });
+    expect(__mock.state.openPathCalls).toEqual([]);
+  });
+
+  it('opens the installer through the shell when there is no elevate.exe', async () => {
+    process.resourcesPath = undefined;
     __mock.route('/v1.0.9', { statusCode: 200, body: 'MZ' });
     await downloadAndInstallUpdate('1.0.9');
+    expect(spawnCalls).toEqual([]);
+    expect(__mock.state.openPathCalls).toEqual([stagedInstaller()]);
+  });
+
+  it('opens the installer through the shell when the silent launch fails', async () => {
+    withElevateHelper();
+    spawnError = new Error('spawn EACCES');
+    __mock.route('/v1.0.9', { statusCode: 200, body: 'MZ' });
+
+    const result = await downloadAndInstallUpdate('1.0.9');
+
+    expect(result).toEqual({ ok: true });
     expect(__mock.state.openPathCalls).toEqual([stagedInstaller()]);
   });
 
