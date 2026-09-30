@@ -74,6 +74,15 @@ describe('window security', () => {
     expect(event.preventDefault).toHaveBeenCalled();
   });
 
+  it('blocks a look-alike host that merely starts with the server origin', () => {
+    const win = open();
+    const event = { preventDefault: vi.fn() };
+
+    win.webContents.emit('will-navigate', event, `${SERVER_URL}.evil.example/phish`);
+
+    expect(event.preventDefault).toHaveBeenCalled();
+  });
+
   it('allows navigation within the server origin', () => {
     const win = open();
     const event = { preventDefault: vi.fn() };

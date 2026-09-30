@@ -72,8 +72,15 @@ function createWindow(loadUrl, preloadPath, appRoot) {
   Menu.setApplicationMenu(null);
 
   // Security: restrict navigation to the expected origin only
+  // Exact origin match: a prefix check also let https://host.evil.example through.
   mainWindow.webContents.on('will-navigate', (event, url) => {
-    if (!url.startsWith(new URL(loadUrl).origin)) event.preventDefault();
+    let allowed;
+    try {
+      allowed = new URL(url).origin === new URL(loadUrl).origin;
+    } catch {
+      allowed = false;
+    }
+    if (!allowed) event.preventDefault();
   });
 
   // Security: block all window.open() calls

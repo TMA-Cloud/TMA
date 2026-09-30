@@ -4,6 +4,7 @@ const { app } = require('electron');
 const { getServerUrl, noServerUrlPage } = require('./config.cjs');
 const { getTheme } = require('./theme.cjs');
 const { createWindow, getMainWindow } = require('./window.cjs');
+const { installIpcSenderGuard } = require('./ipcGuard.cjs');
 const { registerClipboardHandlers } = require('./ipc/clipboard.cjs');
 const { registerAppHandlers } = require('./ipc/app.cjs');
 const { registerEditWithDesktopHandler, registerSaveFileHandlers, getActiveEditDirs } = require('./ipc/files.cjs');
@@ -47,7 +48,9 @@ app.on('second-instance', () => {
   }
 });
 
-// Register IPC handlers before any window is created
+// Register IPC handlers before any window is created, behind the sender guard
+// (installed first so every handler is wrapped).
+installIpcSenderGuard();
 registerClipboardHandlers();
 registerAppHandlers();
 registerEditWithDesktopHandler();
