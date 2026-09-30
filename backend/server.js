@@ -142,6 +142,9 @@ app.use('/api/files', csrfProtection, fileRoutes);
 app.use('/api/user', csrfProtection, userRoutes);
 app.use('/s', shareRoutes);
 
+// A bare startsWith('/s') also swallowed SPA paths like /settings or /shared.
+const isBackendPath = p => p === '/api' || p.startsWith('/api/') || p === '/s' || p.startsWith('/s/');
+
 // Serve static frontend files (only when frontend is built)
 const frontendPath = path.join(__dirname, '..', 'frontend', 'dist');
 const frontendExists = fs.existsSync(frontendPath) && fs.existsSync(path.join(frontendPath, 'index.html'));
@@ -150,7 +153,7 @@ if (frontendExists) {
   app.use(express.static(frontendPath));
   // SPA fallback - serve index.html for all non-API routes
   app.use((req, res, next) => {
-    if (req.path.startsWith('/api') || req.path.startsWith('/s')) {
+    if (isBackendPath(req.path)) {
       return next();
     }
     res.sendFile(path.join(frontendPath, 'index.html'), err => {
@@ -161,7 +164,7 @@ if (frontendExists) {
   logger.warn('Frontend not built (frontend/dist missing). Non-API routes will return a graceful 404.');
   // Graceful response when frontend is missing - no ENOENT, no stack traces
   app.use((req, res, next) => {
-    if (req.path.startsWith('/api') || req.path.startsWith('/s')) {
+    if (isBackendPath(req.path)) {
       return next();
     }
     res.status(404).json({
@@ -174,15 +177,19 @@ if (frontendExists) {
 // Error handling middleware (must be last)
 app.use(errorHandler);
 
+// Arbitrary constant: serialises migrations across replicas starting together.
+const MIGRATION_LOCK_KEY = 7_261_900_001;
+
 async function runMigrations() {
   const client = await pool.connect();
   try {
+    await client.query('SELECT pg_advisory_lock($1)', [MIGRATION_LOCK_KEY]);
     await client.query(`CREATE TABLE IF NOT EXISTS migrations (
       version VARCHAR(255) PRIMARY KEY,
       applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
     )`);
     const appliedRes = await client.query('SELECT version FROM migrations');
-    const applied = appliedRes.rows.map(r => r.version);
+    const applied = new Set(appliedRes.rows.map(r => r.version));
     const migrationsDir = path.join(__dirname, 'migrations');
     if (!fs.existsSync(migrationsDir)) return;
     const files = fs
@@ -191,27 +198,46 @@ async function runMigrations() {
       .sort();
     for (const file of files) {
       const version = file.replace('.sql', '');
-      if (!applied.includes(version)) {
-        const sql = fs.readFileSync(path.join(migrationsDir, file), 'utf8');
-        logger.info({ version }, 'Applying migration');
+      if (applied.has(version)) continue;
+      const sql = fs.readFileSync(path.join(migrationsDir, file), 'utf8');
+      logger.info({ version }, 'Applying migration');
+      // One transaction, so a crash can't leave a migration applied but unrecorded.
+      await client.query('BEGIN');
+      try {
         await client.query(sql);
         await client.query('INSERT INTO migrations(version) VALUES($1)', [version]);
+        await client.query('COMMIT');
+      } catch (err) {
+        await client.query('ROLLBACK').catch(() => {});
+        throw err;
       }
     }
   } finally {
+    await client.query('SELECT pg_advisory_unlock($1)', [MIGRATION_LOCK_KEY]).catch(() => {});
     client.release();
   }
 }
+
+const SHUTDOWN_DRAIN_MS = 8000;
 
 // Graceful shutdown handler
 async function gracefulShutdown(signal) {
   logger.info({ signal }, 'Received shutdown signal, starting graceful shutdown...');
 
   try {
-    // Stop accepting new connections
+    // Let in-flight requests finish before the pool closes under them; SSE
+    // streams never end on their own, so cut stragglers under Docker's 10s grace.
     if (server) {
-      server.close(() => {
-        logger.info('HTTP server closed');
+      await new Promise(resolve => {
+        server.close(() => {
+          logger.info('HTTP server closed');
+          resolve();
+        });
+        server.closeIdleConnections();
+        setTimeout(() => {
+          server.closeAllConnections();
+          resolve();
+        }, SHUTDOWN_DRAIN_MS).unref();
       });
     }
 
