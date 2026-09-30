@@ -328,13 +328,25 @@ describe('listFilesFromBackend', () => {
   it('lists the root when no parent is given', async () => {
     __mock.route('/api/files', { statusCode: 200, body: '[]' });
     await listFilesFromBackend(SERVER_URL, null);
-    expect(__mock.lastRequest().url).toBe(`${SERVER_URL}/api/files`);
+    expect(__mock.lastRequest().url).toBe(`${SERVER_URL}/api/files?limit=500`);
   });
 
   it('encodes the parent id into the query string', async () => {
     __mock.route('/api/files', { statusCode: 200, body: '[]' });
     await listFilesFromBackend(SERVER_URL, 'a b&c');
-    expect(__mock.lastRequest().url).toBe(`${SERVER_URL}/api/files?parentId=a%20b%26c`);
+    expect(__mock.lastRequest().url).toBe(`${SERVER_URL}/api/files?limit=500&parentId=a+b%26c`);
+  });
+
+  it('follows X-Next-Cursor until the listing is complete', async () => {
+    __mock.route(/cursor=p2/, { statusCode: 200, body: '[{"id":"3"}]' });
+    __mock.route('/api/files', {
+      statusCode: 200,
+      headers: { 'x-next-cursor': 'p2' },
+      body: '[{"id":"1"},{"id":"2"}]',
+    });
+    const entries = await listFilesFromBackend(SERVER_URL, 'f1');
+    expect(entries.map(e => e.id)).toEqual(['1', '2', '3']);
+    expect(__mock.requests()).toHaveLength(2);
   });
 });
 

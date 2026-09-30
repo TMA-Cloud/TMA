@@ -103,6 +103,11 @@ function pipeResponseToFile(response, filePath, resolve, reject, onProgress) {
  * Shared by the cloud-drive bridge for directory listings.
  */
 function getJson(url, cookieHeader) {
+  return getJsonWithHeaders(url, cookieHeader).then(({ data }) => data);
+}
+
+/** GET + parse JSON, also returning the (lowercased) response headers. */
+function getJsonWithHeaders(url, cookieHeader) {
   return new Promise((resolve, reject) => {
     const request = net.request({ url });
     if (cookieHeader) request.setHeader('Cookie', cookieHeader);
@@ -117,7 +122,7 @@ function getJson(url, cookieHeader) {
           return reject(new Error(body ? `GET failed (${status}): ${body}` : `GET failed (${status})`));
         }
         try {
-          resolve(body ? JSON.parse(body) : null);
+          resolve({ data: body ? JSON.parse(body) : null, headers: response.headers || {} });
         } catch (err) {
           reject(err);
         }
@@ -187,5 +192,6 @@ module.exports = {
   pipeResponseToFile,
   makeIpcProgressEmitter,
   getJson,
+  getJsonWithHeaders,
   apiPostJson,
 };

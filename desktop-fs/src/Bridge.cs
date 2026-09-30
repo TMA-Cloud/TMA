@@ -27,9 +27,9 @@ namespace TmaCloud.Fs
     /// </summary>
     public sealed class Bridge : IDisposable
     {
-        // Response lines are control messages, never bulk content, so anything
-        // near this is a peer streaming bytes that never terminate.
-        private const int MaxLineBytes = 8 * 1024 * 1024;
+        // The largest reply is a whole folder listing (tens of thousands of
+        // entries); anything past this is a peer that never terminates a line.
+        private const int MaxLineBytes = 64 * 1024 * 1024;
 
         private readonly string _pipeName;
         private readonly string _token;

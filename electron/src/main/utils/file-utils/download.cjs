@@ -4,7 +4,7 @@
  * default session cookies through the shared http helpers.
  */
 const { net } = require('electron');
-const { getCookieHeader, handleResponseError, pipeResponseToFile, getJson } = require('./http.cjs');
+const { getCookieHeader, handleResponseError, pipeResponseToFile, getJsonWithHeaders } = require('./http.cjs');
 
 async function downloadToFile(url, filePath, onProgress) {
   const cookieHeader = await getCookieHeader(url);
@@ -89,14 +89,31 @@ async function getFileInfoFromBackend(base, fileId) {
   });
 }
 
+const LIST_PAGE_SIZE = 500;
+const MAX_LIST_PAGES = 1000;
+
 /**
- * List the files/folders in a directory (root when parentId is falsy).
- * Returns the raw array of entries from GET /api/files.
+ * List every file/folder in a directory (root when parentId is falsy).
+ * GET /api/files is keyset-paged (next cursor in X-Next-Cursor); reading only
+ * the first page hid everything past 200 entries from the mounted drive.
  */
 async function listFilesFromBackend(base, parentId) {
-  const url = parentId ? `${base}/api/files?parentId=${encodeURIComponent(parentId)}` : `${base}/api/files`;
   const cookieHeader = await getCookieHeader(base);
-  return getJson(url, cookieHeader);
+  const entries = [];
+  let cursor = null;
+  for (let page = 0; page < MAX_LIST_PAGES; page++) {
+    const params = new URLSearchParams({ limit: String(LIST_PAGE_SIZE) });
+    if (parentId) params.set('parentId', parentId);
+    if (cursor) params.set('cursor', cursor);
+    const { data, headers } = await getJsonWithHeaders(`${base}/api/files?${params}`, cookieHeader);
+    if (!Array.isArray(data)) return page === 0 ? data : entries;
+    entries.push(...data);
+    const raw = headers['x-next-cursor'];
+    const next = Array.isArray(raw) ? raw[0] : raw;
+    if (!next || next === cursor) break;
+    cursor = next;
+  }
+  return entries;
 }
 
 module.exports = { downloadToFile, downloadPostToFile, getFileInfoFromBackend, listFilesFromBackend };

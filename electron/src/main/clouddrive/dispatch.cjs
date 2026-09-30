@@ -24,8 +24,20 @@ async function dispatch(msg) {
   if (!base) throw new Error('server URL not configured');
 
   switch (msg.op) {
-    case 'list':
-      return listFilesFromBackend(base, msg.parentId || null);
+    case 'list': {
+      const entries = await listFilesFromBackend(base, msg.parentId || null);
+      if (!Array.isArray(entries)) return entries;
+      // Only what the host's NodeFromJson reads: halves the reply line, which
+      // the host caps, so very large folders still fit.
+      return entries.map(({ id, name, type, size, modified, accessedAt }) => ({
+        id,
+        name,
+        type,
+        size,
+        modified,
+        accessedAt,
+      }));
+    }
 
     case 'download': {
       if (!isInStagingDir(msg.dest)) throw new Error('invalid dest path');

@@ -403,7 +403,7 @@ describe('bridge operations', () => {
     const reply = await call({ op: 'list', parentId: 'folder-1' });
 
     expect(reply).toEqual({ rid: 1, ok: true, result: [{ id: '1' }] });
-    expect(__mock.lastRequest().url).toBe(`${SERVER_URL}/api/files?parentId=folder-1`);
+    expect(__mock.lastRequest().url).toBe(`${SERVER_URL}/api/files?limit=500&parentId=folder-1`);
   });
 
   it('creates a folder', async () => {
