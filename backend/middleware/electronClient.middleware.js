@@ -19,8 +19,16 @@ async function requireElectronClientIfEnabled(req, res, next) {
       return next();
     }
 
-    // Always allow share links and operational endpoints
-    if (req.path.startsWith('/s/') || req.path === '/health' || req.path === '/metrics') {
+    // Always allow share links and operational endpoints, plus the OnlyOffice
+    // server's own fetch/save calls: it never sends this header (so saving broke
+    // while the setting was on) and those routes are authenticated by its JWT.
+    if (
+      req.path.startsWith('/s/') ||
+      req.path === '/health' ||
+      req.path === '/metrics' ||
+      req.path === '/api/onlyoffice/callback' ||
+      req.path.startsWith('/api/onlyoffice/file/')
+    ) {
       return next();
     }
 

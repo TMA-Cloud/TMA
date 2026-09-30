@@ -61,11 +61,14 @@ describe('when the setting is on', () => {
     expect(res.status).toHaveBeenCalledWith(403);
   });
 
-  it.each(['/s/AbC123xyz789QWer', '/health', '/metrics'])('always allows %s', async path => {
-    getElectronOnlyAccessSettings.mockResolvedValue(true);
-    const { next } = await run(path);
-    expect(next).toHaveBeenCalled();
-  });
+  it.each(['/s/AbC123xyz789QWer', '/health', '/metrics', '/api/onlyoffice/callback', '/api/onlyoffice/file/abc123'])(
+    'always allows %s',
+    async path => {
+      getElectronOnlyAccessSettings.mockResolvedValue(true);
+      const { next } = await run(path);
+      expect(next).toHaveBeenCalled();
+    }
+  );
 
   it('serves a branded HTML page to a browser hitting a non-API route', async () => {
     getElectronOnlyAccessSettings.mockResolvedValue(true);
