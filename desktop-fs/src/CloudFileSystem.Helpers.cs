@@ -17,6 +17,17 @@ namespace TmaCloud.Fs
 {
     public sealed partial class CloudFileSystem
     {
+        private static object[] CreatePathLocks(int count)
+        {
+            var locks = new object[count];
+            for (int i = 0; i < count; i++) locks[i] = new object();
+            return locks;
+        }
+
+        // Same stripe for any spelling of a path, since Windows paths are case-insensitive.
+        private object PathLock(string path) =>
+            _pathLocks[(StringComparer.OrdinalIgnoreCase.GetHashCode(path ?? string.Empty) & int.MaxValue) % _pathLocks.Length];
+
         private string NewTempFile()
             => Path.Combine(_stagingDir, Guid.NewGuid().ToString("N") + ".tmp");
 

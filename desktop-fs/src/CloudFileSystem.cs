@@ -46,9 +46,10 @@ namespace TmaCloud.Fs
         private readonly Node _root = Node.Root();
         private readonly ConcurrentDictionary<string, DirCache> _dirCache =
             new ConcurrentDictionary<string, DirCache>(StringComparer.OrdinalIgnoreCase);
-        // Serializes new-file write-back so concurrent "Save As" Cleanups
-        // (placeholder + real content) can't both create a duplicate.
-        private readonly object _uploadLock = new object();
+        // Serializes create/write-back per path so concurrent "Save As" Cleanups
+        // (placeholder + real content) can't both create a duplicate. Striped,
+        // not global: one lock made every save wait behind any slow upload.
+        private readonly object[] _pathLocks = CreatePathLocks(64);
         // Path -> backend id for files created this session; immune to the
         // backend's ~60s listing cache so a placeholder+content pair resolves
         // to one backend file even when a fresh list is still stale.

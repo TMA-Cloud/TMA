@@ -80,7 +80,7 @@ namespace TmaCloud.Fs
             if (isDir)
             {
                 string folderPath = Combine(parentPath, name);
-                lock (_uploadLock)
+                lock (PathLock(folderPath))
                 {
                     // Idempotent mkdir: apps "ensure" a directory exists before
                     // saving, so reuse an existing same-name folder (in-session

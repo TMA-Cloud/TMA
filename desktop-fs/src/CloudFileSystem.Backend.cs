@@ -35,7 +35,7 @@ namespace TmaCloud.Fs
                 // duplicate names). Resolve one target per path so a save yields
                 // exactly one file.
                 string fullPath = of.Node.Path;
-                lock (_uploadLock)
+                lock (PathLock(fullPath))
                 {
                     // Prefer the in-session map (cache-proof); fall back to a
                     // backend listing for files not created this session.
