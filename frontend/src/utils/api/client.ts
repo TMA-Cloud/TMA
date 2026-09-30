@@ -2,7 +2,7 @@
  * Shared HTTP client for the JSON API. Every domain module builds on these
  * verbs; nothing here is feature-specific.
  */
-import { ApiError } from '../errorUtils';
+import { ApiError, firstValidationDetail } from '../errorUtils';
 
 export interface ApiRequestOptions extends RequestInit {
   signal?: AbortSignal;
@@ -39,7 +39,10 @@ async function throwApiErrorWithDetails(res: Response): Promise<never> {
   const errorData: ErrorResponseBody = isErrorResponseBody(raw) ? raw : { message: res.statusText };
   const { message, error, ...rest } = errorData;
   const errorMessage =
-    (typeof message === 'string' && message) || (typeof error === 'string' && error) || res.statusText;
+    firstValidationDetail(errorData) ||
+    (typeof message === 'string' && message) ||
+    (typeof error === 'string' && error) ||
+    res.statusText;
   throw new ApiError(errorMessage, res.status, Object.keys(rest).length > 0 ? rest : undefined);
 }
 

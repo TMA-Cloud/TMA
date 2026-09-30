@@ -447,3 +447,22 @@ describe('throttleTrailing', () => {
     }
   });
 });
+
+describe('firstValidationDetail', () => {
+  it('returns the first field reason from a 422 body', async () => {
+    const { firstValidationDetail } = await import('../../src/utils/errorUtils');
+    expect(
+      firstValidationDetail({
+        message: 'Validation failed',
+        details: [{ password: 'Password must not exceed 72 bytes' }],
+      })
+    ).toBe('Password must not exceed 72 bytes');
+  });
+
+  it('returns null when there are no usable details', async () => {
+    const { firstValidationDetail } = await import('../../src/utils/errorUtils');
+    expect(firstValidationDetail({ message: 'x' })).toBeNull();
+    expect(firstValidationDetail({ details: [{}, null, 'x'] })).toBeNull();
+    expect(firstValidationDetail(null)).toBeNull();
+  });
+});

@@ -49,6 +49,22 @@ function meaningOfStatus(status: number): string {
   return 'Upload failed.';
 }
 
+/**
+ * The first field-level reason from a 422 body ({ details: [{ field: msg }] }),
+ * which says far more than its generic "Validation failed" message.
+ */
+export function firstValidationDetail(data: unknown): string | null {
+  if (typeof data !== 'object' || data === null) return null;
+  const details = (data as { details?: unknown }).details;
+  if (!Array.isArray(details)) return null;
+  for (const entry of details) {
+    if (typeof entry !== 'object' || entry === null) continue;
+    const msg = Object.values(entry).find(value => typeof value === 'string' && value);
+    if (typeof msg === 'string') return msg;
+  }
+  return null;
+}
+
 export function extractXhrErrorMessage(xhr: XMLHttpRequest): string {
   let errorMessage = `${UPLOAD_FAILED_PREFIX}${xhr.statusText}`;
 
@@ -57,7 +73,7 @@ export function extractXhrErrorMessage(xhr: XMLHttpRequest): string {
     if (responseText && responseText.trim().length > 0) {
       try {
         const errorData = JSON.parse(responseText);
-        const bodyMessage = errorData.message || errorData.error || errorData.msg;
+        const bodyMessage = firstValidationDetail(errorData) || errorData.message || errorData.error || errorData.msg;
         if (bodyMessage && typeof bodyMessage === 'string') {
           errorMessage = bodyMessage;
         }
@@ -90,7 +106,7 @@ export async function extractResponseError(res: Response): Promise<string> {
     }
     try {
       const data = JSON.parse(text);
-      return data.message || data.error || res.statusText;
+      return firstValidationDetail(data) || data.message || data.error || res.statusText;
     } catch {
       return text.length < 500 ? text.trim() : `${res.statusText} (non-JSON response)`;
     }

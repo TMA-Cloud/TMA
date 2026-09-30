@@ -32,17 +32,12 @@ describe('validate', () => {
     expect(res.body.details.length).toBeGreaterThan(0);
   });
 
-  it('keys the details by "undefined" rather than the field name', async () => {
-    // Contradicts the documented API contract. The wiki (API → Errors) promises
-    //   "details": [{ "email": "Invalid email format" }]
-    // and tells clients to "parse the `details` array to provide specific
-    // feedback to the user" — which this makes impossible.
-    //
-    // Cause: express-validator v7 renamed the field to `err.path`; the
-    // middleware still reads `err.param`. Pinned so the one-word fix shows up
-    // here as an intentional change rather than a surprise failure.
+  it('keys each detail by the field name, as the API contract promises', async () => {
+    // The wiki (API → Errors) promises "details": [{ "email": "Invalid email format" }].
     const res = await request(appFor(signupSchema)).post('/test').send({ email: 'bad', password: '123' });
-    expect(Object.keys(res.body.details[0])).toEqual(['undefined']);
+    const fields = res.body.details.flatMap(detail => Object.keys(detail));
+    expect(fields).toContain('email');
+    expect(fields).not.toContain('undefined');
   });
 
   it('reports the human-readable rule message', async () => {
