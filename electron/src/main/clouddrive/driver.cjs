@@ -41,17 +41,19 @@ class CloudDrive {
     let buf = '';
     sock.on('data', chunk => {
       buf += chunk;
+      let start = 0;
+      let idx;
+      while ((idx = buf.indexOf('\n', start)) >= 0) {
+        const line = buf.slice(start, idx);
+        start = idx + 1;
+        if (line.trim()) void this.handleLine(sock, line);
+      }
+      buf = buf.slice(start);
+      // Judge only the unfinished line: a burst of small complete lines is fine.
       if (buf.length > MAX_LINE_BYTES) {
         warn('bridge line too long; dropping connection');
         sock.destroy();
         buf = '';
-        return;
-      }
-      let idx;
-      while ((idx = buf.indexOf('\n')) >= 0) {
-        const line = buf.slice(0, idx);
-        buf = buf.slice(idx + 1);
-        if (line.trim()) void this.handleLine(sock, line);
       }
     });
     sock.on('error', () => {

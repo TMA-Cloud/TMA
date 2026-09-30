@@ -24,6 +24,8 @@ const { readFilesFromClipboard, peekClipboardFileNames, readClipboardFilePaths }
 
 /** Virtual OLE content is held whole in memory, so the batch needs a RAM ceiling. */
 const MAX_VIRTUAL_BATCH_BYTES = 500 * 1024 * 1024;
+/** Stays under Chromium's six-connections-per-host ceiling. */
+const SERVER_COPY_CONCURRENCY = 4;
 
 /**
  * No XHR here for the renderer to draw a progress card from, so these two
@@ -224,7 +226,8 @@ function registerClipboardHandlers() {
           return { ok: false, error: 'File size exceeds maximum allowed' };
         }
         totalBytes += buf.length;
-        fs.writeFileSync(filePath, buf);
+        // Async: a sync write of up to 200 MB would freeze every window meanwhile.
+        await fs.promises.writeFile(filePath, buf);
         writtenPaths.push(filePath);
       }
       if (writtenPaths.length === 0) {
@@ -261,29 +264,36 @@ function registerClipboardHandlers() {
       const pasteDir = path.join(tmpRoot, `${PASTE_DIR_PREFIX}${Date.now()}`);
       fs.mkdirSync(pasteDir, { recursive: true });
 
-      const writtenPaths = [];
+      // Names are settled up front so deduplication stays deterministic.
       const seen = new Set();
-
+      const jobs = [];
       for (const item of payload.items) {
         if (!item || !item.id || !item.name) continue;
-
         const baseName = deduplicateFileName(sanitizeFileName(String(item.name)), seen);
         seen.add(baseName);
+        jobs.push({
+          filePath: path.join(pasteDir, baseName),
+          downloadUrl: `${base}/api/files/${encodeURIComponent(String(item.id))}/download`,
+        });
+      }
 
-        const filePath = path.join(pasteDir, baseName);
-        const downloadUrl = `${base}/api/files/${encodeURIComponent(String(item.id))}/download`;
-
-        try {
-          await downloadToFile(downloadUrl, filePath);
-          writtenPaths.push(filePath);
-        } catch (_) {
+      // A few downloads at once; one at a time made copying many small files crawl.
+      const done = new Array(jobs.length).fill(false);
+      let next = 0;
+      const worker = async () => {
+        while (next < jobs.length) {
+          const index = next++;
+          const { filePath, downloadUrl } = jobs[index];
           try {
-            if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-          } catch {
-            /* ignore */
+            await downloadToFile(downloadUrl, filePath);
+            done[index] = true;
+          } catch (_) {
+            await fs.promises.rm(filePath, { force: true }).catch(() => {});
           }
         }
-      }
+      };
+      await Promise.all(Array.from({ length: Math.min(SERVER_COPY_CONCURRENCY, jobs.length) }, worker));
+      const writtenPaths = jobs.filter((_, i) => done[i]).map(job => job.filePath);
 
       if (writtenPaths.length === 0) {
         try {

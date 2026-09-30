@@ -579,6 +579,12 @@ describe('bridge framing', () => {
     expect(sock.destroyed).toBe(true);
   });
 
+  it('keeps a connection whose chunk holds many small complete lines past the cap', () => {
+    const filler = `${' '.repeat(1000)}\n`;
+    sock.emit('data', filler.repeat(1100));
+    expect(sock.destroyed).toBeFalsy();
+  });
+
   it('survives a socket error without taking the process down', () => {
     expect(() => sock.emit('error', new Error('EPIPE'))).not.toThrow();
   });
