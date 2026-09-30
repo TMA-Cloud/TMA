@@ -5,6 +5,7 @@
 import type React from 'react';
 
 import { checkUploadStorage } from './api';
+import { updateTransfer } from './transferUtils';
 
 /**
  * Verifies the upload fits within the user's storage quota before any bytes are
@@ -38,7 +39,7 @@ export function updateUploadProgress(
   uploadId: string,
   updates: Partial<Pick<UploadProgressItem, 'progress' | 'status'>>
 ): UploadProgressItem[] {
-  return prev.map(item => (item.id === uploadId ? { ...item, ...updates } : item));
+  return updateTransfer<UploadProgressItem>(prev, uploadId, updates);
 }
 
 /**

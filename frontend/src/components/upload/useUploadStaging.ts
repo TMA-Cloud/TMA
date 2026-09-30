@@ -10,6 +10,7 @@ import {
   type ScanOptions,
 } from '../../utils/folderUpload';
 import { throttleTrailing } from '../../utils/scheduling';
+import { useStore } from '../../utils/store';
 import {
   buildFolderUploadGroups,
   buildUploadPlan,
@@ -36,10 +37,11 @@ export function useUploadStaging() {
     uploadFileWithProgress,
     replaceFileWithProgress,
     uploadEntriesBulk,
-    uploadProgress,
+    uploadProgressStore,
     cancelUpload,
     cancelUploadGroup,
   } = useApp();
+  const uploadProgress = useStore(uploadProgressStore);
   const { showToast } = useToast();
 
   const [uploadFiles, setUploadFiles] = useState<UploadFile[]>([]);

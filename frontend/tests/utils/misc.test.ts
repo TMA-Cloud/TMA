@@ -197,6 +197,13 @@ describe('upload progress list', () => {
       const result = updateUploadProgress([item('a')], 'zzz', { progress: 50 });
       expect(result[0]?.progress).toBe(0);
     });
+
+    it('returns the same array when nothing changed, so React can skip the render', () => {
+      const prev = [item('a', { progress: 40 })];
+      expect(updateUploadProgress(prev, 'a', { progress: 40 })).toBe(prev);
+      expect(updateUploadProgress(prev, 'zzz', { progress: 90 })).toBe(prev);
+      expect(updateUploadProgress(prev, 'a', { progress: 41 })).not.toBe(prev);
+    });
   });
 
   describe('createAutoDismissTimeout', () => {

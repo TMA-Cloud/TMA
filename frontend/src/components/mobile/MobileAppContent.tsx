@@ -5,8 +5,7 @@ import FileManager from '../fileManager/FileManager';
 import Dashboard from '../dashboard/Dashboard';
 import Settings from '../settings/Settings';
 import { UploadModal } from '../upload/UploadModal';
-import { UploadProgress } from '../upload/UploadProgress';
-import { DownloadProgress } from '../fileManager/DownloadProgress';
+import { TransferPanels } from '../transfer/TransferPanels';
 import { UploadIssuesModal } from '../upload/UploadIssuesModal';
 import { CreateFolderModal } from '../folder/CreateFolderModal';
 import { ImageViewerModal } from '../viewer/ImageViewerModal';
@@ -37,19 +36,7 @@ const navItems = [
 ] as const;
 
 export const MobileAppContent: React.FC = () => {
-  const {
-    currentPath,
-    folderStack,
-    setCurrentPath,
-    setUploadModalOpen,
-    uploadProgress,
-    setUploadProgress,
-    setIsUploadProgressInteracting,
-    downloadProgress,
-    cancelDownload,
-    dismissDownload,
-    setIsDownloadProgressInteracting,
-  } = useApp();
+  const { currentPath, folderStack, setCurrentPath, setUploadModalOpen } = useApp();
   const { user, logout, can } = useAuth();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -251,19 +238,7 @@ export const MobileAppContent: React.FC = () => {
       <DocumentViewerModal />
       <RenameModal />
       <ShareLinkModal />
-      <UploadProgress
-        uploads={uploadProgress}
-        onDismiss={id => {
-          setUploadProgress(prev => prev.filter(item => item.id !== id));
-        }}
-        onInteractionChange={setIsUploadProgressInteracting}
-      />
-      <DownloadProgress
-        downloads={downloadProgress}
-        onDismiss={dismissDownload}
-        onInteractionChange={setIsDownloadProgressInteracting}
-        onCancel={cancelDownload}
-      />
+      <TransferPanels />
     </div>
   );
 };

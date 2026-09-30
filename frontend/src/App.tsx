@@ -24,14 +24,9 @@ const UploadModal = lazy(() =>
     default: mod.UploadModal,
   }))
 );
-const UploadProgress = lazy(() =>
-  import('./components/upload/UploadProgress').then(mod => ({
-    default: mod.UploadProgress,
-  }))
-);
-const DownloadProgress = lazy(() =>
-  import('./components/fileManager/DownloadProgress').then(mod => ({
-    default: mod.DownloadProgress,
+const TransferPanels = lazy(() =>
+  import('./components/transfer/TransferPanels').then(mod => ({
+    default: mod.TransferPanels,
   }))
 );
 const CreateFolderModal = lazy(() =>
@@ -91,19 +86,7 @@ const PageLoadingFallback: React.FC = () => (
 );
 
 const AppContent: React.FC = () => {
-  const {
-    currentPath,
-    folderStack,
-    sidebarOpen,
-    uploadProgress,
-    setUploadProgress,
-    setIsUploadProgressInteracting,
-    cancelUpload,
-    downloadProgress,
-    cancelDownload,
-    dismissDownload,
-    setIsDownloadProgressInteracting,
-  } = useApp();
+  const { currentPath, folderStack, sidebarOpen } = useApp();
   const isMobile = useIsMobile();
   // One hook feeds both pieces of chrome that depend on this scroller: the
   // header's soft edge and the overlay scrollbar.
@@ -198,20 +181,7 @@ const AppContent: React.FC = () => {
         <RenameModal />
         <ShareLinkModal />
         <UploadIssuesModal />
-        <UploadProgress
-          uploads={uploadProgress}
-          onDismiss={(id: string) => {
-            setUploadProgress(prev => prev.filter(item => item.id !== id));
-          }}
-          onInteractionChange={setIsUploadProgressInteracting}
-          onCancel={cancelUpload}
-        />
-        <DownloadProgress
-          downloads={downloadProgress}
-          onDismiss={dismissDownload}
-          onInteractionChange={setIsDownloadProgressInteracting}
-          onCancel={cancelDownload}
-        />
+        <TransferPanels />
       </Suspense>
     </div>
   );

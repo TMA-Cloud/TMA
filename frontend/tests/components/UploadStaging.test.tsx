@@ -4,6 +4,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { UploadModal } from '../../src/components/upload/UploadModal';
 import type { AppContextType, UploadModalInitialEntry } from '../../src/contexts/AppContext';
+import { createStore } from '../../src/utils/store';
+import type { UploadProgressItem } from '../../src/utils/uploadUtils';
 
 /**
  * The modal takes drag-and-dropped entries from the provider rather than
@@ -16,6 +18,8 @@ const entryList = (count: number): UploadModalInitialEntry[] =>
     file: new File(['x'], `file-${i}.txt`),
     relativePath: `Docs/file-${i}.txt`,
   }));
+
+const uploadProgressStore = createStore<UploadProgressItem[]>([]);
 
 function makeContext(initialEntries: UploadModalInitialEntry[]): AppContextType {
   return {
@@ -35,7 +39,7 @@ function makeContext(initialEntries: UploadModalInitialEntry[]): AppContextType 
     uploadFileWithProgress: vi.fn(),
     replaceFileWithProgress: vi.fn(),
     uploadEntriesBulk: vi.fn(),
-    uploadProgress: [],
+    uploadProgressStore,
     cancelUpload: vi.fn(),
     cancelUploadGroup: vi.fn(),
   } as unknown as AppContextType;

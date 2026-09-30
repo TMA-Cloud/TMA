@@ -30,7 +30,16 @@ export function removeTransfer<T extends { id: string }>(prev: T[], id: string):
 
 /** Merge a partial update into one item by id. */
 export function updateTransfer<T extends { id: string }>(prev: T[], id: string, updates: Partial<T>): T[] {
-  return prev.map(item => (item.id === id ? { ...item, ...updates } : item));
+  // Progress fires per network chunk; returning `prev` when nothing moved lets
+  // React skip the render instead of redrawing the app for an identical card.
+  const index = prev.findIndex(item => item.id === id);
+  const current = prev[index];
+  if (!current) return prev;
+  const changed = (Object.keys(updates) as (keyof T)[]).some(key => !Object.is(current[key], updates[key]));
+  if (!changed) return prev;
+  const next = prev.slice();
+  next[index] = { ...current, ...updates };
+  return next;
 }
 
 /**

@@ -157,7 +157,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         uploadEntriesBulk: uploads.uploadEntriesBulk,
         uploadFileWithProgress: uploads.uploadFileWithProgress,
         replaceFileWithProgress: uploads.replaceFileWithProgress,
-        uploadProgress: uploads.uploadProgress,
+        uploadProgressStore: uploads.uploadProgressStore,
         setUploadProgress: uploads.setUploadProgress,
         cancelUpload: uploads.cancelUpload,
         cancelUploadGroup: uploads.cancelUploadGroup,
@@ -169,7 +169,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         // Downloads
         isDownloading: downloads.isDownloading,
         downloadFiles: downloads.downloadFiles,
-        downloadProgress: downloads.downloadProgress,
+        downloadProgressStore: downloads.downloadProgressStore,
         cancelDownload: downloads.cancelDownload,
         dismissDownload: downloads.dismissDownload,
         setIsDownloadProgressInteracting: downloads.setIsDownloadProgressInteracting,

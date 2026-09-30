@@ -18,6 +18,7 @@ import {
 } from '../../utils/electronDesktop';
 import { runWithConcurrency, throttleTrailing } from '../../utils/scheduling';
 import { formatBytes } from '../../utils/storageUtils';
+import { createStore } from '../../utils/store';
 import {
   BULK_AGGREGATE_THRESHOLD,
   BULK_BATCH_CONCURRENCY,
@@ -47,7 +48,10 @@ export function useUploads({
   refreshFiles,
   debouncedRefreshFiles,
 }: UploadsDeps) {
-  const [uploadProgress, setUploadProgress] = useState<UploadProgressItem[]>([]);
+  // Outside React state: progress ticks many times a second and must not
+  // re-render the whole app tree, only the progress panel subscribed to it.
+  const [uploadProgressStore] = useState(() => createStore<UploadProgressItem[]>([]));
+  const setUploadProgress = uploadProgressStore.set;
   const [uploadFailures, setUploadFailures] = useState<UploadFailure[]>([]);
   const [uploadSavedCount, setUploadSavedCount] = useState(0);
   const [isUploadProgressInteracting, setIsUploadProgressInteracting] = useState(false);
@@ -211,7 +215,7 @@ export function useUploads({
       uploadDismissTimeoutsRef.current.forEach(t => clearTimeout(t));
       uploadDismissTimeoutsRef.current.clear();
     }
-  }, [isUploadProgressInteracting]);
+  }, [isUploadProgressInteracting, setUploadProgress]);
 
   // A clipboard paste uploads in Electron's main process, so there is no XHR
   // here to hang progress off; these two subscriptions feed the same cards.
@@ -250,13 +254,11 @@ export function useUploads({
       const progress = getInFlightUploadProgress(loaded, total);
       // At 99% the bytes are sent and the backend is finalizing; say so.
       const status: UploadProgressItem['status'] = progress >= 99 ? 'finalizing' : 'uploading';
-      setUploadProgress(prev =>
-        prev.map(item =>
-          item.id === id && (item.status === 'uploading' || item.status === 'finalizing')
-            ? { ...item, progress, status }
-            : item
-        )
-      );
+      setUploadProgress(prev => {
+        const item = prev.find(entry => entry.id === id);
+        if (!item || (item.status !== 'uploading' && item.status !== 'finalizing')) return prev;
+        return updateUploadProgress(prev, id, { progress, status });
+      });
     });
 
     return () => {
@@ -586,7 +588,10 @@ export function useUploads({
 
   const cancelUploadGroup = (groupId: string) => {
     cancelUploadBatchGroup(groupId);
-    const idsToCancel = uploadProgress.filter(item => item.groupId === groupId).map(item => item.id);
+    const idsToCancel = uploadProgressStore
+      .get()
+      .filter(item => item.groupId === groupId)
+      .map(item => item.id);
     if (idsToCancel.length === 0) return;
     idsToCancel.forEach(id => {
       const xhr = uploadXhrRef.current.get(id);
@@ -600,7 +605,7 @@ export function useUploads({
   };
 
   return {
-    uploadProgress,
+    uploadProgressStore,
     setUploadProgress,
     uploadFailures,
     uploadSavedCount,

@@ -1,6 +1,7 @@
 import { createContext, useContext } from 'react';
 import type { UploadProgressItem } from '../utils/uploadUtils';
 import type { TransferItem } from '../utils/transferUtils';
+import type { Store } from '../utils/store';
 
 export type ShareExpiry = '7d' | '30d' | 'never';
 
@@ -163,7 +164,8 @@ export interface AppContextType {
   } | null;
   downloadFiles: (ids: string[]) => Promise<void>;
   /** Per-file download progress cards (shared UI with uploads). */
-  downloadProgress: TransferItem[];
+  /** Read with useStore() — a store so progress ticks don't re-render every consumer. */
+  downloadProgressStore: Store<TransferItem[]>;
   /** Cancel an in-progress download by its card id. */
   cancelDownload: (id: string) => void;
   /** Dismiss a finished download card by its id. */
@@ -171,7 +173,8 @@ export interface AppContextType {
   setIsDownloadProgressInteracting: (isInteracting: boolean) => void;
   /** Open a single file on the desktop (Windows) and save changes back */
   editFileWithDesktop: (id: string) => Promise<void>;
-  uploadProgress: UploadProgressItem[];
+  /** Read with useStore() — a store so progress ticks don't re-render every consumer. */
+  uploadProgressStore: Store<UploadProgressItem[]>;
   setUploadProgress: (progress: UploadProgressItem[] | ((prev: UploadProgressItem[]) => UploadProgressItem[])) => void;
   uploadFileWithProgress: (file: File, onProgress?: (progress: number) => void) => Promise<void>;
   /** Replace contents of an existing file (same progress UI as upload). */

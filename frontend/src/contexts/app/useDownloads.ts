@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { createStore, useStore } from '../../utils/store';
 import { type FileItem } from '../AppContext';
 import { downloadFile as downloadFileApi } from '../../utils/api';
 import { openDownloadFileSink, saveResponseDownload } from '../../utils/download';
@@ -37,7 +38,9 @@ const isInFlight = (s: TransferStatus) =>
  * no byte progress, so those show a styled indeterminate card.
  */
 export function useDownloads({ showToast, files }: DownloadsDeps) {
-  const [downloadProgress, setDownloadProgress] = useState<TransferItem[]>([]);
+  // Outside React state so per-chunk progress re-renders only the progress panel.
+  const [downloadProgressStore] = useState(() => createStore<TransferItem[]>([]));
+  const setDownloadProgress = downloadProgressStore.set;
   const [isDownloadProgressInteracting, setIsDownloadProgressInteracting] = useState(false);
 
   const isInteractingRef = useRef(false);
@@ -75,26 +78,25 @@ export function useDownloads({ showToast, files }: DownloadsDeps) {
       }
     }, 2000);
     return () => clearTimeout(checkTimeout);
-  }, [isDownloadProgressInteracting]);
+  }, [isDownloadProgressInteracting, setDownloadProgress]);
 
   // Electron saves stream over IPC; reflect their real byte progress on the card.
   useEffect(() => {
     return subscribeToElectronSaveProgress(({ id, loaded, total }) => {
-      setDownloadProgress(prev =>
-        prev.map(item => {
-          if (item.id !== id || item.status === 'completed' || item.status === 'error') return item;
-          return {
-            ...item,
-            status: 'downloading',
-            indeterminate: !(total > 0),
-            progress: total > 0 ? Math.min(100, Math.round((loaded / total) * 100)) : item.progress,
-          };
-        })
-      );
+      setDownloadProgress(prev => {
+        const item = prev.find(entry => entry.id === id);
+        if (!item || item.status === 'completed' || item.status === 'error') return prev;
+        return updateTransfer(prev, id, {
+          status: 'downloading',
+          indeterminate: !(total > 0),
+          progress: total > 0 ? Math.min(100, Math.round((loaded / total) * 100)) : item.progress,
+        });
+      });
     });
-  }, []);
+  }, [setDownloadProgress]);
 
-  const isDownloading = downloadProgress.some(item => isInFlight(item.status));
+  // Selected as a boolean so the provider re-renders only when it flips.
+  const isDownloading = useStore(downloadProgressStore, items => items.some(item => isInFlight(item.status)));
 
   const patch = (id: string, updates: Partial<TransferItem>) =>
     setDownloadProgress(prev => updateTransfer(prev, id, updates));
@@ -250,7 +252,7 @@ export function useDownloads({ showToast, files }: DownloadsDeps) {
   return {
     isDownloading,
     downloadFiles,
-    downloadProgress,
+    downloadProgressStore,
     cancelDownload,
     dismissDownload,
     setIsDownloadProgressInteracting,
