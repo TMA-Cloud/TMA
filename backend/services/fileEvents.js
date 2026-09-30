@@ -121,17 +121,33 @@ async function publishFileEventsBatch(events) {
   logger.debug({ eventCount: events.length, userCount: eventsByUser.size }, 'Batch file events published');
 }
 
-// Track active subscriptions for connection management (userId -> Set of subscriber clients)
-const activeSubscriptions = new Map();
+// One subscriber connection per process, shared by every SSE stream: node-redis
+// multiplexes channels and listeners on it and resubscribes after a reconnect.
+// Duplicating the client per stream cost one Redis socket per open tab.
+let sharedSubscriber = null;
+let sharedSubscriberConnecting = null;
 let totalActiveConnections = 0;
 const MAX_CONNECTIONS = 10000; // Maximum concurrent SSE connections
 
+async function getSharedSubscriber() {
+  if (sharedSubscriber?.isReady) return sharedSubscriber;
+  sharedSubscriberConnecting ??= (async () => {
+    const client = redisClient.duplicate();
+    client.on('error', err => logger.error({ err }, 'File events subscriber error'));
+    await client.connect();
+    sharedSubscriber = client;
+    return client;
+  })().finally(() => {
+    sharedSubscriberConnecting = null;
+  });
+  return sharedSubscriberConnecting;
+}
+
 /**
  * Subscribe to file events from Redis (per-user channel for privacy)
- * Optimized with connection tracking and limits
  * @param {string} userId - User ID to subscribe to events for
  * @param {Function} callback - Callback function to handle events
- * @returns {Promise<Object>} Redis subscriber client
+ * @returns {Promise<{ channel: string, listener: Function, active: boolean } | null>} Subscription handle
  */
 async function subscribeToFileEvents(userId, callback) {
   if (!isRedisConnected()) {
@@ -149,52 +165,21 @@ async function subscribeToFileEvents(userId, callback) {
     return null;
   }
 
-  try {
-    // Create a separate subscriber client (Redis requires separate clients for pub/sub)
-    const subscriber = redisClient.duplicate();
-    await subscriber.connect();
-
-    const channel = getUserEventsChannel(userId);
-
-    // Subscribe with error handling
-    await subscriber.subscribe(channel, message => {
-      try {
-        const event = JSON.parse(message);
-        callback(event);
-      } catch (err) {
-        logger.error({ err, message, userId }, 'Failed to parse file event message');
-      }
-    });
-
-    if (!activeSubscriptions.has(userId)) {
-      activeSubscriptions.set(userId, new Set());
+  const channel = getUserEventsChannel(userId);
+  const listener = message => {
+    try {
+      callback(JSON.parse(message));
+    } catch (err) {
+      logger.error({ err, message, userId }, 'Failed to parse file event message');
     }
-    activeSubscriptions.get(userId).add(subscriber);
+  };
+
+  try {
+    const subscriber = await getSharedSubscriber();
+    await subscriber.subscribe(channel, listener);
     totalActiveConnections++;
-
-    const removeSubscriber = () => {
-      const subs = activeSubscriptions.get(userId);
-      if (subs && subs.delete(subscriber)) {
-        totalActiveConnections--;
-        if (subs.size === 0) activeSubscriptions.delete(userId);
-      }
-    };
-
-    subscriber.on('error', err => {
-      logger.error({ err, userId, channel }, 'Subscriber client error');
-      removeSubscriber();
-    });
-
-    subscriber.on('end', () => {
-      logger.debug({ userId, channel }, 'Subscriber client disconnected');
-      removeSubscriber();
-    });
-
-    logger.debug(
-      { channel, userId, activeConnections: activeSubscriptions.get(userId)?.size ?? 0 },
-      'Subscribed to user file events channel'
-    );
-    return subscriber;
+    logger.debug({ channel, userId, activeConnections: totalActiveConnections }, 'Subscribed to user file events');
+    return { channel, listener, active: true };
   } catch (err) {
     logger.error({ err, userId }, 'Failed to subscribe to file events');
     return null;
@@ -202,80 +187,21 @@ async function subscribeToFileEvents(userId, callback) {
 }
 
 /**
- * Unsubscribe from file events
- * Optimized with better cleanup and connection tracking
- * @param {Object} subscriber - Redis subscriber client
- * @param {string} userId - User ID (optional, for logging)
+ * Unsubscribe one stream's listener; the channel itself is dropped once no
+ * listener is left. Safe to call more than once.
+ * @param {{ channel: string, listener: Function, active: boolean } | null} subscription
+ * @param {string} [userId] - For logging only
  */
-async function unsubscribeFromFileEvents(subscriber, userId = null) {
-  if (!subscriber) {
-    return;
-  }
-
-  if (userId && activeSubscriptions.has(userId)) {
-    const subs = activeSubscriptions.get(userId);
-    if (subs.delete(subscriber)) {
-      totalActiveConnections--;
-      if (subs.size === 0) activeSubscriptions.delete(userId);
-    }
-  }
-
+async function unsubscribeFromFileEvents(subscription, userId = null) {
+  if (!subscription?.active) return;
+  subscription.active = false;
+  totalActiveConnections--;
+  if (!sharedSubscriber?.isReady) return;
   try {
-    // Check if client is ready before attempting operations
-    if (subscriber.isReady === false) {
-      logger.debug({ userId }, 'Subscriber client not ready, skipping unsubscribe');
-      return;
-    }
-
-    // Get the channel name if userId is provided, otherwise unsubscribe from all
-    if (userId) {
-      const channel = getUserEventsChannel(userId);
-      try {
-        await subscriber.unsubscribe(channel);
-        logger.debug(
-          { channel, userId, activeConnections: activeSubscriptions.size },
-          'Unsubscribed from user file events channel'
-        );
-      } catch (unsubErr) {
-        // Handle unsubscribe errors gracefully
-        if (unsubErr.message && (unsubErr.message.includes('closed') || unsubErr.type === 'ClientClosedError')) {
-          logger.debug({ userId, channel }, 'Channel already unsubscribed (client closed)');
-          return;
-        }
-        throw unsubErr;
-      }
-    } else {
-      // Fallback: try to unsubscribe from all channels
-      try {
-        await subscriber.unsubscribe();
-        logger.debug({ userId }, 'Unsubscribed from all file events channels');
-      } catch (unsubErr) {
-        if (unsubErr.message && (unsubErr.message.includes('closed') || unsubErr.type === 'ClientClosedError')) {
-          logger.debug({ userId }, 'Already unsubscribed (client closed)');
-          return;
-        }
-        throw unsubErr;
-      }
-    }
-
-    // Quit the client (this may fail if already closed, which is fine)
-    try {
-      await subscriber.quit();
-    } catch (quitErr) {
-      // Handle "client is closed" error gracefully (expected if called multiple times)
-      if (quitErr.message && (quitErr.message.includes('closed') || quitErr.type === 'ClientClosedError')) {
-        logger.debug({ userId }, 'Subscriber client already closed during quit');
-        return;
-      }
-      throw quitErr;
-    }
+    await sharedSubscriber.unsubscribe(subscription.channel, subscription.listener);
+    logger.debug({ channel: subscription.channel, userId }, 'Unsubscribed from user file events');
   } catch (err) {
-    // Handle "client is closed" error gracefully (expected if called multiple times)
-    if (err.message && (err.message.includes('closed') || err.type === 'ClientClosedError')) {
-      logger.debug({ userId }, 'Subscriber client already closed during unsubscribe');
-      return;
-    }
-    logger.error({ err, userId }, 'Failed to unsubscribe from file events');
+    logger.debug({ err, userId }, 'Failed to unsubscribe from file events');
   }
 }
 

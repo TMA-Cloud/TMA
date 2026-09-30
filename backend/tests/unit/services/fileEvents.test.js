@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { publishedMessages, setRedisDown } from '../../mocks/redis.mock.js';
+import { publishedMessages, redisClient, setRedisDown } from '../../mocks/redis.mock.js';
 import {
   EventTypes,
   getConnectionStats,
@@ -134,6 +134,25 @@ describe('subscribeToFileEvents', () => {
     expect(received[0]).toMatchObject({ type: EventTypes.FILE_UPLOADED, data: { fileId: 'f1' } });
 
     await unsubscribeFromFileEvents(subscriber, USER);
+  });
+
+  it('shares one subscriber connection across every stream', async () => {
+    const before = redisClient.duplicate.mock.calls.length;
+    const a = await subscribeToFileEvents(USER, () => {});
+    const b = await subscribeToFileEvents(OTHER, () => {});
+    const c = await subscribeToFileEvents(USER, () => {});
+    expect(redisClient.duplicate.mock.calls.length - before).toBeLessThanOrEqual(1);
+    await Promise.all([a, b, c].map(sub => unsubscribeFromFileEvents(sub)));
+  });
+
+  it('keeps delivering to a stream after another tab on the same channel closes', async () => {
+    const kept = [];
+    const closing = await subscribeToFileEvents(USER, () => {});
+    const staying = await subscribeToFileEvents(USER, event => kept.push(event));
+    await unsubscribeFromFileEvents(closing, USER);
+    await publishFileEvent(EventTypes.FILE_UPLOADED, { fileId: 'f2' }, USER);
+    expect(kept).toHaveLength(1);
+    await unsubscribeFromFileEvents(staying, USER);
   });
 
   it("does not deliver another user's events", async () => {

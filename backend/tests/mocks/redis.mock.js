@@ -240,9 +240,15 @@ const redisClient = {
     subscribers.get(channel).add(handler);
   }),
 
-  unsubscribe: vi.fn(async channel => {
+  // Like node-redis: with a listener, drop just that one; the channel goes once empty.
+  unsubscribe: vi.fn(async (channel, handler) => {
     if (channel === undefined) subscribers.clear();
-    else subscribers.delete(channel);
+    else if (handler === undefined) subscribers.delete(channel);
+    else {
+      const handlers = subscribers.get(channel);
+      handlers?.delete(handler);
+      if (handlers?.size === 0) subscribers.delete(channel);
+    }
   }),
 
   /** Pub/sub needs its own connection; hand back an independent fake. */
