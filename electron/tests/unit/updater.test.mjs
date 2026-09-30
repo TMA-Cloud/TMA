@@ -45,6 +45,19 @@ describe('configuration guards', () => {
     expect(result.error).toMatch(/Updator URL is not configured/);
   });
 
+  it.each(['1/../../x', '1.0.9?x=1', '../latest', 'latest', '1.0', '1.0.9 ; rm'])(
+    'rejects the malformed version %j before building a URL',
+    async version => {
+      await expect(downloadAndInstallUpdate(version)).resolves.toEqual({ ok: false, error: 'Invalid version.' });
+    }
+  );
+
+  it('refuses an http updator URL, since the download is executed', async () => {
+    useBuildConfig({ serverUrl: SERVER_URL, updatorUrl: 'http://updates.example.com/tma' });
+    const result = await downloadAndInstallUpdate('1.0.9');
+    expect(result).toEqual({ ok: false, error: 'Updator URL must use https.' });
+  });
+
   it('requires a version', async () => {
     await expect(downloadAndInstallUpdate()).resolves.toEqual({ ok: false, error: 'Version is required.' });
     await expect(downloadAndInstallUpdate('')).resolves.toEqual({ ok: false, error: 'Version is required.' });
@@ -117,6 +130,17 @@ describe('installer filename', () => {
     expect(name).not.toContain('..');
     expect(path.dirname(path.join(tempRoot, name))).toBe(tempRoot);
     expect(name).toContain('evil.exe');
+  });
+
+  it.each(['update.bat', 'update.cmd', 'update.hta', 'update.ps1', 'update.exe.js'])(
+    'never stages a non-installer extension (%s), since the file is executed',
+    async suggested => {
+      expect(await downloadWith(`attachment; filename="${suggested}"`)).toMatch(/TMA-Cloud-Setup-1\.0\.9\.exe$/);
+    }
+  );
+
+  it('keeps an .msi installer name', async () => {
+    expect(await downloadWith('attachment; filename="TMA-Cloud-1.0.9.msi"')).toContain('TMA-Cloud-1.0.9.msi');
   });
 
   it('collapses a name that is only dots into the safe fallback', async () => {

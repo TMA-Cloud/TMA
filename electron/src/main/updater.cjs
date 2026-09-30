@@ -11,6 +11,10 @@ function getInstallFileUrl(updatorUrl, version) {
 }
 
 const MAX_FILENAME_LENGTH = 120;
+// The version arrives from the renderer and lands in the download URL, and the
+// downloaded file is then executed; keep both tightly constrained.
+const VERSION_RE = /^\d{1,4}\.\d{1,4}\.\d{1,6}(?:-[0-9A-Za-z.-]{1,32})?$/;
+const INSTALLER_EXT_RE = /\.(exe|msi)$/i;
 
 // Extract a filename from Content-Disposition (RFC 5987 filename*=, RFC 6266
 // quoted, or unquoted token), raw and unsanitised. Null if absent.
@@ -64,7 +68,18 @@ function sanitizeInstallerFilename(suggested, version) {
     name = stem + ext;
   }
   if (!name || name === '.' || name === '..') return fallback;
+  // shell.openPath runs whatever it is given: a server-suggested .bat/.cmd/.hta
+  // would execute, so only installer extensions survive.
+  if (!INSTALLER_EXT_RE.test(name)) return fallback;
   return name;
+}
+
+function isHttps(url) {
+  try {
+    return new URL(url).protocol === 'https:';
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -91,15 +106,25 @@ async function downloadAndInstallUpdate(version, onProgress) {
   if (!version || typeof version !== 'string') {
     return { ok: false, error: 'Version is required.' };
   }
-  const trimmedVersion = version.trim();
+  const trimmedVersion = version.trim().replace(/^v/i, '');
   if (!trimmedVersion) {
     return { ok: false, error: 'Version is required.' };
+  }
+  if (!VERSION_RE.test(trimmedVersion)) {
+    return { ok: false, error: 'Invalid version.' };
+  }
+  if (!isHttps(updatorUrl)) {
+    return { ok: false, error: 'Updator URL must use https.' };
   }
 
   const installUrl = getInstallFileUrl(updatorUrl, trimmedVersion);
 
   try {
     const response = await net.fetch(installUrl, { redirect: 'follow' });
+    // A redirect could otherwise hand us the installer over plain http.
+    if (response.url && !isHttps(response.url)) {
+      return { ok: false, error: 'Update download was redirected off https.' };
+    }
     if (!response.ok) {
       const msg = `Download failed: ${response.status} ${response.statusText}. Tried: ${installUrl}`;
       return { ok: false, error: msg };
