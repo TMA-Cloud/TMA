@@ -1,12 +1,10 @@
-# AI Agent directories and files
+# AI agent local state
 .claude/*
-.kiro/*
-.codex/*
-.cursor/*
-.agent/
-agent_data/
-agent_cache/
-agent_logs/
+!.claude/launch.json
+.kiro/
+.codex/
+.cursor/
+CLAUDE.local.md
 
 # Dependencies
 node_modules/
@@ -26,68 +24,31 @@ backend/tests/.tmp/
 # Logs
 logs/
 *.log
-npm-debug.log*
-yarn-debug.log*
-pnpm-debug.log*
 
-# Frontend
+# Build output
 frontend/dist/
-frontend/.vite/
+electron/dist-client/
+electron/dist-electron/
+electron/clouddrive-dist/
+electron/build-assets/
+electron/src/config/build-config.json
+desktop-fs/bin/
+desktop-fs/obj/
+*.tgz
 
-# Backend
-backend/dist/
-
-# Runtime data
-pids/
-*.pid
-*.seed
-*.pid.lock
-
-# Temporary files
+# Local data
+backups/
 tmp/
-temp/
-.cache/
-*.local
-*.swp
-*.swo
-*~
 
-# Uploads
-uploads/
+# Local compose overrides
+docker-compose-*.yml
 
-# OS files
-.DS_Store
-Thumbs.db
-Desktop.ini
-
-# IDE files
+# Editors and OS
 .vscode/*
 !.vscode/extensions.json
 .idea/
-*.sublime-workspace
-*.sublime-project
-
-# Database backups
-backups/
-
-# Docker
-docker-compose-prod.yml
-docker-compose-dev.yml
-docker-compose-test.yml
-docker-compose-local.yml
-
-# Electron
-electron/dist-client/
-electron/dist-electron/
-electron/src/config/build-config.json
-electron/clouddrive-dist/
-electron/build-assets/
-
-# Desktop FS
-desktop-fs/bin/
-desktop-fs/obj/
-
-# Misc
-*.tgz
-.next/
-.eslintcache
+*.swp
+*~
+.DS_Store
+Thumbs.db
+Desktop.ini

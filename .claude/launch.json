@@ -1,0 +1,29 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "frontend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--prefix", "frontend"],
+      "port": 5173
+    },
+    {
+      "name": "backend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["start", "--prefix", "backend"],
+      "port": 3000
+    },
+    {
+      "name": "worker",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["backend/audit-worker.js"],
+      "port": 3999
+    },
+    {
+      "name": "wiki",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--prefix", "../TMAWiki", "--", "-p", "3100"],
+      "port": 3100
+    }
+  ]
+}
