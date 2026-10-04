@@ -30,9 +30,7 @@ function installElectron(overrides: Partial<ElectronAPI> = {}) {
     clipboard: {
       peekFileNames: vi.fn(async () => ({ names: ['a.txt'], external: true })),
       claim: vi.fn(async () => ({ ok: true })),
-      readFiles: vi.fn(async () => ({ files: [] })),
-      writeFiles: vi.fn(async () => ({ ok: true })),
-      writeFilesFromData: vi.fn(async () => ({ ok: true })),
+      uploadFiles: vi.fn(async () => ({ ok: true })),
       writeFilesFromServer: vi.fn(async () => ({ ok: true })),
     },
     files: {
@@ -46,8 +44,6 @@ function installElectron(overrides: Partial<ElectronAPI> = {}) {
       onUpdateDownloadProgress: vi.fn(() => () => {}),
     },
     cloudDrive: {
-      start: vi.fn(async () => ({ ok: true, mountPoint: 'T:' })),
-      stop: vi.fn(async () => ({ ok: true })),
       status: vi.fn(async () => ({ running: true, mountPoint: 'T:' })),
       getMode: vi.fn(async () => ({ mode: 'full' as const })),
       setMode: vi.fn(async () => ({ ok: true, mode: 'saveOnly' as const })),
@@ -103,7 +99,7 @@ describe('capability probes', () => {
   });
 
   it('report false when only part of the clipboard bridge exists', () => {
-    installElectron({ clipboard: { readFiles: vi.fn() } } as unknown as Partial<ElectronAPI>);
+    installElectron({ clipboard: { uploadFiles: vi.fn() } } as unknown as Partial<ElectronAPI>);
     expect(hasElectronClipboard()).toBe(false);
   });
 });

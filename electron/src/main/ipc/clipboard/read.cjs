@@ -64,8 +64,8 @@ function parsePathsFromText(text) {
 async function readFilesFromClipboard() {
   if (process.platform !== 'win32') return [];
   // Physical and text paths use clipboard:uploadFiles and stream from disk.
-  // This compatibility endpoint is only for virtual OLE content, which has no
-  // filesystem path for Node to stream.
+  // This reads only virtual OLE content, which has no filesystem path for Node
+  // to stream.
   try {
     const scriptContent = getOleExtractScriptContent();
     const stdout = await runPowerShellEnv(scriptContent, 15000);

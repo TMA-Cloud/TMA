@@ -322,15 +322,11 @@ describe('starting the drive', () => {
     });
   });
 
-  it('returns the start error to the renderer rather than throwing', async () => {
+  it('fails to start with a clear error when the host is missing', async () => {
     hideFsHost();
     const reloaded = freshRequire('src/main/clouddrive.cjs');
-    reloaded.registerCloudDriveHandlers();
 
-    const result = await __mock.invoke('clouddrive:start', {});
-
-    expect(result.ok).toBe(false);
-    expect(result.error).toMatch(/TmaCloudFs\.exe not found/);
+    await expect(reloaded.startCloudDrive({})).rejects.toThrow(/TmaCloudFs\.exe not found/);
   });
 
   it('writes a log file so a packaged app can be diagnosed', async () => {
@@ -671,15 +667,6 @@ describe('stopping the drive', () => {
     expect(clouddrive.getMountPoint()).toBeNull();
     await expect(mount()).resolves.toBe('T:');
     expect(hosts).toHaveLength(2);
-  });
-
-  it('reports success to the renderer', async () => {
-    clouddrive.registerCloudDriveHandlers();
-    await mount();
-    const stopping = __mock.invoke('clouddrive:stop');
-    hosts[0].exit(0);
-
-    await expect(stopping).resolves.toEqual({ ok: true });
   });
 });
 

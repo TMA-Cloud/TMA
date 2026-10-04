@@ -82,11 +82,8 @@ describe('handler registration', () => {
       'clipboard:cancelUpload',
       'clipboard:claim',
       'clipboard:peekFileNames',
-      'clipboard:readFiles',
       'clipboard:uploadFiles',
       'clipboard:uploadVirtualFiles',
-      'clipboard:writeFiles',
-      'clipboard:writeFilesFromData',
       'clipboard:writeFilesFromServer',
     ]);
   });
@@ -130,14 +127,18 @@ describe('clipboard:peekFileNames', () => {
   });
 });
 
-describe('clipboard:readFiles', () => {
-  it('does not materialise Explorer files through the legacy base64 endpoint', async () => {
+describe('reading clipboard files for a virtual upload', () => {
+  const readClipboard = async () => ({
+    files: await freshRequire('src/main/ipc/clipboard/read.cjs').readFilesFromClipboard(),
+  });
+
+  it('leaves Explorer files to the streaming upload', async () => {
     const dir = createTempRoot();
     const file = writeFile(dir, 'note.txt', 'hello');
     fakePowerShell({ dropList: `${file}\r\n` });
 
     const readFile = vi.spyOn(fs.promises, 'readFile');
-    await expect(__mock.invoke('clipboard:readFiles')).resolves.toEqual({ files: [] });
+    await expect(readClipboard()).resolves.toEqual({ files: [] });
     expect(readFile).not.toHaveBeenCalled();
   });
 
@@ -145,19 +146,19 @@ describe('clipboard:readFiles', () => {
     const payload = JSON.stringify({ 'shot.png': Buffer.from('PNG').toString('base64') });
     fakePowerShell({ dropList: '', ole: payload });
 
-    const { files } = await __mock.invoke('clipboard:readFiles');
+    const { files } = await readClipboard();
 
     expect(files).toEqual([{ name: 'shot.png', mime: 'image/png', data: Buffer.from('PNG').toString('base64') }]);
   });
 
-  it('does not materialise clipboard text paths through renderer IPC', async () => {
+  it('leaves clipboard text paths to the streaming upload', async () => {
     fakePowerShell({ dropList: '', ole: '{}' });
     // Only drive-letter and UNC paths are recognised, so the fixture is a
     // Windows path with the filesystem stubbed — this runs on Linux CI too.
     const copied = 'C:\\Users\\me\\copied.txt';
     __mock.setClipboardText(`"${copied}"`);
     const readFile = vi.spyOn(fs.promises, 'readFile');
-    await expect(__mock.invoke('clipboard:readFiles')).resolves.toEqual({ files: [] });
+    await expect(readClipboard()).resolves.toEqual({ files: [] });
     expect(readFile).not.toHaveBeenCalled();
   });
 
@@ -166,7 +167,7 @@ describe('clipboard:readFiles', () => {
     __mock.setClipboardText('..\\..\\secrets.txt');
     const stat = vi.spyOn(fs.promises, 'stat');
 
-    await expect(__mock.invoke('clipboard:readFiles')).resolves.toEqual({ files: [] });
+    await expect(readClipboard()).resolves.toEqual({ files: [] });
     expect(stat).not.toHaveBeenCalled();
   });
 
@@ -174,25 +175,25 @@ describe('clipboard:readFiles', () => {
     fakePowerShell({ dropList: '', ole: '{}' });
     __mock.setClipboardText('just some copied prose\nnot a path');
 
-    await expect(__mock.invoke('clipboard:readFiles')).resolves.toEqual({ files: [] });
+    await expect(readClipboard()).resolves.toEqual({ files: [] });
   });
 
   it('returns nothing when every source is empty', async () => {
     fakePowerShell({ dropList: '', ole: '{}' });
     __mock.setClipboardText('');
-    await expect(__mock.invoke('clipboard:readFiles')).resolves.toEqual({ files: [] });
+    await expect(readClipboard()).resolves.toEqual({ files: [] });
   });
 
   it('survives a failure in each PowerShell stage', async () => {
     fakePowerShell({ dropListFails: true, oleFails: true });
     __mock.setClipboardText('');
-    await expect(__mock.invoke('clipboard:readFiles')).resolves.toEqual({ files: [] });
+    await expect(readClipboard()).resolves.toEqual({ files: [] });
   });
 
   it('returns nothing outside Windows', async () => {
     usePlatform('linux');
     const spawned = fakePowerShell({ dropList: 'C:\\a.txt' });
-    await expect(__mock.invoke('clipboard:readFiles')).resolves.toEqual({ files: [] });
+    await expect(readClipboard()).resolves.toEqual({ files: [] });
     expect(spawned).toHaveLength(0);
   });
 
@@ -200,7 +201,7 @@ describe('clipboard:readFiles', () => {
     const payload = JSON.stringify({ 'thing.zzzzz': Buffer.from('x').toString('base64') });
     fakePowerShell({ dropList: '', ole: payload });
 
-    const { files } = await __mock.invoke('clipboard:readFiles');
+    const { files } = await readClipboard();
 
     expect(files[0].mime).toBe('application/octet-stream');
   });
@@ -371,144 +372,6 @@ describe('direct clipboard uploads', () => {
   it('reports nothing to cancel for an upload that already settled', async () => {
     expect(__mock.invoke('clipboard:cancelUpload', 'clipboard-0-0')).toEqual({ ok: false });
     expect(__mock.invoke('clipboard:cancelUpload', undefined)).toEqual({ ok: false });
-  });
-});
-
-describe('clipboard:writeFiles', () => {
-  it('puts existing paths on the Windows clipboard', async () => {
-    const file = writeFile(createTempRoot(), 'a.txt', 'x');
-    const spawned = fakePowerShell();
-
-    await expect(__mock.invoke('clipboard:writeFiles', [file])).resolves.toEqual({ ok: true });
-    expect(spawned[0].args.join(' ')).toContain('SetFileDropList');
-  });
-
-  it('refuses an empty or non-array selection', async () => {
-    fakePowerShell();
-    await expect(__mock.invoke('clipboard:writeFiles', [])).resolves.toEqual({ ok: false });
-    await expect(__mock.invoke('clipboard:writeFiles', 'C:\\a.txt')).resolves.toEqual({ ok: false });
-    await expect(__mock.invoke('clipboard:writeFiles', undefined)).resolves.toEqual({ ok: false });
-  });
-
-  it('refuses outside Windows', async () => {
-    usePlatform('darwin');
-    await expect(__mock.invoke('clipboard:writeFiles', ['C:\\a.txt'])).resolves.toEqual({ ok: false });
-  });
-
-  it('reports the failure when the clipboard cannot be set', async () => {
-    fakePowerShell({ dropListFails: true });
-    const file = writeFile(createTempRoot(), 'a.txt', 'x');
-
-    const result = await __mock.invoke('clipboard:writeFiles', [file]);
-
-    expect(result.ok).toBe(false);
-    expect(result.error).toBeTruthy();
-  });
-});
-
-describe('clipboard:writeFilesFromData', () => {
-  const fileEntry = (name, text) => ({ name, data: Buffer.from(text).toString('base64') });
-
-  it('materialises the files in a temp folder and copies them to the clipboard', async () => {
-    fakePowerShell();
-
-    const result = await __mock.invoke('clipboard:writeFilesFromData', {
-      files: [fileEntry('a.txt', 'AAA'), fileEntry('b.txt', 'BBB')],
-    });
-
-    expect(result).toEqual({ ok: true });
-    expect(fs.readdirSync(pasteDir()).sort()).toEqual(['a.txt', 'b.txt']);
-    expect(fs.readFileSync(path.join(pasteDir(), 'a.txt'), 'utf8')).toBe('AAA');
-  });
-
-  it('sanitises names so a payload cannot write outside the paste folder', async () => {
-    fakePowerShell();
-
-    await __mock.invoke('clipboard:writeFilesFromData', { files: [fileEntry('../../evil.txt', 'X')] });
-
-    expect(fs.readdirSync(pasteDir())).toEqual(['.._.._evil.txt']);
-  });
-
-  it('deduplicates repeated names instead of overwriting', async () => {
-    fakePowerShell();
-
-    await __mock.invoke('clipboard:writeFilesFromData', {
-      files: [fileEntry('a.txt', 'first'), fileEntry('a.txt', 'second')],
-    });
-
-    expect(fs.readdirSync(pasteDir()).sort()).toEqual(['a (1).txt', 'a.txt']);
-  });
-
-  it('clears earlier paste folders so temp does not grow without bound', async () => {
-    fakePowerShell();
-    const stale = path.join(tmpRoot, `${PASTE_DIR_PREFIX}old`);
-    fs.mkdirSync(stale, { recursive: true });
-    // A folder stamped in the current millisecond is skipped by the sweep, so
-    // backdate it to the previous paste it stands for.
-    const earlier = new Date(Date.now() - 1000);
-    fs.utimesSync(stale, earlier, earlier);
-
-    await __mock.invoke('clipboard:writeFilesFromData', { files: [fileEntry('a.txt', 'X')] });
-
-    expect(fs.existsSync(stale)).toBe(false);
-  });
-
-  it('skips entries with no name or non-string data', async () => {
-    fakePowerShell();
-
-    await __mock.invoke('clipboard:writeFilesFromData', {
-      files: [{ data: 'AAA' }, { name: 'b.txt', data: 42 }, fileEntry('c.txt', 'CCC')],
-    });
-
-    expect(fs.readdirSync(pasteDir())).toEqual(['c.txt']);
-  });
-
-  it('rejects a single file over the per-file limit before allocating it', async () => {
-    fakePowerShell();
-    const oversized = { name: 'huge.bin', data: 'A'.repeat(300 * 1024 * 1024) };
-
-    const result = await __mock.invoke('clipboard:writeFilesFromData', { files: [oversized] });
-
-    expect(result).toEqual({ ok: false, error: 'File exceeds maximum allowed size' });
-  });
-
-  it('rejects a batch whose total exceeds the overall limit', async () => {
-    fakePowerShell();
-    const chunk = () => ({ name: 'part.bin', data: 'A'.repeat(180 * 1024 * 1024) });
-
-    const result = await __mock.invoke('clipboard:writeFilesFromData', {
-      files: [chunk(), chunk(), chunk(), chunk()],
-    });
-
-    expect(result).toEqual({ ok: false, error: 'Total payload size exceeds maximum allowed' });
-  });
-
-  it('reports an empty result and leaves no folder behind', async () => {
-    fakePowerShell();
-
-    const result = await __mock.invoke('clipboard:writeFilesFromData', { files: [{ name: 'a.txt' }] });
-
-    expect(result).toEqual({ ok: false, error: 'No valid files' });
-    expect(pasteDir()).toBeNull();
-  });
-
-  it('refuses an empty payload', async () => {
-    await expect(__mock.invoke('clipboard:writeFilesFromData', { files: [] })).resolves.toEqual({
-      ok: false,
-      error: 'Invalid payload',
-    });
-    await expect(__mock.invoke('clipboard:writeFilesFromData', undefined)).resolves.toEqual({
-      ok: false,
-      error: 'Invalid payload',
-    });
-  });
-
-  it('refuses outside Windows', async () => {
-    usePlatform('linux');
-    await expect(__mock.invoke('clipboard:writeFilesFromData', { files: [fileEntry('a.txt', 'X')] })).resolves.toEqual({
-      ok: false,
-      error: 'Invalid payload',
-    });
   });
 });
 

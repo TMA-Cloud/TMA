@@ -31,9 +31,6 @@ declare global {
         /** `external`: files another app copied after this app's last Copy or Cut. */
         peekFileNames?: () => Promise<{ names: string[]; external?: boolean }>;
         claim?: (payload: { names: string[] }) => Promise<{ ok: boolean }>;
-        readFiles: () => Promise<{
-          files: { name: string; mime: string; data: string }[];
-        }>;
         // A refused file lands in `failed`, not in `ok`: see onUploadStatus.
         uploadFiles?: (payload: { origin: string; parentId: string | null }) => Promise<{
           ok: boolean;
@@ -55,10 +52,6 @@ declare global {
         onUploadStatus?: (callback: (payload: ClipboardUploadStatus) => void) => () => void;
         /** Byte progress for an in-flight clipboard upload; `id` matches onUploadStatus. */
         onUploadProgress?: (callback: (payload: { id: string; loaded: number; total: number }) => void) => () => void;
-        writeFiles: (paths: string[]) => Promise<{ ok: boolean; error?: string }>;
-        writeFilesFromData: (payload: {
-          files: { name: string; data: string }[];
-        }) => Promise<{ ok: boolean; error?: string }>;
         writeFilesFromServer: (payload: {
           origin: string;
           items: { id: string; name: string }[];
@@ -99,12 +92,6 @@ declare global {
         ) => () => void;
       };
       cloudDrive?: {
-        start: (opts?: { mount?: string; label?: string }) => Promise<{
-          ok: boolean;
-          mountPoint?: string;
-          error?: string;
-        }>;
-        stop: () => Promise<{ ok: boolean; error?: string }>;
         status: () => Promise<{ running: boolean; mountPoint: string | null; mode?: CloudDriveMode }>;
         getMode: () => Promise<{ mode: CloudDriveMode }>;
         setMode: (mode: CloudDriveMode) => Promise<{ ok: boolean; mode?: CloudDriveMode; error?: string }>;
@@ -120,7 +107,7 @@ export function isElectron(): boolean {
 
 /** True when the desktop app can mount the cloud as a Windows drive (WinFsp). */
 export function hasElectronCloudDrive(): boolean {
-  return typeof window !== 'undefined' && !!window.electronAPI?.cloudDrive?.start;
+  return typeof window !== 'undefined' && !!window.electronAPI?.cloudDrive?.status;
 }
 
 /** Read the current cloud-drive mode. Returns 'full' outside the desktop app. */
@@ -152,7 +139,7 @@ export async function setElectronCloudDriveMode(
 export function hasElectronClipboard(): boolean {
   return (
     typeof window !== 'undefined' &&
-    !!window.electronAPI?.clipboard?.readFiles &&
+    !!window.electronAPI?.clipboard?.uploadFiles &&
     !!window.electronAPI?.clipboard?.writeFilesFromServer
   );
 }

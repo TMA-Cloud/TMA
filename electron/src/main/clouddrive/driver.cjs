@@ -476,27 +476,9 @@ class CloudDrive {
 
   // --------------------------- IPC ---------------------------
 
-  // Lets the renderer drive the mount explicitly (the cookie watcher above is
-  // the primary trigger). WinFsp must be installed for start to succeed; the
-  // error is returned rather than thrown.
+  // The renderer reads the mount and changes its mode; the cookie watcher
+  // above starts and stops it.
   registerCloudDriveHandlers() {
-    ipcMain.handle('clouddrive:start', async (_event, opts) => {
-      try {
-        return { ok: true, mountPoint: await this.startCloudDrive(opts || {}) };
-      } catch (err) {
-        return { ok: false, error: err && err.message ? err.message : String(err) };
-      }
-    });
-
-    ipcMain.handle('clouddrive:stop', async () => {
-      try {
-        await this.stopCloudDrive();
-        return { ok: true };
-      } catch (err) {
-        return { ok: false, error: err && err.message ? err.message : String(err) };
-      }
-    });
-
     ipcMain.handle('clouddrive:status', async () => ({
       running: this.isRunning(),
       mountPoint: this.getMountPoint(),

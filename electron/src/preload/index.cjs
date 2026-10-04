@@ -19,7 +19,6 @@ const { contextBridge, ipcRenderer } = require('electron');
         peekFileNames: () => ipcRenderer.invoke('clipboard:peekFileNames'),
         /** Take the OS clipboard for an in-app Copy or Cut of these item names. */
         claim: payload => ipcRenderer.invoke('clipboard:claim', payload),
-        readFiles: () => ipcRenderer.invoke('clipboard:readFiles'),
         uploadFiles: payload => ipcRenderer.invoke('clipboard:uploadFiles', payload),
         uploadVirtualFiles: payload => ipcRenderer.invoke('clipboard:uploadVirtualFiles', payload),
         /** Abort an in-flight clipboard upload by the id from onUploadStatus. */
@@ -54,8 +53,6 @@ const { contextBridge, ipcRenderer } = require('electron');
           ipcRenderer.on('clipboard:uploadProgress', listener);
           return () => ipcRenderer.removeListener('clipboard:uploadProgress', listener);
         },
-        writeFiles: paths => ipcRenderer.invoke('clipboard:writeFiles', paths),
-        writeFilesFromData: payload => ipcRenderer.invoke('clipboard:writeFilesFromData', payload),
         writeFilesFromServer: payload => ipcRenderer.invoke('clipboard:writeFilesFromServer', payload),
       },
       files: {
@@ -115,12 +112,10 @@ const { contextBridge, ipcRenderer } = require('electron');
       },
       /**
        * Cloud Drive: mount TMA Cloud as a Windows drive so files can be
-       * opened/saved from any app's file dialogs. The renderer should call
-       * start() after a successful login and stop() on logout.
+       * opened/saved from any app's file dialogs. The main process mounts it
+       * on sign-in; the renderer reads the status and sets the mode.
        */
       cloudDrive: {
-        start: opts => ipcRenderer.invoke('clouddrive:start', opts || {}),
-        stop: () => ipcRenderer.invoke('clouddrive:stop'),
         status: () => ipcRenderer.invoke('clouddrive:status'),
         getMode: () => ipcRenderer.invoke('clouddrive:getMode'),
         setMode: mode => ipcRenderer.invoke('clouddrive:setMode', mode),

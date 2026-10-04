@@ -36,20 +36,12 @@ describe('what the bridge exposes', () => {
 describe('channel mapping', () => {
   const cases = [
     ['clipboard.peekFileNames', () => api.clipboard.peekFileNames(), 'clipboard:peekFileNames', undefined],
-    ['clipboard.readFiles', () => api.clipboard.readFiles(), 'clipboard:readFiles', undefined],
     ['clipboard.claim', () => api.clipboard.claim({ names: ['a.txt'] }), 'clipboard:claim', { names: ['a.txt'] }],
     [
       'clipboard.uploadVirtualFiles',
       () => api.clipboard.uploadVirtualFiles({ parentId: null }),
       'clipboard:uploadVirtualFiles',
       { parentId: null },
-    ],
-    ['clipboard.writeFiles', () => api.clipboard.writeFiles(['C:\\a.txt']), 'clipboard:writeFiles', ['C:\\a.txt']],
-    [
-      'clipboard.writeFilesFromData',
-      () => api.clipboard.writeFilesFromData({ files: [] }),
-      'clipboard:writeFilesFromData',
-      { files: [] },
     ],
     [
       'clipboard.writeFilesFromServer',
@@ -67,7 +59,6 @@ describe('channel mapping', () => {
       'app:downloadAndInstallUpdate',
       '1.0.9',
     ],
-    ['cloudDrive.stop', () => api.cloudDrive.stop(), 'clouddrive:stop', undefined],
     ['cloudDrive.status', () => api.cloudDrive.status(), 'clouddrive:status', undefined],
     ['cloudDrive.getMode', () => api.cloudDrive.getMode(), 'clouddrive:getMode', undefined],
     ['cloudDrive.setMode', () => api.cloudDrive.setMode('full'), 'clouddrive:setMode', 'full'],
@@ -78,16 +69,6 @@ describe('channel mapping', () => {
     const invocation = __mock.state.rendererInvocations.at(-1);
     expect(invocation[0]).toBe(channel);
     expect(invocation[1]).toEqual(payload);
-  });
-
-  it('starts the cloud drive with an options object even when called with none', () => {
-    api.cloudDrive.start();
-    expect(__mock.state.rendererInvocations.at(-1)).toEqual(['clouddrive:start', {}]);
-  });
-
-  it('passes cloud drive options through when given', () => {
-    api.cloudDrive.start({ mount: 'Z:' });
-    expect(__mock.state.rendererInvocations.at(-1)).toEqual(['clouddrive:start', { mount: 'Z:' }]);
   });
 });
 

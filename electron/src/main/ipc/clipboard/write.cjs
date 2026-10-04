@@ -111,14 +111,6 @@ function registerClipboardHandlers() {
     }
   });
 
-  ipcMain.handle('clipboard:readFiles', async () => {
-    try {
-      return { files: await readFilesFromClipboard() };
-    } catch (_) {
-      return { files: [] };
-    }
-  });
-
   // Physical clipboard files are uploaded from disk streams in the main
   // process. Their bytes never become base64 or cross IPC into the renderer.
   ipcMain.handle('clipboard:uploadFiles', async (event, payload) => {
@@ -210,70 +202,6 @@ function registerClipboardHandlers() {
     } catch (error) {
       finish();
       return { ok: false, error: error.message || 'Virtual clipboard upload failed' };
-    }
-  });
-
-  ipcMain.handle('clipboard:writeFiles', async (_event, paths) => {
-    if (process.platform !== 'win32' || !Array.isArray(paths) || paths.length === 0) {
-      return { ok: false };
-    }
-    try {
-      await setClipboardToPaths(paths);
-      return { ok: true };
-    } catch (e) {
-      return { ok: false, error: e.message };
-    }
-  });
-
-  ipcMain.handle('clipboard:writeFilesFromData', async (_event, payload) => {
-    if (process.platform !== 'win32' || !payload?.files?.length) {
-      return { ok: false, error: 'Invalid payload' };
-    }
-    // Cap decoded size to avoid OOM from a malicious renderer sending huge base64.
-    const MAX_TOTAL_BYTES = 500 * 1024 * 1024; // 500 MB
-    const MAX_PER_FILE_BYTES = 200 * 1024 * 1024; // 200 MB
-    const tmpRoot = os.tmpdir();
-    try {
-      await cleanTempDirsByPrefix(PASTE_DIR_PREFIX, 0);
-      const pasteDir = path.join(tmpRoot, `${PASTE_DIR_PREFIX}${Date.now()}`);
-      fs.mkdirSync(pasteDir, { recursive: true });
-      const writtenPaths = [];
-      const seen = new Set();
-      let totalBytes = 0;
-      for (const f of payload.files) {
-        if (!f.name || typeof f.data !== 'string') continue;
-        // base64 decodes to ~3/4 of its length: cheap upper bound before allocating.
-        const estimatedBytes = Math.floor((f.data.length * 3) / 4);
-        if (estimatedBytes > MAX_PER_FILE_BYTES) {
-          return { ok: false, error: 'File exceeds maximum allowed size' };
-        }
-        if (totalBytes + estimatedBytes > MAX_TOTAL_BYTES) {
-          return { ok: false, error: 'Total payload size exceeds maximum allowed' };
-        }
-        const base = deduplicateFileName(sanitizeFileName(f.name), seen);
-        seen.add(base);
-        const filePath = path.join(pasteDir, base);
-        const buf = Buffer.from(f.data, 'base64');
-        if (buf.length > MAX_PER_FILE_BYTES || totalBytes + buf.length > MAX_TOTAL_BYTES) {
-          return { ok: false, error: 'File size exceeds maximum allowed' };
-        }
-        totalBytes += buf.length;
-        // Async: a sync write of up to 200 MB would freeze every window meanwhile.
-        await fs.promises.writeFile(filePath, buf);
-        writtenPaths.push(filePath);
-      }
-      if (writtenPaths.length === 0) {
-        try {
-          fs.rmSync(pasteDir, { recursive: true });
-        } catch (_) {
-          /* ignore */
-        }
-        return { ok: false, error: 'No valid files' };
-      }
-      await setClipboardToPaths(writtenPaths);
-      return { ok: true };
-    } catch (e) {
-      return { ok: false, error: e.message };
     }
   });
 
