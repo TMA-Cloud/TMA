@@ -1,0 +1,6 @@
+# LF everywhere, whatever core.autocrlf says: Prettier and the shell hooks
+# expect it. Binary files are left alone.
+* text=auto eol=lf
+
+# desktop-fs requires CRLF (see desktop-fs/.editorconfig, `dotnet format`).
+desktop-fs/** text=auto eol=crlf

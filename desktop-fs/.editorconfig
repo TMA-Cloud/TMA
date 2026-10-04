@@ -1,6 +1,6 @@
 root = true
 
-# TMA Cloud Drive host (C# / .NET 9). Drives `dotnet format` — both the
+# TMA Cloud Drive host (C# / .NET 10). Drives `dotnet format` — both the
 # whitespace formatter and the analyzer/style linter read these rules.
 
 [*]
