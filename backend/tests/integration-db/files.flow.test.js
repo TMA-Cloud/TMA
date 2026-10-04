@@ -326,9 +326,56 @@ describe('move', () => {
 
     expect((await readFileRow(rows[0].id)).name).toBe('notes.txt');
   });
+
+  it('refuses to move an item that was trashed after it was cut', async () => {
+    const { client: c } = await signUpAndLogin();
+    const folderId = await createFolder(c, 'Target');
+    await upload(c, { name: 'notes.txt' });
+    const { rows } = await pool.query("SELECT id FROM files WHERE type = 'file'");
+    await pool.query('UPDATE files SET deleted_at = NOW() WHERE id = $1', [rows[0].id]);
+
+    const res = await c.post('/api/files/move').send({ ids: [rows[0].id], parentId: folderId });
+
+    expect(res.status).toBe(404);
+    expect((await readFileRow(rows[0].id)).parent_id).toBeNull();
+  });
+
+  it('refuses a destination that no longer exists instead of moving to the root', async () => {
+    const { client: c } = await signUpAndLogin();
+    const folderId = await createFolder(c, 'Target');
+    await upload(c, { name: 'notes.txt', parentId: folderId });
+    const { rows } = await pool.query("SELECT id FROM files WHERE type = 'file'");
+
+    const res = await c.post('/api/files/move').send({ ids: [rows[0].id], parentId: 'gone-folder-id1' });
+
+    expect(res.status).toBe(404);
+    expect((await readFileRow(rows[0].id)).parent_id).toBe(folderId);
+  });
+
+  it('answers a move into its own subtree with a client error', async () => {
+    const { client: c } = await signUpAndLogin();
+    const parentId = await createFolder(c, 'Parent');
+    const childId = await createFolder(c, 'Child', parentId);
+
+    const res = await c.post('/api/files/move').send({ ids: [parentId], parentId: childId });
+
+    expect(res.status).toBe(400);
+  });
 });
 
 describe('copy', () => {
+  it('refuses to copy an item that was trashed after it was copied', async () => {
+    const { client: c } = await signUpAndLogin();
+    await upload(c, { name: 'notes.txt' });
+    const { rows } = await pool.query("SELECT id FROM files WHERE type = 'file'");
+    await pool.query('UPDATE files SET deleted_at = NOW() WHERE id = $1', [rows[0].id]);
+
+    const res = await c.post('/api/files/copy').send({ ids: [rows[0].id], parentId: null });
+
+    expect(res.status).toBe(404);
+    expect(await countRows('files', "WHERE type = 'file'")).toBe(1);
+  });
+
   it('names a copied folder like a copied file when the target has one', async () => {
     const { client: c } = await signUpAndLogin();
     const docsId = await createFolder(c, 'Docs');

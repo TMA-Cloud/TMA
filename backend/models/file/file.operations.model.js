@@ -9,6 +9,8 @@ import { isFilePathEncrypted } from '../../utils/filePath.js';
 import storage from '../../utils/storageDriver.js';
 import { releaseStorageReservation, reserveStorage } from '../../services/storageReservations.js';
 
+const httpError = (message, status) => Object.assign(new Error(message), { status });
+
 /**
  * Move files to a different parent folder. Name conflicts in the target are
  * resolved by keeping both, as copy and upload do, so a move never leaves two
@@ -22,11 +24,16 @@ async function moveFiles(ids, parentId = null, userId) {
     await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [userId]);
     const filesResult = await client.query(
       `SELECT id, parent_id, type, name FROM files
-        WHERE id = ANY($1::text[]) AND user_id = $2
+        WHERE id = ANY($1::text[]) AND user_id = $2 AND deleted_at IS NULL
         ORDER BY array_position($1::text[], id)
         FOR UPDATE`,
       [ids, userId]
     );
+    // A cut taken before another session trashed or deleted an item must not
+    // re-parent rows the user can no longer see.
+    if (filesResult.rows.length !== new Set(ids).size) {
+      throw httpError('Some items no longer exist or are in the trash', 404);
+    }
 
     if (parentId) {
       const target = await client.query(
@@ -35,7 +42,7 @@ async function moveFiles(ids, parentId = null, userId) {
           FOR UPDATE`,
         [parentId, userId]
       );
-      if (target.rows.length === 0) throw new Error('Target folder not found');
+      if (target.rows.length === 0) throw httpError('Target folder not found', 404);
 
       const cycle = await client.query(
         `WITH RECURSIVE descendants(id, visited) AS (
@@ -49,7 +56,9 @@ async function moveFiles(ids, parentId = null, userId) {
          SELECT 1 FROM descendants WHERE id = $3 LIMIT 1`,
         [ids, userId, parentId]
       );
-      if (cycle.rows.length > 0) throw new Error('A folder cannot be moved into itself or one of its descendants');
+      if (cycle.rows.length > 0) {
+        throw httpError('A folder cannot be moved into itself or one of its descendants', 400);
+      }
     }
 
     // Items already in the target stay put, like a paste back into the same folder.

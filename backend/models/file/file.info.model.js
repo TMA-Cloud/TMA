@@ -99,6 +99,7 @@ async function getTargetFolderName(folderId, userId) {
  * If the targetId refers to a file, it returns the file's parent_id.
  * If the targetId refers to a folder, it returns the targetId itself.
  * If targetId is null, it returns null (representing the root).
+ * Throws a 404 error when the target is missing or in the trash.
  * @param {string|null} targetId - The ID of the item the user intends to paste into/onto.
  * @param {string} userId - The user ID.
  * @returns {Promise<string|null>} The ID of the actual parent folder for the paste operation.
@@ -108,13 +109,14 @@ async function resolveTargetFolderId(targetId, userId) {
     return null; // Root folder
   }
 
-  const result = await pool.query('SELECT type, parent_id FROM files WHERE id = $1 AND user_id = $2', [
-    targetId,
-    userId,
-  ]);
+  const result = await pool.query(
+    'SELECT type, parent_id FROM files WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL',
+    [targetId, userId]
+  );
 
+  // A missing target must fail the paste, not silently retarget it to the root.
   if (result.rows.length === 0) {
-    return null; // Target not found, default to root or handle as error? For now, root.
+    throw Object.assign(new Error('The destination folder no longer exists'), { status: 404 });
   }
 
   const targetEntry = result.rows[0];

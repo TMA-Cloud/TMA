@@ -18,6 +18,10 @@ async function getPasteContext(req) {
 
   const actualParentId = await resolveTargetFolderId(requestedParentId, req.ownerId);
   const fileInfo = await getFileInfo(ids, req.ownerId);
+  // A clipboard can outlive its items: fail loudly instead of pasting nothing.
+  if (fileInfo.length !== new Set(ids).size) {
+    throw Object.assign(new Error('Some items no longer exist or are in the trash'), { status: 404 });
+  }
   const fileNames = fileInfo.map(f => f.name);
   const fileTypes = fileInfo.map(f => f.type);
 
