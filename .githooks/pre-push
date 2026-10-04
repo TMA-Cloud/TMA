@@ -58,6 +58,10 @@ for pkg in $NODE_PACKAGES; do
     run "$pkg" ./node_modules/.bin/tsc --noEmit -p tsconfig.app.json
     run "$pkg" ./node_modules/.bin/tsc -b tsconfig.test.json
   fi
+  # Only packages that have adopted knip define the script.
+  if grep -q '"knip":' "$pkg/package.json"; then
+    run "$pkg" npm run --silent knip
+  fi
   run "$pkg" npm test --silent
 done
 

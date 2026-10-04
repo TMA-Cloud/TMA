@@ -73,6 +73,10 @@ Layers: `routes → controllers → services / models → utils / config`.
   `utils/api.ts`, so code keeps importing `from '../utils/api'`.
 - CSS uses ITCSS-ordered partials under `src/styles/` (tokens → base → components
   → utilities), imported by `index.css`. Use tokens, not literal colours.
+- `npm run knip` fails on unused files, exports and dependencies, first with
+  tests and then without them. An export only tests use is dead unless it is a
+  test seam; tag that `/** @internal Exported for tests. */`. Config lives in
+  `knip.jsonc`.
 - New cross-cutting conventions become rules in the local `house` ESLint plugin
   (`eslint-rules/house.js`). Make a rule an error only where the code already
   follows it, then widen it over time.
@@ -125,12 +129,12 @@ REST calls; this process only talks to Electron over a named pipe.
 Run these in each package you touched. CI (`.github/workflows/test.yml`) runs the
 same commands, except for desktop-fs.
 
-| Package       | Commands                                                                                                                                           |
-| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `backend/`    | `npm run lint` · `npm run format:check` · `npm test` · `npm run test:integration`                                                                  |
-| `frontend/`   | `npm run lint` · `npm run format:check` · `npx tsc --noEmit -p tsconfig.app.json` · `npx tsc -b tsconfig.test.json` · `npm test` · `npm run build` |
-| `electron/`   | `npm run lint` · `npm run format:check` · `npm test`                                                                                               |
-| `desktop-fs/` | `dotnet build` (0 warnings, 0 errors) · `dotnet format --verify-no-changes`                                                                        |
+| Package       | Commands                                                                                                                                                            |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `backend/`    | `npm run lint` · `npm run format:check` · `npm test` · `npm run test:integration`                                                                                   |
+| `frontend/`   | `npm run lint` · `npm run format:check` · `npx tsc --noEmit -p tsconfig.app.json` · `npx tsc -b tsconfig.test.json` · `npm run knip` · `npm test` · `npm run build` |
+| `electron/`   | `npm run lint` · `npm run format:check` · `npm test`                                                                                                                |
+| `desktop-fs/` | `dotnet build` (0 warnings, 0 errors) · `dotnet format --verify-no-changes`                                                                                         |
 
 ## Git
 

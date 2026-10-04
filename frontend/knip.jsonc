@@ -1,0 +1,13 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": [
+    // The motion folder's barrel is its interface, so it may list live code
+    // that no caller imports through it yet.
+    "src/motion/index.ts!",
+    // Named in vitest.config.ts as setupFiles, which knip does not follow.
+    "tests/setup.ts",
+  ],
+  // Loaded by path from tsconfig.test.json and eslint.config.js, which the
+  // production run does not read.
+  "ignore": ["eslint-rules/**"],
+}
