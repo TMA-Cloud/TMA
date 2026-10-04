@@ -1,6 +1,7 @@
 // Pure helpers shared by the AppProvider feature hooks.
 
 import type { FileItem, FileSortBy } from '../AppContext';
+import type { AccountPermission } from '../AuthContext';
 
 // Navigation / paging
 
@@ -153,4 +154,21 @@ export function choosePasteSource({
 }): 'os' | 'cloud' | 'none' {
   if (!cloud) return electron ? 'os' : 'none';
   return electron && osHasExternalFiles ? 'os' : 'cloud';
+}
+
+/** Whether a clipboard action is allowed where the user is, mirroring the context menu. */
+export function canUseClipboardAction(
+  action: 'copy' | 'cut' | 'paste',
+  {
+    view,
+    can,
+    clipboard,
+  }: { view: string | undefined; can: (permission: AccountPermission) => boolean; clipboard: CloudClipboard | null }
+): boolean {
+  if (view === 'Trash') return false;
+  if (action === 'copy') return can('files.upload');
+  if (action === 'cut') return can('files.edit');
+  // Paste needs a real folder to land in; other views have no current folder.
+  if (view !== 'My Files') return false;
+  return clipboard?.action === 'cut' ? can('files.edit') : can('files.upload');
 }

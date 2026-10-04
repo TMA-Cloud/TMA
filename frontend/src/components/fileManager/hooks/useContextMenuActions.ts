@@ -22,6 +22,7 @@ import { useToast } from '../../../hooks/useToast';
 import { hasElectronClipboard, hasElectronOpenOnDesktop } from '../../../utils/electronDesktop';
 import { getErrorMessage } from '../../../utils/errorUtils';
 import { copyToClipboard } from '../../../utils/clipboard';
+import { canUseClipboardAction } from '../../../contexts/app/helpers';
 
 export interface ContextMenuItem {
   icon: LucideIcon;
@@ -110,8 +111,8 @@ export function useContextMenuActions({
 
   const electronClipboardAvailable = hasElectronClipboard();
 
-  // Copy-paste creates (upload grant); cut-paste moves (edit grant).
-  const canPaste = clipboard?.action === 'cut' ? can('files.edit') : can('files.upload');
+  // Copy-paste creates (upload grant); cut-paste moves (edit grant). Only My Files has a folder to paste into.
+  const canPaste = canUseClipboardAction('paste', { view: currentPath[0], can, clipboard });
 
   const handleRestore = useCallback(async () => {
     if (isRestoring) return;

@@ -1,5 +1,7 @@
 import { useEffect } from 'react';
 import type { FileItem } from '../../../contexts/AppContext';
+import type { AccountPermission } from '../../../contexts/AuthContext';
+import { canUseClipboardAction, type CloudClipboard } from '../../../contexts/app/helpers';
 import { isElectron } from '../../../utils/electronDesktop';
 
 type ToastType = 'success' | 'error' | 'info';
@@ -8,6 +10,8 @@ interface FileManagerShortcutsParams {
   files: FileItem[];
   selectedFiles: string[];
   folderStack: (string | null)[];
+  /** Top-level page, e.g. 'My Files' or 'Trash'. */
+  view: string | undefined;
   isMyFilesView: boolean;
   isTrashView: boolean;
   canUpload: boolean;
@@ -21,6 +25,8 @@ interface FileManagerShortcutsParams {
   clipboardCopy: (ids: string[]) => void;
   clipboardCut: (ids: string[]) => void;
   clipboardPaste: (parentId: string | null) => Promise<void>;
+  clipboard: CloudClipboard | null;
+  can: (permission: AccountPermission) => boolean;
   setSelectedFiles: (ids: string[]) => void;
   openInfoModalForSelection: () => void;
   setDeleteModalOpen: (open: boolean) => void;
@@ -32,6 +38,7 @@ export function useFileManagerShortcuts({
   files,
   selectedFiles,
   folderStack,
+  view,
   isMyFilesView,
   isTrashView,
   canUpload,
@@ -45,6 +52,8 @@ export function useFileManagerShortcuts({
   clipboardCopy,
   clipboardCut,
   clipboardPaste,
+  clipboard,
+  can,
   setSelectedFiles,
   openInfoModalForSelection,
   setDeleteModalOpen,
@@ -127,6 +136,12 @@ export function useFileManagerShortcuts({
       }
 
       const key = e.key.toLowerCase();
+      // Holding the keys must not queue a paste per auto-repeat.
+      if (e.repeat && (key === 'c' || key === 'x' || key === 'v')) {
+        e.preventDefault();
+        return;
+      }
+      const allowed = (action: 'copy' | 'cut' | 'paste') => canUseClipboardAction(action, { view, can, clipboard });
 
       if (key === 'a') {
         e.preventDefault();
@@ -137,14 +152,14 @@ export function useFileManagerShortcuts({
       }
 
       if (key === 'c') {
-        if (!selectedFiles.length) return;
+        if (!selectedFiles.length || !allowed('copy')) return;
         e.preventDefault();
         clipboardCopy(selectedFiles);
         return;
       }
 
       if (key === 'x') {
-        if (!selectedFiles.length) return;
+        if (!selectedFiles.length || !allowed('cut')) return;
         e.preventDefault();
         clipboardCut(selectedFiles);
         return;
@@ -152,10 +167,12 @@ export function useFileManagerShortcuts({
 
       if (key === 'v') {
         e.preventDefault();
+        if (!allowed('paste')) return;
         void clipboardPaste(folderStack[folderStack.length - 1] ?? null).catch(error => {
           const message = error instanceof Error ? error.message : String(error);
           showToast(message || 'Failed to paste files', 'error');
         });
+        return;
       }
 
       if (key === 'i' && e.shiftKey) {
@@ -168,6 +185,8 @@ export function useFileManagerShortcuts({
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [
+    can,
+    clipboard,
     clipboardCopy,
     clipboardCut,
     clipboardPaste,
@@ -177,6 +196,7 @@ export function useFileManagerShortcuts({
     selectedFiles,
     setSelectedFiles,
     showToast,
+    view,
   ]);
 
   // Keyboard Delete: move selected files/folders to trash
