@@ -59,7 +59,14 @@ export function useFileBrowser(setSelectedFiles: (ids: string[]) => void) {
   // Core data functions
 
   const refreshFiles = useCallback(
-    async (skipSearchCheck = false) => {
+    async function refresh(skipSearchCheck = false): Promise<void> {
+      // A caller holding an old copy (a paste that finished after the user
+      // navigated) must refresh where the user is now, not where it started.
+      if (folderStackRef.current !== folderStack || currentPathRef.current !== currentPath) {
+        const latest = refreshFilesRef.current;
+        if (latest && latest !== refresh) await latest(skipSearchCheck);
+        return;
+      }
       if (!skipSearchCheck && searchQuery.trim().length > 0) return;
       if (!isFileManagerPage(currentPath[0])) {
         setNextCursor(null);

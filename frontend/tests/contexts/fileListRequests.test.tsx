@@ -114,6 +114,27 @@ describe('file list requests', () => {
     expect(listCalls[0]).toContain('sortBy=size');
   });
 
+  it('a refresh held from before navigating lists the folder the user is in now', async () => {
+    const { tree, get } = harness();
+    render(tree);
+    await waitFor(() => expect(listCalls.length).toBe(1));
+
+    // A paste captures refreshFiles, then waits on the server while the user moves on.
+    const heldRefresh = get().refreshFiles;
+    await act(async () => {
+      get().openFolder({ id: 'folder-b', name: 'B', type: 'folder', modified: new Date() });
+    });
+    await waitFor(() => expect(listCalls.some(url => url.includes('parentId=folder-b'))).toBe(true));
+
+    listCalls = [];
+    await act(async () => {
+      await heldRefresh();
+    });
+
+    expect(listCalls.length).toBeGreaterThan(0);
+    expect(listCalls.every(url => url.includes('parentId=folder-b'))).toBe(true);
+  });
+
   it('lists once when the search box is cleared', async () => {
     const { tree, get } = harness();
     render(tree);
