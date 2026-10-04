@@ -80,6 +80,7 @@ describe('handler registration', () => {
   it('registers every clipboard channel the preload bridge exposes', () => {
     expect(__mock.handlerChannels().sort()).toEqual([
       'clipboard:cancelUpload',
+      'clipboard:claim',
       'clipboard:peekFileNames',
       'clipboard:readFiles',
       'clipboard:uploadFiles',
@@ -98,23 +99,33 @@ describe('clipboard:peekFileNames', () => {
     const dropList = [path.join(dir, 'a.txt'), path.join(dir, 'b.png')].join('\r\n');
     fakePowerShell({ dropList: `${dropList}\r\n` });
 
-    await expect(__mock.invoke('clipboard:peekFileNames')).resolves.toEqual({ names: ['a.txt', 'b.png'] });
+    await expect(__mock.invoke('clipboard:peekFileNames')).resolves.toEqual({
+      names: ['a.txt', 'b.png'],
+      external: true,
+    });
+  });
+
+  it('treats files this app staged for Explorer as its own copy', async () => {
+    const dir = path.join(tmpRoot, `${PASTE_DIR_PREFIX}1`);
+    fakePowerShell({ dropList: `${path.join(dir, 'a.txt')}\r\n` });
+
+    await expect(__mock.invoke('clipboard:peekFileNames')).resolves.toEqual({ names: ['a.txt'], external: false });
   });
 
   it('returns nothing when the clipboard holds no files', async () => {
     fakePowerShell({ dropList: '' });
-    await expect(__mock.invoke('clipboard:peekFileNames')).resolves.toEqual({ names: [] });
+    await expect(__mock.invoke('clipboard:peekFileNames')).resolves.toEqual({ names: [], external: false });
   });
 
   it('returns nothing rather than failing when PowerShell errors', async () => {
     fakePowerShell({ dropListFails: true });
-    await expect(__mock.invoke('clipboard:peekFileNames')).resolves.toEqual({ names: [] });
+    await expect(__mock.invoke('clipboard:peekFileNames')).resolves.toEqual({ names: [], external: false });
   });
 
   it('returns nothing outside Windows', async () => {
     usePlatform('darwin');
     const spawned = fakePowerShell({ dropList: 'C:\\a.txt' });
-    await expect(__mock.invoke('clipboard:peekFileNames')).resolves.toEqual({ names: [] });
+    await expect(__mock.invoke('clipboard:peekFileNames')).resolves.toEqual({ names: [], external: false });
     expect(spawned).toHaveLength(0);
   });
 });
@@ -501,11 +512,45 @@ describe('clipboard:writeFilesFromData', () => {
   });
 });
 
+describe('clipboard:claim', () => {
+  it('puts the item names on the OS clipboard so older files there count as stale', async () => {
+    await expect(__mock.invoke('clipboard:claim', { names: ['a.txt', 'Folder'] })).resolves.toEqual({ ok: true });
+    await expect(electron.clipboard.readText()).resolves.toBe('a.txt\nFolder');
+  });
+
+  it('leaves the clipboard alone when given no names', async () => {
+    __mock.setClipboardText('mine');
+    await expect(__mock.invoke('clipboard:claim', { names: [] })).resolves.toEqual({ ok: false });
+    await expect(electron.clipboard.readText()).resolves.toBe('mine');
+  });
+
+  it('refuses outside Windows', async () => {
+    usePlatform('darwin');
+    await expect(__mock.invoke('clipboard:claim', { names: ['a.txt'] })).resolves.toEqual({ ok: false });
+  });
+});
+
 describe('clipboard:writeFilesFromServer', () => {
   const items = [
     { id: '1', name: 'a.txt' },
     { id: '2', name: 'b.txt' },
   ];
+
+  it('gives way when the user copies something else during the download', async () => {
+    const spawned = fakePowerShell();
+    const copyElsewhere = request => {
+      if (!request.url.includes('/download')) return false;
+      __mock.setClipboardText('copied elsewhere');
+      return true;
+    };
+    __mock.route(copyElsewhere, { statusCode: 200, body: 'BODY' });
+
+    const result = await __mock.invoke('clipboard:writeFilesFromServer', { origin: SERVER_URL, items });
+
+    expect(result).toEqual({ ok: false, superseded: true });
+    expect(pasteDir()).toBeNull();
+    expect(spawned).toHaveLength(0);
+  });
 
   it('downloads each item into a paste folder and copies it to the clipboard', async () => {
     fakePowerShell();

@@ -17,6 +17,8 @@ const { contextBridge, ipcRenderer } = require('electron');
       },
       clipboard: {
         peekFileNames: () => ipcRenderer.invoke('clipboard:peekFileNames'),
+        /** Take the OS clipboard for an in-app Copy or Cut of these item names. */
+        claim: payload => ipcRenderer.invoke('clipboard:claim', payload),
         readFiles: () => ipcRenderer.invoke('clipboard:readFiles'),
         uploadFiles: payload => ipcRenderer.invoke('clipboard:uploadFiles', payload),
         uploadVirtualFiles: payload => ipcRenderer.invoke('clipboard:uploadVirtualFiles', payload),

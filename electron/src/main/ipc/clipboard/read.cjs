@@ -4,11 +4,13 @@
  * text interpreted as file paths.
  */
 const path = require('path');
+const os = require('os');
 const fsPromises = require('fs').promises;
 const { clipboard } = require('electron');
 const { runPowerShell, runPowerShellEnv } = require('../../utils/powershell.cjs');
 const { mimeForFilenameOrDefault: getMimeForName } = require('../../utils/mime-types.cjs');
 const { getOleExtractScriptContent } = require('./oleScript.cjs');
+const { PASTE_DIR_PREFIX } = require('../../utils/file-utils.cjs');
 
 const CLIPBOARD_DEBUG = process.env.TMA_CLOUD_CLIPBOARD_DEBUG === '1';
 
@@ -83,29 +85,40 @@ async function readFilesFromClipboard() {
   return [];
 }
 
-// Peek clipboard file names without reading bytes, so the renderer can detect an
-// external clipboard overwrite. FileDropList only — the OLE path isn't worth the
-// latency for a freshness check.
-async function peekClipboardFileNames() {
+// Peek the clipboard's file-drop list without reading bytes, so the renderer can
+// tell whether another app copied files after this one. FileDropList only — the
+// OLE path isn't worth the latency for a freshness check.
+async function peekClipboardFilePaths() {
   if (process.platform !== 'win32') return [];
   try {
     const stdout = await runPowerShell(
       'Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.Clipboard]::GetFileDropList() | ForEach-Object { $_ }',
       5000
     );
-    const paths = stdout
+    return stdout
       .split(/\r?\n/)
       .map(p => p.trim())
       .filter(Boolean);
-    return paths.map(p => path.basename(p));
   } catch (_) {
     return [];
   }
+}
+
+async function peekClipboardFileNames() {
+  return (await peekClipboardFilePaths()).map(p => path.basename(p));
+}
+
+/** True for files this app staged for an Explorer paste, i.e. our own copy. */
+function isOwnPastePath(filePath) {
+  const root = path.join(os.tmpdir(), PASTE_DIR_PREFIX).toLowerCase();
+  return path.resolve(filePath).toLowerCase().startsWith(root);
 }
 
 module.exports = {
   parsePathsFromText,
   readFilesFromClipboard,
   peekClipboardFileNames,
+  peekClipboardFilePaths,
+  isOwnPastePath,
   readClipboardFilePaths,
 };

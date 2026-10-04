@@ -31,6 +31,7 @@ describe('startup', () => {
       'app:getVersion',
       'app:setTheme',
       'clipboard:cancelUpload',
+      'clipboard:claim',
       'clipboard:peekFileNames',
       'clipboard:readFiles',
       'clipboard:uploadFiles',

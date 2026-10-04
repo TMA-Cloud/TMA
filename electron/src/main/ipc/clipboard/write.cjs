@@ -6,7 +6,7 @@
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
-const { ipcMain, BrowserWindow } = require('electron');
+const { ipcMain, BrowserWindow, clipboard } = require('electron');
 const {
   PASTE_DIR_PREFIX,
   sanitizeFileName,
@@ -20,7 +20,12 @@ const {
   uploadNewFile,
   uploadNewFileData,
 } = require('../../utils/file-utils.cjs');
-const { readFilesFromClipboard, peekClipboardFileNames, readClipboardFilePaths } = require('./read.cjs');
+const {
+  readFilesFromClipboard,
+  peekClipboardFilePaths,
+  readClipboardFilePaths,
+  isOwnPastePath,
+} = require('./read.cjs');
 
 /** Virtual OLE content is held whole in memory, so the batch needs a RAM ceiling. */
 const MAX_VIRTUAL_BATCH_BYTES = 500 * 1024 * 1024;
@@ -60,9 +65,34 @@ async function runClipboardUpload({ win, cancels, uploadId, fileName, fileSize }
   }
 }
 
+/** Line endings normalised, since Windows may hand text back with CRLF. */
+const sameText = (a, b) => String(a ?? '').replace(/\r\n/g, '\n') === String(b ?? '').replace(/\r\n/g, '\n');
+
 function registerClipboardHandlers() {
   /** In-flight clipboard uploads by upload id, so the renderer's Cancel can abort one. */
   const cancels = new Map();
+  /** Item names this app last put on the OS clipboard; any other app's copy replaces them. */
+  let claimText = null;
+
+  // An in-app Copy or Cut takes the OS clipboard, as any Ctrl+C does, so files
+  // copied in Explorer earlier can't be mistaken for newer ones at paste time.
+  const claim = async names => {
+    const list = (Array.isArray(names) ? names : []).filter(n => typeof n === 'string' && n.length > 0);
+    if (list.length === 0) return false;
+    claimText = list.join('\n');
+    await clipboard.writeText(claimText);
+    return true;
+  };
+  const stillClaimed = async () => claimText != null && sameText(await clipboard.readText(), claimText);
+
+  ipcMain.handle('clipboard:claim', async (_event, payload) => {
+    if (process.platform !== 'win32') return { ok: false };
+    try {
+      return { ok: await claim(payload?.names) };
+    } catch (_) {
+      return { ok: false };
+    }
+  });
 
   ipcMain.handle('clipboard:cancelUpload', (_event, uploadId) => {
     const controller = typeof uploadId === 'string' ? cancels.get(uploadId) : null;
@@ -71,11 +101,13 @@ function registerClipboardHandlers() {
     return { ok: true };
   });
 
+  // `external` means another app put files there after this app's last copy.
   ipcMain.handle('clipboard:peekFileNames', async () => {
     try {
-      return { names: await peekClipboardFileNames() };
+      const paths = await peekClipboardFilePaths();
+      return { names: paths.map(p => path.basename(p)), external: paths.some(p => !isOwnPastePath(p)) };
     } catch (_) {
-      return { names: [] };
+      return { names: [], external: false };
     }
   });
 
@@ -259,6 +291,7 @@ function registerClipboardHandlers() {
     const tmpRoot = os.tmpdir();
 
     try {
+      await claim(payload.items.map(item => (item?.name ? String(item.name) : '')));
       await cleanTempDirsByPrefix(PASTE_DIR_PREFIX, 0);
 
       const pasteDir = path.join(tmpRoot, `${PASTE_DIR_PREFIX}${Date.now()}`);
@@ -304,6 +337,11 @@ function registerClipboardHandlers() {
         return { ok: false, error: 'Failed to download files' };
       }
 
+      // The user copied something else while we downloaded: theirs is newer.
+      if (!(await stillClaimed())) {
+        await fs.promises.rm(pasteDir, { recursive: true, force: true }).catch(() => {});
+        return { ok: false, superseded: true };
+      }
       await setClipboardToPaths(writtenPaths);
       return { ok: true };
     } catch (e) {
