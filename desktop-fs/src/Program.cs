@@ -162,7 +162,8 @@ namespace TmaCloud.Fs
 
     public static class Program
     {
-        public static void Main(string[] args)
+        // Service.Run reads the command line itself, so Main takes no args.
+        public static void Main()
         {
             using var service = new TmaCloudService();
             Environment.ExitCode = service.Run();

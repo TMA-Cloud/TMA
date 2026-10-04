@@ -72,6 +72,14 @@ csharp_prefer_braces = false:suggestion
 # deliberate lightweight-struct pattern, not a public API surface — don't flag.
 dotnet_diagnostic.CA1051.severity = none
 
+# Dead code fails the build: the pre-push hook builds with -warnaserror.
+# IDE0051 unused private member, IDE0052 private member never read,
+# IDE0060 unused parameter, CA1823 unused private field.
+dotnet_diagnostic.IDE0051.severity = warning
+dotnet_diagnostic.IDE0052.severity = warning
+dotnet_diagnostic.IDE0060.severity = warning
+dotnet_diagnostic.CA1823.severity = warning
+
 # --- Naming: private/internal fields use _camelCase ---
 dotnet_naming_rule.private_fields_underscore.severity = suggestion
 dotnet_naming_rule.private_fields_underscore.symbols = private_internal_fields
