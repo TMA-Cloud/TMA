@@ -132,9 +132,7 @@ export function getExt(name?: string) {
 export function getDisplayFileName(name: string, isFile: boolean, hideExtensions: boolean): string {
   if (!name) return '';
   if (!hideExtensions || !isFile) return name;
-  const ext = getExt(name);
-  if (!ext) return name;
-  return name.slice(0, name.length - ext.length);
+  return name.slice(0, name.length - hideableExt(name).length);
 }
 
 /**
@@ -142,10 +140,16 @@ export function getDisplayFileName(name: string, isFile: boolean, hideExtensions
  * This appends the original file's extension back to produce the full name to send to the API.
  */
 export function getFullNameForRename(editedDisplayName: string, originalFullName: string): string {
-  const trimmed = editedDisplayName.trim();
-  const ext = getExt(originalFullName);
-  if (!ext) return trimmed;
-  return trimmed + ext;
+  return editedDisplayName.trim() + hideableExt(originalFullName);
+}
+
+/**
+ * The extension that hiding may strip. A dotfile like ".txt" has no name left
+ * without it, so it keeps its full name, as `path.extname` and Explorer do.
+ */
+function hideableExt(name: string): string {
+  const ext = getExt(name);
+  return /[^.]/.test(name.slice(0, name.length - ext.length)) ? ext : '';
 }
 
 /**

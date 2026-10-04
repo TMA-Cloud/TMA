@@ -164,6 +164,16 @@ describe('getDisplayFileName', () => {
   it('returns an empty string for an empty name', () => {
     expect(getDisplayFileName('', true, true)).toBe('');
   });
+
+  it('keeps a dotfile whole, since hiding would leave no name', () => {
+    expect(getDisplayFileName('.txt', true, true)).toBe('.txt');
+    expect(getDisplayFileName('.gitignore', true, true)).toBe('.gitignore');
+    expect(getDisplayFileName('..txt', true, true)).toBe('..txt');
+  });
+
+  it('still hides the extension of a named dotfile', () => {
+    expect(getDisplayFileName('.env.local', true, true)).toBe('.env');
+  });
 });
 
 describe('getFullNameForRename', () => {
@@ -179,10 +189,16 @@ describe('getFullNameForRename', () => {
     expect(getFullNameForRename('  renamed  ', 'README')).toBe('renamed');
   });
 
-  it('round-trips with getDisplayFileName', () => {
-    const original = 'Quarterly Report.xlsx';
-    const shown = getDisplayFileName(original, true, true);
-    expect(getFullNameForRename(shown, original)).toBe(original);
+  it.each(['Quarterly Report.xlsx', '.txt', '.gitignore', '.env.local'])(
+    'round-trips %s with getDisplayFileName',
+    original => {
+      const shown = getDisplayFileName(original, true, true);
+      expect(getFullNameForRename(shown, original)).toBe(original);
+    }
+  );
+
+  it('does not double a dotfile shown whole', () => {
+    expect(getFullNameForRename('.notes', '.txt')).toBe('.notes');
   });
 });
 
