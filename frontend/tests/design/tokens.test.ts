@@ -228,6 +228,15 @@ describe('file artwork', () => {
   }
 });
 
+describe('compressed folder', () => {
+  for (const theme of THEMES) {
+    it.each(['--folder-back', '--folder-front'])(`${theme}: the zipper reads on %s`, tone => {
+      const ratio = contrast(theme, '--folder-zip', tone);
+      expect(ratio, `zipper on ${tone} in ${theme} is ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(AA_NON_TEXT);
+    });
+  }
+});
+
 describe('semantic colours', () => {
   const ROLES = ['positive', 'warning', 'destructive'] as const;
 

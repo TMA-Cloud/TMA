@@ -60,6 +60,8 @@
     /* Folder artwork: two tones so it reads as a pocket at small sizes. */
     --folder-back: #e07c00;
     --folder-front: #ff9f0a;
+    /* Zipper on a compressed folder: dark enough to hold 3:1 on both tones. */
+    --folder-zip: #6b3800;
 
     /* File artwork: mid-tones that hold 3:1 against both grounds and under the
        white glyph, so one set serves both themes. */

@@ -6,7 +6,6 @@ import {
   Database,
   Image,
   Music,
-  Package,
   PenTool,
   Play,
   Presentation,
@@ -14,7 +13,7 @@ import {
   TextAlignJustify,
   TextAlignStart,
 } from 'lucide-react';
-import { IconCsv, IconJson, IconPdf, IconSql, IconSvg, IconZip } from '@tabler/icons-react';
+import { IconCsv, IconJson, IconPdf, IconSql, IconSvg } from '@tabler/icons-react';
 import { type FileItem } from '../../contexts/AppContext';
 import { getFileKind, type FileKind } from '../../utils/fileKind';
 import { getExt } from '../../utils/fileUtils';
@@ -31,7 +30,7 @@ import { formatLabel } from './formatLabel';
  *   width. Matched to the page's bounding box instead it would carry more
  *   area than the files beside it and pull the eye down the column.
  */
-const FolderGlyph: React.FC<{ className?: string }> = ({ className = '' }) => (
+const FolderGlyph: React.FC<{ className?: string; children?: React.ReactNode }> = ({ className = '', children }) => (
   <svg viewBox="0 0 32 32" className={className} aria-hidden="true" focusable="false">
     {/* Back panel and tab. */}
     <path
@@ -43,7 +42,26 @@ const FolderGlyph: React.FC<{ className?: string }> = ({ className = '' }) => (
       d="M3 11.25h26a2 2 0 0 1 2 2V24a4 4 0 0 1-4 4H5a4 4 0 0 1-4-4V13.25a2 2 0 0 1 2-2z"
       fill="var(--folder-front)"
     />
+    {children}
   </svg>
+);
+
+/**
+ * An archive is a folder zipped shut, as the OS draws a compressed folder.
+ * The pull is a solid block so it still reads once the teeth blur together.
+ */
+const ZipFolderGlyph: React.FC<{ className?: string }> = ({ className = '' }) => (
+  <FolderGlyph className={className}>
+    <g fill="var(--folder-zip)" data-kind="archive">
+      {/* Teeth, staggered either side of the seam. */}
+      <path d="M14.5 8h2v1.25h-2zM16 9.25h2v1.25h-2zM14.5 10.5h2v1.25h-2zM16 11.75h2V13h-2zM14.5 13h2v1.25h-2zM16 14.25h2v1.25h-2z" />
+      {/* Slider and pull, with a slot cut through it. */}
+      <path
+        fillRule="evenodd"
+        d="M15 15.5h2.5a1.25 1.25 0 0 1 1.25 1.25v5.5a1.25 1.25 0 0 1-1.25 1.25H15a1.25 1.25 0 0 1-1.25-1.25v-5.5A1.25 1.25 0 0 1 15 15.5zM16.25 18a.75.75 0 0 0-.75.75v1.75a.75.75 0 0 0 1.5 0v-1.75a.75.75 0 0 0-.75-.75z"
+      />
+    </g>
+  </FolderGlyph>
 );
 
 type GlyphIcon = React.ComponentType<{
@@ -83,7 +101,7 @@ const KIND_ART: Record<FileKind, { color: string; glyph?: Glyph }> = {
   design: { color: 'var(--file-design)', glyph: { icon: PenTool } },
   video: { color: 'var(--file-video)', glyph: { icon: Play, filled: true } },
   audio: { color: 'var(--file-audio)', glyph: { icon: Music } },
-  archive: { color: 'var(--file-archive)', glyph: { icon: Package } },
+  archive: { color: 'var(--file-archive)' },
   code: { color: 'var(--file-code)', glyph: { icon: CodeXml } },
   database: { color: 'var(--file-database)', glyph: { icon: Database } },
   text: { color: 'var(--file-text)', glyph: { icon: TextAlignStart } },
@@ -109,7 +127,6 @@ const EXTENSION_GLYPHS: Record<string, Glyph> = {
   '.psd': PSD,
   '.psb': PSD,
   '.csv': label(IconCsv),
-  '.zip': label(IconZip),
   '.sql': label(IconSql),
   '.json': label(IconJson),
   '.svg': label(IconSvg),
@@ -148,12 +165,17 @@ const PageGlyph: React.FC<{ kind: FileKind; ext: string; className?: string }> =
 export const FileTypeIcon: React.FC<{
   file: FileItem;
   className?: string;
-}> = ({ file, className = '' }) => (
-  <div className={`flex items-center justify-center flex-shrink-0 ${className}`}>
-    {file.type === 'folder' ? (
-      <FolderGlyph className="w-full h-full" />
-    ) : (
-      <PageGlyph kind={getFileKind(file.name, file.mimeType)} ext={getExt(file.name)} className="w-full h-full" />
-    )}
-  </div>
-);
+}> = ({ file, className = '' }) => {
+  const kind = file.type === 'folder' ? null : getFileKind(file.name, file.mimeType);
+  return (
+    <div className={`flex items-center justify-center flex-shrink-0 ${className}`}>
+      {kind === null ? (
+        <FolderGlyph className="w-full h-full" />
+      ) : kind === 'archive' ? (
+        <ZipFolderGlyph className="w-full h-full" />
+      ) : (
+        <PageGlyph kind={kind} ext={getExt(file.name)} className="w-full h-full" />
+      )}
+    </div>
+  );
+};
