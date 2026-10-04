@@ -5,6 +5,8 @@ import { FileItemComponent } from './FileItem';
 import { FileSkeleton } from './FileSkeleton';
 import { EmptyState } from './EmptyState';
 import { MarqueeSelector } from './MarqueeSelector';
+import type { ListScrollRequest } from './hooks/useFileSelection';
+import { fileItemDomId } from './hooks/keyboard.helpers';
 
 interface FileListProps {
   files: FileItem[];
@@ -31,8 +33,15 @@ interface FileListProps {
   onMarqueeSelection: (selectedIds: string[], additive: boolean) => void;
   onSelectingChange: (selecting: boolean) => void;
   /** When set, the matching row scrolls into view after navigation (ref + useLayoutEffect in FileItem) */
-  listScrollRequest?: { fileId: string; token: number } | null;
+  listScrollRequest?: ListScrollRequest | null;
   onListScrollRequestHandled?: () => void;
+  /** Item the arrow keys are on, outlined when Ctrl moves it apart from the selection. */
+  keyboardFocusId?: string | null;
+  /** Reports items per grid row so the arrow keys can move by rows. */
+  onColumnCountChange?: (columns: number) => void;
+  onListFocus?: (e: React.FocusEvent<HTMLElement>) => void;
+  onListBlur?: (e: React.FocusEvent<HTMLElement>) => void;
+  onListMouseDown?: (e: React.MouseEvent<HTMLElement>) => void;
 }
 
 export const FileList: React.FC<FileListProps> = ({
@@ -61,6 +70,11 @@ export const FileList: React.FC<FileListProps> = ({
   onSelectingChange,
   listScrollRequest,
   onListScrollRequestHandled,
+  keyboardFocusId,
+  onColumnCountChange,
+  onListFocus,
+  onListBlur,
+  onListMouseDown,
 }) => {
   const { hasMoreFiles, isLoadingMore, loadMoreFiles } = useApp();
   const loadMoreSentinelRef = React.useRef<HTMLDivElement | null>(null);
@@ -102,8 +116,15 @@ export const FileList: React.FC<FileListProps> = ({
   React.useLayoutEffect(() => {
     if (!listScrollRequest) return;
     const index = files.findIndex(file => file.id === listScrollRequest.fileId);
-    if (index >= 0) rowVirtualizer.scrollToIndex(Math.floor(index / columnCount), { align: 'center' });
+    if (index < 0) return;
+    rowVirtualizer.scrollToIndex(Math.floor(index / columnCount), {
+      align: listScrollRequest.align === 'nearest' ? 'auto' : 'center',
+    });
   }, [columnCount, files, listScrollRequest, rowVirtualizer]);
+
+  React.useEffect(() => {
+    onColumnCountChange?.(columnCount);
+  }, [columnCount, onColumnCountChange]);
 
   React.useEffect(() => {
     loadMoreFilesRef.current = loadMoreFiles;
@@ -142,10 +163,27 @@ export const FileList: React.FC<FileListProps> = ({
     }
   };
 
+  // One Tab stop for the whole list. Focus stays on the container and
+  // aria-activedescendant names the item, because virtualized rows unmount.
+  const listboxProps =
+    files.length > 0
+      ? {
+          role: 'listbox',
+          tabIndex: 0,
+          'aria-label': 'Files',
+          'aria-multiselectable': true,
+          'aria-activedescendant': keyboardFocusId ? fileItemDomId(keyboardFocusId) : undefined,
+          onFocus: onListFocus,
+          onBlur: onListBlur,
+          onMouseDown: onListMouseDown,
+        }
+      : {};
+
   const fileListContent = (
     <div
       ref={containerRef}
-      className={containerClassName}
+      {...listboxProps}
+      className={`${containerClassName} file-list`}
       style={{
         overflow: 'unset',
         height: files.length > 0 ? `${rowVirtualizer.getTotalSize() + (hasMoreFiles ? 32 : 0)}px` : 'auto',
@@ -187,6 +225,7 @@ export const FileList: React.FC<FileListProps> = ({
                     <FileItemComponent
                       file={file}
                       isSelected={selectedFiles.includes(file.id)}
+                      isKeyboardFocused={keyboardFocusId === file.id}
                       viewMode={viewMode}
                       onClick={e => onFileClick(file.id, e)}
                       onDoubleClick={() => onFileDoubleClick(file)}

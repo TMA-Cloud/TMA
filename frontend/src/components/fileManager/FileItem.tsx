@@ -5,10 +5,13 @@ import { Star, Share2, Eye, Clock } from 'lucide-react';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { FileTypeIcon } from './FileTypeIcon';
 import { usePress } from '../../motion';
+import type { ListScrollRequest } from './hooks/useFileSelection';
+import { fileItemDomId } from './hooks/keyboard.helpers';
 
 interface FileItemProps {
   file: FileItemType;
   isSelected: boolean;
+  isKeyboardFocused?: boolean;
   viewMode: 'grid' | 'list';
   onClick: (e: React.MouseEvent) => void;
   onDoubleClick: () => void;
@@ -20,13 +23,14 @@ interface FileItemProps {
   onDrop?: (e: React.DragEvent) => void;
   isDragOver?: boolean;
   dragDisabled?: boolean;
-  scrollIntoViewRequest?: { fileId: string; token: number } | null;
+  scrollIntoViewRequest?: ListScrollRequest | null;
   onScrollIntoViewHandled?: () => void;
 }
 
 export const FileItemComponent: React.FC<FileItemProps> = ({
   file,
   isSelected,
+  isKeyboardFocused = false,
   viewMode,
   onClick,
   onDoubleClick,
@@ -60,6 +64,7 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
     .join(' · ');
   const isCut = clipboard?.action === 'cut' && clipboard.ids.includes(file.id);
   const cutClass = isCut ? 'opacity-45' : '';
+  const focusClass = isKeyboardFocused ? 'outline-2 outline-offset-2 outline-[var(--accent)]' : '';
 
   // The row answers the press itself, on pointer-down, rather than waiting for
   // the click to resolve into a selection. Dragging off cancels it; dragging
@@ -68,7 +73,7 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
 
   useLayoutEffect(() => {
     if (!scrollIntoViewRequest || scrollIntoViewRequest.fileId !== file.id) return;
-    rootRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    rootRef.current?.scrollIntoView({ block: scrollIntoViewRequest.align ?? 'center', behavior: 'smooth' });
   }, [file.id, scrollIntoViewRequest]);
 
   useEffect(() => {
@@ -211,6 +216,9 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
     return (
       <div
         ref={rootRef}
+        id={fileItemDomId(file.id)}
+        role="option"
+        aria-selected={isSelected}
         data-file-id={file.id}
         {...pressProps}
         {...sharedHandlers}
@@ -224,6 +232,7 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
           }
           ${dropTarget}
           ${cutClass}
+          ${focusClass}
         `}
         style={{ maxWidth: '100%' }}
       >
@@ -267,6 +276,9 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
   return (
     <div
       ref={rootRef}
+      id={fileItemDomId(file.id)}
+      role="option"
+      aria-selected={isSelected}
       data-file-id={file.id}
       {...pressProps}
       {...sharedHandlers}
@@ -280,6 +292,7 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
         }
         ${dropTarget}
         ${cutClass}
+        ${focusClass}
       `}
     >
       <div className="relative flex-shrink-0">

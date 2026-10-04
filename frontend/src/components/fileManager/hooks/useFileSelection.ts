@@ -1,5 +1,23 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { FileItem } from '../../../contexts/AppContext';
+import { rangeIds } from '../keyboardMove';
+
+/**
+ * Explorer's list cursor, shared by clicks and keys. The anchor is where a Shift
+ * range starts; the focus is the item the next arrow key moves from, which can
+ * be one a Ctrl-click just deselected.
+ */
+export interface SelectionCursor {
+  anchorId: string | null;
+  focusId: string | null;
+}
+
+/** `nearest` scrolls only as far as needed, for keyboard moves within view. */
+export interface ListScrollRequest {
+  fileId: string;
+  token: number;
+  align?: 'center' | 'nearest';
+}
 
 interface FileSelectionParams {
   files: FileItem[];
@@ -29,6 +47,8 @@ export function useFileSelection({
   dragSelectingRef,
 }: FileSelectionParams) {
   const [isSelecting, setIsSelecting] = useState(false);
+  /** Set by a click or Ctrl-click; Shift-click moves only the focus. */
+  const selectionCursorRef = useRef<SelectionCursor>({ anchorId: null, focusId: null });
   const [multiSelectMode, setMultiSelectMode] = useState(false);
   const multiSelectModeRef = useRef(multiSelectMode);
 
@@ -91,9 +111,13 @@ export function useFileSelection({
     prevFolderStackLenRef.current = len;
   }, [folderStack.length]);
 
-  const [listScrollRequest, setListScrollRequest] = useState<{ fileId: string; token: number } | null>(null);
+  const [listScrollRequest, setListScrollRequest] = useState<ListScrollRequest | null>(null);
   const listScrollTokenRef = useRef(0);
   const clearListScrollRequest = useCallback(() => setListScrollRequest(null), []);
+  const requestListScroll = useCallback((fileId: string, align: ListScrollRequest['align'] = 'center') => {
+    listScrollTokenRef.current += 1;
+    setListScrollRequest({ fileId, token: listScrollTokenRef.current, align });
+  }, []);
 
   useEffect(() => {
     if (!scrollReturnHighlightRef.current) return;
@@ -106,9 +130,8 @@ export function useFileSelection({
     if (!id || !files.some(f => f.id === id)) return;
 
     scrollReturnHighlightRef.current = false;
-    listScrollTokenRef.current += 1;
-    setListScrollRequest({ fileId: id, token: listScrollTokenRef.current });
-  }, [files, selectedFiles]);
+    requestListScroll(id);
+  }, [files, selectedFiles, requestListScroll]);
 
   // Click outside the manager clears the selection (unless a marquee drag is ending).
   useEffect(() => {
@@ -140,37 +163,41 @@ export function useFileSelection({
       } else {
         addSelectedFile(fileId);
       }
+      selectionCursorRef.current = { anchorId: fileId, focusId: fileId };
       return;
     }
 
-    if (e.ctrlKey || e.metaKey) {
+    const fileIds = files.map(f => f.id);
+    const anchorId = selectionCursorRef.current.anchorId ?? selectedFiles[selectedFiles.length - 1];
+    const anchorIndex = anchorId ? fileIds.indexOf(anchorId) : -1;
+    const clickedIndex = fileIds.indexOf(fileId);
+
+    if (e.shiftKey && anchorIndex >= 0 && clickedIndex >= 0) {
+      // Shift replaces the selection with anchor..clicked; Ctrl+Shift adds that range.
+      // The clicked item goes last, so the keys carry on from it. The anchor stays.
+      const range = rangeIds(fileIds, anchorIndex, clickedIndex);
+      const kept = e.ctrlKey || e.metaKey ? selectedFiles.filter(id => !range.includes(id)) : [];
+      setSelectedFiles([...kept, ...range]);
+      selectionCursorRef.current = { anchorId: fileIds[anchorIndex] ?? fileId, focusId: fileId };
+    } else if (e.ctrlKey || e.metaKey) {
       // Multi-select with Ctrl/Cmd
       if (selectedFiles.includes(fileId)) {
         handleRemoveSelectedFile(fileId);
       } else {
         addSelectedFile(fileId);
       }
-    } else if (e.shiftKey && selectedFiles.length > 0) {
-      // Range select with Shift
-      const fileIds = files.map(f => f.id);
-      const lastSelectedId = selectedFiles[selectedFiles.length - 1];
-      if (!lastSelectedId) return; // Safety check
-      const lastSelectedIndex = fileIds.indexOf(lastSelectedId);
-      const clickedIndex = fileIds.indexOf(fileId);
-
-      const start = Math.min(lastSelectedIndex, clickedIndex);
-      const end = Math.max(lastSelectedIndex, clickedIndex);
-      const rangeIds = fileIds.slice(start, end + 1);
-
-      setSelectedFiles([...new Set([...selectedFiles, ...rangeIds])]);
+      selectionCursorRef.current = { anchorId: fileId, focusId: fileId };
     } else {
       // Single select
       setSelectedFiles([fileId]);
+      selectionCursorRef.current = { anchorId: fileId, focusId: fileId };
     }
   };
 
   const handleMarqueeSelection = useCallback(
     (selectedIds: string[], additive: boolean) => {
+      // A drag-box selection has no clicked item, so a later Shift range starts from its last id.
+      selectionCursorRef.current = { anchorId: null, focusId: null };
       if (additive) {
         // merge current selection + new marquee hits
         const merged = Array.from(new Set([...selectedFiles, ...selectedIds]));
@@ -194,5 +221,7 @@ export function useFileSelection({
     handleMarqueeSelection,
     listScrollRequest,
     clearListScrollRequest,
+    requestListScroll,
+    selectionCursorRef,
   };
 }

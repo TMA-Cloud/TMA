@@ -24,6 +24,9 @@ import { useFileDragAndDrop } from './hooks/useFileDragAndDrop';
 import { useExternalFileDrop } from './hooks/useExternalFileDrop';
 import { useFileManagerShortcuts } from './hooks/useFileManagerShortcuts';
 import { useFileOpen } from './hooks/useFileOpen';
+import { useTypeAheadSelect } from './hooks/useTypeAheadSelect';
+import { useNavigationKeys } from './hooks/useNavigationKeys';
+import { useArrowKeySelect } from './hooks/useArrowKeySelect';
 
 const FileManager: React.FC = () => {
   const {
@@ -72,6 +75,7 @@ const FileManager: React.FC = () => {
     canGoForward,
     goBack,
     goForward,
+    navigateTo,
     openUploadModalWithEntries,
     setUploadModalOpen,
     uploadModalProcessing,
@@ -102,6 +106,8 @@ const FileManager: React.FC = () => {
     position: { x: number; y: number };
     targetId: string | null;
   }>({ isOpen: false, position: { x: 0, y: 0 }, targetId: null });
+
+  const [columnCount, setColumnCount] = useState(1);
 
   const managerRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLDivElement>(null);
@@ -140,6 +146,8 @@ const FileManager: React.FC = () => {
     handleMarqueeSelection,
     listScrollRequest,
     clearListScrollRequest,
+    requestListScroll,
+    selectionCursorRef,
   } = useFileSelection({
     files,
     selectedFiles,
@@ -271,6 +279,37 @@ const FileManager: React.FC = () => {
   };
 
   const handleFileDoubleClick = useFileOpen(closeMultiSelectIfMobile);
+
+  // Arrows, Home/End and Page keys move the selection; Shift extends it, Ctrl moves focus only.
+  const { keyboardFocusId, focusItem, onListFocus, onListBlur, onListMouseDown } = useArrowKeySelect({
+    files,
+    selectedFiles,
+    setSelectedFiles,
+    requestListScroll,
+    viewMode,
+    columnCount,
+    cursorRef: selectionCursorRef,
+  });
+
+  // Typing a name's first letters selects it, as in Explorer.
+  useTypeAheadSelect({
+    files,
+    selectedFiles,
+    focusedId: keyboardFocusId,
+    selectItem: focusItem,
+    folderId: folderStack[folderStack.length - 1] ?? null,
+  });
+
+  // Enter opens, Backspace goes back, Alt+Up climbs to the parent, as in Explorer.
+  useNavigationKeys({
+    files,
+    selectedFiles,
+    openItem: handleFileDoubleClick,
+    canGoBack,
+    goBack,
+    pathLength: currentPath.length,
+    navigateTo,
+  });
 
   const handleContextMenu = (e: React.MouseEvent, fileId?: string) => {
     e.preventDefault();
@@ -485,6 +524,11 @@ const FileManager: React.FC = () => {
         onSelectingChange={handleSelectingChange}
         listScrollRequest={listScrollRequest}
         onListScrollRequestHandled={clearListScrollRequest}
+        keyboardFocusId={keyboardFocusId}
+        onColumnCountChange={setColumnCount}
+        onListFocus={onListFocus}
+        onListBlur={onListBlur}
+        onListMouseDown={onListMouseDown}
       />
 
       {/* Context Menu */}

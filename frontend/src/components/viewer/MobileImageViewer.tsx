@@ -376,7 +376,7 @@ export const MobileImageViewer: React.FC<MobileImageViewerProps> = ({
   if (!imageViewerFile) return null;
 
   return (
-    <div className="fixed inset-0 z-[10000] bg-black">
+    <div role="dialog" aria-modal="true" aria-label={imageViewerFile.name} className="fixed inset-0 z-[10000] bg-black">
       {/* Image viewer container - full screen */}
       <div
         ref={containerRef}

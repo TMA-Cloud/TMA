@@ -88,3 +88,8 @@
 .icon-rotate-active {
   animation: rotate360 var(--dur-slow) var(--ease-momentum);
 }
+
+/* The file list is one Tab stop; its outlined item shows focus, not the whole list. */
+.file-list:focus-visible {
+  outline: none;
+}
