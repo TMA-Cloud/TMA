@@ -14,24 +14,25 @@ import { useScrollEdge, scrollToTopFast } from '../../motion';
 import { RenameModal } from '../fileManager/RenameModal';
 import { ShareLinkModal } from '../fileManager/ShareLinkModal';
 import {
-  Home,
+  House,
   FolderOpen,
   Share2,
   Star,
-  Trash2,
+  Trash,
   Settings as SettingsIcon,
   HardDrive,
   Upload,
   LogOut,
   ChevronDown,
 } from 'lucide-react';
+import { ICON_STROKE, ICON_STROKE_BOLD } from '../ui/iconStroke';
 
 const navItems = [
-  { id: 'Dashboard', label: 'Home', icon: Home },
+  { id: 'Dashboard', label: 'Home', icon: House },
   { id: 'My Files', label: 'Files', icon: FolderOpen },
   { id: 'Shared', label: 'Shared', icon: Share2 },
   { id: 'Starred', label: 'Starred', icon: Star },
-  { id: 'Trash', label: 'Trash', icon: Trash2 },
+  { id: 'Trash', label: 'Trash', icon: Trash },
   { id: 'Settings', label: 'Settings', icon: SettingsIcon },
 ] as const;
 
@@ -130,7 +131,7 @@ export const MobileAppContent: React.FC = () => {
       >
         <div className="flex items-center gap-2.5">
           <div className="w-9 h-9 rounded-[10px] bg-[var(--accent)] grid place-items-center">
-            <HardDrive className="w-4 h-4 text-[var(--label-on-accent)]" strokeWidth={2.25} />
+            <HardDrive className="w-4 h-4 text-[var(--label-on-accent)]" />
           </div>
           <div className="flex flex-col">
             <span className="type-caption type-emphasized text-[var(--label)]">TMA Cloud</span>
@@ -146,7 +147,7 @@ export const MobileAppContent: React.FC = () => {
               className="pressable grid place-items-center rounded-full bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-[var(--label-on-accent)] w-9 h-9"
               aria-label="Upload"
             >
-              <Upload className="w-4 h-4" strokeWidth={2.25} />
+              <Upload className="w-4 h-4" />
             </button>
           )}
 
@@ -163,7 +164,6 @@ export const MobileAppContent: React.FC = () => {
                 className={`w-3 h-3 text-[var(--label-tertiary)] transition-motion duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] ${
                   dropdownOpen ? 'rotate-180' : ''
                 }`}
-                strokeWidth={2.5}
               />
             </button>
 
@@ -177,7 +177,7 @@ export const MobileAppContent: React.FC = () => {
                   }}
                   className="pressable type-callout w-full flex items-center gap-2.5 px-3 py-2 text-left text-[var(--label)] hover:bg-[var(--destructive)] hover:text-white rounded-xl"
                 >
-                  <LogOut className="w-4 h-4 flex-shrink-0" strokeWidth={2} />
+                  <LogOut className="w-4 h-4 flex-shrink-0" />
                   <span>Log out</span>
                 </button>
               </div>
@@ -215,7 +215,7 @@ export const MobileAppContent: React.FC = () => {
                     active ? 'bg-[var(--accent-fill)] text-[var(--accent)]' : 'text-[var(--label-tertiary)]'
                   }`}
                 >
-                  <Icon className="w-[18px] h-[18px]" strokeWidth={active ? 2.25 : 2} />
+                  <Icon className="w-[18px] h-[18px]" strokeWidth={active ? ICON_STROKE_BOLD : ICON_STROKE} />
                 </div>
                 <span
                   className={`type-caption-2 ${

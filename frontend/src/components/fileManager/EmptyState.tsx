@@ -1,15 +1,15 @@
 import React from 'react';
-import { FolderOpen, Search, Star, Share2, Trash2 } from 'lucide-react';
+import { FolderOpen, Search, Star, Share2, Trash } from 'lucide-react';
 
 // Built once at module scope: these are fixed marks for each destination, not
 // something the view decides on the fly.
 const glyph = 'w-6 h-6 text-[var(--label-tertiary)]';
 const GLYPHS = {
-  search: <Search className={glyph} strokeWidth={1.75} />,
-  starred: <Star className={glyph} strokeWidth={1.75} />,
-  shared: <Share2 className={glyph} strokeWidth={1.75} />,
-  trash: <Trash2 className={glyph} strokeWidth={1.75} />,
-  folder: <FolderOpen className={glyph} strokeWidth={1.75} />,
+  search: <Search className={glyph} />,
+  starred: <Star className={glyph} />,
+  shared: <Share2 className={glyph} />,
+  trash: <Trash className={glyph} />,
+  folder: <FolderOpen className={glyph} />,
 };
 
 interface EmptyStateProps {

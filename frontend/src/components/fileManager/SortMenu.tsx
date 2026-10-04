@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ArrowUpDown, Check } from 'lucide-react';
 import { Tooltip } from '../ui/Tooltip';
+import { ICON_STROKE_BOLD } from '../ui/iconStroke';
 
 interface SortMenuProps {
   sortBy: string;
@@ -60,7 +61,7 @@ export const SortMenu: React.FC<SortMenuProps> = ({ sortBy, sortOrder, onSortCha
             setShowSortMenu(s => !s);
           }}
         >
-          <ArrowUpDown className="w-[18px] h-[18px]" strokeWidth={2} />
+          <ArrowUpDown className="w-[18px] h-[18px]" />
         </button>
       </Tooltip>
       {showSortMenu &&
@@ -98,7 +99,7 @@ export const SortMenu: React.FC<SortMenuProps> = ({ sortBy, sortOrder, onSortCha
                   >
                     <Check
                       className={`w-3.5 h-3.5 flex-shrink-0 ${selected ? 'opacity-100' : 'opacity-0'}`}
-                      strokeWidth={3}
+                      strokeWidth={ICON_STROKE_BOLD}
                     />
                     {opt.label}
                   </button>

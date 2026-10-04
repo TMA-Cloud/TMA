@@ -1,5 +1,5 @@
 import React from 'react';
-import { ChevronRight, Loader2 } from 'lucide-react';
+import { ChevronRight, LoaderCircle } from 'lucide-react';
 
 interface SettingsItemProps {
   label: string;
@@ -92,7 +92,7 @@ export const SettingsItem: React.FC<SettingsItemProps> = ({
                   }
                 `}
               >
-                {showLoader ? <Loader2 className="w-4 h-4 animate-spin" /> : <ActionIcon className="w-4 h-4" />}
+                {showLoader ? <LoaderCircle className="w-4 h-4 animate-spin" /> : <ActionIcon className="w-4 h-4" />}
                 <span>{action}</span>
               </button>
             );

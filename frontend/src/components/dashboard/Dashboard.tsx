@@ -189,7 +189,7 @@ export const Dashboard: React.FC = () => {
                     action.isPrimary ? 'border-[var(--accent-ring)] bg-[var(--accent-fill)]' : ''
                   }`}
                 >
-                  <Icon className="w-5 h-5" style={{ color: action.tint }} strokeWidth={2} />
+                  <Icon className="w-5 h-5" style={{ color: action.tint }} />
                   <span className="type-callout type-emphasized text-[var(--label)]">{action.title}</span>
                 </button>
               );

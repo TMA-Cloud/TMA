@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Loader2, Lock, AlertTriangle } from 'lucide-react';
+import { LoaderCircle, Lock, TriangleAlert } from 'lucide-react';
 import { Modal } from '../../ui/Modal';
 import { useToast } from '../../../hooks/useToast';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -82,7 +82,7 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ isOpen
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/60">
           <div className="mt-0.5">
-            <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+            <TriangleAlert className="w-5 h-5 text-amber-600 dark:text-amber-400" />
           </div>
           <div className="space-y-1">
             <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">Security reminder</p>
@@ -163,7 +163,7 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ isOpen
           >
             {submitting ? (
               <>
-                <Loader2 className="w-4 h-4 animate-spin" />
+                <LoaderCircle className="w-4 h-4 animate-spin" />
                 Saving...
               </>
             ) : (

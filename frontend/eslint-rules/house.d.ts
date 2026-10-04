@@ -11,6 +11,7 @@ declare const plugin: {
     'no-vendor-names': Rule.RuleModule;
     'transition-covers-motion': Rule.RuleModule;
     'no-number-input': Rule.RuleModule;
+    'icon-stroke-token': Rule.RuleModule;
   };
 };
 

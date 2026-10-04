@@ -1,5 +1,5 @@
 import React from 'react';
-import { Settings as SettingsIcon, Trash2, Users, UserPlus, MonitorSmartphone } from 'lucide-react';
+import { Settings as SettingsIcon, Trash, Users, UserPlus, MonitorSmartphone } from 'lucide-react';
 import { SettingsSection } from '../components/SettingsSection';
 import { SettingsItem } from '../components/SettingsItem';
 import { SettingsGroup } from '../components/SettingsGroup';
@@ -189,7 +189,7 @@ export const AdministrationSection: React.FC<AdministrationSectionProps> = ({
             label="Orphaned files"
             value=""
             action="Review orphans"
-            actionIcon={Trash2}
+            actionIcon={Trash}
             actionVariant="danger"
             onAction={onShowOrphans}
             description="Find stored files with no database record, and records with no file"

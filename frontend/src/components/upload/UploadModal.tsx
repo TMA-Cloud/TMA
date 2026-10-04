@@ -1,5 +1,5 @@
 import React from 'react';
-import { Upload, File, Folder, CheckCircle, AlertCircle, RefreshCw, FilePlus, Loader2 } from 'lucide-react';
+import { Upload, File, Folder, CircleCheckBig, CircleAlert, RefreshCw, FilePlus, LoaderCircle } from 'lucide-react';
 import { Modal } from '../ui/Modal';
 import { formatFileSize } from '../../utils/fileUtils';
 import { useIsMobile } from '../../hooks/useIsMobile';
@@ -82,7 +82,7 @@ export const UploadModal: React.FC = () => {
                   isMobile ? 'w-10 h-10' : 'w-12 h-12'
                 } bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center`}
               >
-                <Loader2 className={`${isMobile ? 'w-5 h-5' : 'w-6 h-6'} text-gray-500 animate-spin`} />
+                <LoaderCircle className={`${isMobile ? 'w-5 h-5' : 'w-6 h-6'} text-gray-500 animate-spin`} />
               </div>
               <div className="space-y-1">
                 <p className={`${isMobile ? 'text-base' : 'text-lg'} font-semibold text-gray-900 dark:text-gray-100`}>
@@ -201,7 +201,7 @@ export const UploadModal: React.FC = () => {
                       } rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center`}
                     >
                       {upload.status === 'finalizing' ? (
-                        <Loader2
+                        <LoaderCircle
                           className={`${
                             isMobile ? 'w-3.5 h-3.5' : 'w-4 h-4'
                           } text-blue-600 dark:text-blue-400 animate-spin`}
@@ -323,9 +323,9 @@ export const UploadModal: React.FC = () => {
                     >
                       <div className="flex-shrink-0">
                         {uploadFile.status === 'completed' ? (
-                          <CheckCircle className={`${isMobile ? 'w-5 h-5' : 'w-6 h-6'} text-green-500`} />
+                          <CircleCheckBig className={`${isMobile ? 'w-5 h-5' : 'w-6 h-6'} text-green-500`} />
                         ) : uploadFile.status === 'error' ? (
-                          <AlertCircle className={`${isMobile ? 'w-5 h-5' : 'w-6 h-6'} text-red-500`} />
+                          <CircleAlert className={`${isMobile ? 'w-5 h-5' : 'w-6 h-6'} text-red-500`} />
                         ) : (
                           <File className={`${isMobile ? 'w-5 h-5' : 'w-6 h-6'} text-gray-400`} />
                         )}

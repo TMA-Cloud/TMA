@@ -1,5 +1,5 @@
 import React from 'react';
-import { Loader2 } from 'lucide-react';
+import { LoaderCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { Modal } from '../../ui/Modal';
 import { ModalCountHeader } from '../components/ModalCountHeader';
@@ -47,7 +47,7 @@ export const SessionsModal: React.FC<SessionsModalProps> = ({
 
         {loadingSessions ? (
           <p className="text-center text-gray-600 dark:text-gray-300 flex items-center justify-center gap-2">
-            <Loader2 className="w-4 h-4 animate-spin" />
+            <LoaderCircle className="w-4 h-4 animate-spin" />
             Loading sessions...
           </p>
         ) : activeSessions.length === 0 ? (
@@ -112,7 +112,7 @@ export const SessionsModal: React.FC<SessionsModalProps> = ({
                       >
                         {isRevoking ? (
                           <span className="flex items-center gap-1">
-                            <Loader2 className="w-3 h-3 animate-spin" />
+                            <LoaderCircle className="w-3 h-3 animate-spin" />
                             Revoking...
                           </span>
                         ) : (

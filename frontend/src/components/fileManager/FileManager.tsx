@@ -394,7 +394,7 @@ export const FileManager: React.FC = () => {
                   className="p-2.5 rounded-lg text-gray-700 dark:text-gray-200 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200/80 dark:hover:bg-gray-600/60 disabled:opacity-40 disabled:pointer-events-none transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50"
                   aria-label="Back"
                 >
-                  <ArrowLeft className="w-6 h-6" strokeWidth={2.25} />
+                  <ArrowLeft className="w-6 h-6" />
                 </button>
               </Tooltip>
               <Tooltip text="Forward">
@@ -405,7 +405,7 @@ export const FileManager: React.FC = () => {
                   className="p-2.5 rounded-lg text-gray-700 dark:text-gray-200 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200/80 dark:hover:bg-gray-600/60 disabled:opacity-40 disabled:pointer-events-none transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50"
                   aria-label="Forward"
                 >
-                  <ArrowRight className="w-6 h-6" strokeWidth={2.25} />
+                  <ArrowRight className="w-6 h-6" />
                 </button>
               </Tooltip>
             </div>

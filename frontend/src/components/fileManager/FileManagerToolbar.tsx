@@ -1,5 +1,5 @@
 import React from 'react';
-import { Grid, List, FolderPlus, Trash2, Share2, Star, Download, Edit3, RotateCcw } from 'lucide-react';
+import { Grid3x3, List, FolderPlus, Trash, Share2, Star, Download, PenLine, RotateCcw } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { Tooltip } from '../ui/Tooltip';
 import { SortMenu } from './SortMenu';
@@ -52,7 +52,7 @@ const TINTS: Record<Tint, { on: string; hover: string }> = {
 
 interface ToolbarButtonProps {
   label: string;
-  icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
+  icon: React.ComponentType<{ className?: string }>;
   onClick: () => void;
   /** The control is showing the state it toggles, not merely being available. */
   active?: boolean;
@@ -92,7 +92,7 @@ const ToolbarButton: React.FC<ToolbarButtonProps> = ({
               : `text-[var(--label-secondary)] hover:bg-[var(--fill-quaternary)] ${disabled ? '' : colours.hover}`
           }`}
       >
-        <Icon className={`w-[18px] h-[18px] ${filled ? 'fill-current' : ''}`} strokeWidth={2} />
+        <Icon className={`w-[18px] h-[18px] ${filled ? 'fill-current' : ''}`} />
       </button>
     </Tooltip>
   );
@@ -177,7 +177,7 @@ export const FileManagerToolbar: React.FC<FileManagerToolbarProps> = ({
           {can('files.edit') && (
             <ToolbarButton
               label="Rename"
-              icon={Edit3}
+              icon={PenLine}
               tint="accent"
               disabled={selectedFiles.length !== 1}
               onClick={onRename}
@@ -185,7 +185,7 @@ export const FileManagerToolbar: React.FC<FileManagerToolbarProps> = ({
           )}
 
           {can('files.delete') && (
-            <ToolbarButton label="Delete" icon={Trash2} tint="destructive" disabled={isDeleting} onClick={onDelete} />
+            <ToolbarButton label="Delete" icon={Trash} tint="destructive" disabled={isDeleting} onClick={onDelete} />
           )}
 
           {/* Separates what acts on the selection from what changes the view.
@@ -207,7 +207,7 @@ export const FileManagerToolbar: React.FC<FileManagerToolbarProps> = ({
               />
               <ToolbarButton
                 label="Delete Forever"
-                icon={Trash2}
+                icon={Trash}
                 tint="destructive"
                 disabled={isDeleting}
                 onClick={onDeleteForever}
@@ -215,14 +215,14 @@ export const FileManagerToolbar: React.FC<FileManagerToolbarProps> = ({
             </>
           )}
           {hasTrashFiles && selectedFiles.length === 0 && can('files.trash') && (
-            <ToolbarButton label="Empty Trash" icon={Trash2} tint="destructive" onClick={onEmptyTrash} />
+            <ToolbarButton label="Empty Trash" icon={Trash} tint="destructive" onClick={onEmptyTrash} />
           )}
         </>
       ) : (
         <>
           <ToolbarButton
             label="Grid view"
-            icon={Grid}
+            icon={Grid3x3}
             tint="accent"
             active={viewMode === 'grid'}
             onClick={() => onViewModeChange('grid')}

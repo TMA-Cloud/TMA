@@ -1,5 +1,5 @@
 import React from 'react';
-import { Upload, Download, X, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { Upload, Download, X, CircleCheckBig, CircleAlert, LoaderCircle } from 'lucide-react';
 import { formatFileSize } from '../../utils/fileUtils';
 import type { TransferStatus } from '../../utils/transferUtils';
 
@@ -65,15 +65,15 @@ export const TransferItemCard: React.FC<TransferItemCardProps> = ({
       <div className="flex-shrink-0">
         {status === 'completed' ? (
           <div className={`${circle} rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center`}>
-            <CheckCircle className={`${glyph} text-green-600 dark:text-green-400`} />
+            <CircleCheckBig className={`${glyph} text-green-600 dark:text-green-400`} />
           </div>
         ) : status === 'error' ? (
           <div className={`${circle} rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center`}>
-            <AlertCircle className={`${glyph} text-red-600 dark:text-red-400`} />
+            <CircleAlert className={`${glyph} text-red-600 dark:text-red-400`} />
           </div>
         ) : isPreparing(status) ? (
           <div className={`${circle} rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center`}>
-            <Loader2 className={`${glyph} text-blue-600 dark:text-blue-400 animate-spin`} />
+            <LoaderCircle className={`${glyph} text-blue-600 dark:text-blue-400 animate-spin`} />
           </div>
         ) : (
           <div className={`${circle} rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center`}>

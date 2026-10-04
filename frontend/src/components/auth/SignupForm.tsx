@@ -93,7 +93,7 @@ export const SignupForm: React.FC<{ onSwitch: () => void }> = ({ onSwitch }) => 
     <div className="material-thick material-edge rounded-3xl p-8 w-96 max-w-[calc(100vw-2rem)] animate-modalIn">
       <div className="flex flex-col items-center gap-3 mb-7">
         <div className="w-11 h-11 bg-[var(--accent)] rounded-[14px] grid place-items-center">
-          <HardDrive className="w-5 h-5 text-[var(--label-on-accent)]" strokeWidth={2.25} />
+          <HardDrive className="w-5 h-5 text-[var(--label-on-accent)]" />
         </div>
         <div className="text-center">
           <h1 className="type-title-2 text-[var(--label)]">Create your account</h1>

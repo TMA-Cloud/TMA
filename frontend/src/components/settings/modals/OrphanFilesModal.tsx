@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, Database, HardDrive, Loader2, ShieldCheck, Trash2 } from 'lucide-react';
+import { TriangleAlert, Database, HardDrive, LoaderCircle, ShieldCheck, Trash } from 'lucide-react';
 import { format } from 'date-fns';
 import { Modal } from '../../ui/Modal';
 import { formatFileSize } from '../../../utils/fileUtils';
@@ -377,7 +377,7 @@ export const OrphanFilesModal: React.FC<OrphanFilesModalProps> = ({ isOpen, onCl
         {/* List */}
         {loading ? (
           <p className="py-10 text-center text-gray-600 dark:text-gray-300 flex items-center justify-center gap-2">
-            <Loader2 className="w-4 h-4 animate-spin" />
+            <LoaderCircle className="w-4 h-4 animate-spin" />
             Scanning storage and database...
           </p>
         ) : error ? (
@@ -437,7 +437,7 @@ export const OrphanFilesModal: React.FC<OrphanFilesModalProps> = ({ isOpen, onCl
         {skippedNotes.length > 0 && (
           <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
             <div className="flex items-center gap-2 mb-1.5">
-              <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+              <TriangleAlert className="w-4 h-4 text-amber-600 dark:text-amber-400" />
               <p className="text-sm font-medium text-amber-900 dark:text-amber-200">
                 {skippedNotes.length} {skippedNotes.length === 1 ? 'entry was' : 'entries were'} kept
               </p>
@@ -475,7 +475,7 @@ export const OrphanFilesModal: React.FC<OrphanFilesModalProps> = ({ isOpen, onCl
               }
             `}
           >
-            {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+            {deleting ? <LoaderCircle className="w-4 h-4 animate-spin" /> : <Trash className="w-4 h-4" />}
             <span>
               {deleting
                 ? deleteProgress && deleteProgress.total > ORPHAN_DELETE_BATCH_SIZE

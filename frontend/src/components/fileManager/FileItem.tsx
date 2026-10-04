@@ -203,7 +203,7 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
         onDoubleClick();
       }}
     >
-      <Eye className="w-3.5 h-3.5 text-[var(--accent)]" strokeWidth={2.25} />
+      <Eye className="w-3.5 h-3.5 text-[var(--accent)]" />
     </button>
   );
 

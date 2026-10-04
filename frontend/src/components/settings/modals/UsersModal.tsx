@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Loader2, Shield, ShieldCheck, HardDrive, Edit2, Check, X, CornerDownRight, RotateCcw } from 'lucide-react';
+import { LoaderCircle, Shield, ShieldCheck, HardDrive, Pen, Check, X, CornerDownRight, RotateCcw } from 'lucide-react';
 import { format } from 'date-fns';
 import { Modal } from '../../ui/Modal';
 import { NumberInput } from '../../ui/NumberInput';
@@ -239,7 +239,7 @@ export const UsersModal: React.FC<UsersModalProps> = ({
 
         {loadingUsersList ? (
           <p className="text-center text-gray-600 dark:text-gray-300 flex items-center justify-center gap-2">
-            <Loader2 className="w-4 h-4 animate-spin" />
+            <LoaderCircle className="w-4 h-4 animate-spin" />
             Loading users...
           </p>
         ) : usersList.length === 0 ? (
@@ -383,7 +383,7 @@ export const UsersModal: React.FC<UsersModalProps> = ({
                               className="p-1 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded disabled:opacity-50 transition-colors"
                               title="Edit storage limit"
                             >
-                              <Edit2 className="w-3 h-3" />
+                              <Pen className="w-3 h-3" />
                             </button>
                           </div>
                         )}
@@ -411,7 +411,7 @@ export const UsersModal: React.FC<UsersModalProps> = ({
             </table>
             {hasMoreUsers && (
               <div ref={loadMoreRef} className="flex h-10 items-center justify-center" aria-hidden="true">
-                {loadingMoreUsers && <Loader2 className="h-4 w-4 animate-spin text-gray-500" />}
+                {loadingMoreUsers && <LoaderCircle className="h-4 w-4 animate-spin text-gray-500" />}
               </div>
             )}
           </div>

@@ -233,6 +233,24 @@ describe('house/no-number-input', () => {
   });
 });
 
+describe('house/icon-stroke-token', () => {
+  it('flags literal stroke weights and lets the tokens through', () => {
+    ruleTester.run('icon-stroke-token', house.rules['icon-stroke-token'], {
+      valid: [
+        '<Search className="w-4 h-4" />',
+        '<Check strokeWidth={ICON_STROKE_BOLD} />',
+        '<Icon strokeWidth={active ? ICON_STROKE_BOLD : ICON_STROKE} />',
+        '<LucideProvider strokeWidth={ICON_STROKE} />',
+      ],
+      invalid: [
+        { code: '<Search strokeWidth={2} />', errors: [{ messageId: 'literal' }] },
+        { code: '<Search strokeWidth="1.5" />', errors: [{ messageId: 'literal' }] },
+        { code: '<Icon strokeWidth={active ? 2.25 : ICON_STROKE} />', errors: [{ messageId: 'literal' }] },
+      ],
+    });
+  });
+});
+
 describe('house/no-vendor-names', () => {
   it('flags borrowed authority in comments and leaves the reasoning alone', () => {
     ruleTester.run('no-vendor-names', house.rules['no-vendor-names'], {

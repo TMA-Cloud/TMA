@@ -1,5 +1,5 @@
 import React from 'react';
-import { Trash2 } from 'lucide-react';
+import { Trash } from 'lucide-react';
 import { FixedProgress } from './FixedProgress';
 
 interface DeleteProgressProps {
@@ -15,7 +15,7 @@ export const DeleteProgress: React.FC<DeleteProgressProps> = ({ progress }) => {
 
   return (
     <FixedProgress
-      icon={Trash2}
+      icon={Trash}
       title={progress.label}
       subtitle={`${progress.itemCount} item${progress.itemCount !== 1 ? 's' : ''} selected`}
       percent={progress.percent}

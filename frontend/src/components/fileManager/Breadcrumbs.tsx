@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronRight, Home } from 'lucide-react';
+import { ChevronRight, House } from 'lucide-react';
 import { useApp } from '../../contexts/AppContext';
 import { useIsMobile } from '../../hooks/useIsMobile';
 
@@ -83,7 +83,7 @@ const OverflowMenu: React.FC<{ items: HiddenItem[]; onNavigate: (index: number) 
                   }}
                   className="pressable type-callout flex items-center gap-2 w-full px-2.5 py-2 text-left rounded-xl text-[var(--label)] hover:bg-[var(--fill-quaternary)]"
                 >
-                  <ChevronRight className="w-3.5 h-3.5 flex-shrink-0 opacity-40" strokeWidth={2.5} />
+                  <ChevronRight className="w-3.5 h-3.5 flex-shrink-0 opacity-40" />
                   <span className="truncate">{item.label}</span>
                 </button>
               ))}
@@ -112,7 +112,7 @@ export const Breadcrumbs: React.FC = () => {
       aria-label="My Files"
       className={`flex items-center justify-center min-w-[2.25rem] min-h-[2.25rem] rounded-xl flex-shrink-0 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-100 hover:bg-slate-200/50 dark:hover:bg-slate-700/50 transition-all duration-300 ease-out`}
     >
-      <Home className="w-5 h-5" strokeWidth={2} />
+      <House className="w-5 h-5" />
     </button>
   );
 

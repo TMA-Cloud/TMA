@@ -54,6 +54,8 @@ export default defineConfig([
       // Not a convention but a bug: the number input type drops the value it
       // cannot parse while leaving the characters on screen.
       'house/no-number-input': 'error',
+      // The whole tree takes its stroke from the provider or the two tokens.
+      'house/icon-stroke-token': 'error',
     },
   },
   {

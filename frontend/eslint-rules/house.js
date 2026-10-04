@@ -411,6 +411,38 @@ const noNumberInput = {
   },
 };
 
+/**
+ * Icon strokes are held in screen pixels (styles/base/icons.css), and one
+ * weight only reads as a system if nothing picks its own. A literal here is
+ * how five different weights crept in last time.
+ */
+const iconStrokeToken = {
+  meta: {
+    type: 'suggestion',
+    docs: { description: 'Take icon stroke weights from components/ui/iconStroke rather than a literal' },
+    messages: {
+      literal:
+        'Drop strokeWidth to get ICON_STROKE from LucideProvider, or use ICON_STROKE_BOLD for a mark that ' +
+        'carries state. A literal weight breaks the single stroke the icon set is drawn to.',
+    },
+  },
+  create(context) {
+    return {
+      JSXAttribute(node) {
+        if (node.name.name !== 'strokeWidth' || !node.value) return;
+        const { value } = node;
+        const literal =
+          value.type === 'Literal' ||
+          (value.type === 'JSXExpressionContainer' &&
+            (value.expression.type === 'Literal' ||
+              (value.expression.type === 'ConditionalExpression' &&
+                [value.expression.consequent, value.expression.alternate].some(b => b.type === 'Literal'))));
+        if (literal) context.report({ node, messageId: 'literal' });
+      },
+    };
+  },
+};
+
 export default {
   meta: { name: 'house' },
   rules: {
@@ -422,5 +454,6 @@ export default {
     'no-vendor-names': noVendorNames,
     'transition-covers-motion': transitionCoversMotion,
     'no-number-input': noNumberInput,
+    'icon-stroke-token': iconStrokeToken,
   },
 };

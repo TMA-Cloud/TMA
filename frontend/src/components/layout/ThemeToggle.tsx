@@ -25,10 +25,10 @@ export const ThemeToggle: React.FC = () => {
       title={isDark ? 'Light mode' : 'Dark mode'}
     >
       <span className={`${glyph} ${isDark ? 'opacity-100 rotate-0' : 'opacity-0 -rotate-90'}`} aria-hidden="true">
-        <Sun className="w-[18px] h-[18px]" strokeWidth={2} />
+        <Sun className="w-[18px] h-[18px]" />
       </span>
       <span className={`${glyph} ${isDark ? 'opacity-0 rotate-90' : 'opacity-100 rotate-0'}`} aria-hidden="true">
-        <Moon className="w-[18px] h-[18px]" strokeWidth={2} />
+        <Moon className="w-[18px] h-[18px]" />
       </span>
     </button>
   );

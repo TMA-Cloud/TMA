@@ -1,15 +1,15 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import {
-  Home,
+  House,
   FolderOpen,
   Share2,
   Star,
-  Trash2,
+  Trash,
   Settings,
   HardDrive,
   X,
   Download,
-  Loader2,
+  LoaderCircle,
   RefreshCw,
 } from 'lucide-react';
 import { useApp } from '../../contexts/AppContext';
@@ -19,7 +19,7 @@ import { SPRING_PRESETS, useSpring } from '../../motion';
 // Named for what they contain rather than for a vague umbrella: a specific
 // label is what makes a destination predictable before you get there.
 const navigationItems = [
-  { id: 'dashboard', label: 'Dashboard', icon: Home, path: ['Dashboard'] },
+  { id: 'dashboard', label: 'Dashboard', icon: House, path: ['Dashboard'] },
   { id: 'files', label: 'My Files', icon: FolderOpen, path: ['My Files'] },
   {
     id: 'shared',
@@ -28,7 +28,7 @@ const navigationItems = [
     path: ['Shared'],
   },
   { id: 'starred', label: 'Starred', icon: Star, path: ['Starred'] },
-  { id: 'trash', label: 'Trash', icon: Trash2, path: ['Trash'] },
+  { id: 'trash', label: 'Trash', icon: Trash, path: ['Trash'] },
 ];
 
 export const Sidebar: React.FC = () => {
@@ -139,7 +139,7 @@ export const Sidebar: React.FC = () => {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 bg-[var(--accent)] rounded-[10px] grid place-items-center">
-                  <HardDrive className="w-4 h-4 text-[var(--label-on-accent)]" strokeWidth={2.25} />
+                  <HardDrive className="w-4 h-4 text-[var(--label-on-accent)]" />
                 </div>
                 <span className="type-title-3 text-[var(--label)]">TMA Cloud</span>
               </div>
@@ -148,7 +148,7 @@ export const Sidebar: React.FC = () => {
                 className="pressable lg:hidden grid place-items-center w-8 h-8 rounded-full text-[var(--label-secondary)] hover:bg-[var(--fill-quaternary)] hover:text-[var(--label)]"
                 aria-label="Close sidebar"
               >
-                <X className="w-4 h-4" strokeWidth={2.25} />
+                <X className="w-4 h-4" />
               </button>
             </div>
           </div>
@@ -175,7 +175,6 @@ export const Sidebar: React.FC = () => {
                 >
                   <Icon
                     className={`w-[18px] h-[18px] flex-shrink-0 ${active ? 'text-[var(--accent)]' : 'text-[var(--label-tertiary)]'}`}
-                    strokeWidth={2}
                   />
                   <span className="truncate">{item.label}</span>
                 </button>
@@ -198,7 +197,7 @@ export const Sidebar: React.FC = () => {
                         <div className="flex flex-col gap-1">
                           {electronAutoUpdateState.status === 'downloading' && (
                             <div className="flex items-center gap-1.5">
-                              <Loader2 className="w-3 h-3 animate-spin flex-shrink-0" />
+                              <LoaderCircle className="w-3 h-3 animate-spin flex-shrink-0" />
                               <span>
                                 Auto-updating
                                 {electronAutoUpdateState.progress != null
@@ -255,7 +254,6 @@ export const Sidebar: React.FC = () => {
                 className={`w-[18px] h-[18px] flex-shrink-0 ${
                   isActive(['Settings']) ? 'text-[var(--accent)]' : 'text-[var(--label-tertiary)]'
                 }`}
-                strokeWidth={2}
               />
               <span>Settings</span>
             </button>

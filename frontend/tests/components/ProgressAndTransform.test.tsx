@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { render } from '@testing-library/react';
-import { Trash2 } from 'lucide-react';
+import { Trash } from 'lucide-react';
 import { FixedProgress } from '../../src/components/fileManager/FixedProgress';
 import { DeleteProgress } from '../../src/components/fileManager/DeleteProgress';
 import { DownloadProgress } from '../../src/components/fileManager/DownloadProgress';
@@ -10,7 +10,7 @@ import { clampPercent } from '../../src/components/fileManager/progressUtils';
 
 describe('progress components', () => {
   it('FixedProgress keeps its fixed positioning and 80-wide card', () => {
-    const { container } = render(<FixedProgress icon={Trash2} title="t" percent={42} showPercentBadge />);
+    const { container } = render(<FixedProgress icon={Trash} title="t" percent={42} showPercentBadge />);
     const outer = container.firstElementChild as HTMLElement;
     expect(outer.className).toContain('fixed');
     expect(outer.className).toContain('bottom-4');

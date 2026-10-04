@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { X, CheckCircle2, AlertCircle, Info } from 'lucide-react';
+import { X, CircleCheck, CircleAlert, Info } from 'lucide-react';
 import { SPRING_PRESETS, projectedEndpoint, rubberband, useDrag, useSpring } from '../../motion';
 
 /** Matches the exit path, so the node finishes leaving before it is unmounted. */
@@ -93,8 +93,8 @@ export const Toast: React.FC<ToastProps> = ({ id, message, type = 'info', durati
   });
 
   const icons = {
-    success: CheckCircle2,
-    error: AlertCircle,
+    success: CircleCheck,
+    error: CircleAlert,
     info: Info,
   };
 
@@ -122,14 +122,14 @@ export const Toast: React.FC<ToastProps> = ({ id, message, type = 'info', durati
     >
       {/* Colour sits on the icon rather than a filled bar: the message is the
           content and the severity is a qualifier on it, not the other way up. */}
-      <Icon className={`w-5 h-5 flex-shrink-0 ${tints[type]}`} strokeWidth={2.25} />
+      <Icon className={`w-5 h-5 flex-shrink-0 ${tints[type]}`} />
       <p className="type-callout vibrant flex-1 min-w-0">{message}</p>
       <button
         onClick={dismiss}
         className="pressable flex-shrink-0 grid place-items-center w-6 h-6 rounded-full text-[var(--label-tertiary)] hover:bg-[var(--fill-quaternary)] hover:text-[var(--label)]"
         aria-label="Close notification"
       >
-        <X className="w-3.5 h-3.5" strokeWidth={2.5} />
+        <X className="w-3.5 h-3.5" />
       </button>
     </div>
   );

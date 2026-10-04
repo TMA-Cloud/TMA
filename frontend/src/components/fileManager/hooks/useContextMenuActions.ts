@@ -4,7 +4,7 @@ import {
   ClipboardPaste,
   Copy,
   Download,
-  Edit3,
+  PenLine,
   Info,
   Link2,
   MonitorDown,
@@ -12,9 +12,9 @@ import {
   Scissors,
   Share2,
   Square,
-  CheckSquare,
+  SquareCheckBig,
   Star,
-  Trash2,
+  Trash,
 } from 'lucide-react';
 import { useApp, type FileItem, type ShareExpiry } from '../../../contexts/AppContext';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -179,7 +179,7 @@ export function useContextMenuActions({
         ...(isMobile && setMultiSelectMode
           ? [
               {
-                icon: multiSelectMode ? CheckSquare : Square,
+                icon: multiSelectMode ? SquareCheckBig : Square,
                 label: multiSelectMode ? 'Exit Multi-Select' : 'Select Multiple',
                 action: () => {
                   if (setMultiSelectMode) {
@@ -206,7 +206,7 @@ export function useContextMenuActions({
                 },
               },
               {
-                icon: Trash2,
+                icon: Trash,
                 label: 'Delete Forever',
                 disabled: isDeleting,
                 action: () => {
@@ -227,7 +227,7 @@ export function useContextMenuActions({
       ...(isMobile && setMultiSelectMode
         ? [
             {
-              icon: multiSelectMode ? CheckSquare : Square,
+              icon: multiSelectMode ? SquareCheckBig : Square,
               label: multiSelectMode ? 'Exit Multi-Select' : 'Select Multiple',
               action: () => {
                 if (setMultiSelectMode) {
@@ -429,7 +429,7 @@ export function useContextMenuActions({
       ...(can('files.edit')
         ? [
             {
-              icon: Edit3,
+              icon: PenLine,
               label: 'Rename',
               disabled: false,
               action: () => {
@@ -444,7 +444,7 @@ export function useContextMenuActions({
       ...(can('files.delete')
         ? [
             {
-              icon: Trash2,
+              icon: Trash,
               label: 'Delete',
               disabled: isDeleting,
               action: () => {

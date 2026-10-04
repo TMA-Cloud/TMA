@@ -1,5 +1,5 @@
 import React from 'react';
-import { Loader2, Monitor } from 'lucide-react';
+import { LoaderCircle, Monitor } from 'lucide-react';
 import { format } from 'date-fns';
 import { Modal } from '../../ui/Modal';
 import { ModalCountHeader } from '../components/ModalCountHeader';
@@ -60,7 +60,7 @@ export const ActiveClientsModal: React.FC<ActiveClientsModalProps> = ({
 
         {loading ? (
           <p className="text-center text-gray-600 dark:text-gray-300 flex items-center justify-center gap-2">
-            <Loader2 className="w-4 h-4 animate-spin" />
+            <LoaderCircle className="w-4 h-4 animate-spin" />
             Loading clients...
           </p>
         ) : clients.length === 0 ? (

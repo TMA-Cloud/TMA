@@ -1,6 +1,7 @@
 import React from 'react';
 import { Check } from 'lucide-react';
 import type { PermissionDefinition } from '../../../utils/api';
+import { ICON_STROKE_BOLD } from '../../ui/iconStroke';
 
 interface PermissionChecklistProps {
   /** Capabilities the server offers, in the order it wants them shown. */
@@ -104,7 +105,7 @@ export const PermissionChecklist: React.FC<PermissionChecklistProps> = ({
                         : 'border-slate-300 dark:border-slate-600 bg-white/70 dark:bg-slate-700/50'
                     }`}
                   >
-                    {checked && <Check className="w-3.5 h-3.5 text-white" strokeWidth={3} />}
+                    {checked && <Check className="w-3.5 h-3.5 text-white" strokeWidth={ICON_STROKE_BOLD} />}
                   </span>
                 </span>
 

@@ -289,7 +289,7 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
               className="pressable flex-shrink-0 grid place-items-center w-8 h-8 rounded-full bg-[var(--fill-quaternary)] text-[var(--label-secondary)] hover:bg-[var(--fill-tertiary)] hover:text-[var(--label)]"
               aria-label="Close modal"
             >
-              <X className="w-4 h-4" strokeWidth={2.5} />
+              <X className="w-4 h-4" />
             </button>
           </div>
 

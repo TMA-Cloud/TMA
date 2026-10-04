@@ -9,6 +9,7 @@
 @import './styles/base/typography.css';
 @import './styles/base/cursors.css';
 @import './styles/base/scrollbars.css';
+@import './styles/base/icons.css';
 
 @import './styles/components/materials.css';
 @import './styles/components/interaction.css';

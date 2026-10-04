@@ -1,5 +1,5 @@
 import React, { useMemo, useRef } from 'react';
-import { AlertTriangle, Clipboard, FileWarning } from 'lucide-react';
+import { TriangleAlert, Clipboard, FileExclamationPoint } from 'lucide-react';
 import { Modal } from '../ui/Modal';
 import { useApp, type UploadFailure } from '../../contexts/AppContext';
 import { useToast } from '../../hooks/useToast';
@@ -105,7 +105,7 @@ export const UploadIssuesModal: React.FC = () => {
     >
       <div className="space-y-5">
         <div className="flex gap-3 rounded-2xl bg-[var(--fill-quaternary)] p-4">
-          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-[var(--warning-text)]" strokeWidth={2.25} />
+          <TriangleAlert className="mt-0.5 h-5 w-5 shrink-0 text-[var(--warning-text)]" />
           <p className="type-callout text-[var(--label-secondary)]">{summary}</p>
         </div>
 
@@ -130,7 +130,7 @@ export const UploadIssuesModal: React.FC = () => {
                       key={`${failure.folderPath ?? ''}/${failure.fileName}-${index}`}
                       className="flex items-center gap-3 px-3.5 py-2.5"
                     >
-                      <FileWarning className="h-4 w-4 shrink-0 text-[var(--label-tertiary)]" strokeWidth={2} />
+                      <FileExclamationPoint className="h-4 w-4 shrink-0 text-[var(--label-tertiary)]" />
                       <div className="min-w-0">
                         <p className="type-footnote truncate text-[var(--label)]">{failure.fileName}</p>
                         {failure.folderPath && (
@@ -152,7 +152,7 @@ export const UploadIssuesModal: React.FC = () => {
 
         <div className="flex justify-end gap-2">
           <button type="button" onClick={copyDetails} className="btn btn-secondary type-callout">
-            <Clipboard className="h-4 w-4" strokeWidth={2} />
+            <Clipboard className="h-4 w-4" />
             Copy details
           </button>
           <button ref={acknowledgeRef} type="button" onClick={dismissUploadFailures} className="btn btn-primary">

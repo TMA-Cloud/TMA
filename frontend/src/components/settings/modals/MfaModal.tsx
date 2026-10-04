@@ -1,5 +1,5 @@
 import React from 'react';
-import { Copy, Check, Loader2, Shield, ShieldCheck, ShieldOff, AlertTriangle } from 'lucide-react';
+import { Copy, Check, LoaderCircle, Shield, ShieldCheck, ShieldOff, TriangleAlert } from 'lucide-react';
 import { Modal } from '../../ui/Modal';
 import { useMfa } from './useMfa';
 import { formatCooldownTime } from './mfaBackupCodes';
@@ -89,12 +89,12 @@ export const MfaModal: React.FC<MfaModalProps> = ({ isOpen, onClose }) => {
                     >
                       {regenerating ? (
                         <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <LoaderCircle className="w-4 h-4 animate-spin" />
                           Regenerating...
                         </>
                       ) : cooldownRemaining !== null && cooldownRemaining > 0 ? (
                         <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <LoaderCircle className="w-4 h-4 animate-spin" />
                           Cooldown: {formatCooldownTime(cooldownRemaining)}
                         </>
                       ) : (
@@ -123,7 +123,7 @@ export const MfaModal: React.FC<MfaModalProps> = ({ isOpen, onClose }) => {
                 >
                   {loading ? (
                     <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <LoaderCircle className="w-4 h-4 animate-spin" />
                       Setting up...
                     </>
                   ) : (
@@ -210,7 +210,7 @@ export const MfaModal: React.FC<MfaModalProps> = ({ isOpen, onClose }) => {
               >
                 {loading ? (
                   <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <LoaderCircle className="w-4 h-4 animate-spin" />
                     Verifying...
                   </>
                 ) : (
@@ -273,7 +273,7 @@ export const MfaModal: React.FC<MfaModalProps> = ({ isOpen, onClose }) => {
               >
                 {loading ? (
                   <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <LoaderCircle className="w-4 h-4 animate-spin" />
                     Disabling...
                   </>
                 ) : (
@@ -313,7 +313,7 @@ export const MfaModal: React.FC<MfaModalProps> = ({ isOpen, onClose }) => {
               >
                 {revokingSessions ? (
                   <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <LoaderCircle className="w-4 h-4 animate-spin" />
                     Signing out...
                   </>
                 ) : (
@@ -335,7 +335,7 @@ export const MfaModal: React.FC<MfaModalProps> = ({ isOpen, onClose }) => {
         <div className="space-y-6">
           <div className="flex items-start gap-4">
             <div className="flex-shrink-0 p-3 rounded-full bg-amber-100 dark:bg-amber-900/30">
-              <AlertTriangle className="w-6 h-6 text-amber-600 dark:text-amber-400" />
+              <TriangleAlert className="w-6 h-6 text-amber-600 dark:text-amber-400" />
             </div>
             <div className="flex-1">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">Are you sure?</h3>
@@ -361,12 +361,12 @@ export const MfaModal: React.FC<MfaModalProps> = ({ isOpen, onClose }) => {
             >
               {regenerating ? (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <LoaderCircle className="w-4 h-4 animate-spin" />
                   Regenerating...
                 </>
               ) : cooldownRemaining !== null && cooldownRemaining > 0 ? (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <LoaderCircle className="w-4 h-4 animate-spin" />
                   Wait: {formatCooldownTime(cooldownRemaining)}
                 </>
               ) : (

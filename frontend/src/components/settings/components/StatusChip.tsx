@@ -1,5 +1,5 @@
 import React from 'react';
-import { CheckCircle2, AlertTriangle, MinusCircle, HelpCircle } from 'lucide-react';
+import { CircleCheck, TriangleAlert, CircleMinus, CircleQuestionMark } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 export type StatusTone = 'success' | 'warning' | 'neutral' | 'unknown' | 'info';
@@ -13,11 +13,11 @@ interface StatusChipProps {
 }
 
 const TONES: Record<StatusTone, { icon: LucideIcon | null; className: string }> = {
-  success: { icon: CheckCircle2, className: 'text-green-700 dark:text-green-400 bg-green-500/10' },
-  warning: { icon: AlertTriangle, className: 'text-amber-700 dark:text-amber-400 bg-amber-500/10' },
+  success: { icon: CircleCheck, className: 'text-green-700 dark:text-green-400 bg-green-500/10' },
+  warning: { icon: TriangleAlert, className: 'text-amber-700 dark:text-amber-400 bg-amber-500/10' },
   neutral: { icon: null, className: 'text-gray-600 dark:text-gray-300 bg-gray-500/10' },
-  unknown: { icon: HelpCircle, className: 'text-gray-500 dark:text-gray-400 bg-gray-500/10' },
-  info: { icon: MinusCircle, className: 'text-gray-500 dark:text-gray-400 bg-gray-500/10' },
+  unknown: { icon: CircleQuestionMark, className: 'text-gray-500 dark:text-gray-400 bg-gray-500/10' },
+  info: { icon: CircleMinus, className: 'text-gray-500 dark:text-gray-400 bg-gray-500/10' },
 };
 
 /**

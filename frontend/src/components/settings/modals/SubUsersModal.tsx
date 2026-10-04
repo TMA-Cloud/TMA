@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronDown, ChevronRight, Loader2, Shield, ShieldCheck, Trash2, UserPlus } from 'lucide-react';
+import { ChevronDown, ChevronRight, LoaderCircle, Shield, ShieldCheck, Trash, UserPlus } from 'lucide-react';
 import { format } from 'date-fns';
 import { Modal } from '../../ui/Modal';
 import { ModalCountHeader } from '../components/ModalCountHeader';
@@ -231,7 +231,7 @@ export const SubUsersModal: React.FC<SubUsersModalProps> = ({
                 disabled={creating}
                 className="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl border border-blue-500/40 text-blue-600 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/30 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
               >
-                {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />}
+                {creating ? <LoaderCircle className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />}
                 <span>Create sub-user</span>
               </button>
               <button
@@ -259,7 +259,7 @@ export const SubUsersModal: React.FC<SubUsersModalProps> = ({
 
         {loading && subUsers.length === 0 ? (
           <p className="text-center text-gray-600 dark:text-gray-300 flex items-center justify-center gap-2 py-4">
-            <Loader2 className="w-4 h-4 animate-spin" />
+            <LoaderCircle className="w-4 h-4 animate-spin" />
             Loading sub-users...
           </p>
         ) : subUsers.length === 0 ? (
@@ -355,9 +355,9 @@ export const SubUsersModal: React.FC<SubUsersModalProps> = ({
                               className="p-1.5 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded disabled:opacity-50 transition-colors"
                             >
                               {isDeleting ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
+                                <LoaderCircle className="w-4 h-4 animate-spin" />
                               ) : (
-                                <Trash2 className="w-4 h-4" />
+                                <Trash className="w-4 h-4" />
                               )}
                             </button>
                           )}
@@ -380,7 +380,7 @@ export const SubUsersModal: React.FC<SubUsersModalProps> = ({
                                 disabled={isUpdating}
                                 className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-blue-500/40 text-blue-600 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/30 disabled:opacity-60 disabled:cursor-not-allowed text-sm transition-colors"
                               >
-                                {isUpdating && <Loader2 className="w-4 h-4 animate-spin" />}
+                                {isUpdating && <LoaderCircle className="w-4 h-4 animate-spin" />}
                                 <span>Save permissions</span>
                               </button>
                               <button

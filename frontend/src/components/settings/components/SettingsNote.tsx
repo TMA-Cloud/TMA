@@ -1,5 +1,5 @@
 import React from 'react';
-import { Info, AlertTriangle } from 'lucide-react';
+import { Info, TriangleAlert } from 'lucide-react';
 
 interface SettingsNoteProps {
   children: React.ReactNode;
@@ -11,7 +11,7 @@ interface SettingsNoteProps {
  */
 export const SettingsNote: React.FC<SettingsNoteProps> = ({ children, tone = 'info' }) => {
   const isWarning = tone === 'warning';
-  const Icon = isWarning ? AlertTriangle : Info;
+  const Icon = isWarning ? TriangleAlert : Info;
 
   return (
     <div
