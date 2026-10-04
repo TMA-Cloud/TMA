@@ -15,6 +15,7 @@ const {
   EDIT_DIR_PREFIX,
   sanitizeFileName,
   deduplicateFileName,
+  isExecutableFileName,
   createTempDir,
   downloadToFile,
   downloadPostToFile,
@@ -54,6 +55,25 @@ describe('sanitizeFileName', () => {
   it('does not let a traversal sequence survive as a path', () => {
     expect(sanitizeFileName('../../etc/passwd')).toBe('.._.._etc_passwd');
     expect(path.basename(sanitizeFileName('../../etc/passwd'))).toBe('.._.._etc_passwd');
+  });
+});
+
+describe('isExecutableFileName', () => {
+  it('flags programs, scripts and shortcuts in any case', () => {
+    for (const name of ['setup.exe', 'run.BAT', 'x.ps1', 'a.vbs', 'go.lnk', 'site.url', 'pkg.msi', 'tool.js']) {
+      expect(isExecutableFileName(name)).toBe(true);
+    }
+  });
+
+  it('sees through the trailing dots and spaces Windows strips', () => {
+    expect(isExecutableFileName('setup.exe.')).toBe(true);
+    expect(isExecutableFileName('setup.exe . ')).toBe(true);
+  });
+
+  it('leaves documents, archives, media and extensionless files openable', () => {
+    for (const name of ['report.docx', 'notes.txt', 'a.pdf', 'b.zip', 'c.mkv', 'README', 'exe', 'setup.exe.txt']) {
+      expect(isExecutableFileName(name)).toBe(false);
+    }
   });
 });
 

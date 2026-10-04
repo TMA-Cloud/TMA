@@ -50,11 +50,10 @@ export function useFileOpen(afterOpen: () => void) {
 
   const openFile = (file: FileItem): boolean => {
     const mime = (file.mimeType || '').toLowerCase();
-    const isMedia = mime.startsWith('image/') || mime.startsWith('video/') || mime.startsWith('audio/');
     const isOffice = ONLYOFFICE_EXTS.has(getExt(file.name));
 
-    // In Electron, media and Office docs open in the system's native apps.
-    if (isElectron() && (isMedia || isOffice)) {
+    // In Electron every file goes to Windows, which opens its app or asks which one.
+    if (isElectron()) {
       void editFileWithDesktop(file.id);
     } else if (mime.startsWith('image/')) {
       setImageViewerFile(file);

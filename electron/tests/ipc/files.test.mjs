@@ -284,6 +284,30 @@ describe('files:editWithDesktop', () => {
     expect(__mock.state.openPathCalls).toHaveLength(0);
   });
 
+  it('refuses to open a program instead of running it', async () => {
+    const { event } = windowEvent();
+    const result = await __mock.invoke(
+      'files:editWithDesktop',
+      { origin: SERVER_URL, item: { id: '7', name: 'setup.exe' } },
+      event
+    );
+    expect(result.ok).toBe(false);
+    expect(result.error).toMatch(/Programs and scripts/);
+    expect(__mock.state.openPathCalls).toHaveLength(0);
+    expect(__mock.requests()).toHaveLength(0);
+  });
+
+  it('hands a file type with no special handling to the shell', async () => {
+    const { event } = windowEvent();
+    const result = await __mock.invoke(
+      'files:editWithDesktop',
+      { origin: SERVER_URL, item: { id: '7', name: 'archive.xyz' } },
+      event
+    );
+    expect(result).toEqual({ ok: true });
+    expect(path.basename(__mock.state.openPathCalls[0])).toBe('archive.xyz');
+  });
+
   it('rejects an item without an id or a name', async () => {
     const { event } = windowEvent();
     await expect(

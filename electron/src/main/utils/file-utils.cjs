@@ -17,7 +17,12 @@ const {
   uploadNewFile,
   uploadNewFileData,
 } = require('./file-utils/upload.cjs');
-const { validateOrigin, sanitizeFileName, deduplicateFileName } = require('./file-utils/names.cjs');
+const {
+  validateOrigin,
+  sanitizeFileName,
+  deduplicateFileName,
+  isExecutableFileName,
+} = require('./file-utils/names.cjs');
 const {
   PASTE_DIR_PREFIX,
   EDIT_DIR_PREFIX,
@@ -34,6 +39,7 @@ module.exports = {
   EDIT_DIR_PREFIX,
   sanitizeFileName,
   deduplicateFileName,
+  isExecutableFileName,
   createTempDir,
   downloadToFile,
   downloadPostToFile,

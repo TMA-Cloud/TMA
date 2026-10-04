@@ -86,10 +86,6 @@ export function useDesktopEdit({ showToast, files, debouncedRefreshFiles }: Desk
       showToast('Select one file to open on desktop', 'error');
       return;
     }
-    if (!file.mimeType) {
-      showToast("Can't open on desktop — unknown file type", 'error');
-      return;
-    }
 
     desktopEditInProgressRef.current.add(id);
     let succeeded = false;

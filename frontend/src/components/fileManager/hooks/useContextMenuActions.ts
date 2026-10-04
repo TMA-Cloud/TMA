@@ -20,7 +20,6 @@ import { useApp, type FileItem, type ShareExpiry } from '../../../contexts/AppCo
 import { useAuth } from '../../../contexts/AuthContext';
 import { useToast } from '../../../hooks/useToast';
 import { hasElectronClipboard, hasElectronOpenOnDesktop } from '../../../utils/electronDesktop';
-import { isOnlyOfficeSupported } from '../../../utils/fileUtils';
 import { getErrorMessage } from '../../../utils/errorUtils';
 import { copyToClipboard } from '../../../utils/clipboard';
 
@@ -102,18 +101,12 @@ export function useContextMenuActions({
   const isTrashView = currentPath[0] === 'Trash';
   const singleSelectedItem = selectedItems.length === 1 ? selectedItems[0] : null;
 
-  const singleSelectedMime = (singleSelectedItem?.mimeType || '').toLowerCase();
-
-  // "Open on desktop" for Office-type files (by extension) and image/video/audio.
+  // Any file type, like Explorer on a share: Windows picks the app or asks.
   const canOpenOnDesktop =
     !isTrashView &&
     hasElectronOpenOnDesktop() &&
     !!singleSelectedItem &&
-    String(singleSelectedItem.type || '').toLowerCase() !== 'folder' &&
-    (isOnlyOfficeSupported(singleSelectedItem.name) ||
-      singleSelectedMime.startsWith('image/') ||
-      singleSelectedMime.startsWith('video/') ||
-      singleSelectedMime.startsWith('audio/'));
+    String(singleSelectedItem.type || '').toLowerCase() !== 'folder';
 
   const electronClipboardAvailable = hasElectronClipboard();
 

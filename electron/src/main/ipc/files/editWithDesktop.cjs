@@ -9,6 +9,7 @@ const { ipcMain, shell, BrowserWindow } = require('electron');
 const {
   EDIT_DIR_PREFIX,
   sanitizeFileName,
+  isExecutableFileName,
   createTempDir,
   downloadToFile,
   uploadFileToReplace,
@@ -222,6 +223,14 @@ function registerEditWithDesktopHandler(registry) {
       const item = payload?.item;
       if (!origin || !item || !item.id || !item.name) {
         return { ok: false, error: 'Invalid payload' };
+      }
+      // Any other type goes to its default app or the Windows Open-with picker,
+      // but a program from the server must never run on a double-click.
+      if (isExecutableFileName(sanitizeFileName(String(item.name)))) {
+        return {
+          ok: false,
+          error: "Programs and scripts can't be opened from the cloud. Download the file to run it.",
+        };
       }
 
       const base = origin;
