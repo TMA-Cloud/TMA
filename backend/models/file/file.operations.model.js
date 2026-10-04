@@ -9,7 +9,11 @@ import { isFilePathEncrypted } from '../../utils/filePath.js';
 import storage from '../../utils/storageDriver.js';
 import { releaseStorageReservation, reserveStorage } from '../../services/storageReservations.js';
 
-/** Move files to a different parent folder. */
+/**
+ * Move files to a different parent folder. Name conflicts in the target are
+ * resolved by keeping both, as copy and upload do, so a move never leaves two
+ * items with the same name side by side.
+ */
 async function moveFiles(ids, parentId = null, userId) {
   const client = await pool.connect();
   try {
@@ -17,10 +21,12 @@ async function moveFiles(ids, parentId = null, userId) {
     // Serialize hierarchy mutations for this account across API instances.
     await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [userId]);
     const filesResult = await client.query(
-      'SELECT id, parent_id, path, type, name FROM files WHERE id = ANY($1::text[]) AND user_id = $2 FOR UPDATE',
+      `SELECT id, parent_id, type, name FROM files
+        WHERE id = ANY($1::text[]) AND user_id = $2
+        ORDER BY array_position($1::text[], id)
+        FOR UPDATE`,
       [ids, userId]
     );
-    const oldParentIds = [...new Set(filesResult.rows.map(row => row.parent_id))];
 
     if (parentId) {
       const target = await client.query(
@@ -46,20 +52,24 @@ async function moveFiles(ids, parentId = null, userId) {
       if (cycle.rows.length > 0) throw new Error('A folder cannot be moved into itself or one of its descendants');
     }
 
-    await client.query(
-      `UPDATE files f
-          SET parent_id = $1
-         FROM unnest($2::text[]) AS selected(id)
-        WHERE f.id = selected.id AND f.user_id = $3`,
-      [parentId, ids, userId]
-    );
+    // Items already in the target stay put, like a paste back into the same folder.
+    const moving = filesResult.rows.filter(row => row.parent_id !== parentId);
+    const oldParentIds = [...new Set(moving.map(row => row.parent_id))];
+    if (moving.length > 0) {
+      const names = await allocateTargetNames(client, userId, parentId, moving);
+      await client.query(
+        `UPDATE files f
+            SET parent_id = $1, name = incoming.name
+           FROM unnest($2::text[], $3::text[]) AS incoming(id, name)
+          WHERE f.id = incoming.id AND f.user_id = $4`,
+        [parentId, moving.map(row => row.id), names, userId]
+      );
+    }
     await client.query('COMMIT');
 
     await invalidateAllFileCaches(userId, parentId, { includeStats: false, includeStorage: false });
     for (const oldParentId of oldParentIds) {
-      if (oldParentId !== parentId) {
-        await invalidateAllFileCaches(userId, oldParentId, { includeStats: false, includeStorage: false });
-      }
+      await invalidateAllFileCaches(userId, oldParentId, { includeStats: false, includeStorage: false });
     }
   } catch (error) {
     await client.query('ROLLBACK');
@@ -83,6 +93,62 @@ function allocateUniqueName(desiredName, occupiedNames) {
       occupiedNames.add(candidate.toLocaleLowerCase());
       return candidate;
     }
+  }
+  throw new Error('Too many duplicate names in database');
+}
+
+/**
+ * Pick a free name in the target folder for each incoming item, in order.
+ * Files and folders are deduplicated against their own type, matching upload.
+ * @param {{ id?: string, name: string, type: string }[]} items
+ * @returns {Promise<string[]>} one name per item
+ */
+async function allocateTargetNames(client, userId, parentId, items) {
+  const escapeLike = value => value.replace(/([%_\\])/g, '\\$1');
+  const occupied = await client.query(
+    `WITH requested(idx, desired, pattern, type) AS (
+       SELECT * FROM unnest($1::int[], $2::text[], $3::text[], $4::text[])
+     )
+     SELECT requested.idx, f.name FROM requested JOIN files f
+       ON f.user_id = $5 AND f.parent_id IS NOT DISTINCT FROM $6
+      AND f.type = requested.type AND f.deleted_at IS NULL
+      AND NOT f.id = ANY($7::text[])
+      AND (LOWER(f.name) = LOWER(requested.desired) OR LOWER(f.name) LIKE LOWER(requested.pattern) ESCAPE '\\')`,
+    [
+      items.map((_, i) => i),
+      items.map(item => item.name),
+      items.map(item => {
+        const ext = item.type === 'file' ? path.extname(item.name) : '';
+        const base = item.type === 'file' ? path.basename(item.name, ext) : item.name;
+        return `${escapeLike(base)} (%)${escapeLike(ext)}`;
+      }),
+      items.map(item => item.type),
+      userId,
+      parentId,
+      items.map(item => item.id).filter(Boolean),
+    ]
+  );
+  const occupiedByItem = new Map();
+  for (const row of occupied.rows) {
+    const names = occupiedByItem.get(row.idx) || new Set();
+    names.add(row.name.toLocaleLowerCase());
+    occupiedByItem.set(row.idx, names);
+  }
+  const batchOccupied = { file: new Set(), folder: new Set() };
+  return items.map((item, i) => {
+    const batch = batchOccupied[item.type] || batchOccupied.file;
+    const used = new Set([...(occupiedByItem.get(i) || []), ...batch]);
+    const name = item.type === 'file' ? allocateUniqueName(item.name, used) : allocateUniqueFolderName(item.name, used);
+    batch.add(name.toLocaleLowerCase());
+    return name;
+  });
+}
+
+function allocateUniqueFolderName(desiredName, occupiedNames) {
+  if (!occupiedNames.has(desiredName.toLocaleLowerCase())) return desiredName;
+  for (let counter = 1; counter <= 10000; counter += 1) {
+    const candidate = `${desiredName} (${counter})`;
+    if (!occupiedNames.has(candidate.toLocaleLowerCase())) return candidate;
   }
   throw new Error('Too many duplicate names in database');
 }
@@ -172,50 +238,18 @@ async function copyFiles(ids, parentId = null, userId, { operationId = null } = 
     const roots = await client.query(
       'SELECT root_order, source_id, new_id, new_name, type FROM copy_stage WHERE depth = 0 ORDER BY root_order'
     );
-    const requestedFiles = roots.rows.filter(row => row.type === 'file');
-    if (requestedFiles.length > 0) {
-      const occupied = await client.query(
-        `WITH requested(idx, desired, pattern) AS (SELECT * FROM unnest($1::int[], $2::text[], $3::text[]))
-         SELECT requested.idx, f.name FROM requested JOIN files f
-           ON f.user_id = $4 AND f.parent_id IS NOT DISTINCT FROM $5
-          AND f.type = 'file' AND f.deleted_at IS NULL
-          AND (f.name = requested.desired OR f.name LIKE requested.pattern ESCAPE '\\')`,
-        [
-          requestedFiles.map(row => row.root_order),
-          requestedFiles.map(row => row.new_name),
-          requestedFiles.map(row => {
-            const ext = path.extname(row.new_name);
-            const base = path.basename(row.new_name, ext);
-            const escapeLike = value => value.replace(/([%_\\])/g, '\\$1');
-            return `${escapeLike(base)} (%)${escapeLike(ext)}`;
-          }),
-          userId,
-          parentId,
-        ]
-      );
-      const occupiedByRoot = new Map();
-      for (const row of occupied.rows) {
-        const names = occupiedByRoot.get(row.idx) || new Set();
-        names.add(row.name.toLocaleLowerCase());
-        occupiedByRoot.set(row.idx, names);
-      }
-      const batchOccupied = new Set();
-      const rootOrders = [];
-      const names = [];
-      for (const root of requestedFiles) {
-        const used = new Set([...(occupiedByRoot.get(root.root_order) || []), ...batchOccupied]);
-        const name = allocateUniqueName(root.new_name, used);
-        batchOccupied.add(name.toLocaleLowerCase());
-        rootOrders.push(root.root_order);
-        names.push(name);
-      }
-      await client.query(
-        `UPDATE copy_stage stage SET new_name = incoming.name
-           FROM unnest($1::int[], $2::text[]) AS incoming(root_order, name)
-          WHERE stage.depth = 0 AND stage.root_order = incoming.root_order`,
-        [rootOrders, names]
-      );
-    }
+    const rootNames = await allocateTargetNames(
+      client,
+      userId,
+      parentId,
+      roots.rows.map(row => ({ name: row.new_name, type: row.type }))
+    );
+    await client.query(
+      `UPDATE copy_stage stage SET new_name = incoming.name
+         FROM unnest($1::int[], $2::text[]) AS incoming(root_order, name)
+        WHERE stage.depth = 0 AND stage.root_order = incoming.root_order`,
+      [roots.rows.map(row => row.root_order), rootNames]
+    );
 
     const bytesResult = await client.query(
       "SELECT COALESCE(SUM(size), 0)::bigint AS bytes FROM copy_stage WHERE type = 'file'"

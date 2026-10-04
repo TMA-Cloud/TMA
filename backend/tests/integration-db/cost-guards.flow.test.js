@@ -78,7 +78,7 @@ describe('cost and hierarchy guards', () => {
     const copied = await copyFiles(['copy-root'], null, OWNER);
     expect(copied).toHaveLength(1);
     const descendants = await getFolderTree(copied[0], OWNER);
-    expect(descendants.map(row => row.name).sort()).toEqual(['Child', 'Root']);
+    expect(descendants.map(row => row.name).sort()).toEqual(['Child', 'Root (1)']);
   });
 
   it('creates selected share subtrees in one batch and keyset-paginates their public listing', async () => {

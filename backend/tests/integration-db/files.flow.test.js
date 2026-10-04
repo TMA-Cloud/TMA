@@ -300,9 +300,46 @@ describe('move', () => {
 
     expect((await readFileRow(rows[0].id)).parent_id).toBeNull();
   });
+
+  it('keeps both when the target already has an item with that name', async () => {
+    const { client: c } = await signUpAndLogin();
+    const folderId = await createFolder(c, 'Target');
+    await upload(c, { name: 'notes.txt', parentId: folderId });
+    await upload(c, { name: 'notes.txt' });
+    await createFolder(c, 'Docs', folderId);
+    const docsId = await createFolder(c, 'Docs');
+    const loose = (await pool.query("SELECT id FROM files WHERE type = 'file' AND parent_id IS NULL")).rows[0];
+
+    const res = await c.post('/api/files/move').send({ ids: [loose.id, docsId], parentId: folderId });
+
+    expect(res.status).toBeLessThan(400);
+    const names = await pool.query('SELECT name FROM files WHERE parent_id = $1 ORDER BY name', [folderId]);
+    expect(names.rows.map(row => row.name)).toEqual(['Docs', 'Docs (1)', 'notes (1).txt', 'notes.txt']);
+  });
+
+  it('leaves names alone when pasting back into the same folder', async () => {
+    const { client: c } = await signUpAndLogin();
+    await upload(c, { name: 'notes.txt' });
+    const { rows } = await pool.query("SELECT id FROM files WHERE type = 'file'");
+
+    await c.post('/api/files/move').send({ ids: [rows[0].id], parentId: null });
+
+    expect((await readFileRow(rows[0].id)).name).toBe('notes.txt');
+  });
 });
 
 describe('copy', () => {
+  it('names a copied folder like a copied file when the target has one', async () => {
+    const { client: c } = await signUpAndLogin();
+    const docsId = await createFolder(c, 'Docs');
+
+    const res = await c.post('/api/files/copy').send({ ids: [docsId], parentId: null });
+    await waitForFileJob(c, res);
+
+    const names = await pool.query("SELECT name FROM files WHERE type = 'folder' ORDER BY name");
+    expect(names.rows.map(row => row.name)).toEqual(['Docs', 'Docs (1)']);
+  });
+
   it('does not duplicate a committed copy when pg-boss retries the job', async () => {
     const { client: c, user } = await signUpAndLogin();
     await upload(c, { name: 'notes.txt', content: 'copy once' });
