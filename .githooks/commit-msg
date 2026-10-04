@@ -1,0 +1,72 @@
+#!/bin/sh
+# Enforces the commit message style used across this repo's history:
+# "Lock Cloud Drive creates per path instead of globally" + body + sign-off.
+# Limits follow git's SubmittingPatches and https://cbea.ms/git-commit/:
+# subject 50 soft / 72 hard, body wrapped at 72. The body-length caps come
+# from this repo's history (p90 is 11 lines); a longer body usually means
+# the commit should be split.
+set -eu
+
+SUBJECT_SOFT=50
+SUBJECT_HARD=72
+BODY_WIDTH=72
+BODY_SOFT_LINES=20
+BODY_HARD_LINES=40
+
+cd "$(git rev-parse --show-toplevel)"
+. .githooks/lib.sh
+
+msg_file=$1
+comment_char=$(git config core.commentChar 2>/dev/null || echo '#')
+[ "$comment_char" = auto ] && comment_char='#'
+
+# Drop the scissors section (commit -v) and comment lines, as git will.
+msg=$(sed -e "/^$comment_char -\{8,\} >8 -\{8,\}\$/,\$d" -e "/^$comment_char/d" "$msg_file")
+subject=$(printf '%s\n' "$msg" | sed -n '1p')
+
+# Git-generated and autosquash messages follow their own format.
+case $subject in
+  "Merge branch '"* | "Merge branches '"* | "Merge remote-tracking branch '"* | \
+    "Merge tag '"* | "Merge commit '"* | 'Merge pull request #'* | \
+    'Revert "'* | 'fixup! '* | 'squash! '* | 'amend! '*) exit 0 ;;
+esac
+
+errors=''
+add() { errors="$errors
+  - $1"; }
+
+[ -n "$subject" ] || add 'the subject (first line) is empty'
+len=$(printf '%s' "$subject" | wc -m | tr -d ' ')
+[ "$len" -le "$SUBJECT_HARD" ] || add "subject is $len characters; the limit is $SUBJECT_HARD"
+case $subject in *.) add 'drop the trailing period from the subject' ;; esac
+case $subject in [a-z]*) add 'start the subject with a capital letter' ;; esac
+if printf '%s' "$subject" | grep -qE '^[A-Za-z]+(\([^)]*\))?!?: '; then
+  add 'no "type:" prefixes; write an imperative sentence ("Fix …", "Add …")'
+fi
+second=$(printf '%s\n' "$msg" | sed -n '2p')
+[ -z "$second" ] || add 'leave a blank line between the subject and the body'
+printf '%s\n' "$msg" | grep -q '^Signed-off-by: ' || add 'missing Signed-off-by; commit with -s (git commit -s)'
+
+# Body prose, without trailers, indented code/quotes, or lines that can't be
+# wrapped (URLs, or a single long token such as a path).
+prose=$(printf '%s\n' "$msg" | sed '1,2d' |
+  grep -vE '^[A-Za-z-]+: .*<.*@.*>$|^[[:space:]]|://' | grep -E '[^[:space:]] +[^[:space:]]' || true)
+too_wide=$(printf '%s\n' "$prose" | awk -v w="$BODY_WIDTH" 'length > w' | head -3)
+if [ -n "$too_wide" ]; then
+  add "wrap the body at $BODY_WIDTH columns; for example:
+$(printf '%s\n' "$too_wide" | sed 's/^/      | /')"
+fi
+body_lines=$(printf '%s\n' "$prose" | sed '/^$/d' | wc -l | tr -d ' ')
+[ "$body_lines" -le "$BODY_HARD_LINES" ] ||
+  add "body is $body_lines lines (limit $BODY_HARD_LINES); say why, not how, or split the commit"
+
+if [ -n "$errors" ]; then
+  fail "commit message:$errors"
+  printf '  %sYour message is kept in %s%s\n' "$dim" "$msg_file" "$reset" >&2
+  exit 1
+fi
+
+[ "$len" -le "$SUBJECT_SOFT" ] || warn "subject is $len characters; aim for $SUBJECT_SOFT or fewer"
+[ "$body_lines" -le "$BODY_SOFT_LINES" ] ||
+  warn "body is $body_lines lines; aim for $BODY_SOFT_LINES or fewer (what and why, not how)"
+exit 0

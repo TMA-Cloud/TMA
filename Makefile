@@ -9,7 +9,7 @@
 #   make              - Same as make build (default target)
 # =============================================================================
 
-.PHONY: help build build-no-cache clean
+.PHONY: help build build-no-cache clean hooks
 
 # =============================================================================
 # Configuration Variables (can be overridden)
@@ -30,6 +30,7 @@ help:
 	@echo "  make build        Build Docker image"
 	@echo "  make build-no-cache  Build without using cache"
 	@echo "  make clean        Remove Docker image"
+	@echo "  make hooks        Use the repo's git hooks (.githooks/)"
 	@echo ""
 	@echo "Configuration (override with VAR=value):"
 	@echo "  IMAGE_NAME        Docker image name (default: tma-cloud)"
@@ -69,3 +70,10 @@ clean:
 	@echo "Removing Docker image $(IMAGE_NAME):$(IMAGE_TAG)..."
 	@docker rmi $(IMAGE_NAME):$(IMAGE_TAG) 2>/dev/null || echo "Image not found"
 	@echo "Cleanup complete"
+
+# =============================================================================
+# Development
+# =============================================================================
+hooks:
+	@git config core.hooksPath .githooks
+	@echo "Git hooks enabled from .githooks/"

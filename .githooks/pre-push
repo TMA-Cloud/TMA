@@ -1,0 +1,74 @@
+#!/bin/sh
+# Runs the CI checks (minus integration tests, which need Postgres and Redis)
+# for each package the pushed commits touch. It runs against the working tree,
+# so uncommitted changes are included in the run.
+set -eu
+
+cd "$(git rev-parse --show-toplevel)"
+. .githooks/lib.sh
+
+zero=0000000000000000000000000000000000000000
+changed=''
+check_all=0
+
+# One line per pushed ref: <local ref> <local sha> <remote ref> <remote sha>
+while read -r _local_ref local_sha _remote_ref remote_sha; do
+  case $local_sha in *[!0]*) ;; *) continue ;; esac # branch deletion
+  case $remote_sha in
+    *[!0]*)
+      if git cat-file -e "$remote_sha^{commit}" 2>/dev/null; then
+        base=$remote_sha
+      else
+        base='' # remote has commits we don't: likely a force push
+      fi
+      ;;
+    *) base='' ;; # new branch
+  esac
+  if [ -z "$base" ]; then
+    default=$(git symbolic-ref -q --short refs/remotes/origin/HEAD 2>/dev/null || echo origin/main)
+    base=$(git merge-base "$local_sha" "$default" 2>/dev/null || true)
+  fi
+  if [ -z "$base" ]; then
+    check_all=1
+  else
+    changed="$changed
+$(git diff --name-only "$base" "$local_sha")"
+  fi
+done
+
+touched() { [ "$check_all" -eq 1 ] || printf '%s\n' "$changed" | grep -q "^$1/"; }
+
+status=0
+run() {
+  _pkg=$1
+  shift
+  step "$_pkg: $*"
+  if ! (cd "$_pkg" && "$@" </dev/null); then
+    fail "$_pkg: $* failed"
+    status=1
+  fi
+}
+
+for pkg in $NODE_PACKAGES; do
+  touched "$pkg" || continue
+  has_node_modules "$pkg" || continue
+  run "$pkg" npm run --silent lint
+  run "$pkg" npm run --silent format:check
+  if [ "$pkg" = frontend ]; then
+    run "$pkg" ./node_modules/.bin/tsc --noEmit -p tsconfig.app.json
+    run "$pkg" ./node_modules/.bin/tsc -b tsconfig.test.json
+  fi
+  run "$pkg" npm test --silent
+done
+
+if touched desktop-fs; then
+  if command -v dotnet >/dev/null 2>&1; then
+    run desktop-fs dotnet build --nologo -v quiet -warnaserror
+    run desktop-fs dotnet format --verify-no-changes
+  else
+    warn "desktop-fs: dotnet not found, skipping build"
+  fi
+fi
+
+[ "$status" -eq 0 ] || fail "pre-push failed (bypass with --no-verify only if you must)"
+exit "$status"
