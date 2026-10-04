@@ -12,6 +12,8 @@ import {
   hasElectronClipboard,
   hasElectronCloudDrive,
   hasElectronOpenOnDesktop,
+  claimElectronClipboard,
+  hasExternalElectronClipboardFiles,
   isElectron,
   peekElectronClipboardFileNames,
   saveFileViaElectron,
@@ -29,7 +31,8 @@ function installElectron(overrides: Partial<ElectronAPI> = {}) {
   const api = {
     platform: 'win32',
     clipboard: {
-      peekFileNames: vi.fn(async () => ({ names: ['a.txt'] })),
+      peekFileNames: vi.fn(async () => ({ names: ['a.txt'], external: true })),
+      claim: vi.fn(async () => ({ ok: true })),
       readFiles: vi.fn(async () => ({ files: [] })),
       writeFiles: vi.fn(async () => ({ ok: true })),
       writeFilesFromData: vi.fn(async () => ({ ok: true })),
@@ -233,6 +236,34 @@ describe('clipboard bridge', () => {
     const api = installElectron();
     api.clipboard.peekFileNames = vi.fn(async () => ({ names: null as never }));
     expect(await peekElectronClipboardFileNames()).toEqual([]);
+  });
+
+  it('reports files another app copied after ours', async () => {
+    const api = installElectron();
+    expect(await hasExternalElectronClipboardFiles()).toBe(true);
+    api.clipboard.peekFileNames = vi.fn(async () => ({ names: ['a.txt'], external: false }));
+    expect(await hasExternalElectronClipboardFiles()).toBe(false);
+  });
+
+  it('treats a failed or missing peek as no newer files', async () => {
+    expect(await hasExternalElectronClipboardFiles()).toBe(false);
+    const api = installElectron();
+    api.clipboard.peekFileNames = vi.fn(async () => {
+      throw new Error('clipboard locked');
+    });
+    expect(await hasExternalElectronClipboardFiles()).toBe(false);
+  });
+
+  it('claims the OS clipboard with the item names', async () => {
+    const api = installElectron();
+    await claimElectronClipboard(['a.txt', 'Folder']);
+    expect(api.clipboard.claim).toHaveBeenCalledWith({ names: ['a.txt', 'Folder'] });
+  });
+
+  it('skips the claim when there is nothing to name', async () => {
+    const api = installElectron();
+    await claimElectronClipboard([]);
+    expect(api.clipboard.claim).not.toHaveBeenCalled();
   });
 
   it('converts clipboard payloads into File objects', async () => {

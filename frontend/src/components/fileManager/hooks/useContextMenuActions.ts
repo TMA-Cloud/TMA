@@ -51,9 +51,9 @@ export function useContextMenuActions({
 }: ContextMenuActionsParams) {
   const {
     selectedFiles,
-    setClipboard,
     clipboard,
     clipboardCopy,
+    clipboardCut,
     clipboardPaste,
     folderStack,
     folderSharedStack,
@@ -391,11 +391,7 @@ export function useContextMenuActions({
               label: 'Cut',
               disabled: false,
               action: () => {
-                setClipboard({ ids: selectedFiles, action: 'cut' });
-                showToast(
-                  `Cut ${selectedFiles.length} item${selectedFiles.length !== 1 ? 's' : ''} — paste to move`,
-                  'success'
-                );
+                clipboardCut(selectedFiles);
                 onActionComplete?.();
               },
             },
@@ -473,7 +469,7 @@ export function useContextMenuActions({
     anyShared,
     starFiles,
     allStarred,
-    setClipboard,
+    clipboardCut,
     clipboard,
     clipboardCopy,
     clipboardPaste,

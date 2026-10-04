@@ -41,9 +41,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const clipboard = useClipboard({
     showToast,
-    operationQueue,
     files: browser.files,
     refreshFiles: browser.refreshFiles,
+    moveFiles: operations.moveFiles,
+    copyFiles: operations.copyFiles,
   });
 
   const downloads = useDownloads({ showToast, files: browser.files });
@@ -147,6 +148,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         clipboard: clipboard.clipboard,
         setClipboard: clipboard.setClipboard,
         clipboardCopy: clipboard.clipboardCopy,
+        clipboardCut: clipboard.clipboardCut,
         clipboardPaste: clipboard.clipboardPaste,
         pasteProgress: clipboard.pasteProgress,
         setPasteProgress: clipboard.setPasteProgress,

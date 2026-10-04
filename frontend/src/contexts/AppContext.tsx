@@ -131,6 +131,8 @@ export interface AppContextType {
   clipboard: { ids: string[]; action: 'copy' | 'cut' } | null;
   setClipboard: (clip: { ids: string[]; action: 'copy' | 'cut' } | null) => void;
   clipboardCopy: (ids: string[]) => void;
+  /** Marks items to move on the next paste. */
+  clipboardCut: (ids: string[]) => void;
   clipboardPaste: (parentId: string | null) => Promise<void>;
   pasteProgress: number | null;
   setPasteProgress: (p: number | null) => void;

@@ -133,3 +133,24 @@ export function parseContentDispositionFilename(header: string | null, fallback:
 
 export type NavEntry = { path: string[]; ids: (string | null)[]; shared: boolean[] };
 export type ProgressState = { itemCount: number; percent: number; label: string };
+
+// Clipboard
+
+export type CloudClipboard = { ids: string[]; action: 'copy' | 'cut' };
+
+/**
+ * Which clipboard a paste reads. Last writer wins: an in-app Copy or Cut claims
+ * the OS clipboard, so OS files that aren't ours were copied after it.
+ */
+export function choosePasteSource({
+  cloud,
+  electron,
+  osHasExternalFiles,
+}: {
+  cloud: CloudClipboard | null;
+  electron: boolean;
+  osHasExternalFiles: boolean;
+}): 'os' | 'cloud' | 'none' {
+  if (!cloud) return electron ? 'os' : 'none';
+  return electron && osHasExternalFiles ? 'os' : 'cloud';
+}

@@ -28,7 +28,9 @@ declare global {
         setTheme?: (theme: 'light' | 'dark') => Promise<{ ok: boolean }>;
       };
       clipboard: {
-        peekFileNames?: () => Promise<{ names: string[] }>;
+        /** `external`: files another app copied after this app's last Copy or Cut. */
+        peekFileNames?: () => Promise<{ names: string[]; external?: boolean }>;
+        claim?: (payload: { names: string[] }) => Promise<{ ok: boolean }>;
         readFiles: () => Promise<{
           files: { name: string; mime: string; data: string }[];
         }>;
@@ -60,7 +62,7 @@ declare global {
         writeFilesFromServer: (payload: {
           origin: string;
           items: { id: string; name: string }[];
-        }) => Promise<{ ok: boolean; error?: string }>;
+        }) => Promise<{ ok: boolean; error?: string; superseded?: boolean }>;
       };
       files?: {
         editWithDesktop: (payload: { origin: string; item: { id: string; name: string } }) => Promise<{
@@ -224,6 +226,30 @@ export async function peekElectronClipboardFileNames(): Promise<string[]> {
   }
 }
 
+/**
+ * True when another app put files on the OS clipboard after this app's last
+ * Copy or Cut: those are newer, so a paste should upload them instead.
+ */
+export async function hasExternalElectronClipboardFiles(): Promise<boolean> {
+  if (!isElectron() || !window.electronAPI?.clipboard?.peekFileNames) return false;
+  try {
+    const { external } = await window.electronAPI.clipboard.peekFileNames();
+    return external === true;
+  } catch {
+    return false;
+  }
+}
+
+/** Take the OS clipboard for an in-app Copy or Cut that has nothing to put there for Explorer. */
+export async function claimElectronClipboard(names: string[]): Promise<void> {
+  if (!isElectron() || !window.electronAPI?.clipboard?.claim || names.length === 0) return;
+  try {
+    await window.electronAPI.clipboard.claim({ names });
+  } catch {
+    // Best effort: the cloud clipboard still holds the selection.
+  }
+}
+
 /** Read files from OS clipboard (e.g. copy in Explorer). */
 export async function getFilesFromElectronClipboard(): Promise<File[]> {
   if (!isElectron() || !window.electronAPI?.clipboard) return [];
@@ -259,7 +285,7 @@ export async function uploadElectronClipboardFiles(parentId: string | null): Pro
 /** Fetch files and put on OS clipboard so user can paste in Explorer. */
 export async function copyFilesToPcClipboard(
   items: { id: string; name: string }[]
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<{ ok: boolean; error?: string; superseded?: boolean }> {
   try {
     const clip = window.electronAPI?.clipboard;
     if (!isElectron() || !clip?.writeFilesFromServer || !items.length) {

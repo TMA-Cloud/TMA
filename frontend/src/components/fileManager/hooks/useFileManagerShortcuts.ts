@@ -19,8 +19,8 @@ interface FileManagerShortcutsParams {
   uploadFile: (file: File) => Promise<void>;
   uploadFilesBulk: (files: File[]) => Promise<void>;
   clipboardCopy: (ids: string[]) => void;
+  clipboardCut: (ids: string[]) => void;
   clipboardPaste: (parentId: string | null) => Promise<void>;
-  setClipboard: (clip: { ids: string[]; action: 'copy' | 'cut' } | null) => void;
   setSelectedFiles: (ids: string[]) => void;
   openInfoModalForSelection: () => void;
   setDeleteModalOpen: (open: boolean) => void;
@@ -43,8 +43,8 @@ export function useFileManagerShortcuts({
   uploadFile,
   uploadFilesBulk,
   clipboardCopy,
+  clipboardCut,
   clipboardPaste,
-  setClipboard,
   setSelectedFiles,
   openInfoModalForSelection,
   setDeleteModalOpen,
@@ -146,11 +146,7 @@ export function useFileManagerShortcuts({
       if (key === 'x') {
         if (!selectedFiles.length) return;
         e.preventDefault();
-        setClipboard({ ids: selectedFiles, action: 'cut' });
-        showToast(
-          `Cut ${selectedFiles.length} item${selectedFiles.length !== 1 ? 's' : ''} — paste to move`,
-          'success'
-        );
+        clipboardCut(selectedFiles);
         return;
       }
 
@@ -173,12 +169,12 @@ export function useFileManagerShortcuts({
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [
     clipboardCopy,
+    clipboardCut,
     clipboardPaste,
     files,
     folderStack,
     openInfoModalForSelection,
     selectedFiles,
-    setClipboard,
     setSelectedFiles,
     showToast,
   ]);

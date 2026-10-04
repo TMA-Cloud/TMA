@@ -1,179 +1,142 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { type FileItem } from '../AppContext';
-import type { PromiseQueue } from '../../utils/debounce';
-import { extractResponseError } from '../../utils/errorUtils';
 import {
+  claimElectronClipboard,
   copyFilesToPcClipboard,
+  hasExternalElectronClipboardFiles,
   isElectron,
   MAX_COPY_TO_PC_BYTES,
-  peekElectronClipboardFileNames,
   uploadElectronClipboardFiles,
 } from '../../utils/electronDesktop';
+import { choosePasteSource, type CloudClipboard } from './helpers';
 
 type ToastType = 'success' | 'error' | 'info';
 
 interface ClipboardDeps {
   showToast: (message: string, type?: ToastType) => void;
-  operationQueue: Pick<PromiseQueue, 'add'>;
   files: FileItem[];
   refreshFiles: (skipSearchCheck?: boolean) => Promise<void>;
+  /** Server-side move and copy; copy waits for its background job to finish. */
+  moveFiles: (ids: string[], parentId: string | null) => Promise<void>;
+  copyFiles: (ids: string[], parentId: string | null) => Promise<void>;
 }
 
-/** Unified clipboard: an in-app cloud clipboard, mirrored best-effort to the OS clipboard in Electron. */
-export function useClipboard({ showToast, operationQueue, files, refreshFiles }: ClipboardDeps) {
-  const [clipboard, setClipboard] = useState<{ ids: string[]; action: 'copy' | 'cut' } | null>(null);
+const itemLabel = (count: number) => `${count} item${count !== 1 ? 's' : ''}`;
+
+/**
+ * Unified clipboard: an in-app cloud clipboard plus the OS clipboard in Electron.
+ * Like Windows, the most recent Copy or Cut anywhere owns the clipboard: an
+ * in-app Copy or Cut claims the OS clipboard, so OS files found at paste time
+ * are newer and win. A copy can be pasted repeatedly; a cut is spent on paste.
+ */
+export function useClipboard({ showToast, files, refreshFiles, moveFiles, copyFiles }: ClipboardDeps) {
+  const [clipboard, setClipboard] = useState<CloudClipboard | null>(null);
   const [pasteProgress, setPasteProgress] = useState<number | null>(null);
 
-  /** Names we last synced to the OS clipboard, so paste can detect an external overwrite. */
-  const lastOsClipboardSyncRef = useRef<string[] | null>(null);
-
-  // Any non-Copy clipboard change invalidates the OS sync tracker.
-  useEffect(() => {
-    if (!clipboard || clipboard.action !== 'copy') {
-      lastOsClipboardSyncRef.current = null;
-    }
-  }, [clipboard]);
+  const namesOf = (ids: string[]) => ids.map(id => files.find(f => f.id === id)?.name).filter((n): n is string => !!n);
 
   /** Sets the cloud clipboard, then best-effort syncs eligible files to the OS clipboard in Electron. */
   const clipboardCopy = (ids: string[]) => {
     if (ids.length === 0) return;
 
     setClipboard({ ids, action: 'copy' });
-    // Reset tracker — populated below only if we actually sync to the OS clipboard.
-    lastOsClipboardSyncRef.current = null;
-
-    const itemCount = ids.length;
-    const itemLabel = `${itemCount} item${itemCount !== 1 ? 's' : ''}`;
+    const label = itemLabel(ids.length);
 
     if (!isElectron()) {
-      showToast(`Copied ${itemLabel}`, 'success');
+      showToast(`Copied ${label}`, 'success');
       return;
     }
 
     const fileItems = ids
       .map(id => files.find(f => f.id === id))
       .filter((f): f is FileItem => f != null && String(f.type || '').toLowerCase() !== 'folder');
-    const folderCount = itemCount - fileItems.length;
+    const folderCount = ids.length - fileItems.length;
     const totalBytes = fileItems.reduce((s, f) => s + Number(f.size ?? 0), 0);
     const overLimit =
       fileItems.some(f => f.size != null && Number(f.size) > MAX_COPY_TO_PC_BYTES) || totalBytes > MAX_COPY_TO_PC_BYTES;
 
-    if (fileItems.length === 0) {
-      // Folders only — cloud paste only.
-      showToast(`Copied ${itemLabel} (folders paste in cloud only)`, 'success');
-      return;
-    }
-    if (overLimit) {
-      showToast(`Copied ${itemLabel} (over 200 MB — paste in cloud only)`, 'success');
+    if (fileItems.length === 0 || overLimit) {
+      void claimElectronClipboard(namesOf(ids));
+      const note = fileItems.length === 0 ? 'folders paste in cloud only' : 'over 200 MB — paste in cloud only';
+      showToast(`Copied ${label} (${note})`, 'success');
       return;
     }
 
-    const items = fileItems.map(f => ({ id: f.id, name: f.name }));
-    copyFilesToPcClipboard(items)
+    copyFilesToPcClipboard(fileItems.map(f => ({ id: f.id, name: f.name })))
       .then(result => {
         if (result.ok) {
-          // Remember the synced names so a later paste can detect an external overwrite.
-          lastOsClipboardSyncRef.current = items.map(i => i.name);
           const folderNote =
             folderCount > 0 ? ` (${folderCount} folder${folderCount !== 1 ? 's' : ''} cloud-only)` : '';
-          showToast(`Copied ${itemLabel}${folderNote} — paste in cloud or in Explorer`, 'success');
-        } else {
-          showToast(`Copied ${itemLabel} (system clipboard unavailable — paste in cloud)`, 'success');
+          showToast(`Copied ${label}${folderNote} — paste in cloud or in Explorer`, 'success');
+        } else if (!result.superseded) {
+          showToast(`Copied ${label} (system clipboard unavailable — paste in cloud)`, 'success');
         }
       })
       .catch(() => {
-        showToast(`Copied ${itemLabel} (system clipboard error — paste in cloud)`, 'success');
+        showToast(`Copied ${label} (system clipboard error — paste in cloud)`, 'success');
       });
   };
 
-  const pasteClipboard = async (parentId: string | null) => {
-    if (!clipboard) return;
-
-    return operationQueue.add(async () => {
-      setPasteProgress(0);
-      const endpoint = clipboard.action === 'cut' ? 'move' : 'copy';
-
-      try {
-        const res = await fetch(`/api/files/${endpoint}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-          credentials: 'include',
-          body: JSON.stringify({ ids: clipboard.ids, parentId }),
-        });
-
-        if (!res.ok) {
-          const errorMessage = await extractResponseError(res);
-          throw new Error(
-            errorMessage || (clipboard.action === 'cut' ? 'Failed to move files' : 'Failed to copy files')
-          );
-        }
-
-        setPasteProgress(100);
-        await refreshFiles();
-        setClipboard(null);
-        setTimeout(() => setPasteProgress(null), 300);
-      } catch (error) {
-        setPasteProgress(null);
-        throw error;
-      }
-    });
+  /** Marks items to move on the next paste. Cut is cloud-only, but still takes the OS clipboard. */
+  const clipboardCut = (ids: string[]) => {
+    if (ids.length === 0) return;
+    setClipboard({ ids, action: 'cut' });
+    void claimElectronClipboard(namesOf(ids));
+    showToast(`Cut ${itemLabel(ids.length)} — paste to move`, 'success');
   };
 
-  /** Paste: cloud clipboard first (no re-upload); fall back to uploading the OS clipboard. */
+  const pasteCloudClipboard = async (clip: CloudClipboard, parentId: string | null) => {
+    setPasteProgress(0);
+    try {
+      if (clip.action === 'cut') {
+        await moveFiles(clip.ids, parentId);
+        // A cut is spent once moved; a newer Copy or Cut made meanwhile stays.
+        setClipboard(current => (current === clip ? null : current));
+      } else {
+        await copyFiles(clip.ids, parentId);
+      }
+      setPasteProgress(100);
+      setTimeout(() => setPasteProgress(null), 300);
+    } catch (error) {
+      setPasteProgress(null);
+      throw error;
+    }
+  };
+
+  /** Uploads the OS clipboard; returns false when it held nothing to upload. */
+  const pasteOsClipboard = async (parentId: string | null) => {
+    const direct = await uploadElectronClipboardFiles(parentId);
+    if (direct.ok) {
+      await refreshFiles();
+      return true;
+    }
+    if (!direct.fallback) throw new Error(direct.error || 'Clipboard upload failed');
+    return false;
+  };
+
+  /** Paste whichever clipboard is newer: files copied in another app, else the cloud clipboard. */
   const clipboardPaste = async (parentId: string | null) => {
-    // No cloud clipboard: only the OS clipboard matters.
-    if (!clipboard) {
-      if (!isElectron()) {
-        showToast('Nothing to paste', 'info');
-        return;
-      }
-      const direct = await uploadElectronClipboardFiles(parentId);
-      if (direct.ok) {
-        await refreshFiles();
-        return;
-      }
-      if (!direct.fallback) {
-        showToast(direct.error || 'Clipboard upload failed', 'error');
-        return;
-      }
+    const clip = clipboard;
+    const osHasExternalFiles = clip != null && (await hasExternalElectronClipboardFiles());
+    const source = choosePasteSource({ cloud: clip, electron: isElectron(), osHasExternalFiles });
+
+    if (source === 'os' && (await pasteOsClipboard(parentId))) {
+      // A newer copy elsewhere replaced ours, as it would in Explorer.
+      if (clip) setClipboard(current => (current === clip ? null : current));
+      return;
+    }
+    if (!clip) {
       showToast('Nothing to paste', 'info');
       return;
     }
-
-    // If the OS clipboard was overwritten externally since our sync, upload that instead.
-    // Cut is exempt: its OS clipboard is never synced, so anything there is unrelated.
-    if (isElectron() && clipboard.action === 'copy') {
-      const osNames = await peekElectronClipboardFileNames();
-      const synced = lastOsClipboardSyncRef.current;
-      const osHasFiles = osNames.length > 0;
-      const matchesSync =
-        synced != null &&
-        osNames.length === synced.length &&
-        new Set(synced).size === synced.length &&
-        osNames.every(n => synced.includes(n));
-
-      if (osHasFiles && !matchesSync) {
-        const direct = await uploadElectronClipboardFiles(parentId);
-        if (direct.ok) {
-          setClipboard(null);
-          await refreshFiles();
-          return;
-        }
-        if (!direct.fallback) {
-          showToast(direct.error || 'Clipboard upload failed', 'error');
-          return;
-        }
-        // Peek may race with clipboard ownership changes; fall through to cloud paste.
-      }
-    }
-
-    await pasteClipboard(parentId);
+    await pasteCloudClipboard(clip, parentId);
   };
 
   return {
     clipboard,
     setClipboard,
     clipboardCopy,
+    clipboardCut,
     clipboardPaste,
     pasteProgress,
     setPasteProgress,
