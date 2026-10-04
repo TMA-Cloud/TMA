@@ -1,4 +1,4 @@
-import promClient from 'prom-client';
+import promClient from '@prometheus-io/client';
 
 import { logger } from '../config/logger.js';
 import pool, { pgbossSchema } from '../config/db.js';

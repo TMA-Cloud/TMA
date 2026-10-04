@@ -23,24 +23,21 @@ export default defineConfig({
     exclude: ['lucide-react'],
   },
   build: {
-    rollupOptions: {
+    rolldownOptions: {
       output: {
         // Split vendor code for better caching (vendor changes less than app code)
         // Lazy loading handles app code splitting, this handles dependencies
-        manualChunks(id) {
-          if (!id.includes('node_modules')) return;
-
-          // Only core React packages (exact names) to avoid circular chunk:
-          // other "react-*" packages must stay in vendor, not react-vendor
-          if (
-            /node_modules[/\\]react[/\\]/.test(id) ||
-            /node_modules[/\\]react-dom[/\\]/.test(id) ||
-            /node_modules[/\\]scheduler[/\\]/.test(id)
-          ) {
-            return 'react-vendor';
-          }
-
-          return 'vendor';
+        codeSplitting: {
+          groups: [
+            // Only core React packages (exact names) to avoid circular chunk:
+            // other "react-*" packages must stay in vendor, not react-vendor
+            {
+              name: 'react-vendor',
+              test: /node_modules[/\\](react|react-dom|scheduler)[/\\]/,
+              priority: 20,
+            },
+            { name: 'vendor', test: /node_modules[/\\]/, priority: 10 },
+          ],
         },
       },
     },
