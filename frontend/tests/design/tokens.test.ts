@@ -193,6 +193,41 @@ describe('text contrast clears WCAG AA', () => {
   }
 });
 
+describe('file artwork', () => {
+  const KINDS = [
+    'document',
+    'pdf',
+    'spreadsheet',
+    'presentation',
+    'image',
+    'design',
+    'video',
+    'audio',
+    'archive',
+    'code',
+    'database',
+    'text',
+    'executable',
+    'generic',
+  ] as const;
+
+  for (const theme of THEMES) {
+    it.each(KINDS)(`${theme}: the glyph reads on --file-%s`, kind => {
+      const ratio = contrast(theme, '--file-glyph', `--file-${kind}`);
+      expect(ratio, `glyph on --file-${kind} in ${theme} is ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(AA_NON_TEXT);
+    });
+
+    for (const ground of GROUNDS) {
+      it.each(KINDS)(`${theme}: --file-%s stands off ${ground}`, kind => {
+        const ratio = contrast(theme, `--file-${kind}`, ground);
+        expect(ratio, `--file-${kind} on ${ground} in ${theme} is ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(
+          AA_NON_TEXT
+        );
+      });
+    }
+  }
+});
+
 describe('semantic colours', () => {
   const ROLES = ['positive', 'warning', 'destructive'] as const;
 

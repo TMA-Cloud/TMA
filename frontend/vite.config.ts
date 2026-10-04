@@ -31,7 +31,7 @@ export default defineConfig({
           if (!id.includes('node_modules')) return;
 
           // Only core React packages (exact names) to avoid circular chunk:
-          // e.g. "react-file-icon" must stay in vendor, not react-vendor
+          // other "react-*" packages must stay in vendor, not react-vendor
           if (
             /node_modules[/\\]react[/\\]/.test(id) ||
             /node_modules[/\\]react-dom[/\\]/.test(id) ||

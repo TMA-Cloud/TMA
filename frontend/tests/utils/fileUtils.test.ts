@@ -8,16 +8,11 @@ import {
   describeShareTimeRemaining,
   getDisplayFileName,
   getExt,
-  getFileIcon,
   getFullNameForRename,
   isOnlyOfficeSupported,
   validateOnlyOfficeMimeType,
   mapFileResponse,
 } from '../../src/utils/fileUtils';
-import type { FileItem } from '../../src/contexts/AppContext';
-
-const item = (overrides: Partial<FileItem> = {}) =>
-  ({ id: 'f1', name: 'file.txt', type: 'file', ...overrides }) as FileItem;
 
 describe('mapFileResponse', () => {
   it('parses the shared timestamp for icon and Get Info rendering', () => {
@@ -32,35 +27,6 @@ describe('mapFileResponse', () => {
 
     expect(mapped.sharedAt).toBeInstanceOf(Date);
     expect(mapped.sharedAt?.toISOString()).toBe('2026-09-11T09:15:00.000Z');
-  });
-});
-
-describe('getFileIcon', () => {
-  it('returns the folder icon for a folder regardless of MIME type', () => {
-    const folder = getFileIcon(item({ type: 'folder', mimeType: 'image/png' }));
-    expect(folder).toBe(getFileIcon(item({ type: 'folder' })));
-  });
-
-  it('distinguishes the major media families', () => {
-    const image = getFileIcon(item({ mimeType: 'image/png' }));
-    const video = getFileIcon(item({ mimeType: 'video/mp4' }));
-    const audio = getFileIcon(item({ mimeType: 'audio/mpeg' }));
-    expect(new Set([image, video, audio]).size).toBe(3);
-  });
-
-  it('matches the MIME type case-insensitively', () => {
-    expect(getFileIcon(item({ mimeType: 'IMAGE/PNG' }))).toBe(getFileIcon(item({ mimeType: 'image/png' })));
-  });
-
-  it('falls back to a generic icon when the MIME type is missing or unknown', () => {
-    const generic = getFileIcon(item({ mimeType: undefined }));
-    expect(getFileIcon(item({ mimeType: 'application/x-unheard-of' }))).toBe(generic);
-  });
-
-  it('gives spreadsheets and presentations distinct icons', () => {
-    const sheet = getFileIcon(item({ mimeType: 'application/vnd.ms-excel' }));
-    const deck = getFileIcon(item({ mimeType: 'application/vnd.ms-powerpoint' }));
-    expect(sheet).not.toBe(deck);
   });
 });
 

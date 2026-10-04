@@ -61,6 +61,24 @@
     --folder-back: #e07c00;
     --folder-front: #ff9f0a;
 
+    /* File artwork: mid-tones that hold 3:1 against both grounds and under the
+       white glyph, so one set serves both themes. */
+    --file-glyph: #ffffff;
+    --file-document: #3372e0;
+    --file-pdf: #e0383e;
+    --file-spreadsheet: #1f8f4e;
+    --file-presentation: #e25a1c;
+    --file-image: #9c53d7;
+    --file-design: #a67408;
+    --file-video: #d63a78;
+    --file-audio: #0e8a7e;
+    --file-archive: #907153;
+    --file-code: #6c68db;
+    --file-database: #2b7e9e;
+    --file-text: #78766f;
+    --file-executable: #5f789a;
+    --file-generic: #8a8880;
+
     /* Materials: bigger surfaces get more blur and deeper shadow. */
     --material-chrome: rgba(242, 241, 237, 0.78);
     --material-thin: rgba(249, 248, 245, 0.62);

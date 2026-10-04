@@ -1,7 +1,25 @@
 import React from 'react';
-import { FileIcon, defaultStyles } from 'react-file-icon';
+import {
+  AppWindow,
+  CaseSensitive,
+  CodeXml,
+  Database,
+  Image,
+  Music,
+  Package,
+  PenTool,
+  Play,
+  Presentation,
+  Sheet,
+  TextAlignJustify,
+  TextAlignStart,
+} from 'lucide-react';
+import { IconCsv, IconJson, IconPdf, IconSql, IconSvg, IconZip } from '@tabler/icons-react';
 import { type FileItem } from '../../contexts/AppContext';
+import { getFileKind, type FileKind } from '../../utils/fileKind';
 import { getExt } from '../../utils/fileUtils';
+import { ICON_STROKE } from '../ui/iconStroke';
+import { formatLabel } from './formatLabel';
 
 /**
  * Folder artwork, drawn to be told apart from a file at a glance rather than
@@ -28,134 +46,114 @@ const FolderGlyph: React.FC<{ className?: string }> = ({ className = '' }) => (
   </svg>
 );
 
+type GlyphIcon = React.ComponentType<{
+  x?: number;
+  y?: number;
+  size?: number;
+  color?: string;
+  fill?: string;
+  strokeWidth?: number;
+  'aria-hidden'?: 'true';
+}>;
+
 /**
- * Renders a file or folder icon. Files use react-file-icon's defaultStyles for
- * automatic extension → icon/color mapping; no manual mapping required.
+ * A symbol, or a format name drawn as strokes. Lucide has the symbols; Tabler
+ * fills in the format names Lucide lacks, on the same 24px grid and round caps.
+ * Names are wider than a symbol, so they get the page's full width.
  */
+interface Glyph {
+  icon: GlyphIcon;
+  label?: boolean;
+  filled?: boolean;
+}
+
+const label = (icon: GlyphIcon): Glyph => ({ icon, label: true });
+
+/**
+ * Colour says which family a file is in; the glyph says it again for anyone
+ * who can't tell the hues apart, so no two kinds share both. Kinds without a
+ * colour of their own borrow the neutral one.
+ */
+const KIND_ART: Record<FileKind, { color: string; glyph?: Glyph }> = {
+  document: { color: 'var(--file-document)', glyph: { icon: TextAlignJustify } },
+  pdf: { color: 'var(--file-pdf)', glyph: label(IconPdf) },
+  spreadsheet: { color: 'var(--file-spreadsheet)', glyph: { icon: Sheet } },
+  presentation: { color: 'var(--file-presentation)', glyph: { icon: Presentation } },
+  image: { color: 'var(--file-image)', glyph: { icon: Image } },
+  design: { color: 'var(--file-design)', glyph: { icon: PenTool } },
+  video: { color: 'var(--file-video)', glyph: { icon: Play, filled: true } },
+  audio: { color: 'var(--file-audio)', glyph: { icon: Music } },
+  archive: { color: 'var(--file-archive)', glyph: { icon: Package } },
+  code: { color: 'var(--file-code)', glyph: { icon: CodeXml } },
+  database: { color: 'var(--file-database)', glyph: { icon: Database } },
+  text: { color: 'var(--file-text)', glyph: { icon: TextAlignStart } },
+  executable: { color: 'var(--file-executable)', glyph: { icon: AppWindow } },
+  font: { color: 'var(--file-generic)', glyph: { icon: CaseSensitive } },
+  generic: { color: 'var(--file-generic)' },
+};
+
+const DOC = label(formatLabel('DOC'));
+const XLS = label(formatLabel('XLS'));
+const PPT = label(formatLabel('PPT'));
+const PSD = label(formatLabel('PSD'));
+
+/** Formats people know by name, where the name says more than the kind's symbol. */
+const EXTENSION_GLYPHS: Record<string, Glyph> = {
+  '.doc': DOC,
+  '.docx': DOC,
+  '.xls': XLS,
+  '.xlsx': XLS,
+  '.ppt': PPT,
+  '.pptx': PPT,
+  '.ai': label(formatLabel('AI')),
+  '.psd': PSD,
+  '.psb': PSD,
+  '.csv': label(IconCsv),
+  '.zip': label(IconZip),
+  '.sql': label(IconSql),
+  '.json': label(IconJson),
+  '.svg': label(IconSvg),
+};
+
+/**
+ * A flat, filled page in the folder's grid, so files and folders read as one
+ * family. Portrait and full height, which gives it about the folder's area.
+ * The fold is a lighter flap rather than a shadow, which keeps it flat.
+ */
+const PageGlyph: React.FC<{ kind: FileKind; ext: string; className?: string }> = ({ kind, ext, className = '' }) => {
+  const { color, glyph: kindGlyph } = KIND_ART[kind];
+  const glyph = EXTENSION_GLYPHS[ext] ?? kindGlyph;
+  const Icon = glyph?.icon;
+  return (
+    <svg viewBox="0 0 32 32" className={className} aria-hidden="true" focusable="false" data-kind={kind}>
+      <path
+        d="M8.5 2H19l8 8v16.5a3.5 3.5 0 0 1-3.5 3.5h-15A3.5 3.5 0 0 1 5 26.5v-21A3.5 3.5 0 0 1 8.5 2z"
+        fill={color}
+      />
+      <path d="M19 2l8 8h-5a3 3 0 0 1-3-3z" fill="var(--file-glyph)" fillOpacity={0.4} />
+      {Icon && (
+        <Icon
+          {...(glyph.label ? { x: 6, y: 10, size: 20 } : { x: 9, y: 13, size: 14 })}
+          color="var(--file-glyph)"
+          fill={glyph.filled ? 'var(--file-glyph)' : 'none'}
+          strokeWidth={ICON_STROKE}
+          aria-hidden="true"
+        />
+      )}
+    </svg>
+  );
+};
+
+/** Renders a file or folder icon, picking file artwork from its kind. */
 export const FileTypeIcon: React.FC<{
   file: FileItem;
   className?: string;
-}> = ({ file, className = '' }) => {
-  if (file.type === 'folder') {
-    return (
-      <div className={`flex items-center justify-center flex-shrink-0 ${className}`}>
-        <FolderGlyph className="w-full h-full" />
-      </div>
-    );
-  }
-
-  const rawExt = getExt(file.name);
-  const extension = rawExt ? rawExt.slice(1) : ''; // "pdf" from ".pdf"
-  const style = extension && (defaultStyles as Record<string, object>)[extension];
-  const fallback = { type: 'document' as const };
-  const base = (style || fallback) as {
-    type?: string;
-    color?: string;
-    labelColor?: string;
-    [k: string]: unknown;
-  };
-
-  // Archive/compressed types: document-with-zipper look, clear label (zip, rar, 7z, etc.)
-  const archiveStyle = {
-    type: 'compressed',
-    color: '#f3f3f0',
-    labelColor: '#66645d',
-    glyphColor: '#b0aea6',
-    labelTextColor: '#FFFFFF',
-  } as const;
-
-  // Extension-specific styles so Windows/Mac/text/JSON get proper colored icons (not white)
-  const extensionOverrides: Record<
-    string,
-    {
-      type: string;
-      color: string;
-      labelColor: string;
-      glyphColor: string;
-      labelTextColor?: string;
-    }
-  > = {
-    // Archives – consistent document + zipper + extension label
-    zip: archiveStyle,
-    zipx: archiveStyle,
-    rar: archiveStyle,
-    '7z': archiveStyle,
-    '7zip': archiveStyle,
-    tar: archiveStyle,
-    gz: archiveStyle,
-    gzip: archiveStyle,
-    bz2: archiveStyle,
-    xz: archiveStyle,
-    lz: archiveStyle,
-    lzma: archiveStyle,
-    z: archiveStyle,
-    // Disk images – drive icon with clear "iso" label
-    iso: {
-      type: 'drive',
-      color: '#e8e7ff',
-      labelColor: '#5e5ce6',
-      glyphColor: '#7d7aff',
-      labelTextColor: '#FFFFFF',
-    },
-    exe: {
-      type: 'settings',
-      color: '#0078D4',
-      labelColor: '#106EBE',
-      glyphColor: 'rgba(255,255,255,0.9)',
-    },
-    msi: {
-      type: 'settings',
-      color: '#0078D4',
-      labelColor: '#106EBE',
-      glyphColor: 'rgba(255,255,255,0.9)',
-    },
-    json: {
-      type: 'document',
-      color: '#ff9f0a',
-      labelColor: '#c93400',
-      glyphColor: 'rgba(255,255,255,0.9)',
-    },
-    txt: {
-      type: 'document',
-      color: '#8f8d85',
-      labelColor: '#66645d',
-      glyphColor: 'rgba(255,255,255,0.9)',
-    },
-    dmg: {
-      type: 'drive',
-      color: '#8f8d85',
-      labelColor: '#66645d',
-      glyphColor: 'rgba(255,255,255,0.9)',
-    },
-    pkg: {
-      type: 'settings',
-      color: '#8f8d85',
-      labelColor: '#66645d',
-      glyphColor: 'rgba(255,255,255,0.9)',
-    },
-  };
-
-  // Type-based overrides for image and video (white → colored)
-  const imageVideoOverrides: Record<string, { color: string; labelColor: string; glyphColor: string }> = {
-    image: {
-      color: '#af52de',
-      labelColor: '#8944ab',
-      glyphColor: 'rgba(255,255,255,0.9)',
-    },
-    video: {
-      color: '#30b0c7',
-      labelColor: '#20808f',
-      glyphColor: 'rgba(255,255,255,0.9)',
-    },
-  };
-
-  const extOverride = extension ? extensionOverrides[extension] : undefined;
-  const typeOverride = base.type ? imageVideoOverrides[base.type] : undefined;
-  const finalStyle = extOverride ? { ...base, ...extOverride } : typeOverride ? { ...base, ...typeOverride } : base;
-
-  return (
-    <div className={`flex items-center justify-center flex-shrink-0 ${className}`}>
-      <FileIcon extension={extension || undefined} {...finalStyle} radius={8} />
-    </div>
-  );
-};
+}> = ({ file, className = '' }) => (
+  <div className={`flex items-center justify-center flex-shrink-0 ${className}`}>
+    {file.type === 'folder' ? (
+      <FolderGlyph className="w-full h-full" />
+    ) : (
+      <PageGlyph kind={getFileKind(file.name, file.mimeType)} ext={getExt(file.name)} className="w-full h-full" />
+    )}
+  </div>
+);

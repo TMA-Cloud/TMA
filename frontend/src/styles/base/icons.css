@@ -1,6 +1,8 @@
 /* Lucide draws on a 24px grid and scales its stroke with the icon, so a 13px
    icon got a 1.1px line and a 24px one 2px. Holding the stroke in screen
-   pixels gives every size the same weight (see components/ui/iconStroke.ts). */
-.lucide * {
+   pixels gives every size the same weight (see components/ui/iconStroke.ts).
+   Tabler draws the format names inside file icons on the same grid. */
+.lucide *,
+.tabler-icon * {
   vector-effect: non-scaling-stroke;
 }

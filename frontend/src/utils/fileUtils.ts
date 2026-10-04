@@ -1,15 +1,3 @@
-import {
-  FileText,
-  Image,
-  Video,
-  Music,
-  Archive,
-  File,
-  Folder,
-  FileSpreadsheet,
-  Presentation as FilePresentation,
-  FileCode,
-} from 'lucide-react';
 import { format, formatDistanceToNow, isToday, isYesterday } from 'date-fns';
 import bytes from 'bytes';
 import mime from 'mime';
@@ -28,52 +16,6 @@ export const mapFileResponse = (f: FileItemResponse): FileItem => ({
   deletedAt: f.deletedAt ? new Date(f.deletedAt) : undefined,
   expiresAt: f.expiresAt ? new Date(f.expiresAt) : f.expiresAt === null ? null : undefined,
 });
-
-export const getFileIcon = (file: FileItem) => {
-  if (file.type === 'folder') {
-    return Folder;
-  }
-
-  if (!file.mimeType) {
-    return File;
-  }
-
-  const mimeType = file.mimeType.toLowerCase();
-
-  if (mimeType.startsWith('image/')) {
-    return Image;
-  }
-
-  if (mimeType.startsWith('video/')) {
-    return Video;
-  }
-
-  if (mimeType.startsWith('audio/')) {
-    return Music;
-  }
-
-  if (mimeType.includes('pdf') || mimeType.includes('text/')) {
-    return FileText;
-  }
-
-  if (mimeType.includes('spreadsheet') || mimeType.includes('excel')) {
-    return FileSpreadsheet;
-  }
-
-  if (mimeType.includes('presentation') || mimeType.includes('powerpoint')) {
-    return FilePresentation;
-  }
-
-  if (mimeType.includes('zip') || mimeType.includes('archive')) {
-    return Archive;
-  }
-
-  if (mimeType.includes('javascript') || mimeType.includes('html') || mimeType.includes('css')) {
-    return FileCode;
-  }
-
-  return File;
-};
 
 /**
  * Format file size using bytes package for consistent formatting
