@@ -35,7 +35,6 @@ function mimeForFilenameOrDefault(name) {
 }
 
 module.exports = {
-  DEFAULT_MIME,
   mimeForFilename,
   mimeForFilenameOrDefault,
 };

@@ -143,8 +143,6 @@ function serverErrorPage(serverUrl, theme) {
 }
 
 module.exports = {
-  EMBEDDED_SERVER_URL,
-  EMBEDDED_UPDATOR_URL,
   getServerUrl,
   getUpdatorUrl,
   noServerUrlPage,

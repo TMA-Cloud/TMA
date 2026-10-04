@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import mimeTypes from '../../src/main/utils/mime-types.cjs';
 
-const { DEFAULT_MIME, mimeForFilename, mimeForFilenameOrDefault } = mimeTypes;
+const { mimeForFilename, mimeForFilenameOrDefault } = mimeTypes;
 
 describe('mimeForFilename', () => {
   it('maps the document types the desktop editing flow uploads', () => {
@@ -53,8 +53,7 @@ describe('mimeForFilename', () => {
 
 describe('mimeForFilenameOrDefault', () => {
   it('falls back to a binary content type for unknown extensions', () => {
-    expect(mimeForFilenameOrDefault('archive.zzzzz')).toBe(DEFAULT_MIME);
-    expect(DEFAULT_MIME).toBe('application/octet-stream');
+    expect(mimeForFilenameOrDefault('archive.zzzzz')).toBe('application/octet-stream');
   });
 
   it('still returns the specific type when one is known', () => {

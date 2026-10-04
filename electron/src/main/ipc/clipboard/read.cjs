@@ -104,10 +104,6 @@ async function peekClipboardFilePaths() {
   }
 }
 
-async function peekClipboardFileNames() {
-  return (await peekClipboardFilePaths()).map(p => path.basename(p));
-}
-
 /** True for files this app staged for an Explorer paste, i.e. our own copy. */
 function isOwnPastePath(filePath) {
   const root = path.join(os.tmpdir(), PASTE_DIR_PREFIX).toLowerCase();
@@ -115,9 +111,7 @@ function isOwnPastePath(filePath) {
 }
 
 module.exports = {
-  parsePathsFromText,
   readFilesFromClipboard,
-  peekClipboardFileNames,
   peekClipboardFilePaths,
   isOwnPastePath,
   readClipboardFilePaths,

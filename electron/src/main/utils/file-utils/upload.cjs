@@ -360,8 +360,6 @@ function uploadNewFileData(base, parentId, data, fileName, options) {
 
 module.exports = {
   precheckUploads,
-  clientMtimeField,
-  postMultipartFile,
   uploadFileToReplace,
   uploadDerivedFile,
   uploadNewFile,

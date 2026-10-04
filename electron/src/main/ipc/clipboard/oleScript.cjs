@@ -41,4 +41,4 @@ static byte[] GetFileContents(System.Runtime.InteropServices.ComTypes.IDataObjec
 Add-Type -TypeDefinition $code -ReferencedAssemblies System.Windows.Forms,System.Drawing
 try{$json=[OleClipboardHelper]::ExtractToJson();Write-Output $json}catch{Write-Output "{}"}`;
 
-module.exports = { getOleExtractScriptContent, OLE_EXTRACT_SCRIPT_FALLBACK };
+module.exports = { getOleExtractScriptContent };

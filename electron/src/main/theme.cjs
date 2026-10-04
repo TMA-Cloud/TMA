@@ -40,4 +40,4 @@ function rememberTheme(theme) {
   }
 }
 
-module.exports = { DEFAULT_THEME, getTheme, rememberTheme };
+module.exports = { getTheme, rememberTheme };

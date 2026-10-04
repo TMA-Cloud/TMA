@@ -46,4 +46,4 @@ function installIpcSenderGuard() {
   ipcMain.__senderGuarded = true;
 }
 
-module.exports = { installIpcSenderGuard, isTrustedSender };
+module.exports = { installIpcSenderGuard };

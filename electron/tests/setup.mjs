@@ -15,8 +15,8 @@ import Module from 'module';
 import { afterEach, beforeEach } from 'vitest';
 
 import electron from './mocks/electron.mock.mjs';
-import tempDirs from './helpers/tempDirs.cjs';
-import platform from './helpers/platform.cjs';
+import { removeAllTempDirs } from './helpers/tempDirs.cjs';
+import { restorePlatform } from './helpers/platform.cjs';
 
 const originalLoad = Module._load;
 Module._load = function patchedLoad(request, parent, isMain) {
@@ -29,6 +29,6 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  platform.restorePlatform();
-  tempDirs.removeAllTempDirs();
+  restorePlatform();
+  removeAllTempDirs();
 });

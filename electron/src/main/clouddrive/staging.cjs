@@ -16,4 +16,4 @@ function isInStagingDir(p) {
   return resolved === base || resolved.startsWith(base + path.sep);
 }
 
-module.exports = { STAGING_DIR, isInStagingDir };
+module.exports = { isInStagingDir };

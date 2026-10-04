@@ -95,4 +95,4 @@ function fakeSpawnResult(vi, { stdout = '', stderr = '', code = 0, delayMs = 0 }
   });
 }
 
-module.exports = { FakeChildProcess, fakeSpawn, fakeSpawnResult };
+module.exports = { fakeSpawn, fakeSpawnResult };
