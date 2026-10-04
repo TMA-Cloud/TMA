@@ -3,6 +3,7 @@
  * Uses escape-html package for better performance and correctness
  */
 import escapeHtml from 'escape-html';
+import { extensionOf, getFileKind } from '../../utils/fileKind.js';
 
 /**
  * Shared <head> boilerplate for the public share pages: charset, viewport,
@@ -96,7 +97,8 @@ const ICON_SPRITE = `<svg width="0" height="0" style="position:absolute" aria-hi
 <symbol id="i-sheet" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 4v16M15 4v16"/></symbol>
 <symbol id="i-archive" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M12 3v3m0 2v2m0 2v2"/><rect x="10" y="14" width="4" height="4" rx="1"/></symbol>
 <symbol id="i-code" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m9 8-4 4 4 4m6-8 4 4-4 4"/></symbol>
-<symbol id="i-doc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M6 2h8l4 4v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1Z"/><path d="M14 2v5h5"/><path d="M8 12h8M8 15h8M8 18h5"/></symbol>
+<symbol id="i-slides" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4m-4 0h8"/></symbol>
+<symbol id="i-doc"viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M6 2h8l4 4v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1Z"/><path d="M14 2v5h5"/><path d="M8 12h8M8 15h8M8 18h5"/></symbol>
 <symbol id="i-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v10m0 0 4-4m-4 4-4-4M5 19h14"/></symbol>
 <symbol id="i-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></symbol>
 </svg>`;
@@ -128,45 +130,28 @@ function formatBytes(bytes) {
   return `${i === 0 ? val : val.toFixed(val >= 10 || i === 0 ? 0 : 1)} ${units[i]}`;
 }
 
-/** Map a file's mime type / extension to one of the sprite symbol ids. */
+/** Sprite symbol and label per kind; kinds without artwork of their own borrow the nearest. */
+const KIND_ART = {
+  document: ['i-doc', 'Document'],
+  pdf: ['i-pdf', 'Document'],
+  spreadsheet: ['i-sheet', 'Spreadsheet'],
+  presentation: ['i-slides', 'Presentation'],
+  image: ['i-image', 'Image'],
+  design: ['i-image', 'Design file'],
+  video: ['i-video', 'Video'],
+  audio: ['i-audio', 'Audio'],
+  archive: ['i-archive', 'Archive'],
+  code: ['i-code', 'Code'],
+  database: ['i-sheet', 'Database'],
+  text: ['i-doc', 'Text'],
+  executable: ['i-file', 'Application'],
+  font: ['i-file', 'Font'],
+  generic: ['i-file', 'File'],
+};
+
 function iconIdFor(item) {
   if (item.type === 'folder') return 'i-folder';
-  const mime = (item.mimeType || '').toLowerCase();
-  const name = (item.name || '').toLowerCase();
-  const ext = name.includes('.') ? name.slice(name.lastIndexOf('.') + 1) : '';
-
-  if (mime.startsWith('image/')) return 'i-image';
-  if (mime.startsWith('video/')) return 'i-video';
-  if (mime.startsWith('audio/')) return 'i-audio';
-  if (mime === 'application/pdf' || ext === 'pdf') return 'i-pdf';
-  if (/(sheet|excel|csv)/.test(mime) || ['xlsx', 'xls', 'csv', 'tsv', 'ods'].includes(ext)) return 'i-sheet';
-  if (/(zip|compressed|tar|rar|7z|gzip)/.test(mime) || ['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) {
-    return 'i-archive';
-  }
-  if (/(word|document|opendocument\.text|rtf)/.test(mime) || ['doc', 'docx', 'rtf', 'odt', 'txt', 'md'].includes(ext)) {
-    return 'i-doc';
-  }
-  const code = [
-    'js',
-    'ts',
-    'jsx',
-    'tsx',
-    'json',
-    'html',
-    'css',
-    'py',
-    'java',
-    'c',
-    'cpp',
-    'go',
-    'rs',
-    'sh',
-    'yml',
-    'yaml',
-    'xml',
-  ];
-  if (code.includes(ext)) return 'i-code';
-  return 'i-file';
+  return KIND_ART[getFileKind(item.name, item.mimeType)][0];
 }
 
 /** SVG icon reference into the shared sprite. */
@@ -175,21 +160,9 @@ function icon(id, cls) {
 }
 
 /** Human label for a file's kind, e.g. "PDF · Document", "PNG · Image". */
-const KIND_LABELS = {
-  'i-image': 'Image',
-  'i-video': 'Video',
-  'i-audio': 'Audio',
-  'i-pdf': 'Document',
-  'i-sheet': 'Spreadsheet',
-  'i-archive': 'Archive',
-  'i-doc': 'Document',
-  'i-code': 'Code',
-  'i-file': 'File',
-};
 function kindLabel(item) {
-  const label = KIND_LABELS[iconIdFor(item)] || 'File';
-  const name = (item.name || '').toLowerCase();
-  const ext = name.includes('.') ? name.slice(name.lastIndexOf('.') + 1).toUpperCase() : '';
+  const label = KIND_ART[getFileKind(item.name, item.mimeType)][1];
+  const ext = extensionOf(item.name).toUpperCase();
   return ext ? `${ext} · ${label}` : label;
 }
 

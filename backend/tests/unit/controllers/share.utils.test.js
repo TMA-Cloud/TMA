@@ -1,7 +1,27 @@
 import { describe, expect, it } from 'vitest';
 
-import { renderErrorPage } from '../../../controllers/share/share.utils.js';
+import { renderErrorPage, renderFilePage } from '../../../controllers/share/share.utils.js';
 import { mockRes } from '../../helpers/http.js';
+
+describe('renderFilePage', () => {
+  const render = (name, mimeType) => renderFilePage({ id: 'f1', name, mimeType, size: 2048 }, 'tok');
+
+  it.each([
+    [
+      'Deck.pptx',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      'PPTX · Presentation',
+      'i-slides',
+    ],
+    ['index.ts', 'video/mp2t', 'TS · Code', 'i-code'],
+    ['comp.psd', 'application/octet-stream', 'PSD · Design file', 'i-image'],
+    ['.txt', 'text/plain', 'Text', 'i-doc'],
+  ])('describes %s by its extension first', (name, mimeType, label, iconId) => {
+    const html = render(name, mimeType);
+    expect(html).toContain(`2.0 KB · ${label}`);
+    expect(html).toContain(`href="#${iconId}"`);
+  });
+});
 
 describe('renderErrorPage', () => {
   function render(status, title, message) {
