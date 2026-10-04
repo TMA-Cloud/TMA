@@ -4,8 +4,8 @@ import { logger } from '../config/logger.js';
 /**
  * Upsert a client heartbeat
  * Identity precedence:
- * 1) Stable clientId (new clients) so each desktop install is unique
- * 2) sessionId (compatibility with older clients)
+ * 1) Stable clientId, so each desktop install is one row across logins
+ * 2) The signed-in session: web presence, or a desktop app with no storage
  * 3) fallback "no-session"
  */
 async function upsertClientHeartbeat({ userId, clientId, sessionId, appVersion, platform, userAgent, ipAddress }) {

@@ -12,7 +12,7 @@ import { sendError, sendSuccess } from '../../utils/response.js';
  */
 async function clientHeartbeat(req, res) {
   try {
-    const { appVersion, platform, sessionId, clientId } = req.body;
+    const { appVersion, platform, clientId } = req.body;
     if (!appVersion || typeof appVersion !== 'string') {
       return sendError(res, 400, 'appVersion is required');
     }
@@ -20,7 +20,7 @@ async function clientHeartbeat(req, res) {
     await upsertClientHeartbeat({
       userId: req.userId,
       clientId: typeof clientId === 'string' && clientId.trim() ? clientId.trim() : null,
-      sessionId: sessionId || req.sessionId || null,
+      sessionId: req.sessionId || null,
       appVersion,
       platform: platform || null,
       userAgent: req.get('User-Agent') || null,
