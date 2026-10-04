@@ -4,6 +4,7 @@ import { useToast } from '../../hooks/useToast';
 import { formatBytes } from '../../utils/storageUtils';
 import { type FileItem, type FolderInfo, useApp } from '../../contexts/AppContext';
 import { describeShareTimeRemaining, getDisplayFileName } from '../../utils/fileUtils';
+import { getFileTypeLabel } from '../../utils/fileTypeLabel';
 
 interface FileInfoModalProps {
   isOpen: boolean;
@@ -112,8 +113,10 @@ export const FileInfoModal: React.FC<FileInfoModalProps> = ({ isOpen, onClose, f
           <div className="grid grid-cols-2 gap-4">
             <div>
               <p className="font-semibold">Type</p>
-              <p className="mt-0.5 capitalize">
-                {String(effectiveItem.type || '').toLowerCase() === 'folder' ? 'Folder' : 'File'}
+              <p className="mt-0.5">
+                {String(effectiveItem.type || '').toLowerCase() === 'folder'
+                  ? 'Folder'
+                  : getFileTypeLabel(effectiveItem.name, effectiveItem.mimeType)}
               </p>
             </div>
             <div>
