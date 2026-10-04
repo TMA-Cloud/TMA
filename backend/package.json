@@ -1,7 +1,7 @@
 {
   "name": "tma-cloud-backend",
   "private": true,
-  "version": "3.1.4",
+  "version": "3.1.5",
   "description": "Backend for TMA Cloud",
   "main": "server.js",
   "scripts": {
@@ -39,7 +39,7 @@
     "storage",
     "backend"
   ],
-  "author": "ZIDAN44",
+  "author": "TMA Cloud",
   "license": "MIT",
   "type": "module",
   "engines": {

@@ -1,14 +1,14 @@
 {
   "name": "tma-cloud-frontend",
   "private": true,
-  "version": "3.1.4",
+  "version": "3.1.5",
   "description": "Frontend for TMA Cloud",
   "keywords": [
     "tma-cloud",
     "storage",
     "frontend"
   ],
-  "author": "ZIDAN44",
+  "author": "TMA Cloud",
   "license": "MIT",
   "type": "module",
   "engines": {
