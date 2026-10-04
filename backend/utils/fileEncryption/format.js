@@ -274,7 +274,6 @@ export {
   // Segment layout math
   totalSegments,
   plaintextOffsetAt,
-  plaintextSegmentLength,
   ciphertextOffsetAt,
   ciphertextSegmentLength,
   segmentIndexForOffset,

@@ -77,20 +77,9 @@ async function makeFile(
   return rows[0];
 }
 
-/** Move a row to the trash, as the delete endpoint would. */
-async function trashFile(fileId) {
-  await pool.query('UPDATE files SET deleted_at = NOW() WHERE id = $1', [fileId]);
-}
-
 /** Read a file row straight from the database. */
 async function readFileRow(fileId) {
   const { rows } = await pool.query('SELECT * FROM files WHERE id = $1', [fileId]);
-  return rows[0];
-}
-
-/** Read a user row straight from the database. */
-async function readUserRow(userId) {
-  const { rows } = await pool.query('SELECT * FROM users WHERE id = $1', [userId]);
   return rows[0];
 }
 
@@ -100,4 +89,4 @@ async function countRows(table, where = '', params = []) {
   return rows[0].c;
 }
 
-export { makeOwner, makeSubUser, makeFolder, makeFile, trashFile, readFileRow, readUserRow, countRows, unique };
+export { makeOwner, makeSubUser, makeFolder, makeFile, readFileRow, countRows };

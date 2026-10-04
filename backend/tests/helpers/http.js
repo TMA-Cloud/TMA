@@ -141,17 +141,6 @@ function mockNext() {
 }
 
 /**
- * Run a single middleware against fake req/res and resolve once it either
- * calls next() or writes a response.
- * @returns {Promise<{req, res, next}>}
- */
-async function runMiddleware(middleware, req = mockReq(), res = mockRes()) {
-  const next = mockNext();
-  await middleware(req, res, next);
-  return { req, res, next };
-}
-
-/**
  * Run a callback inside the request context.
  *
  * Anything that calls setUserId/setAccountContext (the auth middleware, the
@@ -195,4 +184,4 @@ function fakeAuth({ userId = 'user000000000001', ownerId = null, isSubUser = fal
   };
 }
 
-export { mockReq, mockRes, mockNext, runMiddleware, buildApp, fakeAuth, withRequestContext };
+export { mockReq, mockRes, mockNext, buildApp, fakeAuth, withRequestContext };

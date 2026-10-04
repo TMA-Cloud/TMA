@@ -276,4 +276,4 @@ async function streamUnencryptedFile(res, storageKey, filename, mimeType, attach
   stream.pipe(res);
 }
 
-export { validateAndResolveFile, streamEncryptedFile, streamUnencryptedFile, contentDispositionValue, parseRange };
+export { validateAndResolveFile, streamEncryptedFile, streamUnencryptedFile, contentDispositionValue };

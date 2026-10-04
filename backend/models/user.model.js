@@ -7,7 +7,7 @@
  * - user.auth.model.js - Authentication/session operations (getUserTokenVersion, invalidateAllSessions)
  * - user.storage.model.js - Storage operations (getUserStorageUsage)
  * - user.admin.model.js - Admin operations (isFirstUser, getSignupEnabled, setSignupEnabled, getTotalUserCount, getAllUsersBasic, handleFirstUserSetup)
- * - user.mfa.model.js - MFA operations (getMfaStatus, enableMfa, disableMfa, getMfaSecret)
+ * - user.mfa.model.js - MFA operations (getMfaStatus, enableMfa, disableMfa)
  * - user.subuser.model.js - Sub-user operations (getAccountContext, createSubUser, listSubUsers, updateSubUserPermissions, deleteSubUser)
  */
 

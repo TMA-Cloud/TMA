@@ -66,4 +66,4 @@ function setAuthCookieAndRespond(res, token, data, status = 200) {
   res.status(status).json(data);
 }
 
-export { extractRequestInfo, createSessionAndToken, setAuthCookieAndRespond };
+export { createSessionAndToken, setAuthCookieAndRespond };

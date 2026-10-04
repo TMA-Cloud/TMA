@@ -134,4 +134,4 @@ async function createAndLogin(options = {}) {
   return { client: c, user: response.body.user, email: owner.email, password: owner.password };
 }
 
-export { api, buildApi, client, signUpAndLogin, loginAs, createAndLogin, ensureOwner, waitForFileJob };
+export { api, client, signUpAndLogin, loginAs, createAndLogin, ensureOwner, waitForFileJob };

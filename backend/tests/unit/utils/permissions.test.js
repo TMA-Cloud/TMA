@@ -2,10 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import {
   ALL_PERMISSIONS,
-  FULL_ACCESS_PERMISSIONS,
   PERMISSIONS,
   PERMISSION_CATALOG,
-  VIEW_ONLY_PERMISSIONS,
   arePermissionsValid,
   hasPermission,
   normalizePermissions,
@@ -39,23 +37,6 @@ describe('permission catalog', () => {
     for (const key of ALL_PERMISSIONS) {
       expect(key).toMatch(/^[a-z]+\.[a-z]+$/);
     }
-  });
-});
-
-describe('presets', () => {
-  it('full access grants everything', () => {
-    expect(new Set(FULL_ACCESS_PERMISSIONS)).toEqual(new Set(ALL_PERMISSIONS));
-  });
-
-  it('full access is a copy, so mutating it cannot corrupt the catalog', () => {
-    const before = [...ALL_PERMISSIONS];
-    const preset = [...FULL_ACCESS_PERMISSIONS];
-    preset.push('files.nonsense');
-    expect(ALL_PERMISSIONS).toEqual(before);
-  });
-
-  it('view only grants download and nothing else', () => {
-    expect(VIEW_ONLY_PERMISSIONS).toEqual([PERMISSIONS.DOWNLOAD]);
   });
 });
 

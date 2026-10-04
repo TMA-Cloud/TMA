@@ -1,9 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
-  validateBoolean,
   validateClientMtime,
-  validateEmail,
   validateFileName,
   validateFileUpload,
   validateId,
@@ -12,81 +10,7 @@ import {
   validateSearchQuery,
   validateSortBy,
   validateSortOrder,
-  validateString,
-  validateToken,
 } from '../../../utils/validation.js';
-
-describe('validateString', () => {
-  it('returns the trimmed string for ordinary input', () => {
-    expect(validateString('  hello  ')).toBe('hello');
-  });
-
-  it('rejects non-strings', () => {
-    for (const input of [null, undefined, 42, {}, [], true]) {
-      expect(validateString(input)).toBeNull();
-    }
-  });
-
-  it('rejects input longer than the limit', () => {
-    expect(validateString('a'.repeat(1001))).toBeNull();
-    expect(validateString('a'.repeat(1000))).toBe('a'.repeat(1000));
-  });
-
-  it('honours a custom max length', () => {
-    expect(validateString('abcdef', 5)).toBeNull();
-    expect(validateString('abcde', 5)).toBe('abcde');
-  });
-
-  it('strips null bytes and control characters', () => {
-    expect(validateString('he\x00llo')).toBe('hello');
-    expect(validateString('he\x07llo')).toBe('hello');
-    expect(validateString('he\x7Fllo')).toBe('hello');
-  });
-
-  it('keeps tabs, newlines and carriage returns', () => {
-    expect(validateString('a\tb')).toBe('a\tb');
-    expect(validateString('a\nb')).toBe('a\nb');
-    expect(validateString('a\rb')).toBe('a\rb');
-  });
-
-  it('returns null when stripping leaves nothing', () => {
-    expect(validateString('\x00\x01\x02')).toBeNull();
-    expect(validateString('   ')).toBeNull();
-    expect(validateString('')).toBeNull();
-  });
-});
-
-describe('validateEmail', () => {
-  it.each(['user@example.com', 'first.last@sub.domain.co.uk', 'a+tag@b.io', "o'brien@example.org"])(
-    'accepts %s',
-    email => {
-      expect(validateEmail(email)).toBe(true);
-    }
-  );
-
-  it.each([
-    ['missing @', 'userexample.com'],
-    ['missing domain dot', 'user@example'],
-    ['leading space', ' user@example.com'],
-    ['inner space', 'user name@example.com'],
-    ['two @', 'a@b@c.com'],
-    ['empty', ''],
-  ])('rejects %s', (_label, email) => {
-    expect(validateEmail(email)).toBe(false);
-  });
-
-  it('rejects non-strings and nullish values', () => {
-    for (const input of [null, undefined, 42, {}, []]) {
-      expect(validateEmail(input)).toBe(false);
-    }
-  });
-
-  it('rejects addresses longer than 255 characters', () => {
-    const long = `${'a'.repeat(250)}@example.com`;
-    expect(long.length).toBeGreaterThan(255);
-    expect(validateEmail(long)).toBe(false);
-  });
-});
 
 describe('validateFileName', () => {
   it.each(['report.pdf', 'my file.txt', 'résumé.docx', '報告書.xlsx', 'file..name.pdf', 'a', '.hidden'])(
@@ -308,27 +232,6 @@ describe('validateLimit', () => {
   });
 });
 
-describe('validateBoolean', () => {
-  it('passes real booleans through', () => {
-    expect(validateBoolean(true)).toBe(true);
-    expect(validateBoolean(false)).toBe(false);
-  });
-
-  it('parses string booleans case-insensitively', () => {
-    expect(validateBoolean('true')).toBe(true);
-    expect(validateBoolean('TRUE')).toBe(true);
-    expect(validateBoolean('False')).toBe(false);
-  });
-
-  it('rejects everything else', () => {
-    expect(validateBoolean('yes')).toBeNull();
-    expect(validateBoolean(1)).toBeNull();
-    expect(validateBoolean(0)).toBeNull();
-    expect(validateBoolean(null)).toBeNull();
-    expect(validateBoolean('')).toBeNull();
-  });
-});
-
 describe('validateClientMtime', () => {
   const now = new Date('2026-08-15T12:00:00.000Z');
 
@@ -373,20 +276,6 @@ describe('validateClientMtime', () => {
     expect(validateClientMtime(undefined, now)).toBeNull();
     expect(validateClientMtime(null, now)).toBeNull();
     expect(validateClientMtime('', now)).toBeNull();
-  });
-});
-
-describe('validateToken', () => {
-  it('accepts a 16-character alphanumeric share token', () => {
-    expect(validateToken('AbC123xyz789QWer')).toBe('AbC123xyz789QWer');
-  });
-
-  it('rejects wrong lengths and non-alphanumeric characters', () => {
-    expect(validateToken('short')).toBeNull();
-    expect(validateToken('AbC123xyz789QWer1')).toBeNull();
-    expect(validateToken('AbC123xyz789QW-r')).toBeNull();
-    expect(validateToken('../../etc/passwd')).toBeNull();
-    expect(validateToken(null)).toBeNull();
   });
 });
 

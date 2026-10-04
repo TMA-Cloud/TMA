@@ -213,13 +213,4 @@ function resetAccessTracker() {
   flushing = false;
 }
 
-export {
-  recordAccess,
-  flushAccessTimes,
-  startAccessTracker,
-  shutdownAccessTracker,
-  resetAccessTracker,
-  WINDOW_MS,
-  MAX_PENDING,
-  CHUNK_SIZE,
-};
+export { recordAccess, flushAccessTimes, startAccessTracker, shutdownAccessTracker, resetAccessTracker, CHUNK_SIZE };

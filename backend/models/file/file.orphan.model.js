@@ -368,12 +368,4 @@ async function deleteOrphans({ storageKeys = [], fileIds = [], graceMinutes } = 
   };
 }
 
-export {
-  scanOrphans,
-  deleteOrphans,
-  normalizeGraceMinutes,
-  DEFAULT_GRACE_MINUTES,
-  MIN_GRACE_MINUTES,
-  MAX_GRACE_MINUTES,
-  MAX_DELETE_BATCH,
-};
+export { scanOrphans, deleteOrphans, DEFAULT_GRACE_MINUTES };

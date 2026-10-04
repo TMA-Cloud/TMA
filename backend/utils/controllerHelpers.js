@@ -3,7 +3,7 @@
  * Common patterns used across controllers
  */
 
-import { validateId, validateIdArray } from './validation.js';
+import { validateId } from './validation.js';
 import { logAuditEvent } from '../services/auditLogger.js';
 import { logger } from '../config/logger.js';
 
@@ -27,22 +27,6 @@ function validateParentId(req, source = 'body') {
   }
 
   return { valid: true, parentId: validatedId, error: null };
-}
-
-/**
- * Validate file/folder IDs from request body
- * @param {Object} req - Express request object
- * @returns {Object} { valid: boolean, ids: string[]|null, error: string|null }
- */
-function validateFileIds(req) {
-  const { ids } = req.body;
-  const validatedIds = validateIdArray(ids);
-
-  if (!validatedIds) {
-    return { valid: false, ids: null, error: 'Invalid ids array' };
-  }
-
-  return { valid: true, ids: validatedIds, error: null };
 }
 
 /**
@@ -171,11 +155,4 @@ async function streamBulkProgress(res, { ids, processChunk, finalize, chunkSize 
   }
 }
 
-export {
-  validateParentId,
-  validateFileIds,
-  validateSingleId,
-  logBulkFileAudit,
-  wantsProgressStream,
-  streamBulkProgress,
-};
+export { validateParentId, validateSingleId, logBulkFileAudit, wantsProgressStream, streamBulkProgress };

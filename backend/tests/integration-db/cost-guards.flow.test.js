@@ -2,10 +2,10 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import pool from '../../config/db.js';
 import { createFileFromStreamedUpload } from '../../models/file/file.crud.model.js';
-import { getFolderTree } from '../../models/file/file.metadata.model.js';
 import { copyFiles, moveFiles } from '../../models/file/file.operations.model.js';
 import { getFolderContentsByShare, upsertShareRoots } from '../../models/share.model.js';
 import { scanOrphans } from '../../models/file/file.orphan.model.js';
+import { countFileTree } from '../../models/file/file.trash.model.js';
 import { getAllUsersBasic } from '../../models/user/user.admin.users.model.js';
 import { getUserStorageUsage } from '../../models/user/user.storage.model.js';
 import { releaseStorageReservation, reserveStorage } from '../../services/storageReservations.js';
@@ -77,8 +77,8 @@ describe('cost and hierarchy guards', () => {
     );
     const copied = await copyFiles(['copy-root'], null, OWNER);
     expect(copied).toHaveLength(1);
-    const descendants = await getFolderTree(copied[0], OWNER);
-    expect(descendants.map(row => row.name).sort()).toEqual(['Child', 'Root (1)']);
+    const descendants = await pool.query('SELECT name FROM files WHERE id = $1 OR parent_id = $1', [copied[0]]);
+    expect(descendants.rows.map(row => row.name).sort()).toEqual(['Child', 'Root (1)']);
   });
 
   it('creates selected share subtrees in one batch and keyset-paginates their public listing', async () => {
@@ -112,9 +112,7 @@ describe('cost and hierarchy guards', () => {
     await expect(moveFiles(['folder-a'], 'folder-b', OWNER)).rejects.toThrow(/descendants/);
 
     await pool.query("UPDATE files SET parent_id = 'folder-b' WHERE id = 'folder-a'");
-    const tree = await getFolderTree('folder-a', OWNER);
-    expect(new Set(tree.map(row => row.id))).toEqual(new Set(['folder-a', 'folder-b']));
-    expect(tree).toHaveLength(2);
+    expect(await countFileTree(['folder-a'], OWNER)).toBe(2);
   });
 
   it('paginates complete owner accounts and reads their counters', async () => {

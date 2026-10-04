@@ -5,31 +5,6 @@ import { logger } from '../config/logger.js';
  */
 
 /**
- * Validates and sanitizes a string input
- * @param {string} input - Input string
- * @param {number} maxLength - Maximum allowed length
- * @returns {string|null} Sanitized string or null if invalid
- */
-function validateString(input, maxLength = 1000) {
-  if (typeof input !== 'string') return null;
-  if (input.length > maxLength) return null;
-  // Remove null bytes and control characters (except newlines and tabs)
-  // eslint-disable-next-line no-control-regex -- Intentional for security validation
-  return input.replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, '').trim() || null;
-}
-
-/**
- * Validates an email address
- * @param {string} email - Email to validate
- * @returns {boolean} True if valid email
- */
-function validateEmail(email) {
-  if (!email || typeof email !== 'string') return false;
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return emailRegex.test(email) && email.length <= 255;
-}
-
-/**
  * Validates a file/folder name
  * @param {string} name - Name to validate
  * @returns {boolean} True if valid name
@@ -141,21 +116,6 @@ function validateLimit(limit, maxLimit = 1000) {
 }
 
 /**
- * Validates a boolean value
- * @param {any} value - Value to validate
- * @returns {boolean|null} Validated boolean or null if invalid
- */
-function validateBoolean(value) {
-  if (typeof value === 'boolean') return value;
-  if (typeof value === 'string') {
-    const lower = value.toLowerCase();
-    if (lower === 'true') return true;
-    if (lower === 'false') return false;
-  }
-  return null;
-}
-
-/**
  * Earliest modification time an upload may claim. Chosen to match the floor the
  * ZIP format has always imposed, which in practice is the oldest timestamp any
  * real-world file carries; anything below it is a broken clock, not history.
@@ -183,18 +143,6 @@ function validateClientMtime(value, now = new Date()) {
   if (!Number.isFinite(ms) || !Number.isInteger(ms)) return null;
   if (ms < MIN_CLIENT_MTIME_MS) return null;
   return ms > now.getTime() ? now : new Date(ms);
-}
-
-/**
- * Validates a token (share link token)
- * @param {any} token - Token to validate
- * @returns {string|null} Validated token or null if invalid
- */
-function validateToken(token) {
-  if (typeof token !== 'string') return null;
-  // Share tokens are 16 character alphanumeric (~93 bits entropy)
-  const tokenRegex = /^[a-zA-Z0-9]{16}$/;
-  return tokenRegex.test(token) ? token : null;
 }
 
 /**
@@ -287,8 +235,6 @@ function validateFileUpload(mimeType, filename, { suppressSpoofingWarning = fals
 }
 
 export {
-  validateString,
-  validateEmail,
   validateFileName,
   validateIdArray,
   validateId,
@@ -296,8 +242,6 @@ export {
   validateSortOrder,
   validateSearchQuery,
   validateLimit,
-  validateBoolean,
-  validateToken,
   validateFileUpload,
   validateClientMtime,
 };

@@ -33,8 +33,6 @@ const DEK_LENGTH = 32; // 256-bit per-file data key
 const WRAP_IV_LENGTH = 12; // AES-GCM nonce for the wrap
 const WRAP_TAG_LENGTH = 16;
 const WRAPPED_DEK_LENGTH = WRAP_IV_LENGTH + DEK_LENGTH + WRAP_TAG_LENGTH; // 60
-const KEK_VERSION_ENV_RE = /^FILE_ENCRYPTION_KEY_V(\d+)$/;
-
 /** Version number of the primary (current) KEK. */
 function primaryKekVersion() {
   const raw = parseInt(process.env.FILE_KEK_VERSION || '1', 10);
@@ -154,7 +152,6 @@ function resolveIkm(row) {
 export {
   DEK_LENGTH,
   WRAPPED_DEK_LENGTH,
-  KEK_VERSION_ENV_RE,
   primaryKekVersion,
   kekForVersion,
   generateDek,

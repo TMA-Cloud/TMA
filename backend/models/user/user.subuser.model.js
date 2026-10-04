@@ -225,22 +225,4 @@ async function deleteSubUser(ownerId, subUserId) {
   return deleted;
 }
 
-/**
- * Count an owner's sub-users.
- * @param {string} ownerId - Owner user ID
- * @returns {Promise<number>}
- */
-async function countSubUsers(ownerId) {
-  const result = await pool.query('SELECT COUNT(*)::int AS count FROM users WHERE parent_user_id = $1', [ownerId]);
-  return result.rows[0]?.count || 0;
-}
-
-export {
-  getAccountContext,
-  listSubUsers,
-  getSubUser,
-  createSubUser,
-  updateSubUserPermissions,
-  deleteSubUser,
-  countSubUsers,
-};
+export { getAccountContext, listSubUsers, getSubUser, createSubUser, updateSubUserPermissions, deleteSubUser };

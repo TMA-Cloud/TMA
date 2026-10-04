@@ -18,30 +18,6 @@ import {
   DEFAULT_TTL,
 } from '../utils/cache.js';
 
-async function createShareLink(fileId, userId, fileIds = [fileId], expiresAt = null) {
-  const id = generateId(16);
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    await client.query('INSERT INTO share_links(id, file_id, user_id, expires_at) VALUES($1,$2,$3,$4)', [
-      id,
-      fileId,
-      userId,
-      expiresAt,
-    ]);
-    await client.query('INSERT INTO share_link_files(share_id, file_id) SELECT $1, unnest($2::text[])', [id, fileIds]);
-    await client.query('COMMIT');
-
-    await invalidateShareCache(id, userId);
-  } catch (err) {
-    await client.query('ROLLBACK');
-    throw err;
-  } finally {
-    client.release();
-  }
-  return id;
-}
-
 /** Create/update every selected root and populate all memberships in one recursive statement. */
 async function upsertShareRoots(rootIds, userId, expiresAt) {
   if (!Array.isArray(rootIds) || rootIds.length === 0) return { tokens: {}, counts: {}, created: [] };
@@ -130,22 +106,6 @@ async function upsertShareRoots(rootIds, userId, expiresAt) {
   }
 }
 
-async function getShareLink(fileId, userId) {
-  const cacheKey = cacheKeys.shareLink(fileId, userId);
-  const cached = await getCache(cacheKey);
-  if (cached !== null) {
-    return cached;
-  }
-
-  const res = await pool.query('SELECT id FROM share_links WHERE file_id = $1 AND user_id = $2', [fileId, userId]);
-  const shareId = res.rows[0]?.id || null;
-
-  // Cache the result
-  await setCache(cacheKey, shareId, DEFAULT_TTL);
-
-  return shareId;
-}
-
 /**
  * Get share links for multiple files (bulk operation)
  * Returns a map: { fileId: shareId | null }
@@ -195,32 +155,6 @@ async function getShareLinks(fileIds, userId) {
 
   // Merge cached and database results
   return { ...cacheResults, ...dbResults };
-}
-
-async function updateShareExpiry(shareId, expiresAt) {
-  await pool.query('UPDATE share_links SET expires_at = $1 WHERE id = $2', [expiresAt, shareId]);
-  await invalidateShareCache(shareId);
-}
-
-async function addFilesToShare(shareId, fileIds) {
-  if (!fileIds || fileIds.length === 0) return;
-  await pool.query(
-    'INSERT INTO share_link_files(share_id, file_id) SELECT $1, unnest($2::text[]) ON CONFLICT DO NOTHING',
-    [shareId, fileIds]
-  );
-
-  // Invalidate share cache when files are added
-  await invalidateShareCache(shareId);
-}
-
-async function removeFilesFromShares(fileIds, userId) {
-  if (!fileIds || fileIds.length === 0) return;
-  await pool.query(
-    `DELETE FROM share_link_files
-     WHERE file_id = ANY($1::text[])
-       AND share_id IN (SELECT id FROM share_links WHERE user_id = $2)`,
-    [fileIds, userId]
-  );
 }
 
 /** Remove selected trees from shares without returning every descendant to Node. */
@@ -349,53 +283,6 @@ async function linkItemsToParentShares(rootIds, userId) {
   }
 }
 
-async function deleteShareLink(fileId, userId) {
-  // Get share ID before deleting for cache invalidation
-  const shareResult = await pool.query('SELECT id FROM share_links WHERE file_id = $1 AND user_id = $2', [
-    fileId,
-    userId,
-  ]);
-  const shareId = shareResult.rows[0]?.id;
-
-  await pool.query('DELETE FROM share_links WHERE file_id = $1 AND user_id = $2', [fileId, userId]);
-
-  // Invalidate share cache
-  if (shareId) {
-    await invalidateShareCache(shareId, userId);
-  }
-  await deleteCache(cacheKeys.shareLink(fileId, userId));
-}
-
-/**
- * Delete share links for multiple files (bulk operation)
- */
-async function deleteShareLinks(fileIds, userId) {
-  if (!fileIds || fileIds.length === 0) return;
-
-  // Get share IDs before deleting for cache invalidation
-  const shareResult = await pool.query(
-    'SELECT id, file_id FROM share_links WHERE file_id = ANY($1::text[]) AND user_id = $2',
-    [fileIds, userId]
-  );
-
-  const shareIds = shareResult.rows.map(r => r.id);
-  const fileIdToShareId = {};
-  for (const row of shareResult.rows) {
-    fileIdToShareId[row.file_id] = row.id;
-  }
-
-  // Delete all share links in one query
-  await pool.query('DELETE FROM share_links WHERE file_id = ANY($1::text[]) AND user_id = $2', [fileIds, userId]);
-
-  // Invalidate share cache for all affected shares
-  for (const shareId of shareIds) {
-    await invalidateShareCache(shareId, userId);
-  }
-
-  // Delete cache for all files
-  await deleteCaches(fileIds.map(fileId => cacheKeys.shareLink(fileId, userId)));
-}
-
 /**
  * Look up a share link by token.
  * Returns:
@@ -518,38 +405,6 @@ async function getSharedFolderPath(token, folderId) {
   return res.rows.reverse();
 }
 
-/**
- * Share ids whose subtree contains this folder — i.e. shares the folder is a
- * member of, whether it is the shared root or a nested subfolder. Used to link
- * newly added items into the same share(s) as their parent folder.
- */
-async function getShareIdsContainingFolder(folderId, userId) {
-  if (!folderId) return [];
-  const res = await pool.query(
-    `SELECT DISTINCT slf.share_id
-     FROM share_link_files slf
-     JOIN share_links sl ON sl.id = slf.share_id
-     WHERE slf.file_id = $1 AND sl.user_id = $2`,
-    [folderId, userId]
-  );
-  return res.rows.map(r => r.share_id);
-}
-
-async function isFileShared(token, fileId) {
-  const cacheKey = cacheKeys.fileShared(token, fileId);
-  const cached = await getCache(cacheKey);
-  if (cached !== null) {
-    return cached;
-  }
-
-  const res = await pool.query('SELECT 1 FROM share_link_files WHERE share_id = $1 AND file_id = $2', [token, fileId]);
-  const isShared = res.rowCount > 0;
-
-  await setCache(cacheKey, isShared, DEFAULT_TTL);
-
-  return isShared;
-}
-
 /** Stream a shared subtree with bounded memory and precomputed ZIP paths. */
 async function* streamSharedArchiveEntries(token, rootId, batchSize = 200) {
   yield* streamCursorRows(
@@ -644,23 +499,14 @@ async function cleanupExpiredShareLinks({ batchSize = 500, maxBatches = 100 } = 
 }
 
 export {
-  createShareLink,
   upsertShareRoots,
-  getShareLink,
   getShareLinks,
-  updateShareExpiry,
-  addFilesToShare,
-  removeFilesFromShares,
   unshareRoots,
   linkItemsToParentShares,
   parentHasShares,
-  deleteShareLink,
-  deleteShareLinks,
   getFileByToken,
   getFolderContentsByShare,
   getSharedFolderPath,
-  getShareIdsContainingFolder,
-  isFileShared,
   streamSharedArchiveEntries,
   cleanupExpiredShareLinks,
 };

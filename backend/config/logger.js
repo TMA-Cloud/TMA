@@ -353,4 +353,4 @@ function createRequestLogger(bindings = {}) {
   return logger.child(bindings);
 }
 
-export { logger, httpLogger, createRequestLogger, maskSecret, maskJWT, maskCookie, maskAuthorization };
+export { logger, httpLogger, createRequestLogger };

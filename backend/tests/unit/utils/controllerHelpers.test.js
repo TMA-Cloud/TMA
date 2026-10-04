@@ -8,7 +8,6 @@ const { logAuditEvent } = await import('../../../services/auditLogger.js');
 import {
   logBulkFileAudit,
   streamBulkProgress,
-  validateFileIds,
   validateParentId,
   validateSingleId,
   wantsProgressStream,
@@ -76,28 +75,6 @@ describe('validateParentId', () => {
     const req = { body: { parentId: ID }, query: { parentId: ID2 } };
     expect(validateParentId(req, 'body').parentId).toBe(ID);
     expect(validateParentId(req).parentId).toBe(ID);
-  });
-});
-
-describe('validateFileIds', () => {
-  it('returns a validated list', () => {
-    expect(validateFileIds({ body: { ids: [ID, ID2] } })).toEqual({ valid: true, ids: [ID, ID2], error: null });
-  });
-
-  it('rejects an empty list', () => {
-    expect(validateFileIds({ body: { ids: [] } })).toEqual({ valid: false, ids: null, error: 'Invalid ids array' });
-  });
-
-  it('rejects a missing ids field', () => {
-    expect(validateFileIds({ body: {} }).valid).toBe(false);
-  });
-
-  it('rejects the whole batch if any id is malformed', () => {
-    expect(validateFileIds({ body: { ids: [ID, '../../etc/passwd'] } }).valid).toBe(false);
-  });
-
-  it('rejects a single id sent outside an array', () => {
-    expect(validateFileIds({ body: { ids: ID } }).valid).toBe(false);
   });
 });
 

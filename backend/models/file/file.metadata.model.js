@@ -59,29 +59,6 @@ async function getStarredFiles(userId, sortBy = 'modified', order = 'DESC', page
 }
 
 /**
- * Set shared status for files (recursively)
- */
-async function setShared(ids, shared, userId) {
-  const allIds = await getRecursiveIds(ids, userId);
-  if (allIds.length === 0) return [];
-  const res = await pool.query(
-    `UPDATE files
-     SET shared = $1,
-         shared_at = CASE WHEN $1 THEN COALESCE(shared_at, NOW()) ELSE NULL END
-     WHERE id = ANY($2::text[]) AND user_id = $3
-     RETURNING id`,
-    [shared, allIds, userId]
-  );
-
-  // Invalidate cache (shared status affects file listings and stats)
-  await invalidateAllFileCaches(userId);
-  // Invalidate shared files cache
-  await deleteCachePattern(`files:${userId}:shared:*`);
-
-  return res.rows.map(r => r.id);
-}
-
-/**
  * Get shared files (top-level only), including share link expiry info
  */
 async function getSharedFiles(userId, sortBy = 'modified', order = 'DESC', pageOptions = null) {
@@ -123,41 +100,6 @@ async function getSharedFiles(userId, sortBy = 'modified', order = 'DESC', pageO
   await setCache(cacheKey, response, 60);
 
   return response;
-}
-
-/**
- * Get all recursive IDs for files (including children)
- */
-async function getRecursiveIds(ids, userId) {
-  const res = await pool.query(
-    `WITH RECURSIVE sub(id, visited) AS (
-       SELECT id, ARRAY[id] FROM files WHERE id = ANY($1::text[]) AND user_id = $2
-       UNION ALL
-       SELECT f.id, s.visited || f.id FROM files f JOIN sub s ON f.parent_id = s.id
-       WHERE f.user_id = $2 AND NOT f.id = ANY(s.visited)
-     )
-     SELECT id FROM sub`,
-    [ids, userId]
-  );
-  return res.rows.map(r => r.id);
-}
-
-/**
- * Get folder tree (all files and folders recursively)
- */
-async function getFolderTree(folderId, userId) {
-  const res = await pool.query(
-    `WITH RECURSIVE sub(id, name, type, path, size, parent_id, visited) AS (
-       SELECT id, name, type, path, size, parent_id, ARRAY[id] FROM files WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL
-       UNION ALL
-       SELECT f.id, f.name, f.type, f.path, f.size, f.parent_id, s.visited || f.id FROM files f
-       JOIN sub s ON f.parent_id = s.id
-       WHERE f.user_id = $2 AND f.deleted_at IS NULL AND NOT f.id = ANY(s.visited)
-     )
-     SELECT id, name, type, path, size, parent_id FROM sub`,
-    [folderId, userId]
-  );
-  return res.rows;
 }
 
 /** Aggregate folder info in PostgreSQL so the API retains only one row. */
@@ -206,13 +148,4 @@ async function* streamArchiveEntries(rootIds, userId, batchSize = 200) {
   );
 }
 
-export {
-  setStarred,
-  getStarredFiles,
-  setShared,
-  getSharedFiles,
-  getRecursiveIds,
-  getFolderTree,
-  getFolderTreeStats,
-  streamArchiveEntries,
-};
+export { setStarred, getStarredFiles, getSharedFiles, getFolderTreeStats, streamArchiveEntries };

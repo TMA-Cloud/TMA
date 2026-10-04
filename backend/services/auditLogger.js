@@ -11,11 +11,9 @@ export { initializeAuditQueue, shutdownAuditQueue, getBoss, logAuditEvent } from
 export {
   fileUploaded,
   fileDownloaded,
-  fileDeleted,
   loginSuccess,
   loginFailure,
   userSignup,
-  shareCreated,
   shareAccessed,
   filesUploadedBulk,
 } from './auditLogger/events.js';

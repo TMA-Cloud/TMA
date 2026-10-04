@@ -17,7 +17,6 @@ import {
   UploadPartCopyCommand,
 } from '@aws-sdk/client-s3';
 import { Upload } from '@aws-sdk/lib-storage';
-import fs from 'fs';
 
 import { logger } from '../config/logger.js';
 import { s3 as s3Config } from '../config/storage.js';
@@ -90,18 +89,6 @@ async function getReadStream(key, range) {
   }
   const response = await client.send(new GetObjectCommand(params));
   return response.Body;
-}
-
-/**
- * Upload from a local file path (e.g. after encryption)
- * @param {string} key - Object key
- * @param {string} localPath - Path to local file
- * @returns {Promise<void>}
- */
-async function putFromPath(key, localPath) {
-  const { size } = await fs.promises.stat(localPath);
-  const body = fs.createReadStream(localPath);
-  await putStream(key, body, size);
 }
 
 /**
@@ -285,56 +272,9 @@ async function copyObject(sourceKey, destKey, knownSourceSize) {
 }
 
 /**
- * List all object keys in the bucket (for orphan cleanup).
- * Avoids loading the whole bucket into memory by processing page-by-page.
- * @returns {Promise<string[]>}
- */
-async function listKeys() {
-  const client = getClient();
-  const keys = [];
-  let continuationToken;
-  do {
-    const response = await client.send(
-      new ListObjectsV2Command({
-        Bucket: s3Config.bucket,
-        ContinuationToken: continuationToken,
-        MaxKeys: 1000,
-      })
-    );
-    for (const obj of response.Contents || []) {
-      if (obj.Key) keys.push(obj.Key);
-    }
-    continuationToken = response.IsTruncated ? response.NextContinuationToken : undefined;
-  } while (continuationToken);
-  return keys;
-}
-
-/**
- * List object keys page-by-page (for orphan cleanup at scale; avoids loading all keys into RAM).
- * @param {number} [pageSize=1000]
- * @yields {string[]} One page of keys per iteration
- */
-async function* listKeysPaginated(pageSize = 1000) {
-  const client = getClient();
-  let continuationToken;
-  do {
-    const response = await client.send(
-      new ListObjectsV2Command({
-        Bucket: s3Config.bucket,
-        ContinuationToken: continuationToken,
-        MaxKeys: pageSize,
-      })
-    );
-    const page = (response.Contents || []).map(obj => obj.Key).filter(Boolean);
-    if (page.length > 0) yield page;
-    continuationToken = response.IsTruncated ? response.NextContinuationToken : undefined;
-  } while (continuationToken);
-}
-
-/**
  * List objects page-by-page with their size and last-modified time.
- * Same streaming behaviour as listKeysPaginated, but carries the metadata the
- * orphan scanner needs to tell a stale leftover from a fresh upload.
+ * Streams rather than loading every key into memory, and carries the metadata
+ * the orphan scanner needs to tell a stale leftover from a fresh upload.
  * @param {number} [pageSize=1000]
  * @yields {Array<{ key: string, size: number, lastModified: Date | null }>}
  */
@@ -389,15 +329,12 @@ async function statObject(key) {
 export {
   exists,
   getReadStream,
-  putFromPath,
   putBuffer,
   putStream,
   deleteObject,
   deleteObjects,
   copyObject,
   multipartCopyObject,
-  listKeys,
-  listKeysPaginated,
   listObjectsPaginated,
   statObject,
 };

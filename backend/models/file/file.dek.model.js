@@ -35,4 +35,4 @@ async function resolveIkmForPath(storagePath) {
   return resolveIkm(row || {});
 }
 
-export { getFileDekByPath, resolveIkmForPath };
+export { resolveIkmForPath };

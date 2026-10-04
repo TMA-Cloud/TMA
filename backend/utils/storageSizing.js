@@ -60,7 +60,6 @@ export {
   MAX_MULTIPART_PART_SIZE,
   MAX_PORTABLE_OBJECT_SIZE,
   MAX_SINGLE_REQUEST_BYTES,
-  MIN_MULTIPART_PART_SIZE,
   multipartPartSizeFor,
   requiresMultipart,
 };

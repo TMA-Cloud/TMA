@@ -315,4 +315,4 @@ function renderFilePage(file, token) {
 </body></html>`;
 }
 
-export { escapeHtml, renderErrorPage, renderFolderPage, renderFilePage };
+export { renderErrorPage, renderFolderPage, renderFilePage };

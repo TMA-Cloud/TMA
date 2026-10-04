@@ -294,7 +294,6 @@ async function buildEditorSession(req, file, userId) {
 }
 
 export {
-  BACKEND_URL,
   buildEditorSession,
   getOnlyOfficeConfig,
   isOnlyOfficeSupported,

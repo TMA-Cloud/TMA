@@ -7,7 +7,6 @@
  * scripts, tests) do not move:
  * - fileEncryption/format.js  - wire-format primitives, key derivation, layout math
  * - fileEncryption/streams.js - encrypt/decrypt Transform + Range-aware factories
- * - fileEncryption/fileOps.js - encrypted stream copy helper
  */
 
 export {
@@ -16,7 +15,6 @@ export {
   createDecryptStreamFromStream,
   createRangeDecryptStream,
 } from './fileEncryption/streams.js';
-export { copyEncryptedFileStreams } from './fileEncryption/fileOps.js';
 export {
   // Envelope encryption: per-file wrapped data keys + versioned KEK rotation
   DEK_LENGTH,
@@ -38,8 +36,6 @@ export {
   // Format constants (exported for scripts and tests)
   HEADER_LENGTH,
   TAG_LENGTH,
-  CIPHERTEXT_SEGMENT_SIZE,
-  DERIVED_KEY_LENGTH,
   PLAINTEXT_FIRST_SEGMENT_MAX,
   PLAINTEXT_SEGMENT_MAX,
 } from './fileEncryption/format.js';

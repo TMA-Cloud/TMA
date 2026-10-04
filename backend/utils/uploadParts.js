@@ -94,10 +94,4 @@ function extractFolderSegmentsFromRelativePath(relativePath, fallbackFileName) {
   return isLastFile ? parts.slice(0, -1) : parts;
 }
 
-export {
-  collectUploadParts,
-  extractFolderSegmentsFromRelativePath,
-  metadataForPart,
-  normalizeClientMtimes,
-  normalizeMultipartArray,
-};
+export { collectUploadParts, extractFolderSegmentsFromRelativePath, metadataForPart };

@@ -29,12 +29,8 @@ async function runWithMutex(key, operation) {
   }
 }
 
-const fileOperationLock = async (fileId, operation) => {
-  return runWithMutex(`file:${fileId}`, operation);
-};
-
 const userOperationLock = async (userId, operation) => {
   return runWithMutex(`user:${userId}`, operation);
 };
 
-export { fileOperationLock, userOperationLock };
+export { userOperationLock };

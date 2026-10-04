@@ -105,16 +105,6 @@ async function disableMfa(userId) {
 }
 
 /**
- * Get MFA secret for a user (for verification during setup)
- * @param {string} userId - User ID
- * @returns {Promise<string|null>}
- */
-async function getMfaSecret(userId) {
-  const result = await pool.query('SELECT mfa_secret FROM users WHERE id = $1', [userId]);
-  return result.rows[0]?.mfa_secret || null;
-}
-
-/**
  * Mint plain codes and their hashes. No database access.
  *
  * Hashing stays outside the transaction below: ten bcrypt rounds take about a
@@ -329,7 +319,6 @@ export {
   setMfaSecret,
   enableMfa,
   disableMfa,
-  getMfaSecret,
   consumeMfaTimeStep,
   generateBackupCodes,
   replaceBackupCodes,

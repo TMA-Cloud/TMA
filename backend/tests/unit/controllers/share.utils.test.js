@@ -1,26 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { escapeHtml, renderErrorPage } from '../../../controllers/share/share.utils.js';
+import { renderErrorPage } from '../../../controllers/share/share.utils.js';
 import { mockRes } from '../../helpers/http.js';
-
-describe('escapeHtml', () => {
-  it.each([
-    ['<script>alert(1)</script>', '&lt;script&gt;alert(1)&lt;/script&gt;'],
-    ['a & b', 'a &amp; b'],
-    ['"quoted"', '&quot;quoted&quot;'],
-    ["it's", 'it&#39;s'],
-  ])('escapes %s', (input, expected) => {
-    expect(escapeHtml(input)).toBe(expected);
-  });
-
-  it('leaves ordinary text untouched', () => {
-    expect(escapeHtml('Quarterly report 2024')).toBe('Quarterly report 2024');
-  });
-
-  it('leaves non-ASCII text untouched', () => {
-    expect(escapeHtml('報告書 — résumé')).toBe('報告書 — résumé');
-  });
-});
 
 describe('renderErrorPage', () => {
   function render(status, title, message) {

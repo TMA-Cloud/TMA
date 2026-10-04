@@ -40,8 +40,3 @@ const s3 = {
 const r2PublicUrl = R2_PUBLIC_URL;
 
 export { s3, r2PublicUrl };
-
-export default {
-  s3,
-  r2PublicUrl,
-};

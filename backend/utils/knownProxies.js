@@ -61,4 +61,4 @@ async function resolveKnownProxies(entries, resolveHostname = lookup) {
   return { resolved, failures };
 }
 
-export { MAX_KNOWN_PROXIES, normalizeKnownProxies, resolveKnownProxies };
+export { normalizeKnownProxies, resolveKnownProxies };

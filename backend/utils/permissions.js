@@ -63,12 +63,6 @@ const PERMISSION_CATALOG = [
 
 const ALL_PERMISSIONS = PERMISSION_CATALOG.map(p => p.key);
 
-/** Preset used by the "Full access" button in the UI. */
-const FULL_ACCESS_PERMISSIONS = [...ALL_PERMISSIONS];
-
-/** Preset used by the "View only" button in the UI. */
-const VIEW_ONLY_PERMISSIONS = [PERMISSIONS.DOWNLOAD];
-
 /**
  * Normalise a caller-supplied permission list: drop unknown keys, remove
  * duplicates, and return them in catalog order so stored rows are comparable.
@@ -105,13 +99,4 @@ function hasPermission(req, permission) {
   return Array.isArray(req.permissions) && req.permissions.includes(permission);
 }
 
-export {
-  PERMISSIONS,
-  PERMISSION_CATALOG,
-  ALL_PERMISSIONS,
-  FULL_ACCESS_PERMISSIONS,
-  VIEW_ONLY_PERMISSIONS,
-  normalizePermissions,
-  arePermissionsValid,
-  hasPermission,
-};
+export { PERMISSIONS, PERMISSION_CATALOG, ALL_PERMISSIONS, normalizePermissions, arePermissionsValid, hasPermission };

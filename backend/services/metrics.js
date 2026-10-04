@@ -18,17 +18,6 @@ promClient.collectDefaultMetrics({
 // ============================================================================
 
 /**
- * Counter: Total number of audit events queued
- * Labels: action, status
- */
-const auditEventsQueuedTotal = new promClient.Counter({
-  name: 'audit_events_queued_total',
-  help: 'Total number of audit events queued to pg-boss',
-  labelNames: ['action', 'status'],
-  registers: [register],
-});
-
-/**
  * Counter: Total number of audit events successfully processed
  */
 const auditEventsProcessedTotal = new promClient.Counter({
@@ -90,19 +79,6 @@ let queueMetricsUpdate = null;
 // ============================================================================
 // Metric update functions
 // ============================================================================
-
-/**
- * Increment the counter when an audit event is queued
- * @param {string} action - The audit action (e.g., 'file.upload')
- * @param {string} status - The event status ('success', 'failure', 'error')
- */
-function incrementEventsQueued(action, status = 'success') {
-  try {
-    auditEventsQueuedTotal.labels(action, status).inc();
-  } catch (error) {
-    logger.error({ err: error }, 'Failed to increment audit_events_queued_total metric');
-  }
-}
 
 /**
  * Increment the counter when an audit event is successfully processed
@@ -215,13 +191,10 @@ async function metricsEndpoint(req, res) {
 }
 
 export {
-  register,
   initializeMetrics,
   metricsEndpoint,
   startQueueMetricsUpdater,
-  incrementEventsQueued,
   incrementEventsProcessed,
   incrementEventsFailed,
   recordProcessingDuration,
-  updateQueueMetrics,
 };

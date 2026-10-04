@@ -75,23 +75,6 @@ async function getTrashFiles(userId, sortBy = 'deletedAt', order = 'DESC', topLe
   return page ? finishKeysetPage(files, page) : files;
 }
 
-/**
- * Get all recursive IDs for files in trash (including children)
- */
-async function getRecursiveTrashIds(ids, userId) {
-  const res = await pool.query(
-    `WITH RECURSIVE sub(id, parent_id, visited) AS (
-       SELECT id, parent_id, ARRAY[id] FROM files WHERE id = ANY($1::text[]) AND user_id = $2 AND deleted_at IS NOT NULL
-       UNION ALL
-       SELECT f.id, f.parent_id, s.visited || f.id FROM files f JOIN sub s ON f.parent_id = s.id
-       WHERE f.user_id = $2 AND f.deleted_at IS NOT NULL AND NOT f.id = ANY(s.visited)
-     )
-     SELECT id FROM sub`,
-    [ids, userId]
-  );
-  return res.rows.map(r => r.id);
-}
-
 async function countFileTree(ids, userId, { deleted = false, allTrash = false } = {}) {
   if (allTrash) {
     const result = await pool.query(
@@ -255,4 +238,4 @@ async function permanentlyDeleteFiles(ids, userId, { allTrash = false, batchSize
   }
 }
 
-export { deleteFiles, getTrashFiles, getRecursiveTrashIds, countFileTree, restoreFiles, permanentlyDeleteFiles };
+export { deleteFiles, getTrashFiles, countFileTree, restoreFiles, permanentlyDeleteFiles };

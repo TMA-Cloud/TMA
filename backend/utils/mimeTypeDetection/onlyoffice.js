@@ -267,4 +267,4 @@ async function validateOnlyOfficeMimeType(
   };
 }
 
-export { getExpectedMimeTypesForExtension, validateOnlyOfficeMimeType };
+export { validateOnlyOfficeMimeType };

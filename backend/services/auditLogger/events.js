@@ -63,22 +63,6 @@ async function fileDownloaded(fileId, fileName, req) {
 }
 
 /**
- * Log a file delete event
- */
-async function fileDeleted(fileId, fileName, permanent, req) {
-  return logAuditEvent(
-    permanent ? 'file.delete.permanent' : 'file.delete',
-    {
-      status: 'success',
-      resourceType: 'file',
-      resourceId: fileId,
-      metadata: { fileName, permanent },
-    },
-    req
-  );
-}
-
-/**
  * Log a successful login. Identity is passed in (not read from CLS) because
  * login runs before the auth middleware, else the row would get a NULL user_id.
  * @param {string} userId - Authenticated user ID
@@ -136,22 +120,6 @@ async function userSignup(userId, email, method, req) {
 }
 
 /**
- * Log a share link creation
- */
-async function shareCreated(shareId, fileIds, req) {
-  return logAuditEvent(
-    'share.create',
-    {
-      status: 'success',
-      resourceType: 'share',
-      resourceId: shareId,
-      metadata: { fileCount: fileIds.length },
-    },
-    req
-  );
-}
-
-/**
  * Log a share link access (may be anonymous)
  */
 async function shareAccessed(shareId, req) {
@@ -166,14 +134,4 @@ async function shareAccessed(shareId, req) {
   );
 }
 
-export {
-  fileUploaded,
-  fileDownloaded,
-  fileDeleted,
-  loginSuccess,
-  loginFailure,
-  userSignup,
-  shareCreated,
-  shareAccessed,
-  filesUploadedBulk,
-};
+export { fileUploaded, fileDownloaded, loginSuccess, loginFailure, userSignup, shareAccessed, filesUploadedBulk };

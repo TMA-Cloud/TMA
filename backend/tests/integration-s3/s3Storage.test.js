@@ -23,7 +23,6 @@ import {
   listObjectsPaginated,
   multipartCopyObject,
   putBuffer,
-  putFromPath,
   putStream,
   statObject,
 } from '../../utils/s3Storage.js';
@@ -135,18 +134,6 @@ describe('putStream', () => {
 
     expect((await statObject(k)).size).toBe(payload.length);
     expect(Buffer.compare(await collect(await getReadStream(k)), payload)).toBe(0);
-  });
-});
-
-describe('putFromPath', () => {
-  it('uploads a local file', async () => {
-    const local = path.join(tmpDir, 'source.bin');
-    await fs.writeFile(local, 'from local disk');
-    const k = key('from-path.bin');
-
-    await putFromPath(k, local);
-
-    expect((await collect(await getReadStream(k))).toString('utf8')).toBe('from local disk');
   });
 });
 

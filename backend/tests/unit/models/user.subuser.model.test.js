@@ -4,7 +4,6 @@ import { alwaysReturn, clientQuery, connect, executedCalls, queueQueryResults, q
 import { cacheKeys, getCache, setCache } from '../../../utils/cache.js';
 import { PERMISSIONS } from '../../../utils/permissions.js';
 import {
-  countSubUsers,
   createSubUser,
   deleteSubUser,
   getAccountContext,
@@ -331,22 +330,5 @@ describe('deleteSubUser', () => {
     await deleteSubUser(OWNER, SUB);
 
     expect(await getCache(emailKey)).toBeNull();
-  });
-});
-
-describe('countSubUsers', () => {
-  it('returns the count', async () => {
-    alwaysReturn({ rows: [{ count: 3 }] });
-    expect(await countSubUsers(OWNER)).toBe(3);
-  });
-
-  it('returns zero when the query yields nothing', async () => {
-    alwaysReturn({ rows: [] });
-    expect(await countSubUsers(OWNER)).toBe(0);
-  });
-
-  it('returns zero rather than null for an owner with no sub-users', async () => {
-    alwaysReturn({ rows: [{ count: 0 }] });
-    expect(await countSubUsers(OWNER)).toBe(0);
   });
 });

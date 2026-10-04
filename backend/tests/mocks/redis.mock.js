@@ -18,7 +18,6 @@ const sortedSets = new Map();
 const published = [];
 
 let isConnected = false;
-let connectionError = null;
 /** Forces isRedisConnected() to report false without touching the store. */
 let forcedDown = false;
 
@@ -263,7 +262,6 @@ const redisClient = {
 
 async function connectRedis() {
   isConnected = true;
-  connectionError = null;
   return redisClient;
 }
 
@@ -273,10 +271,6 @@ async function disconnectRedis() {
 
 function isRedisConnected() {
   return isConnected && !forcedDown;
-}
-
-function getConnectionError() {
-  return connectionError;
 }
 
 /* ------------------------------------------------------------------ *
@@ -315,11 +309,10 @@ function resetRedisMock() {
   published.length = 0;
   forcedDown = false;
   isConnected = true;
-  connectionError = null;
 }
 
 // Tests import modules that assume a live connection; start connected.
 isConnected = true;
 
-export { redisClient, connectRedis, disconnectRedis, isRedisConnected, getConnectionError };
+export { redisClient, connectRedis, disconnectRedis, isRedisConnected };
 export { setRedisDown, redisStore, publishedMessages, seedRedis, resetRedisMock };

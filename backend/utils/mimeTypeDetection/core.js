@@ -153,4 +153,4 @@ function createMimeSniffStream(onDetect) {
   });
 }
 
-export { getFileTypeModule, normalizeMime, detectMimeTypeFromContent, validateMimeType, createMimeSniffStream };
+export { normalizeMime, detectMimeTypeFromContent, validateMimeType, createMimeSniffStream };

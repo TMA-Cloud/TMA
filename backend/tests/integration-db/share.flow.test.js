@@ -8,7 +8,7 @@ import request from 'supertest';
 import pool from '../../config/db.js';
 import { redisClient } from '../../config/redis.js';
 import { cacheKeys } from '../../utils/cache.js';
-import { createShareLink, cleanupExpiredShareLinks } from '../../models/share.model.js';
+import { cleanupExpiredShareLinks, upsertShareRoots } from '../../models/share.model.js';
 import { api, ensureOwner, waitForFileJob } from './helpers/app.js';
 import { countRows, makeFile, makeFolder } from './helpers/factories.js';
 
@@ -575,7 +575,8 @@ describe('the cache can never outlive the link', () => {
     // link's remaining lifetime to prevent stale access."
     const { client: c, user } = await ensureOwner();
     const fileId = await uploadFile(c);
-    const token = await createShareLink(fileId, user.id, [fileId], new Date(Date.now() + 30_000));
+    const { tokens } = await upsertShareRoots([fileId], user.id, new Date(Date.now() + 30_000));
+    const token = tokens[fileId];
 
     await visitor().get(`/s/${token}`);
 
@@ -597,7 +598,8 @@ describe('the cache can never outlive the link', () => {
     const { client: c, user } = await ensureOwner();
     const fileId = await uploadFile(c);
     // Warm the cache with an entry that expires almost immediately.
-    const token = await createShareLink(fileId, user.id, [fileId], new Date(Date.now() + 1000));
+    const { tokens } = await upsertShareRoots([fileId], user.id, new Date(Date.now() + 1000));
+    const token = tokens[fileId];
     await visitor().get(`/s/${token}`);
 
     await new Promise(resolve => {

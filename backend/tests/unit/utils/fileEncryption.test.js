@@ -10,7 +10,6 @@ import { pipeline } from 'stream/promises';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import {
-  copyEncryptedFileStreams,
   createByteCountStream,
   createDecryptStreamFromStream,
   createEncryptStream,
@@ -482,20 +481,5 @@ describe('copyEncryptedFile', () => {
     bytes[HEADER_LENGTH + 1] ^= 0xff;
     await fs.writeFile(src, bytes);
     await expect(copyEncryptedFile(src, tmp('.enc'))).rejects.toThrow();
-  });
-});
-
-describe('copyEncryptedFileStreams', () => {
-  it('re-encrypts a stream into a writable and stays decryptable', async () => {
-    const plain = 'stream copy payload'.repeat(200);
-    const src = tmp('.enc');
-    await encryptFile(await writePlain(plain), src);
-
-    const dst = tmp('.enc');
-    await copyEncryptedFileStreams(Readable.from([await fs.readFile(src)]), createWriteStream(dst));
-
-    const dec = tmp('.dec');
-    await decryptFile(dst, dec);
-    expect(await fs.readFile(dec, 'utf8')).toBe(plain);
   });
 });
