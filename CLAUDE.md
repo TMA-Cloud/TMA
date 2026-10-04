@@ -53,6 +53,11 @@ Layers: `routes → controllers → services / models → utils / config`.
   existing number. `server.js` applies them at startup, each one atomically and
   under an advisory lock. Never edit a migration that has shipped. Add a new one.
 - Durable or slow work belongs in the worker, not on the API request path.
+- `npm run knip` fails on unused files, exports and dependencies (config in
+  `knip.jsonc`). Modules export through one `export { ... }` list, which
+  knip's `@internal` tag cannot mark, so the production check that ignores
+  tests is an audit, `npm run knip:production`, not a gate. Its findings
+  should all be test seams: exports a module uses itself and tests reach.
 - Tests: `tests/unit` (mocked), `tests/integration*` (needs Postgres and Redis
   from `.env`), `tests/integration-s3` (`npm run test:s3`). See
   [the testing guide](https://tma-cloud.github.io/Wiki/docs/guides/operations/testing).
@@ -131,7 +136,7 @@ same commands, except for desktop-fs.
 
 | Package       | Commands                                                                                                                                                            |
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `backend/`    | `npm run lint` · `npm run format:check` · `npm test` · `npm run test:integration`                                                                                   |
+| `backend/`    | `npm run lint` · `npm run format:check` · `npm run knip` · `npm test` · `npm run test:integration`                                                                  |
 | `frontend/`   | `npm run lint` · `npm run format:check` · `npx tsc --noEmit -p tsconfig.app.json` · `npx tsc -b tsconfig.test.json` · `npm run knip` · `npm test` · `npm run build` |
 | `electron/`   | `npm run lint` · `npm run format:check` · `npm test`                                                                                                                |
 | `desktop-fs/` | `dotnet build` (0 warnings, 0 errors) · `dotnet format --verify-no-changes`                                                                                         |

@@ -1,0 +1,25 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": [
+    // The production run reads only the `start` script, so the worker and the
+    // operator scripts are listed, including the two run by hand (see the
+    // usage line in each) rather than through npm.
+    "audit-worker.js!",
+    "scripts/{s3-*,migrate-*,reconcile-*,rotate-*,backfill-*,bulk-import-drive-to-s3,check-s3-lifecycle}.js!",
+    // Barrels that document their exports as an interface for scripts and tests.
+    "utils/fileEncryption.js!",
+    "utils/mimeTypeDetection.js!",
+  ],
+  // Test helpers and doubles are not production code.
+  "project": ["**/*.js!", "!tests/**!"],
+  "ignoreIssues": {
+    // Swapped in for real modules by the Vitest aliases, so they mirror those
+    // modules' exports whether or not a test imports them directly.
+    "tests/mocks/*.mock.js": ["exports"],
+    // Reached as members of the storage driver's namespace object, which knip
+    // cannot follow.
+    "utils/s3Storage.js": ["exports"],
+  },
+  // Loaded by name as a pino transport in development.
+  "ignoreDependencies": ["pino-pretty"],
+}

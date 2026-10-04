@@ -31,6 +31,10 @@ jobs:
         working-directory: backend
         run: npm run format:check
 
+      - name: Find unused code
+        working-directory: backend
+        run: npm run knip
+
       - name: Test
         working-directory: backend
         run: npm run test:coverage
