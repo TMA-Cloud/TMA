@@ -6,7 +6,7 @@ import type { TransferStatus } from '../../utils/transferUtils';
 export type TransferDirection = 'upload' | 'download';
 
 /** `card` = the richer standalone card (1–2 items); `row` = the compact list row (3+ items). */
-export type TransferCardVariant = 'card' | 'row';
+type TransferCardVariant = 'card' | 'row';
 
 interface TransferItemCardProps {
   fileName: string;

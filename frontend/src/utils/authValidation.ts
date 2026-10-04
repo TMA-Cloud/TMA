@@ -18,7 +18,7 @@ export const MAX_NAME_LENGTH = 100;
 // Matches MIN_PASSWORD_LENGTH in the server's validationSchemas.js.
 export const MIN_PASSWORD_LENGTH = 8;
 // bcrypt reads only the first 72 bytes; matches MAX_PASSWORD_BYTES on the server.
-export const MAX_PASSWORD_BYTES = 72;
+const MAX_PASSWORD_BYTES = 72;
 
 // Deliberately loose. Precise email grammar is not decidable with a regular
 // expression, and a form that argues with a valid address. This catches

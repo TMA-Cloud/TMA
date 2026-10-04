@@ -26,11 +26,7 @@ export interface UploadPlan {
 }
 
 /** Returns a unique name like "name (1).ext" not in existingNames or usedInBatch. */
-export function getUniqueUploadName(
-  originalName: string,
-  existingNames: Set<string>,
-  usedInBatch: Set<string>
-): string {
+function getUniqueUploadName(originalName: string, existingNames: Set<string>, usedInBatch: Set<string>): string {
   const lastDot = originalName.lastIndexOf('.');
   const base = lastDot > 0 ? originalName.slice(0, lastDot) : originalName;
   const ext = lastDot > 0 ? originalName.slice(lastDot) : '';

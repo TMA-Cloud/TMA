@@ -9,7 +9,6 @@ import {
   getDisplayFileName,
   getExt,
   getFullNameForRename,
-  isOnlyOfficeSupported,
   validateOnlyOfficeMimeType,
   mapFileResponse,
 } from '../../src/utils/fileUtils';
@@ -187,23 +186,7 @@ describe('getFullNameForRename', () => {
   });
 });
 
-describe('isOnlyOfficeSupported', () => {
-  it.each(['report.docx', 'sheet.xlsx', 'deck.pptx', 'data.csv', 'manual.pdf', 'notes.odt'])('accepts %s', name => {
-    expect(isOnlyOfficeSupported(name)).toBe(true);
-  });
-
-  it.each(['photo.png', 'archive.zip', 'video.mp4', 'README'])('rejects %s', name => {
-    expect(isOnlyOfficeSupported(name)).toBe(false);
-  });
-
-  it('matches case-insensitively', () => {
-    expect(isOnlyOfficeSupported('REPORT.DOCX')).toBe(true);
-  });
-
-  it('handles a missing name', () => {
-    expect(isOnlyOfficeSupported(undefined)).toBe(false);
-  });
-
+describe('ONLYOFFICE_EXTS', () => {
   it('lists every extension with a leading dot, in lowercase', () => {
     for (const ext of ONLYOFFICE_EXTS) {
       expect(ext).toMatch(/^\.[a-z]+$/);

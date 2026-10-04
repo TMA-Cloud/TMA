@@ -5,7 +5,6 @@ import {
   apiDelete,
   apiGet,
   apiPost,
-  apiPostForm,
   apiPut,
   checkAuthSilently,
   checkGoogleAuthEnabled,
@@ -78,27 +77,6 @@ describe('request construction', () => {
     fetchMock.mockResolvedValue(jsonResponse({}));
     await apiPost('/api/x');
     expect(fetchMock.mock.calls[0][1].body).toBeUndefined();
-  });
-
-  it('apiPostForm sends the FormData body with the CSRF header', async () => {
-    fetchMock.mockResolvedValue(jsonResponse({}));
-    const form = new FormData();
-    await apiPostForm('/api/files/upload', form);
-    const [, init] = fetchMock.mock.calls[0];
-    expect(init.method).toBe('POST');
-    expect(init.body).toBe(form);
-    expect(init.headers['X-Requested-With']).toBe('XMLHttpRequest');
-  });
-
-  it('apiPostForm still forces Content-Type: application/json, which would break a real upload', async () => {
-    // apiRequest spreads its JSON default *before* the caller's headers, and
-    // apiPostForm only overrides X-Requested-With. An explicit Content-Type
-    // stops fetch generating a multipart boundary, so the server cannot parse
-    // the body. The helper is currently unused, which is why this has not
-    // surfaced; pinned here so a future caller does not get bitten.
-    fetchMock.mockResolvedValue(jsonResponse({}));
-    await apiPostForm('/api/files/upload', new FormData());
-    expect(fetchMock.mock.calls[0][1].headers['Content-Type']).toBe('application/json');
   });
 
   it('forwards an abort signal', async () => {

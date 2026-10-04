@@ -5,7 +5,7 @@ import type { AccountPermission } from '../AuthContext';
 
 // Navigation / paging
 
-export const FILE_MANAGER_PAGES = new Set(['My Files', 'Shared', 'Starred', 'Trash']);
+const FILE_MANAGER_PAGES = new Set(['My Files', 'Shared', 'Starred', 'Trash']);
 
 export const isFileManagerPage = (page: string | undefined) => !!page && FILE_MANAGER_PAGES.has(page);
 
@@ -58,8 +58,8 @@ export const getInFlightUploadProgress = (loaded: number, total: number): number
   Math.min(Math.round((loaded / total) * 100), 99);
 
 /** Bulk upload batching. */
-export const BULK_BATCH_MAX_FILES = 100;
-export const BULK_BATCH_MAX_BYTES = 64 * 1024 * 1024;
+const BULK_BATCH_MAX_FILES = 100;
+const BULK_BATCH_MAX_BYTES = 64 * 1024 * 1024;
 /** Kept below the browser's six-per-origin ceiling. */
 export const BULK_BATCH_CONCURRENCY = 3;
 /** Below this, per-file rows are informative. */

@@ -25,7 +25,7 @@ import { useExternalFileDrop } from './hooks/useExternalFileDrop';
 import { useFileManagerShortcuts } from './hooks/useFileManagerShortcuts';
 import { useFileOpen } from './hooks/useFileOpen';
 
-export const FileManager: React.FC = () => {
+const FileManager: React.FC = () => {
   const {
     files,
     selectedFiles,

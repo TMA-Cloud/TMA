@@ -36,7 +36,7 @@ const navItems = [
   { id: 'Settings', label: 'Settings', icon: SettingsIcon },
 ] as const;
 
-export const MobileAppContent: React.FC = () => {
+const MobileAppContent: React.FC = () => {
   const { currentPath, folderStack, setCurrentPath, setUploadModalOpen } = useApp();
   const { user, logout, can } = useAuth();
   const [dropdownOpen, setDropdownOpen] = useState(false);

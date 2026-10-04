@@ -30,8 +30,3 @@ function useMediaPreference(media: string): boolean {
 export function useReducedMotion(): boolean {
   return useMediaPreference('(prefers-reduced-motion: reduce)');
 }
-
-/** Frostier surfaces: raise the opacity, drop the blur. */
-export function useReducedTransparency(): boolean {
-  return useMediaPreference('(prefers-reduced-transparency: reduce)');
-}

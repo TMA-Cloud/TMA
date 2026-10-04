@@ -70,14 +70,6 @@ export function createSliceBudget(budgetMs: number = SLICE_BUDGET_MS) {
   };
 }
 
-/** Yields if the current slice is over budget. Returns true when it yielded. */
-export async function yieldIfBudgetExpired(budget: ReturnType<typeof createSliceBudget>): Promise<boolean> {
-  if (!budget.expired()) return false;
-  await yieldToMain();
-  budget.reset();
-  return true;
-}
-
 /**
  * Maps over a list in time-sliced batches, yielding between slices.
  *

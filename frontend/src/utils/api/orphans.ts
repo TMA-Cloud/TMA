@@ -2,14 +2,14 @@
 import { apiGet, apiPost } from './client';
 
 /** An object in storage that no database row points at. */
-export interface StorageOrphan {
+interface StorageOrphan {
   key: string;
   size: number;
   lastModified: string | null;
 }
 
 /** A database row whose stored object is missing. */
-export interface DatabaseOrphan {
+interface DatabaseOrphan {
   id: string;
   name: string;
   path: string;
@@ -88,7 +88,7 @@ export async function fetchOrphans(graceMinutes: number): Promise<OrphanReport> 
   );
 }
 
-export async function deleteOrphans(payload: {
+async function deleteOrphans(payload: {
   storageKeys?: string[];
   fileIds?: string[];
   graceMinutes: number;

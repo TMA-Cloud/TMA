@@ -23,7 +23,10 @@ const LETTERS: Record<string, { paths: string[]; x0: number; x1: number }> = {
 const CELL = 4;
 const GAP = 3;
 
-/** Path nodes for `text`, centred on the 24px grid in Tabler's 4x8 cells. */
+/**
+ * Path nodes for `text`, centred on the 24px grid in Tabler's 4x8 cells.
+ * @internal Exported for tests.
+ */
 export function formatLabelNode(text: string): IconNode {
   const width = text.length * CELL + (text.length - 1) * GAP;
   const start = 12 - width / 2;

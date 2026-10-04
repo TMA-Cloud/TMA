@@ -142,6 +142,7 @@ async function scanEntries(roots: FileSystemEntryLike[], options: ScanOptions): 
   return resolved;
 }
 
+/** @internal Exported for tests. */
 export function entriesFromFileList(fileList: FileList): FolderUploadEntry[] {
   return Array.from(fileList).map(toFolderUploadEntry);
 }

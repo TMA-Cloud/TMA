@@ -148,8 +148,6 @@ export function getFullNameForRename(editedDisplayName: string, originalFullName
   return trimmed + ext;
 }
 
-export const isOnlyOfficeSupported = (name?: string) => ONLYOFFICE_EXTS.has(getExt(name));
-
 /**
  * Validates if a file's MIME type matches the expected type for its extension
  * Uses mime package to get expected MIME types dynamically

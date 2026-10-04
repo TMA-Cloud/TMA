@@ -55,7 +55,7 @@ const ALL_SECTIONS: NavSection[] = [
   { id: 'security', label: 'Security', icon: Shield },
 ];
 
-export const Settings: React.FC = () => {
+const Settings: React.FC = () => {
   const { user, isSubUser } = useAuth();
   const { setHideFileExtensions } = useApp();
   const { usage, loading: storageLoading, refresh: refreshStorage } = useStorageUsage();

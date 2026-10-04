@@ -43,7 +43,7 @@ const StatValue: React.FC<{ value: number }> = ({ value }) => {
   return <p ref={nodeRef} className="type-title-1 text-[var(--label)] tabular-nums" />;
 };
 
-export const Dashboard: React.FC = () => {
+const Dashboard: React.FC = () => {
   const { setUploadModalOpen, setCreateFolderModalOpen, setCurrentPath } = useApp();
   const { can } = useAuth();
   const [stats, setStats] = useState<FileStats>({

@@ -8,19 +8,11 @@
  * where a fixed-duration animation is neither.
  */
 
-export { Spring, Spring2D, SPRING_PRESETS, type SpringConfig } from './spring';
-export {
-  project,
-  projectedEndpoint,
-  nearestSnapPoint,
-  rubberband,
-  rubberbandClamp,
-  relativeVelocity,
-  VelocityTracker,
-} from './physics';
-export { useSpring, useSpring2D, useSpringTransform } from './useSpring';
+export { Spring, SPRING_PRESETS, type SpringConfig } from './spring';
+export { project, projectedEndpoint, nearestSnapPoint, rubberband, rubberbandClamp, VelocityTracker } from './physics';
+export { useSpring } from './useSpring';
 export { useDrag, type DragState, type DragOptions } from './useDrag';
 export { usePress, type PressOptions } from './usePress';
 export { useScrollEdge } from './useScrollEdge';
-export { useReducedMotion, useReducedTransparency } from './useReducedMotion';
+export { useReducedMotion } from './useReducedMotion';
 export { scrollToTopFast } from './scrollToTop';

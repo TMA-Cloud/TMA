@@ -205,27 +205,6 @@ export async function downloadAndInstallElectronUpdate(
 
 /** 200MB limit for "Copy to computer". */
 export const MAX_COPY_TO_PC_BYTES = 200 * 1024 * 1024;
-export function base64ToFile(base64: string, name: string, mime: string): File {
-  const bin = atob(base64);
-  const arr = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-  return new File([arr], name, { type: mime });
-}
-
-/**
- * Peek the OS clipboard for file names without reading bytes. Returns [] when no files
- * are on the clipboard or the API isn't available. Cheap enough to call on every paste.
- */
-export async function peekElectronClipboardFileNames(): Promise<string[]> {
-  if (!isElectron() || !window.electronAPI?.clipboard?.peekFileNames) return [];
-  try {
-    const { names } = await window.electronAPI.clipboard.peekFileNames();
-    return Array.isArray(names) ? names : [];
-  } catch {
-    return [];
-  }
-}
-
 /**
  * True when another app put files on the OS clipboard after this app's last
  * Copy or Cut: those are newer, so a paste should upload them instead.
@@ -247,18 +226,6 @@ export async function claimElectronClipboard(names: string[]): Promise<void> {
     await window.electronAPI.clipboard.claim({ names });
   } catch {
     // Best effort: the cloud clipboard still holds the selection.
-  }
-}
-
-/** Read files from OS clipboard (e.g. copy in Explorer). */
-export async function getFilesFromElectronClipboard(): Promise<File[]> {
-  if (!isElectron() || !window.electronAPI?.clipboard) return [];
-  try {
-    const { files } = await window.electronAPI.clipboard.readFiles();
-    if (!files?.length) return [];
-    return files.map(f => base64ToFile(f.data, f.name, f.mime));
-  } catch {
-    return [];
   }
 }
 

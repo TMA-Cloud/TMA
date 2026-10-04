@@ -2,7 +2,7 @@
 // downloadable backup-codes file.
 
 /** Mask an email for display, e.g. useremail****@***.com. */
-export function maskEmail(email: string): string {
+function maskEmail(email: string): string {
   if (!email) return 'userema****@***.com';
   const parts = email.split('@');
   const localPart = parts[0];
@@ -21,7 +21,7 @@ export function maskEmail(email: string): string {
 }
 
 /** Format backup codes in groups of 5 with numbered brackets. */
-export function formatBackupCodes(codes: string[]): string {
+function formatBackupCodes(codes: string[]): string {
   let result = '';
   for (let i = 0; i < codes.length; i++) {
     const num = i + 1;

@@ -2,20 +2,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   MAX_COPY_TO_PC_BYTES,
-  base64ToFile,
   cancelElectronClipboardUpload,
   copyFilesToPcClipboard,
   editFileWithDesktopElectron,
   getElectronAppVersion,
   getElectronCloudDriveMode,
-  getFilesFromElectronClipboard,
   hasElectronClipboard,
   hasElectronCloudDrive,
   hasElectronOpenOnDesktop,
   claimElectronClipboard,
   hasExternalElectronClipboardFiles,
   isElectron,
-  peekElectronClipboardFileNames,
   saveFileViaElectron,
   saveFilesBulkViaElectron,
   setElectronCloudDriveMode,
@@ -194,50 +191,7 @@ describe('subscribeToUpdateDownloadProgress', () => {
   });
 });
 
-describe('base64ToFile', () => {
-  it('decodes base64 into a File with the given name and type', () => {
-    const file = base64ToFile(btoa('hello'), 'greeting.txt', 'text/plain');
-    expect(file.name).toBe('greeting.txt');
-    expect(file.type).toBe('text/plain');
-    expect(file.size).toBe(5);
-  });
-
-  it('round-trips binary bytes without corruption', async () => {
-    const bytes = new Uint8Array([0, 255, 128, 1, 254]);
-    const base64 = btoa(String.fromCharCode(...bytes));
-    const file = base64ToFile(base64, 'b.bin', 'application/octet-stream');
-    expect(new Uint8Array(await file.arrayBuffer())).toEqual(bytes);
-  });
-
-  it('produces an empty file for empty input', () => {
-    expect(base64ToFile('', 'e.bin', 'application/octet-stream').size).toBe(0);
-  });
-});
-
 describe('clipboard bridge', () => {
-  it('peeks clipboard filenames', async () => {
-    installElectron();
-    expect(await peekElectronClipboardFileNames()).toEqual(['a.txt']);
-  });
-
-  it('returns an empty list in a browser', async () => {
-    expect(await peekElectronClipboardFileNames()).toEqual([]);
-  });
-
-  it('returns an empty list when the peek throws', async () => {
-    const api = installElectron();
-    api.clipboard.peekFileNames = vi.fn(async () => {
-      throw new Error('clipboard locked');
-    });
-    expect(await peekElectronClipboardFileNames()).toEqual([]);
-  });
-
-  it('returns an empty list when the bridge sends a non-array', async () => {
-    const api = installElectron();
-    api.clipboard.peekFileNames = vi.fn(async () => ({ names: null as never }));
-    expect(await peekElectronClipboardFileNames()).toEqual([]);
-  });
-
   it('reports files another app copied after ours', async () => {
     const api = installElectron();
     expect(await hasExternalElectronClipboardFiles()).toBe(true);
@@ -264,22 +218,6 @@ describe('clipboard bridge', () => {
     const api = installElectron();
     await claimElectronClipboard([]);
     expect(api.clipboard.claim).not.toHaveBeenCalled();
-  });
-
-  it('converts clipboard payloads into File objects', async () => {
-    const api = installElectron();
-    api.clipboard.readFiles = vi.fn(async () => ({
-      files: [{ name: 'a.txt', mime: 'text/plain', data: btoa('hi') }],
-    }));
-
-    const files = await getFilesFromElectronClipboard();
-    expect(files).toHaveLength(1);
-    expect(files[0]?.name).toBe('a.txt');
-  });
-
-  it('returns an empty list when the clipboard holds no files', async () => {
-    installElectron();
-    expect(await getFilesFromElectronClipboard()).toEqual([]);
   });
 
   it('sends items to the OS clipboard along with the page origin', async () => {

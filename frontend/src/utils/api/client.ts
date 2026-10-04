@@ -78,18 +78,6 @@ export async function apiPut<T = unknown>(endpoint: string, data?: unknown, opti
   return res.json();
 }
 
-export async function apiPostForm<T = unknown>(endpoint: string, formData: FormData): Promise<T> {
-  const res = await apiRequest(endpoint, {
-    method: 'POST',
-    body: formData,
-    headers: { 'X-Requested-With': 'XMLHttpRequest' },
-  });
-  if (!res.ok) {
-    await throwApiErrorWithDetails(res);
-  }
-  return res.json();
-}
-
 export async function apiDelete<T = unknown>(endpoint: string, options?: ApiRequestOptions): Promise<T> {
   const res = await apiRequest(endpoint, { method: 'DELETE', ...options });
   if (!res.ok) {

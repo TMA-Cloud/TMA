@@ -64,16 +64,6 @@ export function rubberbandClamp(value: number, min: number, max: number, dimensi
 }
 
 /**
- * Convert a gesture's px/s into the relative velocity some spring APIs want:
- * how many "remaining distances" per second the value is already covering.
- */
-export function relativeVelocity(velocity: number, from: number, to: number): number {
-  const distance = to - from;
-  if (Math.abs(distance) < 1e-6) return 0;
-  return velocity / distance;
-}
-
-/**
  * A short rolling history of pointer samples.
  *
  * Velocity from the last two events alone is noisy — one stuttered frame at

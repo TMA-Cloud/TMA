@@ -19,6 +19,8 @@ interface ToastProps {
  * It is swipeable in either direction: a notification that lands while you are
  * reading should go away in whichever direction your hand was already moving,
  * not only the one direction a designer picked.
+ *
+ * @internal Exported for tests.
  */
 export const Toast: React.FC<ToastProps> = ({ id, message, type = 'info', duration = 5000, onClose }) => {
   const [leaving, setLeaving] = useState(false);

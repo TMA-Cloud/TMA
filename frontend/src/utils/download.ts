@@ -7,7 +7,7 @@
  * platform lacks a streaming body. Memory profile matches `.blob()`: the whole
  * payload is buffered before the browser save is triggered.
  */
-export async function streamResponseToBlob(
+async function streamResponseToBlob(
   response: Response,
   onProgress?: (loaded: number, total: number | null) => void
 ): Promise<Blob> {

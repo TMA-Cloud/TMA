@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { getCurrentVersions, fetchLatestVersions, type VersionInfo } from '../../../utils/api';
 
 /** Where a component stands against the published release feed. */
-export type VersionState = 'loading' | 'unchecked' | 'upToDate' | 'outdated';
+type VersionState = 'loading' | 'unchecked' | 'upToDate' | 'outdated';
 
 export interface VersionStatus {
   state: VersionState;
