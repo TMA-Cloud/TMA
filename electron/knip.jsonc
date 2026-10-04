@@ -1,0 +1,17 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": [
+    // Loaded by path as the window's preload script, not required.
+    "src/preload/index.cjs!",
+    // Build steps; the production run reads only the `start` script.
+    "scripts/*.js!",
+  ],
+  // Test helpers and doubles are not production code.
+  "project": ["**/*.{cjs,mjs,js}!", "!tests/**!"],
+  // Stands in for `electron` through Module._load, so it mirrors that module's
+  // exports whether or not a test imports them directly.
+  "ignoreIssues": { "tests/mocks/electron.mock.mjs": ["exports"] },
+  // `npm start` runs the electron binary, a dev dependency as electron-builder
+  // requires, which the production run does not count.
+  "ignoreBinaries": ["electron"],
+}

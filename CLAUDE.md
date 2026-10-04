@@ -110,6 +110,10 @@ Main process only (`src/main/`), organised by concern:
   spy. Calling `net.createServer` on the object is fine.
 - Tests replace the Electron runtime with an in-memory double, so they run on any
   OS without a display.
+- `npm run knip` fails on unused files, exports and dependencies, with tests
+  and without them (config in `knip.jsonc`). knip reads destructured
+  `require` and named imports; it cannot see a member read off a default
+  import, so tests import helpers by name.
 
 ## desktop-fs/
 
@@ -138,7 +142,7 @@ same commands, except for desktop-fs.
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `backend/`    | `npm run lint` · `npm run format:check` · `npm run knip` · `npm test` · `npm run test:integration`                                                                  |
 | `frontend/`   | `npm run lint` · `npm run format:check` · `npx tsc --noEmit -p tsconfig.app.json` · `npx tsc -b tsconfig.test.json` · `npm run knip` · `npm test` · `npm run build` |
-| `electron/`   | `npm run lint` · `npm run format:check` · `npm test`                                                                                                                |
+| `electron/`   | `npm run lint` · `npm run format:check` · `npm run knip` · `npm test`                                                                                               |
 | `desktop-fs/` | `dotnet build` (0 warnings, 0 errors) · `dotnet format --verify-no-changes`                                                                                         |
 
 ## Git

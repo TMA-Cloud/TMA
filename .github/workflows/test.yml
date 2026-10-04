@@ -132,6 +132,10 @@ jobs:
         working-directory: electron
         run: npm run format:check
 
+      - name: Find unused code
+        working-directory: electron
+        run: npm run knip
+
       - name: Test
         working-directory: electron
         run: npm run test:coverage
