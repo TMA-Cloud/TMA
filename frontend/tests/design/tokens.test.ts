@@ -24,7 +24,7 @@ const read = (path: string) => readFileSync(join(SRC, path), 'utf-8');
 /** Every local partial the entry imports, concatenated in import order. */
 const indexCss = [...read('index.css').matchAll(/@import '\.\/([^']+)'/g)].map(m => read(m[1]!)).join('\n');
 const themeCss = read('styles/tokens/theme.css');
-const cursorsCss = read('styles/base/cursors.css');
+const cursorsCss = read('styles/tokens/cursors.css') + '\n' + read('styles/base/cursors.css');
 
 // --- CSS extraction -------------------------------------------------------
 
@@ -362,14 +362,15 @@ describe('pointers', () => {
   it.each(['light', 'dark'] as const)('%s: every pointer has an image, a hotspot and a fallback', theme => {
     for (const name of names) {
       const value = C[theme][name]!;
-      expect(value, `${name} is not an svg data uri`).toMatch(/^url\("data:image\/svg\+xml,/);
+      expect(value, `${name} is not an svg data uri`).toMatch(/^url\(["']data:image\/svg\+xml,/);
       // Chrome refuses an SVG cursor without intrinsic dimensions.
-      expect(value, `${name} has no explicit size`).toMatch(/width='24' height='24'/);
+      const svg = decodeURIComponent(value.match(/data:image\/svg\+xml,([^"']+)/)![1]!);
+      expect(svg, `${name} has no explicit size`).toMatch(/width="28" height="28"/);
       const hotspot = value.match(/\)\s*(\d+)\s+(\d+)\s*,\s*([\w-]+)\s*$/);
       expect(hotspot, `${name} has no "<x> <y>, <fallback>" tail`).not.toBeNull();
       const [x, y] = [Number(hotspot![1]), Number(hotspot![2])];
-      expect(x, `${name} hotspot x is outside the 24px box`).toBeLessThanOrEqual(24);
-      expect(y, `${name} hotspot y is outside the 24px box`).toBeLessThanOrEqual(24);
+      expect(x, `${name} hotspot x is outside the 28px box`).toBeLessThan(28);
+      expect(y, `${name} hotspot y is outside the 28px box`).toBeLessThan(28);
       // A keyword fallback keeps the pointer sane if the image is refused.
       expect(hotspot![3], `${name} falls back to nothing`).toBeTruthy();
     }

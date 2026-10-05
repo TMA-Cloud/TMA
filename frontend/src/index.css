@@ -4,6 +4,7 @@
 
 @import './styles/tokens/palette.css';
 @import './styles/tokens/theme.css';
+@import './styles/tokens/cursors.css';
 
 @import './styles/base/document.css';
 @import './styles/base/typography.css';

@@ -223,7 +223,7 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
         {...pressProps}
         {...sharedHandlers}
         className={`
-          stagger-item pressable-lg group relative rounded-2xl border cursor-pointer
+          stagger-item pressable-lg group relative rounded-2xl border cursor-default
           min-w-0 w-full p-3 overflow-hidden ${isMobile ? 'select-none' : ''}
           ${
             isSelected
@@ -283,7 +283,7 @@ export const FileItemComponent: React.FC<FileItemProps> = ({
       {...pressProps}
       {...sharedHandlers}
       className={`
-        stagger-item pressable-lg group flex items-center gap-3 py-2 px-3 cursor-pointer rounded-xl
+        stagger-item pressable-lg group flex items-center gap-3 py-2 px-3 cursor-default rounded-xl
         ${isMobile ? 'select-none' : ''}
         ${
           isSelected
