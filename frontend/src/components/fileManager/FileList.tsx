@@ -5,6 +5,7 @@ import { FileItemComponent } from './FileItem';
 import { FileSkeleton } from './FileSkeleton';
 import { EmptyState } from './EmptyState';
 import { MarqueeSelector } from './MarqueeSelector';
+import { useMarqueeGeometry } from './hooks/useMarqueeGeometry';
 import type { ListScrollRequest } from './hooks/useFileSelection';
 import { fileItemDomId } from './hooks/keyboard.helpers';
 
@@ -95,6 +96,16 @@ export const FileList: React.FC<FileListProps> = ({
     scrollMargin,
     getItemKey: index => files[index * columnCount]?.id || index,
   });
+
+  const getSelectionIds = useMarqueeGeometry(
+    containerRef,
+    rowVirtualizer,
+    React.useMemo(() => files.map(file => file.id), [files]),
+    columnCount,
+    containerWidth,
+    scrollMargin,
+    viewMode
+  );
 
   React.useLayoutEffect(() => {
     const container = containerRef.current;
@@ -286,6 +297,7 @@ export const FileList: React.FC<FileListProps> = ({
 
   return (
     <MarqueeSelector
+      getSelectionIds={getSelectionIds}
       onSelectionChange={onMarqueeSelection}
       onSelectingChange={onSelectingChange}
       selectedFiles={selectedFiles}
