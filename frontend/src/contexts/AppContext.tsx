@@ -116,6 +116,10 @@ export interface AppContextType {
   hasMoreFiles: boolean;
   isLoadingMore: boolean;
   loadMoreFiles: () => Promise<void>;
+  /** Location key of the listing in `files`; lags `folderStack` while the next folder loads. */
+  listedLocation: string | null;
+  /** Whether the latest navigation returns to a seen location (back, forward, up) rather than a new one. */
+  navRestoresScroll: boolean;
   createFolder: (name: string) => Promise<void>;
   uploadFile: (file: File) => Promise<void>;
   moveFiles: (ids: string[], parentId: string | null) => Promise<void>;

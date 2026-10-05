@@ -117,7 +117,20 @@ export const FileList: React.FC<FileListProps> = ({
     if (!listScrollRequest) return;
     const index = files.findIndex(file => file.id === listScrollRequest.fileId);
     if (index < 0) return;
-    rowVirtualizer.scrollToIndex(Math.floor(index / columnCount), {
+    const row = Math.floor(index / columnCount);
+    if (listScrollRequest.align === 'nearest') {
+      // Read the live offset: the virtualizer's copy lags a restored scrollTop until its scroll event.
+      const scroller = rowVirtualizer.scrollElement;
+      const item = rowVirtualizer.measurementsCache[row];
+      if (
+        scroller &&
+        item &&
+        item.start >= scroller.scrollTop &&
+        item.end <= scroller.scrollTop + scroller.clientHeight
+      )
+        return;
+    }
+    rowVirtualizer.scrollToIndex(row, {
       align: listScrollRequest.align === 'nearest' ? 'auto' : 'center',
     });
   }, [columnCount, files, listScrollRequest, rowVirtualizer]);

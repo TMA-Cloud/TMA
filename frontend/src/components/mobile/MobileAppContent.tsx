@@ -10,7 +10,8 @@ import { UploadIssuesModal } from '../upload/UploadIssuesModal';
 import { CreateFolderModal } from '../folder/CreateFolderModal';
 import { ImageViewerModal } from '../viewer/ImageViewerModal';
 import { DocumentViewerModal } from '../viewer/DocumentViewerModal';
-import { useScrollEdge, scrollToTopFast } from '../../motion';
+import { useScrollEdge } from '../../motion';
+import { useScrollRestoration } from '../../hooks/useScrollRestoration';
 import { RenameModal } from '../fileManager/RenameModal';
 import { ShareLinkModal } from '../fileManager/ShareLinkModal';
 import {
@@ -37,7 +38,7 @@ const navItems = [
 ] as const;
 
 const MobileAppContent: React.FC = () => {
-  const { currentPath, folderStack, setCurrentPath, setUploadModalOpen } = useApp();
+  const { currentPath, setCurrentPath, setUploadModalOpen } = useApp();
   const { user, logout, can } = useAuth();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -47,27 +48,7 @@ const MobileAppContent: React.FC = () => {
   // Same hook as the desktop shell, so the top bar's edge and the overlay
   // scrollbar behave identically on both layouts.
   const { ref: mainRef, scrolled: contentScrolled } = useScrollEdge<HTMLElement>();
-  const navScrollRef = useRef<{ page: string; stackLen: number }>({
-    page: currentPath[0] ?? '',
-    stackLen: folderStack.length,
-  });
-
-  // Scroll to top when changing top-level page or opening a deeper folder — not when going up (back/breadcrumb),
-  // so the highlighted folder row stays visible like Windows Explorer.
-  useEffect(() => {
-    const page = currentPath[0] ?? '';
-    const stackLen = folderStack.length;
-    const prev = navScrollRef.current;
-    const pageChanged = page !== prev.page;
-    const wentDeeper = stackLen > prev.stackLen;
-    navScrollRef.current = { page, stackLen };
-
-    if (pageChanged || wentDeeper) {
-      if (mainRef.current) {
-        scrollToTopFast(mainRef.current, 180);
-      }
-    }
-  }, [currentPath, folderStack.length, mainRef]);
+  useScrollRestoration(mainRef);
 
   const renderContent = () => {
     switch (currentPage) {

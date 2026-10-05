@@ -130,7 +130,8 @@ export function useFileSelection({
     if (!id || !files.some(f => f.id === id)) return;
 
     scrollReturnHighlightRef.current = false;
-    requestListScroll(id);
+    // The restored offset usually shows it already; only scroll when it doesn't.
+    requestListScroll(id, 'nearest');
   }, [files, selectedFiles, requestListScroll]);
 
   // Click outside the manager clears the selection (unless a marquee drag is ending).

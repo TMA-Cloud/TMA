@@ -9,6 +9,9 @@ const FILE_MANAGER_PAGES = new Set(['My Files', 'Shared', 'Starred', 'Trash']);
 
 export const isFileManagerPage = (page: string | undefined) => !!page && FILE_MANAGER_PAGES.has(page);
 
+/** Names one listing (page plus folder chain), so its scroll offset can be kept. */
+export const locationKey = (path: string[], stack: (string | null)[]) => [path[0] ?? '', ...stack].join('/');
+
 // Sorting
 
 const naturalCompare = (a: string, b: string) => a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true });

@@ -11,7 +11,8 @@ import { useIsMobile } from './hooks/useIsMobile';
 import { Sidebar } from './components/layout/Sidebar';
 import { Header } from './components/layout/Header';
 import { UpdateInstallingOverlay } from './components/layout/UpdateInstallingOverlay';
-import { useScrollEdge, scrollToTopFast } from './motion';
+import { useScrollEdge } from './motion';
+import { useScrollRestoration } from './hooks/useScrollRestoration';
 
 // Lazy load main page components (using default exports for cleaner syntax)
 const Dashboard = lazy(() => import('./components/dashboard/Dashboard'));
@@ -87,31 +88,12 @@ const PageLoadingFallback: React.FC = () => (
 );
 
 const AppContent: React.FC = () => {
-  const { currentPath, folderStack, sidebarOpen } = useApp();
+  const { currentPath, sidebarOpen } = useApp();
   const isMobile = useIsMobile();
   // One hook feeds both pieces of chrome that depend on this scroller: the
   // header's soft edge and the overlay scrollbar.
   const { ref: mainRef, scrolled: contentScrolled } = useScrollEdge<HTMLElement>();
-  const navScrollRef = React.useRef<{ page: string; stackLen: number }>({
-    page: currentPath[0] ?? '',
-    stackLen: folderStack.length,
-  });
-
-  // Reset main scroll when changing top-level page or drilling into a folder — not when going up (back / breadcrumb),
-  // so returning to a parent list keeps scroll position and the highlighted row can stay in view
-  React.useEffect(() => {
-    if (isMobile) return;
-    const page = currentPath[0] ?? '';
-    const stackLen = folderStack.length;
-    const prev = navScrollRef.current;
-    const pageChanged = page !== prev.page;
-    const wentDeeper = stackLen > prev.stackLen;
-    navScrollRef.current = { page, stackLen };
-
-    if ((pageChanged || wentDeeper) && mainRef.current) {
-      scrollToTopFast(mainRef.current, 180);
-    }
-  }, [currentPath, folderStack.length, isMobile, mainRef]);
+  useScrollRestoration(mainRef);
 
   const renderContent = () => {
     const currentPage = currentPath[0];

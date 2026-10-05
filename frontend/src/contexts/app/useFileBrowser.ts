@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { type FileItem, type FileItemResponse, type FileSortBy } from '../AppContext';
 import { useDebouncedCallback } from '../../utils/debounce';
 import { mapFileResponse } from '../../utils/fileUtils';
-import { isFileManagerPage, sortFilesWithFoldersFirst, type NavEntry } from './helpers';
+import { isFileManagerPage, locationKey, sortFilesWithFoldersFirst, type NavEntry } from './helpers';
 
 /** Location, navigation history, listing (with sort), and search — one concern. */
 export function useFileBrowser(setSelectedFiles: (ids: string[]) => void) {
@@ -18,6 +18,9 @@ export function useFileBrowser(setSelectedFiles: (ids: string[]) => void) {
   const [isSearching, setIsSearching] = useState(false);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  // Which location `files` holds; it trails navigation until the new listing arrives.
+  const [listedLocation, setListedLocation] = useState<string | null>(null);
+  const [navRestoresScroll, setNavRestoresScroll] = useState(false);
   const [navHistory, setNavHistory] = useState<{ entries: NavEntry[]; index: number }>(() => ({
     entries: [{ path: ['My Files'], ids: [null], shared: [false] }],
     index: 0,
@@ -110,6 +113,7 @@ export function useFileBrowser(setSelectedFiles: (ids: string[]) => void) {
         const mapped = data.map(mapFileResponse);
         const sorted = sortBy === 'size' ? sortFilesWithFoldersFirst(mapped, sortBy, sortOrder) : mapped;
         setFiles(sorted);
+        setListedLocation(locationKey(currentPath, folderStack));
         setNextCursor(res.headers.get('X-Next-Cursor'));
 
         const highlightId = returnHighlightAfterRefreshRef.current;
@@ -283,7 +287,8 @@ export function useFileBrowser(setSelectedFiles: (ids: string[]) => void) {
 
   // Navigation
 
-  const pushNavEntry = (path: string[], ids: (string | null)[], shared: boolean[]) => {
+  /** `restoreScroll` is for going up to a folder already seen; a new navigation starts at the top. */
+  const pushNavEntry = (path: string[], ids: (string | null)[], shared: boolean[], restoreScroll = false) => {
     setNavHistory(prev => {
       const cur = prev.entries[prev.index];
       if (cur && cur.path.length === path.length && JSON.stringify(cur.ids) === JSON.stringify(ids)) {
@@ -292,6 +297,7 @@ export function useFileBrowser(setSelectedFiles: (ids: string[]) => void) {
       const base = prev.index < prev.entries.length - 1 ? prev.entries.slice(0, prev.index + 1) : prev.entries;
       return { entries: [...base, { path, ids, shared }], index: base.length };
     });
+    setNavRestoresScroll(restoreScroll);
     setCurrentPathState(path);
     setFolderStack(ids);
     setFolderSharedStack(shared);
@@ -325,7 +331,7 @@ export function useFileBrowser(setSelectedFiles: (ids: string[]) => void) {
     const highlightId = stackBefore.length > newLen && stackBefore[newLen] != null ? stackBefore[newLen]! : null;
     returnHighlightAfterRefreshRef.current = highlightId;
     setSelectedFiles([]);
-    pushNavEntry(nextPath, nextIds, nextShared);
+    pushNavEntry(nextPath, nextIds, nextShared, true);
   };
 
   const canGoBack = navHistory.index > 0;
@@ -344,6 +350,7 @@ export function useFileBrowser(setSelectedFiles: (ids: string[]) => void) {
     returnHighlightAfterRefreshRef.current = highlightId;
     setSelectedFiles([]);
     setNavHistory(prev => ({ ...prev, index: prev.index - 1 }));
+    setNavRestoresScroll(true);
     setCurrentPathState(entry.path);
     setFolderStack(entry.ids);
     setFolderSharedStack(entry.shared);
@@ -354,6 +361,7 @@ export function useFileBrowser(setSelectedFiles: (ids: string[]) => void) {
     const entry = navHistory.entries[navHistory.index + 1];
     if (!entry) return;
     setNavHistory(prev => ({ ...prev, index: prev.index + 1 }));
+    setNavRestoresScroll(true);
     setCurrentPathState(entry.path);
     setFolderStack(entry.ids);
     setFolderSharedStack(entry.shared);
@@ -373,6 +381,7 @@ export function useFileBrowser(setSelectedFiles: (ids: string[]) => void) {
     hasMoreFiles: nextCursor !== null,
     isLoadingMore,
     loadMoreFiles,
+    listedLocation,
 
     // Navigation state
     currentPath,
@@ -385,6 +394,7 @@ export function useFileBrowser(setSelectedFiles: (ids: string[]) => void) {
     canGoForward,
     goBack,
     goForward,
+    navRestoresScroll,
 
     // Search state
     searchQuery,
