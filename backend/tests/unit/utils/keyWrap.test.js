@@ -133,8 +133,8 @@ describe('newWrappedDek', () => {
 
 describe('resolveIkm', () => {
   it('throws for a row with no wrapped DEK (envelope is mandatory)', () => {
-    expect(() => resolveIkm({ dekWrapped: null })).toThrow(/backfill/i);
-    expect(() => resolveIkm({})).toThrow(/backfill/i);
+    expect(() => resolveIkm({ dekWrapped: null })).toThrow(/no wrapped DEK/);
+    expect(() => resolveIkm({})).toThrow(/no wrapped DEK/);
   });
 
   it('unwraps the stored DEK for an envelope row', () => {

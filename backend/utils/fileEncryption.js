@@ -3,8 +3,8 @@
  *
  * Segmented file encryption in Google Tink's AES-GCM-HKDF-STREAMING format
  * (AES256_GCM_HKDF_1MB). Split into focused modules; import paths and exported
- * names are unchanged so consumers (download range math, migration/rotation
- * scripts, tests) do not move:
+ * names are unchanged so consumers (download range math, the rotation script,
+ * tests) do not move:
  * - fileEncryption/format.js  - wire-format primitives, key derivation, layout math
  * - fileEncryption/streams.js - encrypt/decrypt Transform + Range-aware factories
  */
@@ -29,7 +29,7 @@ export {
   resolveIkm,
 } from './fileEncryption/keyWrap.js';
 export {
-  // Key + layout helpers (used by download range math and migration/rotation scripts)
+  // Key + layout helpers (used by download range math, the rotation script and tests)
   getEncryptionKey,
   ciphertextSizeToPlaintextSize,
   plaintextSizeToCiphertextSize,

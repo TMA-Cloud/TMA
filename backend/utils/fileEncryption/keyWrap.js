@@ -11,10 +11,8 @@
  * re-encrypting bodies means downloading and re-uploading every object.
  *
  * Envelope encryption is the only scheme: every encrypted file has a wrapped
- * DEK. A brand-new deployment starts that way; an existing one is brought there
- * once with scripts/backfill-envelope-encryption.js. resolveIkm() therefore
- * expects a wrapped DEK and treats its absence as an error rather than silently
- * decrypting under the master key.
+ * DEK. resolveIkm() therefore treats a missing DEK as an error rather than
+ * silently decrypting under the master key.
  *
  * KEK registry (built from the environment, read lazily so tests/scripts can
  * swap keys in):
@@ -133,17 +131,15 @@ function rewrapDekToPrimary(dekWrapped, fromVersion) {
 
 /**
  * Resolve the streaming ikm for an encrypted file row by unwrapping its stored
- * DEK. Every encrypted file is expected to carry a wrapped DEK (run the backfill
- * on a pre-envelope deployment), so a missing DEK is an error, not a fallback.
+ * DEK. Every encrypted file carries a wrapped DEK, so a missing one is an error,
+ * not a fallback.
  * @param {{ dekWrapped?: Buffer|null, dekKekVersion?: number|null }} row
  * @returns {Buffer} 32-byte ikm for the streaming decrypt/encrypt
  */
 function resolveIkm(row) {
   const wrapped = row?.dekWrapped;
   if (wrapped == null) {
-    throw new Error(
-      'Encrypted file has no wrapped DEK. Run scripts/backfill-envelope-encryption.js to convert pre-envelope files.'
-    );
+    throw new Error('Encrypted file has no wrapped DEK');
   }
   const version = row?.dekKekVersion;
   if (version == null) {

@@ -19,10 +19,6 @@
  *      under an older version are touched, so a resumed run converges.
  *   4. Once "Remaining=0", you may drop FILE_ENCRYPTION_KEY_V1.
  *
- * Only files already converted to envelope form (a non-null wrapped DEK) are
- * rotated here. Pre-envelope files are keyed directly off the master key; run
- * scripts/backfill-envelope-encryption.js first to bring them under a DEK.
- *
  * Usage (from backend directory):
  *   node scripts/rotate-kek.js
  */

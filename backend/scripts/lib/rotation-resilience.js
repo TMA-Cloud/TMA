@@ -1,6 +1,6 @@
 /**
- * Shared resilience helpers for the long-running, at-scale storage scripts
- * (key rotation, streaming-format migration): classify transient storage errors
+ * Resilience helpers for long-running, at-scale scripts such as key rotation:
+ * classify transient database and storage errors
  * and retry an operation with exponential backoff + jitter.
  *
  * Pure and side-effect free — no db/logger/storage imports — so it can be

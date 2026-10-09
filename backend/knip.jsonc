@@ -5,7 +5,7 @@
     // operator scripts are listed, including the two run by hand (see the
     // usage line in each) rather than through npm.
     "audit-worker.js!",
-    "scripts/{s3-*,migrate-*,reconcile-*,rotate-*,backfill-*,generate-key,bulk-import-drive-to-s3,check-s3-lifecycle}.js!",
+    "scripts/{s3-*,rotate-*,generate-key,bulk-import-drive-to-s3,check-s3-lifecycle}.js!",
     // Barrels that document their exports as an interface for scripts and tests.
     "utils/fileEncryption.js!",
     "utils/mimeTypeDetection.js!",
