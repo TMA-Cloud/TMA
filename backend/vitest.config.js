@@ -42,7 +42,6 @@ export default defineConfig({
     env: {
       NODE_ENV: 'test',
       LOG_LEVEL: 'silent',
-      LOG_FORMAT: 'json',
       JWT_SECRET: 'test-jwt-secret-do-not-use-in-production',
       // 64 hex chars = a 32-byte key, taking the hex branch of getEncryptionKey().
       FILE_ENCRYPTION_KEY: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',

@@ -1,3 +1,4 @@
+import { createRequire } from 'module';
 import os from 'os';
 
 import pino from 'pino';
@@ -5,10 +6,20 @@ import pinoHttp from 'pino-http';
 
 import { getRequestId, getUserId } from '../middleware/requestId.middleware.js';
 
-const isDevelopment = process.env.NODE_ENV !== 'production';
 // Default to 'info' in all envs so development is not spammy; set LOG_LEVEL=debug if needed
 const logLevel = process.env.LOG_LEVEL || 'info';
-const logFormat = process.env.LOG_FORMAT || (isDevelopment ? 'pretty' : 'json');
+
+// Pretty logs are for a person at a terminal; Docker, log shippers and tests
+// get JSON. pino-pretty is a dev dependency, so production images lack it.
+function usePrettyLogs() {
+  if (process.env.NODE_ENV === 'test' || !process.stdout.isTTY) return false;
+  try {
+    createRequire(import.meta.url).resolve('pino-pretty');
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Mask sensitive string values (show first/last few characters)
@@ -229,20 +240,17 @@ const baseLoggerOptions = {
     censor: '[REDACTED]', // Replace with this string
   },
 
-  // Pretty-print logs if LOG_FORMAT=pretty (default in development)
-  // Use JSON format if LOG_FORMAT=json (default in production)
-  transport:
-    logFormat === 'pretty'
-      ? {
-          target: 'pino-pretty',
-          options: {
-            colorize: true,
-            translateTime: 'yyyy-mm-dd HH:MM:ss.l',
-            ignore: 'pid,hostname',
-            singleLine: false,
-          },
-        }
-      : undefined,
+  transport: usePrettyLogs()
+    ? {
+        target: 'pino-pretty',
+        options: {
+          colorize: true,
+          translateTime: 'yyyy-mm-dd HH:MM:ss.l',
+          ignore: 'pid,hostname',
+          singleLine: false,
+        },
+      }
+    : undefined,
 
   // Custom serializers for request/response objects with sensitive data masking
   serializers: {

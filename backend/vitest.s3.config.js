@@ -26,7 +26,6 @@ export default defineConfig({
       ...parsed,
       NODE_ENV: 'test',
       LOG_LEVEL: 'silent',
-      LOG_FORMAT: 'json',
 
       // FILE_ENCRYPTION_KEY stays the real one: it decrypts the saved bucket secret.
       JWT_SECRET: 'integration-test-jwt-secret',

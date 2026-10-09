@@ -40,7 +40,6 @@ export default defineConfig({
 
       NODE_ENV: 'test',
       LOG_LEVEL: 'silent',
-      LOG_FORMAT: 'json',
 
       // A database of its own, so the working dev data is never truncated.
       DB_NAME: 'tma_cloud_test',

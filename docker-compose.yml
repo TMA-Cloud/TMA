@@ -19,7 +19,6 @@ services:
     env_file:
       - .env
     environment:
-      - LOG_FORMAT=json
       - FILE_ENCRYPTION_KEY_FILE=/run/secrets/file_encryption_key
     secrets:
       - file_encryption_key
@@ -95,7 +94,6 @@ services:
     env_file:
       - .env
     environment:
-      - LOG_FORMAT=json
       - FILE_ENCRYPTION_KEY_FILE=/run/secrets/file_encryption_key
     secrets:
       - file_encryption_key
