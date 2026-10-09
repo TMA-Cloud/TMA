@@ -315,7 +315,7 @@ runMigrations()
       logger.info('Metrics initialized');
 
       // This gauge belongs to the HTTP process that exposes /metrics.
-      startQueueMetricsUpdater(Number(process.env.QUEUE_METRICS_INTERVAL_SECONDS) || 60);
+      startQueueMetricsUpdater();
       logger.info('Queue metrics updater started');
     } catch (error) {
       logger.error({ err: error }, 'Failed to initialize audit system');

@@ -7,18 +7,8 @@ import { getOnlyOfficeConfig } from '../controllers/onlyoffice/onlyoffice.utils.
 import { getBoss } from './auditLogger.js';
 import { ONLYOFFICE_FORCESAVE_QUEUE } from './backgroundQueue.js';
 
-const configuredInterval = Number(process.env.ONLYOFFICE_AUTOSAVE_INTERVAL_MS);
-const configuredMinutes = configuredInterval / 60000;
-// Cron steps repeat evenly only when the interval divides an hour. Reject an
-// imprecise override instead of silently producing uneven save gaps.
-const intervalMinutes =
-  Number.isInteger(configuredMinutes) &&
-  configuredMinutes >= 1 &&
-  configuredMinutes <= 60 &&
-  60 % configuredMinutes === 0
-    ? configuredMinutes
-    : 5;
-const forceSaveCron = intervalMinutes === 60 ? '0 * * * *' : `*/${intervalMinutes} * * * *`;
+// Every open document is force-saved every five minutes, so an editor crash loses little work.
+const forceSaveCron = '*/5 * * * *';
 const commandServicePaths = new Map();
 
 /** Register one durable, de-duplicated schedule per open document. */

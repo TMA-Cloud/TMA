@@ -162,12 +162,13 @@ async function updateQueueMetricsOnce() {
  * @param {number} intervalSeconds - Update interval in seconds (default: 60, minimum: 10)
  * @returns {NodeJS.Timeout} The interval timer
  */
-function startQueueMetricsUpdater(intervalSeconds = 60) {
-  const configuredInterval = Number(intervalSeconds);
-  const effectiveInterval = Number.isFinite(configuredInterval) && configuredInterval >= 10 ? configuredInterval : 60;
-  logger.info({ intervalSeconds: effectiveInterval }, 'Starting queue metrics updater');
+// A queue depth gauge needs no finer resolution than a typical Prometheus scrape.
+const QUEUE_METRICS_INTERVAL_MS = 60_000;
+
+function startQueueMetricsUpdater() {
+  logger.info({ intervalSeconds: QUEUE_METRICS_INTERVAL_MS / 1000 }, 'Starting queue metrics updater');
   void updateQueueMetrics();
-  return setInterval(updateQueueMetrics, effectiveInterval * 1000);
+  return setInterval(updateQueueMetrics, QUEUE_METRICS_INTERVAL_MS);
 }
 
 /**
