@@ -1,7 +1,9 @@
 # ----------------------------------------------------------------------------------------
 # TMA Cloud | Docker Compose Configuration
 # Installation Guide: https://tma-cloud.github.io/Wiki/docs/getting-started/installation/
-# Prerequisites: Requires '.env' file in the same directory
+# Prerequisites: '.env' and 'secrets/file_encryption_key' in the same directory.
+# setup.sh creates both with random values:
+#   curl -fsSL https://raw.githubusercontent.com/TMA-Cloud/TMA/main/setup.sh | bash
 # ----------------------------------------------------------------------------------------
 
 services:
@@ -16,6 +18,9 @@ services:
       - .env
     environment:
       - LOG_FORMAT=json
+      - FILE_ENCRYPTION_KEY_FILE=/run/secrets/file_encryption_key
+    secrets:
+      - file_encryption_key
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:${BPORT:-3000}/health || exit 1"]
       interval: 30s
@@ -89,7 +94,14 @@ services:
       - .env
     environment:
       - LOG_FORMAT=json
+      - FILE_ENCRYPTION_KEY_FILE=/run/secrets/file_encryption_key
+    secrets:
+      - file_encryption_key
     command: node backend/audit-worker.js
+    # The image's check curls the API port, which the worker does not serve. A
+    # crashed worker exits, and the restart policy brings it back.
+    healthcheck:
+      disable: true
     depends_on:
       app:
         condition: service_started
@@ -99,6 +111,13 @@ services:
         condition: service_healthy
     networks:
       - tma-cloud-network
+
+# The master key for every stored file, mounted at /run/secrets/file_encryption_key
+# so it never appears in the environment or `docker inspect`. The app runs as uid
+# 1001, so the file must be readable by it (setup.sh sets the permissions).
+secrets:
+  file_encryption_key:
+    file: ./secrets/file_encryption_key
 
 volumes:
   postgres-data:

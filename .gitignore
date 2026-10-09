@@ -38,6 +38,9 @@ desktop-fs/obj/
 
 # Local data
 backups/
+# Created by setup.sh when it is run inside a checkout
+/secrets/
+/tma-cloud/
 tmp/
 
 # Local compose overrides

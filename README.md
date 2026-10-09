@@ -13,18 +13,10 @@ A self-hosted cloud storage platform with file storage and management capabiliti
 
 ## Quick Start
 
-Create a directory and download the files
+Download and run the installation script
 
 ```bash
-mkdir tma-cloud && cd tma-cloud
-curl -sSL -o compose.yml https://raw.githubusercontent.com/TMA-Cloud/TMA/main/docker-compose.yml
-curl -sSL -o .env https://raw.githubusercontent.com/TMA-Cloud/TMA/main/.env.example
-```
-
-Start all services
-
-```bash
-docker compose up -d
+curl -fsSL https://raw.githubusercontent.com/TMA-Cloud/TMA/main/setup.sh | bash
 ```
 
 For detailed setup instructions, see the [Documentation Wiki](https://tma-cloud.github.io/Wiki).
