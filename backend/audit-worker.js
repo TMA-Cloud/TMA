@@ -55,6 +55,7 @@ import { deleteQueuedObjects } from './services/objectCleanup.js';
 import { processFileOperation } from './services/fileOperationWorker.js';
 import { applyShareLinking } from './services/shareLinking.js';
 import { verifyEncryptionKeysWhenReady } from './services/encryptionKeyCheck.js';
+import { rewrapToPrimaryKey } from './services/kekRewrap.js';
 
 const logger = createRequestLogger({ service: 'background-worker' });
 
@@ -275,6 +276,24 @@ async function processMaintenanceJob(job) {
 }
 
 /**
+ * After a key rotation, move stored file keys to the newest master key. Runs in
+ * the background: a large rewrap must not hold up the queues.
+ */
+function rewrapAfterKeyRotation() {
+  rewrapToPrimaryKey()
+    .then(({ primary, storageSecret, rewrapped, failures }) => {
+      if (rewrapped || storageSecret) logger.info({ primary, rewrapped, storageSecret }, '[KeyRewrap] Rewrapped keys');
+      if (failures.length) {
+        logger.error(
+          { failed: failures.length, sample: failures.slice(0, 5) },
+          '[KeyRewrap] Some file keys could not be rewrapped'
+        );
+      }
+    })
+    .catch(err => logger.error({ err }, '[KeyRewrap] Rewrap failed; it runs again on the next start'));
+}
+
+/**
  * Initialize the audit worker
  */
 async function initializeWorker() {
@@ -283,6 +302,7 @@ async function initializeWorker() {
 
     // The worker decrypts and deletes files too, so it refuses a wrong master key like the API does.
     await verifyEncryptionKeysWhenReady();
+    rewrapAfterKeyRotation();
 
     // Ensure schema exists before pg-boss migrations run
     const schemaPool = createPool();

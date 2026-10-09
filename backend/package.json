@@ -15,7 +15,7 @@
     "s3:policy-https": "node scripts/s3-bucket-policy-https.js",
     "s3:versioning": "node scripts/s3-bucket-versioning.js",
     "s3:encryption": "node scripts/s3-bucket-encryption.js",
-    "rotate:kek": "node scripts/rotate-kek.js",
+    "rotate": "node scripts/rotate.js",
     "key:generate": "node scripts/generate-key.js",
     "test": "vitest run",
     "test:watch": "vitest",

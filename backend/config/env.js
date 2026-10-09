@@ -6,4 +6,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Load root .env (one level above backend/)
-dotenv.config({ path: path.join(__dirname, '..', '..', '.env') });
+const envPath = path.join(__dirname, '..', '..', '.env');
+dotenv.config({ path: envPath });
+
+export { envPath };

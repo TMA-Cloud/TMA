@@ -1,10 +1,7 @@
 /**
- * Resilience helpers for long-running, at-scale scripts such as key rotation:
- * classify transient database and storage errors
- * and retry an operation with exponential backoff + jitter.
- *
- * Pure and side-effect free — no db/logger/storage imports — so it can be
- * unit-tested directly and reused by any script without opening a DB pool.
+ * Retry helpers for long, resumable jobs such as rewrapping file keys after a
+ * key rotation: classify transient database and storage errors and retry with
+ * exponential backoff and jitter. Pure, so tests cover it directly.
  */
 
 const DEFAULT_RETRIES = 5;

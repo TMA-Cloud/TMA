@@ -1,11 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import {
-  DEFAULT_RETRIES,
-  isTransientError,
-  nextBackoffMs,
-  withRetries,
-} from '../../../scripts/lib/rotation-resilience.js';
+import { DEFAULT_RETRIES, isTransientError, nextBackoffMs, withRetries } from '../../../utils/retry.js';
 
 // No real waiting: withRetries takes an injectable `wait`.
 const noWait = () => Promise.resolve();
