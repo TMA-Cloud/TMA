@@ -100,7 +100,8 @@ main() {
     fi
   }
 
-  # One rotation at a time: two would each start from the same old files.
+  # One rotation at a time, and never during an update: both rewrite .env.
+  [[ -e .update.lock ]] && die "An update is running (.update.lock). Try again when it finishes."
   mkdir .rotate.lock 2>/dev/null ||
     die "Another rotation is running. If none is, remove ${dir}/.rotate.lock"
   trap 'rm -rf .rotate.lock' EXIT

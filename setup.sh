@@ -9,8 +9,9 @@
 #    curl -fsSLO https://raw.githubusercontent.com/TMA-Cloud/TMA/main/setup.sh
 #    bash setup.sh
 #
-#  Creates ./tma-cloud with compose.yml, .env, secrets/ and rotate.sh,
-#  filling every password and key with random values, then starts the stack.
+#  Creates ./tma-cloud with compose.yml, .env, secrets/, setup.sh, update.sh
+#  and rotate.sh, filling every password and key with random values, then
+#  starts the stack. Update it later with ./update.sh.
 #
 #  Re-running is safe: existing files and keys are never replaced, because a
 #  new encryption key would make every stored file unreadable.
@@ -81,6 +82,23 @@ main() {
     fi
   }
 
+  file_hash() {
+    if command -v sha256sum >/dev/null 2>&1; then
+      sha256sum "$1" | cut -d' ' -f1
+    else
+      shasum -a 256 "$1" | cut -d' ' -f1
+    fi
+  }
+
+  # update.sh compares against these hashes to tell local edits from old versions.
+  record_hash() {
+    local tmp
+    tmp="$(mktemp .tma-manifest.XXXXXX)"
+    [[ -f .tma-manifest ]] && awk -v f="$1" '$2 != f' .tma-manifest >"$tmp"
+    printf '%s %s\n' "$(file_hash "$1")" "$1" >>"$tmp"
+    mv -f "$tmp" .tma-manifest
+  }
+
   # Replace KEY=... in .env, or append it when the line is missing.
   set_env() {
     local key="$1" value="$2" file="$3"
@@ -96,6 +114,8 @@ main() {
   command -v curl >/dev/null 2>&1 || [[ -n "${TMA_LOCAL_SOURCE:-}" ]] || die "curl is required"
   command -v docker >/dev/null 2>&1 || die "Docker is required: https://docs.docker.com/engine/install/"
   docker compose version >/dev/null 2>&1 || die "Docker Compose v2 is required (the 'docker compose' command)"
+  command -v sha256sum >/dev/null 2>&1 || command -v shasum >/dev/null 2>&1 ||
+    die "sha256sum or shasum is required"
   if ! command -v openssl >/dev/null 2>&1 && [[ ! -r /dev/urandom ]]; then
     die "openssl or /dev/urandom is required to generate keys"
   fi
@@ -108,13 +128,20 @@ main() {
     info "compose.yml exists, keeping it"
   else
     fetch docker-compose.yml compose.yml
+    record_hash compose.yml
     success "Downloaded compose.yml"
   fi
 
-  # Always refreshed, so rotation fixes reach existing installs.
-  fetch rotate.sh rotate.sh
-  chmod 700 rotate.sh
-  success "Downloaded rotate.sh"
+  # Existing copies are left for update.sh, which knows how to replace them.
+  local script
+  for script in setup.sh update.sh rotate.sh; do
+    if [[ ! -f "$script" ]]; then
+      fetch "$script" "$script"
+      chmod 700 "$script"
+      record_hash "$script"
+      success "Downloaded ${script}"
+    fi
+  done
 
   if [[ -f .env ]]; then
     info ".env exists, keeping its values"
@@ -122,6 +149,8 @@ main() {
     local tmp_env
     tmp_env="$(mktemp .env.XXXXXX)"
     fetch .env.example "$tmp_env"
+    # Kept for reference: the comments explain each setting.
+    cp "$tmp_env" .env.example
     set_env DB_HOST postgres "$tmp_env"
     set_env REDIS_HOST redis "$tmp_env"
     set_env DB_PASSWORD "$(random_hex 32)" "$tmp_env"
@@ -180,6 +209,7 @@ main() {
   echo "  2. Connect a storage bucket in Settings > Storage."
   echo "  3. Back up the encryption key: https://tma-cloud.github.io/Wiki/docs/guides/operations/backups"
   echo
+  echo "Update later with:                   cd ${dir} && ./update.sh"
   echo "Rotate keys and passwords later with: cd ${dir} && ./rotate.sh <key|db|redis|all>"
   echo
   echo "Logs: cd ${dir} && docker compose logs -f app"

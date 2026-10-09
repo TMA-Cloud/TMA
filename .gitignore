@@ -44,6 +44,12 @@ backups/
 # Left by rotate.sh while it runs, or after a failed run
 /.rotate-backup/
 /.rotate.lock/
+# Left by update.sh
+/.update/
+/.update.lock/
+/.update-staging.*/
+/.compose.update.yml
+/.tma-manifest
 tmp/
 
 # Local compose overrides
