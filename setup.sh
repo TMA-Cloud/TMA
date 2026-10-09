@@ -9,8 +9,8 @@
 #    curl -fsSLO https://raw.githubusercontent.com/TMA-Cloud/TMA/main/setup.sh
 #    bash setup.sh
 #
-#  Creates ./tma-cloud with compose.yml, .env and secrets/, filling every
-#  password and key with random values, then starts the stack.
+#  Creates ./tma-cloud with compose.yml, .env, secrets/ and rotate.sh,
+#  filling every password and key with random values, then starts the stack.
 #
 #  Re-running is safe: existing files and keys are never replaced, because a
 #  new encryption key would make every stored file unreadable.
@@ -111,6 +111,11 @@ main() {
     success "Downloaded compose.yml"
   fi
 
+  # Always refreshed, so rotation fixes reach existing installs.
+  fetch rotate.sh rotate.sh
+  chmod 700 rotate.sh
+  success "Downloaded rotate.sh"
+
   if [[ -f .env ]]; then
     info ".env exists, keeping its values"
   else
@@ -137,7 +142,12 @@ main() {
   if [[ -s "$key_file" ]]; then
     info "${key_file} exists, keeping it"
   else
-    random_key >"$key_file"
+    {
+      echo '# TMA Cloud file encryption keys, one "version:key" per line.'
+      echo '# The highest version encrypts new data. Older lines decrypt data not yet'
+      echo '# rewrapped and data in older backups, so keep them with those backups.'
+      printf '1:%s\n' "$(random_key)"
+    } >"$key_file"
     success "Generated ${key_file}"
   fi
   # Compose bind-mounts the file with its host owner and mode. As root, hand it
@@ -169,6 +179,8 @@ main() {
   echo "  1. Open ${url} and create the first account; it becomes the admin."
   echo "  2. Connect a storage bucket in Settings > Storage."
   echo "  3. Back up the encryption key: https://tma-cloud.github.io/Wiki/docs/guides/operations/backups"
+  echo
+  echo "Rotate keys and passwords later with: cd ${dir} && ./rotate.sh <key|db|redis|all>"
   echo
   echo "Logs: cd ${dir} && docker compose logs -f app"
 }

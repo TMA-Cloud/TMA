@@ -4,6 +4,7 @@
 # Prerequisites: '.env' and 'secrets/file_encryption_key' in the same directory.
 # setup.sh creates both with random values:
 #   curl -fsSL https://raw.githubusercontent.com/TMA-Cloud/TMA/main/setup.sh | bash
+# Rotate the master key and the database and Redis passwords with ./rotate.sh.
 # ----------------------------------------------------------------------------------------
 
 services:

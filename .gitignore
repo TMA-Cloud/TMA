@@ -41,6 +41,9 @@ backups/
 # Created by setup.sh when it is run inside a checkout
 /secrets/
 /tma-cloud/
+# Left by rotate.sh while it runs, or after a failed run
+/.rotate-backup/
+/.rotate.lock/
 tmp/
 
 # Local compose overrides
