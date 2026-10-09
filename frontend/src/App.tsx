@@ -11,6 +11,7 @@ import { useIsMobile } from './hooks/useIsMobile';
 import { Sidebar } from './components/layout/Sidebar';
 import { Header } from './components/layout/Header';
 import { UpdateInstallingOverlay } from './components/layout/UpdateInstallingOverlay';
+import { StorageSetupBanner } from './components/layout/StorageSetupBanner';
 import { useScrollEdge } from './motion';
 import { useScrollRestoration } from './hooks/useScrollRestoration';
 
@@ -153,6 +154,7 @@ const AppContent: React.FC = () => {
             of it, so `contentScrolled` is what tells it whether anything is
             actually passing underneath. */}
         <Header contentScrolled={contentScrolled} />
+        <StorageSetupBanner className="mx-4 sm:mx-6 mt-2" />
 
         <main ref={mainRef} className="scroller flex-1 overflow-y-auto">
           {renderContent()}

@@ -27,6 +27,7 @@ import {
   ChevronDown,
 } from 'lucide-react';
 import { ICON_STROKE, ICON_STROKE_BOLD } from '../ui/iconStroke';
+import { StorageSetupBanner } from '../layout/StorageSetupBanner';
 
 const navItems = [
   { id: 'Dashboard', label: 'Home', icon: House },
@@ -169,6 +170,7 @@ const MobileAppContent: React.FC = () => {
 
       {/* Main content */}
       <main ref={mainRef} className="scroller flex-1 overflow-y-auto px-3 pt-3 pb-16">
+        <StorageSetupBanner className="mb-3" />
         <div className="animate-fadeIn">{renderContent()}</div>
       </main>
 

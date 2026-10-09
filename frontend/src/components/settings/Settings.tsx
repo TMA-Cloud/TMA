@@ -57,7 +57,7 @@ const ALL_SECTIONS: NavSection[] = [
 
 const Settings: React.FC = () => {
   const { user, isSubUser } = useAuth();
-  const { setHideFileExtensions } = useApp();
+  const { setHideFileExtensions, storageConfigured } = useApp();
   const { usage, loading: storageLoading, refresh: refreshStorage } = useStorageUsage();
   const { showToast } = useToast();
 
@@ -133,7 +133,10 @@ const Settings: React.FC = () => {
     availablePermissions,
   } = useSubUsers();
 
-  const [activeSection, setActiveSection] = useState<SectionId>('profile');
+  // Arriving from the setup banner should land on the bucket form, not the profile.
+  const [activeSection, setActiveSection] = useState<SectionId>(() =>
+    storageConfigured === false ? 'storage' : 'profile'
+  );
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const runningInElectron = isElectron();

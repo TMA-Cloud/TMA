@@ -13,6 +13,8 @@ import { NumberInput } from '../../ui/NumberInput';
 import { BYTES_PER_MB, BYTES_PER_GB } from '../../../utils/storageUtils';
 import { useAbortableLoader } from '../../../hooks/useAbortableLoader';
 import { useAsyncAction } from '../../../hooks/useAsyncAction';
+import { useApp } from '../../../contexts/AppContext';
+import { ObjectStorageSection } from './ObjectStorageSection';
 
 const MIN_MB = 1;
 const MAX_MB = 100 * 1024; // 100 GB in MB
@@ -61,6 +63,7 @@ interface StorageSectionProps {
 export const StorageSection: React.FC<StorageSectionProps> = ({ usage, loading, canConfigure }) => {
   const { showToast } = useToast();
   const { user } = useAuth();
+  const { storageConfigured, refreshStorageStatus } = useApp();
   const [maxBytes, setMaxBytes] = useState<number>(10 * BYTES_PER_GB);
   const [sizeInput, setSizeInput] = useState<string>('10');
   const [sizeUnit, setSizeUnit] = useState<SizeUnit>('GB');
@@ -138,8 +141,21 @@ export const StorageSection: React.FC<StorageSectionProps> = ({ usage, loading, 
   };
 
   return (
-    <SettingsSection title="Storage" icon={HardDrive} description="Usage and upload limits">
+    <SettingsSection title="Storage" icon={HardDrive} description="Usage, bucket and upload limits">
       <div className="space-y-8">
+        {canConfigure && (
+          <SettingsGroup title="Bucket" description="Where this deployment keeps its files.">
+            <ObjectStorageSection onSaved={() => void refreshStorageStatus()} />
+          </SettingsGroup>
+        )}
+
+        {!canConfigure && storageConfigured === false && (
+          <SettingsNote tone="warning">
+            No storage bucket is connected yet, so files cannot be uploaded or opened. Ask whoever administers this
+            deployment to set it up.
+          </SettingsNote>
+        )}
+
         <SettingsGroup title="Usage" description="How much of this account's space is taken.">
           <StorageMeter
             used={usage?.used ?? 0}

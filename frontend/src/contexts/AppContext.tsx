@@ -203,6 +203,10 @@ export interface AppContextType {
   onlyOfficeConfigured: boolean;
   canConfigureOnlyOffice: boolean;
   refreshOnlyOfficeConfig: () => Promise<void>;
+  /** Whether a storage bucket is connected; null until known. */
+  storageConfigured: boolean | null;
+  canConfigureStorage: boolean;
+  refreshStorageStatus: () => Promise<void>;
   /** When true, file names are shown without extensions (admin setting). */
   hideFileExtensions: boolean;
   /** Update hide file extensions (used after admin changes setting). */

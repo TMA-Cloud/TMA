@@ -1,6 +1,6 @@
 /**
  * API layer barrel. The implementation is split by domain under `./api/`
- * (client, config, users, files, sessions, mfa, versions, clients, orphans,
+ * (client, config, users, files, sessions, mfa, versions, clients, orphans, storage,
  * auth); this file re-exports it all so existing `from '../utils/api'` imports
  * keep working. New code may import the specific module directly if preferred.
  */
@@ -13,4 +13,5 @@ export * from './api/mfa';
 export * from './api/versions';
 export * from './api/clients';
 export * from './api/orphans';
+export * from './api/storage';
 export * from './api/auth';

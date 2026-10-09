@@ -12,6 +12,7 @@ import { useDownloads } from './app/useDownloads';
 import { useDesktopEdit } from './app/useDesktopEdit';
 import { useServerEvents } from './app/useServerEvents';
 import { useAppConfig } from './app/useAppConfig';
+import { useStorageStatus } from './app/useStorageStatus';
 import { useAppUpdates } from './app/useAppUpdates';
 
 /** Composition root: wires the per-concern hooks in ./app/ together and builds the AppContext value. */
@@ -56,6 +57,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   const config = useAppConfig();
+  const storageStatus = useStorageStatus();
   const updates = useAppUpdates({ userId: user?.id });
 
   useServerEvents({
@@ -187,6 +189,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         onlyOfficeConfigured: config.onlyOfficeConfigured,
         canConfigureOnlyOffice: config.canConfigureOnlyOffice,
         refreshOnlyOfficeConfig: config.refreshOnlyOfficeConfig,
+        storageConfigured: storageStatus.storageConfigured,
+        canConfigureStorage: storageStatus.canConfigureStorage,
+        refreshStorageStatus: storageStatus.refreshStorageStatus,
         hideFileExtensions: config.hideFileExtensions,
         setHideFileExtensions: config.setHideFileExtensions,
 
