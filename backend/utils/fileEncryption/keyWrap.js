@@ -14,53 +14,38 @@
  * DEK. resolveIkm() therefore treats a missing DEK as an error rather than
  * silently decrypting under the master key.
  *
- * KEK registry (built from the environment, read lazily so tests/scripts can
- * swap keys in):
- *   - FILE_ENCRYPTION_KEY      the current (primary) KEK; a random 32-byte key in production.
- *   - FILE_KEK_VERSION         integer version of the primary KEK (default 1).
- *   - FILE_ENCRYPTION_KEY_V<n> older KEKs, kept only so their DEKs can still be
- *                              unwrapped until rotation to the new KEK finishes.
- * Any key may instead come from a file named by <NAME>_FILE (Docker/Kubernetes secrets).
+ * KEKs come from the keyring in FILE_ENCRYPTION_KEY or FILE_ENCRYPTION_KEY_FILE
+ * (see ./keySource.js), read lazily so tests and scripts can swap keys in. The
+ * highest version wraps new DEKs; older versions unwrap DEKs not yet rewrapped.
  * Wrapped DEK wire layout: iv(12) || AES-256-GCM(DEK)(32) || tag(16) = 60 bytes.
  */
 
 import crypto from 'crypto';
 
-import { deriveKeyFromRaw, getEncryptionKey } from './format.js';
-import { readSecret } from './keySource.js';
+import { getEncryptionKey, keyFromKeyring } from './format.js';
+import { readKeyring } from './keySource.js';
 
 const DEK_LENGTH = 32; // 256-bit per-file data key
 const WRAP_IV_LENGTH = 12; // AES-GCM nonce for the wrap
 const WRAP_TAG_LENGTH = 16;
 const WRAPPED_DEK_LENGTH = WRAP_IV_LENGTH + DEK_LENGTH + WRAP_TAG_LENGTH; // 60
-/** Version number of the primary (current) KEK. */
+/** Version number of the primary (current) KEK. Without a key, development uses version 1. */
 function primaryKekVersion() {
-  const raw = parseInt(process.env.FILE_KEK_VERSION || '1', 10);
-  if (!Number.isInteger(raw) || raw < 1) {
-    throw new Error(`Invalid FILE_KEK_VERSION: ${process.env.FILE_KEK_VERSION} (must be a positive integer)`);
-  }
-  return raw;
+  return readKeyring()?.primary ?? 1;
 }
 
 /**
- * Resolve a KEK by version from the environment. The primary version resolves
- * through getEncryptionKey() (so the dev fallback still applies); older versions
- * come from FILE_ENCRYPTION_KEY_V<n>.
+ * Resolve a KEK by version from the keyring. Without a keyring, version 1
+ * resolves through getEncryptionKey() so the development fallback applies.
  * @param {number} version
+ * @param {{ allowPassphrase?: boolean }} [opts] - see keyFromKeyring
  * @returns {Buffer} 32-byte KEK
  */
-function kekForVersion(version) {
-  if (version === primaryKekVersion()) {
-    return getEncryptionKey();
-  }
-  // Older keys may still be passphrases: they are only read to rotate away from them.
-  const raw = readSecret(`FILE_ENCRYPTION_KEY_V${version}`);
-  if (!raw) {
-    throw new Error(
-      `No KEK configured for version ${version}. Set FILE_ENCRYPTION_KEY_V${version} to the key that wrapped these DEKs.`
-    );
-  }
-  return deriveKeyFromRaw(raw);
+function kekForVersion(version, opts) {
+  const keyring = readKeyring();
+  if (!keyring && version === 1) return getEncryptionKey();
+  if (!keyring) throw new Error(`FILE_ENCRYPTION_KEY is not set, so key version ${version} is unavailable`);
+  return keyFromKeyring(keyring, version, opts);
 }
 
 /** A fresh random per-file data key. */

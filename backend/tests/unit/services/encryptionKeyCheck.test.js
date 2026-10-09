@@ -6,6 +6,7 @@ const model = vi.hoisted(() => ({
   getKekChecks: vi.fn(),
   recordKekCheck: vi.fn(),
   sampleSealedUnderVersion: vi.fn(),
+  kekVersionsInUse: vi.fn(),
 }));
 vi.mock('../../../models/kekCheck.model.js', () => model);
 vi.mock('../../../config/logger.js', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
@@ -20,6 +21,7 @@ beforeEach(() => {
   model.getKekChecks.mockResolvedValue(new Map());
   model.recordKekCheck.mockImplementation(async (_version, value) => value);
   model.sampleSealedUnderVersion.mockResolvedValue({ dekWrapped: null, storageSecret: null });
+  model.kekVersionsInUse.mockResolvedValue([]);
 });
 
 afterEach(() => {
@@ -61,12 +63,26 @@ describe('verifyEncryptionKeys', () => {
     expect(model.recordKekCheck).not.toHaveBeenCalled();
   });
 
-  it('names an older key by its variable when that is the wrong one', async () => {
-    vi.stubEnv('FILE_KEK_VERSION', '2');
-    vi.stubEnv('FILE_ENCRYPTION_KEY_V1', 'ef'.repeat(32));
+  it('checks older keys in the keyring too, naming the wrong version', async () => {
+    vi.stubEnv('FILE_ENCRYPTION_KEY', `1:${'ef'.repeat(32)},2:${'cd'.repeat(32)}`);
     model.getKekChecks.mockResolvedValue(new Map([[1, kekCheckValue(otherKey)]]));
 
-    await expect(verifyEncryptionKeys()).rejects.toThrow(/FILE_ENCRYPTION_KEY_V1 \(key version 1\)/);
+    await expect(verifyEncryptionKeys()).rejects.toThrow(/key version 1\) does not match/);
+  });
+
+  it('refuses a passphrase as the newest key in production, unless a key is being added on top', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('FILE_ENCRYPTION_KEY', 'an old passphrase');
+
+    await expect(verifyEncryptionKeys()).rejects.toThrow(/must be a random 32-byte key/);
+    await expect(verifyEncryptionKeys({ allowPassphrasePrimary: true })).resolves.toBeUndefined();
+  });
+
+  it('refuses to start when stored data uses a version the keyring lacks', async () => {
+    model.kekVersionsInUse.mockResolvedValue([1, 2]);
+
+    await expect(verifyEncryptionKeys()).rejects.toThrow(/key version 2, which FILE_ENCRYPTION_KEY does not contain/);
+    expect(model.recordKekCheck).not.toHaveBeenCalled();
   });
 
   it('fails if another process recorded a different key first', async () => {

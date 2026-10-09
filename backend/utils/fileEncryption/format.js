@@ -19,7 +19,7 @@
 import crypto from 'crypto';
 
 import { logger } from '../../config/logger.js';
-import { isRandomKey, readSecret } from './keySource.js';
+import { isRandomKey, readKeyring } from './keySource.js';
 
 // --- AES-GCM-HKDF-STREAMING parameters (AES256_GCM_HKDF_1MB) ---
 const HKDF_HASH = 'sha256';
@@ -69,27 +69,15 @@ function deriveKeyFromRaw(raw) {
 }
 
 /**
- * Master key (HKDF ikm) from FILE_ENCRYPTION_KEY or FILE_ENCRYPTION_KEY_FILE.
- * Production accepts only a random 32-byte key: a passphrase goes through
- * PBKDF2 with a fixed salt, so a guessable one yields a guessable key.
+ * The primary master key (HKDF ikm): the highest version in FILE_ENCRYPTION_KEY
+ * or FILE_ENCRYPTION_KEY_FILE. Production accepts only a random 32-byte key: a
+ * passphrase goes through PBKDF2 with a fixed salt, so a guessable one yields a
+ * guessable key.
  * @returns {Buffer} 32-byte key
  */
 function getEncryptionKey() {
-  const envKey = readSecret('FILE_ENCRYPTION_KEY');
-  if (envKey && process.env.NODE_ENV === 'production' && !isRandomKey(envKey)) {
-    throw new Error(
-      'FILE_ENCRYPTION_KEY must be a random 32-byte key in production (base64 or 64 hex characters), not a passphrase. ' +
-        'Generate one with "npm run key:generate" and move to it with scripts/rotate-kek.js.'
-    );
-  }
-  if (envKey) {
-    try {
-      return deriveKeyFromRaw(envKey);
-    } catch (error) {
-      logger.error('[Encryption] Error processing encryption key from environment', error);
-      throw new Error('Invalid encryption key format', { cause: error });
-    }
-  }
+  const keyring = readKeyring();
+  if (keyring) return keyFromKeyring(keyring, keyring.primary);
 
   if (process.env.NODE_ENV === 'production') {
     throw new Error(
@@ -99,6 +87,33 @@ function getEncryptionKey() {
 
   logger.warn('[Encryption] FILE_ENCRYPTION_KEY not set, using development default key');
   return deriveKeyFromRaw('development-key-change-in-production');
+}
+
+/**
+ * One version's key from the keyring. Older versions may still be passphrases:
+ * they are only kept to rotate away from them.
+ * @param {{ keys: Map<number, string>, primary: number }} keyring
+ * @param {number} version
+ * @param {{ allowPassphrase?: boolean }} [opts] - read a passphrase primary, only to rotate away from it
+ * @returns {Buffer} 32-byte key
+ */
+function keyFromKeyring(keyring, version, { allowPassphrase = false } = {}) {
+  const raw = keyring.keys.get(version);
+  if (!raw) {
+    throw new Error(`FILE_ENCRYPTION_KEY has no key version ${version}. Restore the key file that contains it.`);
+  }
+  if (version === keyring.primary && process.env.NODE_ENV === 'production' && !allowPassphrase && !isRandomKey(raw)) {
+    throw new Error(
+      'FILE_ENCRYPTION_KEY must be a random 32-byte key in production (base64 or 64 hex characters), not a passphrase. ' +
+        'Add a random key by rotating: ./rotate.sh key on Docker, or "npm run rotate -- key".'
+    );
+  }
+  try {
+    return deriveKeyFromRaw(raw);
+  } catch (error) {
+    logger.error('[Encryption] Error processing encryption key from environment', error);
+    throw new Error('Invalid encryption key format', { cause: error });
+  }
 }
 
 /**
@@ -272,7 +287,7 @@ export {
   PLAINTEXT_SEGMENT_MAX,
   // Key + header
   getEncryptionKey,
-  deriveKeyFromRaw,
+  keyFromKeyring,
   deriveKey,
   buildHeader,
   parseHeader,

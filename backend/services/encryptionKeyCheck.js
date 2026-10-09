@@ -5,20 +5,29 @@
  */
 
 import { logger } from '../config/logger.js';
-import { getKekChecks, recordKekCheck, sampleSealedUnderVersion } from '../models/kekCheck.model.js';
+import { getKekChecks, kekVersionsInUse, recordKekCheck, sampleSealedUnderVersion } from '../models/kekCheck.model.js';
 import { kekForVersion, primaryKekVersion, unwrapDek } from '../utils/fileEncryption.js';
 import { kekCheckValue, matchesKekCheck } from '../utils/fileEncryption/keyCheck.js';
-import { configuredKeyVersions } from '../utils/fileEncryption/keySource.js';
+import { readKeyring } from '../utils/fileEncryption/keySource.js';
 import { openSecret } from '../utils/storageSettings.js';
 
 class EncryptionKeyMismatchError extends Error {
-  constructor(version, primary) {
-    const name = version === primary ? 'FILE_ENCRYPTION_KEY' : `FILE_ENCRYPTION_KEY_V${version}`;
+  constructor(version) {
     super(
-      `${name} (key version ${version}) does not match the key this deployment's data was encrypted with. ` +
-        'Restore the original value, or check FILE_KEK_VERSION.'
+      `FILE_ENCRYPTION_KEY (key version ${version}) does not match the key this deployment's data was encrypted with. ` +
+        'Restore the original key file or value.'
     );
     this.name = 'EncryptionKeyMismatchError';
+  }
+}
+
+class EncryptionKeyMissingError extends Error {
+  constructor(versions) {
+    super(
+      `Stored data is encrypted under key version ${versions.join(', ')}, which FILE_ENCRYPTION_KEY does not contain. ` +
+        'Restore the key file that has every version.'
+    );
+    this.name = 'EncryptionKeyMissingError';
   }
 }
 
@@ -35,25 +44,31 @@ async function opensExistingData(version, kek) {
 }
 
 /**
- * Check every configured key version against its stored check value, recording
- * a check the first time a version is seen.
- * @throws {EncryptionKeyMismatchError}
+ * Check every key in the keyring against its stored check value, recording a
+ * check the first time a version is seen, and make sure no stored data needs a
+ * version the keyring lacks.
+ * @param {{ allowPassphrasePrimary?: boolean }} [opts] - for adding a random key on top of a passphrase
+ * @throws {EncryptionKeyMismatchError | EncryptionKeyMissingError}
  */
-async function verifyEncryptionKeys() {
-  const primary = primaryKekVersion();
-  const checks = await getKekChecks();
+async function verifyEncryptionKeys({ allowPassphrasePrimary = false } = {}) {
+  const configured = readKeyring()?.keys.keys() ?? [primaryKekVersion()];
+  const versions = [...configured].sort((a, b) => a - b);
+  const [checks, inUse] = await Promise.all([getKekChecks(), kekVersionsInUse()]);
 
-  for (const version of configuredKeyVersions(primary)) {
-    const kek = kekForVersion(version);
+  const missing = inUse.filter(version => !versions.includes(version));
+  if (missing.length) throw new EncryptionKeyMissingError(missing);
+
+  for (const version of versions) {
+    const kek = kekForVersion(version, { allowPassphrase: allowPassphrasePrimary });
     const stored = checks.get(version);
     if (stored) {
-      if (!matchesKekCheck(kek, stored)) throw new EncryptionKeyMismatchError(version, primary);
+      if (!matchesKekCheck(kek, stored)) throw new EncryptionKeyMismatchError(version);
       continue;
     }
-    if (!(await opensExistingData(version, kek))) throw new EncryptionKeyMismatchError(version, primary);
+    if (!(await opensExistingData(version, kek))) throw new EncryptionKeyMismatchError(version);
     // Another process may record first; whichever value won must still match this key.
     const recorded = await recordKekCheck(version, kekCheckValue(kek));
-    if (!matchesKekCheck(kek, recorded)) throw new EncryptionKeyMismatchError(version, primary);
+    if (!matchesKekCheck(kek, recorded)) throw new EncryptionKeyMismatchError(version);
     logger.info({ version }, '[Encryption] Recorded key check value for master key version');
   }
 }

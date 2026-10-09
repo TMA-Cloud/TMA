@@ -2,7 +2,13 @@ import crypto from 'crypto';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { configuredKeyVersions, generateKey, isRandomKey } from '../../../utils/fileEncryption/keySource.js';
+import {
+  formatKeyring,
+  generateKey,
+  isRandomKey,
+  parseKeyring,
+  primaryVersionOf,
+} from '../../../utils/fileEncryption/keySource.js';
 import { kekCheckValue, matchesKekCheck } from '../../../utils/fileEncryption/keyCheck.js';
 
 afterEach(() => {
@@ -34,12 +40,54 @@ describe('isRandomKey', () => {
   });
 });
 
-describe('configuredKeyVersions', () => {
-  it('lists the primary plus every older key present in the environment', () => {
-    vi.stubEnv('FILE_ENCRYPTION_KEY_V1', 'old');
-    vi.stubEnv('FILE_ENCRYPTION_KEY_V3_FILE', '/run/secrets/v3');
-    vi.stubEnv('FILE_ENCRYPTION_KEY_V4', '');
-    expect(configuredKeyVersions(5)).toEqual([1, 3, 5]);
+describe('parseKeyring', () => {
+  const a = 'a'.repeat(64);
+  const b = 'b'.repeat(64);
+
+  it('reads a plain key as version 1', () => {
+    expect(parseKeyring(`${a}\n`)).toEqual(new Map([[1, a]]));
+  });
+
+  it('reads versioned lines with comments and blank lines', () => {
+    const keys = parseKeyring(`# header\n\n1:${a}\r\n# note\n2:${b}\n`);
+    expect([...keys]).toEqual([
+      [1, a],
+      [2, b],
+    ]);
+    expect(primaryVersionOf(keys)).toBe(2);
+  });
+
+  it('reads comma-separated entries, the form that fits on one .env line', () => {
+    expect([...parseKeyring(`3:${a}, 5:${b}`)]).toEqual([
+      [3, a],
+      [5, b],
+    ]);
+  });
+
+  it('keeps base64 padding in the key', () => {
+    const key = crypto.randomBytes(32).toString('base64');
+    expect(parseKeyring(`4:${key}`).get(4)).toBe(key);
+  });
+
+  it.each([
+    ['an empty value', '# only a comment\n'],
+    ['several keys without versions', `${a}\n${b}`],
+    ['a mix of plain and versioned keys', `${a}\n2:${b}`],
+    ['version 0', `0:${a}`],
+    ['a repeated version', `1:${a}\n1:${b}`],
+  ])('rejects %s', (_label, text) => {
+    expect(() => parseKeyring(text)).toThrow(/FILE_ENCRYPTION_KEY/);
+  });
+
+  it('round-trips through formatKeyring, oldest version first', () => {
+    const keys = new Map([
+      [2, b],
+      [1, a],
+    ]);
+    const text = formatKeyring(keys);
+    expect(text.startsWith('#')).toBe(true);
+    expect(text.trim().split('\n').slice(-2)).toEqual([`1:${a}`, `2:${b}`]);
+    expect(parseKeyring(text)).toEqual(keys);
   });
 });
 

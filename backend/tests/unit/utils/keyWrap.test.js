@@ -22,15 +22,17 @@ import {
 const KEK_V1 = 'a'.repeat(64);
 const KEK_V2 = 'b'.repeat(64);
 
-const ENV_KEYS = ['FILE_ENCRYPTION_KEY', 'FILE_KEK_VERSION', 'FILE_ENCRYPTION_KEY_V1'];
+// The keyring after one rotation: v2 encrypts, v1 still unwraps.
+const ROTATED = `1:${KEK_V1}
+2:${KEK_V2}`;
+
+const ENV_KEYS = ['FILE_ENCRYPTION_KEY'];
 let saved;
 
 beforeEach(() => {
   saved = Object.fromEntries(ENV_KEYS.map(k => [k, process.env[k]]));
-  // Default posture: v1 primary.
+  // Default posture: a plain key, which is version 1.
   process.env.FILE_ENCRYPTION_KEY = KEK_V1;
-  process.env.FILE_KEK_VERSION = '1';
-  delete process.env.FILE_ENCRYPTION_KEY_V1;
 });
 
 afterEach(() => {
@@ -47,21 +49,18 @@ async function collect(stream) {
 }
 
 describe('primaryKekVersion', () => {
-  it('defaults to 1', () => {
-    delete process.env.FILE_KEK_VERSION;
+  it('is 1 for a plain key', () => {
     expect(primaryKekVersion()).toBe(1);
   });
 
-  it('reads a positive integer from the environment', () => {
-    process.env.FILE_KEK_VERSION = '7';
+  it('is the highest version in the keyring, whatever the order', () => {
+    process.env.FILE_ENCRYPTION_KEY = `7:${KEK_V2},3:${KEK_V1}`;
     expect(primaryKekVersion()).toBe(7);
   });
 
-  it('rejects a non-positive or non-integer version', () => {
-    process.env.FILE_KEK_VERSION = '0';
-    expect(() => primaryKekVersion()).toThrow(/Invalid FILE_KEK_VERSION/);
-    process.env.FILE_KEK_VERSION = 'nope';
-    expect(() => primaryKekVersion()).toThrow(/Invalid FILE_KEK_VERSION/);
+  it('is 1 in development without a key', () => {
+    delete process.env.FILE_ENCRYPTION_KEY;
+    expect(primaryKekVersion()).toBe(1);
   });
 });
 
@@ -108,17 +107,15 @@ describe('kekForVersion', () => {
     expect(kekForVersion(1).equals(Buffer.from(KEK_V1, 'hex'))).toBe(true);
   });
 
-  it('resolves an older version from FILE_ENCRYPTION_KEY_V<n>', () => {
-    process.env.FILE_KEK_VERSION = '2';
-    process.env.FILE_ENCRYPTION_KEY = KEK_V2;
-    process.env.FILE_ENCRYPTION_KEY_V1 = KEK_V1;
+  it('resolves every version in the keyring', () => {
+    process.env.FILE_ENCRYPTION_KEY = ROTATED;
     expect(kekForVersion(1).equals(Buffer.from(KEK_V1, 'hex'))).toBe(true);
     expect(kekForVersion(2).equals(Buffer.from(KEK_V2, 'hex'))).toBe(true);
   });
 
-  it('throws a clear error when an old KEK version is not configured', () => {
-    process.env.FILE_KEK_VERSION = '2';
-    expect(() => kekForVersion(1)).toThrow(/FILE_ENCRYPTION_KEY_V1/);
+  it('throws a clear error when the keyring lacks a version', () => {
+    process.env.FILE_ENCRYPTION_KEY = `2:${KEK_V2}`;
+    expect(() => kekForVersion(1)).toThrow(/has no key version 1/);
   });
 });
 
@@ -160,9 +157,7 @@ describe('rewrapDekToPrimary (a key rotation, per file)', () => {
     const original = newWrappedDek();
 
     // Operator rotates: v2 is now primary, v1 kept for unwrapping.
-    process.env.FILE_KEK_VERSION = '2';
-    process.env.FILE_ENCRYPTION_KEY = KEK_V2;
-    process.env.FILE_ENCRYPTION_KEY_V1 = KEK_V1;
+    process.env.FILE_ENCRYPTION_KEY = ROTATED;
 
     const rewrapped = rewrapDekToPrimary(original.dekWrapped, original.kekVersion);
     expect(rewrapped.kekVersion).toBe(2);
@@ -187,9 +182,7 @@ describe('end-to-end: body encrypted under a wrapped DEK survives KEK rotation',
     const ciphertext = await collect(Readable.from([plaintext]).pipe(createEncryptStream(dek)));
 
     // Rotate the master key v1 -> v2 and rewrap the DEK (no body rewrite).
-    process.env.FILE_KEK_VERSION = '2';
-    process.env.FILE_ENCRYPTION_KEY = KEK_V2;
-    process.env.FILE_ENCRYPTION_KEY_V1 = KEK_V1;
+    process.env.FILE_ENCRYPTION_KEY = ROTATED;
     const rotated = rewrapDekToPrimary(dekWrapped, kekVersion);
 
     // The body (never touched) decrypts via the ikm resolved from the new wrap.

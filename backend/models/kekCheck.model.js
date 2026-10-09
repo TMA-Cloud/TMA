@@ -38,4 +38,16 @@ async function sampleSealedUnderVersion(version) {
   };
 }
 
-export { getKekChecks, recordKekCheck, sampleSealedUnderVersion };
+/** Every key version that stored file keys or the bucket secret are wrapped under. */
+async function kekVersionsInUse() {
+  const result = await pool.query(
+    `SELECT DISTINCT dek_kek_version AS version FROM files WHERE dek_wrapped IS NOT NULL
+     UNION
+     SELECT storage_secret_kek_version FROM app_settings
+      WHERE id = 'app_settings' AND storage_secret_encrypted IS NOT NULL
+     ORDER BY 1`
+  );
+  return result.rows.map(row => row.version).filter(version => version != null);
+}
+
+export { getKekChecks, recordKekCheck, sampleSealedUnderVersion, kekVersionsInUse };

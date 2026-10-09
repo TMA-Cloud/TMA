@@ -52,19 +52,73 @@ function generateKey() {
   return crypto.randomBytes(KEY_LENGTH).toString('base64');
 }
 
+const VERSIONED_ENTRY = /^(\d+):(.+)$/;
+
+const KEYRING_HEADER = [
+  '# TMA Cloud file encryption keys, one "version:key" per line.',
+  '# The highest version encrypts new data. Older lines decrypt data not yet',
+  '# rewrapped and data in older backups, so keep them with those backups.',
+];
+
 /**
- * KEK versions with a key available: the primary plus every FILE_ENCRYPTION_KEY_V<n>
- * (or its _FILE form) present in the environment.
- * @param {number} primary
- * @returns {number[]}
+ * Parse a keyring: `version:key` entries separated by newlines or commas, with
+ * `#` comment lines. A single entry without a version is version 1, so a plain
+ * key from a fresh install is a keyring of one.
+ * @param {string} text
+ * @returns {Map<number, string>} raw key by version
  */
-function configuredKeyVersions(primary) {
-  const versions = new Set([primary]);
-  for (const name of Object.keys(process.env)) {
-    const match = /^FILE_ENCRYPTION_KEY_V(\d+)(?:_FILE)?$/.exec(name);
-    if (match && process.env[name]) versions.add(Number(match[1]));
+function parseKeyring(text) {
+  const entries = text
+    .split(/\r?\n/)
+    .filter(line => !line.trim().startsWith('#'))
+    .flatMap(line => line.split(','))
+    .map(entry => entry.trim())
+    .filter(Boolean);
+  if (!entries.length) throw new Error('FILE_ENCRYPTION_KEY has no keys');
+  if (entries.length === 1 && !VERSIONED_ENTRY.test(entries[0])) return new Map([[1, entries[0]]]);
+
+  const keys = new Map();
+  for (const entry of entries) {
+    const match = VERSIONED_ENTRY.exec(entry);
+    if (!match) throw new Error('FILE_ENCRYPTION_KEY lists several keys, so each needs a "version:" prefix');
+    const version = Number(match[1]);
+    if (!Number.isSafeInteger(version) || version < 1) {
+      throw new Error(`FILE_ENCRYPTION_KEY has an invalid key version: ${match[1]}`);
+    }
+    if (keys.has(version)) throw new Error(`FILE_ENCRYPTION_KEY lists key version ${version} twice`);
+    keys.set(version, match[2].trim());
   }
-  return [...versions].sort((a, b) => a - b);
+  return keys;
 }
 
-export { readSecret, isRandomKey, generateKey, configuredKeyVersions };
+/** The highest version in a keyring: the one new data is encrypted under. */
+function primaryVersionOf(keys) {
+  return Math.max(...keys.keys());
+}
+
+/**
+ * Serialise a keyring for FILE_ENCRYPTION_KEY_FILE, oldest first.
+ * @param {Map<number, string>} keys
+ */
+function formatKeyring(keys) {
+  const lines = [...keys].sort(([a], [b]) => a - b).map(([version, key]) => `${version}:${key}`);
+  return [...KEYRING_HEADER, ...lines, ''].join('\n');
+}
+
+const parsedKeyrings = new Map();
+
+/**
+ * The configured keyring, or null when FILE_ENCRYPTION_KEY is unset.
+ * @returns {{ keys: Map<number, string>, primary: number } | null}
+ */
+function readKeyring() {
+  const raw = readSecret('FILE_ENCRYPTION_KEY');
+  if (!raw) return null;
+  if (!parsedKeyrings.has(raw)) {
+    const keys = parseKeyring(raw);
+    parsedKeyrings.set(raw, { keys, primary: primaryVersionOf(keys) });
+  }
+  return parsedKeyrings.get(raw);
+}
+
+export { readSecret, isRandomKey, generateKey, parseKeyring, primaryVersionOf, formatKeyring, readKeyring };
