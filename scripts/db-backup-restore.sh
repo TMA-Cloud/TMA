@@ -93,12 +93,17 @@ running_container() {
   docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "$1"
 }
 
+# Docker Compose for the project in PROJECT_ROOT, without changing this shell's directory.
+compose() {
+  (cd "${PROJECT_ROOT}" && docker compose "$@")
+}
+
 if [[ -n "${CONTAINER_NAME}" ]]; then
   running_container "${CONTAINER_NAME}" ||
     die "DB_CONTAINER='${CONTAINER_NAME}' is set but no running container with that name was found."
   USE_DOCKER=true
 elif command -v docker >/dev/null 2>&1; then
-  compose_id="$(cd "${PROJECT_ROOT}" && docker compose ps -q postgres 2>/dev/null || true)"
+  compose_id="$(compose ps -q postgres 2>/dev/null || true)"
   if [[ -n "${compose_id}" ]]; then
     CONTAINER_NAME="$(docker inspect -f '{{.Name}}' "${compose_id}" | sed 's#^/##')"
     USE_DOCKER=true
@@ -185,10 +190,12 @@ trap cleanup EXIT
 # ── SHA-256 checksum helper ──────────────────────────────────
 compute_sha256() {
   local file="$1"
+  # Hashing stdin keeps the file name out of the output: GNU sha256sum prefixes
+  # the hash with a backslash when the name holds a backslash or newline.
   if command -v sha256sum >/dev/null 2>&1; then
-    sha256sum "${file}" | awk '{print $1}'
+    sha256sum < "${file}" | awk '{print $1}'
   elif command -v shasum >/dev/null 2>&1; then
-    shasum -a 256 "${file}" | awk '{print $1}'
+    shasum -a 256 < "${file}" | awk '{print $1}'
   else
     warn "No sha256sum/shasum found. Skipping checksum."
     echo "n/a"
@@ -407,11 +414,11 @@ do_restore() {
   # half-restored database, so the compose services are stopped first.
   local stopped_services=""
   if ${COMPOSE_PROJECT}; then
-    stopped_services="$(cd "${PROJECT_ROOT}" && docker compose ps --status running --services 2>/dev/null | grep -xE 'app|worker' | tr '\n' ' ' || true)"
+    stopped_services="$(compose ps --status running --services 2>/dev/null | grep -xE 'app|worker' | tr '\n' ' ' || true)"
     if [[ -n "${stopped_services}" ]]; then
       info "Stopping ${stopped_services}…"
       # shellcheck disable=SC2086
-      (cd "${PROJECT_ROOT}" && docker compose stop ${stopped_services} >/dev/null 2>&1)
+      compose stop ${stopped_services} >/dev/null 2>&1
       STOPPED_SERVICES="${stopped_services}"
     fi
   else
@@ -498,7 +505,7 @@ do_restore() {
   if [[ -n "${stopped_services}" ]]; then
     info "Starting ${stopped_services}…"
     # shellcheck disable=SC2086
-    (cd "${PROJECT_ROOT}" && docker compose start ${stopped_services} >/dev/null 2>&1)
+    compose start ${stopped_services} >/dev/null 2>&1
     STOPPED_SERVICES=""
     success "Started ${stopped_services}"
   else
@@ -512,7 +519,7 @@ do_restore() {
 clear_cache() {
   local redis_id="" reply=""
   if ${COMPOSE_PROJECT}; then
-    redis_id="$(cd "${PROJECT_ROOT}" && docker compose ps -q redis 2>/dev/null || true)"
+    redis_id="$(compose ps -q redis 2>/dev/null || true)"
   fi
   if [[ -z "${redis_id}" ]]; then
     warn "Clear the Redis cache with FLUSHDB, or entries from before the restore stay for up to 5 minutes."
