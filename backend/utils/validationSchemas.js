@@ -225,6 +225,10 @@ const updateHideFileExtensionsConfigSchema = [body('hidden').isBoolean().withMes
 
 const updateElectronOnlyAccessConfigSchema = [body('enabled').isBoolean().withMessage('Enabled must be a boolean')];
 
+const updateCloudDriveConfigSchema = [
+  body('saveOnly').isBoolean().withMessage('saveOnly must be true or false').toBoolean(true),
+];
+
 const updatePasswordChangeConfigSchema = [body('enabled').isBoolean().withMessage('Enabled must be a boolean')];
 
 const intIn = (field, { min, max }, message) =>
@@ -399,5 +403,6 @@ export {
   checkUploadStorageSchema,
   updateElectronOnlyAccessConfigSchema,
   updatePasswordChangeConfigSchema,
+  updateCloudDriveConfigSchema,
   updateKnownProxiesConfigSchema,
 };

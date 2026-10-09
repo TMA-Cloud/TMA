@@ -32,6 +32,7 @@ const handlerNames = [
   'deleteSubUser',
   'getActiveClients',
   'getActivityConfig',
+  'getCloudDriveConfig',
   'getElectronOnlyAccessConfig',
   'getGoogleAuthSettings',
   'getHideFileExtensionsConfig',
@@ -50,6 +51,7 @@ const handlerNames = [
   'testStorageConfig',
   'toggleSignup',
   'updateAccessTimeConfig',
+  'updateCloudDriveConfig',
   'updateElectronOnlyAccessConfig',
   'updateGoogleAuthSettings',
   'updateHideFileExtensionsConfig',
@@ -270,6 +272,7 @@ describe('boolean config toggles', () => {
     ['hide file extensions', 'put', '/api/user/hide-file-extensions-config', 'hidden'],
     ['desktop-only access', 'put', '/api/user/electron-only-access-config', 'enabled'],
     ['password change', 'put', '/api/user/password-change-config', 'enabled'],
+    ['Cloud Drive mode', 'put', '/api/user/cloud-drive-config', 'saveOnly'],
   ];
 
   it.each(toggles)('%s accepts a real boolean', async (_label, method, path, field) => {

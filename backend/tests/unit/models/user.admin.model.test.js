@@ -3,9 +3,11 @@ import { describe, expect, it } from 'vitest';
 import { alwaysReturn, clientQuery, executedCalls, queueQueryResults } from '../../mocks/db.mock.js';
 import { cacheKeys, getCache, setCache } from '../../../utils/cache.js';
 import {
+  getCloudDriveSaveOnly,
   getElectronOnlyAccessSettings,
   getMaxUploadSizeSettings,
   getUserStorageLimit,
+  setCloudDriveSaveOnly,
   setUserStorageLimit,
 } from '../../../models/user/user.admin.model.js';
 
@@ -220,5 +222,49 @@ describe('getElectronOnlyAccessSettings', () => {
     alwaysReturn({ rows: [{ require_electron_client: true }] });
     await getElectronOnlyAccessSettings();
     expect(await getCache(cacheKeys.electronOnlyAccessSettings())).toBe(true);
+  });
+});
+
+describe('getCloudDriveSaveOnly', () => {
+  it('reports full access only when the column is exactly false', async () => {
+    alwaysReturn({ rows: [{ cloud_drive_save_only: false }] });
+    expect(await getCloudDriveSaveOnly()).toBe(false);
+  });
+
+  it.each([true, null, 'false'])('stays save-only for a stored %j', async value => {
+    alwaysReturn({ rows: [{ cloud_drive_save_only: value }] });
+    expect(await getCloudDriveSaveOnly()).toBe(true);
+  });
+
+  it('stays save-only when there is no settings row', async () => {
+    alwaysReturn({ rows: [] });
+    expect(await getCloudDriveSaveOnly()).toBe(true);
+  });
+
+  it('caches the result', async () => {
+    alwaysReturn({ rows: [{ cloud_drive_save_only: false }] });
+    await getCloudDriveSaveOnly();
+    expect(await getCache(cacheKeys.cloudDriveSaveOnly())).toBe(false);
+  });
+});
+
+describe('setCloudDriveSaveOnly', () => {
+  it('stores only a real true as save-only and drops the cached value', async () => {
+    await setCache(cacheKeys.cloudDriveSaveOnly(), true);
+    queueQueryResults([{ rows: [] }, { rows: [{ first_user_id: ADMIN }] }, { rows: [] }, { rows: [] }]);
+
+    await setCloudDriveSaveOnly('true', ADMIN);
+
+    const update = executedCalls().find(call => /cloud_drive_save_only = \$1/.test(call.sql));
+    expect(update.params[0]).toBe(false);
+    expect(await getCache(cacheKeys.cloudDriveSaveOnly())).toBeNull();
+  });
+
+  it('refuses anyone but the first user', async () => {
+    queueQueryResults([{ rows: [] }, { rows: [{ first_user_id: ADMIN }] }, { rows: [] }]);
+    await expect(setCloudDriveSaveOnly(false, TARGET)).rejects.toThrow(
+      'Only the first user can configure the Cloud Drive mode'
+    );
+    expect(executedCalls().some(call => /cloud_drive_save_only = \$1/.test(call.sql))).toBe(false);
   });
 });

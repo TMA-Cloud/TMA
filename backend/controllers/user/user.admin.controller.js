@@ -30,6 +30,7 @@ export {
   getPasswordChangeConfig,
   updatePasswordChangeConfig,
 } from './user.admin.config.controller.js';
+export { getCloudDriveConfig, updateCloudDriveConfig } from './user.admin.clouddrive.controller.js';
 export { listUsers, updateUserStorageLimit } from './user.admin.users.controller.js';
 export {
   getActivityConfig,

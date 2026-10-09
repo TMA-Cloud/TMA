@@ -193,3 +193,17 @@ export async function updateGoogleAuthConfig(input: {
 export async function deleteGoogleAuthConfig(): Promise<GoogleAuthSettings> {
   return await apiDelete<GoogleAuthSettings>('/api/user/google-auth-config');
 }
+
+/** Cloud Drive access mode. Every user reads it; only the first user changes it. */
+export interface CloudDriveConfig {
+  saveOnly: boolean;
+  canConfigure: boolean;
+}
+
+export async function getCloudDriveConfig(signal?: AbortSignal): Promise<CloudDriveConfig> {
+  return await apiGet<CloudDriveConfig>('/api/user/cloud-drive-config', { signal });
+}
+
+export async function updateCloudDriveConfig(saveOnly: boolean): Promise<CloudDriveConfig> {
+  return await apiPut<CloudDriveConfig>('/api/user/cloud-drive-config', { saveOnly });
+}

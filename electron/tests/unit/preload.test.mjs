@@ -60,8 +60,7 @@ describe('channel mapping', () => {
       '1.0.9',
     ],
     ['cloudDrive.status', () => api.cloudDrive.status(), 'clouddrive:status', undefined],
-    ['cloudDrive.getMode', () => api.cloudDrive.getMode(), 'clouddrive:getMode', undefined],
-    ['cloudDrive.setMode', () => api.cloudDrive.setMode('full'), 'clouddrive:setMode', 'full'],
+    ['cloudDrive.refreshMode', () => api.cloudDrive.refreshMode(), 'clouddrive:refreshMode', undefined],
   ];
 
   it.each(cases)('%s invokes %s', (_name, call, channel, payload) => {

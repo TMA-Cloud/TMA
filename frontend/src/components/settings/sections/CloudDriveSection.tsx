@@ -1,72 +1,52 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState } from 'react';
 import { FolderSync } from 'lucide-react';
 import { SettingsSection } from '../components/SettingsSection';
 import { SettingsItem } from '../components/SettingsItem';
 import { SettingsGroup } from '../components/SettingsGroup';
 import { SettingsNote } from '../components/SettingsNote';
-import { useToast } from '../../../hooks/useToast';
 import {
   hasElectronCloudDrive,
-  getElectronCloudDriveMode,
-  setElectronCloudDriveMode,
+  refreshElectronCloudDriveMode,
   type CloudDriveMode,
 } from '../../../utils/electronDesktop';
 
 /**
- * Desktop-only controls for the TMA Cloud drive (WinFsp mount). Lets the user
- * switch the drive to "save-only" mode: folders and files stay browsable and
- * Save-As keeps working, but opening/copying file content off the drive is
- * blocked — so people keep using the app to view files.
+ * Desktop-only view of the TMA Cloud drive (WinFsp mount): where it is mounted
+ * and the access mode the first user set for every desktop app.
  *
  * Renders nothing outside the desktop app.
  */
 export const CloudDriveSection: React.FC = () => {
-  const { showToast } = useToast();
   const available = hasElectronCloudDrive();
 
-  const [mode, setMode] = useState<CloudDriveMode>('full');
+  const [mode, setMode] = useState<CloudDriveMode | null>(null);
   const [mountPoint, setMountPoint] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
-  const [saving, setSaving] = useState(false);
-
-  const load = useCallback(async () => {
-    if (!available) return;
-    try {
-      const m = await getElectronCloudDriveMode();
-      setMode(m);
-      const status = await window.electronAPI?.cloudDrive?.status?.();
-      setMountPoint(status?.mountPoint ?? null);
-    } finally {
-      setLoaded(true);
-    }
-  }, [available]);
 
   useEffect(() => {
-    void load();
-  }, [load]);
-
-  const handleToggle = async () => {
-    if (saving) return;
-    const next: CloudDriveMode = mode === 'saveOnly' ? 'full' : 'saveOnly';
-    setSaving(true);
-    // Optimistic update; revert on failure.
-    setMode(next);
-    const res = await setElectronCloudDriveMode(next);
-    setSaving(false);
-    if (!res.ok) {
-      setMode(mode);
-      showToast(res.error || 'Failed to update cloud drive mode', 'error');
-      return;
-    }
-    showToast(
-      next === 'saveOnly' ? 'Save-only — the drive can be browsed, not opened from' : 'Cloud drive set to full access',
-      'success'
-    );
-  };
+    if (!available) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const [current, status] = await Promise.all([
+          refreshElectronCloudDriveMode(),
+          window.electronAPI?.cloudDrive?.status?.(),
+        ]);
+        if (cancelled) return;
+        setMode(current);
+        setMountPoint(status?.mountPoint ?? null);
+      } finally {
+        if (!cancelled) setLoaded(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [available]);
 
   if (!available) return null;
 
-  const saveOnly = mode === 'saveOnly';
+  const modeLabel = !loaded ? 'Checking...' : mode === 'full' ? 'Full access' : 'Save-only';
 
   return (
     <SettingsSection
@@ -85,17 +65,15 @@ export const CloudDriveSection: React.FC = () => {
 
         <SettingsGroup title="Access mode" description="What other apps may do with files on the drive.">
           <SettingsItem
-            label="Save-only Mode"
-            description="Folders stay browsable; opening and copying are blocked"
-            toggle
-            toggleValue={saveOnly}
-            onToggle={handleToggle}
-            toggleDisabled={!loaded || saving}
+            label="Mode"
+            value={modeLabel}
+            description={
+              mode === 'full'
+                ? 'Other apps can open and copy files from the drive'
+                : 'Folders stay browsable; opening and copying are blocked'
+            }
           />
-          <SettingsNote>
-            Save-only keeps people viewing files in the app: other programs can still browse the drive and save into it,
-            but cannot read file contents off it.
-          </SettingsNote>
+          <SettingsNote>Set by the admin for every desktop app.</SettingsNote>
         </SettingsGroup>
       </div>
     </SettingsSection>

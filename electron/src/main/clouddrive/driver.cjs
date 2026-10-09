@@ -15,10 +15,12 @@ const { ipcMain, net: enet, session } = require('electron');
 const { getServerUrl } = require('../config.cjs');
 const { getCookieHeader } = require('../utils/file-utils.cjs');
 const { log, warn } = require('./log.cjs');
-const { getMode, persistMode } = require('./mode.cjs');
+const { DEFAULT_MODE, fetchServerMode } = require('./mode.cjs');
 const { locateFsExe } = require('./locate.cjs');
 const { tokenMatches } = require('./security.cjs');
 const { dispatch, MAX_LINE_BYTES } = require('./dispatch.cjs');
+
+const MODE_POLL_MS = 60 * 1000;
 
 class CloudDrive {
   constructor() {
@@ -31,12 +33,17 @@ class CloudDrive {
     this._sock = null; // connected fs-host pipe socket (for server→client pushes)
     this._sse = null; // backend SSE request for cache invalidation
     this._sseRetry = null;
+    this._mode = DEFAULT_MODE;
+    this._hostMode = null; // the mode the running host last received
+    this._modePoll = null;
   }
 
   // --------------------------- bridge pipe ---------------------------
 
   handleConnection(sock) {
     this._sock = sock;
+    // A mode read after the host was spawned could not be pushed before now.
+    if (this._hostMode && this._hostMode !== this._mode) this.pushMode();
     sock.setEncoding('utf8');
     let buf = '';
     sock.on('data', chunk => {
@@ -103,20 +110,48 @@ class CloudDrive {
     }
   }
 
-  /** Persist the drive mode and apply it live to a running host (no remount). */
-  setMode(mode) {
-    const normalized = mode === 'saveOnly' ? 'saveOnly' : 'full';
-    persistMode(normalized);
-    if (this._sock) {
-      try {
-        this._sock.write(
-          JSON.stringify({ push: 'mode', mode: normalized === 'saveOnly' ? 'saveonly' : 'full' }) + '\n'
-        );
-      } catch {
-        /* socket gone; the mode is persisted and applied on next mount */
-      }
+  /** Apply a mode live to a running host (no remount). */
+  applyMode(mode) {
+    if (mode === this._mode) return;
+    this._mode = mode;
+    log('drive mode:', mode);
+    this.pushMode();
+  }
+
+  pushMode() {
+    if (!this._sock) return;
+    try {
+      this._sock.write(JSON.stringify({ push: 'mode', mode: this._mode === 'saveOnly' ? 'saveonly' : 'full' }) + '\n');
+      this._hostMode = this._mode;
+    } catch {
+      /* socket gone; the next mount starts with the current mode */
     }
-    return normalized;
+  }
+
+  /** Read the server's mode and apply it; an unreadable answer keeps the current one. */
+  async refreshMode() {
+    const base = getServerUrl();
+    const mode = base ? await fetchServerMode(base) : null;
+    if (mode) this.applyMode(mode);
+    return this._mode;
+  }
+
+  // The server pushes no settings events, so a mounted drive asks every minute.
+  startModePoll() {
+    this.stopModePoll();
+    this._modePoll = setInterval(() => void this.refreshMode(), MODE_POLL_MS);
+    if (typeof this._modePoll.unref === 'function') this._modePoll.unref();
+  }
+
+  stopModePoll() {
+    if (this._modePoll) clearInterval(this._modePoll);
+    this._modePoll = null;
+  }
+
+  /** The next mount starts save-only until the server answers again. */
+  forgetMode() {
+    this._mode = DEFAULT_MODE;
+    this._hostMode = null;
   }
 
   // --------------------------- SSE cache invalidation ---------------------------
@@ -257,9 +292,11 @@ class CloudDrive {
         if (!this._mountPoint) done(new Error('bridge pipe error: ' + e.message));
       });
 
-      this._server.listen(pipePath, () => {
+      this._server.listen(pipePath, async () => {
         // A pre-mount bind error may have already rejected us before this
         // callback ran; don't spawn an orphan host after the fact.
+        if (settled) return;
+        await this.refreshMode();
         if (settled) return;
         const args = [
           '--pipe',
@@ -270,7 +307,8 @@ class CloudDrive {
           '--label',
           opts.label || 'TMA Cloud',
         ];
-        if (getMode() === 'saveOnly') args.push('--mode', 'saveonly');
+        if (this._mode === 'saveOnly') args.push('--mode', 'saveonly');
+        this._hostMode = this._mode;
         if (opts.debug) args.push('--debug');
 
         log('spawning host:', exe, '--pipe', this._pipeName, '--mount', opts.mount || '*');
@@ -299,6 +337,7 @@ class CloudDrive {
             if (m) {
               this._mountPoint = m[1].trim();
               this.startSse(); // live cache invalidation from the backend event stream
+              this.startModePoll();
               done(null, this._mountPoint);
             }
           }
@@ -310,6 +349,8 @@ class CloudDrive {
           this._mountPoint = null;
           this._child = null;
           this.stopSse();
+          this.stopModePoll();
+          this.forgetMode();
           this.closeServer();
           done(new Error('filesystem host exited before mounting (code ' + code + ')'));
         });
@@ -347,6 +388,8 @@ class CloudDrive {
       this._mountPoint = null;
       this._authToken = null;
       this.stopSse();
+      this.stopModePoll();
+      this.forgetMode();
       if (!child) {
         this.closeServer();
         return resolve();
@@ -476,24 +519,17 @@ class CloudDrive {
 
   // --------------------------- IPC ---------------------------
 
-  // The renderer reads the mount and changes its mode; the cookie watcher
-  // above starts and stops it.
+  // The renderer reads the mount and its mode; the cookie watcher above
+  // starts and stops it, and only the server sets the mode.
   registerCloudDriveHandlers() {
     ipcMain.handle('clouddrive:status', async () => ({
       running: this.isRunning(),
       mountPoint: this.getMountPoint(),
-      mode: getMode(),
+      mode: this._mode,
     }));
 
-    ipcMain.handle('clouddrive:getMode', async () => ({ mode: getMode() }));
-
-    ipcMain.handle('clouddrive:setMode', async (_event, mode) => {
-      try {
-        return { ok: true, mode: this.setMode(mode) };
-      } catch (err) {
-        return { ok: false, error: err && err.message ? err.message : String(err) };
-      }
-    });
+    // Lets the first user's own drive apply a saved mode without waiting for the poll.
+    ipcMain.handle('clouddrive:refreshMode', async () => ({ mode: await this.refreshMode() }));
   }
 }
 

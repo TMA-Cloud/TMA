@@ -6,16 +6,15 @@ import {
   copyFilesToPcClipboard,
   editFileWithDesktopElectron,
   getElectronAppVersion,
-  getElectronCloudDriveMode,
   hasElectronClipboard,
   hasElectronCloudDrive,
   hasElectronOpenOnDesktop,
   claimElectronClipboard,
   hasExternalElectronClipboardFiles,
   isElectron,
+  refreshElectronCloudDriveMode,
   saveFileViaElectron,
   saveFilesBulkViaElectron,
-  setElectronCloudDriveMode,
   subscribeToElectronClipboardUploadProgress,
   subscribeToElectronClipboardUploadStatus,
   subscribeToUpdateDownloadProgress,
@@ -45,8 +44,7 @@ function installElectron(overrides: Partial<ElectronAPI> = {}) {
     },
     cloudDrive: {
       status: vi.fn(async () => ({ running: true, mountPoint: 'T:' })),
-      getMode: vi.fn(async () => ({ mode: 'full' as const })),
-      setMode: vi.fn(async () => ({ ok: true, mode: 'saveOnly' as const })),
+      refreshMode: vi.fn(async () => ({ mode: 'full' as const })),
     },
     ...overrides,
   } as unknown as ElectronAPI;
@@ -104,46 +102,29 @@ describe('capability probes', () => {
   });
 });
 
-describe('cloud drive mode', () => {
-  it('reads the current mode', async () => {
-    installElectron();
-    expect(await getElectronCloudDriveMode()).toBe('full');
-  });
-
-  it('normalises an unexpected mode to "full"', async () => {
+describe('refreshElectronCloudDriveMode', () => {
+  it('asks the drive to re-read the mode and reports it', async () => {
     const api = installElectron();
-    api.cloudDrive!.getMode = vi.fn(async () => ({ mode: 'nonsense' as never }));
-    expect(await getElectronCloudDriveMode()).toBe('full');
+    expect(await refreshElectronCloudDriveMode()).toBe('full');
+    expect(api.cloudDrive!.refreshMode).toHaveBeenCalledTimes(1);
   });
 
-  it('returns "full" outside the desktop app', async () => {
-    expect(await getElectronCloudDriveMode()).toBe('full');
-  });
-
-  it('returns "full" when the bridge call throws', async () => {
+  it('reports save-only for an unexpected mode', async () => {
     const api = installElectron();
-    api.cloudDrive!.getMode = vi.fn(async () => {
+    api.cloudDrive!.refreshMode = vi.fn(async () => ({ mode: 'nonsense' as never }));
+    expect(await refreshElectronCloudDriveMode()).toBe('saveOnly');
+  });
+
+  it('reports save-only when the bridge call throws', async () => {
+    const api = installElectron();
+    api.cloudDrive!.refreshMode = vi.fn(async () => {
       throw new Error('ipc failed');
     });
-    expect(await getElectronCloudDriveMode()).toBe('full');
+    expect(await refreshElectronCloudDriveMode()).toBe('saveOnly');
   });
 
-  it('forwards a mode change to the bridge', async () => {
-    const api = installElectron();
-    expect(await setElectronCloudDriveMode('saveOnly')).toMatchObject({ ok: true });
-    expect(api.cloudDrive!.setMode).toHaveBeenCalledWith('saveOnly');
-  });
-
-  it('reports "Not available" outside the desktop app', async () => {
-    expect(await setElectronCloudDriveMode('saveOnly')).toEqual({ ok: false, error: 'Not available' });
-  });
-
-  it('surfaces a bridge failure as an error result rather than throwing', async () => {
-    const api = installElectron();
-    api.cloudDrive!.setMode = vi.fn(async () => {
-      throw new Error('mount busy');
-    });
-    expect(await setElectronCloudDriveMode('saveOnly')).toEqual({ ok: false, error: 'mount busy' });
+  it('returns null outside the desktop app', async () => {
+    expect(await refreshElectronCloudDriveMode()).toBeNull();
   });
 });
 

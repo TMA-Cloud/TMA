@@ -1,40 +1,31 @@
 /*
- * Drive behavior mode, persisted per-device in <userData>/clouddrive-config.json.
+ * Drive access mode, set by the first user on the server for every desktop app.
  *   'full'     - files can be opened/read from the drive
- *   'saveOnly' - browse + Save-As only; reading file content is denied (default)
+ *   'saveOnly' - browse + Save-As only; reading file content is denied
+ * Until the server answers the drive is save-only, so a failed read never opens it up.
  */
-const fs = require('fs');
-const path = require('path');
-const { app } = require('electron');
+const { getCookieHeader, getJson } = require('../utils/file-utils.cjs');
 
-function modeConfigPath() {
+const DEFAULT_MODE = 'saveOnly';
+const FETCH_TIMEOUT_MS = 10000;
+
+/** The server's mode, or null when it could not be read. */
+async function fetchServerMode(base) {
+  let timer = null;
+  const timeout = new Promise((_resolve, reject) => {
+    timer = setTimeout(() => reject(new Error('timed out')), FETCH_TIMEOUT_MS);
+  });
   try {
-    return path.join(app.getPath('userData'), 'clouddrive-config.json');
+    const cookieHeader = await getCookieHeader(base);
+    const data = await Promise.race([getJson(`${base}/api/user/cloud-drive-config`, cookieHeader), timeout]);
+    if (data && data.saveOnly === false) return 'full';
+    if (data && data.saveOnly === true) return 'saveOnly';
+    return null;
   } catch {
     return null;
+  } finally {
+    clearTimeout(timer);
   }
 }
 
-function getMode() {
-  try {
-    const p = modeConfigPath();
-    if (p && fs.existsSync(p)) {
-      const cfg = JSON.parse(fs.readFileSync(p, 'utf8'));
-      return cfg && cfg.mode === 'full' ? 'full' : 'saveOnly';
-    }
-  } catch {
-    /* ignore */
-  }
-  return 'saveOnly';
-}
-
-function persistMode(mode) {
-  try {
-    const p = modeConfigPath();
-    if (p) fs.writeFileSync(p, JSON.stringify({ mode }));
-  } catch {
-    /* ignore */
-  }
-}
-
-module.exports = { getMode, persistMode };
+module.exports = { DEFAULT_MODE, fetchServerMode };

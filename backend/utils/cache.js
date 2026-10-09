@@ -419,6 +419,7 @@ const cacheKeys = {
   hideFileExtensionsSettings: () => `app:hide_file_extensions`,
   electronOnlyAccessSettings: () => `app:electron_only_access`,
   passwordChangeSettings: () => `app:password_change`,
+  cloudDriveSaveOnly: () => `app:cloud_drive_save_only`,
 
   // Google OAuth cache keys
   userByGoogleId: googleId => `user:google:${googleId}`,

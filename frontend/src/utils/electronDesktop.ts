@@ -93,8 +93,8 @@ declare global {
       };
       cloudDrive?: {
         status: () => Promise<{ running: boolean; mountPoint: string | null; mode?: CloudDriveMode }>;
-        getMode: () => Promise<{ mode: CloudDriveMode }>;
-        setMode: (mode: CloudDriveMode) => Promise<{ ok: boolean; mode?: CloudDriveMode; error?: string }>;
+        /** Re-read the mode the first user set on the server and apply it to the drive. */
+        refreshMode?: () => Promise<{ mode: CloudDriveMode }>;
       };
     };
   }
@@ -110,28 +110,18 @@ export function hasElectronCloudDrive(): boolean {
   return typeof window !== 'undefined' && !!window.electronAPI?.cloudDrive?.status;
 }
 
-/** Read the current cloud-drive mode. Returns 'full' outside the desktop app. */
-export async function getElectronCloudDriveMode(): Promise<CloudDriveMode> {
+/**
+ * Have the drive re-read its mode from the server and report what it now
+ * applies. Null outside the desktop app; save-only when the answer is unclear.
+ */
+export async function refreshElectronCloudDriveMode(): Promise<CloudDriveMode | null> {
   const api = typeof window !== 'undefined' ? window.electronAPI : undefined;
-  if (!isElectron() || !api?.cloudDrive?.getMode) return 'full';
+  if (!isElectron() || !api?.cloudDrive?.refreshMode) return null;
   try {
-    const res = await api.cloudDrive.getMode();
-    return res?.mode === 'saveOnly' ? 'saveOnly' : 'full';
+    const res = await api.cloudDrive.refreshMode();
+    return res?.mode === 'full' ? 'full' : 'saveOnly';
   } catch {
-    return 'full';
-  }
-}
-
-/** Set the cloud-drive mode (persisted, applied live). No-op outside the desktop app. */
-export async function setElectronCloudDriveMode(
-  mode: CloudDriveMode
-): Promise<{ ok: boolean; mode?: CloudDriveMode; error?: string }> {
-  const api = typeof window !== 'undefined' ? window.electronAPI : undefined;
-  if (!isElectron() || !api?.cloudDrive?.setMode) return { ok: false, error: 'Not available' };
-  try {
-    return await api.cloudDrive.setMode(mode);
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    return 'saveOnly';
   }
 }
 

@@ -144,53 +144,130 @@ afterEach(async () => {
 });
 
 describe('drive mode', () => {
-  it('defaults to save-only so file content cannot be copied off the drive', async () => {
-    await expect(__mock.invoke('clouddrive:getMode')).resolves.toEqual({ mode: 'saveOnly' });
+  const MODE_URL = '/api/user/cloud-drive-config';
+  const serverMode = saveOnly => __mock.route(MODE_URL, { statusCode: 200, body: JSON.stringify({ saveOnly }) });
+
+  it('is save-only before the server has answered', async () => {
+    await expect(__mock.invoke('clouddrive:status')).resolves.toMatchObject({ mode: 'saveOnly' });
   });
 
-  it('remembers a mode across restarts of the module', () => {
-    clouddrive.registerCloudDriveHandlers();
-    __mock.invoke('clouddrive:setMode', 'full');
+  it('follows the mode the server sets', async () => {
+    serverMode(false);
+    await expect(__mock.invoke('clouddrive:refreshMode')).resolves.toEqual({ mode: 'full' });
+    await expect(__mock.invoke('clouddrive:status')).resolves.toMatchObject({ mode: 'full' });
+  });
 
+  it('asks with the session cookies', async () => {
+    __mock.setCookies([{ name: 'token', value: 'abc' }]);
+    serverMode(true);
+    await __mock.invoke('clouddrive:refreshMode');
+
+    const asked = __mock.requests().find(r => r.url.endsWith(MODE_URL));
+    expect(asked.headers.Cookie).toBe('token=abc');
+  });
+
+  it.each([
+    ['an error status', { statusCode: 403, body: '{"message":"no"}' }],
+    ['a body without a boolean', { statusCode: 200, body: '{"saveOnly":"false"}' }],
+    ['a body that is not JSON', { statusCode: 200, body: '<html>' }],
+  ])('stays save-only on %s', async (_label, response) => {
+    __mock.route(MODE_URL, response);
+    await expect(__mock.invoke('clouddrive:refreshMode')).resolves.toEqual({ mode: 'saveOnly' });
+  });
+
+  it('stays save-only when the server cannot be reached', async () => {
+    __mock.routeError(MODE_URL, new Error('ECONNREFUSED'));
+    await expect(__mock.invoke('clouddrive:refreshMode')).resolves.toEqual({ mode: 'saveOnly' });
+  });
+
+  it('keeps the last mode the server gave when a later read fails', async () => {
+    serverMode(false);
+    await __mock.invoke('clouddrive:refreshMode');
+    __mock.state.netRoutes.length = 0;
+    __mock.routeError(MODE_URL, new Error('ECONNRESET'));
+
+    await expect(__mock.invoke('clouddrive:refreshMode')).resolves.toEqual({ mode: 'full' });
+  });
+
+  it('ignores the old per-device config file', async () => {
+    fs.writeFileSync(path.join(userData, 'clouddrive-config.json'), JSON.stringify({ mode: 'full' }));
     const reloaded = freshRequire('src/main/clouddrive.cjs');
     reloaded.registerCloudDriveHandlers();
 
-    return expect(__mock.invoke('clouddrive:getMode')).resolves.toEqual({ mode: 'full' });
+    await expect(__mock.invoke('clouddrive:status')).resolves.toMatchObject({ mode: 'saveOnly' });
   });
 
-  it('treats any value other than saveOnly as full', async () => {
-    clouddrive.registerCloudDriveHandlers();
-    await expect(__mock.invoke('clouddrive:setMode', 'nonsense')).resolves.toEqual({ ok: true, mode: 'full' });
-    await expect(__mock.invoke('clouddrive:setMode', 'saveOnly')).resolves.toEqual({ ok: true, mode: 'saveOnly' });
-  });
-
-  it('falls back to save-only when the stored config is corrupt', async () => {
-    fs.writeFileSync(path.join(userData, 'clouddrive-config.json'), '{ broken');
-    const reloaded = freshRequire('src/main/clouddrive.cjs');
-    reloaded.registerCloudDriveHandlers();
-
-    await expect(__mock.invoke('clouddrive:getMode')).resolves.toEqual({ mode: 'saveOnly' });
+  it('gives the renderer no way to set the mode itself', () => {
+    expect(__mock.hasHandler('clouddrive:refreshMode')).toBe(true);
+    expect(__mock.hasHandler('clouddrive:setMode')).toBe(false);
   });
 
   it('applies a mode change to the running host without remounting', async () => {
-    clouddrive.registerCloudDriveHandlers();
     await mount();
     const sock = connect();
 
-    await __mock.invoke('clouddrive:setMode', 'full');
+    serverMode(false);
+    await __mock.invoke('clouddrive:refreshMode');
 
     expect(sock.messages()).toContainEqual({ push: 'mode', mode: 'full' });
     expect(hosts).toHaveLength(1);
   });
 
   it('sends the host the lowercase form it expects for save-only', async () => {
-    clouddrive.registerCloudDriveHandlers();
+    serverMode(false);
     await mount();
     const sock = connect();
 
-    await __mock.invoke('clouddrive:setMode', 'saveOnly');
+    __mock.state.netRoutes.length = 0;
+    serverMode(true);
+    await __mock.invoke('clouddrive:refreshMode');
 
     expect(sock.messages()).toContainEqual({ push: 'mode', mode: 'saveonly' });
+  });
+
+  it('pushes a mode read between spawning the host and its connecting', async () => {
+    await mount();
+    serverMode(false);
+    await __mock.invoke('clouddrive:refreshMode');
+
+    const sock = connect();
+
+    expect(sock.messages()).toEqual([{ push: 'mode', mode: 'full' }]);
+  });
+
+  it('starts the next mount save-only when the server cannot be reached', async () => {
+    serverMode(false);
+    await mount();
+    await clouddrive.stopCloudDrive();
+    __mock.state.netRoutes.length = 0;
+    __mock.routeError(MODE_URL, new Error('ECONNREFUSED'));
+
+    await mount();
+
+    expect(hosts[1].args).toEqual(expect.arrayContaining(['--mode', 'saveonly']));
+  });
+
+  it('does not push when the mode is unchanged', async () => {
+    await mount();
+    const sock = connect();
+
+    serverMode(true);
+    await __mock.invoke('clouddrive:refreshMode');
+
+    expect(sock.messages()).not.toContainEqual(expect.objectContaining({ push: 'mode' }));
+  });
+
+  it('checks the server again every minute while mounted', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true, toFake: ['setInterval', 'clearInterval'] });
+    await mount();
+    const sock = connect();
+    serverMode(false);
+
+    vi.advanceTimersByTime(60 * 1000);
+    await waitFor(() => sock.messages().some(m => m.push === 'mode'), 'the polled mode push');
+
+    expect(sock.messages()).toContainEqual({ push: 'mode', mode: 'full' });
+    vi.useRealTimers();
   });
 });
 
@@ -226,9 +303,8 @@ describe('starting the drive', () => {
     expect(hosts[0].args[hosts[0].args.indexOf('--label') + 1]).toBe('TMA Cloud');
   });
 
-  it('omits the save-only flag when the drive is in full mode', async () => {
-    clouddrive.registerCloudDriveHandlers();
-    await __mock.invoke('clouddrive:setMode', 'full');
+  it('omits the save-only flag when the server sets full access', async () => {
+    __mock.route('/api/user/cloud-drive-config', { statusCode: 200, body: '{"saveOnly":false}' });
 
     await mount();
 

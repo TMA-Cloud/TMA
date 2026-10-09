@@ -31,6 +31,8 @@ interface AdministrationSectionProps {
   loadingActiveClients: boolean;
   onShowActiveClients: () => void;
   onShowOrphans: () => void;
+  /** Extra switches at the end of Policies. */
+  policies?: React.ReactNode;
   /** Collapsible server-configuration cards, grouped by what they configure. */
   activity?: React.ReactNode;
   networking?: React.ReactNode;
@@ -72,6 +74,7 @@ export const AdministrationSection: React.FC<AdministrationSectionProps> = ({
   loadingActiveClients,
   onShowActiveClients,
   onShowOrphans,
+  policies,
   activity,
   networking,
   integrations,
@@ -147,6 +150,7 @@ export const AdministrationSection: React.FC<AdministrationSectionProps> = ({
             toggleDisabled={!canToggleHideFileExtensions || togglingHideFileExtensions || loadingSignupStatus}
             description="Show file names without their extensions"
           />
+          {policies}
         </SettingsGroup>
 
         <SettingsGroup title="People & devices" description="Review who holds an account and what is connected.">

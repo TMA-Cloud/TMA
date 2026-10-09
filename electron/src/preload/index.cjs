@@ -117,8 +117,7 @@ const { contextBridge, ipcRenderer } = require('electron');
        */
       cloudDrive: {
         status: () => ipcRenderer.invoke('clouddrive:status'),
-        getMode: () => ipcRenderer.invoke('clouddrive:getMode'),
-        setMode: mode => ipcRenderer.invoke('clouddrive:setMode', mode),
+        refreshMode: () => ipcRenderer.invoke('clouddrive:refreshMode'),
       },
     };
     contextBridge.exposeInMainWorld('electronAPI', api);

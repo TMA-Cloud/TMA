@@ -43,6 +43,7 @@ export {
   getPasswordChangeSettings,
   setPasswordChangeSettings,
 } from './user.admin.settings.model.js';
+export { getCloudDriveSaveOnly, setCloudDriveSaveOnly } from './user.admin.clouddrive.model.js';
 export {
   getTotalUserCount,
   getAllUsersBasic,

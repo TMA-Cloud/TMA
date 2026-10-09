@@ -9,6 +9,7 @@ import {
   deleteSubUser,
   getActiveClients,
   getActivityConfig,
+  getCloudDriveConfig,
   getElectronOnlyAccessConfig,
   getGoogleAuthSettings,
   getHideFileExtensionsConfig,
@@ -27,6 +28,7 @@ import {
   testStorageConfig,
   toggleSignup,
   updateAccessTimeConfig,
+  updateCloudDriveConfig,
   updateElectronOnlyAccessConfig,
   updateGoogleAuthSettings,
   updateHideFileExtensionsConfig,
@@ -55,6 +57,7 @@ import {
   subUserIdParamSchema,
   toggleSignupSchema,
   updateAccessTimeConfigSchema,
+  updateCloudDriveConfigSchema,
   updateElectronOnlyAccessConfigSchema,
   updateGoogleAuthConfigSchema,
   deleteGoogleAuthConfigSchema,
@@ -115,6 +118,8 @@ router.put(
   validate,
   updateElectronOnlyAccessConfig
 );
+router.get('/cloud-drive-config', getCloudDriveConfig);
+router.put('/cloud-drive-config', updateCloudDriveConfigSchema, validate, updateCloudDriveConfig);
 router.get('/password-change-config', getPasswordChangeConfig);
 router.put('/password-change-config', updatePasswordChangeConfigSchema, validate, updatePasswordChangeConfig);
 router.get('/activity-config', getActivityConfig);
