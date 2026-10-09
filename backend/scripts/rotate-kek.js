@@ -36,6 +36,7 @@ import path from 'path';
 import pool from '../config/db.js';
 import { logger } from '../config/logger.js';
 import { rewrapStorageSecret } from '../models/user/user.admin.storage.model.js';
+import { verifyEncryptionKeys } from '../services/encryptionKeyCheck.js';
 import { primaryKekVersion, rewrapDekToPrimary } from '../utils/fileEncryption.js';
 
 import { isTransientError, withRetries } from './lib/rotation-resilience.js';
@@ -117,6 +118,15 @@ async function main() {
     process.exit(1);
   }
   console.log(`Primary KEK version is ${primary}. Rewrapping every DEK wrapped under an older version.`);
+
+  // Both keys must be right before anything is rewrapped: a wrong old key would fail every row.
+  try {
+    await verifyEncryptionKeys();
+  } catch (err) {
+    console.error(err?.message || err);
+    await pool.end();
+    process.exit(1);
+  }
 
   // The storage secret is one row, so it is rewrapped first and needs no confirmation.
   try {

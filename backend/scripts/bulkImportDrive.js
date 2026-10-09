@@ -19,6 +19,7 @@ import { invalidateUserCache } from '../utils/cache.js';
 import storage from '../utils/storageDriver.js';
 import { checkStorageLimitExceeded } from '../utils/storageUtils.js';
 import { validateFileName } from '../utils/validation.js';
+import { readSecret } from '../utils/fileEncryption/keySource.js';
 
 if (!process.env.DOCKER && process.env.DB_HOST === 'postgres') process.env.DB_HOST = 'localhost';
 if (!process.env.DOCKER && process.env.REDIS_HOST === 'redis') process.env.REDIS_HOST = 'localhost';
@@ -164,7 +165,7 @@ async function runBulkImport({ scriptName, writeVerb, writeVerbIng, storeOneFile
     process.exit(1);
   }
 
-  if (!process.env.FILE_ENCRYPTION_KEY) {
+  if (!readSecret('FILE_ENCRYPTION_KEY')) {
     console.warn('WARNING: FILE_ENCRYPTION_KEY is not set. App will use development default; ensure consistency.');
   }
 

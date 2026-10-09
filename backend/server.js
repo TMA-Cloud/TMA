@@ -27,6 +27,7 @@ import { startAccessTracker, shutdownAccessTracker } from './services/accessTrac
 import { initializeMetrics, metricsEndpoint, startQueueMetricsUpdater } from './services/metrics.js';
 import { connectRedis, disconnectRedis } from './config/redis.js';
 import { getKnownProxiesSettings } from './models/user.model.js';
+import { verifyEncryptionKeys } from './services/encryptionKeyCheck.js';
 import { resolveKnownProxies } from './utils/knownProxies.js';
 
 import { getCachedOnlyOfficeOrigin, warmOnlyOfficeOriginCache } from './utils/onlyofficeOriginCache.js';
@@ -280,6 +281,9 @@ process.on('uncaughtException', error => {
 runMigrations()
   .then(async () => {
     const port = process.env.BPORT || 3000;
+
+    // A wrong master key must stop startup, not surface later as undecryptable files.
+    await verifyEncryptionKeys();
 
     // Forwarded headers affect authentication logs and rate limits, so only
     // enable them for explicitly configured proxy addresses.

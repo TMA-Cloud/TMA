@@ -44,6 +44,7 @@ import {
 } from '../utils/fileEncryption.js';
 
 import { isTransientError, withRetries } from './lib/rotation-resilience.js';
+import { readSecret } from '../utils/fileEncryption/keySource.js';
 
 const DEFAULT_CONCURRENCY = 8;
 const DB_PAGE_SIZE = 500;
@@ -143,7 +144,7 @@ async function backfillOne(row, masterKey) {
 async function main() {
   console.log('=== Backfill: convert pre-envelope files to per-file DEKs ===');
 
-  if (!process.env.FILE_ENCRYPTION_KEY) {
+  if (!readSecret('FILE_ENCRYPTION_KEY')) {
     console.error('ERROR: FILE_ENCRYPTION_KEY must be set (the master key the existing files are encrypted under).');
     process.exit(1);
   }

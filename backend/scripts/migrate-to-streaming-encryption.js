@@ -33,6 +33,7 @@ import {
 } from '../utils/fileEncryption.js';
 
 import { withRetries } from './lib/rotation-resilience.js';
+import { readSecret } from '../utils/fileEncryption/keySource.js';
 
 // Legacy single-blob parameters (kept here so the app can drop them entirely).
 const LEGACY_ALGORITHM = 'aes-256-gcm';
@@ -180,7 +181,7 @@ function askQuestion(query) {
 async function main() {
   console.log('=== Migrate encrypted files to AES-GCM-HKDF-STREAMING ===');
 
-  if (!process.env.FILE_ENCRYPTION_KEY) {
+  if (!readSecret('FILE_ENCRYPTION_KEY')) {
     console.error('ERROR: FILE_ENCRYPTION_KEY must be set (the same key used to encrypt the existing files).');
     process.exit(1);
   }

@@ -19,6 +19,7 @@
 import crypto from 'crypto';
 
 import { logger } from '../../config/logger.js';
+import { isRandomKey, readSecret } from './keySource.js';
 
 // --- AES-GCM-HKDF-STREAMING parameters (AES256_GCM_HKDF_1MB) ---
 const HKDF_HASH = 'sha256';
@@ -68,12 +69,19 @@ function deriveKeyFromRaw(raw) {
 }
 
 /**
- * Master key (HKDF ikm): a 32-byte base64/hex key, or a passphrase stretched
- * with PBKDF2. FILE_ENCRYPTION_KEY is required in production.
+ * Master key (HKDF ikm) from FILE_ENCRYPTION_KEY or FILE_ENCRYPTION_KEY_FILE.
+ * Production accepts only a random 32-byte key: a passphrase goes through
+ * PBKDF2 with a fixed salt, so a guessable one yields a guessable key.
  * @returns {Buffer} 32-byte key
  */
 function getEncryptionKey() {
-  const envKey = process.env.FILE_ENCRYPTION_KEY;
+  const envKey = readSecret('FILE_ENCRYPTION_KEY');
+  if (envKey && process.env.NODE_ENV === 'production' && !isRandomKey(envKey)) {
+    throw new Error(
+      'FILE_ENCRYPTION_KEY must be a random 32-byte key in production (base64 or 64 hex characters), not a passphrase. ' +
+        'Generate one with "npm run key:generate" and move to it with scripts/rotate-kek.js.'
+    );
+  }
   if (envKey) {
     try {
       return deriveKeyFromRaw(envKey);
@@ -85,7 +93,7 @@ function getEncryptionKey() {
 
   if (process.env.NODE_ENV === 'production') {
     throw new Error(
-      'FILE_ENCRYPTION_KEY is required in production. Set a secure 32-byte key (base64 or hex encoded) in your environment.'
+      'FILE_ENCRYPTION_KEY (or FILE_ENCRYPTION_KEY_FILE) is required in production. Generate one with "npm run key:generate".'
     );
   }
 

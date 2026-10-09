@@ -1,7 +1,7 @@
 import { copyEncryptedFile, createDecryptStream, decryptFile, encryptFile } from '../../helpers/encryptionFiles.js';
 import crypto from 'crypto';
 import fs from 'fs/promises';
-import { createWriteStream } from 'fs';
+import { createWriteStream, mkdtempSync, rmSync, writeFileSync } from 'fs';
 import os from 'os';
 import path from 'path';
 import { Readable } from 'stream';
@@ -103,9 +103,38 @@ describe('getEncryptionKey', () => {
     const originalNodeEnv = process.env.NODE_ENV;
     process.env.NODE_ENV = 'production';
     try {
-      expect(() => getEncryptionKey()).toThrow(/FILE_ENCRYPTION_KEY is required in production/);
+      expect(() => getEncryptionKey()).toThrow(/is required in production/);
     } finally {
       process.env.NODE_ENV = originalNodeEnv;
+    }
+  });
+
+  it('refuses a passphrase in production, since PBKDF2 with a fixed salt is only as strong as the passphrase', () => {
+    process.env.FILE_ENCRYPTION_KEY = 'tma_cloud_file_encryption_key';
+    const originalNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+    try {
+      expect(() => getEncryptionKey()).toThrow(/must be a random 32-byte key/);
+      process.env.FILE_ENCRYPTION_KEY = crypto.randomBytes(32).toString('base64');
+      expect(getEncryptionKey()).toHaveLength(32);
+    } finally {
+      process.env.NODE_ENV = originalNodeEnv;
+    }
+  });
+
+  it('reads the key from FILE_ENCRYPTION_KEY_FILE', () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), 'tma-key-'));
+    const file = path.join(dir, 'key');
+    writeFileSync(file, `${'cd'.repeat(32)}\n`);
+    delete process.env.FILE_ENCRYPTION_KEY;
+    process.env.FILE_ENCRYPTION_KEY_FILE = file;
+    try {
+      expect(getEncryptionKey()).toEqual(Buffer.from('cd'.repeat(32), 'hex'));
+      process.env.FILE_ENCRYPTION_KEY = 'ab'.repeat(32);
+      expect(() => getEncryptionKey()).toThrow(/not both/);
+    } finally {
+      delete process.env.FILE_ENCRYPTION_KEY_FILE;
+      rmSync(dir, { recursive: true, force: true });
     }
   });
 

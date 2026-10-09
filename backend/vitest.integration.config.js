@@ -49,6 +49,8 @@ export default defineConfig({
 
       // Deterministic, and unrelated to the key protecting real dev files.
       FILE_ENCRYPTION_KEY: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+      // Cleared so a key file named in .env cannot clash with the test key above.
+      FILE_ENCRYPTION_KEY_FILE: '',
       JWT_SECRET: 'integration-test-jwt-secret',
       SESSION_IDLE_DAYS: '30',
       BACKEND_URL: 'https://cloud.test',

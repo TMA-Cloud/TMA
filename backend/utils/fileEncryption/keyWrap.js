@@ -18,16 +18,18 @@
  *
  * KEK registry (built from the environment, read lazily so tests/scripts can
  * swap keys in):
- *   - FILE_ENCRYPTION_KEY      the current (primary) KEK — same formats as ever.
+ *   - FILE_ENCRYPTION_KEY      the current (primary) KEK; a random 32-byte key in production.
  *   - FILE_KEK_VERSION         integer version of the primary KEK (default 1).
  *   - FILE_ENCRYPTION_KEY_V<n> older KEKs, kept only so their DEKs can still be
  *                              unwrapped until rotation to the new KEK finishes.
+ * Any key may instead come from a file named by <NAME>_FILE (Docker/Kubernetes secrets).
  * Wrapped DEK wire layout: iv(12) || AES-256-GCM(DEK)(32) || tag(16) = 60 bytes.
  */
 
 import crypto from 'crypto';
 
 import { deriveKeyFromRaw, getEncryptionKey } from './format.js';
+import { readSecret } from './keySource.js';
 
 const DEK_LENGTH = 32; // 256-bit per-file data key
 const WRAP_IV_LENGTH = 12; // AES-GCM nonce for the wrap
@@ -53,7 +55,8 @@ function kekForVersion(version) {
   if (version === primaryKekVersion()) {
     return getEncryptionKey();
   }
-  const raw = process.env[`FILE_ENCRYPTION_KEY_V${version}`];
+  // Older keys may still be passphrases: they are only read to rotate away from them.
+  const raw = readSecret(`FILE_ENCRYPTION_KEY_V${version}`);
   if (!raw) {
     throw new Error(
       `No KEK configured for version ${version}. Set FILE_ENCRYPTION_KEY_V${version} to the key that wrapped these DEKs.`

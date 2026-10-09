@@ -18,6 +18,7 @@
     "migrate:streaming": "node scripts/migrate-to-streaming-encryption.js",
     "migrate:sizes": "node scripts/reconcile-encrypted-file-sizes.js",
     "rotate:kek": "node scripts/rotate-kek.js",
+    "key:generate": "node scripts/generate-key.js",
     "backfill:envelope": "node scripts/backfill-envelope-encryption.js",
     "test": "vitest run",
     "test:watch": "vitest",

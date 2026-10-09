@@ -54,6 +54,7 @@ import { cleanupExpiredStorageReservations } from './services/storageReservation
 import { deleteQueuedObjects } from './services/objectCleanup.js';
 import { processFileOperation } from './services/fileOperationWorker.js';
 import { applyShareLinking } from './services/shareLinking.js';
+import { verifyEncryptionKeysWhenReady } from './services/encryptionKeyCheck.js';
 
 const logger = createRequestLogger({ service: 'background-worker' });
 
@@ -279,6 +280,9 @@ async function processMaintenanceJob(job) {
 async function initializeWorker() {
   try {
     logger.info('Starting audit worker...');
+
+    // The worker decrypts and deletes files too, so it refuses a wrong master key like the API does.
+    await verifyEncryptionKeysWhenReady();
 
     // Ensure schema exists before pg-boss migrations run
     const schemaPool = createPool();
