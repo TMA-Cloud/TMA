@@ -2,21 +2,25 @@
 # ============================================================
 #  TMA Cloud – PostgreSQL Full Backup & Restore
 # ============================================================
-#  Usage:
-#    scripts/db-backup-restore.sh backup                  Full DB backup
-#    scripts/db-backup-restore.sh restore <file>          Restore from backup
-#    scripts/db-backup-restore.sh verify  <file>          Verify backup integrity
-#    scripts/db-backup-restore.sh list                    List available backups
+#  Usage, in a Docker install directory (setup.sh puts it there) or from a
+#  repository checkout as scripts/db-backup-restore.sh:
+#    ./db-backup-restore.sh backup                  Full DB backup
+#    ./db-backup-restore.sh restore <file>          Restore from backup
+#    ./db-backup-restore.sh verify  <file>          Verify backup integrity
+#    ./db-backup-restore.sh list                    List available backups
 #
 #  Environment:
-#    Reads .env from project root automatically.
-#    Override with: DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME
+#    Reads DB_* settings from .env in the install directory or project root.
+#    Variables already set in the environment win, as with dotenv.
+#    TMA_DIR sets that directory explicitly.
 #
 #  Backup retention:
 #    Set BACKUP_RETAIN_COUNT (default 10) to auto-prune old backups.
 # ============================================================
 
 set -euo pipefail
+# Dumps hold every user's data; keep them private to the owner.
+umask 077
 
 # ── Colours & helpers ────────────────────────────────────────
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
@@ -30,18 +34,39 @@ header()  { echo -e "\n${BOLD}── $* ──${NC}"; }
 
 # ── Paths ────────────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+# An install directory holds the script next to compose.yml; a checkout keeps it in scripts/.
+if [[ -n "${TMA_DIR:-}" ]]; then
+  PROJECT_ROOT="$(cd "${TMA_DIR}" && pwd)"
+elif [[ -f "${SCRIPT_DIR}/compose.yml" || -f "${SCRIPT_DIR}/.env" ]]; then
+  PROJECT_ROOT="${SCRIPT_DIR}"
+else
+  PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+fi
 BACKUP_DIR="${PROJECT_ROOT}/backups"
 LOCK_FILE="${BACKUP_DIR}/.db-operation.lock"
 TIMESTAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 
-# ── Load .env from project root ─────────────────────────────
+# ── Read settings from .env ──────────────────────────────────
+# .env is dotenv, not shell: reading single keys means a value with $, quotes
+# or spaces is never run as code.
+env_file_value() {
+  local key="$1" line value
+  line="$(grep -E "^${key}=" "${PROJECT_ROOT}/.env" 2>/dev/null | tail -n1 || true)"
+  value="${line#*=}"
+  value="${value%$'\r'}"
+  if [[ "${value}" =~ ^\"(.*)\"$ || "${value}" =~ ^\'(.*)\'$ ]]; then
+    value="${BASH_REMATCH[1]}"
+  fi
+  printf '%s' "${value}"
+}
+
 if [[ -f "${PROJECT_ROOT}/.env" ]]; then
-  set -a
-  # shellcheck disable=SC1091
-  source "${PROJECT_ROOT}/.env"
-  set +a
-  info "Loaded .env from ${PROJECT_ROOT}/.env"
+  for key in DB_HOST DB_PORT DB_USER DB_PASSWORD DB_NAME DB_CONTAINER BACKUP_RETAIN_COUNT REDIS_PASSWORD REDIS_DB; do
+    if [[ -z "${!key:-}" ]] && grep -qE "^${key}=" "${PROJECT_ROOT}/.env"; then
+      printf -v "${key}" '%s' "$(env_file_value "${key}")"
+    fi
+  done
+  info "Read database settings from ${PROJECT_ROOT}/.env"
 fi
 
 # ── Database config ──────────────────────────────────────────
@@ -51,65 +76,59 @@ DB_USER="${DB_USER:-postgres}"
 DB_PASSWORD="${DB_PASSWORD:-}"
 DB_NAME="${DB_NAME:-tma_cloud_storage}"
 BACKUP_RETAIN_COUNT="${BACKUP_RETAIN_COUNT:-10}"
+# Pruning runs after the new dump is written, so 0 would delete that one too.
+[[ "${BACKUP_RETAIN_COUNT}" =~ ^[1-9][0-9]*$ ]] || die "BACKUP_RETAIN_COUNT must be a whole number of at least 1"
 
 # ── Detect Docker vs host mode ───────────────────────────────
-# Container lookup order:
-#   1. DB_CONTAINER env var (explicit override)
-#   2. tma-cloud-postgres  (this project's docker-compose)
-#   3. Any running container whose image contains "postgres"
+# Container lookup, never by guessing: a restore drops the database, so it must
+# not land on another install's or project's PostgreSQL.
+#   1. DB_CONTAINER (explicit override)
+#   2. The postgres service of the compose project in PROJECT_ROOT
+# Otherwise host mode: DB_HOST:DB_PORT with the PostgreSQL client tools here.
 USE_DOCKER=false
 CONTAINER_NAME="${DB_CONTAINER:-}"
+COMPOSE_PROJECT=false
 
-find_postgres_container() {
-  # Try the project's own container name first
-  if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^tma-cloud-postgres$"; then
-    echo "tma-cloud-postgres"
-    return
-  fi
-  # Fall back: find any running container with a postgres image
-  docker ps --format '{{.Names}}\t{{.Image}}' 2>/dev/null \
-    | grep -i postgres \
-    | head -n1 \
-    | cut -f1
+running_container() {
+  docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "$1"
 }
 
 if [[ -n "${CONTAINER_NAME}" ]]; then
-  # Explicit override — verify it exists
-  if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${CONTAINER_NAME}$"; then
-    USE_DOCKER=true
-  else
+  running_container "${CONTAINER_NAME}" ||
     die "DB_CONTAINER='${CONTAINER_NAME}' is set but no running container with that name was found."
-  fi
-else
-  CONTAINER_NAME=$(find_postgres_container)
-  if [[ -n "${CONTAINER_NAME}" ]]; then
+  USE_DOCKER=true
+elif command -v docker >/dev/null 2>&1; then
+  compose_id="$(cd "${PROJECT_ROOT}" && docker compose ps -q postgres 2>/dev/null || true)"
+  if [[ -n "${compose_id}" ]]; then
+    CONTAINER_NAME="$(docker inspect -f '{{.Name}}' "${compose_id}" | sed 's#^/##')"
     USE_DOCKER=true
+    COMPOSE_PROJECT=true
   fi
 fi
 
-# Wrappers: run pg commands either via docker or host
+# The password goes through the environment, never a command line, so it does
+# not show up in ps. Local connections inside the container need none.
+export PGPASSWORD="${DB_PASSWORD}"
+# Host mode: every client tool, psql included, connects to DB_HOST:DB_PORT.
+if ! ${USE_DOCKER}; then
+  export PGHOST="${DB_HOST}" PGPORT="${DB_PORT}"
+fi
+
+# Run a PostgreSQL client tool in the container, or on this machine.
 pg_exec() {
   if ${USE_DOCKER}; then
-    docker exec -e PGPASSWORD="${DB_PASSWORD}" "${CONTAINER_NAME}" "$@"
+    docker exec -e PGPASSWORD "${CONTAINER_NAME}" "$@"
   else
-    PGPASSWORD="${DB_PASSWORD}" "$@"
-  fi
-}
-
-pg_exec_stdin() {
-  if ${USE_DOCKER}; then
-    docker exec -i -e PGPASSWORD="${DB_PASSWORD}" "${CONTAINER_NAME}" "$@"
-  else
-    PGPASSWORD="${DB_PASSWORD}" "$@"
+    "$@"
   fi
 }
 
 # ── Pre-flight checks ───────────────────────────────────────
 preflight() {
   if ! ${USE_DOCKER}; then
-    command -v pg_dump    >/dev/null 2>&1 || die "pg_dump not found. Install PostgreSQL client tools or start the Docker container."
-    command -v pg_restore >/dev/null 2>&1 || die "pg_restore not found. Install PostgreSQL client tools or start the Docker container."
-    command -v psql       >/dev/null 2>&1 || die "psql not found. Install PostgreSQL client tools."
+    command -v pg_dump    >/dev/null 2>&1 || die "pg_dump not found. Install the PostgreSQL client tools, or set DB_CONTAINER to the PostgreSQL container name."
+    command -v pg_restore >/dev/null 2>&1 || die "pg_restore not found. Install the PostgreSQL client tools, or set DB_CONTAINER to the PostgreSQL container name."
+    command -v psql       >/dev/null 2>&1 || die "psql not found. Install the PostgreSQL client tools, or set DB_CONTAINER to the PostgreSQL container name."
   fi
 
   # Verify DB connectivity
@@ -126,6 +145,7 @@ preflight() {
 # ── Locking (prevent concurrent backup / restore) ───────────
 acquire_lock() {
   mkdir -p "${BACKUP_DIR}"
+  chmod 700 "${BACKUP_DIR}"
   if [[ -f "${LOCK_FILE}" ]]; then
     local pid
     pid=$(<"${LOCK_FILE}")
@@ -136,15 +156,28 @@ acquire_lock() {
       rm -f "${LOCK_FILE}"
     fi
   fi
-  echo $$ > "${LOCK_FILE}"
+  # noclobber makes taking the lock atomic: two runs cannot both create it.
+  ( set -o noclobber; echo $$ > "${LOCK_FILE}" ) 2>/dev/null ||
+    die "Another backup/restore operation just started. If stale, remove ${LOCK_FILE}"
+  LOCK_HELD=true
 }
 
+# Only the run that took the lock removes it.
+LOCK_HELD=false
 release_lock() {
-  rm -f "${LOCK_FILE}"
+  if ${LOCK_HELD}; then rm -f "${LOCK_FILE}"; fi
 }
+
+# Set while a dump is being written, and by a restore that stopped services.
+PARTIAL_FILE=""
+STOPPED_SERVICES=""
 
 # Cleanup on exit / error
 cleanup() {
+  [[ -n "${PARTIAL_FILE}" ]] && rm -f "${PARTIAL_FILE}"
+  if [[ -n "${STOPPED_SERVICES}" ]]; then
+    warn "${STOPPED_SERVICES}stay stopped because the restore did not finish. Start them with: docker compose start ${STOPPED_SERVICES}"
+  fi
   release_lock
 }
 trap cleanup EXIT
@@ -177,6 +210,10 @@ do_backup() {
 
   local dump_file="${BACKUP_DIR}/${DB_NAME}_${TIMESTAMP}.dump"
   local meta_file="${dump_file}.meta"
+  # Written under another name and renamed once checked, so a failed dump never
+  # looks like a backup or counts toward the retained ones.
+  local part_file="${dump_file}.part"
+  PARTIAL_FILE="${part_file}"
 
   info "Database   : ${DB_NAME}"
   info "User       : ${DB_USER}"
@@ -195,7 +232,7 @@ do_backup() {
 
   # ── pg_dump: custom format ──
   #   --format=custom    : compressed binary, supports parallel restore & selective restore
-  #   --compress=zstd:6  : zstandard compression (PG16+), falls back to gzip if unavailable
+  #   --compress=6       : gzip, which every pg_restore can read
   #   --lock-wait-timeout: don't hang if a table is locked
   #   --no-owner/privs   : portable across environments
   #   --serializable-deferrable : consistent snapshot WITHOUT blocking concurrent writes
@@ -203,15 +240,10 @@ do_backup() {
 
   local dump_start
   dump_start=$(date +%s)
-
-  # Try zstd compression first (PG16+), fall back to gzip-level 6
   local compress_flag="--compress=6"
-  if pg_exec pg_dump --help 2>/dev/null | grep -q "zstd"; then
-    compress_flag="--compress=zstd:6"
-  fi
 
   if ${USE_DOCKER}; then
-    docker exec -e PGPASSWORD="${DB_PASSWORD}" "${CONTAINER_NAME}" \
+    docker exec -e PGPASSWORD "${CONTAINER_NAME}" \
       pg_dump \
         -U "${DB_USER}" \
         -d "${DB_NAME}" \
@@ -221,9 +253,9 @@ do_backup() {
         --no-owner \
         --no-privileges \
         --serializable-deferrable \
-      > "${dump_file}"
+      > "${part_file}"
   else
-    PGPASSWORD="${DB_PASSWORD}" pg_dump \
+    pg_dump \
       -h "${DB_HOST}" \
       -p "${DB_PORT}" \
       -U "${DB_USER}" \
@@ -234,29 +266,31 @@ do_backup() {
       --no-owner \
       --no-privileges \
       --serializable-deferrable \
-      -f "${dump_file}"
+      -f "${part_file}"
   fi
 
   local dump_end elapsed
   dump_end=$(date +%s)
   elapsed=$((dump_end - dump_start))
 
-  [[ -s "${dump_file}" ]] || die "Backup file is empty – pg_dump may have failed."
+  [[ -s "${part_file}" ]] || die "Backup file is empty – pg_dump may have failed."
 
   # ── Verify dump is readable ──
   info "Verifying backup integrity (pg_restore --list) …"
   local toc_count
   if ${USE_DOCKER}; then
-    toc_count=$(docker exec -i -e PGPASSWORD="${DB_PASSWORD}" "${CONTAINER_NAME}" \
-      pg_restore --list < "${dump_file}" 2>/dev/null | wc -l)
+    toc_count=$(docker exec -i -e PGPASSWORD "${CONTAINER_NAME}" \
+      pg_restore --list < "${part_file}" 2>/dev/null | wc -l)
   else
-    toc_count=$(pg_restore --list "${dump_file}" 2>/dev/null | wc -l)
+    toc_count=$(pg_restore --list "${part_file}" 2>/dev/null | wc -l)
   fi
 
   if [[ "${toc_count}" -lt 1 ]]; then
     die "Backup verification failed – pg_restore cannot read the dump."
   fi
   success "Backup contains ${toc_count} TOC entries."
+  mv -f "${part_file}" "${dump_file}"
+  PARTIAL_FILE=""
 
   # ── SHA-256 checksum ──
   info "Computing SHA-256 checksum …"
@@ -344,7 +378,7 @@ do_restore() {
   # Verify dump is readable
   local toc_count
   if ${USE_DOCKER}; then
-    toc_count=$(docker exec -i -e PGPASSWORD="${DB_PASSWORD}" "${CONTAINER_NAME}" \
+    toc_count=$(docker exec -i -e PGPASSWORD "${CONTAINER_NAME}" \
       pg_restore --list < "${backup_file}" 2>/dev/null | wc -l)
   else
     toc_count=$(pg_restore --list "${backup_file}" 2>/dev/null | wc -l)
@@ -360,26 +394,35 @@ do_restore() {
   warn "This will DROP and RECREATE the database '${DB_NAME}'."
   warn "ALL existing data will be permanently lost."
   echo ""
-  read -rp "Type the database name to confirm: " confirm
+  local confirm=""
+  read -rp "Type the database name to confirm: " confirm || true
   [[ "${confirm}" == "${DB_NAME}" ]] || { info "Restore cancelled."; exit 0; }
   echo ""
 
   local restore_start
   restore_start=$(date +%s)
 
-  # ── Step 1: Terminate all connections ──
-  info "Terminating active connections to '${DB_NAME}' …"
-  pg_exec psql -U "${DB_USER}" -d postgres -c "
-    SELECT pg_terminate_backend(pid)
-    FROM   pg_stat_activity
-    WHERE  datname = '${DB_NAME}'
-      AND  pid <> pg_backend_pid();
-  " >/dev/null 2>&1 || true
+  # ── Step 1: Stop the app ──
+  # A running API or worker reconnects at once and could write into the
+  # half-restored database, so the compose services are stopped first.
+  local stopped_services=""
+  if ${COMPOSE_PROJECT}; then
+    stopped_services="$(cd "${PROJECT_ROOT}" && docker compose ps --status running --services 2>/dev/null | grep -xE 'app|worker' | tr '\n' ' ' || true)"
+    if [[ -n "${stopped_services}" ]]; then
+      info "Stopping ${stopped_services}…"
+      # shellcheck disable=SC2086
+      (cd "${PROJECT_ROOT}" && docker compose stop ${stopped_services} >/dev/null 2>&1)
+      STOPPED_SERVICES="${stopped_services}"
+    fi
+  else
+    warn "Stop the API and the worker before restoring, or they may write to the database mid-restore."
+  fi
 
   # ── Step 2: Drop and recreate the database ──
+  # WITH (FORCE) ends remaining connections in the same statement (PostgreSQL 13+).
   info "Dropping database '${DB_NAME}' …"
   pg_exec psql -U "${DB_USER}" -d postgres -c \
-    "DROP DATABASE IF EXISTS \"${DB_NAME}\";" >/dev/null
+    "DROP DATABASE IF EXISTS \"${DB_NAME}\" WITH (FORCE);" >/dev/null
 
   info "Creating fresh database '${DB_NAME}' …"
   pg_exec psql -U "${DB_USER}" -d postgres -c \
@@ -393,7 +436,7 @@ do_restore() {
 
   local restore_exit=0
   if ${USE_DOCKER}; then
-    docker exec -i -e PGPASSWORD="${DB_PASSWORD}" "${CONTAINER_NAME}" \
+    docker exec -i -e PGPASSWORD "${CONTAINER_NAME}" \
       pg_restore \
         -U "${DB_USER}" \
         -d "${DB_NAME}" \
@@ -403,7 +446,7 @@ do_restore() {
         --exit-on-error \
       < "${backup_file}" || restore_exit=$?
   else
-    PGPASSWORD="${DB_PASSWORD}" pg_restore \
+    pg_restore \
       -h "${DB_HOST}" \
       -p "${DB_PORT}" \
       -U "${DB_USER}" \
@@ -451,7 +494,37 @@ do_restore() {
   success "Rows (est) : ${restored_rows}"
   success "Duration   : ${elapsed}s"
   echo ""
-  info "Restart the application to refresh connection pools."
+  clear_cache
+  if [[ -n "${stopped_services}" ]]; then
+    info "Starting ${stopped_services}…"
+    # shellcheck disable=SC2086
+    (cd "${PROJECT_ROOT}" && docker compose start ${stopped_services} >/dev/null 2>&1)
+    STOPPED_SERVICES=""
+    success "Started ${stopped_services}"
+  else
+    info "Restart the API and the worker to refresh connection pools."
+  fi
+  info "The restored data opens only with the encryption key file from the time of the backup or later."
+}
+
+# Redis holds only a cache of database rows and pub/sub, so it is emptied:
+# entries from before the restore describe rows that may no longer exist.
+clear_cache() {
+  local redis_id="" reply=""
+  if ${COMPOSE_PROJECT}; then
+    redis_id="$(cd "${PROJECT_ROOT}" && docker compose ps -q redis 2>/dev/null || true)"
+  fi
+  if [[ -z "${redis_id}" ]]; then
+    warn "Clear the Redis cache with FLUSHDB, or entries from before the restore stay for up to 5 minutes."
+    return
+  fi
+  reply="$(REDISCLI_AUTH="${REDIS_PASSWORD:-}" docker exec ${REDIS_PASSWORD:+-e REDISCLI_AUTH} "${redis_id}" \
+    redis-cli -n "${REDIS_DB:-0}" FLUSHDB 2>/dev/null || true)"
+  if [[ "${reply}" == "OK" ]]; then
+    success "Cleared the Redis cache"
+  else
+    warn "Could not clear the Redis cache; entries from before the restore expire within 5 minutes."
+  fi
 }
 
 # ============================================================
@@ -502,7 +575,7 @@ do_verify() {
   info "Inspecting dump TOC …"
   local toc_count
   if ${USE_DOCKER}; then
-    toc_count=$(docker exec -i -e PGPASSWORD="${DB_PASSWORD}" "${CONTAINER_NAME}" \
+    toc_count=$(docker exec -i -e PGPASSWORD "${CONTAINER_NAME}" \
       pg_restore --list < "${backup_file}" 2>/dev/null | wc -l)
   else
     if command -v pg_restore >/dev/null 2>&1; then
@@ -554,8 +627,9 @@ do_list() {
 #  PRUNE OLD BACKUPS
 # ============================================================
 prune_old_backups() {
-  local count
-  count=$(find "${BACKUP_DIR}" -maxdepth 1 -name "*.dump" -type f 2>/dev/null | wc -l)
+  # Only this script's own dumps: update.sh keeps pre-update-*.dump on its own schedule.
+  local pattern="${DB_NAME}_*.dump" count
+  count=$(find "${BACKUP_DIR}" -maxdepth 1 -name "${pattern}" -type f 2>/dev/null | wc -l)
 
   if [[ "${count}" -le "${BACKUP_RETAIN_COUNT}" ]]; then
     return
@@ -565,7 +639,7 @@ prune_old_backups() {
   info "Pruning ${to_remove} old backup(s) (retaining last ${BACKUP_RETAIN_COUNT}) …"
 
   # Sort by name (which embeds the timestamp) and remove oldest
-  find "${BACKUP_DIR}" -maxdepth 1 -name "*.dump" -type f -print0 \
+  find "${BACKUP_DIR}" -maxdepth 1 -name "${pattern}" -type f -print0 \
     | sort -z \
     | head -z -n "${to_remove}" \
     | while IFS= read -r -d '' old_file; do
@@ -583,10 +657,10 @@ usage() {
 TMA Cloud – Database Backup & Restore
 
 Usage:
-  scripts/db-backup-restore.sh backup                  Create a full database backup
-  scripts/db-backup-restore.sh restore <backup-file>   Restore database from a backup
-  scripts/db-backup-restore.sh verify  <backup-file>   Verify a backup file's integrity
-  scripts/db-backup-restore.sh list                    List available backups
+  ./db-backup-restore.sh backup                  Create a full database backup
+  ./db-backup-restore.sh restore <backup-file>   Restore database from a backup
+  ./db-backup-restore.sh verify  <backup-file>   Verify a backup file's integrity
+  ./db-backup-restore.sh list                    List available backups
 
 Backup strategy:
   - Uses pg_dump custom format (compressed, supports selective & parallel restore)
@@ -608,7 +682,8 @@ Environment variables (auto-loaded from .env):
   DB_USER               default: postgres
   DB_PASSWORD            (required)
   DB_NAME               default: tma_cloud_storage
-  DB_CONTAINER          override Docker container name (auto-detected if unset)
+  DB_CONTAINER          PostgreSQL container name; without it, the postgres service of
+                        the compose project in this directory, else the host tools
   BACKUP_RETAIN_COUNT   default: 10
 
 USAGE
