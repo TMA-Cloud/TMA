@@ -32,6 +32,7 @@ interface AdministrationSectionProps {
   onShowActiveClients: () => void;
   onShowOrphans: () => void;
   /** Collapsible server-configuration cards, grouped by what they configure. */
+  activity?: React.ReactNode;
   networking?: React.ReactNode;
   integrations?: React.ReactNode;
 }
@@ -71,6 +72,7 @@ export const AdministrationSection: React.FC<AdministrationSectionProps> = ({
   loadingActiveClients,
   onShowActiveClients,
   onShowOrphans,
+  activity,
   networking,
   integrations,
 }) => {
@@ -167,6 +169,15 @@ export const AdministrationSection: React.FC<AdministrationSectionProps> = ({
             description="Desktop apps that checked in within the last 5 minutes"
           />
         </SettingsGroup>
+
+        {activity && (
+          <SettingsGroup
+            title="Sessions & activity"
+            description="How long sign-ins last and what opening a file records."
+          >
+            {activity}
+          </SettingsGroup>
+        )}
 
         {networking && (
           <SettingsGroup title="Networking" description="How the server reads requests that arrive through a proxy.">

@@ -1,26 +1,33 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import jwt from 'jsonwebtoken';
 
+import { applyActivitySettings, getActivitySettings, resetActivitySettings } from '../../../config/activitySettings.js';
 import {
-  SESSION_IDLE_DAYS,
-  SESSION_IDLE_TTL_SECONDS,
-  TOKEN_RENEWAL_THRESHOLD_SECONDS,
   generateAuthToken,
   getCookieOptions,
+  sessionIdleSeconds,
+  tokenRenewalThresholdSeconds,
 } from '../../../utils/auth.js';
 
 const SECRET = 'test-jwt-secret-do-not-use-in-production';
+const DAY = 24 * 60 * 60;
 
-describe('session window constants', () => {
+afterEach(() => resetActivitySettings());
+
+describe('session window', () => {
   it('defaults to a 30 day idle window', () => {
-    expect(SESSION_IDLE_DAYS).toBe(30);
-    expect(SESSION_IDLE_TTL_SECONDS).toBe(30 * 24 * 60 * 60);
+    expect(sessionIdleSeconds()).toBe(30 * DAY);
   });
 
   it('renews at 80% of the window, leaving slack for clock skew', () => {
-    expect(TOKEN_RENEWAL_THRESHOLD_SECONDS).toBe(Math.floor(SESSION_IDLE_TTL_SECONDS * 0.8));
-    expect(TOKEN_RENEWAL_THRESHOLD_SECONDS).toBeLessThan(SESSION_IDLE_TTL_SECONDS);
-    expect(TOKEN_RENEWAL_THRESHOLD_SECONDS).toBeGreaterThan(0);
+    expect(tokenRenewalThresholdSeconds()).toBe(Math.floor(30 * DAY * 0.8));
+  });
+
+  it('follows the idle timeout from Settings without a restart', () => {
+    applyActivitySettings({ ...getActivitySettings(), sessionIdleDays: 7 });
+    expect(sessionIdleSeconds()).toBe(7 * DAY);
+    expect(tokenRenewalThresholdSeconds()).toBe(Math.floor(7 * DAY * 0.8));
+    expect(getCookieOptions().maxAge).toBe(7 * DAY * 1000);
   });
 });
 
@@ -45,7 +52,7 @@ describe('getCookieOptions', () => {
   });
 
   it('sets maxAge to the full idle window in milliseconds', () => {
-    expect(getCookieOptions().maxAge).toBe(SESSION_IDLE_TTL_SECONDS * 1000);
+    expect(getCookieOptions().maxAge).toBe(sessionIdleSeconds() * 1000);
   });
 
   it('leaves Secure off outside production so local HTTP development works', () => {
@@ -129,7 +136,7 @@ describe('generateAuthToken', () => {
   it('expires after the idle window by default', () => {
     const decoded = jwt.decode(generateAuthToken('u1', SECRET));
     const lifetime = decoded.exp - decoded.iat;
-    expect(lifetime).toBe(SESSION_IDLE_TTL_SECONDS);
+    expect(lifetime).toBe(sessionIdleSeconds());
   });
 
   it('honours an explicit expiresIn', () => {

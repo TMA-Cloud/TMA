@@ -1,9 +1,16 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { executedCalls, queueQueryResults, resetDbMock } from '../../mocks/db.mock.js';
 import { seedRedis, setRedisDown } from '../../mocks/redis.mock.js';
 import { cacheKeys, getCache } from '../../../utils/cache.js';
-import { CHUNK_SIZE, flushAccessTimes, recordAccess, resetAccessTracker } from '../../../services/accessTracker.js';
+import { applyActivitySettings, getActivitySettings, resetActivitySettings } from '../../../config/activitySettings.js';
+import {
+  CHUNK_SIZE,
+  configureAccessTracker,
+  flushAccessTimes,
+  recordAccess,
+  resetAccessTracker,
+} from '../../../services/accessTracker.js';
 
 const OWNER = 'user000000000001';
 const OTHER = 'user000000000002';
@@ -12,6 +19,17 @@ beforeEach(() => {
   resetDbMock();
   resetAccessTracker();
 });
+
+afterEach(() => {
+  vi.useRealTimers();
+  resetAccessTracker();
+  resetActivitySettings();
+});
+
+/** Make these settings current, as a save in Settings does, and follow them. */
+function useSettings(changes) {
+  configureAccessTracker(applyActivitySettings({ ...getActivitySettings(), ...changes }));
+}
 
 /** The UPDATE statements the tracker ran, in order. */
 function updates() {
@@ -168,5 +186,58 @@ describe('flushAccessTimes', () => {
     await flushAccessTimes();
 
     expect(updates()).toHaveLength(1);
+  });
+});
+
+describe('settings from the admin', () => {
+  it('records nothing while tracking is off', async () => {
+    useSettings({ accessTimeTracking: false });
+    recordAccess('file1', OWNER);
+    await flushAccessTimes();
+
+    expect(updates()).toHaveLength(0);
+  });
+
+  it('writes what was buffered when tracking is turned off', async () => {
+    useSettings({ accessTimeTracking: true });
+    recordAccess('file1', OWNER);
+    useSettings({ accessTimeTracking: false });
+    await flushAccessTimes();
+
+    expect(updates()).toHaveLength(1);
+  });
+
+  it('writes a re-read at once when the window is 0', async () => {
+    useSettings({ accessTimeWindowMinutes: 0 });
+    recordAccess('file1', OWNER);
+    await flushAccessTimes();
+    recordAccess('file1', OWNER);
+    await flushAccessTimes();
+
+    expect(updates()).toHaveLength(2);
+  });
+
+  it('flushes on the interval from the settings and re-times it on a change', async () => {
+    vi.useFakeTimers();
+    useSettings({ accessTimeFlushSeconds: 30 });
+    recordAccess('file1', OWNER);
+
+    await vi.advanceTimersByTimeAsync(29_000);
+    expect(updates()).toHaveLength(0);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(updates()).toHaveLength(1);
+
+    useSettings({ accessTimeFlushSeconds: 5 });
+    recordAccess('file2', OWNER);
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(updates()).toHaveLength(2);
+  });
+
+  it('stops the interval when tracking is turned off', () => {
+    vi.useFakeTimers();
+    useSettings({ accessTimeFlushSeconds: 5 });
+    useSettings({ accessTimeTracking: false });
+
+    expect(vi.getTimerCount()).toBe(0);
   });
 });

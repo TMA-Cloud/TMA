@@ -182,14 +182,14 @@ describe('auth state hint', () => {
     expect(localStorage.getItem(AUTH_STATE_KEY)).toBeNull();
   });
 
-  it('discards a hint older than the server session window', () => {
-    const tooOld = Date.now() - 31 * 24 * 60 * 60 * 1000;
+  it('discards a hint older than the longest session timeout', () => {
+    const tooOld = Date.now() - 366 * 24 * 60 * 60 * 1000;
     localStorage.setItem(AUTH_STATE_KEY, JSON.stringify({ timestamp: tooOld, version: 1 }));
     expect(hasAuthState()).toBe(false);
   });
 
-  it('keeps a hint that is just inside the window', () => {
-    const recent = Date.now() - 29 * 24 * 60 * 60 * 1000;
+  it('keeps a hint that is inside the longest session timeout', () => {
+    const recent = Date.now() - 364 * 24 * 60 * 60 * 1000;
     localStorage.setItem(AUTH_STATE_KEY, JSON.stringify({ timestamp: recent, version: 1 }));
     expect(hasAuthState()).toBe(true);
   });

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import jwt from 'jsonwebtoken';
 
-import { SESSION_IDLE_TTL_SECONDS, TOKEN_RENEWAL_THRESHOLD_SECONDS } from '../../../utils/auth.js';
+import { sessionIdleSeconds, tokenRenewalThresholdSeconds } from '../../../utils/auth.js';
 import { mockNext, mockReq, mockRes, withRequestContext } from '../../helpers/http.js';
 
 vi.mock('../../../models/user.model.js', () => ({
@@ -22,7 +22,7 @@ const SECRET = 'test-jwt-secret-do-not-use-in-production';
 const USER = 'user000000000001';
 
 const sign = (payload, options = {}) =>
-  jwt.sign(payload, SECRET, { algorithm: 'HS256', expiresIn: SESSION_IDLE_TTL_SECONDS, ...options });
+  jwt.sign(payload, SECRET, { algorithm: 'HS256', expiresIn: sessionIdleSeconds(), ...options });
 
 // The suite restores mocks between tests, which strips the factory defaults;
 // re-establish the "everything is fine" baseline so each test only has to
@@ -242,14 +242,14 @@ describe('sliding session renewal', () => {
 
   it('re-issues a token that is close to expiry', async () => {
     getUserTokenVersion.mockResolvedValue(1);
-    const nearlyExpired = SESSION_IDLE_TTL_SECONDS - TOKEN_RENEWAL_THRESHOLD_SECONDS - 60;
+    const nearlyExpired = tokenRenewalThresholdSeconds() - 60;
     const { res } = await run(sign({ id: USER, v: 1, sid: 's1' }, { expiresIn: nearlyExpired }));
     expect(res.cookie).toHaveBeenCalledWith('token', expect.any(String), expect.objectContaining({ httpOnly: true }));
   });
 
   it('carries the version and session id into the renewed token', async () => {
     getUserTokenVersion.mockResolvedValue(4);
-    const nearlyExpired = SESSION_IDLE_TTL_SECONDS - TOKEN_RENEWAL_THRESHOLD_SECONDS - 60;
+    const nearlyExpired = tokenRenewalThresholdSeconds() - 60;
     const { res } = await run(sign({ id: USER, v: 4, sid: 's1' }, { expiresIn: nearlyExpired }));
     const renewed = jwt.decode(res.cookie.mock.calls[0][1]);
     expect(renewed).toMatchObject({ id: USER, v: 4, sid: 's1' });
@@ -257,7 +257,7 @@ describe('sliding session renewal', () => {
 
   it('does not attempt renewal once headers have gone out', async () => {
     getUserTokenVersion.mockResolvedValue(1);
-    const nearlyExpired = SESSION_IDLE_TTL_SECONDS - TOKEN_RENEWAL_THRESHOLD_SECONDS - 60;
+    const nearlyExpired = tokenRenewalThresholdSeconds() - 60;
     const req = mockReq({ headers: { cookie: `token=${sign({ id: USER, v: 1 }, { expiresIn: nearlyExpired })}` } });
     const res = mockRes();
     res.headersSent = true;
@@ -267,7 +267,7 @@ describe('sliding session renewal', () => {
 
   it('still lets the request proceed when renewal itself fails', async () => {
     getUserTokenVersion.mockResolvedValue(1);
-    const nearlyExpired = SESSION_IDLE_TTL_SECONDS - TOKEN_RENEWAL_THRESHOLD_SECONDS - 60;
+    const nearlyExpired = tokenRenewalThresholdSeconds() - 60;
     const req = mockReq({ headers: { cookie: `token=${sign({ id: USER, v: 1 }, { expiresIn: nearlyExpired })}` } });
     const res = mockRes();
     res.cookie = vi.fn(() => {

@@ -4,6 +4,7 @@
 
 import jwt from 'jsonwebtoken';
 
+import { getActivitySettings } from '../config/activitySettings.js';
 import { logger } from '../config/logger.js';
 
 /** True when production is served over HTTP (BACKEND_URL starts with http:// or FORCE_INSECURE_COOKIES) */
@@ -26,29 +27,26 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 /**
- * How long a session survives *inactivity* before a fresh login is required.
+ * How long a session survives *inactivity* before a fresh login is required,
+ * as the first user set it in Settings (30 days by default).
  *
  * Tokens are minted for this full window and re-issued while the user is
  * active (see the auth middleware), so the window slides instead of counting
- * down from login. Configurable via SESSION_IDLE_DAYS; defaults to 30 days.
+ * down from login.
  */
-const SESSION_IDLE_DAYS = (() => {
-  const parsed = parseInt(process.env.SESSION_IDLE_DAYS || '30', 10);
-  if (!Number.isFinite(parsed) || parsed < 1) {
-    logger.warn({ value: process.env.SESSION_IDLE_DAYS }, 'Invalid SESSION_IDLE_DAYS, falling back to 30 days');
-    return 30;
-  }
-  return parsed;
-})();
-
-const SESSION_IDLE_TTL_SECONDS = SESSION_IDLE_DAYS * 24 * 60 * 60;
+function sessionIdleSeconds() {
+  return getActivitySettings().sessionIdleDays * 24 * 60 * 60;
+}
 
 /**
- * Re-issue the token once less than 80% of its life remains. Renewing on
- * every request would rewrite the cookie constantly for no benefit; waiting
- * until the last moment would leave no slack for clock skew.
+ * Re-issue the token once less than 80% of the idle window remains. Renewing
+ * on every request would rewrite the cookie constantly for no benefit; waiting
+ * until the last moment would leave no slack for clock skew. A token minted
+ * under a shorter window is renewed on its next request after the window grows.
  */
-const TOKEN_RENEWAL_THRESHOLD_SECONDS = Math.floor(SESSION_IDLE_TTL_SECONDS * 0.8);
+function tokenRenewalThresholdSeconds() {
+  return Math.floor(sessionIdleSeconds() * 0.8);
+}
 
 /**
  * Get cookie options for JWT tokens
@@ -65,7 +63,7 @@ function getCookieOptions() {
     httpOnly: true,
     secure,
     sameSite: 'lax',
-    maxAge: SESSION_IDLE_TTL_SECONDS * 1000,
+    maxAge: sessionIdleSeconds() * 1000,
   };
 }
 
@@ -87,7 +85,7 @@ function generateAuthToken(userId, jwtSecret, options = {}) {
     throw new Error('generateAuthToken: jwtSecret must be a non-empty string');
   }
 
-  const { tokenVersion = 1, sessionId = null, expiresIn = SESSION_IDLE_TTL_SECONDS } = options;
+  const { tokenVersion = 1, sessionId = null, expiresIn = sessionIdleSeconds() } = options;
 
   const payload = {
     id: userId,
@@ -103,10 +101,4 @@ function generateAuthToken(userId, jwtSecret, options = {}) {
   return jwt.sign(payload, jwtSecret, { expiresIn, algorithm: 'HS256' });
 }
 
-export {
-  getCookieOptions,
-  generateAuthToken,
-  SESSION_IDLE_DAYS,
-  SESSION_IDLE_TTL_SECONDS,
-  TOKEN_RENEWAL_THRESHOLD_SECONDS,
-};
+export { getCookieOptions, generateAuthToken, sessionIdleSeconds, tokenRenewalThresholdSeconds };

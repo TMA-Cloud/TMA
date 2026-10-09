@@ -47,24 +47,25 @@ async function createSession(userId, tokenVersion, userAgent, ipAddress) {
  */
 async function sessionExists(sessionId, userId, tokenVersion, idleTtlSeconds = null) {
   const cacheKey = cacheKeys.session(sessionId, userId, tokenVersion);
+  const withinWindow = lastActivityMs => idleTtlSeconds === null || lastActivityMs > Date.now() - idleTtlSeconds * 1000;
+
+  // The cache holds when the session was last active, not a verdict, so a new
+  // idle window from Settings applies to every session at once.
   const cached = await getCache(cacheKey);
-  if (cached !== null) {
-    return cached;
-  }
+  if (cached === false) return false;
+  // A cached time can trail the database by one activity-write window; only a
+  // pass is trusted from it, and a near-expiry session is read again.
+  if (typeof cached === 'number' && withinWindow(cached)) return true;
 
   const result = await pool.query(
-    `SELECT id FROM sessions
-     WHERE id = $1 AND user_id = $2 AND token_version = $3
-       AND ($4::bigint IS NULL OR last_activity > NOW() - INTERVAL '1 second' * $4)`,
-    [sessionId, userId, tokenVersion, idleTtlSeconds]
+    `SELECT (EXTRACT(EPOCH FROM last_activity) * 1000)::bigint AS last_activity_ms FROM sessions
+     WHERE id = $1 AND user_id = $2 AND token_version = $3`,
+    [sessionId, userId, tokenVersion]
   );
-  const exists = result.rows.length > 0;
+  const lastActivityMs = result.rows.length > 0 ? Number(result.rows[0].last_activity_ms) : null;
+  await setCache(cacheKey, lastActivityMs ?? false, DEFAULT_TTL);
 
-  // Cache the result (5 minutes TTL). Safe against the idle check because the
-  // window is orders of magnitude longer than the cache lifetime.
-  await setCache(cacheKey, exists, DEFAULT_TTL);
-
-  return exists;
+  return lastActivityMs !== null && withinWindow(lastActivityMs);
 }
 
 /**
@@ -226,31 +227,35 @@ async function deleteAllUserSessions(userId) {
 }
 
 /**
- * Clean up old sessions (sessions with outdated token versions)
- * This should be run periodically to keep the table clean
- * @param {number} daysOld - Delete sessions older than this many days
+ * Delete sessions that can no longer authenticate: idle longer than the
+ * session idle timeout from Settings, or from before a "log out everywhere".
+ * Age since login is not a reason: the idle window slides, so an active
+ * session stays however old it is.
  * @returns {Promise<number>} Number of sessions deleted
  */
-async function cleanupOldSessions(daysOld = 30, { batchSize = 5000, maxBatches = 20 } = {}) {
+async function cleanupOldSessions({ batchSize = 5000, maxBatches = 20 } = {}) {
   let deletedCount = 0;
   for (let batch = 0; batch < maxBatches; batch += 1) {
     const result = await pool.query(
       `WITH doomed AS (
-         SELECT id FROM sessions
-          WHERE created_at < NOW() - INTERVAL '1 day' * $1
-          ORDER BY created_at, id
-          LIMIT $2
+         SELECT s.id FROM sessions s
+           JOIN users u ON u.id = s.user_id
+          WHERE s.last_activity < NOW() - INTERVAL '1 day' * (
+                  SELECT session_idle_days FROM app_settings WHERE id = 'app_settings'
+                )
+             OR s.token_version <> u.token_version
+          LIMIT $1
        )
        DELETE FROM sessions s USING doomed
         WHERE s.id = doomed.id`,
-      [daysOld, batchSize]
+      [batchSize]
     );
     const deleted = result.rowCount || 0;
     deletedCount += deleted;
     if (deleted < batchSize) break;
   }
   if (deletedCount > 0) {
-    logger.info({ deletedCount, daysOld }, 'Cleaned up old sessions');
+    logger.info({ deletedCount }, 'Cleaned up expired sessions');
   }
   return deletedCount;
 }

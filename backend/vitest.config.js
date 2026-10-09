@@ -38,14 +38,13 @@ export default defineConfig({
     clearMocks: true,
     // Env is applied before any module in the graph is evaluated, which matters
     // because several modules read process.env at import time (JWT_SECRET,
-    // storage configuration, SESSION_IDLE_DAYS).
+    // storage configuration).
     env: {
       NODE_ENV: 'test',
       LOG_LEVEL: 'silent',
       JWT_SECRET: 'test-jwt-secret-do-not-use-in-production',
       // 64 hex chars = a 32-byte key, taking the hex branch of getEncryptionKey().
       FILE_ENCRYPTION_KEY: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
-      SESSION_IDLE_DAYS: '30',
       BACKEND_URL: 'https://cloud.example.com',
     },
     coverage: {

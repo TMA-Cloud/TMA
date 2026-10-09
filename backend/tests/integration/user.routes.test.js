@@ -30,6 +30,7 @@ const handlerNames = [
   'deleteOrphans',
   'deleteSubUser',
   'getActiveClients',
+  'getActivityConfig',
   'getElectronOnlyAccessConfig',
   'getHideFileExtensionsConfig',
   'getMaxUploadSizeConfig',
@@ -46,12 +47,14 @@ const handlerNames = [
   'storageUsage',
   'testStorageConfig',
   'toggleSignup',
+  'updateAccessTimeConfig',
   'updateElectronOnlyAccessConfig',
   'updateHideFileExtensionsConfig',
   'updateMaxUploadSizeConfig',
   'updateKnownProxiesConfig',
   'updateOnlyOfficeConfig',
   'updatePasswordChangeConfig',
+  'updateSessionTimeoutConfig',
   'updateShareBaseUrlConfig',
   'updateStorageConfig',
   'updateSubUser',
@@ -359,6 +362,41 @@ describe('known proxy config validation', () => {
           .send({ knownProxies: ['not a hostname'] })
       ).status
     ).toBe(422);
+  });
+});
+
+describe('session and access-time config validation', () => {
+  const putSession = body => request(app).put('/api/user/session-timeout-config').send(body);
+  const putAccess = body => request(app).put('/api/user/access-time-config').send(body);
+  const access = { enabled: true, windowMinutes: 60, flushSeconds: 10 };
+
+  it('accepts the idle timeout across its whole range', async () => {
+    expect((await putSession({ idleDays: 1 })).status).toBe(200);
+    expect((await putSession({ idleDays: 365 })).status).toBe(200);
+  });
+
+  it.each([[{}], [{ idleDays: 0 }], [{ idleDays: 366 }], [{ idleDays: 1.5 }], [{ idleDays: 'thirty' }]])(
+    'rejects the idle timeout %j',
+    async body => {
+      expect((await putSession(body)).status).toBe(422);
+    }
+  );
+
+  it('accepts access-time settings at the edges of each range', async () => {
+    expect((await putAccess(access)).status).toBe(200);
+    expect((await putAccess({ enabled: false, windowMinutes: 0, flushSeconds: 1 })).status).toBe(200);
+    expect((await putAccess({ enabled: true, windowMinutes: 1440, flushSeconds: 300 })).status).toBe(200);
+  });
+
+  it.each([
+    [{ ...access, enabled: 'yes' }],
+    [{ ...access, enabled: undefined }],
+    [{ ...access, windowMinutes: -1 }],
+    [{ ...access, windowMinutes: 1441 }],
+    [{ ...access, flushSeconds: 0 }],
+    [{ ...access, flushSeconds: 301 }],
+  ])('rejects access-time settings %j', async body => {
+    expect((await putAccess(body)).status).toBe(422);
   });
 });
 

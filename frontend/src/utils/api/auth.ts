@@ -3,11 +3,11 @@
  * The hint lets us skip an API round-trip when there was never a prior login.
  */
 export const AUTH_STATE_KEY = 'tma_cloud_auth_state';
-// Must not be shorter than the server's session idle window (SESSION_IDLE_DAYS,
-// 30 days by default). This value only gates whether we bother asking the
+// Must not be shorter than the longest session timeout the admin can set in
+// Settings (365 days). This value only gates whether we bother asking the
 // server; if it expired first, a still-valid session would be shown the login
 // screen without a single request being made.
-const AUTH_STATE_MAX_AGE = 30 * 24 * 60 * 60 * 1000;
+const AUTH_STATE_MAX_AGE = 365 * 24 * 60 * 60 * 1000;
 
 interface AuthState {
   timestamp: number;

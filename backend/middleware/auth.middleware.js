@@ -8,8 +8,8 @@ import { extractRawToken } from '../utils/tokenExtractor.js';
 import {
   generateAuthToken,
   getCookieOptions,
-  SESSION_IDLE_TTL_SECONDS,
-  TOKEN_RENEWAL_THRESHOLD_SECONDS,
+  sessionIdleSeconds,
+  tokenRenewalThresholdSeconds,
 } from '../utils/auth.js';
 
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -25,7 +25,7 @@ if (!JWT_SECRET) {
  * Tokens are minted for the full idle window, so without this an active user
  * would still be forcibly logged out at the end of that window. Refreshing
  * while the user is active turns the fixed window into a sliding one: the
- * session only ends after SESSION_IDLE_TTL_SECONDS of genuine inactivity.
+ * session only ends after the idle window passes without a request.
  *
  * @param {Object} req - Express request
  * @param {Object} res - Express response
@@ -37,7 +37,7 @@ function renewTokenIfNeeded(req, res, decoded) {
   if (res.headersSent || !decoded.exp) return;
 
   const secondsRemaining = decoded.exp - Math.floor(Date.now() / 1000);
-  if (secondsRemaining > TOKEN_RENEWAL_THRESHOLD_SECONDS) return;
+  if (secondsRemaining > tokenRenewalThresholdSeconds()) return;
 
   try {
     const token = generateAuthToken(decoded.id, JWT_SECRET, {
@@ -102,7 +102,7 @@ export default async function authMiddleware(req, res, next) {
       }
 
       if (!isRevokingOwnSession) {
-        const sessionValid = await sessionExists(decoded.sid, decoded.id, tokenVersion, SESSION_IDLE_TTL_SECONDS);
+        const sessionValid = await sessionExists(decoded.sid, decoded.id, tokenVersion, sessionIdleSeconds());
         if (!sessionValid) {
           logger.warn({ userId: decoded.id, sessionId: decoded.sid }, 'Token validation failed: session revoked');
           return res.status(401).json({ message: 'Session has been revoked. Please login again.' });

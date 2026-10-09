@@ -23,10 +23,11 @@ import { blockMainAppOnShareDomain } from './middleware/shareDomain.middleware.j
 import { requireElectronClientIfEnabled } from './middleware/electronClient.middleware.js';
 import { logger, httpLogger } from './config/logger.js';
 import { initializeAuditQueue, shutdownAuditQueue } from './services/auditLogger.js';
-import { startAccessTracker, shutdownAccessTracker } from './services/accessTracker.js';
+import { configureAccessTracker, shutdownAccessTracker } from './services/accessTracker.js';
+import { startActivitySettings, stopActivitySettings } from './config/activitySettings.js';
 import { initializeMetrics, metricsEndpoint, startQueueMetricsUpdater } from './services/metrics.js';
 import { connectRedis, disconnectRedis } from './config/redis.js';
-import { getKnownProxiesSettings } from './models/user.model.js';
+import { getKnownProxiesSettings, loadActivitySettings } from './models/user.model.js';
 import { verifyEncryptionKeys } from './services/encryptionKeyCheck.js';
 import { resolveKnownProxies } from './utils/knownProxies.js';
 
@@ -246,6 +247,7 @@ async function gracefulShutdown(signal) {
     await shutdownAuditQueue();
 
     // Shutdown access tracker
+    stopActivitySettings();
     await shutdownAccessTracker();
 
     // Disconnect Redis
@@ -332,15 +334,15 @@ runMigrations()
       logger.warn({ err: error }, 'Failed to warm OnlyOffice origin cache - will populate on first request');
     }
 
+    // The session timeout applies from the first request, so load it before listening.
+    // Access tracking buffers request-local activity in this process and
+    // follows its settings as they change.
+    await startActivitySettings(loadActivitySettings, next => configureAccessTracker(next));
+
     // Start HTTP server
     server = app.listen(port, () => {
       logger.info({ port, environment: process.env.NODE_ENV || 'development' }, 'Server started successfully');
     });
-
-    // Access tracking buffers request-local activity in this process; durable
-    // scheduled maintenance is registered with pg-boss above and executed by
-    // the standalone worker.
-    startAccessTracker();
 
     // Register shutdown handlers
     process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));

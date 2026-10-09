@@ -22,6 +22,7 @@ import { AdministrationSection } from './sections/AdministrationSection';
 import { OnlyOfficeSection } from './sections/OnlyOfficeSection';
 import { ShareBaseUrlSection } from './sections/ShareBaseUrlSection';
 import { KnownProxiesSection } from './sections/KnownProxiesSection';
+import { ActivitySettingsSection } from './sections/ActivitySettingsSection';
 import { UpdatesSection } from './sections/UpdatesSection';
 import { SecuritySection } from './sections/SecuritySection';
 import { SubUsersSection } from './sections/SubUsersSection';
@@ -292,6 +293,7 @@ const Settings: React.FC = () => {
             loadingActiveClients={loadingActiveClients}
             onShowActiveClients={handleShowActiveClients}
             onShowOrphans={() => setOrphansModalOpen(true)}
+            activity={<ActivitySettingsSection canConfigure={canToggleSignup} />}
             networking={<KnownProxiesSection canConfigure={canToggleSignup} />}
             integrations={
               <>

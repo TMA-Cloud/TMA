@@ -142,3 +142,27 @@ export async function updateKnownProxiesConfig(
     knownProxies,
   });
 }
+
+/** Session idle timeout and last-access tracking, as the first user set them. */
+export interface ActivitySettings {
+  sessionIdleDays: number;
+  accessTimeTracking: boolean;
+  accessTimeWindowMinutes: number;
+  accessTimeFlushSeconds: number;
+}
+
+export async function getActivityConfig(signal?: AbortSignal): Promise<ActivitySettings> {
+  return await apiGet<ActivitySettings>('/api/user/activity-config', { signal });
+}
+
+export async function updateSessionTimeoutConfig(idleDays: number): Promise<ActivitySettings> {
+  return await apiPut<ActivitySettings>('/api/user/session-timeout-config', { idleDays });
+}
+
+export async function updateAccessTimeConfig(settings: {
+  enabled: boolean;
+  windowMinutes: number;
+  flushSeconds: number;
+}): Promise<ActivitySettings> {
+  return await apiPut<ActivitySettings>('/api/user/access-time-config', settings);
+}

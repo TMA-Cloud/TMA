@@ -7,6 +7,7 @@ import {
   deleteOrphans,
   deleteSubUser,
   getActiveClients,
+  getActivityConfig,
   getElectronOnlyAccessConfig,
   getHideFileExtensionsConfig,
   getMaxUploadSizeConfig,
@@ -23,12 +24,14 @@ import {
   storageUsage,
   testStorageConfig,
   toggleSignup,
+  updateAccessTimeConfig,
   updateElectronOnlyAccessConfig,
   updateHideFileExtensionsConfig,
   updateMaxUploadSizeConfig,
   updateKnownProxiesConfig,
   updateOnlyOfficeConfig,
   updatePasswordChangeConfig,
+  updateSessionTimeoutConfig,
   updateShareBaseUrlConfig,
   updateStorageConfig,
   updateSubUser,
@@ -44,12 +47,14 @@ import {
   scanOrphansSchema,
   subUserIdParamSchema,
   toggleSignupSchema,
+  updateAccessTimeConfigSchema,
   updateElectronOnlyAccessConfigSchema,
   updateHideFileExtensionsConfigSchema,
   updateMaxUploadSizeConfigSchema,
   updateKnownProxiesConfigSchema,
   updateOnlyOfficeConfigSchema,
   updatePasswordChangeConfigSchema,
+  updateSessionTimeoutConfigSchema,
   updateShareBaseUrlConfigSchema,
   updateStorageConfigSchema,
   updateSubUserSchema,
@@ -94,6 +99,9 @@ router.put(
 );
 router.get('/password-change-config', getPasswordChangeConfig);
 router.put('/password-change-config', updatePasswordChangeConfigSchema, validate, updatePasswordChangeConfig);
+router.get('/activity-config', getActivityConfig);
+router.put('/session-timeout-config', updateSessionTimeoutConfigSchema, validate, updateSessionTimeoutConfig);
+router.put('/access-time-config', updateAccessTimeConfigSchema, validate, updateAccessTimeConfig);
 router.put('/storage-limit', updateUserStorageLimitSchema, validate, updateUserStorageLimit);
 router.post('/client-heartbeat', clientHeartbeat);
 router.get('/active-clients', getActiveClients);

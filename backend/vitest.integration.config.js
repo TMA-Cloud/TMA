@@ -51,7 +51,6 @@ export default defineConfig({
       // Cleared so a key file named in .env cannot clash with the test key above.
       FILE_ENCRYPTION_KEY_FILE: '',
       JWT_SECRET: 'integration-test-jwt-secret',
-      SESSION_IDLE_DAYS: '30',
       BACKEND_URL: 'https://cloud.test',
 
       // Google OAuth off, so the login controller takes the password path.

@@ -2,6 +2,7 @@ import { body, param, query } from 'express-validator';
 
 import { ALL_PERMISSIONS } from './permissions.js';
 import { normalizeKnownProxies } from './knownProxies.js';
+import { ACCESS_TIME_FLUSH_RANGE, ACCESS_TIME_WINDOW_RANGE, SESSION_IDLE_DAYS_RANGE } from './activitySettings.js';
 
 const MAX_EMAIL_LENGTH = 254;
 const MIN_PASSWORD_LENGTH = 8;
@@ -208,6 +209,17 @@ const updateElectronOnlyAccessConfigSchema = [body('enabled').isBoolean().withMe
 
 const updatePasswordChangeConfigSchema = [body('enabled').isBoolean().withMessage('Enabled must be a boolean')];
 
+const intIn = (field, { min, max }, message) =>
+  body(field).isInt({ min, max }).withMessage(`${message} must be ${min} to ${max}`).toInt();
+
+const updateSessionTimeoutConfigSchema = [intIn('idleDays', SESSION_IDLE_DAYS_RANGE, 'Session idle timeout (days)')];
+
+const updateAccessTimeConfigSchema = [
+  body('enabled').isBoolean().withMessage('Enabled must be true or false').toBoolean(true),
+  intIn('windowMinutes', ACCESS_TIME_WINDOW_RANGE, 'Access time window (minutes)'),
+  intIn('flushSeconds', ACCESS_TIME_FLUSH_RANGE, 'Write interval (seconds)'),
+];
+
 const updateKnownProxiesConfigSchema = [
   body('knownProxies').isArray({ max: 100 }).withMessage('Known proxies must be an array with at most 100 entries'),
   body('knownProxies.*')
@@ -352,6 +364,8 @@ export {
   updateStorageConfigSchema,
   updateMaxUploadSizeConfigSchema,
   updateHideFileExtensionsConfigSchema,
+  updateSessionTimeoutConfigSchema,
+  updateAccessTimeConfigSchema,
   updateUserStorageLimitSchema,
   createSubUserSchema,
   updateSubUserSchema,

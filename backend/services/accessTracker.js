@@ -1,33 +1,20 @@
+import { getActivitySettings } from '../config/activitySettings.js';
 import pool from '../config/db.js';
 import { logger } from '../config/logger.js';
 import { cacheKeys, deleteCache } from '../utils/cache.js';
 
 /**
  * Last-access tracking for files and folders. Like NTFS/relatime, it coalesces
- * writes and accepts a loose timestamp: a per-item suppression window (default
- * one hour) drops repeat reads for free, and a write-behind buffer flushes the
- * survivors as one bulk UPDATE per interval — at most one write per item/hour.
+ * writes and accepts a loose timestamp: a per-item suppression window (one hour
+ * by default) drops repeat reads for free, and a write-behind buffer flushes the
+ * survivors as one bulk UPDATE per interval — at most one write per item/window.
+ * The first user sets the switch, window and interval in Settings; like NTFS's
+ * NtfsDisableLastAccessUpdate, tracking can be turned off on busy deployments.
  * Fire-and-forget: nothing here is awaited on a request path or throws.
  */
 
-/** Read a positive number from the environment, falling back when unset or junk. */
-function envNumber(name, fallback) {
-  const raw = process.env[name];
-  if (raw === undefined || raw === '') return fallback;
-  const parsed = Number(raw);
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
-}
-
-// Off switch, like NTFS's NtfsDisableLastAccessUpdate, for busy deployments.
-const TRACKING_DISABLED = ['0', 'false', 'off', 'no'].includes(
-  String(process.env.ACCESS_TIME_TRACKING || '').toLowerCase()
-);
-
 /** How stale a stored timestamp must be before a read is worth writing down. */
-const WINDOW_MS = envNumber('ACCESS_TIME_WINDOW_MINUTES', 60) * 60 * 1000;
-
-/** How long buffered timestamps may sit in memory before being written. */
-const FLUSH_INTERVAL_MS = envNumber('ACCESS_TIME_FLUSH_SECONDS', 10) * 1000;
+const windowMs = () => getActivitySettings().accessTimeWindowMinutes * 60 * 1000;
 
 /** Flush early once this many items are waiting (a folder download bursts many). */
 const MAX_PENDING = 2000;
@@ -45,6 +32,7 @@ const pending = new Map();
 const suppressed = new Map();
 
 let flushTimer = null;
+let flushIntervalMs = 0;
 let flushing = false;
 
 const key = (ownerId, id) => `${ownerId}:${id}`;
@@ -69,13 +57,14 @@ function pruneSuppressed(now) {
  * @param {string} ownerId - Account owner the rows belong to (req.ownerId)
  */
 function recordAccess(ids, ownerId) {
-  if (TRACKING_DISABLED || !ownerId || ids == null) return;
+  if (!getActivitySettings().accessTimeTracking || !ownerId || ids == null) return;
 
   const list = Array.isArray(ids) ? ids : [ids];
   if (list.length === 0) return;
 
   const now = Date.now();
   const at = new Date(now);
+  const window = windowMs();
 
   for (const id of list) {
     if (!id) continue;
@@ -85,7 +74,7 @@ function recordAccess(ids, ownerId) {
     const openAgainAt = suppressed.get(k);
     if (openAgainAt !== undefined && openAgainAt > now) continue;
 
-    suppressed.set(k, now + WINDOW_MS);
+    suppressed.set(k, now + window);
     pending.set(k, { id, ownerId, at });
   }
 
@@ -176,41 +165,63 @@ async function flushAccessTimes() {
   return written;
 }
 
-/** Begin writing buffered timestamps on an interval. */
-function startAccessTracker() {
-  if (TRACKING_DISABLED) {
-    logger.info('[AccessTime] Access time tracking disabled by configuration');
+function stopTimer() {
+  if (flushTimer) clearInterval(flushTimer);
+  flushTimer = null;
+  flushIntervalMs = 0;
+}
+
+/**
+ * Follow the current settings: start, stop or re-time the flush interval.
+ * Called at startup and whenever the settings change.
+ */
+function configureAccessTracker(settings = getActivitySettings()) {
+  if (!settings.accessTimeTracking) {
+    if (!flushTimer) return;
+    stopTimer();
+    // What was already buffered is still true, so it is written, not dropped.
+    void flushAccessTimes();
+    suppressed.clear();
+    logger.info('[AccessTime] Access time tracking turned off');
     return;
   }
-  if (flushTimer) return;
 
+  const intervalMs = settings.accessTimeFlushSeconds * 1000;
+  if (flushTimer && intervalMs === flushIntervalMs) return;
+
+  stopTimer();
   flushTimer = setInterval(() => {
     void flushAccessTimes();
-  }, FLUSH_INTERVAL_MS);
-
+  }, intervalMs);
+  flushIntervalMs = intervalMs;
   // Buffered timestamps are not a reason to keep the process alive.
   if (typeof flushTimer.unref === 'function') flushTimer.unref();
 
   logger.info(
-    { windowMinutes: WINDOW_MS / 60000, flushSeconds: FLUSH_INTERVAL_MS / 1000 },
-    '[AccessTime] Access time tracker started'
+    { windowMinutes: settings.accessTimeWindowMinutes, flushSeconds: settings.accessTimeFlushSeconds },
+    '[AccessTime] Access time tracker running'
   );
 }
 
 /** Stop the interval and write out whatever is still buffered. */
 async function shutdownAccessTracker() {
-  if (flushTimer) {
-    clearInterval(flushTimer);
-    flushTimer = null;
-  }
+  stopTimer();
   await flushAccessTimes();
 }
 
 /** Test seam: drop all buffered and suppressed state. */
 function resetAccessTracker() {
+  stopTimer();
   pending.clear();
   suppressed.clear();
   flushing = false;
 }
 
-export { recordAccess, flushAccessTimes, startAccessTracker, shutdownAccessTracker, resetAccessTracker, CHUNK_SIZE };
+export {
+  recordAccess,
+  flushAccessTimes,
+  configureAccessTracker,
+  shutdownAccessTracker,
+  resetAccessTracker,
+  CHUNK_SIZE,
+};
