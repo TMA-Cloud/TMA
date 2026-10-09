@@ -47,6 +47,16 @@ jobs:
           path: backend/coverage
           retention-days: 7
 
+  scripts:
+    name: Install scripts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # These scripts write keys and passwords on users' servers; shellcheck ships with the runner.
+      - name: Shellcheck
+        run: shellcheck setup.sh update.sh rotate.sh scripts/db-backup-restore.sh
+
   integration:
     name: Backend integration
     runs-on: ubuntu-latest

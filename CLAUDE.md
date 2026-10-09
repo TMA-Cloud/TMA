@@ -144,6 +144,7 @@ same commands, except for desktop-fs.
 | `frontend/`   | `npm run lint` · `npm run format:check` · `npx tsc --noEmit -p tsconfig.app.json` · `npx tsc -b tsconfig.test.json` · `npm run knip` · `npm test` · `npm run build` |
 | `electron/`   | `npm run lint` · `npm run format:check` · `npm run knip` · `npm test`                                                                                               |
 | `desktop-fs/` | `dotnet build` (0 warnings, 0 errors) · `dotnet format --verify-no-changes`                                                                                         |
+| Root scripts  | `shellcheck setup.sh update.sh rotate.sh scripts/db-backup-restore.sh`                                                                                              |
 
 ## Git
 
