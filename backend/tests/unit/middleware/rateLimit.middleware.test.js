@@ -173,6 +173,15 @@ describe('documented limits', () => {
     );
   });
 
+  it('allows 20 Google sign-in setting saves per window', async () => {
+    expect(
+      await budgetOf(limiters.googleAuthConfigRateLimiter, {
+        path: '/google-auth-config',
+        key: { userId: 'google-budget' },
+      })
+    ).toBe(20);
+  });
+
   it('allows 20 storage connection checks per window', async () => {
     expect(
       await budgetOf(limiters.storageConfigRateLimiter, { path: '/storage', key: { userId: 'storage-budget' } })
@@ -210,6 +219,7 @@ describe('documented limits', () => {
       'authRateLimiter',
       'backupCodeRegenerationRateLimiter',
       'createSSEConnectionLimiter',
+      'googleAuthConfigRateLimiter',
       'loginFailuresPerAccountLimiter',
       'loginFailuresPerIpLimiter',
       'mfaRateLimiter',

@@ -9,11 +9,18 @@
  * - user.admin.users.model.js    - user listing, counts, and storage-limit administration
  * - user.admin.storage.model.js  - encrypted object storage settings
  * - user.admin.activity.model.js - session idle timeout and access-time tracking
+ * - user.admin.google.model.js   - Google sign-in client, with the secret encrypted
  */
 
 export { isFirstUser } from './user.admin.helpers.model.js';
 export { loadActivitySettings, setSessionIdleDays, setAccessTimeSettings } from './user.admin.activity.model.js';
 export { getKnownProxiesSettings, setKnownProxiesSettings } from './user.admin.network.model.js';
+export {
+  loadGoogleAuthConfig,
+  getGoogleAuthSummary,
+  saveGoogleAuthConfig,
+  clearGoogleAuthConfig,
+} from './user.admin.google.model.js';
 export {
   loadStorageConfig,
   getStorageSettingsSummary,

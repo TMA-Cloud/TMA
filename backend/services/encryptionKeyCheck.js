@@ -9,6 +9,7 @@ import { getKekChecks, kekVersionsInUse, recordKekCheck, sampleSealedUnderVersio
 import { kekForVersion, primaryKekVersion, unwrapDek } from '../utils/fileEncryption.js';
 import { kekCheckValue, matchesKekCheck } from '../utils/fileEncryption/keyCheck.js';
 import { readKeyring } from '../utils/fileEncryption/keySource.js';
+import { openGoogleSecret } from '../utils/googleAuthSettings.js';
 import { openSecret } from '../utils/storageSettings.js';
 
 class EncryptionKeyMismatchError extends Error {
@@ -33,10 +34,11 @@ class EncryptionKeyMissingError extends Error {
 
 // Before a version has a stored check, prove the key against data already sealed with it.
 async function opensExistingData(version, kek) {
-  const { dekWrapped, storageSecret } = await sampleSealedUnderVersion(version);
+  const { dekWrapped, storageSecret, googleSecret } = await sampleSealedUnderVersion(version);
   try {
     if (dekWrapped) unwrapDek(Buffer.from(dekWrapped), kek);
     if (storageSecret) openSecret(storageSecret.encrypted, storageSecret.accessKeyId, kek);
+    if (googleSecret) openGoogleSecret(googleSecret.encrypted, googleSecret.clientId, kek);
     return true;
   } catch {
     return false;

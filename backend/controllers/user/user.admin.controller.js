@@ -9,6 +9,7 @@
  * - user.admin.clients.controller.js - desktop client heartbeat and active-client listing
  * - user.admin.storage.controller.js - object storage bucket settings and connection checks
  * - user.admin.activity.controller.js - session idle timeout and access-time tracking
+ * - user.admin.google.controller.js  - Google sign-in client settings
  */
 
 export {
@@ -37,6 +38,11 @@ export {
 } from './user.admin.activity.controller.js';
 export { clientHeartbeat, getActiveClients } from './user.admin.clients.controller.js';
 export { getKnownProxiesConfig, updateKnownProxiesConfig } from './user.admin.network.controller.js';
+export {
+  getGoogleAuthSettings,
+  updateGoogleAuthSettings,
+  deleteGoogleAuthSettings,
+} from './user.admin.google.controller.js';
 export {
   getStorageStatus,
   getStorageConfig,

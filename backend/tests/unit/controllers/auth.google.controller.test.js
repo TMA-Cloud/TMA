@@ -2,11 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { mockReq, mockRes } from '../../helpers/http.js';
 
-// Google sign-in only switches on when these are set at import time.
-process.env.GOOGLE_CLIENT_ID = 'test-client-id';
-process.env.GOOGLE_CLIENT_SECRET = 'test-client-secret';
-process.env.GOOGLE_REDIRECT_URI = 'http://localhost/api/google/callback';
-
 const google = {
   generateCodeVerifierAsync: vi.fn(async () => ({ codeVerifier: 'verifier-123', codeChallenge: 'challenge-abc' })),
   generateAuthUrl: vi.fn(opts => `https://accounts.example/auth?state=${opts.state}`),
@@ -14,11 +9,18 @@ const google = {
   verifyIdToken: vi.fn(),
 };
 
-vi.mock('google-auth-library', () => ({
-  CodeChallengeMethod: { S256: 'S256' },
-  OAuth2Client: vi.fn(function OAuth2Client() {
-    return google;
-  }),
+vi.mock('google-auth-library', () => ({ CodeChallengeMethod: { S256: 'S256' } }));
+
+// Google sign-in is on when the first user has saved a client in Settings.
+const googleConfig = {
+  clientId: '123-abc.apps.googleusercontent.com',
+  clientSecret: 'test-client-secret',
+  redirectUri: 'http://localhost/api/google/callback',
+  version: 1,
+};
+vi.mock('../../../config/googleAuth.js', () => ({
+  getGoogleAuthConfig: vi.fn(async () => googleConfig),
+  oauthClientFor: vi.fn(() => google),
 }));
 
 vi.mock('../../../models/user.model.js', () => ({
@@ -46,7 +48,9 @@ vi.mock('../../../utils/authSession.js', () => ({
 vi.mock('../../../controllers/auth/auth.mfa.controller.js', () => ({ verifyMfaCode: vi.fn() }));
 
 const models = await import('../../../models/user.model.js');
-const { googleLogin, googleCallback } = await import('../../../controllers/auth/auth.login.controller.js');
+const { getGoogleAuthConfig } = await import('../../../config/googleAuth.js');
+const { googleEnabled, googleLogin, googleCallback } =
+  await import('../../../controllers/auth/auth.login.controller.js');
 
 /** Start a flow and return the cookie + state a real browser would carry back. */
 async function startFlow() {
@@ -69,10 +73,42 @@ function callback({ cookie, state, code = 'auth-code' }) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  getGoogleAuthConfig.mockResolvedValue(googleConfig);
   google.verifyIdToken.mockResolvedValue({
     getPayload: () => ({ sub: 'g-1', email: 'ada@example.com', email_verified: true, name: 'Ada' }),
   });
   models.getUserByGoogleId.mockResolvedValue({ id: 'u1', email: 'ada@example.com' });
+});
+
+describe('while Google sign-in is off', () => {
+  beforeEach(() => getGoogleAuthConfig.mockResolvedValue(null));
+
+  it('tells the login page not to offer it', async () => {
+    const res = mockRes();
+    await googleEnabled(mockReq({ method: 'GET' }), res);
+    expect(res.json).toHaveBeenCalledWith({ enabled: false });
+  });
+
+  it('refuses to start a flow', async () => {
+    const res = mockRes();
+    await googleLogin(mockReq({ method: 'GET' }), res);
+    expect(res.status).toHaveBeenCalledWith(503);
+    expect(google.generateAuthUrl).not.toHaveBeenCalled();
+  });
+
+  it('refuses a callback, so a flow begun before it was turned off cannot finish', async () => {
+    const res = await callback({ cookie: 'state.verifier', state: 'state' });
+    expect(res.status).toHaveBeenCalledWith(503);
+    expect(google.getToken).not.toHaveBeenCalled();
+  });
+});
+
+describe('googleEnabled', () => {
+  it('offers Google sign-in once a client is saved', async () => {
+    const res = mockRes();
+    await googleEnabled(mockReq({ method: 'GET' }), res);
+    expect(res.json).toHaveBeenCalledWith({ enabled: true });
+  });
 });
 
 describe('googleLogin', () => {
@@ -91,6 +127,7 @@ describe('googleCallback', () => {
     const flow = await startFlow();
     const res = await callback(flow);
     expect(google.getToken).toHaveBeenCalledWith({ code: 'auth-code', codeVerifier: 'verifier-123' });
+    expect(google.verifyIdToken).toHaveBeenCalledWith({ idToken: 'id.token', audience: googleConfig.clientId });
     expect(res.redirect).toHaveBeenCalledWith('/');
   });
 

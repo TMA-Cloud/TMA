@@ -46,11 +46,12 @@ function requireKeyring() {
 
 async function status() {
   const keyring = requireKeyring();
-  const { files, storageSecretVersion } = await countKeysByVersion();
+  const { files, storageSecretVersion, googleSecretVersion } = await countKeysByVersion();
   console.log(`Master key versions: ${[...keyring.keys.keys()].sort((a, b) => a - b).join(', ')}`);
   console.log(`Newest (encrypts new files): ${keyring.primary}`);
   for (const [version, count] of files) console.log(`  version ${version}: ${count} file key(s)`);
   if (storageSecretVersion != null) console.log(`Bucket secret: version ${storageSecretVersion}`);
+  if (googleSecretVersion != null) console.log(`Google client secret: version ${googleSecretVersion}`);
 
   const behind = [...files].filter(([version]) => version !== keyring.primary).reduce((sum, [, n]) => sum + n, 0);
   console.log(
@@ -59,7 +60,11 @@ async function status() {
       : 'All keys are current.'
   );
   const unused = [...keyring.keys.keys()].filter(
-    version => version !== keyring.primary && !files.has(version) && version !== storageSecretVersion
+    version =>
+      version !== keyring.primary &&
+      !files.has(version) &&
+      version !== storageSecretVersion &&
+      version !== googleSecretVersion
   );
   if (unused.length) {
     console.log(
@@ -111,6 +116,7 @@ async function rewrap() {
     onProgress: ({ rewrapped, failed }) => console.log(`Rewrapped ${rewrapped} file key(s), ${failed} failed`),
   });
   if (result.storageSecret) console.log(`Bucket secret rewrapped to version ${result.primary}.`);
+  if (result.googleSecret) console.log(`Google client secret rewrapped to version ${result.primary}.`);
   // The worker may have done the work already, so report the end state, not just this run.
   const { files } = await countKeysByVersion();
   const current = files.get(result.primary) ?? 0;

@@ -44,8 +44,9 @@ async function applyRewraps(updates) {
 }
 
 /**
- * How many file keys each key version wraps, and the bucket secret's version.
- * @returns {Promise<{ files: Map<number, number>, storageSecretVersion: number | null }>}
+ * How many file keys each key version wraps, and the versions of the bucket and Google secrets.
+ * @returns {Promise<{ files: Map<number, number>, storageSecretVersion: number | null,
+ *   googleSecretVersion: number | null }>}
  */
 async function countKeysByVersion() {
   const [files, settings] = await Promise.all([
@@ -55,13 +56,15 @@ async function countKeysByVersion() {
         GROUP BY dek_kek_version ORDER BY dek_kek_version`
     ),
     pool.query(
-      `SELECT storage_secret_kek_version AS version FROM app_settings
-        WHERE id = 'app_settings' AND storage_secret_encrypted IS NOT NULL`
+      `SELECT CASE WHEN storage_secret_encrypted IS NOT NULL THEN storage_secret_kek_version END AS storage,
+              CASE WHEN google_client_secret_encrypted IS NOT NULL THEN google_client_secret_kek_version END AS google
+         FROM app_settings WHERE id = 'app_settings'`
     ),
   ]);
   return {
     files: new Map(files.rows.map(row => [row.version, Number(row.n)])),
-    storageSecretVersion: settings.rows[0]?.version ?? null,
+    storageSecretVersion: settings.rows[0]?.storage ?? null,
+    googleSecretVersion: settings.rows[0]?.google ?? null,
   };
 }
 

@@ -21,6 +21,7 @@ import { CloudDriveSection } from './sections/CloudDriveSection';
 import { AdministrationSection } from './sections/AdministrationSection';
 import { OnlyOfficeSection } from './sections/OnlyOfficeSection';
 import { ShareBaseUrlSection } from './sections/ShareBaseUrlSection';
+import { GoogleSignInSection } from './sections/GoogleSignInSection';
 import { KnownProxiesSection } from './sections/KnownProxiesSection';
 import { ActivitySettingsSection } from './sections/ActivitySettingsSection';
 import { UpdatesSection } from './sections/UpdatesSection';
@@ -297,6 +298,7 @@ const Settings: React.FC = () => {
             networking={<KnownProxiesSection canConfigure={canToggleSignup} />}
             integrations={
               <>
+                <GoogleSignInSection canConfigure={canToggleSignup} />
                 <OnlyOfficeSection canConfigure={canToggleSignup} />
                 <ShareBaseUrlSection canConfigure={canToggleSignup} />
               </>

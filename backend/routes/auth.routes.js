@@ -3,6 +3,7 @@ import express from 'express';
 import {
   signup,
   login,
+  googleEnabled,
   googleLogin,
   googleCallback,
   googleMfaVerify,
@@ -14,7 +15,6 @@ import {
   sessionOffline,
   revokeSession,
   revokeOtherSessions,
-  googleAuthEnabled,
   setupMfa,
   verifyAndEnableMfa,
   disableMfaController,
@@ -47,14 +47,11 @@ router.post(
   validate,
   login
 );
-router.get('/google/enabled', (req, res) => {
-  res.json({ enabled: googleAuthEnabled });
-});
-if (googleAuthEnabled) {
-  router.get('/google/login', googleLogin);
-  router.get('/google/callback', authRateLimiter, googleCallback);
-  router.post('/google/mfa-verify', mfaRateLimiter, googleMfaVerify);
-}
+// Always registered: the handlers answer 503 while the first user has not set Google sign-in up.
+router.get('/google/enabled', googleEnabled);
+router.get('/google/login', authRateLimiter, googleLogin);
+router.get('/google/callback', authRateLimiter, googleCallback);
+router.post('/google/mfa-verify', mfaRateLimiter, googleMfaVerify);
 router.post('/logout', apiRateLimiter, logout);
 router.post('/logout-all', authMiddleware, apiRateLimiter, logoutAllDevices);
 router.get('/profile', authMiddleware, apiRateLimiter, profile);

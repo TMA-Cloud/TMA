@@ -8,6 +8,7 @@
 
 import { logger } from '../config/logger.js';
 import { applyRewraps, fetchRewrapPage } from '../models/kekRewrap.model.js';
+import { rewrapGoogleSecret } from '../models/user/user.admin.google.model.js';
 import { rewrapStorageSecret } from '../models/user/user.admin.storage.model.js';
 import { primaryKekVersion, rewrapDekToPrimary } from '../utils/fileEncryption.js';
 import { withRetries } from '../utils/retry.js';
@@ -22,12 +23,13 @@ const onRetry =
 /**
  * @param {object} [opts]
  * @param {(progress: { rewrapped: number, failed: number }) => void} [opts.onProgress] after each page
- * @returns {Promise<{ primary: number, storageSecret: boolean, rewrapped: number,
+ * @returns {Promise<{ primary: number, storageSecret: boolean, googleSecret: boolean, rewrapped: number,
  *   failures: Array<{ id: string, fromVersion: number, error: string }> }>}
  */
 async function rewrapToPrimaryKey({ onProgress } = {}) {
   const primary = primaryKekVersion();
   const storageSecret = await rewrapStorageSecret();
+  const googleSecret = await rewrapGoogleSecret();
 
   let rewrapped = 0;
   const failures = [];
@@ -52,7 +54,7 @@ async function rewrapToPrimaryKey({ onProgress } = {}) {
     rewrapped += await withRetries(() => applyRewraps(updates), { onRetry: onRetry('update') });
     onProgress?.({ rewrapped, failed: failures.length });
   }
-  return { primary, storageSecret, rewrapped, failures };
+  return { primary, storageSecret, googleSecret, rewrapped, failures };
 }
 
 export { rewrapToPrimaryKey };

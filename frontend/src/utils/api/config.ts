@@ -1,6 +1,6 @@
 /** Instance and per-user configuration endpoints. */
 import { ApiError } from '../errorUtils';
-import { apiGet, apiPost, apiPut } from './client';
+import { apiDelete, apiGet, apiPost, apiPut } from './client';
 
 export async function checkGoogleAuthEnabled(): Promise<boolean> {
   try {
@@ -165,4 +165,31 @@ export async function updateAccessTimeConfig(settings: {
   flushSeconds: number;
 }): Promise<ActivitySettings> {
   return await apiPut<ActivitySettings>('/api/user/access-time-config', settings);
+}
+
+/** Google sign-in client as the first user saved it. The secret is never sent back. */
+export interface GoogleAuthSettings {
+  configured: boolean;
+  version: number;
+  clientId?: string;
+  redirectUri?: string;
+  updatedAt?: string;
+}
+
+export async function getGoogleAuthConfig(signal?: AbortSignal): Promise<GoogleAuthSettings> {
+  return await apiGet<GoogleAuthSettings>('/api/user/google-auth-config', { signal });
+}
+
+/** A blank secret keeps the saved one while the client ID stays the same. */
+export async function updateGoogleAuthConfig(input: {
+  clientId: string;
+  clientSecret: string;
+  redirectUri: string;
+  expectedVersion: number;
+}): Promise<GoogleAuthSettings> {
+  return await apiPut<GoogleAuthSettings>('/api/user/google-auth-config', input);
+}
+
+export async function deleteGoogleAuthConfig(): Promise<GoogleAuthSettings> {
+  return await apiDelete<GoogleAuthSettings>('/api/user/google-auth-config');
 }

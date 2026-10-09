@@ -52,11 +52,6 @@ export default defineConfig({
       FILE_ENCRYPTION_KEY_FILE: '',
       JWT_SECRET: 'integration-test-jwt-secret',
       BACKEND_URL: 'https://cloud.test',
-
-      // Google OAuth off, so the login controller takes the password path.
-      GOOGLE_CLIENT_ID: '',
-      GOOGLE_CLIENT_SECRET: '',
-      GOOGLE_REDIRECT_URI: '',
     },
     coverage: {
       provider: 'v8',

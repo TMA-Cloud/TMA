@@ -4,11 +4,13 @@ import {
   checkOnlyOfficeConfigured,
   clientHeartbeat,
   createSubUser,
+  deleteGoogleAuthSettings,
   deleteOrphans,
   deleteSubUser,
   getActiveClients,
   getActivityConfig,
   getElectronOnlyAccessConfig,
+  getGoogleAuthSettings,
   getHideFileExtensionsConfig,
   getMaxUploadSizeConfig,
   getKnownProxiesConfig,
@@ -26,6 +28,7 @@ import {
   toggleSignup,
   updateAccessTimeConfig,
   updateElectronOnlyAccessConfig,
+  updateGoogleAuthSettings,
   updateHideFileExtensionsConfig,
   updateMaxUploadSizeConfig,
   updateKnownProxiesConfig,
@@ -39,7 +42,11 @@ import {
 } from '../controllers/user.controller.js';
 import auth from '../middleware/auth.middleware.js';
 import { requireAccountOwner } from '../middleware/accountRole.middleware.js';
-import { apiRateLimiter, storageConfigRateLimiter } from '../middleware/rateLimit.middleware.js';
+import {
+  apiRateLimiter,
+  googleAuthConfigRateLimiter,
+  storageConfigRateLimiter,
+} from '../middleware/rateLimit.middleware.js';
 import { validate } from '../middleware/validation.middleware.js';
 import {
   createSubUserSchema,
@@ -49,6 +56,8 @@ import {
   toggleSignupSchema,
   updateAccessTimeConfigSchema,
   updateElectronOnlyAccessConfigSchema,
+  updateGoogleAuthConfigSchema,
+  deleteGoogleAuthConfigSchema,
   updateHideFileExtensionsConfigSchema,
   updateMaxUploadSizeConfigSchema,
   updateKnownProxiesConfigSchema,
@@ -74,6 +83,15 @@ router.get('/storage-status', getStorageStatus);
 router.get('/storage-config', getStorageConfig);
 router.put('/storage-config', storageConfigRateLimiter, updateStorageConfigSchema, validate, updateStorageConfig);
 router.post('/storage-config/test', storageConfigRateLimiter, updateStorageConfigSchema, validate, testStorageConfig);
+router.get('/google-auth-config', getGoogleAuthSettings);
+router.put(
+  '/google-auth-config',
+  googleAuthConfigRateLimiter,
+  updateGoogleAuthConfigSchema,
+  validate,
+  updateGoogleAuthSettings
+);
+router.delete('/google-auth-config', deleteGoogleAuthConfigSchema, validate, deleteGoogleAuthSettings);
 router.get('/onlyoffice-configured', checkOnlyOfficeConfigured);
 router.get('/onlyoffice-config', getOnlyOfficeConfig);
 router.put('/onlyoffice-config', updateOnlyOfficeConfigSchema, validate, updateOnlyOfficeConfig);

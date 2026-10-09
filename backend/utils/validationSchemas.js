@@ -195,6 +195,24 @@ const updateStorageConfigSchema = [
   body('expectedVersion').optional({ nullable: true }).isInt({ min: 0 }).toInt(),
 ];
 
+const updateGoogleAuthConfigSchema = [
+  body(['clientId', 'redirectUri'])
+    .isString()
+    .withMessage('Client ID and redirect URI are required')
+    .bail()
+    .isLength({ max: 2048 }),
+  body('clientSecret')
+    .optional({ nullable: true })
+    .isString()
+    .withMessage('Client secret must be a string')
+    .bail()
+    .isLength({ max: 256 })
+    .withMessage('Client secret is too long'),
+  body('expectedVersion').optional({ nullable: true }).isInt({ min: 0 }).toInt(),
+];
+
+const deleteGoogleAuthConfigSchema = [body('expectedVersion').optional({ nullable: true }).isInt({ min: 0 }).toInt()];
+
 // Max upload size in bytes (1MB to 100GB)
 const updateMaxUploadSizeConfigSchema = [
   body('maxBytes')
@@ -362,6 +380,8 @@ export {
   updateOnlyOfficeConfigSchema,
   updateShareBaseUrlConfigSchema,
   updateStorageConfigSchema,
+  updateGoogleAuthConfigSchema,
+  deleteGoogleAuthConfigSchema,
   updateMaxUploadSizeConfigSchema,
   updateHideFileExtensionsConfigSchema,
   updateSessionTimeoutConfigSchema,

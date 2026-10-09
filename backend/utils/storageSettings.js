@@ -4,10 +4,10 @@
  * directly.
  */
 
-import crypto from 'crypto';
 import { BlockList, isIP } from 'net';
 
 import { kekForVersion, primaryKekVersion } from './fileEncryption.js';
+import { openSettingSecret, sealSettingSecret } from './settingsSecret.js';
 
 const STORAGE_PROVIDERS = ['s3', 'r2', 'aws'];
 const DEFAULT_REGION = 'us-east-1';
@@ -41,10 +41,12 @@ FORBIDDEN_NETWORKS.addAddress('::', 'ipv6');
 
 const INTERNAL_SUFFIXES = ['.local', '.internal', '.lan', '.home.arpa', '.localhost'];
 
-const SECRET_FORMAT_VERSION = 1;
-const SECRET_IV_LENGTH = 12;
-const SECRET_TAG_LENGTH = 16;
-const SECRET_KEY_INFO = Buffer.from('tma-cloud/storage-credentials/v1');
+// The access key ID is the binding, so a secret cannot be swapped onto another key's row.
+const STORAGE_SECRET = {
+  keyInfo: 'tma-cloud/storage-credentials/v1',
+  aadPrefix: 'tma-cloud:storage-secret',
+  label: 'storage secret',
+};
 
 class StorageSettingsError extends Error {
   constructor(message) {
@@ -191,40 +193,13 @@ function maskAccessKeyId(accessKeyId) {
   return accessKeyId.length <= 8 ? '••••' : `${accessKeyId.slice(0, 4)}••••${accessKeyId.slice(-4)}`;
 }
 
-// A dedicated subkey keeps credential ciphertext cryptographically separate from file DEK wraps.
-function secretKeyFrom(kek) {
-  return Buffer.from(crypto.hkdfSync('sha256', kek, Buffer.alloc(0), SECRET_KEY_INFO, 32));
-}
-
-// Binding the access key ID means a secret cannot be swapped onto another key's row.
-function secretAad(accessKeyId) {
-  return Buffer.from(`tma-cloud:storage-secret:${accessKeyId}`, 'utf8');
-}
-
-/**
- * Encrypt a secret access key with AES-256-GCM under the given KEK.
- * Layout: format(1) || iv(12) || ciphertext || tag(16).
- */
+/** Encrypt a secret access key with AES-256-GCM under the given KEK. */
 function sealSecret(secret, accessKeyId, kek) {
-  const iv = crypto.randomBytes(SECRET_IV_LENGTH);
-  const cipher = crypto.createCipheriv('aes-256-gcm', secretKeyFrom(kek), iv);
-  cipher.setAAD(secretAad(accessKeyId));
-  const ciphertext = Buffer.concat([cipher.update(secret, 'utf8'), cipher.final()]);
-  return Buffer.concat([Buffer.from([SECRET_FORMAT_VERSION]), iv, ciphertext, cipher.getAuthTag()]);
+  return sealSettingSecret(secret, STORAGE_SECRET, accessKeyId, kek);
 }
 
 function openSecret(blob, accessKeyId, kek) {
-  const buffer = Buffer.isBuffer(blob) ? blob : Buffer.from(blob);
-  if (buffer.length <= 1 + SECRET_IV_LENGTH + SECRET_TAG_LENGTH || buffer[0] !== SECRET_FORMAT_VERSION) {
-    throw new Error('Stored storage secret has an unknown format');
-  }
-  const iv = buffer.subarray(1, 1 + SECRET_IV_LENGTH);
-  const tag = buffer.subarray(buffer.length - SECRET_TAG_LENGTH);
-  const ciphertext = buffer.subarray(1 + SECRET_IV_LENGTH, buffer.length - SECRET_TAG_LENGTH);
-  const decipher = crypto.createDecipheriv('aes-256-gcm', secretKeyFrom(kek), iv);
-  decipher.setAAD(secretAad(accessKeyId));
-  decipher.setAuthTag(tag);
-  return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf8');
+  return openSettingSecret(blob, STORAGE_SECRET, accessKeyId, kek);
 }
 
 /** Encrypt under the current primary KEK. */

@@ -110,6 +110,18 @@ const storageConfigRateLimiter = rateLimit({
   skip: req => req.method === 'OPTIONS',
 });
 
+/** Saving Google sign-in settings checks the client with Google first, so cap it like storage checks. */
+const googleAuthConfigRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  message: { error: 'Too many Google sign-in setting changes, please try again later' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: req =>
+    `google-auth-config:${req.userId || ipKeyGenerator(req.ip || req.socket?.remoteAddress || 'unknown')}`,
+  skip: req => req.method === 'OPTIONS',
+});
+
 /**
  * Rate limiter for general API endpoints
  * 10000 requests per 15 minutes, per user when authenticated.
@@ -227,6 +239,7 @@ export {
   backupCodeRegenerationRateLimiter,
   apiRateLimiter,
   storageConfigRateLimiter,
+  googleAuthConfigRateLimiter,
   uploadRateLimiter,
   sseConnectionLimiter,
   createSSEConnectionLimiter,

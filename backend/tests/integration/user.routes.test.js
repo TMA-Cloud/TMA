@@ -27,11 +27,13 @@ const handlerNames = [
   'checkOnlyOfficeConfigured',
   'clientHeartbeat',
   'createSubUser',
+  'deleteGoogleAuthSettings',
   'deleteOrphans',
   'deleteSubUser',
   'getActiveClients',
   'getActivityConfig',
   'getElectronOnlyAccessConfig',
+  'getGoogleAuthSettings',
   'getHideFileExtensionsConfig',
   'getMaxUploadSizeConfig',
   'getKnownProxiesConfig',
@@ -49,6 +51,7 @@ const handlerNames = [
   'toggleSignup',
   'updateAccessTimeConfig',
   'updateElectronOnlyAccessConfig',
+  'updateGoogleAuthSettings',
   'updateHideFileExtensionsConfig',
   'updateMaxUploadSizeConfig',
   'updateKnownProxiesConfig',
@@ -362,6 +365,35 @@ describe('known proxy config validation', () => {
           .send({ knownProxies: ['not a hostname'] })
       ).status
     ).toBe(422);
+  });
+});
+
+describe('Google sign-in config validation', () => {
+  const putGoogle = body => request(app).put('/api/user/google-auth-config').send(body);
+  const valid = {
+    clientId: '123-abc.apps.googleusercontent.com',
+    clientSecret: 'GOCSPX-secret',
+    redirectUri: 'https://cloud.example.com/api/google/callback',
+  };
+
+  it('accepts a client, and a blank secret that keeps the saved one', async () => {
+    expect((await putGoogle(valid)).status).toBe(200);
+    expect((await putGoogle({ ...valid, clientSecret: '' })).status).toBe(200);
+    expect((await putGoogle({ ...valid, clientSecret: null, expectedVersion: 3 })).status).toBe(200);
+  });
+
+  it.each([
+    [{ ...valid, clientId: undefined }],
+    [{ ...valid, redirectUri: undefined }],
+    [{ ...valid, clientId: 42 }],
+    [{ ...valid, clientSecret: 'x'.repeat(257) }],
+    [{ ...valid, expectedVersion: -1 }],
+  ])('rejects %j', async body => {
+    expect((await putGoogle(body)).status).toBe(422);
+  });
+
+  it('lets the admin turn it off', async () => {
+    expect((await request(app).delete('/api/user/google-auth-config').send({})).status).toBe(200);
   });
 });
 

@@ -1,9 +1,10 @@
 import bcrypt from '@node-rs/bcrypt';
 import crypto from 'crypto';
 
-import { CodeChallengeMethod, OAuth2Client } from 'google-auth-library';
+import { CodeChallengeMethod } from 'google-auth-library';
 import jwt from 'jsonwebtoken';
 
+import { getGoogleAuthConfig, oauthClientFor } from '../../config/googleAuth.js';
 import { logger } from '../../config/logger.js';
 import {
   createUserWithGoogle,
@@ -23,22 +24,7 @@ import { sendError } from '../../utils/response.js';
 
 import { verifyMfaCode } from './auth.mfa.controller.js';
 
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
-const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
-const GOOGLE_REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI;
-
 const JWT_SECRET = process.env.JWT_SECRET;
-const GOOGLE_AUTH_ENABLED = GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET && GOOGLE_REDIRECT_URI;
-let googleClient;
-if (GOOGLE_AUTH_ENABLED) {
-  googleClient = new OAuth2Client(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI);
-} else {
-  logger.info('Google OAuth disabled (missing credentials)');
-}
-
-if (!GOOGLE_AUTH_ENABLED) {
-  logger.warn('Google OAuth credentials missing. Google login endpoints will be disabled.');
-}
 
 const OAUTH_FLOW_COOKIE = 'oauth_flow';
 const OAUTH_FLOW_TTL_MS = 10 * 60 * 1000;
@@ -123,13 +109,20 @@ async function login(req, res) {
   }
 }
 
+/** Whether the login page should offer Google sign-in. */
+async function googleEnabled(req, res) {
+  res.json({ enabled: Boolean(await getGoogleAuthConfig()) });
+}
+
 /**
  * Initiate Google OAuth login flow
  */
 async function googleLogin(req, res) {
-  if (!GOOGLE_AUTH_ENABLED) {
-    return res.status(503).send('Google OAuth disabled');
+  const config = await getGoogleAuthConfig();
+  if (!config) {
+    return res.status(503).send('Google sign-in is turned off');
   }
+  const googleClient = oauthClientFor(config);
   // state blocks login CSRF (a victim signed into an attacker's account); PKCE
   // binds the code to this browser. Only an id token is needed, so no offline
   // refresh token and no forced consent screen.
@@ -168,9 +161,11 @@ function consumeOAuthFlow(req, res) {
  */
 async function googleCallback(req, res) {
   try {
-    if (!GOOGLE_AUTH_ENABLED) {
-      return res.status(503).send('Google OAuth disabled');
+    const config = await getGoogleAuthConfig();
+    if (!config) {
+      return res.status(503).send('Google sign-in is turned off');
     }
+    const googleClient = oauthClientFor(config);
     const codeVerifier = consumeOAuthFlow(req, res);
     if (!codeVerifier) {
       logger.warn('Google OAuth callback rejected: missing or mismatched state');
@@ -182,7 +177,7 @@ async function googleCallback(req, res) {
     const { tokens } = await googleClient.getToken({ code, codeVerifier });
     const ticket = await googleClient.verifyIdToken({
       idToken: tokens.id_token,
-      audience: GOOGLE_CLIENT_ID,
+      audience: config.clientId,
     });
     const payload = ticket.getPayload();
     const googleId = payload.sub;
@@ -314,6 +309,4 @@ async function googleMfaVerify(req, res) {
   }
 }
 
-const googleAuthEnabled = !!GOOGLE_AUTH_ENABLED;
-
-export { login, googleLogin, googleCallback, googleMfaVerify, googleAuthEnabled };
+export { login, googleEnabled, googleLogin, googleCallback, googleMfaVerify };
