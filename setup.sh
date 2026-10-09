@@ -9,9 +9,9 @@
 #    curl -fsSLO https://raw.githubusercontent.com/TMA-Cloud/TMA/main/setup.sh
 #    bash setup.sh
 #
-#  Creates ./tma-cloud with compose.yml, .env, secrets/, setup.sh, update.sh
-#  and rotate.sh, filling every password and key with random values, then
-#  starts the stack. Update it later with ./update.sh.
+#  Creates ./tma-cloud with compose.yml, .env, secrets/, setup.sh, update.sh,
+#  rotate.sh and db-backup-restore.sh, filling every password and key with
+#  random values, then starts the stack. Update it later with ./update.sh.
 #
 #  Re-running is safe: existing files and keys are never replaced, because a
 #  new encryption key would make every stored file unreadable.
@@ -133,13 +133,14 @@ main() {
   fi
 
   # Existing copies are left for update.sh, which knows how to replace them.
-  local script
-  for script in setup.sh update.sh rotate.sh; do
-    if [[ ! -f "$script" ]]; then
-      fetch "$script" "$script"
-      chmod 700 "$script"
-      record_hash "$script"
-      success "Downloaded ${script}"
+  local script name
+  for script in setup.sh update.sh rotate.sh scripts/db-backup-restore.sh; do
+    name="${script##*/}"
+    if [[ ! -f "$name" ]]; then
+      fetch "$script" "$name"
+      chmod 700 "$name"
+      record_hash "$name"
+      success "Downloaded ${name}"
     fi
   done
 
@@ -211,6 +212,7 @@ main() {
   echo
   echo "Update later with:                   cd ${dir} && ./update.sh"
   echo "Rotate keys and passwords later with: cd ${dir} && ./rotate.sh <key|db|redis|all>"
+  echo "Back up the database with:           cd ${dir} && ./db-backup-restore.sh backup"
   echo
   echo "Logs: cd ${dir} && docker compose logs -f app"
 }

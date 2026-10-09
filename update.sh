@@ -9,9 +9,9 @@
 #    curl -fsSL https://raw.githubusercontent.com/TMA-Cloud/TMA/main/update.sh | bash
 #
 #  Steps:
-#    1. Downloads compose.yml, .env.example, setup.sh, rotate.sh and update.sh
-#       and checks them before anything changes. A newer update.sh replaces
-#       this one and runs in its place.
+#    1. Downloads compose.yml, .env.example, setup.sh, rotate.sh,
+#       db-backup-restore.sh and update.sh and checks them before anything
+#       changes. A newer update.sh replaces this one and runs in its place.
 #    2. Backs up the database with pg_dump to backups/.
 #    3. Replaces the files, keeping the old ones in .update/backup-<time>/.
 #       A file you edited is left alone and the new one saved next to it as
@@ -117,11 +117,12 @@ main() {
 
   fetch docker-compose.yml "$new_compose"
   fetch .env.example "${staging}/.env.example"
-  local script
-  for script in setup.sh rotate.sh update.sh; do
-    fetch "$script" "${staging}/${script}"
-    head -n1 "${staging}/${script}" | grep -q '^#!/usr/bin/env bash' || die "${script} is not a bash script"
-    bash -n "${staging}/${script}" || die "${script} has a syntax error; nothing was changed"
+  local script name
+  for script in setup.sh rotate.sh update.sh scripts/db-backup-restore.sh; do
+    name="${script##*/}"
+    fetch "$script" "${staging}/${name}"
+    head -n1 "${staging}/${name}" | grep -q '^#!/usr/bin/env bash' || die "${name} is not a bash script"
+    bash -n "${staging}/${name}" || die "${name} has a syntax error; nothing was changed"
   done
   local -a compose_files=(-f "$new_compose")
   [[ -f compose.override.yml ]] && compose_files+=(-f compose.override.yml)
@@ -207,6 +208,7 @@ main() {
   install_file "$new_compose" compose.yml 600
   install_file "${staging}/setup.sh" setup.sh 700
   install_file "${staging}/rotate.sh" rotate.sh 700
+  install_file "${staging}/db-backup-restore.sh" db-backup-restore.sh 700
   # Kept for reference: the comments explain each setting.
   cp "${staging}/.env.example" .env.example.tmp-update
   chmod 600 .env.example.tmp-update
