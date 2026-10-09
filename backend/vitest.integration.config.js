@@ -47,12 +47,6 @@ export default defineConfig({
       // A Redis database of its own, so flushing cannot clear dev sessions.
       REDIS_DB: '15',
 
-      // Isolated bucket double; nothing is written to a real bucket.
-      RUSTFS_ENDPOINT: 'http://127.0.0.1:9000',
-      RUSTFS_BUCKET: 'tma-test',
-      RUSTFS_ACCESS_KEY: 'test-key',
-      RUSTFS_SECRET_KEY: 'test-secret',
-
       // Deterministic, and unrelated to the key protecting real dev files.
       FILE_ENCRYPTION_KEY: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
       JWT_SECRET: 'integration-test-jwt-secret',

@@ -9,6 +9,7 @@ import {
   createDecryptStreamFromStream,
   createRangeDecryptStream,
 } from './fileEncryption.js';
+import { sendIfStorageNotConfigured } from './response.js';
 import storage from './storageDriver.js';
 
 /**
@@ -216,7 +217,7 @@ async function streamEncryptedFile(res, storageKey, filename, mimeType, options 
     decryptStream.pipe(res);
   } catch (error) {
     logger.error(errorDetails(error), 'Error creating decrypt stream');
-    if (!res.headersSent) {
+    if (!res.headersSent && !sendIfStorageNotConfigured(res, error)) {
       res.status(500).json({ error: 'Error decrypting file' });
     }
     cleanup();

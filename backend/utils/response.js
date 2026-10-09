@@ -12,6 +12,7 @@ import { logger } from '../config/logger.js';
  * @param {Object} data - Optional additional error data
  */
 function sendError(res, status, message, err = null, data = null) {
+  if (sendIfStorageNotConfigured(res, err)) return;
   if (err) {
     logger.error({ err }, 'Error in request handler');
   }
@@ -20,6 +21,17 @@ function sendError(res, status, message, err = null, data = null) {
     Object.assign(response, data);
   }
   res.status(status).json(response);
+}
+
+/**
+ * Answer 503 when the error only means no bucket is connected yet: a setup
+ * state, not a crash, whichever handler hit it.
+ * @returns {boolean} true when a response was sent
+ */
+function sendIfStorageNotConfigured(res, err) {
+  if (err?.code !== 'STORAGE_NOT_CONFIGURED') return false;
+  res.status(503).json({ message: err.message, error: 'STORAGE_NOT_CONFIGURED' });
+  return true;
 }
 
 /**
@@ -32,4 +44,4 @@ function sendSuccess(res, data, status = 200) {
   res.status(status).json(data);
 }
 
-export { sendError, sendSuccess };
+export { sendError, sendIfStorageNotConfigured, sendSuccess };

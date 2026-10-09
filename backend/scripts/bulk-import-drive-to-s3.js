@@ -12,7 +12,7 @@
  * bulkImportDrive.js; this file only supplies the S3 write.
  *
  * Prerequisites:
- * - S3 env vars (RUSTFS_* or AWS_*) set in .env
+ * - A storage bucket configured in Settings > Storage
  * - FILE_ENCRYPTION_KEY set in .env (same key the app uses for decrypt)
  * - Database and (optionally) Redis running
  *

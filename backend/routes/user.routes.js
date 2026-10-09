@@ -16,9 +16,12 @@ import {
   getPasswordChangeConfig,
   getShareBaseUrlConfig,
   getSignupStatus,
+  getStorageConfig,
+  getStorageStatus,
   listSubUsers,
   listUsers,
   storageUsage,
+  testStorageConfig,
   toggleSignup,
   updateElectronOnlyAccessConfig,
   updateHideFileExtensionsConfig,
@@ -27,12 +30,13 @@ import {
   updateOnlyOfficeConfig,
   updatePasswordChangeConfig,
   updateShareBaseUrlConfig,
+  updateStorageConfig,
   updateSubUser,
   updateUserStorageLimit,
 } from '../controllers/user.controller.js';
 import auth from '../middleware/auth.middleware.js';
 import { requireAccountOwner } from '../middleware/accountRole.middleware.js';
-import { apiRateLimiter } from '../middleware/rateLimit.middleware.js';
+import { apiRateLimiter, storageConfigRateLimiter } from '../middleware/rateLimit.middleware.js';
 import { validate } from '../middleware/validation.middleware.js';
 import {
   createSubUserSchema,
@@ -47,6 +51,7 @@ import {
   updateOnlyOfficeConfigSchema,
   updatePasswordChangeConfigSchema,
   updateShareBaseUrlConfigSchema,
+  updateStorageConfigSchema,
   updateSubUserSchema,
   updateUserStorageLimitSchema,
 } from '../utils/validationSchemas.js';
@@ -60,6 +65,10 @@ router.get('/signup-status', getSignupStatus);
 router.post('/signup-toggle', toggleSignupSchema, validate, toggleSignup);
 router.get('/all', listUsers);
 router.get('/storage', storageUsage);
+router.get('/storage-status', getStorageStatus);
+router.get('/storage-config', getStorageConfig);
+router.put('/storage-config', storageConfigRateLimiter, updateStorageConfigSchema, validate, updateStorageConfig);
+router.post('/storage-config/test', storageConfigRateLimiter, updateStorageConfigSchema, validate, testStorageConfig);
 router.get('/onlyoffice-configured', checkOnlyOfficeConfigured);
 router.get('/onlyoffice-config', getOnlyOfficeConfig);
 router.put('/onlyoffice-config', updateOnlyOfficeConfigSchema, validate, updateOnlyOfficeConfig);

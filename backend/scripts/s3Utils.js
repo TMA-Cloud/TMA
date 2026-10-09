@@ -1,20 +1,19 @@
-import { S3Client } from '@aws-sdk/client-s3';
-
-import { s3 as s3Config } from '../config/storage.js';
+import pool from '../config/db.js';
+import { getS3Config } from '../config/storage.js';
+import { createS3Client } from '../utils/s3Storage.js';
 
 /**
- * Build a new S3Client using the project's storage config.
+ * The client and bucket for the storage configured in Settings. The database
+ * pool is closed once the config is read, so a script exits when its S3 work ends.
+ * @returns {Promise<{ client: import('@aws-sdk/client-s3').S3Client, bucket: string }>}
  */
-function createS3Client() {
-  return new S3Client({
-    endpoint: s3Config.endpoint,
-    region: s3Config.region,
-    credentials: {
-      accessKeyId: s3Config.accessKeyId,
-      secretAccessKey: s3Config.secretAccessKey,
-    },
-    forcePathStyle: s3Config.forcePathStyle,
-  });
+async function openBucket() {
+  try {
+    const config = await getS3Config();
+    return { client: createS3Client(config), bucket: config.bucket };
+  } finally {
+    await pool.end();
+  }
 }
 
 /**
@@ -49,4 +48,4 @@ function buildLifecycleRules() {
   ];
 }
 
-export { createS3Client, s3Config, buildLifecycleRules, DAYS_AFTER_INITIATION, NONCURRENT_DAYS };
+export { openBucket, buildLifecycleRules, DAYS_AFTER_INITIATION, NONCURRENT_DAYS };

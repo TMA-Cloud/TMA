@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import { logger } from '../../config/logger.js';
 import { getFile } from '../../models/file.model.js';
 import { validateSingleId } from '../../utils/controllerHelpers.js';
+import { sendIfStorageNotConfigured } from '../../utils/response.js';
 import {
   contentDispositionValue,
   streamEncryptedFile,
@@ -95,6 +96,7 @@ async function serveFile(req, res) {
     });
   } catch (err) {
     logger.error({ err }, '[ONLYOFFICE] Error serving file');
+    if (sendIfStorageNotConfigured(res, err)) return;
     res.status(500).json({ error: 'Server error' });
   }
 }

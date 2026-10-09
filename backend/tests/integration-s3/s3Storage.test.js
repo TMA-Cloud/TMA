@@ -13,7 +13,8 @@ import { Readable } from 'stream';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { s3 } from '../../config/storage.js';
+import pool from '../../config/db.js';
+import { getS3Config } from '../../config/storage.js';
 import {
   copyObject,
   deleteObject,
@@ -55,10 +56,12 @@ afterAll(async () => {
   // Best effort: a failed test must not leave objects behind.
   await deleteObjects([...written]).catch(() => {});
   await fs.rm(tmpDir, { recursive: true, force: true });
+  await pool.end();
 });
 
 describe('driver configuration', () => {
-  it('is pointed at the configured bucket', () => {
+  it('is pointed at the bucket configured in Settings', async () => {
+    const s3 = await getS3Config();
     expect(s3.bucket).toBeTruthy();
     expect(s3.endpoint).toMatch(/^https?:\/\//);
   });

@@ -6,8 +6,8 @@ import { defineConfig } from 'vitest/config';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// Same credentials the app uses, read here because nothing in the module graph
-// calls dotenv except server.js.
+// The database connection from .env, read here because nothing in the module
+// graph calls dotenv except server.js. The bucket is the one saved in Settings.
 const { parsed = {} } = dotenv.config({ path: path.join(__dirname, '..', '.env'), processEnv: {} });
 
 export default defineConfig({
@@ -28,7 +28,7 @@ export default defineConfig({
       LOG_LEVEL: 'silent',
       LOG_FORMAT: 'json',
 
-      FILE_ENCRYPTION_KEY: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+      // FILE_ENCRYPTION_KEY stays the real one: it decrypts the saved bucket secret.
       JWT_SECRET: 'integration-test-jwt-secret',
     },
   },

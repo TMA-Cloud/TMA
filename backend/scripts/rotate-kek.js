@@ -1,5 +1,6 @@
 /**
  * Rotate the master key (KEK) for envelope-encrypted files — the cheap rotation.
+ * The stored storage secret access key is rewrapped first, under the same KEK.
  *
  * With envelope encryption each file body is encrypted under its own data key
  * (DEK); only the DEK is wrapped by the master KEK and stored on the row. So
@@ -34,6 +35,7 @@ import path from 'path';
 
 import pool from '../config/db.js';
 import { logger } from '../config/logger.js';
+import { rewrapStorageSecret } from '../models/user/user.admin.storage.model.js';
 import { primaryKekVersion, rewrapDekToPrimary } from '../utils/fileEncryption.js';
 
 import { isTransientError, withRetries } from './lib/rotation-resilience.js';
@@ -115,6 +117,21 @@ async function main() {
     process.exit(1);
   }
   console.log(`Primary KEK version is ${primary}. Rewrapping every DEK wrapped under an older version.`);
+
+  // The storage secret is one row, so it is rewrapped first and needs no confirmation.
+  try {
+    const storageRewrapped = await rewrapStorageSecret();
+    console.log(
+      storageRewrapped
+        ? `Storage secret access key rewrapped to KEK version ${primary}.`
+        : 'Storage secret access key already uses the primary KEK (or storage is not configured).'
+    );
+  } catch (err) {
+    console.error('Could not rewrap the storage secret access key:', err?.message || err);
+    console.error('Keep the old FILE_ENCRYPTION_KEY_V<n> set and re-run, or re-enter the keys in Settings > Storage.');
+    await pool.end();
+    process.exit(1);
+  }
 
   console.log('Connecting to database and counting rows to rotate...');
   const total = await countNeedingRewrap(primary);

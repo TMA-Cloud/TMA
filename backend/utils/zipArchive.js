@@ -7,6 +7,7 @@ import { resolveIkmForPath } from '../models/file/file.dek.model.js';
 import { isFilePathEncrypted, isValidPath } from './filePath.js';
 import { createDecryptStreamFromStream, resolveIkm } from './fileEncryption.js';
 import { contentDispositionValue } from './fileDownload.js';
+import { sendIfStorageNotConfigured } from './response.js';
 import storage from './storageDriver.js';
 
 function setZipHeaders(res, archiveName) {
@@ -35,7 +36,7 @@ function attachArchiveHandlers(archive, res, onSuccess) {
     archiveError = err;
     archiveAborted = true;
     logger.error('[ZIP] Archive error:', err);
-    if (!res.headersSent) {
+    if (!res.headersSent && !sendIfStorageNotConfigured(res, err)) {
       res.status(500).json({ error: 'Failed to create archive' });
     }
   });
@@ -99,7 +100,9 @@ async function createStreamingZipArchive(res, archiveName, entries, onEntry, onS
     archive.abort();
     // A cancelled download is not a failure; returning still releases the cursor.
     if (clientGone.signal.aborted) return;
-    if (!res.headersSent) res.status(500).json({ error: 'Failed to create archive' });
+    if (!res.headersSent && !sendIfStorageNotConfigured(res, err)) {
+      res.status(500).json({ error: 'Failed to create archive' });
+    }
     throw err;
   }
 }

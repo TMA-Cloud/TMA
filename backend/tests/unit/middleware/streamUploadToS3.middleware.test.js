@@ -15,6 +15,9 @@ const { getMaxUploadSizeSettings } = vi.hoisted(() => ({
 
 vi.mock('../../../models/user.model.js', () => ({ getMaxUploadSizeSettings }));
 
+const getS3Config = vi.fn(async () => ({ bucket: 'tma-test', version: 1 }));
+vi.mock('../../../config/storage.js', () => ({ getS3Config: (...args) => getS3Config(...args) }));
+
 vi.mock('../../../utils/fileEncryption.js', () => ({
   createEncryptStream: () => new PassThrough(),
   createByteCountStream: () => {
@@ -100,6 +103,16 @@ beforeEach(() => {
 });
 
 describe('streamUploadToS3', () => {
+  it('refuses before reading the body when no storage is configured', async () => {
+    const notConfigured = Object.assign(new Error('Storage is not configured.'), { code: 'STORAGE_NOT_CONFIGURED' });
+    getS3Config.mockRejectedValueOnce(notConfigured);
+
+    const { err } = await run('single', [{ field: 'file', filename: 'doc.pdf', content: pdfBytes() }]);
+
+    expect(err).toBe(notConfigured);
+    expect(putStream).not.toHaveBeenCalled();
+  });
+
   it('stores a bulk file whose content does not match its extension', async () => {
     const { err, req } = await run('bulk', [{ filename: 'clip.mp4', content: pdfBytes() }]);
 

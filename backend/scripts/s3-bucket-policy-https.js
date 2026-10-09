@@ -1,11 +1,11 @@
 /**
  * Apply a bucket policy that denies all requests over HTTP (enforces HTTPS).
- * Uses project S3 config (RUSTFS_* or AWS_* env vars).
+ * Uses the storage bucket configured in Settings > Storage.
  *
  * Note: PutBucketPolicy replaces the entire bucket policy. If you have other
  * policy statements, merge them in the RUSTFS UI or extend this script.
  *
- * Usage: from backend dir, with .env set for S3:
+ * Usage: from backend dir, with .env pointing at the database:
  *   node scripts/s3-bucket-policy-https.js
  */
 
@@ -13,7 +13,7 @@ import '../config/env.js';
 
 import { PutBucketPolicyCommand } from '@aws-sdk/client-s3';
 
-import { createS3Client, s3Config } from './s3Utils.js';
+import { openBucket } from './s3Utils.js';
 
 function getHttpsOnlyPolicy(bucketName) {
   return JSON.stringify({
@@ -36,18 +36,18 @@ function getHttpsOnlyPolicy(bucketName) {
 }
 
 async function applyHttpsPolicy() {
-  const client = createS3Client();
+  const { client, bucket } = await openBucket();
 
-  const policy = getHttpsOnlyPolicy(s3Config.bucket);
+  const policy = getHttpsOnlyPolicy(bucket);
 
   try {
     await client.send(
       new PutBucketPolicyCommand({
-        Bucket: s3Config.bucket,
+        Bucket: bucket,
         Policy: policy,
       })
     );
-    console.log(`Bucket policy applied on "${s3Config.bucket}": all requests must use HTTPS (HTTP denied).`);
+    console.log(`Bucket policy applied on "${bucket}": all requests must use HTTPS (HTTP denied).`);
   } catch (err) {
     console.error('Failed to apply bucket policy:', err.message);
     process.exit(1);

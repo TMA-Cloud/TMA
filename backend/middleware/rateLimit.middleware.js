@@ -96,6 +96,21 @@ const backupCodeRegenerationRateLimiter = rateLimit({
 });
 
 /**
+ * Storage setup checks make outbound requests to an admin-supplied endpoint, so
+ * cap them well below the general API budget.
+ */
+const storageConfigRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  message: { error: 'Too many storage connection attempts, please try again later' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: req =>
+    `storage-config:${req.userId || ipKeyGenerator(req.ip || req.socket?.remoteAddress || 'unknown')}`,
+  skip: req => req.method === 'OPTIONS',
+});
+
+/**
  * Rate limiter for general API endpoints
  * 10000 requests per 15 minutes, per user when authenticated.
  *
@@ -211,6 +226,7 @@ export {
   mfaRateLimiter,
   backupCodeRegenerationRateLimiter,
   apiRateLimiter,
+  storageConfigRateLimiter,
   uploadRateLimiter,
   sseConnectionLimiter,
   createSSEConnectionLimiter,

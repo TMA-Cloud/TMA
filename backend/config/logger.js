@@ -206,6 +206,7 @@ const baseLoggerOptions = {
       'req.body.api_key',
       'req.body.client_secret',
       'req.body.clientSecret',
+      'req.body.secretAccessKey',
 
       // Request query parameters
       'req.query.token',
@@ -223,6 +224,7 @@ const baseLoggerOptions = {
       '*.JWT_SECRET',
       '*.GOOGLE_CLIENT_SECRET',
       '*.ONLYOFFICE_JWT_SECRET',
+      '*.secretAccessKey',
     ],
     censor: '[REDACTED]', // Replace with this string
   },

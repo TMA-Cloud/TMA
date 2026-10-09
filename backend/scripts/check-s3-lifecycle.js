@@ -6,15 +6,14 @@ import '../config/env.js';
 
 import { GetBucketLifecycleConfigurationCommand } from '@aws-sdk/client-s3';
 
-import { createS3Client, s3Config } from './s3Utils.js';
-
-const client = createS3Client();
+import { openBucket } from './s3Utils.js';
 
 async function checkLifecycle() {
+  const { client, bucket } = await openBucket();
   try {
     const data = await client.send(
       new GetBucketLifecycleConfigurationCommand({
-        Bucket: s3Config.bucket,
+        Bucket: bucket,
       })
     );
 

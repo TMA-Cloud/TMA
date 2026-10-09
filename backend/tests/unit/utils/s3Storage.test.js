@@ -3,14 +3,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const { storageSend } = vi.hoisted(() => ({ storageSend: vi.fn() }));
 
 vi.mock('../../../config/storage.js', () => ({
-  s3: {
+  getS3Config: async () => ({
     endpoint: 'https://example.invalid',
     region: 'auto',
     bucket: 'bucket',
     accessKeyId: 'key',
     secretAccessKey: 'secret',
     forcePathStyle: false,
-  },
+    version: 1,
+  }),
 }));
 vi.mock('../../../config/logger.js', () => ({ logger: { warn: vi.fn() } }));
 vi.mock('../../../utils/fileEncryption.js', () => ({ plaintextSizeToCiphertextSize: size => size + 1024 }));

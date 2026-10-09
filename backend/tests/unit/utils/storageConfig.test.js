@@ -1,68 +1,74 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-beforeEach(() => {
+const { loadStorageConfig } = vi.hoisted(() => ({ loadStorageConfig: vi.fn() }));
+vi.mock('../../../models/user/user.admin.storage.model.js', () => ({ loadStorageConfig }));
+
+const CONFIG = { endpoint: 'https://s3.example.com', bucket: 'files', secretAccessKey: 'secret', version: 3 };
+
+let storage;
+beforeEach(async () => {
   vi.resetModules();
-  for (const key of Object.keys(process.env)) {
-    if (/^(R2_|RUSTFS_|AWS_)/.test(key)) vi.stubEnv(key, '');
-  }
+  vi.useFakeTimers();
+  loadStorageConfig.mockReset();
+  storage = await import('../../../config/storage.js');
 });
-afterEach(() => vi.unstubAllEnvs());
 
-describe('required bucket configuration', () => {
-  it('fails when no bucket is configured', async () => {
-    await expect(import('../../../config/storage.js')).rejects.toThrow('S3 bucket configuration is required');
+afterEach(() => {
+  vi.useRealTimers();
+});
+
+describe('storage configuration resolver', () => {
+  it('fails with a 503 setup error when no bucket is configured', async () => {
+    loadStorageConfig.mockResolvedValue(null);
+
+    await expect(storage.getS3Config()).rejects.toMatchObject({ code: 'STORAGE_NOT_CONFIGURED', status: 503 });
+    await expect(storage.getS3ConfigOrNull()).resolves.toBeNull();
   });
 
-  it('rejects incomplete configuration without exposing credentials', async () => {
-    vi.stubEnv('RUSTFS_ENDPOINT', 'https://bucket.example.com');
-    vi.stubEnv('RUSTFS_BUCKET', 'files');
-    vi.stubEnv('RUSTFS_ACCESS_KEY', 'private-test-access-key');
-    await expect(import('../../../config/storage.js')).rejects.toThrow('S3 bucket configuration is required');
+  it('reads the database once per TTL, however many callers arrive together', async () => {
+    loadStorageConfig.mockResolvedValue(CONFIG);
+
+    const results = await Promise.all([storage.getS3Config(), storage.getS3Config(), storage.getS3Config()]);
+    await storage.getS3Config();
+
+    expect(results).toEqual([CONFIG, CONFIG, CONFIG]);
+    expect(loadStorageConfig).toHaveBeenCalledTimes(1);
   });
 
-  it.each([
-    [
-      'R2',
-      { R2_ACCOUNT_ID: 'account', R2_BUCKET: 'files', R2_ACCESS_KEY_ID: 'key', R2_SECRET_ACCESS_KEY: 'secret' },
-      'https://account.r2.cloudflarestorage.com',
-      'auto',
-      false,
-    ],
-    [
-      'RustFS',
-      {
-        RUSTFS_ENDPOINT: 'https://rustfs.example.com',
-        RUSTFS_BUCKET: 'files',
-        RUSTFS_ACCESS_KEY: 'key',
-        RUSTFS_SECRET_KEY: 'secret',
-      },
-      'https://rustfs.example.com',
-      'us-east-1',
-      true,
-    ],
-    [
-      'AWS',
-      {
-        AWS_S3_ENDPOINT: 'https://s3.eu-west-1.amazonaws.com',
-        AWS_S3_BUCKET: 'files',
-        AWS_ACCESS_KEY_ID: 'key',
-        AWS_SECRET_ACCESS_KEY: 'secret',
-        AWS_REGION: 'eu-west-1',
-      },
-      'https://s3.eu-west-1.amazonaws.com',
-      'eu-west-1',
-      true,
-    ],
-  ])('supports %s without a driver selector', async (_provider, env, endpoint, region, forcePathStyle) => {
-    for (const [key, value] of Object.entries(env)) vi.stubEnv(key, value);
-    const { s3 } = await import('../../../config/storage.js');
-    expect(s3).toEqual({
-      endpoint,
-      bucket: 'files',
-      accessKeyId: 'key',
-      secretAccessKey: 'secret',
-      region,
-      forcePathStyle,
-    });
+  it('re-reads after the TTL so other processes pick up a change', async () => {
+    loadStorageConfig.mockResolvedValueOnce(CONFIG).mockResolvedValueOnce({ ...CONFIG, version: 4 });
+
+    await storage.getS3Config();
+    vi.advanceTimersByTime(16_000);
+
+    expect((await storage.getS3Config()).version).toBe(4);
+  });
+
+  it('re-reads at once after an invalidation in this process', async () => {
+    loadStorageConfig.mockResolvedValueOnce(null).mockResolvedValueOnce(CONFIG);
+
+    await expect(storage.getS3ConfigOrNull()).resolves.toBeNull();
+    storage.invalidateS3Config();
+
+    await expect(storage.getS3Config()).resolves.toEqual(CONFIG);
+  });
+
+  it('does not cache a read that started before an invalidation', async () => {
+    let finishStale;
+    loadStorageConfig
+      .mockImplementationOnce(
+        () =>
+          new Promise(resolve => {
+            finishStale = resolve;
+          })
+      )
+      .mockResolvedValue(CONFIG);
+
+    const stale = storage.getS3ConfigOrNull();
+    storage.invalidateS3Config();
+    finishStale(null);
+    await stale;
+
+    await expect(storage.getS3Config()).resolves.toEqual(CONFIG);
   });
 });

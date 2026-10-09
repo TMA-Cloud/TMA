@@ -9,6 +9,10 @@ const errorHandler = (err, req, res, _next) => {
     return sendError(res, 499, 'Upload cancelled by client', null, { error: 'REQUEST_ABORTED' });
   }
 
+  if (err.code === 'STORAGE_NOT_CONFIGURED') {
+    return sendError(res, 503, err.message, null, { error: 'STORAGE_NOT_CONFIGURED' });
+  }
+
   // Storage limit errors (from upload middleware)
   if (err.message && (err.message.includes('Storage limit exceeded') || err.message.includes('storage limit'))) {
     return sendError(res, 413, err.message, null, { error: 'STORAGE_LIMIT_EXCEEDED' });

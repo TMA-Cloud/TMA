@@ -1,8 +1,8 @@
 /**
- * Enable versioning on the S3/RUSTFS bucket.
- * Uses project S3 config (RUSTFS_* or AWS_* env vars).
+ * Enable versioning on the storage bucket.
+ * Uses the storage bucket configured in Settings > Storage.
  *
- * Usage: from backend dir, with .env set for S3:
+ * Usage: from backend dir, with .env pointing at the database:
  *   node scripts/s3-bucket-versioning.js
  */
 
@@ -10,21 +10,21 @@ import '../config/env.js';
 
 import { PutBucketVersioningCommand } from '@aws-sdk/client-s3';
 
-import { createS3Client, s3Config } from './s3Utils.js';
+import { openBucket } from './s3Utils.js';
 
 async function enableVersioning() {
-  const client = createS3Client();
+  const { client, bucket } = await openBucket();
 
   try {
     await client.send(
       new PutBucketVersioningCommand({
-        Bucket: s3Config.bucket,
+        Bucket: bucket,
         VersioningConfiguration: {
           Status: 'Enabled',
         },
       })
     );
-    console.log(`Versioning enabled on bucket "${s3Config.bucket}".`);
+    console.log(`Versioning enabled on bucket "${bucket}".`);
   } catch (err) {
     console.error('Failed to enable versioning:', err.message);
     process.exit(1);

@@ -180,6 +180,20 @@ const updateShareBaseUrlConfigSchema = [
   body('url').optional({ nullable: true }).isURL().withMessage('Invalid URL format'),
 ];
 
+// Shape and size only; utils/storageSettings.js owns the semantic rules.
+const updateStorageConfigSchema = [
+  body('provider').isIn(['s3', 'r2', 'aws']).withMessage('Provider must be one of: s3, r2, aws'),
+  body(['endpoint', 'region', 'bucket', 'accessKeyId', 'secretAccessKey'])
+    .optional({ nullable: true })
+    .isString()
+    .withMessage('Storage settings must be strings')
+    .bail()
+    .isLength({ max: 2048 })
+    .withMessage('Storage setting is too long'),
+  body('forcePathStyle').optional().isBoolean({ strict: true }).withMessage('Path-style must be true or false'),
+  body('expectedVersion').optional({ nullable: true }).isInt({ min: 0 }).toInt(),
+];
+
 // Max upload size in bytes (1MB to 100GB)
 const updateMaxUploadSizeConfigSchema = [
   body('maxBytes')
@@ -335,6 +349,7 @@ export {
   toggleSignupSchema,
   updateOnlyOfficeConfigSchema,
   updateShareBaseUrlConfigSchema,
+  updateStorageConfigSchema,
   updateMaxUploadSizeConfigSchema,
   updateHideFileExtensionsConfigSchema,
   updateUserStorageLimitSchema,

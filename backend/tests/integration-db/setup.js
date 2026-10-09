@@ -18,6 +18,8 @@ import { afterAll, beforeAll, beforeEach } from 'vitest';
 
 import pool from '../../config/db.js';
 import { resetStorageMock } from '../mocks/storage.mock.js';
+import { invalidateS3Config } from '../../config/storage.js';
+import { encryptStorageSecret } from '../../utils/storageSettings.js';
 import { connectRedis, disconnectRedis, redisClient } from '../../config/redis.js';
 import { initializeAuditQueue, shutdownAuditQueue } from '../../services/auditLogger.js';
 import {
@@ -98,6 +100,20 @@ async function truncateAll() {
   await pool.query(
     `INSERT INTO app_settings (id, signup_enabled) VALUES ('app_settings', true) ON CONFLICT (id) DO NOTHING`
   );
+  await seedStorageConfig();
+}
+
+/** A configured bucket, as the first user would leave it. The driver itself is the in-memory double. */
+async function seedStorageConfig() {
+  const { encrypted, kekVersion } = encryptStorageSecret('test-secret', 'test-key');
+  await pool.query(
+    `UPDATE app_settings SET storage_provider = 's3', storage_endpoint = 'http://127.0.0.1:9000',
+       storage_region = 'us-east-1', storage_bucket = 'tma-test', storage_force_path_style = true,
+       storage_access_key_id = 'test-key', storage_secret_encrypted = $1, storage_secret_kek_version = $2
+     WHERE id = 'app_settings'`,
+    [encrypted, kekVersion]
+  );
+  invalidateS3Config();
 }
 
 /* ------------------------------------------------------------------ *

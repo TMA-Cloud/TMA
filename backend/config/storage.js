@@ -1,42 +1,64 @@
 /**
- * Storage configuration for S3-compatible object storage.
- * Supports: Cloudflare R2 (R2_*), RustFS/other S3 (RUSTFS_*), AWS S3 (AWS_*).
- * Configure the environment variables for your bucket provider.
+ * Object storage configuration, set by the first user and stored encrypted in
+ * app_settings. Each process keeps the decrypted copy in memory only (never in
+ * Redis) and re-reads it after a short TTL, so the API and worker converge on a
+ * change within CONFIG_TTL_MS without a restart.
  */
 
-// Cloudflare R2: R2_ACCOUNT_ID + R2_BUCKET + R2_ACCESS_KEY_ID + R2_SECRET_ACCESS_KEY
-// Or set R2_ENDPOINT to override the default https://<ACCOUNT_ID>.r2.cloudflarestorage.com
-const R2_ACCOUNT_ID = process.env.R2_ACCOUNT_ID;
-const R2_ENDPOINT = process.env.R2_ENDPOINT || (R2_ACCOUNT_ID && `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`);
-const R2_BUCKET = process.env.R2_BUCKET;
-const R2_ACCESS_KEY = process.env.R2_ACCESS_KEY_ID || process.env.R2_ACCESS_KEY;
-const R2_SECRET_KEY = process.env.R2_SECRET_ACCESS_KEY || process.env.R2_SECRET_KEY;
-const R2_PUBLIC_URL = process.env.R2_PUBLIC_URL || null;
-const isR2 = Boolean((R2_ENDPOINT || R2_ACCOUNT_ID) && R2_BUCKET && R2_ACCESS_KEY && R2_SECRET_KEY);
+import { loadStorageConfig } from '../models/user/user.admin.storage.model.js';
 
-// S3-compatible: R2, RUSTFS_* or AWS_*
-const S3_ENDPOINT = R2_ENDPOINT || process.env.RUSTFS_ENDPOINT || process.env.AWS_S3_ENDPOINT;
-const S3_BUCKET = R2_BUCKET || process.env.RUSTFS_BUCKET || process.env.AWS_S3_BUCKET;
-const S3_ACCESS_KEY = R2_ACCESS_KEY || process.env.RUSTFS_ACCESS_KEY || process.env.AWS_ACCESS_KEY_ID;
-const S3_SECRET_KEY = R2_SECRET_KEY || process.env.RUSTFS_SECRET_KEY || process.env.AWS_SECRET_ACCESS_KEY;
-const S3_REGION = isR2 ? 'auto' : process.env.RUSTFS_REGION || process.env.AWS_REGION || 'us-east-1';
-const S3_FORCE_PATH_STYLE = isR2 ? false : process.env.RUSTFS_FORCE_PATH_STYLE !== 'false';
+const CONFIG_TTL_MS = 15_000;
 
-if (!S3_ENDPOINT || !S3_BUCKET || !S3_ACCESS_KEY || !S3_SECRET_KEY) {
-  throw new Error(
-    'S3 bucket configuration is required: set endpoint, bucket, access key and secret key using R2_*, RUSTFS_* or AWS_* variables.'
-  );
+class StorageNotConfiguredError extends Error {
+  constructor() {
+    super('Storage is not configured. The administrator must connect a storage bucket in Settings.');
+    this.name = 'StorageNotConfiguredError';
+    this.code = 'STORAGE_NOT_CONFIGURED';
+    this.status = 503;
+  }
 }
 
-const s3 = {
-  endpoint: S3_ENDPOINT,
-  bucket: S3_BUCKET,
-  accessKeyId: S3_ACCESS_KEY,
-  secretAccessKey: S3_SECRET_KEY,
-  region: S3_REGION,
-  forcePathStyle: S3_FORCE_PATH_STYLE,
-};
+let cached = null;
+let cachedAt = 0;
+let inflight = null;
+let generation = 0;
 
-const r2PublicUrl = R2_PUBLIC_URL;
+async function refresh() {
+  const startedAt = generation;
+  const config = await loadStorageConfig();
+  // A read that began before an invalidation may predate the save, so don't cache it.
+  if (startedAt === generation) {
+    cached = config;
+    cachedAt = Date.now();
+  }
+  return config;
+}
 
-export { s3, r2PublicUrl };
+/** The active configuration, or null when storage has not been set up. */
+async function getS3ConfigOrNull() {
+  if (Date.now() - cachedAt < CONFIG_TTL_MS) return cached;
+  // One DB read per expiry, however many requests arrive together.
+  if (!inflight) {
+    const pending = refresh().finally(() => {
+      if (inflight === pending) inflight = null;
+    });
+    inflight = pending;
+  }
+  return inflight;
+}
+
+/** The active configuration; throws StorageNotConfiguredError when there is none. */
+async function getS3Config() {
+  const config = await getS3ConfigOrNull();
+  if (!config) throw new StorageNotConfiguredError();
+  return config;
+}
+
+/** Drop the cached copy so the next call reads the database (after a save in this process). */
+function invalidateS3Config() {
+  generation += 1;
+  cachedAt = 0;
+  inflight = null;
+}
+
+export { StorageNotConfiguredError, getS3Config, getS3ConfigOrNull, invalidateS3Config };

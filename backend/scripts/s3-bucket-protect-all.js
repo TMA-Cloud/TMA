@@ -6,9 +6,9 @@
  *   4. Enable default SSE (AES256) — skipped with a warning if not supported
  *   5. Lifecycle: abort incomplete multipart after 1 day; delete noncurrent versions after 7 days; remove delete markers
  *
- * Uses project S3 config (RUSTFS_* or AWS_* env vars).
+ * Uses the storage bucket configured in Settings > Storage.
  *
- * Usage: from backend dir, with .env set for S3:
+ * Usage: from backend dir, with .env pointing at the database:
  *   node scripts/s3-bucket-protect-all.js
  */
 
@@ -22,11 +22,10 @@ import {
   PutPublicAccessBlockCommand,
 } from '@aws-sdk/client-s3';
 
-import { createS3Client, s3Config, buildLifecycleRules, DAYS_AFTER_INITIATION, NONCURRENT_DAYS } from './s3Utils.js';
+import { openBucket, buildLifecycleRules, DAYS_AFTER_INITIATION, NONCURRENT_DAYS } from './s3Utils.js';
 
 async function runAll() {
-  const bucket = s3Config.bucket;
-  const client = createS3Client();
+  const { client, bucket } = await openBucket();
   let failed = false;
 
   // 1. Block public access

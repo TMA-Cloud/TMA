@@ -13,6 +13,7 @@ import { pipeline } from 'stream/promises';
 import Busboy from 'busboy';
 
 import { logger } from '../config/logger.js';
+import { getS3Config } from '../config/storage.js';
 import { getMaxUploadSizeSettings } from '../models/user.model.js';
 import { enqueueObjectCleanup } from '../services/objectCleanup.js';
 import {
@@ -90,8 +91,9 @@ function uploadFailureStatus(reason) {
  */
 function streamUploadToS3(singleOrBulk = 'single') {
   return (req, res, next) => {
-    getMaxUploadSizeSettings()
-      .then(settings => {
+    // Reject before reading the body, so the client is not left streaming into nothing.
+    Promise.all([getMaxUploadSizeSettings(), getS3Config()])
+      .then(([settings]) => {
         const maxFileSize = settings.maxBytes;
 
         const contentType = req.headers['content-type'] || '';

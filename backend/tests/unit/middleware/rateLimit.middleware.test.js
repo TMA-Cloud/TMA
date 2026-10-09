@@ -173,6 +173,12 @@ describe('documented limits', () => {
     );
   });
 
+  it('allows 20 storage connection checks per window', async () => {
+    expect(
+      await budgetOf(limiters.storageConfigRateLimiter, { path: '/storage', key: { userId: 'storage-budget' } })
+    ).toBe(20);
+  });
+
   it('caps concurrent SSE connections at 20 per user', () => {
     // The exported limiter is built with a cap of 20; prove it by opening 21.
     const limiter = limiters.sseConnectionLimiter;
@@ -208,6 +214,7 @@ describe('documented limits', () => {
       'loginFailuresPerIpLimiter',
       'mfaRateLimiter',
       'sseConnectionLimiter',
+      'storageConfigRateLimiter',
       'uploadRateLimiter',
     ]);
   });

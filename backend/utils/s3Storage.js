@@ -19,7 +19,7 @@ import {
 import { Upload } from '@aws-sdk/lib-storage';
 
 import { logger } from '../config/logger.js';
-import { s3 as s3Config } from '../config/storage.js';
+import { getS3Config } from '../config/storage.js';
 import { MAX_MAX_UPLOAD_BYTES } from '../config/uploadLimits.js';
 import { plaintextSizeToCiphertextSize } from './fileEncryption.js';
 import {
@@ -31,21 +31,38 @@ import {
 
 const MAX_ENCRYPTED_UPLOAD_BYTES = plaintextSizeToCiphertextSize(MAX_MAX_UPLOAD_BYTES);
 
-let s3Client = null;
+const RETIRED_CLIENT_GRACE_MS = 5 * 60 * 1000;
 
-function getClient() {
-  if (s3Client) return s3Client;
-  s3Client = new S3Client({
-    endpoint: s3Config.endpoint,
-    region: s3Config.region,
+let active = null;
+
+/** An S3 client for one storage configuration. */
+function createS3Client(config) {
+  return new S3Client({
+    endpoint: config.endpoint,
+    region: config.region,
     credentials: {
-      accessKeyId: s3Config.accessKeyId,
-      secretAccessKey: s3Config.secretAccessKey,
+      accessKeyId: config.accessKeyId,
+      secretAccessKey: config.secretAccessKey,
     },
-    forcePathStyle: s3Config.forcePathStyle,
+    forcePathStyle: config.forcePathStyle,
     responseChecksumValidation: 'WHEN_REQUIRED',
   });
-  return s3Client;
+}
+
+/**
+ * The client and bucket for the current configuration. A new configuration
+ * gets a new client; the old one is closed after a grace period so transfers
+ * already running on it can finish.
+ * @returns {Promise<{ client: S3Client, bucket: string }>}
+ */
+async function getStore() {
+  const config = await getS3Config();
+  if (active?.version !== config.version) {
+    const retired = active?.client;
+    if (retired) setTimeout(() => retired.destroy(), RETIRED_CLIENT_GRACE_MS).unref();
+    active = { version: config.version, client: createS3Client(config), bucket: config.bucket };
+  }
+  return active;
 }
 
 /**
@@ -54,11 +71,11 @@ function getClient() {
  * @returns {Promise<boolean>}
  */
 async function exists(key) {
-  const client = getClient();
+  const { client, bucket } = await getStore();
   try {
     await client.send(
       new HeadObjectCommand({
-        Bucket: s3Config.bucket,
+        Bucket: bucket,
         Key: key,
       })
     );
@@ -79,9 +96,9 @@ async function exists(key) {
  * @returns {Promise<Readable>}
  */
 async function getReadStream(key, range) {
-  const client = getClient();
+  const { client, bucket } = await getStore();
   const params = {
-    Bucket: s3Config.bucket,
+    Bucket: bucket,
     Key: key,
   };
   if (range && Number.isFinite(range.start) && Number.isFinite(range.end)) {
@@ -112,7 +129,7 @@ async function putBuffer(key, buffer) {
  * @returns {Promise<void>}
  */
 async function putStream(key, body, contentLength, maximumLength = MAX_ENCRYPTED_UPLOAD_BYTES) {
-  const client = getClient();
+  const { client, bucket } = await getStore();
   let exactLength;
   if (contentLength != null) {
     exactLength = Number(contentLength);
@@ -124,7 +141,7 @@ async function putStream(key, body, contentLength, maximumLength = MAX_ENCRYPTED
   if (exactLength != null && !requiresMultipart(exactLength)) {
     await client.send(
       new PutObjectCommand({
-        Bucket: s3Config.bucket,
+        Bucket: bucket,
         Key: key,
         Body: body,
         ContentLength: exactLength,
@@ -135,7 +152,7 @@ async function putStream(key, body, contentLength, maximumLength = MAX_ENCRYPTED
 
   const sizeHint = exactLength ?? Number(maximumLength);
   const partSize = multipartPartSizeFor(sizeHint, DEFAULT_UPLOAD_PART_SIZE);
-  const params = { Bucket: s3Config.bucket, Key: key, Body: body };
+  const params = { Bucket: bucket, Key: key, Body: body };
   if (exactLength != null) params.ContentLength = exactLength;
   const upload = new Upload({
     client,
@@ -153,10 +170,10 @@ async function putStream(key, body, contentLength, maximumLength = MAX_ENCRYPTED
  * @returns {Promise<void>}
  */
 async function deleteObject(key) {
-  const client = getClient();
+  const { client, bucket } = await getStore();
   await client.send(
     new DeleteObjectCommand({
-      Bucket: s3Config.bucket,
+      Bucket: bucket,
       Key: key,
     })
   );
@@ -167,14 +184,14 @@ async function deleteObjects(keys) {
   const uniqueKeys = [...new Set((keys || []).filter(Boolean))];
   if (uniqueKeys.length === 0) return { deleted: [], errors: [] };
 
-  const client = getClient();
+  const { client, bucket } = await getStore();
   const deleted = [];
   const errors = [];
   for (let offset = 0; offset < uniqueKeys.length; offset += 1000) {
     const chunk = uniqueKeys.slice(offset, offset + 1000);
     const response = await client.send(
       new DeleteObjectsCommand({
-        Bucket: s3Config.bucket,
+        Bucket: bucket,
         Delete: { Objects: chunk.map(Key => ({ Key })), Quiet: true },
       })
     );
@@ -193,14 +210,14 @@ async function deleteObjects(keys) {
  * @returns {Promise<void>}
  */
 async function multipartCopyObject(sourceKey, destKey, sourceSize) {
-  const client = getClient();
-  const source = `${s3Config.bucket}/${encodeURIComponent(sourceKey)}`;
+  const { client, bucket } = await getStore();
+  const source = `${bucket}/${encodeURIComponent(sourceKey)}`;
   const size = Number(sourceSize);
   if (!Number.isSafeInteger(size) || size <= 0) {
     throw new TypeError('Multipart copy source size must be a positive safe integer');
   }
   const partSize = multipartPartSizeFor(size, DEFAULT_COPY_PART_SIZE);
-  const created = await client.send(new CreateMultipartUploadCommand({ Bucket: s3Config.bucket, Key: destKey }));
+  const created = await client.send(new CreateMultipartUploadCommand({ Bucket: bucket, Key: destKey }));
   const uploadId = created.UploadId;
   if (!uploadId) throw new Error('Object store did not return a multipart upload id');
 
@@ -219,7 +236,7 @@ async function multipartCopyObject(sourceKey, destKey, sourceSize) {
         try {
           const copied = await client.send(
             new UploadPartCopyCommand({
-              Bucket: s3Config.bucket,
+              Bucket: bucket,
               Key: destKey,
               UploadId: uploadId,
               PartNumber: partNumber,
@@ -240,7 +257,7 @@ async function multipartCopyObject(sourceKey, destKey, sourceSize) {
     parts.sort((a, b) => a.PartNumber - b.PartNumber);
     await client.send(
       new CompleteMultipartUploadCommand({
-        Bucket: s3Config.bucket,
+        Bucket: bucket,
         Key: destKey,
         UploadId: uploadId,
         MultipartUpload: { Parts: parts },
@@ -248,15 +265,15 @@ async function multipartCopyObject(sourceKey, destKey, sourceSize) {
     );
   } catch (error) {
     await client
-      .send(new AbortMultipartUploadCommand({ Bucket: s3Config.bucket, Key: destKey, UploadId: uploadId }))
+      .send(new AbortMultipartUploadCommand({ Bucket: bucket, Key: destKey, UploadId: uploadId }))
       .catch(abortError => logger.warn({ err: abortError, destKey }, '[S3] Failed to abort multipart copy'));
     throw error;
   }
 }
 
 async function copyObject(sourceKey, destKey, knownSourceSize) {
-  const client = getClient();
-  const source = `${s3Config.bucket}/${encodeURIComponent(sourceKey)}`;
+  const { client, bucket } = await getStore();
+  const source = `${bucket}/${encodeURIComponent(sourceKey)}`;
   let sourceSize = Number(knownSourceSize);
   if (!Number.isSafeInteger(sourceSize) || sourceSize < 0) {
     const sourceMetadata = await statObject(sourceKey);
@@ -265,7 +282,7 @@ async function copyObject(sourceKey, destKey, knownSourceSize) {
   }
 
   if (!requiresMultipart(sourceSize)) {
-    await client.send(new CopyObjectCommand({ Bucket: s3Config.bucket, CopySource: source, Key: destKey }));
+    await client.send(new CopyObjectCommand({ Bucket: bucket, CopySource: source, Key: destKey }));
     return;
   }
   await multipartCopyObject(sourceKey, destKey, sourceSize);
@@ -279,12 +296,12 @@ async function copyObject(sourceKey, destKey, knownSourceSize) {
  * @yields {Array<{ key: string, size: number, lastModified: Date | null }>}
  */
 async function* listObjectsPaginated(pageSize = 1000) {
-  const client = getClient();
+  const { client, bucket } = await getStore();
   let continuationToken;
   do {
     const response = await client.send(
       new ListObjectsV2Command({
-        Bucket: s3Config.bucket,
+        Bucket: bucket,
         ContinuationToken: continuationToken,
         MaxKeys: pageSize,
       })
@@ -307,11 +324,11 @@ async function* listObjectsPaginated(pageSize = 1000) {
  * @returns {Promise<{ size: number, lastModified: Date | null } | null>} null when the object is gone
  */
 async function statObject(key) {
-  const client = getClient();
+  const { client, bucket } = await getStore();
   try {
     const response = await client.send(
       new HeadObjectCommand({
-        Bucket: s3Config.bucket,
+        Bucket: bucket,
         Key: key,
       })
     );
@@ -327,6 +344,7 @@ async function statObject(key) {
 }
 
 export {
+  createS3Client,
   exists,
   getReadStream,
   putBuffer,
