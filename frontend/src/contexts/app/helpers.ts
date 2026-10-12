@@ -175,3 +175,11 @@ export function canUseClipboardAction(
   if (view !== 'My Files') return false;
   return clipboard?.action === 'cut' ? can('files.edit') : can('files.upload');
 }
+
+/** Folder a context-menu paste lands in: the right-clicked folder, else the open one, as in Explorer. */
+export function pasteTargetFolderId(
+  target: Pick<FileItem, 'id' | 'type'> | undefined,
+  currentFolderId: string | null
+): string | null {
+  return target?.type === 'folder' ? target.id : currentFolderId;
+}

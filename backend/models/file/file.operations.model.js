@@ -9,6 +9,8 @@ import { isFilePathEncrypted } from '../../utils/filePath.js';
 import storage from '../../utils/storageDriver.js';
 import { releaseStorageReservation, reserveStorage } from '../../services/storageReservations.js';
 
+import { assertLiveFolders } from './file.utils.model.js';
+
 const httpError = (message, status) => Object.assign(new Error(message), { status });
 
 /**
@@ -202,6 +204,8 @@ async function copyFiles(ids, parentId = null, userId, { operationId = null } = 
         return completed.rows[0].output?.ids || [];
       }
     }
+    // Fail before copying any object; the commit checks again for a late trash.
+    await assertLiveFolders(client, [parentId], userId);
 
     await client.query(
       `CREATE TEMP TABLE copy_stage ON COMMIT PRESERVE ROWS AS
@@ -297,6 +301,8 @@ async function copyFiles(ids, parentId = null, userId, { operationId = null } = 
     }
 
     await client.query('BEGIN');
+    // The target may have been trashed while the job waited in the queue.
+    await assertLiveFolders(client, [parentId], userId);
     await client.query(
       `INSERT INTO files
          (id, name, type, size, mime_type, path, parent_id, user_id,

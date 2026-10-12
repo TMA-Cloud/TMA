@@ -15,7 +15,13 @@ import {
 import { generateId } from '../../utils/id.js';
 import { enqueueObjectCleanup } from '../../services/objectCleanup.js';
 
-import { buildKeysetPage, buildOrderClause, finishKeysetPage, getUniqueDbFileName } from './file.utils.model.js';
+import {
+  assertLiveFolders,
+  buildKeysetPage,
+  buildOrderClause,
+  finishKeysetPage,
+  getUniqueDbFileName,
+} from './file.utils.model.js';
 
 /**
  * Get files in a directory
@@ -78,6 +84,7 @@ async function createFolder(name, parentId = null, userId, modified = null, opti
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
+      await assertLiveFolders(client, [parentId], userId);
       const result = await client.query(
         `INSERT INTO files(id, name, type, parent_id, user_id, modified)
          VALUES($1,$2,'folder',$3,$4,COALESCE($5, NOW()))
@@ -100,6 +107,7 @@ async function createFolder(name, parentId = null, userId, modified = null, opti
     }
   }
 
+  await assertLiveFolders(pool, [parentId], userId);
   if (modified != null) {
     const result = await pool.query(
       'INSERT INTO files(id, name, type, parent_id, user_id, modified) VALUES($1,$2,$3,$4,$5,$6) RETURNING id, name, type, size, modified, mime_type AS "mimeType", starred, shared',
@@ -152,6 +160,7 @@ async function createFileFromStreamedUpload(upload, parentId, userId) {
       throw error;
     }
 
+    await assertLiveFolders(client, [parentId], userId);
     const uniqueName = await getUniqueDbFileName(name, parentId, userId, client);
     const result = await client.query(
       `INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id, modified, dek_wrapped, dek_kek_version)
@@ -198,6 +207,11 @@ async function createFilesFromStreamedUploads(entries, userId, options = {}) {
       throw error;
     }
 
+    await assertLiveFolders(
+      client,
+      entries.map(entry => entry.parentId),
+      userId
+    );
     const patterns = entries.map(entry => uploadNamePattern(entry.upload.name));
     const occupiedResult = await client.query(
       `WITH requested(idx, parent_id, desired, pattern) AS (

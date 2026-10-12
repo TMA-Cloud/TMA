@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { canUseClipboardAction, choosePasteSource } from '../../src/contexts/app/helpers';
+import { canUseClipboardAction, choosePasteSource, pasteTargetFolderId } from '../../src/contexts/app/helpers';
 import type { AccountPermission } from '../../src/contexts/AuthContext';
 
 const copy = { ids: ['a'], action: 'copy' as const };
@@ -54,5 +54,20 @@ describe('canUseClipboardAction', () => {
     expect(canUseClipboardAction('paste', { view: 'My Files', can: uploadOnly, clipboard: cut })).toBe(false);
     expect(canUseClipboardAction('paste', { view: 'My Files', can: uploadOnly, clipboard: copy })).toBe(true);
     expect(canUseClipboardAction('copy', { view: 'My Files', can: grants('files.edit'), clipboard: null })).toBe(false);
+  });
+});
+
+describe('pasteTargetFolderId', () => {
+  it('pastes into a right-clicked folder', () => {
+    expect(pasteTargetFolderId({ id: 'f1', type: 'folder' }, 'open')).toBe('f1');
+  });
+
+  it('pastes beside a right-clicked file, never under it', () => {
+    expect(pasteTargetFolderId({ id: 'doc', type: 'file' }, 'open')).toBe('open');
+    expect(pasteTargetFolderId({ id: 'doc', type: 'file' }, null)).toBeNull();
+  });
+
+  it('pastes into the open folder from empty space', () => {
+    expect(pasteTargetFolderId(undefined, 'open')).toBe('open');
   });
 });

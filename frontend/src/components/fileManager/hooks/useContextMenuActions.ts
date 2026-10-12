@@ -22,7 +22,7 @@ import { useToast } from '../../../hooks/useToast';
 import { hasElectronClipboard, hasElectronOpenOnDesktop } from '../../../utils/electronDesktop';
 import { getErrorMessage } from '../../../utils/errorUtils';
 import { copyToClipboard } from '../../../utils/clipboard';
-import { canUseClipboardAction } from '../../../contexts/app/helpers';
+import { canUseClipboardAction, pasteTargetFolderId } from '../../../contexts/app/helpers';
 
 export interface ContextMenuItem {
   icon: LucideIcon;
@@ -406,7 +406,12 @@ export function useContextMenuActions({
               disabled: false,
               action: async () => {
                 try {
-                  await clipboardPaste(targetId ?? folderStack[folderStack.length - 1] ?? null);
+                  await clipboardPaste(
+                    pasteTargetFolderId(
+                      files.find(f => f.id === targetId),
+                      folderStack[folderStack.length - 1] ?? null
+                    )
+                  );
                   onActionComplete?.();
                 } catch (error) {
                   const errorMessage = error instanceof Error ? error.message : 'Failed to paste files';

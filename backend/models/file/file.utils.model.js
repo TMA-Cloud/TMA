@@ -144,4 +144,30 @@ async function getUniqueDbFileName(desiredName, parentId, userId, queryable = po
   throw new Error('Too many duplicate names in database');
 }
 
-export { SORT_FIELDS, buildOrderClause, buildKeysetPage, finishKeysetPage, generateUniqueName, getUniqueDbFileName };
+/**
+ * Reject parents that are not live folders of this account. The foreign key
+ * alone accepts a file, where no client could ever list the new item.
+ * @param {string[]} parentIds - Target parents; null (root) entries are skipped.
+ */
+async function assertLiveFolders(queryable, parentIds, userId) {
+  const ids = [...new Set(parentIds.filter(Boolean))];
+  if (ids.length === 0) return;
+  const result = await queryable.query(
+    `SELECT COUNT(*)::integer AS count FROM files
+      WHERE id = ANY($1::text[]) AND user_id = $2 AND type = 'folder' AND deleted_at IS NULL`,
+    [ids, userId]
+  );
+  if (result.rows[0].count !== ids.length) {
+    throw Object.assign(new Error('Target folder not found'), { status: 404 });
+  }
+}
+
+export {
+  SORT_FIELDS,
+  assertLiveFolders,
+  buildOrderClause,
+  buildKeysetPage,
+  finishKeysetPage,
+  generateUniqueName,
+  getUniqueDbFileName,
+};
