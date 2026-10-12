@@ -41,7 +41,7 @@ function uploadStatuses(win) {
  */
 function fakePowerShell({ dropList = '', ole = '{}', dropListFails = false, oleFails = false } = {}) {
   return fakeSpawn(vi, child => {
-    const isOle = child.args.includes('$env:OLE_SCRIPT | iex');
+    const isOle = child.args.some(arg => arg.endsWith('$env:OLE_SCRIPT | iex'));
     setTimeout(() => {
       if (isOle) {
         if (oleFails) {

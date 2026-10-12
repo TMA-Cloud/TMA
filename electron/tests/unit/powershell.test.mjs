@@ -5,6 +5,7 @@ import powershell from '../../src/main/utils/powershell.cjs';
 import { fakeSpawn, fakeSpawnResult } from '../helpers/childProcess.cjs';
 
 const { escapePathForPowerShellLiteralPath, runPowerShell, runPowerShellEnv } = powershell;
+const UTF8 = '[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); ';
 
 describe('escapePathForPowerShellLiteralPath', () => {
   it('leaves an ordinary Windows path untouched', () => {
@@ -45,8 +46,20 @@ describe('runPowerShell', () => {
     await runPowerShell('Get-Thing');
     const [command, args, options] = [spawned[0].command, spawned[0].args, childProcess.spawn.mock.calls[0][2]];
     expect(command).toBe('powershell');
-    expect(args).toEqual(['-NoProfile', '-Command', 'Get-Thing']);
+    expect(args).toEqual(['-NoProfile', '-Command', `${UTF8}Get-Thing`]);
     expect(options).toMatchObject({ shell: false, windowsHide: true });
+  });
+
+  it('decodes a non-ASCII path intact even when a character spans two chunks', async () => {
+    const spawned = fakeSpawn(vi);
+    const pending = runPowerShell('Get-Thing');
+    const nnbspPath = 'C:\\Notes\\Standup 9_05\u202FAM.txt\r\n';
+    const bytes = Buffer.from(nnbspPath, 'utf8');
+    const split = bytes.indexOf(0xe2) + 1; // inside the 3-byte U+202F
+    spawned[0].stdout.emit('data', bytes.subarray(0, split));
+    spawned[0].stdout.emit('data', bytes.subarray(split));
+    spawned[0].exit(0);
+    await expect(pending).resolves.toBe(nnbspPath);
   });
 
   it('rejects with stderr when the script exits non-zero', async () => {
@@ -80,7 +93,7 @@ describe('runPowerShellEnv', () => {
     await runPowerShellEnv('Write-Output "{}"');
     const [command, args, options] = childProcess.spawn.mock.calls[0];
     expect(command).toBe('powershell');
-    expect(args).toEqual(['-NoProfile', '-NonInteractive', '-Command', '$env:OLE_SCRIPT | iex']);
+    expect(args).toEqual(['-NoProfile', '-NonInteractive', '-Command', `${UTF8}$env:OLE_SCRIPT | iex`]);
     expect(options.env.OLE_SCRIPT).toBe('Write-Output "{}"');
     expect(options).toMatchObject({ shell: false, windowsHide: true });
   });
