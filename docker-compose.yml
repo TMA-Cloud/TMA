@@ -15,15 +15,16 @@ services:
     container_name: tma-cloud-app
     restart: unless-stopped
     ports:
-      - "${BPORT:-3000}:${BPORT:-3000}"
+      - "${PORT:-3000}:3000"
     env_file:
       - .env
     environment:
+      - PORT=3000
       - FILE_ENCRYPTION_KEY_FILE=/run/secrets/file_encryption_key
     secrets:
       - file_encryption_key
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:${BPORT:-3000}/health || exit 1"]
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/health || exit 1"]
       interval: 30s
       timeout: 3s
       retries: 3

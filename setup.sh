@@ -157,7 +157,7 @@ main() {
     set_env DATABASE_URL "postgresql://postgres:$(random_hex 32)@postgres:5432/tma_cloud_storage" "$tmp_env"
     set_env REDIS_URL "redis://:$(random_hex 32)@redis:6379/0" "$tmp_env"
     set_env JWT_SECRET "$(random_hex 64)" "$tmp_env"
-    set_env BPORT "$port" "$tmp_env"
+    set_env PORT "$port" "$tmp_env"
     set_env BACKEND_URL "$url" "$tmp_env"
     # The key comes from secrets/file_encryption_key, mounted by compose.yml.
     set_env FILE_ENCRYPTION_KEY "" "$tmp_env"

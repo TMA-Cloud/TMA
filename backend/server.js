@@ -282,7 +282,7 @@ process.on('uncaughtException', error => {
 
 runMigrations()
   .then(async () => {
-    const port = process.env.BPORT || 3000;
+    const port = Number(process.env.PORT) || 3000;
 
     // A wrong master key must stop startup, not surface later as undecryptable files.
     await verifyEncryptionKeys();
