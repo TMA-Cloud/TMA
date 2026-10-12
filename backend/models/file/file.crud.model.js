@@ -506,22 +506,48 @@ async function replaceFileDataWithStorageKey(id, size, mimeType, newStorageKey, 
 }
 
 /**
- * Find an existing folder by name under a parent (or root).
- * Returns the folder id if found, otherwise null.
+ * Return the folder named `name` under a parent (or root), creating it when
+ * missing. Matching ignores case, as Explorer does when a pasted folder merges.
+ * @returns {Promise<{ folder: Object, created: boolean }>}
  */
-async function findFolderIdByName(name, parentId = null, userId) {
-  const result = await pool.query(
-    `SELECT id
-     FROM files
-     WHERE user_id = $1
-       AND deleted_at IS NULL
-       AND type = 'folder'
-       AND name = $2
-       AND parent_id IS NOT DISTINCT FROM $3
-     LIMIT 1`,
-    [userId, name, parentId]
-  );
-  return result.rows[0]?.id || null;
+async function findOrCreateFolder(name, parentId, userId) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    // Uploads into one new tree run in parallel, across processes; without
+    // this lock two of them can both miss the folder and both create it.
+    await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [
+      `folder:${userId}:${parentId || ''}:${name.toLowerCase()}`,
+    ]);
+    await assertLiveFolders(client, [parentId], userId);
+    const existing = await client.query(
+      `SELECT id, name, type, size, modified, mime_type AS "mimeType", starred, shared
+         FROM files
+        WHERE user_id = $1 AND deleted_at IS NULL AND type = 'folder'
+          AND parent_id IS NOT DISTINCT FROM $2 AND LOWER(name) = LOWER($3)
+        ORDER BY name = $3 DESC, created_at, id
+        LIMIT 1`,
+      [userId, parentId, name]
+    );
+    const folder =
+      existing.rows[0] ||
+      (
+        await client.query(
+          `INSERT INTO files(id, name, type, parent_id, user_id) VALUES($1, $2, 'folder', $3, $4)
+           RETURNING id, name, type, size, modified, mime_type AS "mimeType", starred, shared`,
+          [generateId(16), name, parentId, userId]
+        )
+      ).rows[0];
+    await client.query('COMMIT');
+    const created = existing.rows.length === 0;
+    if (created) await invalidateAllFileCaches(userId, parentId, { includeStorage: false });
+    return { folder, created };
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export {
@@ -529,7 +555,7 @@ export {
   createFolder,
   createFileFromStreamedUpload,
   createFilesFromStreamedUploads,
-  findFolderIdByName,
+  findOrCreateFolder,
   getFile,
   getFilesByIds,
   renameFile,

@@ -5,7 +5,7 @@
 
 import { logger } from '../../config/logger.js';
 import { EventTypes, publishFileEvent } from '../../services/fileEvents.js';
-import { createFolder, findFolderIdByName } from '../../models/file.model.js';
+import { findOrCreateFolder } from '../../models/file.model.js';
 import { getUserStorageLimit, getUserStorageUsage } from '../../models/user.model.js';
 import { sendError } from '../../utils/response.js';
 import { checkStorageLimitExceeded } from '../../utils/storageUtils.js';
@@ -25,25 +25,19 @@ async function ensureFolderPath({ userId, baseParentId, folderSegments, folderId
       continue;
     }
 
-    const existingId = await findFolderIdByName(seg, parentId, userId);
-    if (existingId) {
-      folderIdCache.set(cacheKey, existingId);
-      parentId = existingId;
-      continue;
+    const { folder, created } = await findOrCreateFolder(seg, parentId, userId);
+    folderIdCache.set(cacheKey, folder.id);
+    if (created) {
+      // Publish so folders auto-created by bulk uploads show without a refresh.
+      await publishFileEvent(EventTypes.FOLDER_CREATED, {
+        id: folder.id,
+        name: folder.name,
+        type: folder.type,
+        parentId,
+        userId,
+      });
     }
-
-    const created = await createFolder(seg, parentId, userId);
-    folderIdCache.set(cacheKey, created.id);
-    parentId = created.id;
-
-    // Publish so folders auto-created by bulk uploads show without a refresh.
-    await publishFileEvent(EventTypes.FOLDER_CREATED, {
-      id: created.id,
-      name: created.name,
-      type: created.type,
-      parentId,
-      userId,
-    });
+    parentId = folder.id;
   }
   return parentId;
 }
