@@ -1,5 +1,6 @@
 import { body, param, query } from 'express-validator';
 
+import { MAX_ITEM_NAME_LENGTH, isValidItemName } from './fileName.js';
 import { ALL_PERMISSIONS } from './permissions.js';
 import { normalizeKnownProxies } from './knownProxies.js';
 import { ACCESS_TIME_FLUSH_RANGE, ACCESS_TIME_WINDOW_RANGE, SESSION_IDLE_DAYS_RANGE } from './activitySettings.js';
@@ -23,9 +24,17 @@ const newPasswordRule = (field, label = 'Password') =>
     .bail()
     .custom(value => Buffer.byteLength(value, 'utf8') <= MAX_PASSWORD_BYTES)
     .withMessage(`${label} must not exceed ${MAX_PASSWORD_BYTES} bytes`);
-// Allow letters (including Unicode), numbers, and special characters; forbid path/control and Windows-reserved
-// eslint-disable-next-line no-control-regex -- Intentional: exclude control chars for security
-const FILE_NAME_REGEX = /^[^\x00-\x1F\x7F/\\:*?"<>|]+$/;
+const ITEM_NAME_RULE = `Names can be up to ${MAX_ITEM_NAME_LENGTH} characters and cannot contain / or \\`;
+
+/** A file or folder name typed by the user, held to the same rule as uploads. */
+const itemNameRule = (field, label) =>
+  body(field)
+    .trim()
+    .notEmpty()
+    .withMessage(`${label} is required`)
+    .bail()
+    .custom(isValidItemName)
+    .withMessage(ITEM_NAME_RULE);
 
 const signupSchema = [
   body('email')
@@ -76,27 +85,13 @@ const changePasswordSchema = [
 ];
 
 const addFolderSchema = [
-  body('name')
-    .trim()
-    .notEmpty()
-    .withMessage('Folder name is required')
-    .matches(FILE_NAME_REGEX)
-    .withMessage('Invalid folder name (forbidden: / \\ : * ? " < > |)')
-    .isLength({ max: MAX_NAME_LENGTH })
-    .withMessage(`Folder name must not exceed ${MAX_NAME_LENGTH} characters`),
+  itemNameRule('name', 'Folder name'),
   body('parentId').optional({ nullable: true }).isString().withMessage('Parent ID must be a string'),
 ];
 
 const renameFileSchema = [
   body('id').notEmpty().withMessage('File ID is required').isString().withMessage('File ID must be a string'),
-  body('name')
-    .trim()
-    .notEmpty()
-    .withMessage('New name is required')
-    .matches(FILE_NAME_REGEX)
-    .withMessage('Invalid file name (forbidden: / \\ : * ? " < > |)')
-    .isLength({ max: MAX_NAME_LENGTH })
-    .withMessage(`File name must not exceed ${MAX_NAME_LENGTH} characters`),
+  itemNameRule('name', 'New name'),
 ];
 
 const downloadFileSchema = [

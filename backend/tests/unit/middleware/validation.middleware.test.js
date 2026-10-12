@@ -136,9 +136,9 @@ describe('addFolderSchema', () => {
   describe('the accepted character set is wider than the API docs claim', () => {
     // The wiki (API → Files) says a folder name "must contain only valid file
     // name characters (`a-zA-Z0-9_.-`)". The schema actually allows anything
-    // except control characters and the Windows-reserved set, which is what
-    // makes Unicode and spaced names work. A client written to the documented
-    // rule would reject names the server happily accepts.
+    // except "/", "\" and control characters, which is what makes Unicode and
+    // spaced names work. A client written to the documented rule would reject
+    // names the server happily accepts.
     it.each([
       ['spaces', 'My Documents'],
       ['Japanese', '報告書'],
@@ -154,9 +154,9 @@ describe('addFolderSchema', () => {
       expect((await post({ name })).status).toBe(200);
     });
 
-    it('still rejects the characters the schema really does forbid', async () => {
-      for (const char of ['/', '\\', ':', '*', '?', '"', '<', '>', '|']) {
-        expect((await post({ name: `bad${char}name` })).status).toBe(422);
+    it('accepts what only Windows forbids, as uploads do', async () => {
+      for (const char of [':', '*', '?', '"', '<', '>', '|']) {
+        expect((await post({ name: `ok${char}name` })).status).toBe(200);
       }
     });
 
@@ -169,12 +169,13 @@ describe('addFolderSchema', () => {
     expect((await post({ name: '   ' })).status).toBe(422);
   });
 
-  it.each(['/', '\\', ':', '*', '?', '"', '<', '>', '|'])('rejects the reserved character %s', async char => {
+  it.each(['/', '\\'])('rejects the separator %s', async char => {
     expect((await post({ name: `bad${char}name` })).status).toBe(422);
   });
 
-  it('rejects a name over 100 characters', async () => {
-    expect((await post({ name: 'a'.repeat(101) })).status).toBe(422);
+  it('allows 255 characters, the same limit as an upload', async () => {
+    expect((await post({ name: 'a'.repeat(255) })).status).toBe(200);
+    expect((await post({ name: 'a'.repeat(256) })).status).toBe(422);
   });
 
   it('accepts a null parentId, meaning the root folder', async () => {

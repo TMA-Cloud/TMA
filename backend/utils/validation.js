@@ -1,5 +1,7 @@
 import { logger } from '../config/logger.js';
 
+import { isValidItemName } from './fileName.js';
+
 /**
  * Input validation utilities to prevent injection attacks and validate user input
  */
@@ -10,32 +12,7 @@ import { logger } from '../config/logger.js';
  * @returns {boolean} True if valid name
  */
 function validateFileName(name) {
-  if (!name || typeof name !== 'string') return false;
-
-  const trimmed = name.trim();
-  if (trimmed.length === 0 || trimmed.length > 255) return false;
-
-  // Prevent path traversal: block separators and the "." / ".." dir refs.
-  // Embedded ".." (e.g. "report..pdf") is safe once separators are blocked.
-  if (trimmed.includes('/') || trimmed.includes('\\')) return false;
-  if (trimmed === '.' || trimmed === '..') return false;
-
-  // Prevent null bytes and control characters
-  // eslint-disable-next-line no-control-regex -- Intentional for security validation
-  if (trimmed.includes('\x00') || /[\x00-\x1F\x7F]/.test(trimmed)) return false;
-
-  // Prevent absolute paths (Unix and Windows)
-  if (trimmed.startsWith('/') || /^[a-zA-Z]:/.test(trimmed)) return false;
-
-  // Prevent reserved characters on Windows/Linux
-  const invalidChars = /[<>:"|?*]/;
-  if (invalidChars.test(trimmed)) return false;
-
-  // Prevent Windows reserved filenames
-  const windowsReserved = /^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(\.|$)/i;
-  if (windowsReserved.test(trimmed)) return false;
-
-  return true;
+  return isValidItemName(name);
 }
 
 /**

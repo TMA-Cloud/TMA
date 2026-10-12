@@ -7,6 +7,7 @@ import { resolveIkmForPath } from '../models/file/file.dek.model.js';
 import { isFilePathEncrypted, isValidPath } from './filePath.js';
 import { createDecryptStreamFromStream, resolveIkm } from './fileEncryption.js';
 import { contentDispositionValue } from './fileDownload.js';
+import { portableName } from './fileName.js';
 import { sendIfStorageNotConfigured } from './response.js';
 import storage from './storageDriver.js';
 
@@ -91,7 +92,9 @@ async function createStreamingZipArchive(res, archiveName, entries, onEntry, onS
       clientGone.signal.throwIfAborted();
       onEntry?.(entry);
       if (entry.type === 'file' && isValidPath(entry.path)) {
-        await addFileToArchive(archive, entry, entry.archivePath, clientGone.signal);
+        // Stored names may hold ":" or "?", which Windows cannot extract.
+        const nameInArchive = entry.archivePath.split('/').map(portableName).join('/');
+        await addFileToArchive(archive, entry, nameInArchive, clientGone.signal);
       }
     }
     archive.finalize();

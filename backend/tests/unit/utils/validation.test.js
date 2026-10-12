@@ -27,10 +27,10 @@ describe('validateFileName', () => {
     expect(validateFileName(undefined)).toBe(false);
   });
 
-  it('rejects names longer than 255 characters after trimming', () => {
-    expect(validateFileName('a'.repeat(256))).toBe(false);
+  it('holds the stored name, padding included, to 255 characters', () => {
     expect(validateFileName('a'.repeat(255))).toBe(true);
-    expect(validateFileName(`  ${'a'.repeat(255)}  `)).toBe(true);
+    expect(validateFileName('a'.repeat(256))).toBe(false);
+    expect(validateFileName(`  ${'a'.repeat(254)}`)).toBe(false);
   });
 
   describe('path traversal', () => {
@@ -50,11 +50,6 @@ describe('validateFileName', () => {
       expect(validateFileName('report..pdf')).toBe(true);
       expect(validateFileName('...')).toBe(true);
     });
-
-    it('rejects drive-letter prefixes regardless of case', () => {
-      expect(validateFileName('c:file.txt')).toBe(false);
-      expect(validateFileName('Z:file.txt')).toBe(false);
-    });
   });
 
   it('rejects null bytes and control characters', () => {
@@ -64,25 +59,20 @@ describe('validateFileName', () => {
     expect(validateFileName('file\x7F.txt')).toBe(false);
   });
 
-  it.each(['<', '>', ':', '"', '|', '?', '*'])('rejects the reserved character %s', char => {
-    expect(validateFileName(`file${char}name.txt`)).toBe(false);
+  // Windows-only limits are handled where a name meets Windows, not by refusing the upload.
+  it.each(['<', '>', ':', '"', '|', '?', '*'])('accepts the Windows-reserved character %s', char => {
+    expect(validateFileName(`file${char}name.txt`)).toBe(true);
   });
 
-  describe('Windows reserved device names', () => {
-    it.each(['CON', 'con', 'PRN', 'AUX', 'NUL', 'COM1', 'COM9', 'LPT1', 'LPT9'])('rejects %s', name => {
-      expect(validateFileName(name)).toBe(false);
-    });
+  it.each(['CON', 'nul.log', 'LPT1', 'c:file.txt', 'ends with a dot.', 'ends with a space '])(
+    'accepts %s, which only Windows refuses',
+    name => {
+      expect(validateFileName(name)).toBe(true);
+    }
+  );
 
-    it('rejects reserved names with an extension', () => {
-      expect(validateFileName('CON.txt')).toBe(false);
-      expect(validateFileName('nul.log')).toBe(false);
-    });
-
-    it('allows names that merely start with a reserved word', () => {
-      expect(validateFileName('CONSOLE.txt')).toBe(true);
-      expect(validateFileName('COM10.txt')).toBe(true);
-      expect(validateFileName('AUXILIARY')).toBe(true);
-    });
+  it('accepts the narrow no-break space Windows puts before AM and PM', () => {
+    expect(validateFileName('Standup 9_05\u202FAM.txt')).toBe(true);
   });
 });
 
