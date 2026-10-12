@@ -66,7 +66,7 @@ namespace TmaCloud.Fs
                             _bridge.Call("replace", w =>
                             {
                                 w.WriteString("id", targetId);
-                                w.WriteString("name", name);
+                                w.WriteString("name", WindowsNames.ToServer(name));
                                 w.WriteString("src", src);
                             });
                             of.Node.Id = targetId;
@@ -85,7 +85,7 @@ namespace TmaCloud.Fs
                         var res = _bridge.Call("upload", w =>
                         {
                             if (parentId != null) w.WriteString("parentId", parentId);
-                            w.WriteString("name", name);
+                            w.WriteString("name", WindowsNames.ToServer(name));
                             w.WriteString("src", src);
                         });
                         string id = GetIdString(res);
@@ -99,7 +99,7 @@ namespace TmaCloud.Fs
                 _bridge.Call("replace", w =>
                 {
                     w.WriteString("id", of.Node.Id);
-                    w.WriteString("name", of.Node.Name);
+                    w.WriteString("name", WindowsNames.ToServer(of.Node.Name));
                     w.WriteString("src", src);
                 });
                 Invalidate(ParentPath(of.Node.Path) ?? "\\");

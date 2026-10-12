@@ -107,7 +107,7 @@ namespace TmaCloud.Fs
                         {
                             res = _bridge.Call("mkdir", w =>
                             {
-                                w.WriteString("name", name);
+                                w.WriteString("name", WindowsNames.ToServer(name));
                                 if (parent.Id != null) w.WriteString("parentId", parent.Id);
                             });
                         }

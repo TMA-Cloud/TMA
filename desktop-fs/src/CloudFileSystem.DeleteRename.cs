@@ -105,7 +105,7 @@ namespace TmaCloud.Fs
                     _bridge.Call("rename", w =>
                     {
                         w.WriteString("id", node.Id);
-                        w.WriteString("name", newName);
+                        w.WriteString("name", WindowsNames.ToServer(newName));
                     });
                 }
                 // Whole subtree, not just this path: a folder rename moves its

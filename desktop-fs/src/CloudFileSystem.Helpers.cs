@@ -211,7 +211,7 @@ namespace TmaCloud.Fs
         {
             if (el.ValueKind != JsonValueKind.Object) return null;
             string name = el.TryGetProperty("name", out var np) && np.ValueKind == JsonValueKind.String
-                ? np.GetString() : null;
+                ? WindowsNames.ToWindows(np.GetString()) : null;
             if (!IsSafeName(name)) return null;
             string id = el.TryGetProperty("id", out var idp) ? JsonToStringId(idp) : null;
             string type = el.TryGetProperty("type", out var tp) ? tp.GetString() : "file";
