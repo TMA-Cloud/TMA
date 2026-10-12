@@ -147,6 +147,18 @@ function abortError() {
   return Object.assign(new Error('Upload cancelled'), { name: 'AbortError', aborted: true });
 }
 
+/** The server's own message when it sent JSON, so the issues dialog can word it. */
+function uploadFailure(status, body) {
+  let message = null;
+  try {
+    message = JSON.parse(body)?.message;
+  } catch {
+    // Not JSON: keep the body as it came.
+  }
+  if (typeof message === 'string' && message) return new Error(message);
+  return new Error(body ? `Upload failed (${status}): ${body}` : `Upload failed (${status})`);
+}
+
 /** Tear the request down when `signal` fires; the returned cleanup unhooks it. */
 function wireAbort(signal, teardown) {
   if (!signal) return () => {};
@@ -162,24 +174,27 @@ function wireAbort(signal, teardown) {
  * file object (including its new id).
  *
  * `options.onProgress(loaded, total)` feeds the renderer's upload card;
- * `options.signal` cancels an upload in flight.
+ * `options.signal` cancels an upload in flight. With `options.relativePath`
+ * ("Folder/sub/file.txt") it goes through the bulk endpoint, which creates the
+ * folders on the way, exactly as a dropped folder does.
  */
 function uploadNewFile(base, parentId, filePath, fileName, options) {
-  const { onProgress, signal } = options || {};
+  const { onProgress, signal, relativePath } = options || {};
   if (signal?.aborted) return Promise.reject(abortError());
-  const url = `${base}/api/files/upload`;
+  const url = `${base}/api/files/${relativePath ? 'upload/bulk' : 'upload'}`;
   return getCookieHeader(base).then(cookieHeader => {
     const boundary = `----ElectronFormBoundary${crypto.randomBytes(16).toString('hex')}`;
     const safeFileName = String(fileName).replace(/"/g, '\\"');
     const contentType = mimeForFilename(fileName) || 'application/octet-stream';
+    const field = (name, value) =>
+      `--${boundary}\r\nContent-Disposition: form-data; name="${name}"\r\n\r\n${value}\r\n`;
     let preamble = '';
-    if (parentId) {
-      preamble += `--${boundary}\r\nContent-Disposition: form-data; name="parentId"\r\n\r\n${parentId}\r\n`;
-    }
+    if (parentId) preamble += field('parentId', parentId);
+    if (relativePath) preamble += field('relativePaths', relativePath);
     preamble += clientMtimeField(boundary, filePath);
     preamble +=
       `--${boundary}\r\n` +
-      `Content-Disposition: form-data; name="file"; filename="${safeFileName}"\r\n` +
+      `Content-Disposition: form-data; name="${relativePath ? 'files' : 'file'}"; filename="${safeFileName}"\r\n` +
       `Content-Type: ${contentType}\r\n\r\n`;
     const closing = `\r\n--${boundary}--\r\n`;
 
@@ -207,7 +222,7 @@ function uploadNewFile(base, parentId, filePath, fileName, options) {
         response.on('end', () => {
           unwire();
           if (status < 200 || status >= 300) {
-            return reject(new Error(body ? `Upload failed (${status}): ${body}` : `Upload failed (${status})`));
+            return reject(uploadFailure(status, body));
           }
           try {
             resolve(body ? JSON.parse(body) : {});
@@ -317,7 +332,7 @@ function uploadNewFileData(base, parentId, data, fileName, options) {
         response.on('end', () => {
           unwire();
           if (status < 200 || status >= 300) {
-            reject(new Error(body ? `Upload failed (${status}): ${body}` : `Upload failed (${status})`));
+            reject(uploadFailure(status, body));
             return;
           }
           try {

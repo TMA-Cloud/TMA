@@ -19,6 +19,7 @@ const {
   cleanTempDirsByPrefix,
   uploadNewFile,
   uploadNewFileData,
+  collectPasteEntries,
 } = require('../../utils/file-utils.cjs');
 const {
   readFilesFromClipboard,
@@ -63,6 +64,75 @@ async function runClipboardUpload({ win, cancels, uploadId, fileName, fileSize }
   } finally {
     cancels.delete(uploadId);
   }
+}
+
+/** The web app's BULK_AGGREGATE_THRESHOLD: past this, or with folders, one card stands for the paste. */
+const PER_FILE_CARD_LIMIT = 8;
+/** The web app's BULK_BATCH_CONCURRENCY. */
+const PASTE_UPLOAD_CONCURRENCY = 3;
+
+/** The web app's describeBulkUpload wording: "Trip — 12 files", "2 folders — 40 files". */
+function describePaste(entries) {
+  const roots = new Set(entries.filter(e => e.relativePath).map(e => e.relativePath.split('/')[0]));
+  const countLabel = `${entries.length.toLocaleString()} files`;
+  if (roots.size === 1) return `${[...roots][0]} — ${countLabel}`;
+  if (roots.size > 1) return `${roots.size} folders — ${countLabel}`;
+  return countLabel;
+}
+
+/**
+ * A pasted folder, or many files, under one card: combined byte progress and
+ * one cancel, as a dropped folder gets in the web app. Per-file refusals are
+ * collected for the issues dialog rather than stopping the batch.
+ */
+async function runPasteBatch({ win, cancels, uploadId, entries }, upload) {
+  const controller = new AbortController();
+  cancels.set(uploadId, controller);
+  const label = describePaste(entries);
+  const total = entries.reduce((sum, entry) => sum + entry.size, 0);
+  sendUploadStatus(win, { state: 'started', id: uploadId, fileName: label, fileSize: total });
+  const emit = makeUploadProgressEmitter(win, uploadId);
+  const sent = new Array(entries.length).fill(0);
+  let loaded = 0;
+  const saved = [];
+  const failed = [];
+  let next = 0;
+  const worker = async () => {
+    while (next < entries.length && !controller.signal.aborted) {
+      const index = next++;
+      const entry = entries[index];
+      const onProgress = bytes => {
+        loaded += bytes - sent[index];
+        sent[index] = bytes;
+        emit?.(loaded, total);
+      };
+      try {
+        await upload(entry, { signal: controller.signal, onProgress });
+        saved.push(entry.relativePath || path.basename(entry.filePath));
+      } catch (error) {
+        if (error?.aborted) return;
+        // Counted as done, as the web app does, so the bar still reaches the end.
+        onProgress(entry.size);
+        failed.push({
+          fileName: entry.relativePath || path.basename(entry.filePath),
+          reason: error?.message || 'Upload failed',
+        });
+      }
+    }
+  };
+  try {
+    await Promise.all(Array.from({ length: Math.min(PASTE_UPLOAD_CONCURRENCY, entries.length) }, worker));
+  } finally {
+    cancels.delete(uploadId);
+  }
+  if (controller.signal.aborted) return { saved, failed: [] };
+  sendUploadStatus(
+    win,
+    saved.length > 0
+      ? { state: 'completed', id: uploadId, fileName: label }
+      : { state: 'error', id: uploadId, fileName: label, error: failed[0]?.reason || 'Upload failed' }
+  );
+  return { saved, failed };
 }
 
 /** Line endings normalised, since Windows may hand text back with CRLF. */
@@ -116,40 +186,58 @@ function registerClipboardHandlers() {
   ipcMain.handle('clipboard:uploadFiles', async (event, payload) => {
     const origin = validateOrigin(payload?.origin);
     if (process.platform !== 'win32' || !origin) return { ok: false, error: 'Invalid request' };
-    const paths = await readClipboardFilePaths();
-    if (paths.length === 0) return { ok: false, fallback: true };
-    const sizes = [];
-    for (const filePath of paths) {
-      sizes.push((await fs.promises.stat(filePath)).size);
+    const roots = await readClipboardFilePaths();
+    if (roots.length === 0) return { ok: false, fallback: true };
+    let entries;
+    let skipped;
+    try {
+      ({ entries, skipped } = await collectPasteEntries(roots));
+    } catch (error) {
+      return { ok: false, error: error.message };
+    }
+    if (entries.length === 0 && skipped.length === 0) {
+      return { ok: false, error: 'Nothing to upload: the copied folders are empty' };
     }
     try {
       await precheckUploads(
         origin,
-        paths.map((filePath, i) => ({ name: path.basename(filePath), size: sizes[i] }))
+        entries.map(entry => ({ name: path.basename(entry.filePath), size: entry.size }))
       );
     } catch (error) {
       return { ok: false, error: error.message };
     }
     const win = BrowserWindow.fromWebContents(event.sender);
     const batchId = `clipboard-${Date.now()}`;
+    const parentId = payload.parentId || null;
+    const upload = (entry, options) =>
+      uploadNewFile(origin, parentId, entry.filePath, path.basename(entry.filePath), {
+        ...options,
+        relativePath: entry.relativePath || undefined,
+      });
     const uploaded = [];
-    const failed = [];
-    let next = 0;
-    const workers = Array.from({ length: Math.min(3, paths.length) }, async () => {
-      for (;;) {
-        const index = next++;
-        if (index >= paths.length) return;
-        const filePath = paths[index];
-        const fileName = path.basename(filePath);
-        const result = await runClipboardUpload(
-          { win, cancels, uploadId: `${batchId}-${index}`, fileName, fileSize: sizes[index] },
-          options => uploadNewFile(origin, payload.parentId || null, filePath, fileName, options)
-        );
-        if (result.saved) uploaded.push(fileName);
-        else if (result.failure) failed.push(result.failure);
-      }
-    });
-    await Promise.all(workers);
+    const failed = [...skipped];
+    if (entries.some(entry => entry.relativePath) || entries.length > PER_FILE_CARD_LIMIT) {
+      const result = await runPasteBatch({ win, cancels, uploadId: `${batchId}-all`, entries }, upload);
+      uploaded.push(...result.saved);
+      failed.push(...result.failed);
+    } else {
+      let next = 0;
+      const workers = Array.from({ length: Math.min(PASTE_UPLOAD_CONCURRENCY, entries.length) }, async () => {
+        for (;;) {
+          const index = next++;
+          if (index >= entries.length) return;
+          const entry = entries[index];
+          const fileName = path.basename(entry.filePath);
+          const result = await runClipboardUpload(
+            { win, cancels, uploadId: `${batchId}-${index}`, fileName, fileSize: entry.size },
+            options => upload(entry, options)
+          );
+          if (result.saved) uploaded.push(fileName);
+          else if (result.failure) failed.push(result.failure);
+        }
+      });
+      await Promise.all(workers);
+    }
     // A refused file is an outcome, not a failed paste: `ok` stays true and the
     // reasons go to the renderer's upload-issues dialog.
     sendUploadStatus(win, { state: 'finished', batchId, saved: uploaded.length, failed });

@@ -32,6 +32,7 @@ const {
   cleanTempEditDirs,
 } = require('./file-utils/tempdirs.cjs');
 const { setClipboardToPaths } = require('./file-utils/clipboard.cjs');
+const { collectPasteEntries } = require('./file-utils/walk.cjs');
 const { hashFile } = require('./file-utils/hash.cjs');
 
 module.exports = {
@@ -60,4 +61,5 @@ module.exports = {
   uploadNewFile,
   uploadNewFileData,
   getCookieHeader,
+  collectPasteEntries,
 };

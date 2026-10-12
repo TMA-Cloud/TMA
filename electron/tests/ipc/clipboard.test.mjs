@@ -500,3 +500,120 @@ describe('clipboard:writeFilesFromServer', () => {
     });
   });
 });
+
+describe('pasting folders copied in Explorer', () => {
+  /** A folder tree on disk, as Explorer would put it on the clipboard. */
+  function copiedTree() {
+    const root = path.join(createTempRoot(), 'Trip');
+    writeFile(root, 'itinerary.txt', 'PLAN');
+    writeFile(path.join(root, 'Day 1'), 'photo.jpg', 'JPEG-BYTES');
+    fs.mkdirSync(path.join(root, 'Empty'), { recursive: true });
+    return root;
+  }
+
+  const bulkRequests = () => __mock.requests().filter(item => item.url.endsWith('/api/files/upload/bulk'));
+
+  it('uploads the tree through the bulk endpoint, each file with its path below the folder', async () => {
+    const { event } = windowEvent();
+    fakePowerShell({ dropList: `${copiedTree()}\r\n` });
+    routeUploadPreflight();
+    __mock.route('/api/files/upload/bulk', { statusCode: 200, body: '{"files":[]}' });
+
+    const result = await __mock.invoke('clipboard:uploadFiles', { origin: SERVER_URL, parentId: 'here' }, event);
+
+    expect(result).toEqual({ ok: true, names: expect.any(Array), failed: [] });
+    expect([...result.names].sort()).toEqual(['Trip/Day 1/photo.jpg', 'Trip/itinerary.txt']);
+    const bodies = bulkRequests().map(request => request.bodyText());
+    expect(bodies).toHaveLength(2);
+    expect(bodies.some(body => body.includes('Trip/Day 1/photo.jpg') && body.includes('JPEG-BYTES'))).toBe(true);
+    expect(bodies.every(body => body.includes('name="parentId"\r\n\r\nhere'))).toBe(true);
+  });
+
+  it('shows the whole paste as one card named after the folder, as a dropped folder is', async () => {
+    const { win, event } = windowEvent();
+    fakePowerShell({ dropList: `${copiedTree()}\r\n` });
+    routeUploadPreflight();
+    __mock.route('/api/files/upload/bulk', { statusCode: 200, body: '{"files":[]}' });
+
+    await __mock.invoke('clipboard:uploadFiles', { origin: SERVER_URL, parentId: null }, event);
+
+    const statuses = uploadStatuses(win);
+    const started = statuses.filter(s => s.state === 'started');
+    expect(started).toHaveLength(1);
+    expect(started[0]).toMatchObject({ fileName: 'Trip — 2 files', fileSize: 14 });
+    expect(statuses).toContainEqual(expect.objectContaining({ state: 'completed', id: started[0].id }));
+    expect(statuses[statuses.length - 1]).toMatchObject({ state: 'finished', saved: 2, failed: [] });
+  });
+
+  it('names the refused file by its path inside the folder and still uploads the rest', async () => {
+    const { event } = windowEvent();
+    fakePowerShell({ dropList: `${copiedTree()}\r\n` });
+    routeUploadPreflight();
+    __mock.route(request => request.bodyText().includes('JPEG-BYTES'), {
+      statusCode: 400,
+      body: '{"message":"Invalid file name"}',
+    });
+    __mock.route('/api/files/upload/bulk', { statusCode: 200, body: '{"files":[]}' });
+
+    const result = await __mock.invoke('clipboard:uploadFiles', { origin: SERVER_URL, parentId: null }, event);
+
+    expect(result.names).toEqual(['Trip/itinerary.txt']);
+    // The server's message, not the raw JSON body, so the issues dialog can word it.
+    expect(result.failed).toEqual([{ fileName: 'Trip/Day 1/photo.jpg', reason: 'Invalid file name' }]);
+  });
+
+  it('still fills the progress bar when a file in the folder is refused', async () => {
+    const { win, event } = windowEvent();
+    fakePowerShell({
+      dropList: `${copiedTree()}
+`,
+    });
+    routeUploadPreflight();
+    __mock.route(request => request.bodyText().includes('JPEG-BYTES'), { statusCode: 415, body: '{"message":"nope"}' });
+    __mock.route('/api/files/upload/bulk', { statusCode: 200, body: '{"files":[]}' });
+
+    await __mock.invoke('clipboard:uploadFiles', { origin: SERVER_URL, parentId: null }, event);
+
+    const progress = win.webContents.sent.filter(s => s.channel === 'clipboard:uploadProgress');
+    expect(progress[progress.length - 1].payload).toMatchObject({ loaded: 14, total: 14 });
+  });
+
+  it('reports a link inside the folder instead of following it', async () => {
+    const { event } = windowEvent();
+    const root = copiedTree();
+    fs.symlinkSync(root, path.join(root, 'Loop'), 'junction');
+    fakePowerShell({ dropList: `${root}\r\n` });
+    routeUploadPreflight();
+    __mock.route('/api/files/upload/bulk', { statusCode: 200, body: '{"files":[]}' });
+
+    const result = await __mock.invoke('clipboard:uploadFiles', { origin: SERVER_URL, parentId: null }, event);
+
+    expect(result.names).toHaveLength(2);
+    expect(result.failed).toEqual([{ fileName: 'Trip/Loop', reason: 'Links are not uploaded' }]);
+  });
+
+  it('says so when the copied folders hold no files', async () => {
+    const { event } = windowEvent();
+    const empty = path.join(createTempRoot(), 'Nothing');
+    fs.mkdirSync(path.join(empty, 'Inside'), { recursive: true });
+    fakePowerShell({ dropList: `${empty}\r\n` });
+
+    const result = await __mock.invoke('clipboard:uploadFiles', { origin: SERVER_URL, parentId: null }, event);
+
+    expect(result).toEqual({ ok: false, error: 'Nothing to upload: the copied folders are empty' });
+    expect(bulkRequests()).toHaveLength(0);
+  });
+
+  it('keeps loose files on the single-file endpoint with a card each', async () => {
+    const { win, event } = windowEvent();
+    const file = writeFile(createTempRoot(), 'loose.txt', 'LOOSE');
+    fakePowerShell({ dropList: `${file}\r\n` });
+    routeUploadPreflight();
+    __mock.route('/api/files/upload', { statusCode: 201, body: '{}' });
+
+    await __mock.invoke('clipboard:uploadFiles', { origin: SERVER_URL, parentId: null }, event);
+
+    expect(bulkRequests()).toHaveLength(0);
+    expect(uploadStatuses(win)[0]).toMatchObject({ state: 'started', fileName: 'loose.txt' });
+  });
+});

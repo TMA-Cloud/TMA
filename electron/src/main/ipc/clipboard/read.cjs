@@ -32,8 +32,9 @@ async function readClipboardFilePaths() {
       .slice(0, MAX_PATHS_FROM_TEXT);
     const valid = [];
     for (const filePath of paths) {
+      // Folders too: the paste expands them, as a dropped folder expands.
       const stat = await fsPromises.stat(filePath).catch(() => null);
-      if (stat?.isFile()) valid.push(filePath);
+      if (stat?.isFile() || stat?.isDirectory()) valid.push(filePath);
     }
     if (valid.length > 0) return valid;
   } catch {
