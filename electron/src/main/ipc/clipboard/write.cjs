@@ -10,6 +10,7 @@ const { ipcMain, BrowserWindow, clipboard } = require('electron');
 const {
   PASTE_DIR_PREFIX,
   sanitizeFileName,
+  fitFileName,
   deduplicateFileName,
   setClipboardToPaths,
   downloadToFile,
@@ -318,9 +319,10 @@ function registerClipboardHandlers() {
       const jobs = [];
       for (const item of payload.items) {
         if (!item || !item.id || !item.name) continue;
-        const baseName = deduplicateFileName(sanitizeFileName(String(item.name)), seen);
+        const baseName = deduplicateFileName(fitFileName(pasteDir, sanitizeFileName(String(item.name)), 8), seen);
         seen.add(baseName);
         jobs.push({
+          name: String(item.name),
           filePath: path.join(pasteDir, baseName),
           downloadUrl: `${base}/api/files/${encodeURIComponent(String(item.id))}/download`,
         });
@@ -359,7 +361,8 @@ function registerClipboardHandlers() {
         return { ok: false, superseded: true };
       }
       await setClipboardToPaths(writtenPaths);
-      return { ok: true };
+      // Partly copied is still copied, but the toast has to say what is missing.
+      return { ok: true, failed: jobs.filter((_, i) => !done[i]).map(job => job.name) };
     } catch (e) {
       return { ok: false, error: e.message };
     }

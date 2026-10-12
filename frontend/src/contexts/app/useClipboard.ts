@@ -65,6 +65,12 @@ export function useClipboard({ showToast, files, refreshFiles, moveFiles, copyFi
     copyFilesToPcClipboard(fileItems.map(f => ({ id: f.id, name: f.name })))
       .then(result => {
         if (result.ok) {
+          const failed = result.failed ?? [];
+          if (failed.length > 0) {
+            const missing = failed.length === 1 ? `"${failed[0]}"` : `${failed.length} files`;
+            showToast(`Copied ${label}, but ${missing} could not be copied for Explorer`, 'error');
+            return;
+          }
           const folderNote =
             folderCount > 0 ? ` (${folderCount} folder${folderCount !== 1 ? 's' : ''} cloud-only)` : '';
           showToast(`Copied ${label}${folderNote} — paste in cloud or in Explorer`, 'success');

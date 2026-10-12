@@ -85,8 +85,38 @@ function validateOrigin(origin) {
   }
 }
 
+// Microsoft's "Naming Files" rules: reserved characters and controls, device
+// names (also with an extension or a superscript digit), and a trailing dot or space.
+// eslint-disable-next-line no-control-regex -- Intentional: Windows refuses control characters
+const WINDOWS_RESERVED_CHARS = /[/\\:*?"<>|\x00-\x1F]/g;
+const WINDOWS_DEVICE_NAME = /^(CON|PRN|AUX|NUL|COM[1-9¹²³]|LPT[1-9¹²³])(\.|$)/i;
+
+/** A name Windows and Explorer can create, for a stored name that may not be one. */
 function sanitizeFileName(name) {
-  return name.replace(/[/\\:*?"<>|]/g, '_').trim() || 'file';
+  const safe = String(name)
+    .replace(WINDOWS_RESERVED_CHARS, '_')
+    .trim()
+    .replace(/[. ]+$/, '');
+  if (!safe) return 'file';
+  return WINDOWS_DEVICE_NAME.test(safe) ? `_${safe}` : safe;
+}
+
+/** Explorer still cannot paste from a path past MAX_PATH unless long paths are enabled. */
+const MAX_SHELL_PATH = 259;
+
+/** Shorten the stem so dir\name stays within MAX_PATH, keeping the extension; `reserve` leaves room for a " (n)" suffix. */
+function fitFileName(dir, name, reserve = 0) {
+  const room = MAX_SHELL_PATH - dir.length - 1 - reserve;
+  if (name.length <= room) return name;
+  const ext = path.extname(name);
+  const keep = Math.max(1, room - ext.length);
+  // Array.from counts code points, so an emoji is never cut in half.
+  return (
+    Array.from(path.basename(name, ext))
+      .slice(0, keep)
+      .join('')
+      .replace(/[. ]+$/, '') + ext
+  );
 }
 
 /** True when opening this name through the shell would run it as a program. */
@@ -98,18 +128,20 @@ function isExecutableFileName(name) {
 
 /**
  * Append a "(n)" suffix to a filename until it's not present in the given set.
+ * Case is ignored, as NTFS ignores it: "A.txt" and "a.txt" are one file there.
  */
 function deduplicateFileName(base, seenSet) {
-  if (!seenSet.has(base)) return base;
+  const taken = new Set([...seenSet].map(name => name.toLowerCase()));
+  if (!taken.has(base.toLowerCase())) return base;
   const ext = path.extname(base);
   const stem = path.basename(base, ext) || base;
   let n = 1;
   let candidate = `${stem} (${n})${ext}`;
-  while (seenSet.has(candidate)) {
+  while (taken.has(candidate.toLowerCase())) {
     n += 1;
     candidate = `${stem} (${n})${ext}`;
   }
   return candidate;
 }
 
-module.exports = { validateOrigin, sanitizeFileName, deduplicateFileName, isExecutableFileName };
+module.exports = { validateOrigin, sanitizeFileName, fitFileName, deduplicateFileName, isExecutableFileName };

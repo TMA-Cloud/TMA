@@ -55,7 +55,7 @@ declare global {
         writeFilesFromServer: (payload: {
           origin: string;
           items: { id: string; name: string }[];
-        }) => Promise<{ ok: boolean; error?: string; superseded?: boolean }>;
+        }) => Promise<{ ok: boolean; error?: string; superseded?: boolean; failed?: string[] }>;
       };
       files?: {
         editWithDesktop: (payload: { origin: string; item: { id: string; name: string } }) => Promise<{
@@ -229,7 +229,7 @@ export async function uploadElectronClipboardFiles(parentId: string | null): Pro
 /** Fetch files and put on OS clipboard so user can paste in Explorer. */
 export async function copyFilesToPcClipboard(
   items: { id: string; name: string }[]
-): Promise<{ ok: boolean; error?: string; superseded?: boolean }> {
+): Promise<{ ok: boolean; error?: string; superseded?: boolean; failed?: string[] }> {
   try {
     const clip = window.electronAPI?.clipboard;
     if (!isElectron() || !clip?.writeFilesFromServer || !items.length) {

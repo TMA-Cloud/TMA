@@ -421,7 +421,7 @@ describe('clipboard:writeFilesFromServer', () => {
 
     const result = await __mock.invoke('clipboard:writeFilesFromServer', { origin: SERVER_URL, items });
 
-    expect(result).toEqual({ ok: true });
+    expect(result).toEqual({ ok: true, failed: [] });
     expect(fs.readdirSync(pasteDir()).sort()).toEqual(['a.txt', 'b.txt']);
   });
 
@@ -464,14 +464,15 @@ describe('clipboard:writeFilesFromServer', () => {
     expect(fs.readdirSync(pasteDir())).toEqual(['c.txt']);
   });
 
-  it('keeps the files that downloaded and discards the partial one', async () => {
+  it('keeps the files that downloaded, discards the partial one, and names it', async () => {
     fakePowerShell();
     __mock.route(r => r.url.includes('/files/1/'), { statusCode: 500, body: 'boom' });
     __mock.route('/download', { statusCode: 200, body: 'BODY' });
 
     const result = await __mock.invoke('clipboard:writeFilesFromServer', { origin: SERVER_URL, items });
 
-    expect(result).toEqual({ ok: true });
+    // Reported, so the toast can say what Explorer will not get.
+    expect(result).toEqual({ ok: true, failed: ['a.txt'] });
     expect(fs.readdirSync(pasteDir())).toEqual(['b.txt']);
   });
 

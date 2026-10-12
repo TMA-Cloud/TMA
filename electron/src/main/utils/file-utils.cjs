@@ -20,6 +20,7 @@ const {
 const {
   validateOrigin,
   sanitizeFileName,
+  fitFileName,
   deduplicateFileName,
   isExecutableFileName,
 } = require('./file-utils/names.cjs');
@@ -39,6 +40,7 @@ module.exports = {
   PASTE_DIR_PREFIX,
   EDIT_DIR_PREFIX,
   sanitizeFileName,
+  fitFileName,
   deduplicateFileName,
   isExecutableFileName,
   createTempDir,

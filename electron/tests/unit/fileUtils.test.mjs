@@ -14,6 +14,7 @@ const {
   PASTE_DIR_PREFIX,
   EDIT_DIR_PREFIX,
   sanitizeFileName,
+  fitFileName,
   deduplicateFileName,
   isExecutableFileName,
   createTempDir,
@@ -56,6 +57,47 @@ describe('sanitizeFileName', () => {
     expect(sanitizeFileName('../../etc/passwd')).toBe('.._.._etc_passwd');
     expect(path.basename(sanitizeFileName('../../etc/passwd'))).toBe('.._.._etc_passwd');
   });
+
+  it('moves device names, with an extension or a superscript digit, off the device', () => {
+    for (const name of ['CON', 'con.txt', 'NUL.tar.gz', 'COM1.log', 'LPT9', 'COM¹', 'AUX']) {
+      expect(sanitizeFileName(name)).toBe(`_${name}`);
+    }
+    expect(sanitizeFileName('CONSOLE.txt')).toBe('CONSOLE.txt');
+    expect(sanitizeFileName('COM10.txt')).toBe('COM10.txt');
+  });
+
+  it('drops the trailing dots and spaces the shell cannot handle', () => {
+    expect(sanitizeFileName('notes.')).toBe('notes');
+    expect(sanitizeFileName('draft . . ')).toBe('draft');
+    expect(sanitizeFileName('...')).toBe('file');
+  });
+
+  it('replaces control characters', () => {
+    expect(sanitizeFileName('a\tb\nc.txt')).toBe('a_b_c.txt');
+  });
+});
+
+describe('fitFileName', () => {
+  const dir = `C:\\Users\\me\\AppData\\Local\\Temp\\tma-cloud-paste-1`;
+
+  it('leaves a name that fits alone', () => {
+    expect(fitFileName(dir, 'report.pdf')).toBe('report.pdf');
+  });
+
+  it('shortens the stem to keep the full path within MAX_PATH, keeping the extension', () => {
+    const fitted = fitFileName(dir, `${'a'.repeat(300)}.docx`);
+    expect(fitted.endsWith('.docx')).toBe(true);
+    expect(`${dir}\\${fitted}`.length).toBe(259);
+  });
+
+  it('leaves room for a "(n)" suffix when asked', () => {
+    expect(`${dir}\\${fitFileName(dir, `${'a'.repeat(300)}.docx`, 8)}`.length).toBe(251);
+  });
+
+  it('never splits an emoji', () => {
+    const fitted = fitFileName(dir, `${'📁'.repeat(200)}.txt`);
+    expect(fitted).toMatch(/^(📁)+\.txt$/u);
+  });
 });
 
 describe('isExecutableFileName', () => {
@@ -97,6 +139,11 @@ describe('deduplicateFileName', () => {
 
   it('treats a dotfile name as having no stem to split', () => {
     expect(deduplicateFileName('.env', new Set(['.env']))).toBe('.env (1)');
+  });
+
+  it('ignores case, as NTFS does, so one file cannot overwrite the other', () => {
+    expect(deduplicateFileName('Report.pdf', new Set(['report.pdf']))).toBe('Report (1).pdf');
+    expect(deduplicateFileName('A.txt', new Set(['a.txt', 'A (1).TXT']))).toBe('A (2).txt');
   });
 });
 
