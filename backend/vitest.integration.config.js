@@ -4,6 +4,8 @@ import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { defineConfig } from 'vitest/config';
 
+import { withDatabase } from './utils/connectionUrl.js';
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const abs = rel => path.resolve(__dirname, rel).replace(/\\/g, '/');
 
@@ -11,6 +13,12 @@ const abs = rel => path.resolve(__dirname, rel).replace(/\\/g, '/');
 // Postgres and Redis from the project .env, so the connection details have to
 // be loaded here — nothing in the module graph calls dotenv except server.js.
 const { parsed = {} } = dotenv.config({ path: path.join(__dirname, '..', '.env'), processEnv: {} });
+
+/** A URL from .env or the environment (CI), pointed at a scratch database. Unset, setup.js reports it. */
+function scratchUrl(name, database) {
+  const url = parsed[name] || process.env[name];
+  return url ? withDatabase(url, database) : '';
+}
 
 export default defineConfig({
   resolve: {
@@ -42,9 +50,9 @@ export default defineConfig({
       LOG_LEVEL: 'silent',
 
       // A database of its own, so the working dev data is never truncated.
-      DB_NAME: 'tma_cloud_test',
+      DATABASE_URL: scratchUrl('DATABASE_URL', 'tma_cloud_test'),
       // A Redis database of its own, so flushing cannot clear dev sessions.
-      REDIS_DB: '15',
+      REDIS_URL: scratchUrl('REDIS_URL', '15'),
 
       // Deterministic, and unrelated to the key protecting real dev files.
       FILE_ENCRYPTION_KEY: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',

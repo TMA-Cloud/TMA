@@ -84,10 +84,28 @@ main() {
   set_env() {
     local key="$1" value="$2" file="$3"
     if grep -q "^${key}=" "$file"; then
-      sed -i.bak "s|^${key}=.*|${key}=${value}|" "$file" && rm -f "${file}.bak"
+      # awk takes the value from the environment, so & | \ in a URL stay literal.
+      K="$key" V="$value" awk 'index($0, ENVIRON["K"] "=") == 1 { $0 = ENVIRON["K"] "=" ENVIRON["V"] } { print }' \
+        "$file" >"${file}.tmp" && mv -f "${file}.tmp" "$file"
     else
       printf '%s=%s\n' "$key" "$value" >>"$file"
     fi
+  }
+
+  # Swap the password in KEY=scheme://user:password@host/... and keep the rest.
+  set_url_password() {
+    local key="$1" password="$2" file="$3" url rest authority user=""
+    url="$(grep "^${key}=" "$file" | tail -n1 | cut -d= -f2-)"
+    url="${url%$'\r'}"
+    [[ "$url" == *://* ]] || die "${key} in .env is not a URL"
+    rest="${url#*://}"
+    authority="${rest%%/*}"
+    if [[ "$authority" == *@* ]]; then
+      user="${authority%@*}"
+      user="${user%%:*}"
+      rest="${rest#*@}"
+    fi
+    set_env "$key" "${url%%://*}://${user}:${password}@${rest}" "$file"
   }
 
   # Compose bind-mounts the key file with its host owner and mode, as setup.sh sets them.
@@ -137,14 +155,13 @@ main() {
       entries="1:${entries}"
     fi
     printf '%s\n' "$entries" | grep -qv '^[0-9][0-9]*:.' && die "${key_file} has a line that is not \"version:key\""
-    local newest recorded db_user db_name
+    local newest recorded
     newest="$(printf '%s\n' "$entries" | cut -d: -f1 | sort -n | tail -1)"
     # A version the app already recorded a check value for, from an earlier
     # attempt, would never match a new key, so the next number must pass it.
     docker compose up -d --wait --wait-timeout 180 postgres redis </dev/null || die "PostgreSQL or Redis did not start"
-    db_user="$(grep '^DB_USER=' .env | tail -n1 | cut -d= -f2-)"
-    db_name="$(grep '^DB_NAME=' .env | tail -n1 | cut -d= -f2-)"
-    recorded="$(docker compose exec -T postgres psql -U "${db_user:-postgres}" -d "${db_name:-tma_cloud_storage}" \
+    # shellcheck disable=SC2016 # expanded by the container's shell, from its DATABASE_URL
+    recorded="$(docker compose exec -T postgres sh -c 'exec psql "$DATABASE_URL" "$@"' sh \
       -tAc 'SELECT COALESCE(MAX(version), 0) FROM kek_checks' </dev/null 2>/dev/null || true)"
     [[ "$recorded" =~ ^[0-9]+$ ]] || recorded=0
     ((recorded > newest)) && newest=$recorded
@@ -161,14 +178,14 @@ main() {
   fi
 
   if ((do_redis)); then
-    set_env REDIS_PASSWORD "$(random_hex 32)" "$new_env"
+    set_url_password REDIS_URL "$(random_hex 32)" "$new_env"
     info "Prepared a new Redis password"
   fi
 
   if ((do_db)); then
     local db_password
     db_password="$(random_hex 32)"
-    set_env DB_PASSWORD "$db_password" "$new_env"
+    set_url_password DATABASE_URL "$db_password" "$new_env"
     # The running app changes its own role's password; .env follows right after.
     ROTATE_CHANGED=1
     printf '%s' "$db_password" | app_cli db-password --stdin ||

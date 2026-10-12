@@ -1,23 +1,11 @@
 import { createClient } from 'redis';
 
+import { requireUrl } from '../utils/connectionUrl.js';
+
 import { logger } from './logger.js';
 
-// Redis configuration
-const redisConfig = {
-  socket: {
-    host: process.env.REDIS_HOST || 'localhost',
-    port: Number(process.env.REDIS_PORT) || 6379,
-  },
-  database: Number(process.env.REDIS_DB) || 0,
-};
-
-// Add password if provided
-if (process.env.REDIS_PASSWORD) {
-  redisConfig.password = process.env.REDIS_PASSWORD;
-}
-
-// Create Redis client
-const redisClient = createClient(redisConfig);
+// node-redis reads host, port, credentials, database and TLS (rediss://) from the URL.
+const redisClient = createClient({ url: requireUrl('REDIS_URL', process.env.REDIS_URL) });
 
 // Error handling
 redisClient.on('error', err => {

@@ -7,11 +7,13 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { hasEnvValue, setEnvValue, writeFileAtomic } from '../../../scripts/lib/envFile.js';
 
 describe('setEnvValue', () => {
-  const text = '# DB_PASSWORD=commented\nDB_HOST=postgres\nDB_PASSWORD=old\nREDIS_PASSWORD=r\n';
+  const text =
+    '# DATABASE_URL=commented\nNODE_ENV=production\nDATABASE_URL=postgresql://u:old@h/db\nREDIS_URL=redis://r\n';
 
   it('replaces the active line and leaves comments alone', () => {
-    expect(setEnvValue(text, 'DB_PASSWORD', 'new')).toBe(
-      '# DB_PASSWORD=commented\nDB_HOST=postgres\nDB_PASSWORD=new\nREDIS_PASSWORD=r\n'
+    expect(setEnvValue(text, 'DATABASE_URL', 'postgresql://u:new@h/db?sslmode=disable&connect_timeout=5')).toBe(
+      '# DATABASE_URL=commented\nNODE_ENV=production\n' +
+        'DATABASE_URL=postgresql://u:new@h/db?sslmode=disable&connect_timeout=5\nREDIS_URL=redis://r\n'
     );
   });
 
@@ -25,9 +27,9 @@ describe('setEnvValue', () => {
   });
 
   it('does not match a key that only shares a prefix', () => {
-    expect(setEnvValue('DB_PASSWORD_FILE=/x\n', 'DB_PASSWORD', 'y')).toBe('DB_PASSWORD_FILE=/x\nDB_PASSWORD=y\n');
-    expect(hasEnvValue('DB_PASSWORD_FILE=/x\n', 'DB_PASSWORD')).toBe(false);
-    expect(hasEnvValue('# DB_PASSWORD=x\n', 'DB_PASSWORD')).toBe(false);
+    expect(setEnvValue('DATABASE_URL_FILE=/x\n', 'DATABASE_URL', 'y')).toBe('DATABASE_URL_FILE=/x\nDATABASE_URL=y\n');
+    expect(hasEnvValue('DATABASE_URL_FILE=/x\n', 'DATABASE_URL')).toBe(false);
+    expect(hasEnvValue('# DATABASE_URL=x\n', 'DATABASE_URL')).toBe(false);
   });
 });
 

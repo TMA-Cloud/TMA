@@ -86,16 +86,8 @@ jobs:
           --health-retries 5
 
     env:
-      DB_HOST: localhost
-      DB_PORT: '5432'
-      DB_USER: tma
-      DB_PASSWORD: tma
-      DB_NAME: tma_cloud_test
-      DB_SSLMODE: disable
-      REDIS_HOST: localhost
-      REDIS_PORT: '6379'
-      REDIS_PASSWORD: ''
-      REDIS_DB: '15'
+      DATABASE_URL: postgresql://tma:tma@localhost:5432/tma_cloud_test
+      REDIS_URL: redis://localhost:6379/15
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

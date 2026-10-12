@@ -8,7 +8,7 @@
 #   docker build -t tma-cloud:latest .
 #
 # Run:
-#   docker run -p 3000:3000 -e DB_HOST=postgres -e DB_USER=user ... tma-cloud:latest
+#   docker run -p 3000:3000 -e DATABASE_URL=postgresql://... -e REDIS_URL=redis://... ... tma-cloud:latest
 # =============================================================================
 
 # -----------------------------------------------------------------------------

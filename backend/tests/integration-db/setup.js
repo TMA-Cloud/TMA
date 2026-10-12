@@ -17,6 +17,7 @@ import { fileURLToPath } from 'url';
 import { afterAll, beforeAll, beforeEach } from 'vitest';
 
 import pool from '../../config/db.js';
+import { parseDatabaseUrl, redisDatabase } from '../../utils/connectionUrl.js';
 import { resetStorageMock } from '../mocks/storage.mock.js';
 import { invalidateS3Config } from '../../config/storage.js';
 import { encryptStorageSecret } from '../../utils/storageSettings.js';
@@ -38,15 +39,16 @@ const MIGRATIONS_DIR = path.join(__dirname, '..', '..', 'migrations');
  * Guardrails
  * ------------------------------------------------------------------ */
 
-if (!/_test$/.test(process.env.DB_NAME || '')) {
+const { database } = parseDatabaseUrl(process.env.DATABASE_URL);
+if (!/_test$/.test(database || '')) {
   throw new Error(
-    `Refusing to run integration tests against database "${process.env.DB_NAME}". ` +
+    `Refusing to run integration tests against database "${database}". ` +
       'The name must end in "_test" so a working database is never truncated.'
   );
 }
 
-if (String(process.env.REDIS_DB || '0') === '0') {
-  throw new Error('Refusing to run integration tests against Redis database 0. Set REDIS_DB to a scratch database.');
+if (redisDatabase(process.env.REDIS_URL) === 0) {
+  throw new Error('Refusing to run integration tests against Redis database 0. Point REDIS_URL at a scratch database.');
 }
 
 /* ------------------------------------------------------------------ *

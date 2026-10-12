@@ -5,7 +5,7 @@
  *   npm run rotate -- status         Key versions and how many file keys each wraps
  *   npm run rotate -- key            Add a new master key to FILE_ENCRYPTION_KEY(_FILE)
  *   npm run rotate -- rewrap         Rewrap stored file keys under the newest master key
- *   npm run rotate -- db-password    Set a new random database password and save it in .env
+ *   npm run rotate -- db-password    Set a new random database password and save it in DATABASE_URL
  *
  * Docker installs run ./rotate.sh on the host instead, which edits the files the
  * containers mount and calls this script inside the app container.
@@ -30,6 +30,7 @@ import { verifyEncryptionKeys } from '../services/encryptionKeyCheck.js';
 import { rewrapToPrimaryKey } from '../services/kekRewrap.js';
 import { formatKeyring, generateKey, readKeyring } from '../utils/fileEncryption/keySource.js';
 import { scramSha256Verifier } from '../utils/scram.js';
+import { parseDatabaseUrl, withPassword } from '../utils/connectionUrl.js';
 
 import { hasEnvValue, setEnvValue, writeFileAtomic } from './lib/envFile.js';
 
@@ -161,7 +162,7 @@ async function rotateDbPassword({ fromStdin }) {
   if (password.length < MIN_DB_PASSWORD_LENGTH) {
     throw new UsageError(`The new password must be at least ${MIN_DB_PASSWORD_LENGTH} characters`);
   }
-  const current = process.env.DB_PASSWORD;
+  const current = parseDatabaseUrl(process.env.DATABASE_URL).password;
   const text = fromStdin ? null : fs.readFileSync(envPath, 'utf8');
 
   await setRolePassword(password);
@@ -172,8 +173,8 @@ async function rotateDbPassword({ fromStdin }) {
   console.log('Database password changed.');
   if (fromStdin) return;
 
-  writeFileAtomic(envPath, setEnvValue(text, 'DB_PASSWORD', password));
-  console.log(`Saved DB_PASSWORD in ${envPath}. Restart the API and the worker now: new connections need it.`);
+  writeFileAtomic(envPath, setEnvValue(text, 'DATABASE_URL', withPassword(process.env.DATABASE_URL, password)));
+  console.log(`Saved DATABASE_URL in ${envPath}. Restart the API and the worker now: new connections need it.`);
 }
 
 const COMMANDS = {

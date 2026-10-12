@@ -103,7 +103,9 @@ main() {
   set_env() {
     local key="$1" value="$2" file="$3"
     if grep -q "^${key}=" "$file"; then
-      sed -i.bak "s|^${key}=.*|${key}=${value}|" "$file" && rm -f "${file}.bak"
+      # awk takes the value from the environment, so & | \ in a URL stay literal.
+      K="$key" V="$value" awk 'index($0, ENVIRON["K"] "=") == 1 { $0 = ENVIRON["K"] "=" ENVIRON["V"] } { print }' \
+        "$file" >"${file}.tmp" && mv -f "${file}.tmp" "$file"
     else
       printf '%s=%s\n' "$key" "$value" >>"$file"
     fi
@@ -152,10 +154,8 @@ main() {
     fetch .env.example "$tmp_env"
     # Kept for reference: the comments explain each setting.
     cp "$tmp_env" .env.example
-    set_env DB_HOST postgres "$tmp_env"
-    set_env REDIS_HOST redis "$tmp_env"
-    set_env DB_PASSWORD "$(random_hex 32)" "$tmp_env"
-    set_env REDIS_PASSWORD "$(random_hex 32)" "$tmp_env"
+    set_env DATABASE_URL "postgresql://postgres:$(random_hex 32)@postgres:5432/tma_cloud_storage" "$tmp_env"
+    set_env REDIS_URL "redis://:$(random_hex 32)@redis:6379/0" "$tmp_env"
     set_env JWT_SECRET "$(random_hex 64)" "$tmp_env"
     set_env BPORT "$port" "$tmp_env"
     set_env BACKEND_URL "$url" "$tmp_env"

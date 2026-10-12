@@ -21,9 +21,6 @@ import { checkStorageLimitExceeded } from '../utils/storageUtils.js';
 import { validateFileName } from '../utils/validation.js';
 import { readSecret } from '../utils/fileEncryption/keySource.js';
 
-if (!process.env.DOCKER && process.env.DB_HOST === 'postgres') process.env.DB_HOST = 'localhost';
-if (!process.env.DOCKER && process.env.REDIS_HOST === 'redis') process.env.REDIS_HOST = 'localhost';
-
 async function getStorageUsageAndLimit(userId) {
   const account = await pool.query('SELECT storage_used, storage_limit FROM users WHERE id = $1', [userId]);
   const used = Number(account.rows[0]?.storage_used) || 0;

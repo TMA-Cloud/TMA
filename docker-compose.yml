@@ -42,10 +42,16 @@ services:
     container_name: tma-cloud-postgres
     restart: unless-stopped
     environment:
-      - POSTGRES_USER=${DB_USER:-postgres}
-      - POSTGRES_PASSWORD=${DB_PASSWORD:-postgres}
-      - POSTGRES_DB=${DB_NAME:-tma_cloud_storage}
+      - DATABASE_URL=${DATABASE_URL}
       - POSTGRES_INITDB_ARGS=--encoding=UTF8 --locale=C
+    entrypoint:
+      - sh
+      - -c
+      - |
+        url="$${DATABASE_URL#*://}"; auth="$${url%@*}"; db="$${url##*@}"; db="$${db#*/}"
+        export POSTGRES_USER="$${auth%%:*}" POSTGRES_PASSWORD="$${auth#*:}" POSTGRES_DB="$${db%%[?]*}"
+        exec docker-entrypoint.sh "$$@"
+      - sh
     #ports:
       #- "127.0.0.1:5432:5432"
     volumes:
@@ -59,7 +65,7 @@ services:
       -c maintenance_work_mem=128MB
       -c max_connections=100
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
+      test: ["CMD-SHELL", "pg_isready -q -d \"$$DATABASE_URL\""]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -70,18 +76,22 @@ services:
     image: redis:8-alpine
     container_name: tma-cloud-redis
     restart: unless-stopped
-    command: >
-      redis-server
-      ${REDIS_PASSWORD:+--requirepass ${REDIS_PASSWORD}}
-      --appendonly yes
-      --maxmemory 512mb
-      --maxmemory-policy allkeys-lru
+    environment:
+      - REDIS_URL=${REDIS_URL}
+    command:
+      - sh
+      - -c
+      - |
+        auth="$${REDIS_URL#*://}"; auth="$${auth%%/*}"; pass=""
+        case "$$auth" in *:*@*) auth="$${auth%@*}"; pass="$${auth#*:}" ;; esac
+        exec docker-entrypoint.sh redis-server $${pass:+--requirepass "$$pass"} \
+          --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
     volumes:
       - redis-data:/data
     networks:
       - tma-cloud-network
     healthcheck:
-      test: ["CMD-SHELL", "if [ -n \"$REDIS_PASSWORD\" ]; then redis-cli -a \"$REDIS_PASSWORD\" ping; else redis-cli ping; fi | grep -q PONG || exit 1"]
+      test: ["CMD-SHELL", "redis-cli -u \"$$REDIS_URL\" -h 127.0.0.1 -p 6379 --no-auth-warning ping | grep -q PONG || exit 1"]
       interval: 10s
       timeout: 3s
       retries: 3

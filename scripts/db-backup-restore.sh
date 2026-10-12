@@ -10,7 +10,7 @@
 #    ./db-backup-restore.sh list                    List available backups
 #
 #  Environment:
-#    Reads DB_* settings from .env in the install directory or project root.
+#    Reads DATABASE_URL and REDIS_URL from .env in the install directory or project root.
 #    Variables already set in the environment win, as with dotenv.
 #    TMA_DIR sets that directory explicitly.
 #
@@ -61,7 +61,7 @@ env_file_value() {
 }
 
 if [[ -f "${PROJECT_ROOT}/.env" ]]; then
-  for key in DB_HOST DB_PORT DB_USER DB_PASSWORD DB_NAME DB_CONTAINER BACKUP_RETAIN_COUNT REDIS_PASSWORD REDIS_DB; do
+  for key in DATABASE_URL REDIS_URL DB_CONTAINER BACKUP_RETAIN_COUNT; do
     if [[ -z "${!key:-}" ]] && grep -qE "^${key}=" "${PROJECT_ROOT}/.env"; then
       printf -v "${key}" '%s' "$(env_file_value "${key}")"
     fi
@@ -70,11 +70,58 @@ if [[ -f "${PROJECT_ROOT}/.env" ]]; then
 fi
 
 # ── Database config ──────────────────────────────────────────
-DB_HOST="${DB_HOST:-localhost}"
-DB_PORT="${DB_PORT:-5432}"
-DB_USER="${DB_USER:-postgres}"
-DB_PASSWORD="${DB_PASSWORD:-}"
-DB_NAME="${DB_NAME:-tma_cloud_storage}"
+url_decode() { printf '%b' "${1//%/\\x}"; }
+
+# Split scheme://user:password@host:port/path?query into URL_* variables.
+parse_url() {
+  local rest="${1#*://}" auth="" hostport
+  URL_QUERY=""; URL_PATH=""; URL_USER=""; URL_PASSWORD=""; URL_HOST=""; URL_PORT=""
+  if [[ "${rest}" == *\?* ]]; then URL_QUERY="${rest#*\?}"; rest="${rest%%\?*}"; fi
+  if [[ "${rest}" == */* ]]; then URL_PATH="$(url_decode "${rest#*/}")"; rest="${rest%%/*}"; fi
+  if [[ "${rest}" == *@* ]]; then auth="${rest%@*}"; rest="${rest##*@}"; fi
+  URL_USER="$(url_decode "${auth%%:*}")"
+  [[ "${auth}" == *:* ]] && URL_PASSWORD="$(url_decode "${auth#*:}")"
+  hostport="${rest}"
+  if [[ "${hostport}" =~ ^\[(.*)\](:([0-9]+))?$ || "${hostport}" =~ ^([^:]*)(:([0-9]+))?$ ]]; then
+    URL_HOST="${BASH_REMATCH[1]}"; URL_PORT="${BASH_REMATCH[3]}"
+  fi
+}
+
+[[ -n "${DATABASE_URL:-}" ]] || die "DATABASE_URL is not set in the environment or ${PROJECT_ROOT}/.env"
+[[ "${DATABASE_URL}" =~ ^postgres(ql)?:// ]] || die "DATABASE_URL must start with postgresql://"
+parse_url "${DATABASE_URL}"
+DB_HOST="${URL_HOST:-localhost}"
+DB_PORT="${URL_PORT:-5432}"
+DB_USER="${URL_USER:-postgres}"
+DB_PASSWORD="${URL_PASSWORD}"
+DB_NAME="${URL_PATH}"
+[[ -n "${DB_NAME}" ]] || die "DATABASE_URL must name a database"
+
+# Host mode: the URL's libpq parameters (sslmode, sslrootcert, ...) reach every
+# client tool as their PG* environment variables.
+pg_param_env() {
+  case "$1" in
+    sslmode) echo PGSSLMODE ;;
+    sslrootcert) echo PGSSLROOTCERT ;;
+    sslcert) echo PGSSLCERT ;;
+    sslkey) echo PGSSLKEY ;;
+    sslcrl) echo PGSSLCRL ;;
+    sslnegotiation) echo PGSSLNEGOTIATION ;;
+    connect_timeout) echo PGCONNECT_TIMEOUT ;;
+    application_name) echo PGAPPNAME ;;
+    options) echo PGOPTIONS ;;
+    target_session_attrs) echo PGTARGETSESSIONATTRS ;;
+  esac
+}
+PG_PARAMS=()
+if [[ -n "${URL_QUERY}" ]]; then
+  IFS='&' read -ra pairs <<<"${URL_QUERY}"
+  for pair in "${pairs[@]}"; do
+    env_name="$(pg_param_env "${pair%%=*}")"
+    [[ -n "${env_name}" ]] && PG_PARAMS+=("${env_name}=$(url_decode "${pair#*=}")")
+  done
+fi
+
 BACKUP_RETAIN_COUNT="${BACKUP_RETAIN_COUNT:-10}"
 # Pruning runs after the new dump is written, so 0 would delete that one too.
 [[ "${BACKUP_RETAIN_COUNT}" =~ ^[1-9][0-9]*$ ]] || die "BACKUP_RETAIN_COUNT must be a whole number of at least 1"
@@ -117,6 +164,7 @@ export PGPASSWORD="${DB_PASSWORD}"
 # Host mode: every client tool, psql included, connects to DB_HOST:DB_PORT.
 if ! ${USE_DOCKER}; then
   export PGHOST="${DB_HOST}" PGPORT="${DB_PORT}"
+  ((${#PG_PARAMS[@]})) && export "${PG_PARAMS[@]}"
 fi
 
 # Run a PostgreSQL client tool in the container, or on this machine.
@@ -525,8 +573,14 @@ clear_cache() {
     warn "Clear the Redis cache with FLUSHDB, or entries from before the restore stay for up to 5 minutes."
     return
   fi
-  reply="$(REDISCLI_AUTH="${REDIS_PASSWORD:-}" docker exec ${REDIS_PASSWORD:+-e REDISCLI_AUTH} "${redis_id}" \
-    redis-cli -n "${REDIS_DB:-0}" FLUSHDB 2>/dev/null || true)"
+  local redis_password="" redis_db=0
+  if [[ -n "${REDIS_URL:-}" ]]; then
+    parse_url "${REDIS_URL}"
+    redis_password="${URL_PASSWORD}"
+    redis_db="${URL_PATH:-0}"
+  fi
+  reply="$(REDISCLI_AUTH="${redis_password}" docker exec ${redis_password:+-e REDISCLI_AUTH} "${redis_id}" \
+    redis-cli -n "${redis_db}" FLUSHDB 2>/dev/null || true)"
   if [[ "${reply}" == "OK" ]]; then
     success "Cleared the Redis cache"
   else
@@ -684,11 +738,8 @@ Restore strategy:
   - Reports table/row counts for verification
 
 Environment variables (auto-loaded from .env):
-  DB_HOST               default: localhost
-  DB_PORT               default: 5432
-  DB_USER               default: postgres
-  DB_PASSWORD            (required)
-  DB_NAME               default: tma_cloud_storage
+  DATABASE_URL          (required) postgresql://user:password@host:port/database
+  REDIS_URL             Redis to clear after a restore: redis://:password@host:port/db
   DB_CONTAINER          PostgreSQL container name; without it, the postgres service of
                         the compose project in this directory, else the host tools
   BACKUP_RETAIN_COUNT   default: 10

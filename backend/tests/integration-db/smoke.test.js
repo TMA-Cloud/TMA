@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import pool from '../../config/db.js';
 import { isRedisConnected, redisClient } from '../../config/redis.js';
+import { redisDatabase } from '../../utils/connectionUrl.js';
 
 describe('integration environment', () => {
   it('is pointed at a dedicated test database', async () => {
@@ -36,7 +37,7 @@ describe('integration environment', () => {
 
   it('is connected to a scratch Redis database, not the dev one', async () => {
     expect(isRedisConnected()).toBe(true);
-    expect(process.env.REDIS_DB).not.toBe('0');
+    expect(redisDatabase(process.env.REDIS_URL)).not.toBe(0);
     await redisClient.set('smoke', 'ok');
     expect(await redisClient.get('smoke')).toBe('ok');
   });

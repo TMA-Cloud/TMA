@@ -179,16 +179,15 @@ main() {
 
   # A backup before new migrations run: the only way back after one.
   if ((start)) && ((running)) && [[ "${TMA_SKIP_DB_BACKUP:-0}" != "1" ]]; then
-    local db_user db_name dump
-    db_user="$(grep '^DB_USER=' .env | tail -n1 | cut -d= -f2-)"
-    db_name="$(grep '^DB_NAME=' .env | tail -n1 | cut -d= -f2-)"
+    local dump
     mkdir -p backups
     chmod 700 backups
     dump="backups/pre-update-${stamp}.dump"
     info "Backing up the database to ${dump}"
     # Same options as scripts/db-backup-restore.sh: a consistent snapshot that
     # does not block writers, restorable into a fresh database.
-    if ! docker compose exec -T postgres pg_dump -U "${db_user:-postgres}" -d "${db_name:-tma_cloud_storage}" \
+    # shellcheck disable=SC2016 # expanded by the container's shell, from its DATABASE_URL
+    if ! docker compose exec -T postgres sh -c 'exec pg_dump -d "$DATABASE_URL" "$@"' sh \
       --format=custom --compress=6 --lock-wait-timeout=15000 --no-owner --no-privileges --serializable-deferrable \
       </dev/null >"${dump}.part" || [[ ! -s "${dump}.part" ]] ||
       ! docker compose exec -T postgres pg_restore --list <"${dump}.part" >/dev/null; then

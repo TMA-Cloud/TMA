@@ -1,30 +1,24 @@
 import pg from 'pg';
 
+import { parseDatabaseUrl } from '../utils/connectionUrl.js';
+
 import { logger } from './logger.js';
 
 const { Pool } = pg;
 
-/**
- * Build a pg connection config from environment variables.
- * Callers can override or extend the defaults (e.g. max pool size).
- */
-function buildPoolConfig(overrides = {}) {
-  return {
-    host: process.env.DB_HOST || 'localhost',
-    port: Number(process.env.DB_PORT) || 5432,
-    user: process.env.DB_USER || 'postgres',
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME || 'tma_cloud_storage',
-    ssl: process.env.DB_SSLMODE === 'require' ? { rejectUnauthorized: false } : false,
-    ...overrides,
-  };
-}
+// Parsed once: an sslrootcert in the URL is read from disk on every parse.
+const urlConfig = parseDatabaseUrl(process.env.DATABASE_URL);
 
 /**
- * The pg-boss schema as a quoted SQL identifier, resolved once so every
- * consumer targets the same schema.
+ * The pg connection config from DATABASE_URL. Callers can override or extend
+ * it (e.g. max pool size, a password to test).
  */
-const pgbossSchema = `"${(process.env.PGBOSS_SCHEMA || 'pgboss').replace(/"/g, '""')}"`;
+function buildPoolConfig(overrides = {}) {
+  return { ...urlConfig, ...overrides };
+}
+
+/** The pg-boss schema as a quoted SQL identifier, shared by every consumer. */
+const pgbossSchema = '"pgboss"';
 
 /** Create a new pg Pool with the shared env-driven config. */
 function createPool(overrides = {}) {
