@@ -80,6 +80,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isLoadingMore: browser.isLoadingMore,
         loadMoreFiles: browser.loadMoreFiles,
         listedLocation: browser.listedLocation,
+        isListingPending: browser.isListingPending,
+        listingFailed: browser.listingFailed,
         navRestoresScroll: browser.navRestoresScroll,
         setCurrentPath: browser.setCurrentPath,
         openFolder: browser.openFolder,

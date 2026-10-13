@@ -53,6 +53,7 @@ const FileManager: React.FC = () => {
     setSortOrder,
     searchQuery,
     isSearching,
+    isListingPending,
     isDownloading,
     isDeleting,
     isRestoring,
@@ -118,7 +119,7 @@ const FileManager: React.FC = () => {
   const canUpload = can('files.upload');
   const canCreateFolder = currentPath[0] === 'My Files' && canUpload;
   const isTrashView = currentPath[0] === 'Trash';
-  const hasTrashFiles = isTrashView && files.length > 0;
+  const hasTrashFiles = isTrashView && !isListingPending && files.length > 0;
   const isMyFilesView = currentPath[0] === 'My Files';
 
   const openInfoModalForSelection = useCallback(() => {

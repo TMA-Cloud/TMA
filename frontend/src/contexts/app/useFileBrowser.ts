@@ -3,6 +3,7 @@ import { type FileItem, type FileItemResponse, type FileSortBy } from '../AppCon
 import { useDebouncedCallback } from '../../utils/debounce';
 import { mapFileResponse } from '../../utils/fileUtils';
 import { isFileManagerPage, locationKey, sortFilesWithFoldersFirst, type NavEntry } from './helpers';
+import { createListingCache, listingCacheKey } from './listingCache';
 
 /** Location, navigation history, listing (with sort), and search — one concern. */
 export function useFileBrowser(setSelectedFiles: (ids: string[]) => void) {
@@ -20,6 +21,8 @@ export function useFileBrowser(setSelectedFiles: (ids: string[]) => void) {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   // Which location `files` holds; it trails navigation until the new listing arrives.
   const [listedLocation, setListedLocation] = useState<string | null>(null);
+  // Location whose latest listing failed, so the view can offer a retry instead of looking empty.
+  const [failedLocation, setFailedLocation] = useState<string | null>(null);
   const [navRestoresScroll, setNavRestoresScroll] = useState(false);
   const [navHistory, setNavHistory] = useState<{ entries: NavEntry[]; index: number }>(() => ({
     entries: [{ path: ['My Files'], ids: [null], shared: [false] }],
@@ -40,6 +43,8 @@ export function useFileBrowser(setSelectedFiles: (ids: string[]) => void) {
   const folderSharedStackRef = useRef<boolean[]>(folderSharedStack);
   const refreshFilesRef = useRef<((skipSearchCheck?: boolean) => Promise<void>) | null>(null);
   const returnHighlightAfterRefreshRef = useRef<string | null>(null);
+  const listingCacheRef = useRef(createListingCache());
+  const listedLocationRef = useRef<string | null>(null);
 
   // Ref-sync effects
 
@@ -58,6 +63,9 @@ export function useFileBrowser(setSelectedFiles: (ids: string[]) => void) {
   useEffect(() => {
     folderSharedStackRef.current = folderSharedStack;
   }, [folderSharedStack]);
+  useEffect(() => {
+    listedLocationRef.current = listedLocation;
+  }, [listedLocation]);
 
   // Core data functions
 
@@ -83,6 +91,23 @@ export function useFileBrowser(setSelectedFiles: (ids: string[]) => void) {
       listRefreshControllerRef.current = controller;
       const requestId = ++listRefreshSeqRef.current;
       setNextCursor(null);
+      setFailedLocation(null);
+
+      const listing = locationKey(currentPath, folderStack);
+      const cacheKey = listingCacheKey(listing, sortBy, sortOrder);
+      const cache = listingCacheRef.current;
+      if (listedLocationRef.current === listing) {
+        // Re-listing the folder on screen means something changed, possibly in other folders too.
+        cache.retainOnly(cacheKey);
+      } else {
+        // Stale-while-revalidate: show the last copy of this folder now, replace it when the fetch lands.
+        const cached = cache.get(cacheKey);
+        if (cached) {
+          setFiles(cached.files);
+          setListedLocation(listing);
+          listedLocationRef.current = listing;
+        }
+      }
 
       const parentId = folderStack[folderStack.length - 1];
       let urlPath = '/api/files';
@@ -112,9 +137,13 @@ export function useFileBrowser(setSelectedFiles: (ids: string[]) => void) {
 
         const mapped = data.map(mapFileResponse);
         const sorted = sortBy === 'size' ? sortFilesWithFoldersFirst(mapped, sortBy, sortOrder) : mapped;
+        const cursor = res.headers.get('X-Next-Cursor');
+        cache.set(cacheKey, { files: sorted, nextCursor: cursor });
         setFiles(sorted);
-        setListedLocation(locationKey(currentPath, folderStack));
-        setNextCursor(res.headers.get('X-Next-Cursor'));
+        setListedLocation(listing);
+        listedLocationRef.current = listing;
+        setFailedLocation(null);
+        setNextCursor(cursor);
 
         const highlightId = returnHighlightAfterRefreshRef.current;
         returnHighlightAfterRefreshRef.current = null;
@@ -127,6 +156,7 @@ export function useFileBrowser(setSelectedFiles: (ids: string[]) => void) {
         // Only the latest request should clear the pending highlight on failure.
         if (requestId === listRefreshSeqRef.current) {
           returnHighlightAfterRefreshRef.current = null;
+          setFailedLocation(listing);
         }
       } finally {
         if (listRefreshControllerRef.current === controller) {
@@ -334,6 +364,11 @@ export function useFileBrowser(setSelectedFiles: (ids: string[]) => void) {
     pushNavEntry(nextPath, nextIds, nextShared, true);
   };
 
+  const currentLocation = locationKey(currentPath, folderStack);
+  const listingIsCurrent =
+    !isFileManagerPage(currentPath[0]) || searchQuery.trim().length > 0 || listedLocation === currentLocation;
+  const listingFailed = !listingIsCurrent && failedLocation === currentLocation;
+
   const canGoBack = navHistory.index > 0;
   const canGoForward = navHistory.index < navHistory.entries.length - 1;
 
@@ -382,6 +417,8 @@ export function useFileBrowser(setSelectedFiles: (ids: string[]) => void) {
     isLoadingMore,
     loadMoreFiles,
     listedLocation,
+    isListingPending: !listingIsCurrent && !listingFailed,
+    listingFailed,
 
     // Navigation state
     currentPath,

@@ -118,6 +118,10 @@ export interface AppContextType {
   loadMoreFiles: () => Promise<void>;
   /** Location key of the listing in `files`; lags `folderStack` while the next folder loads. */
   listedLocation: string | null;
+  /** The current folder has no listing on screen yet (first visit, nothing cached). */
+  isListingPending: boolean;
+  /** The current folder could not be listed, so the view offers a retry. */
+  listingFailed: boolean;
   /** Whether the latest navigation returns to a seen location (back, forward, up) rather than a new one. */
   navRestoresScroll: boolean;
   createFolder: (name: string) => Promise<void>;

@@ -4,10 +4,13 @@ import { type FileItem, useApp } from '../../contexts/AppContext';
 import { FileItemComponent } from './FileItem';
 import { FileSkeleton } from './FileSkeleton';
 import { EmptyState } from './EmptyState';
+import { ListingError } from './ListingError';
 import { MarqueeSelector } from './MarqueeSelector';
 import { useMarqueeGeometry } from './hooks/useMarqueeGeometry';
 import type { ListScrollRequest } from './hooks/useFileSelection';
 import { fileItemDomId } from './hooks/keyboard.helpers';
+import { pickListView } from './listView';
+import { useDelayedFlag } from '../../hooks/useDelayedFlag';
 
 interface FileListProps {
   files: FileItem[];
@@ -77,7 +80,9 @@ export const FileList: React.FC<FileListProps> = ({
   onListBlur,
   onListMouseDown,
 }) => {
-  const { hasMoreFiles, isLoadingMore, loadMoreFiles } = useApp();
+  const { hasMoreFiles, isLoadingMore, loadMoreFiles, isListingPending, listingFailed, refreshFiles } = useApp();
+  // Fast listings swap straight in; only a slow one earns the skeleton.
+  const showListingSkeleton = useDelayedFlag(isListingPending);
   const loadMoreSentinelRef = React.useRef<HTMLDivElement | null>(null);
   const loadMoreFilesRef = React.useRef(loadMoreFiles);
   const isLoadingMoreRef = React.useRef(isLoadingMore);
@@ -86,6 +91,14 @@ export const FileList: React.FC<FileListProps> = ({
   const [scrollMargin, setScrollMargin] = React.useState(0);
   const columnCount = viewMode === 'grid' ? Math.max(1, Math.floor((containerWidth + 12) / 162)) : 1;
   const rowCount = Math.ceil(files.length / columnCount);
+  const view = pickListView({
+    showSkeleton: showListingSkeleton,
+    listingFailed,
+    isListingPending,
+    isSearching,
+    hasFiles: files.length > 0,
+  });
+  const hasRows = view === 'rows';
   // TanStack Virtual intentionally exposes mutable measurement functions.
   // eslint-disable-next-line react-hooks/incompatible-library
   const rowVirtualizer = useVirtualizer({
@@ -157,7 +170,7 @@ export const FileList: React.FC<FileListProps> = ({
 
   React.useEffect(() => {
     const sentinel = loadMoreSentinelRef.current;
-    if (!hasMoreFiles || !sentinel) return;
+    if (!hasMoreFiles || !hasRows || !sentinel) return;
 
     const observer = new IntersectionObserver(
       entries => {
@@ -169,7 +182,8 @@ export const FileList: React.FC<FileListProps> = ({
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [hasMoreFiles]);
+    // The sentinel only mounts with the rows, which can trail the cursor while the skeleton lingers.
+  }, [hasMoreFiles, hasRows]);
 
   // Columns are sized from the container, not the viewport, so collapsing the sidebar adds a
   // column instead of just widening the cards. auto-fill (not auto-fit) leaves the trailing
@@ -177,7 +191,7 @@ export const FileList: React.FC<FileListProps> = ({
   // last few stretch across the row. min() guards the case where the pane is narrower than a card.
   const containerClassName = `
     relative pb-12
-    ${files.length === 0 ? 'flex flex-col items-center justify-center min-h-[calc(100vh-17rem)]' : 'min-h-[calc(100vh-17rem)]'}
+    ${hasRows || view === 'skeleton' ? 'min-h-[calc(100vh-17rem)]' : 'flex flex-col items-center justify-center min-h-[calc(100vh-17rem)]'}
   `;
 
   const handleContainerClick = (e: React.MouseEvent) => {
@@ -189,19 +203,18 @@ export const FileList: React.FC<FileListProps> = ({
 
   // One Tab stop for the whole list. Focus stays on the container and
   // aria-activedescendant names the item, because virtualized rows unmount.
-  const listboxProps =
-    files.length > 0
-      ? {
-          role: 'listbox',
-          tabIndex: 0,
-          'aria-label': 'Files',
-          'aria-multiselectable': true,
-          'aria-activedescendant': keyboardFocusId ? fileItemDomId(keyboardFocusId) : undefined,
-          onFocus: onListFocus,
-          onBlur: onListBlur,
-          onMouseDown: onListMouseDown,
-        }
-      : {};
+  const listboxProps = hasRows
+    ? {
+        role: 'listbox',
+        tabIndex: 0,
+        'aria-label': 'Files',
+        'aria-multiselectable': true,
+        'aria-activedescendant': keyboardFocusId ? fileItemDomId(keyboardFocusId) : undefined,
+        onFocus: onListFocus,
+        onBlur: onListBlur,
+        onMouseDown: onListMouseDown,
+      }
+    : {};
 
   const fileListContent = (
     <div
@@ -210,20 +223,34 @@ export const FileList: React.FC<FileListProps> = ({
       className={`${containerClassName} file-list`}
       style={{
         overflow: 'unset',
-        height: files.length > 0 ? `${rowVirtualizer.getTotalSize() + (hasMoreFiles ? 32 : 0)}px` : 'auto',
+        height: hasRows ? `${rowVirtualizer.getTotalSize() + (hasMoreFiles ? 32 : 0)}px` : 'auto',
       }}
       onClick={handleContainerClick}
       onContextMenu={e => onContextMenu(e)}
     >
-      {files.length === 0 && !isSearching ? (
+      {view === 'skeleton' ? (
+        <>
+          <span className="sr-only" role="status">
+            Loading files
+          </span>
+          <FileSkeleton
+            viewMode={viewMode}
+            count={
+              viewMode === 'grid'
+                ? columnCount * Math.ceil(window.innerHeight / 190)
+                : Math.ceil(window.innerHeight / 53)
+            }
+          />
+        </>
+      ) : view === 'error' ? (
+        <ListingError onRetry={() => void refreshFiles()} />
+      ) : view === 'blank' ? null : view === 'empty' ? (
         <EmptyState
           searchQuery={searchQuery}
           isSearching={isSearching}
           currentPath={currentPath}
           canCreateFolder={canCreateFolder}
         />
-      ) : files.length === 0 && isSearching ? (
-        <FileSkeleton viewMode={viewMode} count={viewMode === 'grid' ? 12 : 8} />
       ) : (
         <>
           {rowVirtualizer.getVirtualItems().map(virtualRow => {
