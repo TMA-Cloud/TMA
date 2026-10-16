@@ -3,7 +3,10 @@
 #![windows_subsystem = "windows"]
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
+mod clip_plan;
 mod clipboard;
+#[cfg(windows)]
+mod clipboard_ole;
 mod cursors;
 mod drive;
 mod edit;

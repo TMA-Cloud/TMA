@@ -6527,6 +6527,7 @@ dependencies = [
 name = "tma-cloud"
 version = "4.0.0"
 dependencies = [
+ "chrono",
  "clipboard-win",
  "device_query",
  "dirs",

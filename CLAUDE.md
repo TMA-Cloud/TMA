@@ -33,7 +33,8 @@ into one image; `make build` tags it with the workspace version.
 - **Never crash.** Crates `deny(clippy::unwrap_used, expect_used, panic)` outside
   tests; return errors with `?`. `unsafe` is denied workspace-wide; only the
   WinFsp adapter, `cloud_files/cfapi.rs` and the desktop app's Windows glue
-  (`cursors/windows.rs`, `single.rs`) allow it, with a `SAFETY:` comment on every block.
+  (`cursors/windows.rs`, `single.rs`, `clipboard_ole.rs`) allow it, with a `SAFETY:`
+  comment on every block.
 - **Comments are short and explain why**, in one line rather than a paragraph.
   Don't restate the code, and don't add banner dividers.
 - **Wire format is the contract.** JSON field names come from `tma-core` types
