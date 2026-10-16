@@ -1,0 +1,11 @@
+# Build with: trunk build --release   (from apps/tma-cloud-web)
+# The server serves dist/ and falls back to index.html for app routes.
+[build]
+target = "index.html"
+dist = "dist"
+public_url = "/"
+filehash = true
+
+[serve]
+addresses = ["127.0.0.1"]
+port = 8780
