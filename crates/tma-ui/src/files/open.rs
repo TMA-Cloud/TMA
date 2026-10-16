@@ -22,8 +22,8 @@ pub(super) fn is_document(name: &str) -> bool {
 /// What opening a file the browser cannot show says instead of downloading it.
 fn no_preview(name: &str) -> String {
     match tma_core::names::extension_of(name).as_str() {
-        "" => format!("{name} can't be opened in the browser. Download it to open it on your computer."),
-        ext => format!(".{ext} files can't be opened in the browser. Download the file to open it on your computer."),
+        "" => "No preview for this file. Use Download.".to_string(),
+        ext => format!("No preview for .{ext} files. Use Download."),
     }
 }
 
@@ -128,11 +128,8 @@ mod tests {
 
     #[test]
     fn unsupported_files_say_so_instead_of_downloading() {
-        assert_eq!(
-            no_preview("backup.zip"),
-            ".zip files can't be opened in the browser. Download the file to open it on your computer."
-        );
-        assert!(no_preview("Makefile").starts_with("Makefile can't be opened"));
+        assert_eq!(no_preview("backup.zip"), "No preview for .zip files. Use Download.");
+        assert_eq!(no_preview("Makefile"), "No preview for this file. Use Download.");
         assert!(is_document("Report.DOCX"));
     }
 }

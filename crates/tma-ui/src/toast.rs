@@ -27,6 +27,7 @@ pub struct Toasts {
 
 const LIFETIME: f64 = 4.0;
 const FADE_IN: f64 = 0.18;
+const MAX_WIDTH: f32 = 300.0;
 
 impl Toasts {
     pub fn info(&mut self, text: impl Into<String>) {
@@ -65,7 +66,8 @@ impl Toasts {
             .anchor(Align2::RIGHT_BOTTOM, [-18.0, -18.0 - lift])
             .order(egui::Order::Tooltip)
             .show(ctx, |ui| {
-                ui.set_max_width(360.0);
+                // Compact: long notices wrap onto a second line instead of stretching across the window.
+                ui.set_max_width(MAX_WIDTH);
                 for toast in &self.items {
                     let age = now - toast.shown_at;
                     // In over FADE_IN, out over the last 0.3 s.
@@ -84,7 +86,7 @@ impl Toasts {
                         .fill(t.surface_raised)
                         .stroke(Stroke::new(1.0, t.separator))
                         .corner_radius(CornerRadius::same(12))
-                        .inner_margin(Margin::symmetric(12, 9))
+                        .inner_margin(Margin::symmetric(11, 8))
                         .shadow(egui::epaint::Shadow {
                             offset: [0, 4],
                             blur: 16,
@@ -92,9 +94,11 @@ impl Toasts {
                             color: Color32::from_black_alpha(40),
                         })
                         .show(ui, |ui| {
-                            ui.horizontal(|ui| {
-                                ui.label(RichText::new(icon).size(16.0).color(color));
-                                ui.label(&toast.text);
+                            ui.set_max_width(MAX_WIDTH - 24.0);
+                            ui.horizontal_top(|ui| {
+                                ui.spacing_mut().item_spacing.x = 8.0;
+                                ui.label(RichText::new(icon).size(15.0).color(color));
+                                ui.add(egui::Label::new(RichText::new(&toast.text).size(12.5)).wrap());
                             });
                         });
                     ui.add_space(6.0);
