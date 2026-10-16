@@ -73,7 +73,12 @@ pub async fn build_state_with_keyring(config: Config, keyring: Keyring, role: Ro
     if role != Role::Worker && config.web_dist_dir.is_none() {
         tracing::warn!("Web app not built (no dist directory). Non-API routes will return a graceful 404.");
     }
-    let http = reqwest::Client::builder().user_agent(concat!("tma-cloud/", env!("CARGO_PKG_VERSION"))).build()?;
+    // Defaults so no outbound call (Google sign-in, version check) can hang a request; calls may set shorter ones.
+    let http = reqwest::Client::builder()
+        .user_agent(concat!("tma-cloud/", env!("CARGO_PKG_VERSION")))
+        .connect_timeout(std::time::Duration::from_secs(10))
+        .timeout(std::time::Duration::from_secs(30))
+        .build()?;
     let inner = Inner {
         storage: Storage::new(pool.clone(), keyring.clone()),
         jobs: jobs::JobQueue::new(pool.clone()),

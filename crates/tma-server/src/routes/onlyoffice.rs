@@ -377,7 +377,7 @@ pub async fn callback(
         tracing::error!(url, "[ONLYOFFICE] Blocked save URL outside the document server");
         return reply(StatusCode::OK, 0);
     }
-    match oo::save_document(&state, &owner, &file_id, url).await {
+    match oo::save_document(&state, &owner, &file_id, url, &oo_url).await {
         Ok(SaveOutcome::Saved { name, new_size, old_size }) => {
             let ctx =
                 ReqCtx { user_id: Some(owner.clone()), owner_id: Some(owner.clone()), role: Some("owner"), ..ctx };
