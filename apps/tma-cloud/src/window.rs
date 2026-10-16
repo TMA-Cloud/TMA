@@ -21,9 +21,11 @@ impl Default for Placement {
 }
 
 impl Placement {
-    /// Build the window at its normal size, maximized on top if it was.
+    /// Build the window at its normal size, maximized on top if it was. On Windows
+    /// it is maximized later, while cloaked: maximizing at creation shows the window
+    /// before the app can hide it (see `Reveal`).
     pub fn apply(&self, builder: egui::ViewportBuilder) -> egui::ViewportBuilder {
-        let mut builder = builder.with_inner_size(self.size).with_maximized(self.maximized);
+        let mut builder = builder.with_inner_size(self.size).with_maximized(self.maximized && !cfg!(windows));
         if let Some(position) = self.position {
             builder = builder.with_position(position);
         }
@@ -77,6 +79,57 @@ fn path() -> Option<std::path::PathBuf> {
     Some(dirs::config_dir()?.join("TMA Cloud").join(FILE))
 }
 
+/// What to do with the window this frame while it opens.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Step {
+    /// Keep it off the screen (it is still shown, maximized and drawn).
+    Cloak,
+    Wait,
+    /// It has drawn at its final size: put it on the screen.
+    Uncloak,
+    Done,
+}
+
+/// Opening a window that should be maximized shows it at its normal size first
+/// (unpainted, so white) and then maximizes it, and the first frames after a
+/// resize are empty, and the app shows only a spinner while it checks the saved
+/// sign-in. The window stays cloaked until the app has something to show, it is
+/// maximized when it should be, and its size has held for a few frames.
+#[derive(Debug, Default)]
+pub struct Reveal {
+    started: Option<f64>,
+    stable: u32,
+    last: Option<egui::Vec2>,
+    done: bool,
+}
+
+/// Frames at the final size before showing: the first one after a resize is blank.
+const STABLE_FRAMES: u32 = 3;
+/// Never hide a window longer than this: a slow server still gets its spinner shown.
+const GIVE_UP_AFTER: f64 = 1.5;
+
+impl Reveal {
+    pub fn step(&mut self, now: f64, want_maximized: bool, ready: bool, info: &egui::ViewportInfo) -> Step {
+        if self.done {
+            return Step::Done;
+        }
+        let Some(started) = self.started else {
+            self.started = Some(now);
+            return Step::Cloak;
+        };
+        let size = info.inner_rect.map(|r| r.size());
+        let in_place = ready && (!want_maximized || info.maximized == Some(true));
+        self.stable = if in_place && size.is_some() && size == self.last { self.stable + 1 } else { 0 };
+        // Only frames drawn while ready count: the first one with the real interface starts over.
+        self.last = if in_place { size } else { None };
+        if self.stable >= STABLE_FRAMES || now - started > GIVE_UP_AFTER {
+            self.done = true;
+            return Step::Uncloak;
+        }
+        Step::Wait
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -102,6 +155,39 @@ mod tests {
         assert_eq!(p.position, Some([100.0, 80.0]));
         p.observe(&info([100.0, 80.0], [1100.0, 700.0], false));
         assert!(!p.maximized);
+    }
+
+    #[test]
+    fn a_maximized_window_appears_once_it_is_maximized_and_drawn() {
+        let mut r = Reveal::default();
+        let normal = info([100.0, 80.0], [1100.0, 700.0], false);
+        let max = info([0.0, 0.0], [1920.0, 1040.0], true);
+        assert_eq!(r.step(0.0, true, true, &normal), Step::Cloak);
+        // Still at the normal size: however long it holds, it is not ready.
+        for i in 1..6 {
+            assert_eq!(r.step(i as f64 * 0.016, true, true, &normal), Step::Wait);
+        }
+        // Maximized but still loading: not yet.
+        for i in 6..10 {
+            assert_eq!(r.step(i as f64 * 0.016, true, false, &max), Step::Wait);
+        }
+        // Maximized: the first frame at the new size starts the count.
+        let mut t = 0.2;
+        let mut steps = Vec::new();
+        for _ in 0..5 {
+            t += 0.016;
+            steps.push(r.step(t, true, true, &max));
+        }
+        assert_eq!(steps, [Step::Wait, Step::Wait, Step::Wait, Step::Uncloak, Step::Done]);
+    }
+
+    #[test]
+    fn a_window_that_never_settles_still_appears() {
+        let mut r = Reveal::default();
+        let normal = info([0.0, 0.0], [800.0, 600.0], false);
+        assert_eq!(r.step(0.0, true, false, &normal), Step::Cloak);
+        assert_eq!(r.step(1.0, true, false, &normal), Step::Wait);
+        assert_eq!(r.step(1.6, true, false, &normal), Step::Uncloak);
     }
 
     #[test]

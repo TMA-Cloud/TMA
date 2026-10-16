@@ -9,6 +9,8 @@ mod clip_plan;
 mod clipboard;
 #[cfg(windows)]
 mod clipboard_ole;
+#[cfg(windows)]
+mod cloak;
 mod cursors;
 mod drive;
 mod edit;
@@ -31,6 +33,9 @@ struct Shell {
     keys: shortcuts::ClipboardKeys,
     cursors: cursors::Cursors,
     placement: window::Placement,
+    /// Whether the window opens maximized, which the first frames do not show yet.
+    opens_maximized: bool,
+    reveal: window::Reveal,
 }
 
 impl eframe::App for Shell {
@@ -42,6 +47,7 @@ impl eframe::App for Shell {
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         self.app.ui(ui);
         let info = ui.ctx().input(|i| i.viewport().clone());
+        self.reveal_window(ui.ctx(), frame, &info);
         self.placement.observe(&info);
         self.cursors.apply(ui.ctx(), frame, tma_ui::widgets::tokens(ui).dark);
     }
@@ -58,6 +64,35 @@ impl eframe::App for Shell {
         }
     }
 }
+
+impl Shell {
+    /// Keep the window off the screen until it has drawn at its final size.
+    fn reveal_window(&mut self, ctx: &egui::Context, frame: &eframe::Frame, info: &egui::ViewportInfo) {
+        let now = ctx.input(|i| i.time);
+        match self.reveal.step(now, self.opens_maximized, !self.app.is_loading(), info) {
+            window::Step::Done => return,
+            window::Step::Cloak => {
+                set_cloaked(frame, true);
+                // Maximized only now, out of sight (see window::Placement::apply).
+                if cfg!(windows) && self.opens_maximized {
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(true));
+                }
+            }
+            window::Step::Uncloak => set_cloaked(frame, false),
+            window::Step::Wait => {}
+        }
+        ctx.request_repaint();
+    }
+}
+
+#[cfg(windows)]
+fn set_cloaked(frame: &eframe::Frame, cloaked: bool) {
+    cloak::set(frame, cloaked);
+}
+
+/// Other systems show a window once it has drawn; there is nothing to hide.
+#[cfg(not(windows))]
+fn set_cloaked(_frame: &eframe::Frame, _cloaked: bool) {}
 
 fn icon() -> Option<egui::IconData> {
     let image = image::load_from_memory(include_bytes!("../../tma-cloud-web/public/tma-192.png")).ok()?.to_rgba8();
@@ -121,6 +156,8 @@ fn main() -> eframe::Result {
                 keys: shortcuts::ClipboardKeys::default(),
                 cursors: cursors::Cursors::default(),
                 placement,
+                opens_maximized: placement.maximized,
+                reveal: window::Reveal::default(),
             }))
         }),
     )

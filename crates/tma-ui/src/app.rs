@@ -244,6 +244,11 @@ impl App {
     }
 
     /// The signed-in server, for the shell to remember.
+    /// Still checking the saved sign-in: only a spinner shows yet.
+    pub fn is_loading(&self) -> bool {
+        matches!(self.screen, Screen::Loading)
+    }
+
     pub fn server_url(&self) -> Option<String> {
         match &self.screen {
             Screen::Main(main) => Some(main.client.base_url().to_string()),

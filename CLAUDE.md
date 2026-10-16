@@ -39,7 +39,7 @@ into one image; `make build` tags it with the workspace version.
 - **Never crash.** Crates `deny(clippy::unwrap_used, expect_used, panic)` outside
   tests; return errors with `?`. `unsafe` is denied workspace-wide; only
   `cloud_files/cfapi.rs` and the desktop app's Windows glue (`cursors/windows.rs`,
-  `single.rs`, `clipboard_ole.rs`) allow it, with a `SAFETY:` comment on every block.
+  `single.rs`, `clipboard_ole.rs`, `cloak.rs`) allow it, with a `SAFETY:` comment on every block.
 - **Colours come from `theme::Tokens`** in `tma-ui` and the apps: `cargo xtask house`
   rejects literal colours outside `theme.rs` (use `theme::with_alpha`, `theme::mix`
   or `theme::NO_TINT`), and curly apostrophes in strings.
