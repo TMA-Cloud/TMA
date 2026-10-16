@@ -1,7 +1,7 @@
 //! The right-click menu for the selected items, in the web app's order:
 //! sharing and downloads, then starring, the clipboard, details and delete.
 
-use egui::{Align2, Color32, CornerRadius, FontId, RichText, Sense, Ui, Vec2};
+use egui::{Align2, CornerRadius, FontId, RichText, Sense, Ui, Vec2};
 use tma_core::Permission;
 use tma_core::api::FileItem;
 
@@ -20,7 +20,7 @@ fn row(ui: &mut Ui, icon: &str, label: &str, danger: bool) -> bool {
         ui.painter().rect_filled(rect, CornerRadius::same(8), if danger { t.destructive } else { t.fill_quaternary });
     }
     let color = match (danger, response.hovered()) {
-        (true, true) => Color32::WHITE,
+        (true, true) => t.on_accent,
         (true, false) => t.destructive_text,
         _ => t.label,
     };
@@ -77,7 +77,7 @@ pub(super) fn context_menu(main: &Main, ui: &mut Ui, items: &[FileItem], desktop
     let single = items.first().filter(|_| n == 1).cloned();
     if let Some(first) = single.clone() {
         item(ui, ph::ARROW_SQUARE_OUT, "Open", Action::Open(first.clone()));
-        if desktop && super::actions::is_image(&first) && user.can(Permission::Download) {
+        if desktop && super::open::is_image(&first) && user.can(Permission::Download) {
             item(ui, ph::EYE, "Preview", Action::Preview(first.clone()));
         }
         if matches!(main.browser.place, Place::Search(_) | Place::Starred | Place::Shared) {

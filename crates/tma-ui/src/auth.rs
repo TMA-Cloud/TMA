@@ -182,7 +182,7 @@ fn pill_input(ui: &mut egui::Ui, value: &mut String, password: bool, placeholder
 /// A full-width button: the accent one, or a quiet one for the alternative.
 fn wide_button(ui: &mut egui::Ui, label: &str, primary: bool, enabled: bool) -> egui::Response {
     let t = widgets::tokens(ui);
-    let (fill, color) = if primary { (t.accent, egui::Color32::WHITE) } else { (t.fill_quaternary, t.label) };
+    let (fill, color) = if primary { (t.accent, t.on_accent) } else { (t.fill_quaternary, t.label) };
     let text = RichText::new(label).size(14.0).family(crate::theme::semibold()).color(color);
     ui.add_enabled(
         enabled,

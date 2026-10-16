@@ -168,12 +168,12 @@ fn round_icon(ui: &mut egui::Ui, icon: &str, tip: &str) -> egui::Response {
 pub fn pill_button(ui: &mut egui::Ui, icon: &str, label: &str) -> egui::Response {
     let t = widgets::tokens(ui);
     let text = format!("{icon}  {label}");
-    let galley = ui.painter().layout_no_wrap(text, FontId::new(14.0, theme::semibold()), Color32::WHITE);
+    let galley = ui.painter().layout_no_wrap(text, FontId::new(14.0, theme::semibold()), t.on_accent);
     let size = Vec2::new(galley.size().x + 30.0, 32.0);
     let (rect, response) = ui.allocate_exact_size(size, Sense::click());
     let fill = if response.hovered() { t.accent_hover } else { t.accent };
     ui.painter().rect_filled(rect, CornerRadius::same(16), fill);
-    ui.painter().galley(rect.center() - galley.size() / 2.0, galley, Color32::WHITE);
+    ui.painter().galley(rect.center() - galley.size() / 2.0, galley, t.on_accent);
     if response.hovered() {
         ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
     }
@@ -197,19 +197,11 @@ fn header(app: &mut App, root: &mut egui::Ui) {
                     app.prefs.sidebar_hidden = !app.prefs.sidebar_hidden;
                 }
                 ui.add_space(4.0);
-                let r = ui.add(
-                    egui::TextEdit::singleline(&mut main.search)
-                        .hint_text(format!("{}  Search files and folders", ph::MAGNIFYING_GLASS))
-                        .desired_width(ui.available_width().clamp(160.0, 320.0) - 60.0)
-                        .frame(
-                            egui::Frame::new()
-                                .fill(t.fill_quaternary)
-                                .corner_radius(CornerRadius::same(18))
-                                .inner_margin(Margin::symmetric(14, 8)),
-                        ),
-                );
-                if r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) && !main.search.trim().is_empty() {
-                    search = Some(main.search.trim().to_string());
+                let hint = format!("{}  Search files and folders", ph::MAGNIFYING_GLASS);
+                let width = ui.available_width().clamp(160.0, 320.0) - 60.0;
+                let (r, query) = widgets::search_field(ui, &mut main.search, &hint, width, &t);
+                if query.is_some() {
+                    search = query;
                 }
                 if ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::K)) {
                     r.request_focus();

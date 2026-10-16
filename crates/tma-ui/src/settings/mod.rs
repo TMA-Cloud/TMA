@@ -3,6 +3,7 @@
 
 mod account;
 mod admin;
+mod admin_activity;
 mod bucket_form;
 mod dialogs;
 mod dialogs_admin;

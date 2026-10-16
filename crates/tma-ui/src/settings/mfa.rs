@@ -195,24 +195,7 @@ pub fn show(ui: &mut egui::Ui, main: &mut Main, tasks: &Tasks, state: &mut MfaDi
             });
             widgets::dialog_footer(ui, |ui| {
                 if widgets::primary_enabled(ui, !busy, if busy { "Signing out…" } else { "Yes" }).clicked() {
-                    save(
-                        tasks,
-                        main,
-                        "mfa",
-                        |c| async move { c.revoke_other_sessions().await },
-                        |main, toasts, r| {
-                            toasts.success(match r.deleted_count {
-                                0 => "No other sessions to sign out".to_string(),
-                                n => format!(
-                                    "Signed out of {}",
-                                    tma_core::format::count(n as usize, "other session", "other sessions")
-                                ),
-                            });
-                            main.settings.dialog = None;
-                            main.settings.sessions =
-                                main.settings.sessions.take().map(|l| l.into_iter().filter(|s| s.is_current).collect());
-                        },
-                    );
+                    super::dialogs::sign_out_others(tasks, main, "mfa", true);
                 }
                 if widgets::secondary(ui, "Skip").clicked() {
                     main.settings.notice_ok = Some("Two-factor authentication updated".into());
@@ -261,7 +244,7 @@ fn verify(ui: &mut egui::Ui, main: &mut Main, tasks: &Tasks, state: &mut MfaDial
     }
     ui.vertical_centered(|ui| match &state.qr {
         Some(qr) => {
-            egui::Frame::new().fill(egui::Color32::WHITE).corner_radius(12).inner_margin(10).show(ui, |ui| {
+            egui::Frame::new().fill(t.qr_background).corner_radius(12).inner_margin(10).show(ui, |ui| {
                 ui.add(egui::Image::new((qr.id(), Vec2::splat(196.0))));
             });
         }

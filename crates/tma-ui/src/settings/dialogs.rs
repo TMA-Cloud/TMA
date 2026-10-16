@@ -247,25 +247,33 @@ fn sessions(ui: &mut egui::Ui, main: &mut Main, tasks: &Tasks, keep: &mut bool) 
         }
         let others = list.iter().any(|s| !s.is_current);
         if ui.add_enabled(others && !revoking, egui::Button::new("Sign out all other devices")).clicked() {
-            save(
-                tasks,
-                main,
-                "session",
-                |c| async move { c.revoke_other_sessions().await },
-                |main, toasts, r| {
-                    toasts.success(match r.deleted_count {
-                        0 => "No other sessions to sign out".to_string(),
-                        n => format!(
-                            "Signed out of {}",
-                            tma_core::format::count(n as usize, "other session", "other sessions")
-                        ),
-                    });
-                    main.settings.sessions =
-                        main.settings.sessions.take().map(|l| l.into_iter().filter(|s| s.is_current).collect());
-                },
-            );
+            sign_out_others(tasks, main, "session", false);
         }
     });
+}
+
+/// Sign out every other session and drop them from the list; `close` also closes
+/// the dialog that offered it.
+pub(super) fn sign_out_others(tasks: &Tasks, main: &mut Main, label: &'static str, close: bool) {
+    save(
+        tasks,
+        main,
+        label,
+        |c| async move { c.revoke_other_sessions().await },
+        move |main, toasts, r| {
+            toasts.success(match r.deleted_count {
+                0 => "No other sessions to sign out".to_string(),
+                n => {
+                    format!("Signed out of {}", tma_core::format::count(n as usize, "other session", "other sessions"))
+                }
+            });
+            if close {
+                main.settings.dialog = None;
+            }
+            main.settings.sessions =
+                main.settings.sessions.take().map(|l| l.into_iter().filter(|s| s.is_current).collect());
+        },
+    );
 }
 
 #[cfg(test)]

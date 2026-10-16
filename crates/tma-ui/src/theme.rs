@@ -11,6 +11,20 @@ fn rgba(r: u8, g: u8, b: u8, a: f32) -> Color32 {
     Color32::from_rgba_unmultiplied(r, g, b, (a * 255.0).round() as u8)
 }
 
+/// The tint that draws an image as it is.
+pub const NO_TINT: Color32 = Color32::WHITE;
+
+/// A token colour at another opacity (0-255), for tinted fills behind it.
+pub fn with_alpha(color: Color32, alpha: u8) -> Color32 {
+    Color32::from_rgba_unmultiplied(color.r(), color.g(), color.b(), alpha)
+}
+
+/// Between two token colours, `t` from 0 (all `a`) to 1 (all `b`), for animated changes.
+pub fn mix(a: Color32, b: Color32, t: f32) -> Color32 {
+    let lerp = |x: u8, y: u8| (x as f32 + (y as f32 - x as f32) * t.clamp(0.0, 1.0)).round() as u8;
+    Color32::from_rgba_unmultiplied(lerp(a.r(), b.r()), lerp(a.g(), b.g()), lerp(a.b(), b.b()), lerp(a.a(), b.a()))
+}
+
 /// Which palette is showing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, Default)]
 pub enum ThemeChoice {
@@ -50,6 +64,14 @@ pub struct Tokens {
     pub folder_front: Color32,
     pub folder_zip: Color32,
     pub scrim: Color32,
+    /// Text and icons on an accent or destructive fill, file badges and avatars.
+    pub on_accent: Color32,
+    /// Controls drawn over photos in the viewer, whatever the theme.
+    pub on_media: Color32,
+    /// Behind a QR code, which scanners read only dark on light.
+    pub qr_background: Color32,
+    /// A switch's off track: opaque, since the translucent fills vanish on dark surfaces.
+    pub toggle_off: Color32,
 }
 
 impl Tokens {
@@ -83,6 +105,10 @@ impl Tokens {
             folder_front: rgb(0xff9f0a),
             folder_zip: rgb(0x6b3800),
             scrim: rgba(0, 0, 0, 0.28),
+            on_accent: Color32::WHITE,
+            on_media: Color32::WHITE,
+            qr_background: Color32::WHITE,
+            toggle_off: rgb(0xd6d5cf),
         }
     }
 
@@ -116,6 +142,10 @@ impl Tokens {
             folder_front: rgb(0xffb340),
             folder_zip: rgb(0x6b3800),
             scrim: rgba(0, 0, 0, 0.62),
+            on_accent: Color32::WHITE,
+            on_media: Color32::WHITE,
+            qr_background: Color32::WHITE,
+            toggle_off: rgb(0x484742),
         }
     }
 

@@ -182,57 +182,9 @@ fn bucket_card(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
             );
             ui.add_space(4.0);
         }
-        let b = &mut f.bucket;
-        combo(ui, "provider", "Provider", &mut b.provider, &bucket_form::PROVIDERS);
-        if b.provider == "r2" {
-            text(ui, "Account ID", &mut b.account_id, "0123456789abcdef0123456789abcdef");
-            parts::hint(ui, "Shown on the R2 overview page in the Cloudflare dashboard");
-            combo(ui, "jurisdiction", "Jurisdiction", &mut b.jurisdiction, &bucket_form::JURISDICTIONS);
-        } else {
-            let aws = b.provider == "aws";
-            let placeholder = if aws { "https://s3.eu-west-1.amazonaws.com" } else { "https://s3.example.com" };
-            text(ui, if aws { "Endpoint (optional)" } else { "Endpoint URL" }, &mut b.endpoint, placeholder);
-            parts::hint(
-                ui,
-                if aws {
-                    "Leave blank to use the standard endpoint for the region"
-                } else {
-                    "https:// for public hosts; http:// is accepted only on a private network"
-                },
-            );
-            text(
-                ui,
-                if aws { "Region" } else { "Region (optional)" },
-                &mut b.region,
-                if aws { "eu-west-1" } else { "us-east-1" },
-            );
-            ui.add_space(4.0);
-        }
-        text(ui, "Bucket name", &mut b.bucket, "tma-cloud-files");
-        ui.add_space(4.0);
-        if b.provider == "s3" {
-            ui.checkbox(&mut b.force_path_style, "Path-style addressing");
-            parts::hint(ui, "Needed by RustFS and MinIO unless they serve buckets on their own subdomains");
-        }
         let masked = summary.as_ref().and_then(|s| s.access_key_id_masked.clone());
-        let keep_key = masked.map(|m| format!("Keep {m}")).unwrap_or_default();
-        text(ui, "Access key ID", &mut b.access_key_id, if configured { &keep_key } else { "" });
-        ui.add_space(4.0);
-        parts::secret_field(
-            ui,
-            "Secret access key",
-            &mut b.secret_access_key,
-            if configured { "Keep the saved secret" } else { "" },
-        );
-        if configured {
-            ui.add_space(4.0);
-            parts::note(
-                ui,
-                Tone::Neutral,
-                "Leave both keys blank to keep the saved ones. A different endpoint or bucket is only accepted if it already holds the files stored so far.",
-            );
-        }
-        if *b != before {
+        bucket_fields(ui, &mut f.bucket, configured, masked);
+        if f.bucket != before {
             f.bucket_result = None;
         }
         if let Some(result) = &f.bucket_result {
@@ -273,6 +225,63 @@ fn bucket_card(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
     if !(test || save_now) {
         return;
     }
+    test_or_save(main, tasks, test, configured, summary.as_ref().map(|s| s.version));
+}
+
+/// The bucket form: provider, where the bucket is, and the access key.
+fn bucket_fields(ui: &mut egui::Ui, b: &mut BucketForm, configured: bool, masked: Option<String>) {
+    combo(ui, "provider", "Provider", &mut b.provider, &bucket_form::PROVIDERS);
+    if b.provider == "r2" {
+        text(ui, "Account ID", &mut b.account_id, "0123456789abcdef0123456789abcdef");
+        parts::hint(ui, "Shown on the R2 overview page in the Cloudflare dashboard");
+        combo(ui, "jurisdiction", "Jurisdiction", &mut b.jurisdiction, &bucket_form::JURISDICTIONS);
+    } else {
+        let aws = b.provider == "aws";
+        let placeholder = if aws { "https://s3.eu-west-1.amazonaws.com" } else { "https://s3.example.com" };
+        text(ui, if aws { "Endpoint (optional)" } else { "Endpoint URL" }, &mut b.endpoint, placeholder);
+        parts::hint(
+            ui,
+            if aws {
+                "Leave blank to use the standard endpoint for the region"
+            } else {
+                "https:// for public hosts; http:// is accepted only on a private network"
+            },
+        );
+        text(
+            ui,
+            if aws { "Region" } else { "Region (optional)" },
+            &mut b.region,
+            if aws { "eu-west-1" } else { "us-east-1" },
+        );
+        ui.add_space(4.0);
+    }
+    text(ui, "Bucket name", &mut b.bucket, "tma-cloud-files");
+    ui.add_space(4.0);
+    if b.provider == "s3" {
+        ui.checkbox(&mut b.force_path_style, "Path-style addressing");
+        parts::hint(ui, "Needed by RustFS and MinIO unless they serve buckets on their own subdomains");
+    }
+    let keep_key = masked.map(|m| format!("Keep {m}")).unwrap_or_default();
+    text(ui, "Access key ID", &mut b.access_key_id, if configured { &keep_key } else { "" });
+    ui.add_space(4.0);
+    parts::secret_field(
+        ui,
+        "Secret access key",
+        &mut b.secret_access_key,
+        if configured { "Keep the saved secret" } else { "" },
+    );
+    if configured {
+        ui.add_space(4.0);
+        parts::note(
+            ui,
+            Tone::Neutral,
+            "Leave both keys blank to keep the saved ones. A different endpoint or bucket is only accepted if it already holds the files stored so far.",
+        );
+    }
+}
+
+/// Test the bucket form, or save it once the server has checked it.
+fn test_or_save(main: &mut Main, tasks: &Tasks, test: bool, configured: bool, version: Option<i32>) {
     let form = main.settings.forms.bucket.clone();
     if let Some(problem) = form.problem(configured) {
         main.settings.forms.bucket_result = Some(CheckResult { message: problem.into(), ..Default::default() });
@@ -298,7 +307,7 @@ fn bucket_card(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
             },
         );
     } else {
-        let input = form.to_input(summary.as_ref().map(|s| s.version));
+        let input = form.to_input(version);
         attempt(
             tasks,
             main,

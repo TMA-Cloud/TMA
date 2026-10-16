@@ -62,7 +62,7 @@ pub(super) fn grid(main: &mut Main, ui: &mut Ui, t: &Tokens, desktop: bool, acti
                         );
                         let shown = super::thumbs::fit(area, texture.size_vec2());
                         let uv = Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0));
-                        ui.painter().image(texture.id(), shown, uv, egui::Color32::WHITE);
+                        ui.painter().image(texture.id(), shown, uv, crate::theme::NO_TINT);
                     } else if item.is_folder() {
                         icons::folder(ui.painter(), icon_rect, t, false);
                     } else {

@@ -78,14 +78,14 @@ pub fn dialog_footer<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
 
 pub fn primary(ui: &mut Ui, text: impl Into<String>) -> Response {
     let t = tokens(ui);
-    ui.add(sized(egui::Button::new(RichText::new(text.into()).color(Color32::WHITE).semibold()).fill(t.accent)))
+    ui.add(sized(egui::Button::new(RichText::new(text.into()).color(t.on_accent).semibold()).fill(t.accent)))
 }
 
 pub fn primary_enabled(ui: &mut Ui, enabled: bool, text: impl Into<String>) -> Response {
     let t = tokens(ui);
     ui.add_enabled(
         enabled,
-        sized(egui::Button::new(RichText::new(text.into()).color(Color32::WHITE).semibold()).fill(t.accent)),
+        sized(egui::Button::new(RichText::new(text.into()).color(t.on_accent).semibold()).fill(t.accent)),
     )
 }
 
@@ -110,7 +110,7 @@ const ROW_ACTIONS: &str = "tma-row-actions";
 
 pub fn danger(ui: &mut Ui, text: impl Into<String>) -> Response {
     let t = tokens(ui);
-    ui.add(sized(egui::Button::new(RichText::new(text.into()).color(Color32::WHITE).semibold()).fill(t.destructive)))
+    ui.add(sized(egui::Button::new(RichText::new(text.into()).color(t.on_accent).semibold()).fill(t.destructive)))
 }
 
 pub fn ghost(ui: &mut Ui, text: impl Into<WidgetText>) -> Response {
@@ -118,6 +118,18 @@ pub fn ghost(ui: &mut Ui, text: impl Into<WidgetText>) -> Response {
 }
 
 /// A square icon button with a tooltip.
+/// The header's rounded search box. Returns its response, and the query when Enter is pressed.
+pub fn search_field(ui: &mut Ui, text: &mut String, hint: &str, width: f32, t: &Tokens) -> (Response, Option<String>) {
+    let frame = egui::Frame::new()
+        .fill(t.fill_quaternary)
+        .corner_radius(CornerRadius::same(18))
+        .inner_margin(Margin::symmetric(14, 8));
+    let r = ui.add(egui::TextEdit::singleline(text).hint_text(hint).desired_width(width).frame(frame));
+    let entered = r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) && !text.trim().is_empty();
+    let query = entered.then(|| text.trim().to_string());
+    (r, query)
+}
+
 pub fn icon_button(ui: &mut Ui, icon: &str, tip: &str) -> Response {
     let t = tokens(ui);
     ui.add(
@@ -147,25 +159,14 @@ pub fn toggle_with_id(ui: &mut Ui, id: egui::Id, on: &mut bool) -> Response {
     }
     if ui.is_rect_visible(rect) {
         let how_on = ui.ctx().animate_bool_responsive(response.id, *on);
-        // An opaque off track: the translucent fills vanish on dark surfaces.
-        let off = if t.dark { Color32::from_rgb(72, 71, 66) } else { Color32::from_rgb(214, 213, 207) };
-        let fill = Color32::from_rgba_unmultiplied(
-            lerp(off.r(), t.positive.r(), how_on),
-            lerp(off.g(), t.positive.g(), how_on),
-            lerp(off.b(), t.positive.b(), how_on),
-            lerp(off.a(), 255, how_on),
-        );
+        let fill = crate::theme::mix(t.toggle_off, t.positive, how_on);
         ui.painter().rect_filled(rect, rect.height() / 2.0, fill);
         let radius = rect.height() / 2.0 - 2.0;
         let x = egui::lerp((rect.left() + radius + 2.0)..=(rect.right() - radius - 2.0), how_on);
         ui.painter().circle_filled(egui::pos2(x, rect.center().y + 0.5), radius, Color32::from_black_alpha(30));
-        ui.painter().circle_filled(egui::pos2(x, rect.center().y), radius, Color32::WHITE);
+        ui.painter().circle_filled(egui::pos2(x, rect.center().y), radius, t.on_accent);
     }
     response
-}
-
-fn lerp(a: u8, b: u8, f: f32) -> u8 {
-    (a as f32 + (b as f32 - a as f32) * f).round() as u8
 }
 
 /// Add a text field with a hairline border, so it reads as a field on any surface.
@@ -198,7 +199,7 @@ pub fn text_edit(ui: &mut Ui, value: &mut String, hint: &str, width: f32) -> Res
 }
 
 pub fn badge(ui: &mut Ui, text: &str, color: Color32) -> Response {
-    let fill = Color32::from_rgba_unmultiplied(color.r(), color.g(), color.b(), 34);
+    let fill = crate::theme::with_alpha(color, 34);
     Frame::new()
         .fill(fill)
         .corner_radius(CornerRadius::same(RADIUS_MD))

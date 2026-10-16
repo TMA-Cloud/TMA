@@ -62,10 +62,11 @@ pub fn clamp_pan(pan: Vec2, image: Vec2, stage: Vec2) -> Vec2 {
 fn round_button(ui: &mut egui::Ui, pos: egui::Pos2, icon: &str, id: &str) -> bool {
     let r = egui::Rect::from_center_size(pos, Vec2::splat(36.0));
     let resp = ui.interact(r, egui::Id::new(("viewer-btn", id)), egui::Sense::click());
+    let t = crate::widgets::tokens(ui);
     if resp.hovered() {
-        ui.painter().circle_filled(r.center(), 18.0, Color32::from_white_alpha(30));
+        ui.painter().circle_filled(r.center(), 18.0, crate::theme::with_alpha(t.on_media, 30));
     }
-    ui.painter().text(r.center(), Align2::CENTER_CENTER, icon, egui::FontId::proportional(20.0), Color32::WHITE);
+    ui.painter().text(r.center(), Align2::CENTER_CENTER, icon, egui::FontId::proportional(20.0), t.on_media);
     resp.clicked()
 }
 
@@ -97,7 +98,7 @@ pub(super) fn viewer_overlay(
             Align2::LEFT_CENTER,
             &item.name,
             egui::FontId::proportional(15.0),
-            Color32::WHITE,
+            t.on_media,
         );
         ui.painter().text(
             bar.left_center() + Vec2::new(20.0, 18.0),
@@ -166,7 +167,7 @@ pub(super) fn viewer_overlay(
                 texture.id(),
                 shown,
                 egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
-                Color32::WHITE,
+                crate::theme::NO_TINT,
             );
         } else if let Some(err) = viewer.failed.get(&item.id) {
             ui.painter().text(
@@ -179,7 +180,7 @@ pub(super) fn viewer_overlay(
         } else {
             ui.put(
                 egui::Rect::from_center_size(stage.center(), Vec2::splat(32.0)),
-                egui::Spinner::new().size(32.0).color(Color32::WHITE),
+                egui::Spinner::new().size(32.0).color(t.on_media),
             );
         }
         let many = viewer.items.len() > 1;

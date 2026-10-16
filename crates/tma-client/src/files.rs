@@ -142,6 +142,14 @@ impl Client {
     }
 
     /// Poll a queued file job until it finishes (or fails).
+    /// Wait for the job a request queued, if it queued one.
+    pub async fn settle(&self, queued: &QueuedResponse) -> ApiResult<()> {
+        if let Some(job) = &queued.job_id {
+            self.wait_for_job(job).await?;
+        }
+        Ok(())
+    }
+
     pub async fn wait_for_job(&self, job_id: &str) -> ApiResult<JobStatus> {
         let mut delay = 300u64;
         loop {

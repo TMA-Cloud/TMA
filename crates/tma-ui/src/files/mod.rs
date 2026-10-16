@@ -6,16 +6,20 @@ mod cache;
 mod conflicts;
 mod download;
 mod grid;
+mod jobs;
 mod keys;
 mod marquee;
 mod menu;
+mod open;
 mod paste;
+mod sharing;
 mod thumbs;
 mod toolbar;
 mod view;
 
+pub(crate) use actions::items_label;
 pub use actions::{Action, download, run as run_action, stage_files, upload_files};
-pub(crate) use actions::{items_label, settle_job};
+pub(crate) use jobs::settle_job;
 pub use view::show;
 
 use std::collections::BTreeSet;

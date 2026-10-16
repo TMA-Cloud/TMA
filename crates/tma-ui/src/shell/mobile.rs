@@ -72,19 +72,10 @@ pub(super) fn top_bar(app: &mut App, root: &mut egui::Ui) {
                 });
             });
             if search_open {
-                let r = ui.add(
-                    egui::TextEdit::singleline(&mut main.search)
-                        .hint_text("Search files and folders")
-                        .desired_width(f32::INFINITY)
-                        .frame(
-                            egui::Frame::new()
-                                .fill(t.fill_quaternary)
-                                .corner_radius(CornerRadius::same(18))
-                                .inner_margin(Margin::symmetric(14, 8)),
-                        ),
-                );
-                if r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) && !main.search.trim().is_empty() {
-                    search = Some(main.search.trim().to_string());
+                let (_, query) =
+                    crate::widgets::search_field(ui, &mut main.search, "Search files and folders", f32::INFINITY, &t);
+                if query.is_some() {
+                    search = query;
                 }
             }
         });

@@ -100,9 +100,9 @@ pub fn file(painter: &Painter, rect: Rect, t: &Tokens, name: &str, mime: Option<
     let center = g(16.0, 19.5);
     if let Some(label) = format_label(&ext) {
         let size = if label.len() > 3 { 5.6 } else { 6.6 } * s;
-        painter.text(center, Align2::CENTER_CENTER, label, FontId::proportional(size.max(5.0)), Color32::WHITE);
+        painter.text(center, Align2::CENTER_CENTER, label, FontId::proportional(size.max(5.0)), t.on_accent);
     } else if let Some(symbol) = kind_symbol(kind) {
-        painter.text(center, Align2::CENTER_CENTER, symbol, FontId::proportional((12.0 * s).max(6.0)), Color32::WHITE);
+        painter.text(center, Align2::CENTER_CENTER, symbol, FontId::proportional((12.0 * s).max(6.0)), t.on_accent);
     }
 }
 
@@ -134,7 +134,7 @@ pub fn logo(painter: &Painter, rect: Rect, t: &Tokens) {
         Align2::CENTER_CENTER,
         ph::HARD_DRIVE,
         FontId::proportional(rect.width() * 0.56),
-        Color32::WHITE,
+        t.on_accent,
     );
 }
 
@@ -144,7 +144,7 @@ pub fn avatar(painter: &Painter, center: Pos2, radius: f32, name: &str, t: &Toke
     let initials: String =
         name.split_whitespace().filter_map(|w| w.chars().next()).take(2).collect::<String>().to_uppercase();
     let initials = if initials.is_empty() { "?".to_string() } else { initials };
-    painter.text(center, Align2::CENTER_CENTER, initials, FontId::proportional(radius * 0.85), Color32::WHITE);
+    painter.text(center, Align2::CENTER_CENTER, initials, FontId::proportional(radius * 0.85), t.on_accent);
 }
 
 pub fn point(x: f32, y: f32) -> Pos2 {

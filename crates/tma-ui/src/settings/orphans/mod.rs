@@ -6,10 +6,9 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use egui::RichText;
-use tma_core::api::{OrphanDeleteOutcome, OrphanDeleteReport};
+use tma_core::api::OrphanReport;
 
 use super::parts::{self, Tone};
-use super::{attempt, save};
 use crate::app::Main;
 use crate::icons::ph;
 use crate::tasks::Tasks;
@@ -17,7 +16,12 @@ use crate::theme::Weight;
 use crate::widgets;
 
 /// The server takes at most this many entries per list in one request.
-const BATCH: usize = 500;
+mod jobs;
+
+use jobs::{delete, scan};
+
+/// The server takes at most this many entries per list in one request.
+pub(super) const BATCH: usize = 500;
 
 /// Newer than this may still be an upload in progress; the server floor is an hour.
 const GRACE: [(i64, &str); 5] =
@@ -52,87 +56,6 @@ impl Default for OrphanState {
             progress: None,
         }
     }
-}
-
-fn scan(main: &mut Main, tasks: &Tasks, state: &mut OrphanState, notes: Vec<String>) {
-    state.keys.clear();
-    state.ids.clear();
-    state.confirming = false;
-    main.settings.orphans = None;
-    main.settings.orphan_notes = Vec::new();
-    main.settings.orphan_error = None;
-    let grace = state.grace;
-    attempt(
-        tasks,
-        main,
-        "orphans",
-        move |c| async move { c.scan_orphans(Some(grace)).await },
-        move |main, toasts, result| match result {
-            Ok(report) => {
-                main.settings.orphans = Some(report);
-                main.settings.orphan_notes = notes;
-            }
-            Err(err) => {
-                main.settings.orphan_error = Some("Unable to scan for orphaned files right now".into());
-                toasts.error(err.message);
-            }
-        },
-    );
-}
-
-fn merge(into: &mut OrphanDeleteOutcome, from: OrphanDeleteOutcome) {
-    into.deleted += from.deleted;
-    into.skipped += from.skipped;
-    into.results.extend(from.results);
-}
-
-fn delete(main: &mut Main, tasks: &Tasks, state: &mut OrphanState) {
-    let (keys, ids): (Vec<String>, Vec<String>) =
-        (state.keys.iter().cloned().collect(), state.ids.iter().cloned().collect());
-    let grace = state.grace;
-    let done = Arc::new(AtomicUsize::new(0));
-    state.progress = Some((done.clone(), keys.len() + ids.len()));
-    state.confirming = false;
-    save(
-        tasks,
-        main,
-        "orphans-delete",
-        move |c| async move {
-            let mut total = OrphanDeleteReport { grace_minutes: grace, ..Default::default() };
-            for chunk in keys.chunks(BATCH) {
-                let r = c.delete_orphans(chunk, &[], grace).await?;
-                merge(&mut total.storage, r.storage);
-                done.fetch_add(chunk.len(), Ordering::Relaxed);
-            }
-            for chunk in ids.chunks(BATCH) {
-                let r = c.delete_orphans(&[], chunk, grace).await?;
-                merge(&mut total.database, r.database);
-                done.fetch_add(chunk.len(), Ordering::Relaxed);
-            }
-            Ok(total)
-        },
-        |main, toasts, r| {
-            let (deleted, skipped) = (r.storage.deleted + r.database.deleted, r.storage.skipped + r.database.skipped);
-            let noun = |n: i64| if n == 1 { "orphan" } else { "orphans" };
-            match (deleted, skipped) {
-                (0, _) => toasts.info("Nothing was deleted: every entry is still in use"),
-                (d, 0) => toasts.success(format!("Deleted {d} {}", noun(d))),
-                (d, s) => toasts.info(format!("Deleted {d} {}, skipped {s}", noun(d))),
-            }
-            let notes = r
-                .storage
-                .results
-                .iter()
-                .chain(&r.database.results)
-                .filter(|x| !x.deleted)
-                .map(|x| {
-                    let what = x.key.clone().or(x.id.clone()).unwrap_or_default();
-                    format!("{what}: {}", x.reason.as_deref().unwrap_or("Skipped"))
-                })
-                .collect();
-            main.settings.orphan_rescan = Some(notes);
-        },
-    );
 }
 
 /// One selectable entry: a checkbox, the title, details and its size.
@@ -192,26 +115,7 @@ pub fn show(ui: &mut egui::Ui, main: &mut Main, tasks: &Tasks, state: &mut Orpha
     let deleting = state.progress.is_some();
     parts::note(ui, Tone::Info, "Nothing is deleted automatically. Only the entries you select here are removed.");
     ui.add_space(6.0);
-    ui.horizontal(|ui| {
-        ui.label("Ignore anything newer than");
-        let current = GRACE.iter().find(|g| g.0 == state.grace).map_or("24 hours", |g| g.1);
-        let mut grace = state.grace;
-        ui.add_enabled_ui(!scanning && !deleting, |ui| {
-            egui::ComboBox::from_id_salt("orphan-grace").selected_text(current).show_ui(ui, |ui| {
-                for (minutes, label) in GRACE {
-                    ui.selectable_value(&mut grace, minutes, label);
-                }
-            });
-        });
-        let rescan = ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            ui.add_enabled(!scanning && !deleting, egui::Button::new(if scanning { "Scanning…" } else { "Rescan" }))
-                .clicked()
-        });
-        if grace != state.grace || rescan.inner {
-            state.grace = grace;
-            scan(main, tasks, state, Vec::new());
-        }
-    });
+    controls(ui, main, tasks, state, scanning || deleting);
     let report = main.settings.orphans.clone();
     if let Some(r) = &report {
         let mut summary =
@@ -223,33 +127,7 @@ pub fn show(ui: &mut egui::Ui, main: &mut Main, tasks: &Tasks, state: &mut Orpha
         ui.label(RichText::new(summary).size(11.5).color(t.label_tertiary));
     }
     ui.add_space(4.0);
-    ui.horizontal(|ui| {
-        let tabs = [
-            (
-                Tab::Storage,
-                ph::HARD_DRIVES,
-                "In storage, no record",
-                report.as_ref().map_or(0, |r| r.storage_orphans.count),
-            ),
-            (Tab::Database, ph::DATABASE, "Record, no file", report.as_ref().map_or(0, |r| r.database_orphans.count)),
-        ];
-        for (tab, icon, label, count) in tabs {
-            if ui.selectable_label(state.tab == tab, format!("{icon}  {label}  ({count})")).clicked() {
-                state.tab = tab;
-                state.confirming = false;
-            }
-        }
-    });
-    ui.label(
-        RichText::new(match state.tab {
-            Tab::Storage => "Stored data that no file refers to. Deleting it frees the space and cannot be undone.",
-            Tab::Database => {
-                "File records whose stored data is missing. Deleting them removes the broken entries without touching storage."
-            }
-        })
-        .size(12.0)
-        .color(t.label_secondary),
-    );
+    tabs(ui, state, report.as_ref(), &t);
     let Some(report) = report else {
         ui.add_space(20.0);
         match &main.settings.orphan_error {
@@ -271,57 +149,141 @@ pub fn show(ui: &mut egui::Ui, main: &mut Main, tasks: &Tasks, state: &mut Orpha
     };
     let selected = state.keys.len() + state.ids.len();
     if shown > 0 {
-        ui.horizontal(|ui| {
-            let all = picked == shown;
-            if ui
-                .add_enabled(
-                    !deleting,
-                    egui::Button::new(if all {
-                        "Clear selection".to_string()
-                    } else {
-                        format!("Select all {shown} shown")
-                    })
-                    .frame(false),
-                )
-                .clicked()
-            {
+        selection_bar(ui, state, &report, (shown, picked, selected), deleting, &t);
+    }
+    entries(ui, state, &report, shown, deleting);
+    if truncated {
+        ui.label(
+            RichText::new(format!("Showing the first {shown} entries. Delete these and rescan to see the rest."))
+                .size(12.0)
+                .color(t.warning_text),
+        );
+    }
+    let notes = main.settings.orphan_notes.clone();
+    if !notes.is_empty() {
+        let kept = if notes.len() == 1 {
+            "1 entry was kept".to_string()
+        } else {
+            format!("{} entries were kept", notes.len())
+        };
+        parts::note(ui, Tone::Warning, &format!("{kept}:\n{}", notes.join("\n")));
+    }
+    footer(ui, main, tasks, state, keep, selected);
+}
+
+/// How far back to look, and Rescan.
+fn controls(ui: &mut egui::Ui, main: &mut Main, tasks: &Tasks, state: &mut OrphanState, busy: bool) {
+    let scanning = main.settings.busy == Some("orphans");
+    ui.horizontal(|ui| {
+        ui.label("Ignore anything newer than");
+        let current = GRACE.iter().find(|g| g.0 == state.grace).map_or("24 hours", |g| g.1);
+        let mut grace = state.grace;
+        ui.add_enabled_ui(!busy, |ui| {
+            egui::ComboBox::from_id_salt("orphan-grace").selected_text(current).show_ui(ui, |ui| {
+                for (minutes, label) in GRACE {
+                    ui.selectable_value(&mut grace, minutes, label);
+                }
+            });
+        });
+        let rescan = ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            ui.add_enabled(!busy, egui::Button::new(if scanning { "Scanning…" } else { "Rescan" })).clicked()
+        });
+        if grace != state.grace || rescan.inner {
+            state.grace = grace;
+            scan(main, tasks, state, Vec::new());
+        }
+    });
+}
+
+/// The two kinds of orphan, with their counts, and what the open one means.
+fn tabs(ui: &mut egui::Ui, state: &mut OrphanState, report: Option<&OrphanReport>, t: &crate::theme::Tokens) {
+    ui.horizontal(|ui| {
+        let tabs = [
+            (Tab::Storage, ph::HARD_DRIVES, "In storage, no record", report.map_or(0, |r| r.storage_orphans.count)),
+            (Tab::Database, ph::DATABASE, "Record, no file", report.map_or(0, |r| r.database_orphans.count)),
+        ];
+        for (tab, icon, label, count) in tabs {
+            if ui.selectable_label(state.tab == tab, format!("{icon}  {label}  ({count})")).clicked() {
+                state.tab = tab;
                 state.confirming = false;
-                match (state.tab, all) {
-                    (Tab::Storage, true) => state.keys.clear(),
-                    (Tab::Database, true) => state.ids.clear(),
-                    (Tab::Storage, false) => {
-                        state.keys = report.storage_orphans.items.iter().map(|i| i.key.clone()).collect()
-                    }
-                    (Tab::Database, false) => {
-                        state.ids = report.database_orphans.items.iter().map(|i| i.id.clone()).collect()
-                    }
+            }
+        }
+    });
+    ui.label(
+    RichText::new(match state.tab {
+        Tab::Storage => "Stored data that no file refers to. Deleting it frees the space and cannot be undone.",
+        Tab::Database => {
+            "File records whose stored data is missing. Deleting them removes the broken entries without touching storage."
+        }
+    })
+    .size(12.0)
+    .color(t.label_secondary),
+);
+}
+
+/// Select or clear what is shown, and the size of what is selected.
+fn selection_bar(
+    ui: &mut egui::Ui,
+    state: &mut OrphanState,
+    report: &OrphanReport,
+    (shown, picked, selected): (usize, usize, usize),
+    deleting: bool,
+    t: &crate::theme::Tokens,
+) {
+    ui.horizontal(|ui| {
+        let all = picked == shown;
+        if ui
+            .add_enabled(
+                !deleting,
+                egui::Button::new(if all {
+                    "Clear selection".to_string()
+                } else {
+                    format!("Select all {shown} shown")
+                })
+                .frame(false),
+            )
+            .clicked()
+        {
+            state.confirming = false;
+            match (state.tab, all) {
+                (Tab::Storage, true) => state.keys.clear(),
+                (Tab::Database, true) => state.ids.clear(),
+                (Tab::Storage, false) => {
+                    state.keys = report.storage_orphans.items.iter().map(|i| i.key.clone()).collect()
+                }
+                (Tab::Database, false) => {
+                    state.ids = report.database_orphans.items.iter().map(|i| i.id.clone()).collect()
                 }
             }
-            if selected > 0 {
-                let bytes: i64 = report
-                    .storage_orphans
+        }
+        if selected > 0 {
+            let bytes: i64 = report
+                .storage_orphans
+                .items
+                .iter()
+                .filter(|i| state.keys.contains(&i.key))
+                .map(|i| i.size)
+                .sum::<i64>()
+                + report
+                    .database_orphans
                     .items
                     .iter()
-                    .filter(|i| state.keys.contains(&i.key))
+                    .filter(|i| state.ids.contains(&i.id))
                     .map(|i| i.size)
-                    .sum::<i64>()
-                    + report
-                        .database_orphans
-                        .items
-                        .iter()
-                        .filter(|i| state.ids.contains(&i.id))
-                        .map(|i| i.size)
-                        .sum::<i64>();
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    ui.label(
-                        RichText::new(format!("{selected} selected · {}", tma_core::format::file_size(bytes)))
-                            .size(12.0)
-                            .color(t.label_secondary),
-                    );
-                });
-            }
-        });
-    }
+                    .sum::<i64>();
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                ui.label(
+                    RichText::new(format!("{selected} selected · {}", tma_core::format::file_size(bytes)))
+                        .size(12.0)
+                        .color(t.label_secondary),
+                );
+            });
+        }
+    });
+}
+
+/// The entries of the open tab, each with a checkbox.
+fn entries(ui: &mut egui::Ui, state: &mut OrphanState, report: &OrphanReport, shown: usize, deleting: bool) {
     egui::ScrollArea::vertical().max_height(ui.ctx().content_rect().height() * 0.36).show(ui, |ui| {
         if shown == 0 {
             ui.add_space(24.0);
@@ -368,23 +330,6 @@ pub fn show(ui: &mut egui::Ui, main: &mut Main, tasks: &Tasks, state: &mut Orpha
             }
         }
     });
-    if truncated {
-        ui.label(
-            RichText::new(format!("Showing the first {shown} entries. Delete these and rescan to see the rest."))
-                .size(12.0)
-                .color(t.warning_text),
-        );
-    }
-    let notes = main.settings.orphan_notes.clone();
-    if !notes.is_empty() {
-        let kept = if notes.len() == 1 {
-            "1 entry was kept".to_string()
-        } else {
-            format!("{} entries were kept", notes.len())
-        };
-        parts::note(ui, Tone::Warning, &format!("{kept}:\n{}", notes.join("\n")));
-    }
-    footer(ui, main, tasks, state, keep, selected);
 }
 
 fn footer(
@@ -420,7 +365,7 @@ fn footer(
                 None => format!("{}  Delete {selected} selected", ph::TRASH),
             };
             let button = if state.confirming {
-                egui::Button::new(RichText::new(label).color(egui::Color32::WHITE).semibold()).fill(t.destructive)
+                egui::Button::new(RichText::new(label).color(t.on_accent).semibold()).fill(t.destructive)
             } else {
                 egui::Button::new(RichText::new(label).color(t.destructive_text))
             };
