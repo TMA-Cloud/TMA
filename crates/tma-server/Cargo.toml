@@ -1,0 +1,69 @@
+[package]
+name = "tma-server"
+description = "TMA Cloud server: the REST API, the background worker and the admin CLI"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+default-run = "tma-server"
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "tma-server"
+path = "src/main.rs"
+
+[dependencies]
+tma-core = { workspace = true }
+
+anyhow = { workspace = true }
+async-stream = "0.3"
+aws-credential-types = "1"
+aws-sdk-s3 = { version = "1", default-features = false, features = ["rt-tokio", "behavior-version-latest", "default-https-client"] }
+aws-smithy-types = { version = "1", features = ["byte-stream-poll-next"] }
+axum = { version = "0.8", features = ["multipart", "macros"] }
+base64 = { workspace = true }
+bcrypt = "0.19"
+bytes = { workspace = true }
+chrono = { workspace = true }
+clap = { version = "4", features = ["derive", "env"] }
+crc32fast = "1"
+cron = "0.17"
+dashmap = "6"
+data-encoding = "2"
+dotenvy = "0.15"
+flate2 = "1"
+futures = { workspace = true }
+http-body-util = "0.1"
+image = { version = "0.25", default-features = false, features = ["png"] }
+infer = "0.22"
+ipnet = "2"
+jsonwebtoken = { version = "11", default-features = false, features = ["aws_lc_rs", "use_pem"] }
+mime_guess = { workspace = true }
+percent-encoding = { workspace = true }
+prometheus = { version = "0.14", default-features = false, features = ["process"] }
+qrcode = { version = "0.14", default-features = false, features = ["image"] }
+rand = "0.8"
+redis = { version = "1", features = ["tokio-comp", "aio", "connection-manager", "tokio-rustls-comp"] }
+regex = { workspace = true }
+reqwest = { workspace = true }
+ring = "0.17"
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { version = "0.9", default-features = false, features = ["postgres", "runtime-tokio", "tls-rustls-ring-webpki", "chrono", "json", "uuid", "macros"] }
+subtle = "2"
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+tower = { version = "0.5", features = ["util"] }
+tower-http = { version = "0.7", features = ["fs", "set-header", "catch-panic"] }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+url = { workspace = true }
+uuid = { workspace = true }
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }
+tma-client = { workspace = true }
