@@ -65,6 +65,21 @@ pub fn open_secret(blob: &[u8], purpose: &SecretPurpose, binding: &str, kek: &[u
     String::from_utf8(plain.to_vec()).map_err(|_| anyhow!("Stored {} is not text", purpose.label))
 }
 
+/// The secret sealed again under the primary KEK, or None when it already is.
+pub fn reseal(
+    sealed: &[u8],
+    purpose: &SecretPurpose,
+    binding: &str,
+    version: i32,
+    keyring: &super::Keyring,
+) -> Result<Option<Vec<u8>>> {
+    if version == keyring.primary_version() {
+        return Ok(None);
+    }
+    let secret = open_secret(sealed, purpose, binding, keyring.kek(version)?)?;
+    Ok(Some(seal_secret(&secret, purpose, binding, keyring.primary_kek()?)?))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

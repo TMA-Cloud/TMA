@@ -49,6 +49,22 @@ fn bulk_audit(action: &str, items: &[Brief], extra: serde_json::Value) -> Event 
         .meta(meta)
 }
 
+/// A large tree goes to the worker: queue `task` for it, audit that, and answer that it is queued.
+async fn queue_tree(
+    state: &AppState,
+    ctx: &ReqCtx,
+    owner: &str,
+    task: &str,
+    (ids, items, tree): (&[String], &[Brief], i64),
+    event: &str,
+    text: &str,
+) -> ApiResult<Response> {
+    let body = json!({ "task": task, "ids": ids, "userId": owner });
+    let job = state.jobs.send(queues::FILE_OPERATIONS, body, Some(owner), 0).await?;
+    state.audit.log(ctx, bulk_audit(event, items, json!({ "treeCount": tree })));
+    Ok(queued(job, text))
+}
+
 fn queued(job: uuid::Uuid, text: &str) -> Response {
     (StatusCode::ACCEPTED, Json(json!({ "message": text, "queued": true, "jobId": job }))).into_response()
 }
@@ -214,17 +230,16 @@ pub async fn trash(
     let items = listing::briefs(&state.pool, &ids, &auth.owner_id, false).await?;
     let tree = trash_model::count_tree(&state.pool, &ids, &auth.owner_id, false, false).await?;
     if tree > ASYNC_TREE_THRESHOLD {
-        let job = state
-            .jobs
-            .send(
-                queues::FILE_OPERATIONS,
-                json!({ "task": "trash", "ids": ids, "userId": auth.owner_id }),
-                Some(&auth.owner_id),
-                0,
-            )
-            .await?;
-        state.audit.log(&ctx, bulk_audit("file.delete.queued", &items, json!({ "treeCount": tree })));
-        return Ok(queued(job, "Move to trash queued."));
+        return queue_tree(
+            &state,
+            &ctx,
+            &auth.owner_id,
+            "trash",
+            (&ids, &items, tree),
+            "file.delete.queued",
+            "Move to trash queued.",
+        )
+        .await;
     }
     let run = {
         let (state, owner) = (state.clone(), auth.owner_id.clone());
@@ -281,17 +296,16 @@ pub async fn restore(
     }
     let tree = trash_model::count_tree(&state.pool, &ids, &auth.owner_id, true, false).await?;
     if tree > ASYNC_TREE_THRESHOLD {
-        let job = state
-            .jobs
-            .send(
-                queues::FILE_OPERATIONS,
-                json!({ "task": "restore", "ids": ids, "userId": auth.owner_id }),
-                Some(&auth.owner_id),
-                0,
-            )
-            .await?;
-        state.audit.log(&ctx, bulk_audit("file.restore.queued", &items, json!({ "treeCount": tree })));
-        return Ok(queued(job, "Restore queued."));
+        return queue_tree(
+            &state,
+            &ctx,
+            &auth.owner_id,
+            "restore",
+            (&ids, &items, tree),
+            "file.restore.queued",
+            "Restore queued.",
+        )
+        .await;
     }
     let run = {
         let (pool, owner) = (state.pool.clone(), auth.owner_id.clone());

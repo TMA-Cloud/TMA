@@ -118,6 +118,18 @@ pub async fn google_config(
     Ok(Json(google::summary(&state.pool).await?))
 }
 
+/// Google sign-in is configured by the first user only.
+async fn require_google_admin(state: &AppState, auth: &AuthUser, ctx: &ReqCtx) -> ApiResult<()> {
+    require_first_user(
+        state,
+        auth,
+        ctx,
+        "update_google_auth_config",
+        "Only the first user can configure Google sign-in",
+    )
+    .await
+}
+
 pub async fn save_google_config(
     State(state): State<AppState>,
     ctx: ReqCtx,
@@ -125,14 +137,7 @@ pub async fn save_google_config(
     JsonBody(input): JsonBody<GoogleAuthInput>,
 ) -> ApiResult<Json<GoogleAuthSummary>> {
     state.limits.check(limits::GOOGLE_CONFIG, &format!("google-auth-config:{}", auth.user_id))?;
-    require_first_user(
-        &state,
-        &auth,
-        &ctx,
-        "update_google_auth_config",
-        "Only the first user can configure Google sign-in",
-    )
-    .await?;
+    require_google_admin(&state, &auth, &ctx).await?;
     let current = google::load(&state.pool, &state.keyring).await.unwrap_or(None);
     let config = google::normalize(&input, current.as_ref())?;
     if let Err((status, message)) = google::probe(&state.http, &config).await {
@@ -169,14 +174,7 @@ pub async fn clear_google_config(
     auth: AuthUser,
     JsonBody(body): JsonBody<serde_json::Value>,
 ) -> ApiResult<Json<GoogleAuthSummary>> {
-    require_first_user(
-        &state,
-        &auth,
-        &ctx,
-        "update_google_auth_config",
-        "Only the first user can configure Google sign-in",
-    )
-    .await?;
+    require_google_admin(&state, &auth, &ctx).await?;
     let expected = body.get("expectedVersion").and_then(|v| v.as_i64()).map(|v| v as i32);
     // Accounts keep their Google link, so turning sign-in back on restores it.
     let version = google::save(&state.pool, &state.keyring, None, &auth.user_id, expected).await?;

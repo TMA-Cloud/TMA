@@ -50,18 +50,28 @@ pub async fn get_many(pool: &PgPool, ids: &[String], owner: &str) -> anyhow::Res
     Ok(sqlx::query_as::<_, StoredFile>(sqlx::AssertSqlSafe(sql)).bind(ids).bind(owner).fetch_all(pool).await?)
 }
 
-pub async fn create_folder(pool: &PgPool, name: &str, parent: Option<&str>, owner: &str) -> anyhow::Result<FileItem> {
-    let mut tx = pool.begin().await?;
-    assert_live_folders(&mut *tx, &[parent.map(String::from)], owner).await?;
+/// A new folder row; the caller has checked the parent.
+async fn insert_folder(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    name: &str,
+    parent: Option<&str>,
+    owner: &str,
+) -> anyhow::Result<ListRow> {
     let sql =
         format!("INSERT INTO files(id, name, type, parent_id, user_id) VALUES($1, $2, 'folder', $3, $4) {RETURNING}");
-    let row = sqlx::query_as::<_, ListRow>(sqlx::AssertSqlSafe(sql))
+    Ok(sqlx::query_as::<_, ListRow>(sqlx::AssertSqlSafe(sql))
         .bind(generate_id())
         .bind(name)
         .bind(parent)
         .bind(owner)
-        .fetch_one(&mut *tx)
-        .await?;
+        .fetch_one(&mut **tx)
+        .await?)
+}
+
+pub async fn create_folder(pool: &PgPool, name: &str, parent: Option<&str>, owner: &str) -> anyhow::Result<FileItem> {
+    let mut tx = pool.begin().await?;
+    assert_live_folders(&mut *tx, &[parent.map(String::from)], owner).await?;
+    let row = insert_folder(&mut tx, name, parent, owner).await?;
     tx.commit().await?;
     Ok(row.into())
 }
@@ -92,19 +102,7 @@ pub async fn find_or_create_folder(
     .await?;
     let (row, created) = match existing {
         Some(row) => (row, false),
-        None => {
-            let sql = format!(
-                "INSERT INTO files(id, name, type, parent_id, user_id) VALUES($1, $2, 'folder', $3, $4) {RETURNING}"
-            );
-            let row = sqlx::query_as::<_, ListRow>(sqlx::AssertSqlSafe(sql))
-                .bind(generate_id())
-                .bind(name)
-                .bind(parent)
-                .bind(owner)
-                .fetch_one(&mut *tx)
-                .await?;
-            (row, true)
-        }
+        None => (insert_folder(&mut tx, name, parent, owner).await?, true),
     };
     tx.commit().await?;
     Ok((row.into(), created))

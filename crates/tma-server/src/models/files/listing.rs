@@ -222,19 +222,7 @@ pub async fn info(pool: &PgPool, id: &str, owner: &str) -> anyhow::Result<FileIn
 /// Folder names from the root down to `folder_id` ("Home / A / B" without Home).
 pub async fn folder_path(pool: &PgPool, folder_id: Option<&str>, owner: &str) -> anyhow::Result<Vec<String>> {
     let Some(folder_id) = folder_id else { return Ok(Vec::new()) };
-    Ok(sqlx::query_scalar(
-        "WITH RECURSIVE chain(id, name, parent_id, depth, visited) AS (
-           SELECT id, name, parent_id, 0, ARRAY[id] FROM files WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL
-           UNION ALL
-           SELECT f.id, f.name, f.parent_id, chain.depth + 1, chain.visited || f.id
-             FROM files f JOIN chain ON chain.parent_id = f.id
-            WHERE f.user_id = $2 AND f.deleted_at IS NULL AND NOT f.id = ANY(chain.visited)
-         ) SELECT name FROM chain ORDER BY depth DESC",
-    )
-    .bind(folder_id)
-    .bind(owner)
-    .fetch_all(pool)
-    .await?)
+    Ok(folder_trail(pool, folder_id, owner).await?.into_iter().map(|(_, name)| name).collect())
 }
 
 /// Breadcrumbs for a folder: (id, name) from the root down.

@@ -43,16 +43,7 @@ pub async fn create(
     if name.chars().count() > 100 {
         return Err(ApiError::validation("name", "Name must not exceed 100 characters"));
     }
-    if users::by_email(&state.pool, &email).await?.is_some() {
-        state.audit.log(
-            &ctx,
-            Event::new("account.sub_user.create")
-                .failure()
-                .resource("user", None)
-                .meta(json!({ "email": email, "reason": "email_already_in_use" })),
-        );
-        return Err(ApiError::conflict("Email already in use"));
-    }
+    super::auth::ensure_email_free(&state, &ctx, &email, "account.sub_user.create", "user").await?;
     let hash = password::hash(&body.password).await?;
     let sub_user =
         accounts::create_sub_user(&state.pool, &auth.user_id, &email, &hash, name, &body.permissions).await?;

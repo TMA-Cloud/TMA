@@ -271,11 +271,7 @@ pub async fn rewrap_secret(pool: &PgPool, keyring: &Keyring) -> Result<bool> {
     else {
         return Ok(false);
     };
-    if kv == keyring.primary_version() {
-        return Ok(false);
-    }
-    let secret = open_secret(&sealed, &GOOGLE_SECRET, &id, keyring.kek(kv)?)?;
-    let resealed = seal_secret(&secret, &GOOGLE_SECRET, &id, keyring.primary_kek()?)?;
+    let Some(resealed) = crate::crypto::reseal(&sealed, &GOOGLE_SECRET, &id, kv, keyring)? else { return Ok(false) };
     sqlx::query("UPDATE app_settings SET google_client_secret_encrypted = $1, google_client_secret_kek_version = $2 WHERE id = 'app_settings'")
         .bind(resealed)
         .bind(keyring.primary_version())

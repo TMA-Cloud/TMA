@@ -112,6 +112,19 @@ async fn full_workflow() {
     assert!(other.login("ada@example.test", "wrong-password", None).await.unwrap_err().is_unauthorized());
     other.login("ada@example.test", "correct-horse-battery", None).await.unwrap();
 
+    // Instance switches answer with their new value under the keys the apps read.
+    assert_eq!(admin.set_signup(false).await.unwrap()["signupEnabled"], false);
+    assert!(!admin.signup_status().await.unwrap().signup_enabled);
+    admin.set_signup(true).await.unwrap();
+    assert_eq!(admin.set_hide_extensions(true).await.unwrap()["hideFileExtensions"], true);
+    assert!(admin.hide_extensions().await.unwrap());
+    admin.set_hide_extensions(false).await.unwrap();
+    assert_eq!(admin.set_desktop_only(false).await.unwrap()["electronOnlyAccess"], false);
+    assert_eq!(admin.set_password_change(true).await.unwrap()["allowPasswordChange"], true);
+    assert!(admin.set_cloud_drive_save_only(true).await.unwrap().save_only);
+    assert!(admin.cloud_drive_config().await.unwrap().save_only);
+    admin.activity_settings().await.unwrap();
+
     // Folders work without a bucket.
     let docs = admin.create_folder("Docs", None).await.unwrap();
     admin.rename(&docs.id, "Documents").await.unwrap();
@@ -159,8 +172,19 @@ async fn full_workflow() {
     admin.download_to(&item.id, &dest, Progress::new(0)).await.unwrap();
     assert_eq!(std::fs::read_to_string(&dest).unwrap(), body);
     let _ = std::fs::remove_file(&dest);
-    admin.upload(&text_file("deep.txt", "x", Some("A/B")), &UploadOptions::default(), Progress::new(0)).await.unwrap();
+    let deep = admin
+        .upload(&text_file("deep.txt", "x", Some("A/B")), &UploadOptions::default(), Progress::new(0))
+        .await
+        .unwrap();
     assert!(root(&admin).await.iter().any(|f| f.name == "A" && f.is_folder()));
+    assert_eq!(admin.info(&deep.id).await.unwrap().location_path, ["A", "B"]);
+
+    // New content for a file keeps its id, as saving in a desktop app does.
+    let replaced = admin.replace(&deep.id, &text_file("deep.txt", "second", None), Progress::new(0)).await.unwrap();
+    assert_eq!(replaced.id, deep.id);
+    admin.download_to(&deep.id, &dest, Progress::new(0)).await.unwrap();
+    assert_eq!(std::fs::read_to_string(&dest).unwrap(), "second");
+    let _ = std::fs::remove_file(&dest);
 
     // Search, stats, star.
     assert!(admin.search("note", 10).await.unwrap().iter().any(|f| f.id == item.id));

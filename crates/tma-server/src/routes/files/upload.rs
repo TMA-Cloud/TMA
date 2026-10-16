@@ -72,6 +72,24 @@ async fn announce(state: &AppState, owner: &str, file: &FileItem, parent: Option
         .await;
 }
 
+/// The one row a single-file upload inserts.
+async fn insert_one(state: &AppState, planned: &[PlannedUpload], owner: &str) -> ApiResult<FileItem> {
+    crud::insert_uploads(&state.pool, planned, owner)
+        .await?
+        .into_iter()
+        .next()
+        .ok_or_else(|| ApiError::internal("upload row missing"))
+}
+
+/// The file a single-file request carried.
+fn first_upload(outcome: &upload::UploadOutcome) -> ApiResult<crud::StreamedUpload> {
+    outcome.uploads.first().cloned().ok_or_else(|| ApiError::bad_request("No file uploaded"))
+}
+
+async fn owned_file(state: &AppState, id: &str, owner: &str) -> ApiResult<crud::StoredFile> {
+    crud::get(&state.pool, id, owner).await?.ok_or_else(|| ApiError::not_found("File not found"))
+}
+
 pub async fn single(
     State(state): State<AppState>,
     ctx: ReqCtx,
@@ -81,16 +99,12 @@ pub async fn single(
     auth::require(&state, &auth, &ctx, Permission::Upload).await?;
     state.limits.check(limits::UPLOAD, &upload_key(&auth))?;
     let mut outcome = upload::receive(&state, form, true).await?;
-    let file = outcome.uploads.first().cloned().ok_or_else(|| ApiError::bad_request("No file uploaded"))?;
+    let file = first_upload(&outcome)?;
     validate_name(&file.name).map_err(|_| ApiError::bad_request("Invalid file name"))?;
     let parent = parent_id(outcome.field("parentId"))?;
     let modified = client_mtime(outcome.field("lastModifiedTimes"));
     let planned = [PlannedUpload { upload: file.clone(), parent_id: parent.clone(), modified, client_id: None }];
-    let item = crud::insert_uploads(&state.pool, &planned, &auth.owner_id)
-        .await?
-        .into_iter()
-        .next()
-        .ok_or_else(|| ApiError::internal("upload row missing"))?;
+    let item = insert_one(&state, &planned, &auth.owner_id).await?;
     outcome.keys.keep_all();
     state.audit.log(
         &ctx,
@@ -244,9 +258,8 @@ pub async fn replace(
     auth::require(&state, &auth, &ctx, Permission::Edit).await?;
     state.limits.check(limits::UPLOAD, &upload_key(&auth))?;
     let mut outcome = upload::receive(&state, form, true).await?;
-    let upload = outcome.uploads.first().cloned().ok_or_else(|| ApiError::bad_request("No file uploaded"))?;
-    let existing =
-        crud::get(&state.pool, &id, &auth.owner_id).await?.ok_or_else(|| ApiError::not_found("File not found"))?;
+    let upload = first_upload(&outcome)?;
+    let existing = owned_file(&state, &id, &auth.owner_id).await?;
     validate_name(&existing.name).map_err(|_| ApiError::bad_request("Invalid file name"))?;
     let modified = client_mtime(outcome.field("lastModifiedTimes"));
     let (updated, superseded, parent) = crud::replace_data(&state.pool, &id, &auth.owner_id, &upload, modified)
@@ -275,17 +288,12 @@ pub async fn derived(
 ) -> ApiResult<Json<FileItem>> {
     auth::require(&state, &auth, &ctx, Permission::Upload).await?;
     state.limits.check(limits::UPLOAD, &upload_key(&auth))?;
-    let existing =
-        crud::get(&state.pool, &id, &auth.owner_id).await?.ok_or_else(|| ApiError::not_found("File not found"))?;
+    let existing = owned_file(&state, &id, &auth.owner_id).await?;
     let mut outcome = upload::receive(&state, form, true).await?;
-    let upload = outcome.uploads.first().cloned().ok_or_else(|| ApiError::bad_request("No file uploaded"))?;
+    let upload = first_upload(&outcome)?;
     validate_name(&upload.name).map_err(|_| ApiError::bad_request("Invalid file name"))?;
     let planned = [PlannedUpload { upload, parent_id: existing.parent_id.clone(), modified: None, client_id: None }];
-    let item = crud::insert_uploads(&state.pool, &planned, &auth.owner_id)
-        .await?
-        .into_iter()
-        .next()
-        .ok_or_else(|| ApiError::internal("upload row missing"))?;
+    let item = insert_one(&state, &planned, &auth.owner_id).await?;
     outcome.keys.keep_all();
     state.audit.log(
         &ctx,

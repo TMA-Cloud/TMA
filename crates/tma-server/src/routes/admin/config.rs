@@ -41,6 +41,30 @@ pub async fn signup_status(State(state): State<AppState>, auth: AuthUser) -> Api
     }))
 }
 
+/// One instance switch the first user turns on or off: the request field, who may
+/// change it, and how the change is audited and answered. The shapes match what
+/// the web and desktop apps already send and read.
+struct Switch {
+    flag: FlagSetting,
+    field: &'static str,
+    invalid: &'static str,
+    action: &'static str,
+    forbidden: &'static str,
+    /// The setting's name in the audit log, and the key its new value goes under there.
+    setting: &'static str,
+    audit_key: &'static str,
+    /// The key the new value is returned under.
+    reply_key: &'static str,
+}
+
+/// Change a switch for the first user, audit it and answer with its new value.
+async fn flip(state: &AppState, ctx: &ReqCtx, auth: &AuthUser, body: &Value, s: &Switch) -> ApiResult<Json<Value>> {
+    let value = bool_field(body, s.field, s.invalid)?;
+    set_flag(state, ctx, auth, s.flag, value, s.action, s.forbidden).await?;
+    audit_update(state, ctx, json!({ "setting": s.setting, (s.audit_key): value }));
+    Ok(Json(json!({ (s.reply_key): value })))
+}
+
 /// Shared shape of every "first user flips a boolean" endpoint.
 async fn set_flag(
     state: &AppState,
@@ -57,25 +81,32 @@ async fn set_flag(
     Ok(())
 }
 
+/// `true` or `false`, also accepted as the strings older clients send.
+fn true_or_false(body: &Value, field: &str, message: &str) -> Result<bool, ApiError> {
+    match body.get(field) {
+        Some(Value::Bool(b)) => Ok(*b),
+        Some(Value::String(s)) if s == "true" || s == "false" => Ok(s == "true"),
+        _ => Err(ApiError::validation(field, message)),
+    }
+}
+
 pub async fn toggle_signup(
     State(state): State<AppState>,
     ctx: ReqCtx,
     auth: AuthUser,
     JsonBody(body): JsonBody<Value>,
 ) -> ApiResult<Json<Value>> {
-    let enabled = bool_field(&body, "enabled", "Enabled must be a boolean")?;
-    set_flag(
-        &state,
-        &ctx,
-        &auth,
-        FlagSetting::SignupEnabled,
-        enabled,
-        "toggle_signup",
-        "Only the first user can toggle signup",
-    )
-    .await?;
-    audit_update(&state, &ctx, json!({ "setting": "signup_enabled", "newValue": enabled }));
-    Ok(Json(json!({ "signupEnabled": enabled })))
+    let switch = Switch {
+        flag: FlagSetting::SignupEnabled,
+        field: "enabled",
+        invalid: "Enabled must be a boolean",
+        action: "toggle_signup",
+        forbidden: "Only the first user can toggle signup",
+        setting: "signup_enabled",
+        audit_key: "newValue",
+        reply_key: "signupEnabled",
+    };
+    flip(&state, &ctx, &auth, &body, &switch).await
 }
 
 pub async fn hide_extensions(State(state): State<AppState>) -> Json<Value> {
@@ -88,19 +119,17 @@ pub async fn save_hide_extensions(
     auth: AuthUser,
     JsonBody(body): JsonBody<Value>,
 ) -> ApiResult<Json<Value>> {
-    let hidden = bool_field(&body, "hidden", "Hidden must be a boolean")?;
-    set_flag(
-        &state,
-        &ctx,
-        &auth,
-        FlagSetting::HideFileExtensions,
-        hidden,
-        "update_hide_file_extensions",
-        "Only the first user can configure hide file extensions",
-    )
-    .await?;
-    audit_update(&state, &ctx, json!({ "setting": "hide_file_extensions", "hidden": hidden }));
-    Ok(Json(json!({ "hideFileExtensions": hidden })))
+    let switch = Switch {
+        flag: FlagSetting::HideFileExtensions,
+        field: "hidden",
+        invalid: "Hidden must be a boolean",
+        action: "update_hide_file_extensions",
+        forbidden: "Only the first user can configure hide file extensions",
+        setting: "hide_file_extensions",
+        audit_key: "hidden",
+        reply_key: "hideFileExtensions",
+    };
+    flip(&state, &ctx, &auth, &body, &switch).await
 }
 
 pub async fn desktop_only(State(state): State<AppState>) -> Json<Value> {
@@ -113,19 +142,17 @@ pub async fn save_desktop_only(
     auth: AuthUser,
     JsonBody(body): JsonBody<Value>,
 ) -> ApiResult<Json<Value>> {
-    let enabled = bool_field(&body, "enabled", "Enabled must be a boolean")?;
-    set_flag(
-        &state,
-        &ctx,
-        &auth,
-        FlagSetting::RequireDesktopClient,
-        enabled,
-        "update_electron_only_access",
-        "Only the first user can configure desktop-only access",
-    )
-    .await?;
-    audit_update(&state, &ctx, json!({ "setting": "electron_only_access", "enabled": enabled }));
-    Ok(Json(json!({ "electronOnlyAccess": enabled })))
+    let switch = Switch {
+        flag: FlagSetting::RequireDesktopClient,
+        field: "enabled",
+        invalid: "Enabled must be a boolean",
+        action: "update_electron_only_access",
+        forbidden: "Only the first user can configure desktop-only access",
+        setting: "electron_only_access",
+        audit_key: "enabled",
+        reply_key: "electronOnlyAccess",
+    };
+    flip(&state, &ctx, &auth, &body, &switch).await
 }
 
 pub async fn password_change(State(state): State<AppState>) -> Json<Value> {
@@ -138,19 +165,17 @@ pub async fn save_password_change(
     auth: AuthUser,
     JsonBody(body): JsonBody<Value>,
 ) -> ApiResult<Json<Value>> {
-    let enabled = bool_field(&body, "enabled", "Enabled must be a boolean")?;
-    set_flag(
-        &state,
-        &ctx,
-        &auth,
-        FlagSetting::AllowPasswordChange,
-        enabled,
-        "update_password_change",
-        "Only the first user can configure password change",
-    )
-    .await?;
-    audit_update(&state, &ctx, json!({ "setting": "allow_password_change", "enabled": enabled }));
-    Ok(Json(json!({ "allowPasswordChange": enabled })))
+    let switch = Switch {
+        flag: FlagSetting::AllowPasswordChange,
+        field: "enabled",
+        invalid: "Enabled must be a boolean",
+        action: "update_password_change",
+        forbidden: "Only the first user can configure password change",
+        setting: "allow_password_change",
+        audit_key: "enabled",
+        reply_key: "allowPasswordChange",
+    };
+    flip(&state, &ctx, &auth, &body, &switch).await
 }
 
 /// Any signed-in user: every desktop app reads the mode it must apply.
@@ -165,11 +190,7 @@ pub async fn save_cloud_drive(
     auth: AuthUser,
     JsonBody(body): JsonBody<Value>,
 ) -> ApiResult<Json<CloudDriveConfig>> {
-    let save_only = match body.get("saveOnly") {
-        Some(Value::Bool(b)) => *b,
-        Some(Value::String(s)) if s == "true" || s == "false" => s == "true",
-        _ => return Err(ApiError::validation("saveOnly", "saveOnly must be true or false")),
-    };
+    let save_only = true_or_false(&body, "saveOnly", "saveOnly must be true or false")?;
     set_flag(
         &state,
         &ctx,
@@ -317,15 +338,14 @@ pub async fn save_known_proxies(
 }
 
 pub async fn activity(State(state): State<AppState>, ctx: ReqCtx, auth: AuthUser) -> ApiResult<Json<ActivitySettings>> {
-    require_first_user(
-        &state,
-        &auth,
-        &ctx,
-        "read_activity_settings",
-        "Only the first user can manage session and access-time settings",
-    )
-    .await?;
+    require_activity_admin(&state, &auth, &ctx, "read_activity_settings").await?;
     Ok(Json(state.settings.get().await.activity()))
+}
+
+/// Session and access-time settings belong to the first user.
+async fn require_activity_admin(state: &AppState, auth: &AuthUser, ctx: &ReqCtx, action: &str) -> ApiResult<()> {
+    require_first_user(state, auth, ctx, action, "Only the first user can manage session and access-time settings")
+        .await
 }
 
 fn int_field(body: &Value, field: &str) -> Option<i64> {
@@ -338,14 +358,7 @@ pub async fn save_session_timeout(
     auth: AuthUser,
     JsonBody(body): JsonBody<Value>,
 ) -> ApiResult<Json<ActivitySettings>> {
-    require_first_user(
-        &state,
-        &auth,
-        &ctx,
-        "update_activity_settings",
-        "Only the first user can manage session and access-time settings",
-    )
-    .await?;
+    require_activity_admin(&state, &auth, &ctx, "update_activity_settings").await?;
     let days = int_field(&body, "idleDays")
         .ok_or_else(|| ApiError::validation("idleDays", "Session idle timeout (days) must be 1 to 365"))?;
     settings::set_idle_days(&state.pool, &auth.user_id, days).await?;
@@ -361,19 +374,8 @@ pub async fn save_access_time(
     auth: AuthUser,
     JsonBody(body): JsonBody<Value>,
 ) -> ApiResult<Json<ActivitySettings>> {
-    require_first_user(
-        &state,
-        &auth,
-        &ctx,
-        "update_activity_settings",
-        "Only the first user can manage session and access-time settings",
-    )
-    .await?;
-    let enabled = match body.get("enabled") {
-        Some(Value::Bool(b)) => *b,
-        Some(Value::String(s)) if s == "true" || s == "false" => s == "true",
-        _ => return Err(ApiError::validation("enabled", "Enabled must be true or false")),
-    };
+    require_activity_admin(&state, &auth, &ctx, "update_activity_settings").await?;
+    let enabled = true_or_false(&body, "enabled", "Enabled must be true or false")?;
     let window = int_field(&body, "windowMinutes")
         .ok_or_else(|| ApiError::validation("windowMinutes", "Access time window (minutes) must be 0 to 1440"))?;
     let flush = int_field(&body, "flushSeconds")

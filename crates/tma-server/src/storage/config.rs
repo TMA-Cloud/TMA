@@ -333,11 +333,7 @@ pub async fn rewrap_secret(pool: &PgPool, keyring: &Keyring) -> anyhow::Result<b
     else {
         return Ok(false);
     };
-    if kv == keyring.primary_version() {
-        return Ok(false);
-    }
-    let secret = open_secret(&sealed, &STORAGE_SECRET, &akid, keyring.kek(kv)?)?;
-    let resealed = seal_secret(&secret, &STORAGE_SECRET, &akid, keyring.primary_kek()?)?;
+    let Some(resealed) = crate::crypto::reseal(&sealed, &STORAGE_SECRET, &akid, kv, keyring)? else { return Ok(false) };
     sqlx::query("UPDATE app_settings SET storage_secret_encrypted = $1, storage_secret_kek_version = $2 WHERE id = 'app_settings'")
         .bind(resealed)
         .bind(keyring.primary_version())
