@@ -4,7 +4,7 @@
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
-use egui::{Align2, CornerRadius, Frame, Margin, RichText, Stroke};
+use egui::{Align2, CornerRadius, Frame, Margin, RichText, Sense, Stroke, Vec2};
 use tma_client::{Client, Progress, UploadFile, UploadOptions};
 
 use crate::app::{App, Main};
@@ -358,51 +358,10 @@ pub fn show(main: &mut Main, ctx: &egui::Context) {
                         widgets::progress_bar(ui, fraction, width);
                     }
                     if main.transfers.expanded {
-                        ui.add_space(6.0);
-                        egui::ScrollArea::vertical().max_height(220.0).show(ui, |ui| {
+                        ui.add_space(8.0);
+                        egui::ScrollArea::vertical().max_height(240.0).show(ui, |ui| {
                             for item in main.transfers.items.iter().rev() {
-                                ui.horizontal(|ui| {
-                                    let icon = match item.direction {
-                                        Direction::Up => ph::ARROW_UP,
-                                        Direction::Down => ph::ARROW_DOWN,
-                                        Direction::Job(icon) => icon,
-                                    };
-                                    ui.label(RichText::new(icon).color(t.label_tertiary));
-                                    ui.vertical(|ui| {
-                                        ui.set_width(230.0);
-                                        let name = match (item.direction, &item.state) {
-                                            (Direction::Job(_), State::Done) => {
-                                                crate::transfer_text::finished(&item.name)
-                                            }
-                                            _ => item.name.clone(),
-                                        };
-                                        ui.add(egui::Label::new(name).truncate());
-                                        match &item.state {
-                                            State::Queued => {
-                                                ui.label(RichText::new("Waiting").size(11.0).color(t.label_tertiary));
-                                            }
-                                            // No byte counts: a bar that moves rather than one that fills.
-                                            State::Running if item.progress.total.load(Ordering::Relaxed) == 0 => {
-                                                widgets::busy_bar(ui, 220.0)
-                                            }
-                                            State::Running => {
-                                                widgets::progress_bar(ui, item.progress.fraction(), 220.0)
-                                            }
-                                            State::Done => {
-                                                let status = crate::transfer_text::row_status(kind(item.direction));
-                                                ui.label(RichText::new(status).size(11.0).color(t.positive_text));
-                                            }
-                                            State::Failed(msg) => {
-                                                ui.label(RichText::new(msg).size(11.0).color(t.destructive_text));
-                                            }
-                                        }
-                                    });
-                                    if matches!(item.state, State::Running | State::Queued)
-                                        && widgets::icon_button(ui, ph::X_CIRCLE, "Cancel").clicked()
-                                    {
-                                        item.progress.cancel();
-                                    }
-                                });
+                                row(ui, item, &t);
                             }
                         });
                     }
@@ -421,6 +380,122 @@ pub fn show(main: &mut Main, ctx: &egui::Context) {
     }
     if clear {
         main.transfers.items.clear();
+    }
+}
+
+/// One item: its icon and name, with what is happening on the right. Only a
+/// running item's progress or a failure's reason takes a second line.
+fn row(ui: &mut egui::Ui, item: &Transfer, t: &crate::theme::Tokens) {
+    const ICON: f32 = 22.0;
+    let width = ui.available_width();
+    let second_line = matches!(item.state, State::Running | State::Failed(_));
+    let height = if second_line { 44.0 } else { 32.0 };
+    let (rect, response) = ui.allocate_exact_size(Vec2::new(width, height), Sense::hover());
+    if response.hovered() {
+        ui.painter().rect_filled(rect, CornerRadius::same(8), t.fill_quaternary);
+    }
+    let top = rect.top() + 16.0;
+    let icon_rect = egui::Rect::from_center_size(egui::pos2(rect.left() + 4.0 + ICON / 2.0, top), Vec2::splat(ICON));
+    match item.direction {
+        Direction::Job(icon) => {
+            ui.painter().text(
+                icon_rect.center(),
+                Align2::CENTER_CENTER,
+                icon,
+                egui::FontId::proportional(16.0),
+                t.label_secondary,
+            );
+        }
+        _ => crate::icons::file(ui.painter(), icon_rect, t, &item.name, None),
+    }
+    // The right side: cancel while working, a mark when finished.
+    let right = rect.right() - 6.0;
+    let mut name_right = right - 26.0;
+    match &item.state {
+        State::Running | State::Queued => {
+            let cancel = egui::Rect::from_center_size(egui::pos2(right - 11.0, top), Vec2::splat(22.0));
+            let r = ui.interact(cancel, response.id.with("cancel"), Sense::click()).on_hover_text("Cancel");
+            let color = if r.hovered() { t.destructive_text } else { t.label_tertiary };
+            ui.painter().text(
+                cancel.center(),
+                Align2::CENTER_CENTER,
+                ph::X_CIRCLE,
+                egui::FontId::proportional(16.0),
+                color,
+            );
+            if r.clicked() {
+                item.progress.cancel();
+            }
+            if item.state == State::Queued {
+                let waiting =
+                    ui.painter().layout_no_wrap("Waiting".into(), egui::FontId::proportional(11.0), t.label_tertiary);
+                name_right = cancel.left() - waiting.size().x - 8.0;
+                ui.painter().galley(
+                    egui::pos2(name_right + 4.0, top - waiting.size().y / 2.0),
+                    waiting,
+                    t.label_tertiary,
+                );
+            }
+        }
+        State::Done => {
+            let _ = response.clone().on_hover_text(crate::transfer_text::row_status(kind(item.direction)));
+            ui.painter().text(
+                egui::pos2(right - 11.0, top),
+                Align2::CENTER_CENTER,
+                ph::CHECK_CIRCLE,
+                egui::FontId::proportional(16.0),
+                t.positive_text,
+            );
+        }
+        State::Failed(_) => {
+            ui.painter().text(
+                egui::pos2(right - 11.0, top),
+                Align2::CENTER_CENTER,
+                ph::WARNING_CIRCLE,
+                egui::FontId::proportional(16.0),
+                t.destructive_text,
+            );
+        }
+    }
+    let text_left = icon_rect.right() + 10.0;
+    let name = match (item.direction, &item.state) {
+        (Direction::Job(_), State::Done) => crate::transfer_text::finished(&item.name),
+        _ => item.name.clone(),
+    };
+    let mut job = egui::text::LayoutJob::simple_singleline(name, egui::FontId::proportional(13.0), t.label);
+    job.wrap = egui::text::TextWrapping::truncate_at_width((name_right - text_left).max(20.0));
+    let galley = ui.painter().layout_job(job);
+    ui.painter().galley(egui::pos2(text_left, top - galley.size().y / 2.0), galley, t.label);
+    let line = egui::Rect::from_min_max(egui::pos2(text_left, top + 12.0), egui::pos2(name_right, rect.bottom() - 4.0));
+    match &item.state {
+        // No byte counts: a bar that moves rather than one that fills.
+        State::Running => {
+            let bar =
+                egui::Rect::from_min_size(egui::pos2(line.left(), line.center().y - 2.0), Vec2::new(line.width(), 4.0));
+            let mut child = ui.new_child(egui::UiBuilder::new().max_rect(bar));
+            if item.progress.total.load(Ordering::Relaxed) == 0 {
+                widgets::busy_bar(&mut child, bar.width());
+            } else {
+                widgets::progress_bar(&mut child, item.progress.fraction(), bar.width());
+            }
+        }
+        State::Failed(msg) => {
+            let mut job = egui::text::LayoutJob::simple_singleline(
+                msg.clone(),
+                egui::FontId::proportional(11.0),
+                t.destructive_text,
+            );
+            job.wrap = egui::text::TextWrapping::truncate_at_width(line.width().max(20.0));
+            let galley = ui.painter().layout_job(job);
+            // The whole reason when it is cut short.
+            let _ = response.clone().on_hover_text(msg);
+            ui.painter().galley(
+                egui::pos2(line.left(), line.center().y - galley.size().y / 2.0),
+                galley,
+                t.destructive_text,
+            );
+        }
+        _ => {}
     }
 }
 
