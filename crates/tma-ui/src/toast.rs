@@ -26,6 +26,7 @@ pub struct Toasts {
 }
 
 const LIFETIME: f64 = 4.0;
+const FADE_IN: f64 = 0.18;
 
 impl Toasts {
     pub fn info(&mut self, text: impl Into<String>) {
@@ -43,8 +44,12 @@ impl Toasts {
     pub fn show(&mut self, ctx: &egui::Context, t: &Tokens) {
         let now = ctx.input(|i| i.time);
         for (text, level) in self.pending.drain(..) {
-            self.items.retain(|i| i.text != text);
-            self.items.push(Toast { text, level, shown_at: now });
+            // The same notice again (a double-click, repeated clicks) stays as it is, only
+            // living a little longer, instead of fading in again or stacking up.
+            match self.items.iter_mut().find(|i| i.text == text) {
+                Some(shown) => shown.shown_at = shown.shown_at.max(now - FADE_IN),
+                None => self.items.push(Toast { text, level, shown_at: now }),
+            }
         }
         self.items.retain(|i| now - i.shown_at < LIFETIME);
         if self.items.len() > 4 {
@@ -63,9 +68,10 @@ impl Toasts {
                 ui.set_max_width(360.0);
                 for toast in &self.items {
                     let age = now - toast.shown_at;
-                    // In over 0.18 s, out over the last 0.3 s.
-                    let alpha = (age.min(0.18) / 0.18).min((LIFETIME - age).min(0.3) / 0.3).clamp(0.0, 1.0) as f32;
-                    if age < 0.18 {
+                    // In over FADE_IN, out over the last 0.3 s.
+                    let alpha =
+                        (age.min(FADE_IN) / FADE_IN).min((LIFETIME - age).min(0.3) / 0.3).clamp(0.0, 1.0) as f32;
+                    if age < FADE_IN {
                         ctx.request_repaint();
                     }
                     let (icon, color) = match toast.level {

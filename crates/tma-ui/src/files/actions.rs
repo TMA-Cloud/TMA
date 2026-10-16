@@ -149,6 +149,14 @@ fn is_document(name: &str) -> bool {
     EXTS.contains(&tma_core::names::extension_of(name).as_str())
 }
 
+/// What opening a file the browser cannot show says instead of downloading it.
+fn no_preview(name: &str) -> String {
+    match tma_core::names::extension_of(name).as_str() {
+        "" => format!("{name} can't be opened in the browser. Download it to open it on your computer."),
+        ext => format!(".{ext} files can't be opened in the browser. Download the file to open it on your computer."),
+    }
+}
+
 pub(super) fn is_image(item: &FileItem) -> bool {
     item.mime_type.as_deref().is_some_and(|m| m.starts_with("image/") && m != "image/svg+xml")
 }
@@ -180,7 +188,8 @@ pub fn run(app: &mut App, action: Action) {
             } else if is_document(&item.name) && main.instance.onlyoffice {
                 run(app, Action::OpenDocument(item));
             } else {
-                run(app, Action::Download(vec![item]));
+                // Opening must not start a download nobody asked for; Download is one click away.
+                app.toasts.info(no_preview(&item.name));
             }
         }
         Action::OpenDocument(item) => {
@@ -485,5 +494,20 @@ pub fn run(app: &mut App, action: Action) {
                 app.toasts.info("Editing in a desktop app needs the TMA Cloud desktop app");
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn unsupported_files_say_so_instead_of_downloading() {
+        assert_eq!(
+            no_preview("backup.zip"),
+            ".zip files can't be opened in the browser. Download the file to open it on your computer."
+        );
+        assert!(no_preview("Makefile").starts_with("Makefile can't be opened"));
+        assert!(is_document("Report.DOCX"));
     }
 }
