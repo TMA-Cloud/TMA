@@ -100,6 +100,15 @@ pub fn adopt(path: &Path, stamp: &Stamp) -> std::io::Result<()> {
     Ok(())
 }
 
+/// Mark a folder the engine filled itself as listed, so it opens while the app is closed.
+pub fn mark_listed(path: &Path) -> std::io::Result<()> {
+    Placeholder::options()
+        .write_access()
+        .open(path)
+        .and_then(|mut p| p.update(UpdateOptions::default().has_no_children(), None).map(|_| ()))
+        .map_err(std::io::Error::other)
+}
+
 /// Point a placeholder at a newer server copy and drop the stale local contents.
 pub fn refresh(path: &Path, entry: &Entry) -> std::io::Result<()> {
     let blob = Stamp::of(entry).encode();

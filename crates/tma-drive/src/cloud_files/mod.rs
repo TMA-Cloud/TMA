@@ -162,6 +162,9 @@ pub fn mount(core: Arc<Core>, label: &str, at: Option<&str>) -> Result<Mounted, 
     watcher.watch(&folder, notify::RecursiveMode::Recursive).map_err(|e| e.to_string())?;
     // Windows never asks for the sync root's own contents, so list it before showing it.
     shared.resync_folder(&folder);
+    if let Err(err) = local::mark_listed(&folder) {
+        log::warn!("Cloud Drive root stays unlisted: {err}");
+    }
     let runner = shared.clone();
     let worker = std::thread::Builder::new()
         .name("cloud-drive-sync".into())
