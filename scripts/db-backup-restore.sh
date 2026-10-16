@@ -77,7 +77,11 @@ main() {
   fi
 
   # ── Database config ──────────────────────────────────────────
-  url_decode() { printf '%b' "${1//%/\\x}"; }
+  # %XX becomes its byte; a literal backslash stays one (printf %b would read \n as a newline).
+  url_decode() {
+    local s="${1//\\/\\\\}"
+    printf '%b' "${s//%/\\x}"
+  }
 
   # Split scheme://user:password@host:port/path?query into URL_* variables.
   parse_url() {
@@ -103,6 +107,9 @@ main() {
   DB_PASSWORD="${URL_PASSWORD}"
   DB_NAME="${URL_PATH}"
   [[ -n "${DB_NAME}" ]] || die "DATABASE_URL must name a database"
+  # The name goes into SQL and into backup file names, so only plain names are accepted.
+  [[ "${DB_NAME}" =~ ^[A-Za-z0-9_][A-Za-z0-9_-]{0,62}$ ]] ||
+    die "The database name '${DB_NAME}' must be letters, digits, _ or - (at most 63)"
 
   # Host mode: the URL's libpq parameters (sslmode, sslrootcert, ...) reach every
   # client tool as their PG* environment variables.
@@ -183,6 +190,18 @@ main() {
     fi
   }
 
+  # Entries in a dump's table of contents; 0 when pg_restore cannot read it,
+  # so a corrupt file reaches the caller's message instead of exiting via set -e.
+  toc_entries() {
+    local listing
+    if ${USE_DOCKER}; then
+      listing="$(docker exec -i -e PGPASSWORD "${CONTAINER_NAME}" pg_restore --list <"$1" 2>/dev/null)" || { echo 0; return 0; }
+    else
+      listing="$(pg_restore --list "$1" 2>/dev/null)" || { echo 0; return 0; }
+    fi
+    printf '%s\n' "${listing}" | grep -c . || true
+  }
+
   # ── Pre-flight checks ───────────────────────────────────────
   preflight() {
     if ! ${USE_DOCKER}; then
@@ -228,13 +247,24 @@ main() {
     if ${LOCK_HELD}; then rm -f "${LOCK_FILE}"; fi
   }
 
-  # Set while a dump is being written, and by a restore that stopped services.
+  # Set while a dump is being written, by a restore that stopped services, and
+  # while a restore's scratch database exists.
   PARTIAL_FILE=""
   STOPPED_SERVICES=""
+  SCRATCH_DB=""
 
   # Cleanup on exit / error
   cleanup() {
     [[ -n "${PARTIAL_FILE}" ]] && rm -f "${PARTIAL_FILE}"
+    if [[ -n "${SCRATCH_DB}" ]]; then
+      pg_exec psql -U "${DB_USER}" -d postgres -c "DROP DATABASE IF EXISTS \"${SCRATCH_DB}\" WITH (FORCE);" >/dev/null 2>&1 ||
+        warn "Drop the unused database '${SCRATCH_DB}' by hand."
+      # The live database was never touched, so the services can run on it again.
+      if [[ -n "${STOPPED_SERVICES}" ]]; then
+        # shellcheck disable=SC2086
+        compose start ${STOPPED_SERVICES} >/dev/null 2>&1 && STOPPED_SERVICES=""
+      fi
+    fi
     if [[ -n "${STOPPED_SERVICES}" ]]; then
       warn "${STOPPED_SERVICES}stay stopped because the restore did not finish. Start them with: docker compose start ${STOPPED_SERVICES}"
     fi
@@ -340,12 +370,7 @@ main() {
     # ── Verify dump is readable ──
     info "Verifying backup integrity (pg_restore --list) …"
     local toc_count
-    if ${USE_DOCKER}; then
-      toc_count=$(docker exec -i -e PGPASSWORD "${CONTAINER_NAME}" \
-        pg_restore --list < "${part_file}" 2>/dev/null | wc -l)
-    else
-      toc_count=$(pg_restore --list "${part_file}" 2>/dev/null | wc -l)
-    fi
+    toc_count="$(toc_entries "${part_file}")"
 
     if [[ "${toc_count}" -lt 1 ]]; then
       die "Backup verification failed – pg_restore cannot read the dump."
@@ -439,12 +464,7 @@ METAEOF
 
     # Verify dump is readable
     local toc_count
-    if ${USE_DOCKER}; then
-      toc_count=$(docker exec -i -e PGPASSWORD "${CONTAINER_NAME}" \
-        pg_restore --list < "${backup_file}" 2>/dev/null | wc -l)
-    else
-      toc_count=$(pg_restore --list "${backup_file}" 2>/dev/null | wc -l)
-    fi
+    toc_count="$(toc_entries "${backup_file}")"
 
     if [[ "${toc_count}" -lt 1 ]]; then
       die "Cannot read backup file – it may be corrupt or not in custom format."
@@ -453,8 +473,8 @@ METAEOF
     echo ""
 
     # ── Confirmation ──
-    warn "This will DROP and RECREATE the database '${DB_NAME}'."
-    warn "ALL existing data will be permanently lost."
+    warn "This will REPLACE the database '${DB_NAME}' with the backup."
+    warn "Its current data is lost once the restore succeeds; a failed restore leaves it unchanged."
     echo ""
     local confirm=""
     if ! read -rp "Type the database name to confirm: " confirm && [[ -r /dev/tty ]]; then
@@ -483,48 +503,57 @@ METAEOF
       warn "Stop the API and the worker before restoring, or they may write to the database mid-restore."
     fi
 
-    # ── Step 2: Drop and recreate the database ──
-    # WITH (FORCE) ends remaining connections in the same statement (PostgreSQL 13+).
-    info "Dropping database '${DB_NAME}' …"
+    # ── Step 2: Restore into a scratch database ──
+    # The live database is only replaced once the backup has fully loaded, so a
+    # failed restore (bad file, full disk) leaves it exactly as it was.
+    local scratch="tma_restore_${TIMESTAMP}" old="tma_pre_restore_${TIMESTAMP}"
+    info "Creating scratch database '${scratch}' …"
     pg_exec psql -U "${DB_USER}" -d postgres -c \
-      "DROP DATABASE IF EXISTS \"${DB_NAME}\" WITH (FORCE);" >/dev/null
+      "CREATE DATABASE \"${scratch}\" OWNER \"${DB_USER}\" ENCODING 'UTF8' LC_COLLATE 'C' LC_CTYPE 'C' TEMPLATE template0;" >/dev/null
+    SCRATCH_DB="${scratch}"
 
-    info "Creating fresh database '${DB_NAME}' …"
-    pg_exec psql -U "${DB_USER}" -d postgres -c \
-      "CREATE DATABASE \"${DB_NAME}\" OWNER \"${DB_USER}\" ENCODING 'UTF8' LC_COLLATE 'C' LC_CTYPE 'C' TEMPLATE template0;" >/dev/null
-
-    # ── Step 3: Restore with pg_restore ──
-    #   --single-transaction : all-or-nothing — rolls back on any error
+    #   --single-transaction : all-or-nothing
     #   --no-owner/privs     : portable
     #   --exit-on-error      : stop immediately on first error
-    info "Restoring from backup (single-transaction mode) …"
-
+    info "Restoring from backup into '${scratch}' …"
     local restore_exit=0
     if ${USE_DOCKER}; then
       docker exec -i -e PGPASSWORD "${CONTAINER_NAME}" \
-        pg_restore \
-          -U "${DB_USER}" \
-          -d "${DB_NAME}" \
-          --single-transaction \
-          --no-owner \
-          --no-privileges \
-          --exit-on-error \
+        pg_restore -U "${DB_USER}" -d "${scratch}" \
+          --single-transaction --no-owner --no-privileges --exit-on-error \
         < "${backup_file}" || restore_exit=$?
     else
-      pg_restore \
-        -h "${DB_HOST}" \
-        -p "${DB_PORT}" \
-        -U "${DB_USER}" \
-        -d "${DB_NAME}" \
-        --single-transaction \
-        --no-owner \
-        --no-privileges \
-        --exit-on-error \
+      pg_restore -h "${DB_HOST}" -p "${DB_PORT}" -U "${DB_USER}" -d "${scratch}" \
+        --single-transaction --no-owner --no-privileges --exit-on-error \
         "${backup_file}" || restore_exit=$?
     fi
-
     if [[ ${restore_exit} -ne 0 ]]; then
-      die "pg_restore exited with code ${restore_exit}. The restore was rolled back (single-transaction mode)."
+      die "pg_restore exited with code ${restore_exit}. '${DB_NAME}' was not changed."
+    fi
+
+    # ── Step 3: Swap the restored database in ──
+    # Renames need the databases free of connections; the services are stopped,
+    # and anything else still connected is ended first.
+    info "Replacing '${DB_NAME}' with the restored database …"
+    local exists
+    exists="$(pg_exec psql -U "${DB_USER}" -d postgres -tAc \
+      "SELECT 1 FROM pg_database WHERE datname = '${DB_NAME}';")"
+    if [[ "${exists}" == "1" ]]; then
+      pg_exec psql -U "${DB_USER}" -d postgres -c \
+        "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '${DB_NAME}' AND pid <> pg_backend_pid();" >/dev/null
+      pg_exec psql -U "${DB_USER}" -d postgres -c "ALTER DATABASE \"${DB_NAME}\" RENAME TO \"${old}\";" >/dev/null ||
+        die "Could not set '${DB_NAME}' aside (is something still connected?). It was not changed."
+    fi
+    if ! pg_exec psql -U "${DB_USER}" -d postgres -c "ALTER DATABASE \"${scratch}\" RENAME TO \"${DB_NAME}\";" >/dev/null; then
+      [[ "${exists}" == "1" ]] &&
+        pg_exec psql -U "${DB_USER}" -d postgres -c "ALTER DATABASE \"${old}\" RENAME TO \"${DB_NAME}\";" >/dev/null
+      die "Could not put the restored database in place. '${DB_NAME}' was not changed."
+    fi
+    SCRATCH_DB=""
+    if [[ "${exists}" == "1" ]]; then
+      # WITH (FORCE) ends any connection that slipped in (PostgreSQL 13+).
+      pg_exec psql -U "${DB_USER}" -d postgres -c "DROP DATABASE IF EXISTS \"${old}\" WITH (FORCE);" >/dev/null ||
+        warn "The previous data is still in database '${old}'; drop it once the restore looks right."
     fi
 
     local restore_end elapsed
@@ -644,18 +673,12 @@ METAEOF
 
     # ── pg_restore --list ──
     info "Inspecting dump TOC …"
-    local toc_count
-    if ${USE_DOCKER}; then
-      toc_count=$(docker exec -i -e PGPASSWORD "${CONTAINER_NAME}" \
-        pg_restore --list < "${backup_file}" 2>/dev/null | wc -l)
-    else
-      if command -v pg_restore >/dev/null 2>&1; then
-        toc_count=$(pg_restore --list "${backup_file}" 2>/dev/null | wc -l)
-      else
-        warn "pg_restore not available on host – cannot inspect TOC."
-        return
-      fi
+    if ! ${USE_DOCKER} && ! command -v pg_restore >/dev/null 2>&1; then
+      warn "pg_restore not available on host – cannot inspect TOC."
+      return
     fi
+    local toc_count
+    toc_count="$(toc_entries "${backup_file}")"
 
     if [[ "${toc_count}" -gt 0 ]]; then
       success "Dump is readable: ${toc_count} TOC entries"
@@ -688,7 +711,8 @@ METAEOF
       local name size date_mod
       name="$(basename "${f}")"
       size="$(du -sh "${f}" | cut -f1)"
-      date_mod="$(date -r "${f}" '+%Y-%m-%d %H:%M:%S' 2>/dev/null || stat -c '%y' "${f}" 2>/dev/null | cut -d. -f1)"
+      # GNU date reads a file's time with -r; BSD and macOS need stat -f.
+      date_mod="$(date -r "${f}" '+%Y-%m-%d %H:%M:%S' 2>/dev/null || stat -f '%Sm' -t '%Y-%m-%d %H:%M:%S' "${f}" 2>/dev/null || true)"
       printf "  %-55s  %8s  %s\n" "${name}" "${size}" "${date_mod}"
     done
     echo ""
@@ -709,14 +733,15 @@ METAEOF
     local to_remove=$((count - BACKUP_RETAIN_COUNT))
     info "Pruning ${to_remove} old backup(s) (retaining last ${BACKUP_RETAIN_COUNT}) …"
 
-    # Sort by name (which embeds the timestamp) and remove oldest
-    find "${BACKUP_DIR}" -maxdepth 1 -name "${pattern}" -type f -print0 \
-      | sort -z \
-      | head -z -n "${to_remove}" \
-      | while IFS= read -r -d '' old_file; do
-          rm -f "${old_file}" "${old_file}.meta"
-          info "  Removed: $(basename "${old_file}")"
-        done
+    # Sort by name (which embeds the timestamp) and remove the oldest. A plain
+    # array, not GNU-only head -z: the names are safe (DB_NAME is checked above).
+    local -a dumps=()
+    local f
+    while IFS= read -r f; do dumps+=("${f}"); done < <(find "${BACKUP_DIR}" -maxdepth 1 -name "${pattern}" -type f | sort)
+    for f in "${dumps[@]:0:${to_remove}}"; do
+      rm -f "${f}" "${f}.meta"
+      info "  Removed: $(basename "${f}")"
+    done
   }
 
   # ============================================================
@@ -742,8 +767,8 @@ Backup strategy:
 
 Restore strategy:
   - Validates backup integrity (checksum + TOC) BEFORE touching the database
-  - Drops and recreates the database for a clean slate
-  - Restores in --single-transaction mode (atomic: all-or-nothing)
+  - Restores into a scratch database and swaps it in only once it fully loaded,
+    so a failed restore leaves the current database unchanged
   - Runs ANALYZE after restore to update query planner statistics
   - Reports table/row counts for verification
 
