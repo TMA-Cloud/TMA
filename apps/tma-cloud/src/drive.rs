@@ -57,6 +57,19 @@ impl Drive {
     }
 }
 
+/// `tma-cloud --forget-drive`, run by the uninstaller: unregister the Cloud Files
+/// folder so no placeholders are left that can never open again.
+#[cfg(windows)]
+pub fn forget() {
+    if let Err(err) = tma_drive::cloud_files::forget_all() {
+        log::warn!("Cloud Drive forget: {err}");
+    }
+}
+
+/// Mounts elsewhere end with the app; there is nothing to clean up.
+#[cfg(not(windows))]
+pub fn forget() {}
+
 /// A mounted drive of whichever adapter this system uses; dropping it unmounts.
 type Guard = Box<dyn std::any::Any>;
 

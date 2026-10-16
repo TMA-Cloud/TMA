@@ -21,6 +21,20 @@ pub struct Filter {
     pub shared: Arc<Shared>,
 }
 
+/// Connected while clearing a folder with the app closed: without a connected
+/// engine Windows refuses even to delete placeholders.
+pub struct Idle;
+
+impl SyncFilter for Idle {
+    fn fetch_data(&self, _request: Request, _ticket: ticket::FetchData, _info: info::FetchData) -> CResult<()> {
+        Err(CloudErrorKind::ProviderNotRunning)
+    }
+
+    fn delete(&self, _request: Request, ticket: ticket::Delete, _info: info::Delete) -> CResult<()> {
+        ticket.pass().map_err(|e| unsuccessful("delete", e))
+    }
+}
+
 /// Changes the engine makes itself (resyncing) need no server call.
 fn ours(request: &Request) -> bool {
     request.process().id() == std::process::id()

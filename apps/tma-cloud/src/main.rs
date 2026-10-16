@@ -47,6 +47,10 @@ fn icon() -> Option<egui::IconData> {
 
 fn main() -> eframe::Result {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info,wgpu=warn,naga=warn")).init();
+    if std::env::args().nth(1).as_deref() == Some("--forget-drive") {
+        drive::forget();
+        return Ok(());
+    }
     let mut viewport = egui::ViewportBuilder::default()
         .with_title("TMA Cloud")
         .with_inner_size([1280.0, 820.0])

@@ -60,40 +60,71 @@ impl Mounted {
     pub fn forget(self) -> Result<(), String> {
         let folder = PathBuf::from(&self.mount_point);
         drop(self);
-        unregister(&folder, None).map(|_| ())
+        unregister(Some(&folder), None)?;
+        let _ = std::fs::remove_dir(&folder);
+        Ok(())
     }
+}
+
+/// Unregister every drive folder of this app for the signed-in Windows user,
+/// as the uninstaller does. Synced copies go; anything not uploaded yet stays,
+/// and so does a folder that still holds it. Run it with the app closed.
+pub fn forget_all() -> Result<(), String> {
+    for folder in unregister(None, None)? {
+        let _ = std::fs::remove_dir(&folder);
+    }
+    Ok(())
 }
 
 fn same_path(a: &Path, b: &Path) -> bool {
     a.to_string_lossy().trim_end_matches('\\').eq_ignore_ascii_case(b.to_string_lossy().trim_end_matches('\\'))
 }
 
-/// Unregister this provider's sync roots at `folder` (except `keep`), removing
-/// their synced copies. Returns whether anything made locally was left behind.
-fn unregister(folder: &Path, keep: Option<&SyncRootId>) -> Result<bool, String> {
+/// Remove a folder's synced copies, keeping anything made or changed locally.
+fn clear(folder: &Path) -> Result<(), String> {
+    // A running app would take these deletes as the user's and trash the files on the server.
+    let idle = Session::new()
+        .connect(folder, filter::Idle)
+        .map_err(|e| format!("Close TMA Cloud before removing its folder ({e})"))?;
+    if let Ok(items) = std::fs::read_dir(folder) {
+        for item in items.flatten() {
+            local::remove_synced(&item.path());
+        }
+    }
+    drop(idle);
+    Ok(())
+}
+
+/// Unregister this provider's sync roots at `folder` (all of them for `None`),
+/// except `keep`, removing their synced copies. Returns the folders unregistered.
+fn unregister(folder: Option<&Path>, keep: Option<&SyncRootId>) -> Result<Vec<PathBuf>, String> {
     let roots = cloud_filter::root::active_roots().map_err(|e| e.to_string())?;
-    let mut left = false;
+    let mut released = Vec::new();
     for root in roots {
         let id = root.id();
+        let path = root.path();
         // Other providers' ids need not split cleanly; compare the prefix only.
         let ours = id.to_os_string().to_string_lossy().starts_with(&format!("{PROVIDER}!"));
-        if !ours || !same_path(&root.path(), folder) || keep.is_some_and(|k| id.to_os_string() == k.to_os_string()) {
+        let here = folder.is_none_or(|f| same_path(&path, f));
+        if !ours || !here || keep.is_some_and(|k| id.to_os_string() == k.to_os_string()) {
             continue;
         }
-        if let Ok(items) = std::fs::read_dir(folder) {
-            for item in items.flatten() {
-                left |= !local::remove_synced(&item.path());
-            }
-        }
+        clear(&path)?;
         id.unregister().map_err(|e| format!("Cannot release the drive folder: {e}"))?;
+        released.push(path);
     }
-    Ok(left)
+    Ok(released)
+}
+
+/// Whether anything other than synced copies is in a folder.
+fn holds_local_work(folder: &Path) -> bool {
+    std::fs::read_dir(folder).is_ok_and(|mut items| items.next().is_some())
 }
 
 /// A folder left by another account (or an older registration) is never
 /// reused: its synced placeholders go, and anything made there is set aside.
 fn release_folder(folder: &Path, keep: &SyncRootId) -> Result<(), String> {
-    if unregister(folder, Some(keep))? {
+    if !unregister(Some(folder), Some(keep))?.is_empty() && holds_local_work(folder) {
         let aside = folder.with_file_name(format!(
             "{} (previous account {})",
             folder.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default(),

@@ -70,6 +70,28 @@ installer-mode = "currentUser"
 installer-icon = "assets/icons/icon.ico"
 sidebar-image = "assets/icons/installer-sidebar.bmp"
 appdata-paths = ["$APPDATA/TMA Cloud", "$LOCALAPPDATA/TMA Cloud"]
+# Runs before the template's own uninstall section (uninstaller sections run in
+# order). An update runs the old uninstaller with /P; the drive folder stays then.
+preinstall-section = """
+Section "un.ForgetCloudDrive"
+  ${GetOptions} $CMDLINE "/P" $R0
+  IfErrors 0 forget_done
+    nsis_tauri_utils::FindProcess "${MAINBINARYNAME}.exe"
+    Pop $R0
+    ${If} $R0 = 0
+      IfSilent forget_kill 0
+      MessageBox MB_OKCANCEL "$(appRunningOkKill)" IDOK forget_kill
+      Abort
+      forget_kill:
+      nsis_tauri_utils::KillProcess "${MAINBINARYNAME}.exe"
+      Pop $R0
+      Sleep 500
+    ${EndIf}
+    DetailPrint "Removing the TMA Cloud folder's downloaded copies..."
+    ExecWait '"$INSTDIR\\${MAINBINARYNAME}.exe" --forget-drive'
+  forget_done:
+SectionEnd
+"""
 
 [package.metadata.packager.deb]
 # FUSE for Cloud Drive, D-Bus for the saved sign-in (Secret Service).
