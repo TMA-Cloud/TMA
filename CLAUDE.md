@@ -81,6 +81,8 @@ Layers: `routes → services / models → storage / crypto / util / config`.
 - `core/` holds all filesystem behaviour (five-second listing cache, staging
   files, save-only mode, create-empty-then-write and temp-then-rename saves) and
   is tested with an in-memory backend. FUSE and NFS only translate calls.
+  `core/scratch.rs` keeps editors' scratch and backup files local, so an Office
+  save replaces the document under its id; Cloud Files does the same in `filter.rs`.
 - `cloud_files/` (Windows) is a sync engine instead: placeholders download on
   open, a watcher uploads local changes, and server events resync folders that
   have been browsed. What to change is planned in the pure `sync_plan.rs`.

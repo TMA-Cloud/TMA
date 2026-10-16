@@ -8,7 +8,7 @@ use std::sync::Mutex;
 
 use chrono::Utc;
 
-use super::{Core, FsError, FsResult, Node, lock};
+use super::{Core, FsError, FsResult, Node, lock, scratch};
 use crate::paths;
 
 #[derive(Debug)]
@@ -23,6 +23,8 @@ pub struct State {
     written: bool,
     deleted: bool,
     parent: Option<Node>,
+    /// A scratch file (see `scratch.rs`): its contents stay here and never upload.
+    scratch: bool,
 }
 
 /// One open file or folder.
@@ -45,6 +47,7 @@ impl Handle {
                 written: false,
                 deleted: false,
                 parent,
+                scratch: false,
             }),
         }
     }
@@ -66,6 +69,18 @@ fn io(err: std::io::Error) -> FsError {
 
 impl Core {
     pub fn open(&self, path: &str) -> FsResult<Handle> {
+        if let Some(s) = self.scratch(&paths::normalize(path)) {
+            let mut node = self.resolve(path)?.ok_or(FsError::NotFound)?;
+            node.id = s.backup_of.clone();
+            let handle = Handle::new(node, None, s.backup_of.is_none());
+            {
+                let mut state = lock(&handle.state);
+                state.local = s.staging;
+                state.scratch = true;
+                state.dirty = false;
+            }
+            return Ok(handle);
+        }
         let node = self.resolve(path)?.ok_or(FsError::NotFound)?;
         // A local empty placeholder opens as a new file: writing to it uploads it.
         if !node.is_folder && node.id.is_none() {
@@ -106,11 +121,16 @@ impl Core {
         let local = self.new_staging_file();
         let file = OpenOptions::new().read(true).write(true).create_new(true).open(&local).map_err(io)?;
         let node = Node { id: None, name, is_folder: false, size: 0, modified: Utc::now(), accessed: None, path };
+        let scratch = scratch::is_scratch_name(&node.path);
+        if scratch {
+            self.add_scratch(&node.path, local.clone());
+        }
         let handle = Handle::new(node, Some(parent), true);
         {
             let mut state = lock(&handle.state);
             state.local = Some(local);
             state.file = Some(file);
+            state.scratch = scratch;
         }
         Ok(handle)
     }
@@ -118,6 +138,25 @@ impl Core {
     /// Download (or create) the staging file on first use.
     fn ensure_file(&self, state: &mut State) -> FsResult<()> {
         if state.file.is_some() {
+            return Ok(());
+        }
+        if state.scratch {
+            // Shared by every handle on the scratch file, and kept after they close.
+            let local = match state.local.clone() {
+                Some(local) => local,
+                None => {
+                    let local = self.new_staging_file();
+                    match &state.node.id {
+                        Some(id) => self.backend.download(id, &local).map_err(FsError::Io)?,
+                        None => drop(File::create(&local).map_err(io)?),
+                    }
+                    self.keep_scratch(&state.node.path, local.clone());
+                    local
+                }
+            };
+            let file = OpenOptions::new().read(true).write(true).create(true).truncate(false).open(&local);
+            state.file = Some(file.map_err(io)?);
+            state.local = Some(local);
             return Ok(());
         }
         let local = state.local.clone().unwrap_or_else(|| self.new_staging_file());
@@ -145,6 +184,9 @@ impl Core {
                 let local = state.local.clone().unwrap_or_else(|| self.new_staging_file());
                 let file =
                     OpenOptions::new().read(true).write(true).create(true).truncate(true).open(&local).map_err(io)?;
+                if state.scratch {
+                    self.keep_scratch(&state.node.path, local.clone());
+                }
                 state.local = Some(local);
                 state.file = Some(file);
             }
@@ -225,6 +267,17 @@ impl Core {
     /// The last handle closed: delete if asked, else upload changes.
     pub fn cleanup(&self, handle: &Handle, delete: bool) {
         let mut state = lock(&handle.state);
+        if state.scratch {
+            if delete {
+                state.deleted = true;
+                self.delete_scratch(&state.node.path);
+            } else if let (Some(file), Some(local)) = (&state.file, &state.local) {
+                let _ = file.sync_all();
+                self.keep_scratch(&state.node.path, local.clone());
+            }
+            state.dirty = false;
+            return;
+        }
         if delete {
             if let Some(id) = &state.node.id
                 && let Err(err) = self.backend.delete(id)
@@ -260,6 +313,9 @@ impl Core {
     pub fn close(&self, handle: &Handle) {
         let mut state = lock(&handle.state);
         state.file = None;
+        if state.scratch {
+            return;
+        }
         if let Some(local) = state.local.take() {
             let _ = std::fs::remove_file(local);
         }
@@ -315,7 +371,19 @@ impl Core {
     /// Rename or move; an item already at the destination is replaced (moved to the trash).
     pub fn rename(&self, from: &str, to: &str) -> FsResult<()> {
         let (from, to) = (paths::normalize(from), paths::normalize(to));
+        if self.scratch(&from).is_some() {
+            return self.rename_scratch(&from, &to);
+        }
         let node = self.resolve(&from)?.ok_or(FsError::NotFound)?;
+        if !node.is_folder
+            && let Some(id) = node.id.as_deref()
+            && scratch::is_scratch_name(&to)
+            && !scratch::is_scratch_name(&from)
+        {
+            // An editor's save backup: see `scratch.rs`.
+            self.stash_backup(&node, id, &to);
+            return Ok(());
+        }
         let old_parent = paths::parent(&from).unwrap_or_else(|| paths::ROOT.into());
         let new_parent = paths::parent(&to).ok_or(FsError::AccessDenied)?;
         let new_name = paths::leaf(&to).to_string();

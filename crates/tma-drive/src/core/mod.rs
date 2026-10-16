@@ -4,6 +4,7 @@
 //! (create-empty-then-write, write-temp-then-rename).
 
 mod handle;
+mod scratch;
 
 pub use handle::Handle;
 
@@ -84,6 +85,10 @@ pub struct Core {
     created: Mutex<HashMap<String, String>>,
     /// Empty files an app created but never wrote: shown locally, never uploaded.
     local_empty: Mutex<HashSet<String>>,
+    /// Scratch files apps keep while saving, by path; never uploaded.
+    scratch: Mutex<HashMap<String, scratch::Scratch>>,
+    /// Server files an app renamed to a backup name, by path: (id, path).
+    hidden: Mutex<HashMap<String, (String, String)>>,
     path_locks: Vec<Mutex<()>>,
     pub deny_read: AtomicBool,
     /// Paths TMA Cloud itself opened or copied, readable in save-only mode until they expire.
@@ -108,6 +113,8 @@ impl Core {
             dirs: Mutex::new(HashMap::new()),
             created: Mutex::new(HashMap::new()),
             local_empty: Mutex::new(HashSet::new()),
+            scratch: Mutex::new(HashMap::new()),
+            hidden: Mutex::new(HashMap::new()),
             path_locks: (0..64).map(|_| Mutex::new(())).collect(),
             deny_read: AtomicBool::new(false),
             readable: Mutex::new(Vec::new()),
@@ -196,9 +203,16 @@ impl Core {
         Ok(children)
     }
 
-    /// A folder's children, plus empty placeholder files apps created here.
+    /// A folder's children, plus empty placeholder and scratch files apps created
+    /// here, less documents an app renamed to a backup name.
     pub fn children(&self, folder: &Node) -> FsResult<Vec<Node>> {
         let mut children = (*self.list_dir(folder)?).clone();
+        children.retain(|c| !self.is_hidden(&c.path));
+        for node in self.scratch_nodes(&folder.path) {
+            if !children.iter().any(|c| c.name.eq_ignore_ascii_case(&node.name)) {
+                children.push(node);
+            }
+        }
         let empties: Vec<String> = lock(&self.local_empty).iter().cloned().collect();
         for path in empties {
             if paths::parent(&path).map(|p| paths::key(&p)) != Some(paths::key(&folder.path)) {
@@ -285,6 +299,8 @@ impl Core {
 
     fn forget_subtree(&self, root: &str) {
         lock(&self.created).retain(|k, _| !paths::is_at_or_under(k, root));
+        lock(&self.hidden).retain(|k, _| !paths::is_at_or_under(k, root));
+        lock(&self.scratch).retain(|k, _| !paths::is_at_or_under(k, root));
         lock(&self.local_empty).retain(|k| !paths::is_at_or_under(k, root));
         lock(&self.dirs).retain(|k, _| !paths::is_at_or_under(k, root));
     }
@@ -312,6 +328,16 @@ impl Core {
         for path in empties {
             self.track_empty(&format!("{new}{}", &path[old.len().min(path.len())..]));
         }
+        // A folder moved with a save in progress inside: its scratch files move along.
+        let mut scratch = lock(&self.scratch);
+        let hits: Vec<String> = scratch.keys().filter(|k| paths::is_at_or_under(k, old)).cloned().collect();
+        for key in hits {
+            if let Some(mut s) = scratch.remove(&key) {
+                s.path = format!("{new}{}", &s.path[old.len().min(s.path.len())..]);
+                scratch.insert(paths::key(&s.path), s);
+            }
+        }
+        drop(scratch);
         lock(&self.dirs).retain(|k, _| !paths::is_at_or_under(k, old));
     }
 

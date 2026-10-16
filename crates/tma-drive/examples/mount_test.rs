@@ -150,10 +150,31 @@ fn ops(mount_point: &str) -> Result<(), String> {
         return Err(format!("rename-over kept {:?}", String::from_utf8_lossy(&v2)));
     }
     let second = wait_for("note.txt", 14).ok_or("the saved version never reached the server")?;
-    println!("saved version reached the server ({})", if second == first { "same file" } else { "new file" });
+    if second != first {
+        return Err("the saved version became a new file".into());
+    }
+    println!("saved version reached the server as the same file");
+    // Word's save: the document becomes a backup, the new copy takes its name, the backup goes.
+    std::thread::sleep(std::time::Duration::from_secs(1));
+    std::fs::write(p("Drive Test\\~WRD0000.tmp"), b"third version").map_err(|e| format!("word temp: {e}"))?;
+    std::fs::rename(p("Drive Test\\note.txt"), p("Drive Test\\~WRL0001.tmp")).map_err(|e| format!("backup: {e}"))?;
+    std::fs::rename(p("Drive Test\\~WRD0000.tmp"), p("Drive Test\\note.txt")).map_err(|e| format!("word save: {e}"))?;
+    std::fs::remove_file(p("Drive Test\\~WRL0001.tmp")).map_err(|e| format!("drop backup: {e}"))?;
+    let third = wait_for("note.txt", 13).ok_or("Word's save never reached the server")?;
+    if third != first {
+        return Err("Word's save made a new file".into());
+    }
+    std::thread::sleep(std::time::Duration::from_secs(3));
+    for scratch in ["~WRL0001.tmp", "~WRD0000.tmp", "~tmp1.tmp"] {
+        let found = tma_client::rt::block_on(client.search(scratch, 10)).map_err(|e| e.message)?;
+        if found.iter().any(|f| f.name == scratch) {
+            return Err(format!("{scratch} was uploaded"));
+        }
+    }
+    println!("Word's save kept the file and uploaded no scratch files");
     std::thread::sleep(std::time::Duration::from_secs(1));
     std::fs::rename(p("Drive Test\\note.txt"), p("Drive Test\\renamed.txt")).map_err(|e| format!("rename: {e}"))?;
-    wait_for("renamed.txt", 14).ok_or("the rename never reached the server")?;
+    wait_for("renamed.txt", 13).ok_or("the rename never reached the server")?;
     std::fs::remove_file(p("Drive Test\\renamed.txt")).map_err(|e| format!("delete: {e}"))?;
     std::fs::remove_file(p("Drive Test\\remote.txt")).map_err(|e| format!("delete remote: {e}"))?;
     std::fs::remove_dir(p("Drive Test")).map_err(|e| format!("rmdir: {e}"))?;
