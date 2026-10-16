@@ -39,16 +39,28 @@ fn type_ahead(b: &mut Browser, text: &str, now: f64) {
     }
     b.typed.0.push_str(&text.to_lowercase());
     b.typed.1 = now;
-    let prefix = b.typed.0.clone();
-    // A repeated single letter cycles through the names starting with it.
-    let start =
-        if prefix.chars().count() == 1 { current(b).map(|i| i + 1).unwrap_or(0) } else { current(b).unwrap_or(0) };
-    let count = b.items.len();
-    let hit =
-        (0..count).map(|k| (start + k) % count.max(1)).find(|&i| b.items[i].name.to_lowercase().starts_with(&prefix));
-    if let Some(index) = hit {
+    let names: Vec<String> = b.items.iter().map(|i| i.name.to_lowercase()).collect();
+    if let Some(index) = next_match(&names, current(b), &b.typed.0) {
         move_to(b, index, false);
     }
+}
+
+/// Which item typing selects, as in Explorer and Finder. One letter, or the same
+/// letter pressed again however fast ("m", "mm", "mmm"), moves to the next name
+/// starting with it, wrapping around; anything else ("mar") selects the first
+/// name with that prefix from the current item on, so typing more refines it.
+/// `names` are lowercase, like `typed`.
+fn next_match(names: &[String], current: Option<usize>, typed: &str) -> Option<usize> {
+    let mut letters = typed.chars();
+    let first = letters.next()?;
+    let repeated = letters.all(|c| c == first);
+    let (prefix, start) = if repeated {
+        (first.to_string(), current.map_or(0, |i| i + 1))
+    } else {
+        (typed.to_string(), current.unwrap_or(0))
+    };
+    let count = names.len();
+    (0..count).map(|k| (start + k) % count).find(|&i| names[i].starts_with(&prefix))
 }
 
 pub fn handle(main: &mut Main, ui: &mut Ui, actions: &mut Vec<Action>) {
@@ -159,5 +171,36 @@ pub fn handle(main: &mut Main, ui: &mut Ui, actions: &mut Vec<Action>) {
     });
     if !typed.is_empty() && count > 0 {
         type_ahead(&mut main.browser, &typed, now);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::next_match;
+
+    fn names(list: &[&str]) -> Vec<String> {
+        list.iter().map(|n| n.to_lowercase()).collect()
+    }
+
+    #[test]
+    fn pressing_a_letter_again_moves_to_the_next_name_with_it() {
+        let list = names(&["Alpha", "Marketing", "Notes", "Media", "mockup.png", "Zebra"]);
+        // Fast presses build "m", "mm", "mmm": each still means "the next M".
+        assert_eq!(next_match(&list, None, "m"), Some(1));
+        assert_eq!(next_match(&list, Some(1), "mm"), Some(3));
+        assert_eq!(next_match(&list, Some(3), "mmm"), Some(4));
+        // Past the last one it wraps to the first.
+        assert_eq!(next_match(&list, Some(4), "mmmm"), Some(1));
+    }
+
+    #[test]
+    fn typing_more_letters_refines_from_the_current_name() {
+        let list = names(&["Marketing", "Media", "Memo.txt"]);
+        assert_eq!(next_match(&list, None, "m"), Some(0));
+        // "me" keeps looking from the current item, so it lands on the first match.
+        assert_eq!(next_match(&list, Some(0), "me"), Some(1));
+        assert_eq!(next_match(&list, Some(1), "mem"), Some(2));
+        assert_eq!(next_match(&list, Some(1), "mx"), None);
+        assert_eq!(next_match(&[], None, "m"), None);
     }
 }
