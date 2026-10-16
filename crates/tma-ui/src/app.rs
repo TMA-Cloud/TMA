@@ -82,6 +82,7 @@ pub struct Main {
 pub enum Screen {
     Loading,
     Auth(Box<AuthState>),
+    Reconnect(Box<crate::reconnect::Reconnect>),
     Main(Box<Main>),
 }
 
@@ -135,11 +136,46 @@ impl App {
             self.screen = Screen::Auth(Box::new(AuthState::new("")));
             return;
         };
+        self.check_session(client);
+    }
+
+    /// Check a restored session: sign in on success, ask for the password only
+    /// when the server refused it, and keep retrying when it could not be reached.
+    pub(crate) fn check_session(&mut self, client: Client) {
         let c = client.clone();
         self.tasks.run(async move { c.profile().await }, move |app, result| match result {
             Ok(user) => app.enter(client, user),
-            Err(_) => app.screen = Screen::Auth(Box::new(AuthState::new(client.base_url()))),
+            Err(err) if err.is_unauthorized() || err.status == 403 => {
+                app.screen = Screen::Auth(Box::new(AuthState::new(client.base_url())));
+            }
+            Err(err) => {
+                let attempts = match &app.screen {
+                    Screen::Reconnect(r) => r.attempts + 1,
+                    _ => 1,
+                };
+                app.screen = Screen::Reconnect(Box::new(crate::reconnect::Reconnect {
+                    client,
+                    error: err.message,
+                    attempts,
+                    next_at: None,
+                    trying: false,
+                }));
+            }
         });
+    }
+
+    /// Save the session token as it is now: the server renews it while the
+    /// app is used, and a restart must not fall back to the one from sign-in.
+    pub fn remember_session(&mut self) {
+        if self.host.kind() != HostKind::Desktop {
+            return;
+        }
+        let Screen::Main(main) = &self.screen else { return };
+        let token = main.client.session_token();
+        if token.is_some() {
+            let server = main.client.base_url().to_string();
+            self.host.save_session(Some(&SavedSession { server, token }));
+        }
     }
 
     /// Signed in: build the main screen and start live events.
@@ -280,6 +316,7 @@ impl App {
                 });
             }
             Screen::Auth(_) => crate::auth::show(self, ui),
+            Screen::Reconnect(_) => crate::reconnect::show(self, ui),
             Screen::Main(_) => crate::shell::show(self, ui),
         }
         self.toasts.show(ctx, &self.t);

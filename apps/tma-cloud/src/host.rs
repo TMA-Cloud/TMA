@@ -72,6 +72,8 @@ impl Host for DesktopHost {
         self.server = Some(session.server.clone());
         let Some(entry) = Self::entry(&session.server) else { return };
         let result = match &session.token {
+            // Saved every half minute while signed in; only a renewed token is written.
+            Some(token) if entry.get_password().is_ok_and(|saved| saved == *token) => Ok(()),
             Some(token) => entry.set_password(token),
             None => match entry.delete_credential() {
                 Err(keyring::Error::NoEntry) => Ok(()),
@@ -97,12 +99,21 @@ impl Host for DesktopHost {
         }
         let stop = Arc::new(AtomicBool::new(false));
         self.heartbeat_stop = Some(stop.clone());
-        let (client, client_id) = (client.clone(), self.client_id.clone());
+        let (client, client_id, notifier) = (client.clone(), self.client_id.clone(), Notifier::new(tasks));
         tma_client::rt::spawn(async move {
             while !stop.load(Ordering::Relaxed) {
                 if let Err(err) = client.client_heartbeat(env!("CARGO_PKG_VERSION"), platform(), &client_id).await
                     && err.is_unauthorized()
                 {
+                    // Ended elsewhere (password change, sign out everywhere): show sign-in now, not on the next click.
+                    if !stop.load(Ordering::Relaxed) {
+                        notifier.apply(move |app| {
+                            if !stop.load(Ordering::Relaxed) {
+                                app.sign_out();
+                                app.toasts.info("Your session ended. Sign in again.");
+                            }
+                        });
+                    }
                     return;
                 }
                 tma_client::rt::sleep(std::time::Duration::from_secs(HEARTBEAT_SECS)).await;

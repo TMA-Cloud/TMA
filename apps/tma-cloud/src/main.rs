@@ -38,6 +38,7 @@ impl eframe::App for Shell {
     }
 
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
+        self.app.remember_session();
         eframe::set_value(storage, PREFS_KEY, &self.app.prefs);
         eframe::set_value(storage, CLIENT_ID_KEY, &self.client_id);
         if let Some(server) = self.app.server_url() {

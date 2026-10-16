@@ -12,6 +12,7 @@ mod host;
 pub mod icons;
 mod modals;
 pub mod platform;
+mod reconnect;
 mod settings;
 mod shell;
 mod tasks;
