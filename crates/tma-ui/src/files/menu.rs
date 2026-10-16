@@ -92,7 +92,8 @@ pub(super) fn context_menu(main: &Main, ui: &mut Ui, items: &[FileItem], desktop
         let label = if all_starred { "Remove from Starred" } else { "Add to Starred" };
         item(ui, ph::STAR, label, Action::Star(ids.clone(), !all_starred));
     }
-    if user.can(Permission::Upload) {
+    // On the desktop, Copy also puts the files on the system clipboard for other apps.
+    if user.can(Permission::Upload) || (desktop && user.can(Permission::Download)) {
         item(ui, ph::COPY, "Copy", Action::Clip(ids.clone(), false));
     }
     if user.can(Permission::Edit) && main.browser.place == Place::Folder {

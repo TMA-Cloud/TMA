@@ -195,8 +195,8 @@ impl Host for DesktopHost {
         true
     }
 
-    fn copy_files_to_system(&mut self, client: &Client, files: &[FileItem], tasks: &Tasks) -> bool {
-        crate::clipboard::copy_files(client.clone(), files.to_vec(), Notifier::new(tasks));
+    fn clipboard_copy(&mut self, client: &Client, items: &[FileItem], cut: bool, tasks: &Tasks) -> bool {
+        crate::clipboard::copied(client.clone(), items.to_vec(), cut, Notifier::new(tasks));
         true
     }
 

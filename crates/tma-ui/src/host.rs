@@ -57,8 +57,9 @@ pub trait Host {
         false
     }
 
-    /// Put files on the system clipboard as files (desktop only).
-    fn copy_files_to_system(&mut self, _client: &Client, _files: &[FileItem], _tasks: &Tasks) -> bool {
+    /// Copy or Cut in TMA Cloud: mirror it on the system clipboard for other apps
+    /// (desktop only). `true` when the host also told the user.
+    fn clipboard_copy(&mut self, _client: &Client, _items: &[FileItem], _cut: bool, _tasks: &Tasks) -> bool {
         false
     }
 

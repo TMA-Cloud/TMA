@@ -39,7 +39,6 @@ pub enum Action {
     Order(SortOrder),
     Grid(bool),
     EditInApp(FileItem),
-    CopyToSystem(Vec<FileItem>),
     OpenDocument(FileItem),
     OpenLocation(FileItem),
 }
@@ -276,9 +275,12 @@ pub fn run(app: &mut App, action: Action) {
         }
         Action::Clip(ids, cut) => {
             let n = ids.len();
+            let items: Vec<FileItem> = main.browser.items.iter().filter(|i| ids.contains(&i.id)).cloned().collect();
             main.browser.clip = Some(Clip { ids, cut, seq: app.host.clipboard_sequence() });
-            app.toasts
-                .info(format!("{n} item(s) {}. Paste them in another folder.", if cut { "cut" } else { "copied" }));
+            if !app.host.clipboard_copy(&client, &items, cut, tasks) {
+                let done = if cut { "cut" } else { "copied" };
+                app.toasts.info(format!("{n} item(s) {done}. Paste them in another folder."));
+            }
         }
         Action::Back | Action::Forward => {
             let back = matches!(action, Action::Back);
@@ -363,11 +365,6 @@ pub fn run(app: &mut App, action: Action) {
         Action::EditInApp(item) => {
             if !app.host.edit_in_app(&client, &item, &app.tasks) {
                 app.toasts.info("Editing in a desktop app needs the TMA Cloud desktop app");
-            }
-        }
-        Action::CopyToSystem(items) => {
-            if !app.host.copy_files_to_system(&client, &items, &app.tasks) {
-                app.toasts.info("Copying files to other apps needs the TMA Cloud desktop app");
             }
         }
     }
