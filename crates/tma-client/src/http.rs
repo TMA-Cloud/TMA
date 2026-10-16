@@ -38,6 +38,9 @@ impl Client {
             .default_headers(headers)
             .user_agent(concat!("TMA-Cloud-Desktop/", env!("CARGO_PKG_VERSION")))
             .connect_timeout(std::time::Duration::from_secs(15))
+            // A connection lost mid-request (sleep, Wi-Fi change) fails instead of hanging the
+            // app or Cloud Drive; well above the event stream's 30 s keep-alive.
+            .read_timeout(std::time::Duration::from_secs(120))
             .build()
             .map_err(ApiError::network)?;
         Ok(Self { inner: Arc::new(Inner { base, http, jar }) })
