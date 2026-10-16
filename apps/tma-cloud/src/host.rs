@@ -14,7 +14,12 @@ use crate::notify_ui::Notifier;
 
 /// What to open for the drive: "Z:\\" on Windows, the mount folder elsewhere.
 fn drive_root(point: &str) -> String {
-    if cfg!(windows) { format!("{point}\\") } else { point.to_string() }
+    if cfg!(windows) && point.ends_with(':') { format!("{point}\\") } else { point.to_string() }
+}
+
+/// A drive letter as is; a folder by its name, since the full path is long.
+fn drive_label(point: &str) -> &str {
+    std::path::Path::new(point).file_name().and_then(|n| n.to_str()).unwrap_or(point)
 }
 
 const KEYRING_SERVICE: &str = "TMA Cloud";
@@ -144,11 +149,11 @@ impl Host for DesktopHost {
             let status = self.drive.status();
             let mut restart = false;
             tma_ui::widgets::setting_row(ui, "Status", "", |ui| match &status {
-                Status::Mounted(letter) => {
+                Status::Mounted(point) => {
                     if tma_ui::widgets::secondary(ui, "Open").clicked() {
-                        let _ = open::that_detached(drive_root(letter));
+                        let _ = open::that_detached(drive_root(point));
                     }
-                    ui.label(format!("Connected as {letter}"));
+                    ui.label(format!("Connected at {point}"));
                 }
                 Status::Starting => {
                     ui.spinner();
@@ -170,9 +175,9 @@ impl Host for DesktopHost {
     }
 
     fn header_status(&mut self, ui: &mut egui::Ui) {
-        if let Status::Mounted(letter) = self.drive.status() {
+        if let Status::Mounted(point) = self.drive.status() {
             let t = tma_ui::widgets::tokens(ui);
-            let text = egui::RichText::new(format!("{}  {letter}", tma_ui::icons::ph::HARD_DRIVES))
+            let text = egui::RichText::new(format!("{}  {}", tma_ui::icons::ph::HARD_DRIVES, drive_label(&point)))
                 .size(12.0)
                 .color(t.positive_text);
             if ui
@@ -180,7 +185,7 @@ impl Host for DesktopHost {
                 .on_hover_text("Cloud Drive is connected. Click to open it.")
                 .clicked()
             {
-                let _ = open::that_detached(drive_root(&letter));
+                let _ = open::that_detached(drive_root(&point));
             }
         }
     }

@@ -64,27 +64,12 @@ icons = [
 binaries = [{ path = "tma-cloud", main = true }]
 
 [package.metadata.packager.nsis]
-# Per user, so installing the app needs no administrator; only WinFsp asks.
+# Per user, so installing needs no administrator. Cloud Drive uses the Cloud
+# Files API built into Windows, so there is no driver to install alongside.
 installer-mode = "currentUser"
 installer-icon = "assets/icons/icon.ico"
 sidebar-image = "assets/icons/installer-sidebar.bmp"
 appdata-paths = ["$APPDATA/TMA Cloud", "$LOCALAPPDATA/TMA Cloud"]
-# Cloud Drive needs WinFsp. The xtask points TMA_WINFSP_MSI at a checked copy
-# of the official MSI; it is installed (one UAC prompt) only when missing.
-preinstall-section = """
-Section "WinFsp" SEC_WINFSP
-  ; WinFsp registers in the 32-bit view; the installer's own view comes back after.
-  SetRegView 32
-  ReadRegStr $0 HKLM "SOFTWARE\\WinFsp" "InstallDir"
-  SetRegView lastused
-  StrCmp $0 "" 0 winfsp_done
-    InitPluginsDir
-    File "/oname=$PLUGINSDIR\\winfsp.msi" "$%TMA_WINFSP_MSI%"
-    DetailPrint "Installing WinFsp for Cloud Drive..."
-    ExecShellWait "runas" "msiexec.exe" '/i "$PLUGINSDIR\\winfsp.msi" /passive /norestart'
-  winfsp_done:
-SectionEnd
-"""
 
 [package.metadata.packager.deb]
 # FUSE for Cloud Drive, D-Bus for the saved sign-in (Secret Service).

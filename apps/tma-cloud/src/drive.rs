@@ -14,7 +14,7 @@ pub enum Status {
     Starting,
     Mounted(String),
     Failed(String),
-    /// The OS piece (WinFsp, FUSE) is missing.
+    /// The OS piece (FUSE on Linux, a recent Windows) is missing.
     Unavailable(String),
 }
 
@@ -57,19 +57,41 @@ impl Drive {
     }
 }
 
-#[cfg(any(windows, target_os = "linux", target_os = "macos"))]
-fn run(client: Client, status: &Arc<Mutex<Status>>, rx: &std::sync::mpsc::Receiver<()>) {
+/// A mounted drive of whichever adapter this system uses; dropping it unmounts.
+type Guard = Box<dyn std::any::Any>;
+
+/// Windows: a Cloud Files folder (built in since Windows 10 1709), or a WinFsp
+/// drive letter where Cloud Files is missing and WinFsp is installed.
+#[cfg(windows)]
+fn mount(core: Arc<tma_drive::Core>) -> Result<(String, Guard), Status> {
+    if tma_drive::is_available() {
+        let m = tma_drive::mount(core, "TMA Cloud", None).map_err(Status::Failed)?;
+        return Ok((m.mount_point.clone(), Box::new(m)));
+    }
+    if tma_drive::winfsp_fs::is_available() {
+        let m = tma_drive::winfsp_fs::mount(core, "TMA Cloud", None).map_err(Status::Failed)?;
+        return Ok((m.mount_point.clone(), Box::new(m)));
+    }
+    Err(Status::Unavailable("Cloud Drive needs Windows 10 version 1709 or later.".into()))
+}
+
+/// macOS mounts a local NFS share with its built-in client; Linux uses FUSE.
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+fn mount(core: Arc<tma_drive::Core>) -> Result<(String, Guard), Status> {
     if !tma_drive::is_available() {
-        let hint = if cfg!(windows) {
-            "Install WinFsp (winfsp.dev) to use Cloud Drive."
-        } else if cfg!(target_os = "macos") {
-            "Install macFUSE (macfuse.github.io) to use Cloud Drive."
+        let hint = if cfg!(target_os = "macos") {
+            "Cloud Drive needs the system NFS client."
         } else {
             "Install FUSE (the fuse3 package) to use Cloud Drive."
         };
-        set(status, Status::Unavailable(hint.into()));
-        return;
+        return Err(Status::Unavailable(hint.into()));
     }
+    let m = tma_drive::mount(core, "TMA Cloud", None).map_err(Status::Failed)?;
+    Ok((m.mount_point.clone(), Box::new(m)))
+}
+
+#[cfg(any(windows, target_os = "linux", target_os = "macos"))]
+fn run(client: Client, status: &Arc<Mutex<Status>>, rx: &std::sync::mpsc::Receiver<()>) {
     let staging = std::env::temp_dir().join("tma-cloud-fs");
     let backend: Arc<dyn tma_drive::Backend> = Arc::new(tma_drive::ClientBackend::new(client.clone()));
     // Windows refuses some characters in names; they map to look-alikes and back.
@@ -82,15 +104,15 @@ fn run(client: Client, status: &Arc<Mutex<Status>>, rx: &std::sync::mpsc::Receiv
     };
     // Until the server answers, the drive stays save-only: the safer of the two modes.
     core.deny_read.store(backend.save_only().unwrap_or(true), Ordering::Relaxed);
-    let mounted = match tma_drive::mount(core.clone(), "TMA Cloud", None) {
+    let (point, mounted) = match mount(core.clone()) {
         Ok(m) => m,
         Err(err) => {
-            set(status, Status::Failed(err));
+            set(status, err);
             return;
         }
     };
-    log::info!("Cloud Drive mounted at {}", mounted.mount_point);
-    set(status, Status::Mounted(mounted.mount_point.clone()));
+    log::info!("Cloud Drive mounted at {point}");
+    set(status, Status::Mounted(point));
     let events_core = core.clone();
     // A change made anywhere (web, another device) shows up in the drive at once.
     let _events = tma_client::events::subscribe(&client, Arc::new(move |_| events_core.invalidate_all()));
