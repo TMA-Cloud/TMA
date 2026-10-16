@@ -150,19 +150,33 @@ fn submit(app: &mut App) {
 /// A full-width filled input with a placeholder, as on the web sign-in card.
 fn pill_input(ui: &mut egui::Ui, value: &mut String, password: bool, placeholder: &str) -> egui::Response {
     let t = widgets::tokens(ui);
-    ui.add(
+    // Password fields carry an eye that shows what was typed, as in the web app.
+    let shown_id = egui::Id::new(("show-password", placeholder));
+    let shown = password && ui.data(|d| d.get_temp::<bool>(shown_id)).unwrap_or(false);
+    let response = ui.add(
         egui::TextEdit::singleline(value)
-            .password(password)
+            .password(password && !shown)
             .hint_text(RichText::new(placeholder).color(t.label_tertiary))
             .desired_width(f32::INFINITY)
             .font(egui::FontId::proportional(14.0))
             .frame(
-                egui::Frame::new()
-                    .fill(t.fill_quaternary)
-                    .corner_radius(egui::CornerRadius::same(12))
-                    .inner_margin(egui::Margin::symmetric(12, 10)),
+                egui::Frame::new().fill(t.fill_quaternary).corner_radius(egui::CornerRadius::same(12)).inner_margin(
+                    egui::Margin { left: 12, right: if password { 38 } else { 12 }, top: 10, bottom: 10 },
+                ),
             ),
-    )
+    );
+    if password {
+        let eye =
+            egui::Rect::from_center_size(response.rect.right_center() - egui::vec2(20.0, 0.0), egui::Vec2::splat(26.0));
+        let toggle = ui.interact(eye, shown_id.with("toggle"), egui::Sense::click());
+        let icon = if shown { ph::EYE_SLASH } else { ph::EYE };
+        let color = if toggle.hovered() { t.label } else { t.label_tertiary };
+        ui.painter().text(eye.center(), egui::Align2::CENTER_CENTER, icon, egui::FontId::proportional(16.0), color);
+        if toggle.on_hover_text(if shown { "Hide password" } else { "Show password" }).clicked() {
+            ui.data_mut(|d| d.insert_temp(shown_id, !shown));
+        }
+    }
+    response
 }
 
 /// A full-width button: the accent one, or a quiet one for the alternative.
