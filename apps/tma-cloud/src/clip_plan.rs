@@ -1,24 +1,8 @@
-//! Pure clipboard logic: unique local names, file paths copied as text, and
+//! Pure clipboard logic: file paths copied as text, pasted image names and
 //! the list of "virtual" files (Outlook attachments, zip contents) that
 //! Windows describes in a FileGroupDescriptorW block.
 
-use std::collections::HashSet;
 use std::path::{Component, Path, PathBuf};
-
-/// `name`, or "name (2).ext" and so on when the folder already has it.
-pub fn unique_name(name: &str, taken: &mut HashSet<String>) -> String {
-    let (stem, ext) = match name.rfind('.') {
-        Some(i) if i > 0 => (&name[..i], &name[i..]),
-        _ => (name, ""),
-    };
-    let mut candidate = name.to_string();
-    let mut n = 2;
-    while !taken.insert(candidate.to_lowercase()) {
-        candidate = format!("{stem} ({n}){ext}");
-        n += 1;
-    }
-    candidate
-}
 
 /// Absolute paths, one per line, as "Copy as path" in Explorer writes them.
 pub fn paths_in_text(text: &str) -> Vec<PathBuf> {
@@ -86,17 +70,6 @@ pub fn file_group(bytes: &[u8]) -> Vec<Described> {
         .collect()
 }
 
-/// The top-level entries of a copy: what gets uploaded (folders walk themselves).
-pub fn top_level(paths: &[PathBuf], root: &Path) -> Vec<PathBuf> {
-    let mut seen = HashSet::new();
-    paths
-        .iter()
-        .filter_map(|p| p.components().next())
-        .filter(|c| seen.insert(c.as_os_str().to_owned()))
-        .map(|c| root.join(c.as_os_str()))
-        .collect()
-}
-
 /// "Pasted image 2026-10-16 183405.png".
 pub fn image_name(stamp: &str) -> String {
     format!("Pasted image {stamp}.png")
@@ -105,17 +78,6 @@ pub fn image_name(stamp: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn names_stay_unique_per_folder() {
-        let mut taken = HashSet::new();
-        assert_eq!(unique_name("a.txt", &mut taken), "a.txt");
-        assert_eq!(unique_name("A.TXT", &mut taken), "A (2).TXT");
-        assert_eq!(unique_name("a.txt", &mut taken), "a (3).txt");
-        assert_eq!(unique_name(".env", &mut taken), ".env");
-        assert_eq!(unique_name("Folder", &mut taken), "Folder");
-        assert_eq!(unique_name("Folder", &mut taken), "Folder (2)");
-    }
 
     #[test]
     fn paths_come_from_copied_text() {
@@ -163,10 +125,7 @@ mod tests {
     }
 
     #[test]
-    fn top_level_entries_are_unique() {
-        let root = Path::new("R");
-        let paths = [PathBuf::from("Trip"), Path::new("Trip").join("a.jpg"), PathBuf::from("b.pdf")];
-        assert_eq!(top_level(&paths, root), [root.join("Trip"), root.join("b.pdf")]);
+    fn pasted_images_are_named_by_time() {
         assert_eq!(image_name("2026-10-16 183405"), "Pasted image 2026-10-16 183405.png");
     }
 }

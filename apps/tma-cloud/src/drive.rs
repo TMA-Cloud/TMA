@@ -24,6 +24,8 @@ pub struct Drive {
     stop: Option<std::sync::mpsc::Sender<()>>,
     /// The mounted drive's mode: 0 unknown, 1 save-only, 2 full access.
     mode: Arc<AtomicU8>,
+    /// The running drive, for paths into it and save-only exceptions.
+    core: Arc<Mutex<Option<Arc<tma_drive::Core>>>>,
 }
 
 fn store_mode(mode: &AtomicU8, save_only: bool) {
@@ -37,6 +39,11 @@ fn set(status: &Arc<Mutex<Status>>, value: Status) {
 impl Drive {
     pub fn status(&self) -> Status {
         self.status.lock().unwrap_or_else(|e| e.into_inner()).clone()
+    }
+
+    /// A handle for finding items in the drive from background work.
+    pub fn paths(&self) -> Paths {
+        Paths { status: self.status.clone(), core: self.core.clone() }
     }
 
     /// Whether the mounted drive is save-only, as the administrator set it.
@@ -54,10 +61,10 @@ impl Drive {
         self.stop = Some(tx);
         let status = self.status.clone();
         set(&status, Status::Starting);
-        let (client, mode) = (client.clone(), self.mode.clone());
+        let (client, mode, core) = (client.clone(), self.mode.clone(), self.core.clone());
         mode.store(0, Ordering::Relaxed);
         let spawned = std::thread::Builder::new().name("cloud-drive".into()).spawn(move || {
-            run(client, &status, &mode, &rx);
+            run(client, &status, &mode, &core, &rx);
             ctx.request_repaint();
         });
         if let Err(err) = spawned {
@@ -70,6 +77,30 @@ impl Drive {
             let _ = stop.send(());
         }
         set(&self.status, Status::Off);
+    }
+}
+
+/// Finds items inside the mounted drive; cheap to clone and send.
+#[derive(Clone)]
+pub struct Paths {
+    status: Arc<Mutex<Status>>,
+    core: Arc<Mutex<Option<Arc<tma_drive::Core>>>>,
+}
+
+impl Paths {
+    /// An item's path in the mounted drive, from its server folder names and name.
+    /// Other apps may read it for `time` even in save-only mode: the user opened or
+    /// copied it from TMA Cloud on purpose.
+    pub fn local_path(&self, folders: &[String], name: &str, time: std::time::Duration) -> Option<std::path::PathBuf> {
+        let Status::Mounted(point) = self.status.lock().unwrap_or_else(|e| e.into_inner()).clone() else {
+            return None;
+        };
+        let core = self.core.lock().unwrap_or_else(|e| e.into_inner()).clone()?;
+        let rel = core.local_path(folders, name);
+        core.allow_read(&rel, time);
+        let mut path = std::path::PathBuf::from(crate::host::drive_root(&point));
+        path.extend(rel.split('\\').filter(|p| !p.is_empty()));
+        Some(path)
     }
 }
 
@@ -120,8 +151,18 @@ fn mount(core: Arc<tma_drive::Core>) -> Result<(String, Guard), Status> {
 }
 
 #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
-fn run(client: Client, status: &Arc<Mutex<Status>>, mode: &Arc<AtomicU8>, rx: &std::sync::mpsc::Receiver<()>) {
-    let staging = std::env::temp_dir().join("tma-cloud-fs");
+fn run(
+    client: Client,
+    status: &Arc<Mutex<Status>>,
+    mode: &Arc<AtomicU8>,
+    slot: &Arc<Mutex<Option<Arc<tma_drive::Core>>>>,
+    rx: &std::sync::mpsc::Receiver<()>,
+) {
+    // FUSE, NFS and WinFsp keep open files here; Cloud Files streams and never uses it.
+    let Some(staging) = dirs::cache_dir().map(|d| d.join("TMA Cloud").join("drive")) else {
+        set(status, Status::Failed("No folder for the drive's open files".into()));
+        return;
+    };
     let backend: Arc<dyn tma_drive::Backend> = Arc::new(tma_drive::ClientBackend::new(client.clone()));
     // Windows refuses some characters in names; they map to look-alikes and back.
     let core = match tma_drive::Core::new(backend.clone(), staging, cfg!(windows)) {
@@ -145,6 +186,7 @@ fn run(client: Client, status: &Arc<Mutex<Status>>, mode: &Arc<AtomicU8>, rx: &s
         }
     };
     log::info!("Cloud Drive mounted at {point}");
+    *slot.lock().unwrap_or_else(|e| e.into_inner()) = Some(core.clone());
     set(status, Status::Mounted(point));
     let events_core = core.clone();
     // A change made anywhere (web, another device) shows up in the drive at once.
@@ -167,11 +209,18 @@ fn run(client: Client, status: &Arc<Mutex<Status>>, mode: &Arc<AtomicU8>, rx: &s
     });
     let _ = rx.recv();
     polling.store(false, Ordering::Relaxed);
+    *slot.lock().unwrap_or_else(|e| e.into_inner()) = None;
     drop(mounted);
     log::info!("Cloud Drive unmounted");
 }
 
 #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
-fn run(_client: Client, status: &Arc<Mutex<Status>>, _mode: &Arc<AtomicU8>, _rx: &std::sync::mpsc::Receiver<()>) {
+fn run(
+    _client: Client,
+    status: &Arc<Mutex<Status>>,
+    _mode: &Arc<AtomicU8>,
+    _slot: &Arc<Mutex<Option<Arc<tma_drive::Core>>>>,
+    _rx: &std::sync::mpsc::Receiver<()>,
+) {
     set(status, Status::Unavailable("Cloud Drive is not available on this system.".into()));
 }

@@ -5,7 +5,6 @@ use std::fs::{File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::PathBuf;
 use std::sync::Mutex;
-use std::sync::atomic::Ordering;
 
 use chrono::Utc;
 
@@ -158,8 +157,9 @@ impl Core {
 
     pub fn read(&self, handle: &Handle, offset: u64, buf: &mut [u8]) -> FsResult<usize> {
         let mut state = lock(&handle.state);
-        // Save-only drives refuse to open what is already in the cloud; new files stay readable.
-        if self.deny_read.load(Ordering::Relaxed) && !state.is_new && state.file.is_none() {
+        // Save-only drives refuse to open what is already in the cloud, except what TMA Cloud
+        // opened or copied; new files stay readable.
+        if !state.is_new && state.file.is_none() && !self.may_read(&state.node.path) {
             return Err(FsError::AccessDenied);
         }
         self.ensure_file(&mut state)?;

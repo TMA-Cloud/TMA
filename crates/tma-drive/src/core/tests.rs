@@ -55,6 +55,9 @@ impl Backend for Mock {
     fn download(&self, id: &str, dest: &Path) -> BackendResult<()> {
         std::fs::write(dest, self.bytes(id)).map_err(|e| e.to_string())
     }
+    fn download_with(&self, id: &str, sink: &mut (dyn FnMut(&[u8]) -> Result<(), String> + Send)) -> BackendResult<()> {
+        sink(&self.bytes(id))
+    }
     fn upload(&self, parent: Option<&str>, name: &str, src: &Path) -> BackendResult<String> {
         *self.uploads.lock().unwrap() += 1;
         let id = self.id();
@@ -196,6 +199,10 @@ fn save_only_refuses_reading_existing_files() {
     let h = core.open("\\s.txt").unwrap();
     let mut buf = [0u8; 8];
     assert_eq!(core.read(&h, 0, &mut buf), Err(FsError::AccessDenied));
+    // FUSE, NFS and WinFsp honour the same exception for what TMA Cloud opened.
+    core.allow_read("\\s.txt", std::time::Duration::from_secs(60));
+    let h = core.open("\\s.txt").unwrap();
+    assert_eq!(core.read(&h, 0, &mut buf), Ok(6));
 }
 
 #[test]
@@ -216,4 +223,27 @@ fn reserved_characters_round_trip() {
     mock.items.lock().unwrap().insert("q".into(), (None, "what?.txt".into(), false, b"q".to_vec()));
     let local = tma_core::names::server_to_windows("what?.txt");
     assert!(core.resolve(&format!("\\{local}")).unwrap().is_some());
+}
+
+#[test]
+fn save_only_lets_through_what_tma_cloud_opened() {
+    let (_mock, core, _dir) = setup();
+    assert!(core.may_read(r"\Docs\a.txt"));
+    core.deny_read.store(true, std::sync::atomic::Ordering::Relaxed);
+    assert!(!core.may_read(r"\Docs\a.txt"));
+    core.allow_read(r"\Docs", std::time::Duration::from_secs(60));
+    assert!(core.may_read(r"\docs\A.txt"));
+    assert!(core.may_read(r"\Docs"));
+    assert!(!core.may_read(r"\Docs2\b.txt"));
+    core.allow_read(r"\Old", std::time::Duration::ZERO);
+    assert!(!core.may_read(r"\Old\c.txt"));
+}
+
+#[test]
+fn drive_paths_use_windows_names() {
+    let (_mock, core, _dir) = setup();
+    let local = |name: &str| tma_core::names::server_to_windows(name);
+    let expected = format!(r"\{}\{}", local("Q1: plans"), local("a?.txt"));
+    assert_eq!(core.local_path(&["Q1: plans".into()], "a?.txt"), expected);
+    assert_eq!(core.local_path(&[], "a.txt"), r"\a.txt");
 }

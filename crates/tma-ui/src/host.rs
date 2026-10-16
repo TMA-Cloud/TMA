@@ -73,6 +73,12 @@ pub trait Host {
         Vec::new()
     }
 
+    /// Clipboard content that exists only in memory (a copied image, an Outlook
+    /// attachment), ready to upload; asked when there are no paths.
+    fn clipboard_contents(&self) -> Vec<tma_client::UploadFile> {
+        Vec::new()
+    }
+
     /// Changes whenever any app writes the system clipboard, so Paste can tell which copy is newer.
     fn clipboard_sequence(&self) -> u64 {
         0

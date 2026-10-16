@@ -30,6 +30,8 @@ pub type BackendResult<T> = Result<T, String>;
 pub trait Backend: Send + Sync {
     fn list(&self, parent: Option<&str>) -> BackendResult<Vec<Entry>>;
     fn download(&self, id: &str, dest: &Path) -> BackendResult<()>;
+    /// Hand a file's bytes to `sink` as they arrive (Cloud Files writes them into the placeholder).
+    fn download_with(&self, id: &str, sink: &mut (dyn FnMut(&[u8]) -> Result<(), String> + Send)) -> BackendResult<()>;
     /// Upload a new file and return its id.
     fn upload(&self, parent: Option<&str>, name: &str, src: &Path) -> BackendResult<String>;
     /// Replace a file's contents; `name` is its current name (the type is read from it).
@@ -98,6 +100,10 @@ impl Backend for ClientBackend {
 
     fn download(&self, id: &str, dest: &Path) -> BackendResult<()> {
         tma_client::rt::block_on(self.client.download_to(id, dest, Progress::new(0))).map_err(|e| e.message)
+    }
+
+    fn download_with(&self, id: &str, sink: &mut (dyn FnMut(&[u8]) -> Result<(), String> + Send)) -> BackendResult<()> {
+        tma_client::rt::block_on(self.client.download_with(id, sink)).map_err(|e| e.message)
     }
 
     fn upload(&self, parent: Option<&str>, name: &str, src: &Path) -> BackendResult<String> {

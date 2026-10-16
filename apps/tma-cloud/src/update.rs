@@ -44,7 +44,13 @@ pub fn check(client: Client, notifier: Notifier) {
             return;
         }
         let progress = notifier.track_download(&format!("TMA Cloud {version}"));
-        let path = std::env::temp_dir().join(format!("tma-cloud-{version}-setup.exe"));
+        // The installer must be a file to run; it goes in the app's own folder, replacing any older one.
+        let Some(dir) = dirs::data_local_dir().map(|d| d.join("TMA Cloud").join("updates")) else { return };
+        let _ = std::fs::remove_dir_all(&dir);
+        if std::fs::create_dir_all(&dir).is_err() {
+            return;
+        }
+        let path = dir.join(format!("tma-cloud-{version}-setup.exe"));
         match download(&installer_url(&version), &path, &progress).await {
             Ok(()) => notifier.finish_download(&progress, None),
             Err(err) => {

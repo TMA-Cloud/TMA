@@ -123,6 +123,10 @@ fn paste_system_files(app: &mut App) {
     {
         let paths = app.host.clipboard_files();
         if paths.is_empty() {
+            let contents = app.host.clipboard_contents();
+            if !contents.is_empty() {
+                upload_files(app, contents);
+            }
             return;
         }
         // Walking a large copied folder reads the disk, so it runs off the frame.

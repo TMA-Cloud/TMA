@@ -1,28 +1,25 @@
 //! TMA Cloud's Copy and Cut on the system clipboard, and pasting what other
-//! apps copied. Copy downloads the files and folders to a private folder and
-//! puts them there as real files, so they paste into Explorer, mail or chat;
-//! Cut takes the clipboard over, as in Explorer.
+//! apps copied. Copy puts the items' paths in the Cloud Drive folder on the
+//! clipboard, so Explorer, mail or chat paste the real files and Windows
+//! downloads them only then; nothing is copied anywhere first. Cut takes the
+//! clipboard over, as in Explorer.
 
-use std::collections::HashSet;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Duration;
 
-use tma_client::{Client, ListQuery, Progress, View};
+use tma_client::{Client, Source, UploadFile};
 use tma_core::api::FileItem;
 
 use crate::clip_plan;
+use crate::drive::Paths;
 use crate::notify_ui::Notifier;
 
-/// Larger copies stay in TMA Cloud: downloading them all on Copy would take too long.
-const MAX_COPY_BYTES: u64 = 2 * 1024 * 1024 * 1024;
-const MAX_COPY_FILES: usize = 10_000;
-/// Downloads at once while preparing a copy.
-const PARALLEL: usize = 4;
-/// Virtual files are written out before the paste; this bounds that wait.
-const MAX_VIRTUAL_BYTES: u64 = 500 * 1024 * 1024;
-/// Prepared copies older than this are removed; a paste long after is unlikely.
-const KEEP_COPIES: std::time::Duration = std::time::Duration::from_secs(24 * 3600);
+/// How long copied items stay readable in save-only mode: a paste is usually soon.
+const PASTE_WINDOW: Duration = Duration::from_secs(24 * 3600);
+/// Virtual files and images are read into memory before they upload; this bounds that.
+const MAX_IN_MEMORY: u64 = 500 * 1024 * 1024;
 
 /// Bumped by every Copy or Cut, so a slow copy finishing late cannot replace a newer one.
 static GENERATION: AtomicU64 = AtomicU64::new(0);
@@ -35,94 +32,9 @@ fn label(n: usize) -> String {
     if n == 1 { "1 item".into() } else { format!("{n} items") }
 }
 
-fn workspace(kind: &str) -> Option<PathBuf> {
-    let root = dirs::cache_dir()?.join("TMA Cloud").join(kind);
-    clean_old(&root);
-    let dir = root.join(stamp());
-    std::fs::create_dir_all(&dir).ok()?;
-    Some(dir)
-}
-
-/// What a copy downloads: folders to create and files to fetch, by local path.
-#[derive(Default)]
-struct Plan {
-    tops: Vec<PathBuf>,
-    dirs: Vec<PathBuf>,
-    files: Vec<(String, PathBuf)>,
-    bytes: u64,
-}
-
-/// List the copied folders on the server, keeping their structure locally.
-async fn plan(client: &Client, items: &[FileItem], dir: &Path) -> tma_client::ApiResult<Plan> {
-    let mut plan = Plan::default();
-    let mut taken = HashSet::new();
-    let mut folders = Vec::new();
-    for item in items {
-        let path = dir.join(clip_plan::unique_name(&tma_core::names::portable_name(&item.name), &mut taken));
-        plan.tops.push(path.clone());
-        if item.is_folder() {
-            folders.push((item.id.clone(), path.clone()));
-            plan.dirs.push(path);
-        } else {
-            plan.bytes += item.size.unwrap_or(0).max(0) as u64;
-            plan.files.push((item.id.clone(), path));
-        }
-    }
-    while let Some((id, path)) = folders.pop() {
-        let mut taken = HashSet::new();
-        let mut query = ListQuery { limit: Some(500), ..Default::default() };
-        loop {
-            let page = client.list(&View::Folder(Some(id.clone())), &query).await?;
-            for child in page.files {
-                let name = clip_plan::unique_name(&tma_core::names::portable_name(&child.name), &mut taken);
-                let child_path = path.join(name);
-                if child.is_folder() {
-                    plan.dirs.push(child_path.clone());
-                    folders.push((child.id, child_path));
-                } else {
-                    plan.bytes += child.size.unwrap_or(0).max(0) as u64;
-                    plan.files.push((child.id, child_path));
-                }
-            }
-            if plan.bytes > MAX_COPY_BYTES || plan.files.len() > MAX_COPY_FILES {
-                return Ok(plan);
-            }
-            match page.next_cursor {
-                Some(cursor) => query.cursor = Some(cursor),
-                None => break,
-            }
-        }
-    }
-    Ok(plan)
-}
-
-/// Fetch every planned file, a few at a time.
-async fn download_all(client: &Client, files: Vec<(String, PathBuf)>) -> Result<(), String> {
-    let queue = std::sync::Arc::new(Mutex::new(files));
-    let mut workers = tokio::task::JoinSet::new();
-    for _ in 0..PARALLEL {
-        let (client, queue) = (client.clone(), queue.clone());
-        workers.spawn(async move {
-            loop {
-                let next = queue.lock().ok().and_then(|mut q| q.pop());
-                let Some((id, path)) = next else { return Ok(()) };
-                let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
-                client.download_to(&id, &path, Progress::new(0)).await.map_err(|e| format!("{name}: {}", e.message))?;
-            }
-        });
-    }
-    while let Some(done) = workers.join_next().await {
-        if let Ok(Err(err)) = done {
-            workers.abort_all();
-            return Err(err);
-        }
-    }
-    Ok(())
-}
-
 /// Copy or Cut in TMA Cloud. A paste back into TMA Cloud still copies on the
 /// server; the system clipboard is for other apps.
-pub fn copied(client: Client, items: Vec<FileItem>, cut: bool, notifier: Notifier) {
+pub fn copied(paths: Paths, client: Client, items: Vec<FileItem>, cut: bool, notifier: Notifier) {
     let generation = GENERATION.fetch_add(1, Ordering::SeqCst) + 1;
     let total = items.len();
     // Taken at once, as any Ctrl+C does, so an older copy elsewhere cannot be pasted meanwhile.
@@ -132,38 +44,28 @@ pub fn copied(client: Client, items: Vec<FileItem>, cut: bool, notifier: Notifie
         return;
     }
     tma_client::rt::spawn(async move {
-        let Some(dir) = workspace("clipboard") else {
-            notifier.error("Copied in TMA Cloud only: no folder to prepare the files in".to_string());
-            return;
-        };
-        let plan = match plan(&client, &items, &dir).await {
-            Ok(plan) => plan,
-            Err(err) => {
-                notifier.error(format!("Copied in TMA Cloud only: {}", err.message));
-                return;
+        let mut local = Vec::new();
+        for item in &items {
+            let info = match client.info(&item.id).await {
+                Ok(info) => info,
+                Err(err) => {
+                    notifier.error(format!("Copied in TMA Cloud only: {}", err.message));
+                    return;
+                }
+            };
+            match paths.local_path(&info.location_path, &info.name, PASTE_WINDOW) {
+                Some(path) => local.push(path),
+                None => {
+                    notifier
+                        .info(format!("{} copied. Connect Cloud Drive to paste in other apps as well.", label(total)));
+                    return;
+                }
             }
-        };
-        if plan.bytes > MAX_COPY_BYTES || plan.files.len() > MAX_COPY_FILES {
-            notifier.info(format!("{} copied. Over 2 GB, so they paste in TMA Cloud only.", label(total)));
-            return;
-        }
-        if plan.bytes > 20 * 1024 * 1024 {
-            notifier.info(format!("Preparing {} for other apps…", tma_core::format::file_size(plan.bytes as i64)));
-        }
-        for folder in &plan.dirs {
-            if let Err(err) = std::fs::create_dir_all(folder) {
-                notifier.error(format!("Copied in TMA Cloud only: {err}"));
-                return;
-            }
-        }
-        if let Err(err) = download_all(&client, plan.files).await {
-            notifier.error(format!("Copied in TMA Cloud, but not for other apps. {err}"));
-            return;
         }
         if GENERATION.load(Ordering::SeqCst) != generation {
             return;
         }
-        match set_clipboard(&plan.tops) {
+        match set_clipboard(&local) {
             Ok(()) => {
                 OWN_SEQUENCE.store(sequence(), Ordering::SeqCst);
                 notifier.success(format!("{} copied. Paste here or in any app.", label(total)));
@@ -178,23 +80,6 @@ fn claim() {
     if clear_clipboard() {
         OWN_SEQUENCE.store(sequence(), Ordering::SeqCst);
     }
-}
-
-fn clean_old(root: &Path) {
-    let Ok(entries) = std::fs::read_dir(root) else { return };
-    for entry in entries.flatten() {
-        let old = entry.metadata().and_then(|m| m.modified()).ok().and_then(|m| m.elapsed().ok());
-        if old.is_some_and(|age| age > KEEP_COPIES) {
-            let _ = std::fs::remove_dir_all(entry.path());
-        }
-    }
-}
-
-fn stamp() -> String {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_millis().to_string())
-        .unwrap_or_default()
 }
 
 /// Whether another app copied something that pastes as files: files and
@@ -216,20 +101,44 @@ pub fn has_files() -> bool {
     }
 }
 
-/// The files to upload for a paste: paths as they are, or other content
-/// written to a private folder first.
+/// Files and folders another app copied, as paths (Explorer's Copy, or paths as text).
 pub fn files() -> Vec<PathBuf> {
     let listed = file_list();
-    if !listed.is_empty() {
-        return listed;
-    }
-    match other_content() {
-        Ok(paths) => paths,
+    if !listed.is_empty() { listed } else { text_paths() }
+}
+
+/// What exists only in memory: virtual files (Outlook, zip folders) or a copied image.
+pub fn contents() -> Vec<UploadFile> {
+    match in_memory() {
+        Ok(files) => files,
         Err(err) => {
             log::warn!("Paste: {err}");
             Vec::new()
         }
     }
+}
+
+/// An upload straight from memory; `path` is where it sits inside the copy.
+fn bytes_upload(path: &std::path::Path, bytes: Vec<u8>) -> Option<UploadFile> {
+    let name = path.file_name()?.to_string_lossy().to_string();
+    let dir = path.parent().map(|p| p.to_string_lossy().replace('\\', "/")).filter(|d| !d.is_empty());
+    Some(UploadFile {
+        name,
+        size: bytes.len() as u64,
+        source: Source::Bytes(bytes.into()),
+        modified_ms: None,
+        relative_dir: dir,
+    })
+}
+
+#[cfg(windows)]
+fn in_memory() -> Result<Vec<UploadFile>, String> {
+    if crate::clipboard_ole::available() {
+        let files = crate::clipboard_ole::read_all(MAX_IN_MEMORY)?;
+        return Ok(files.into_iter().filter_map(|(path, bytes)| bytes_upload(&path, bytes)).collect());
+    }
+    let name = clip_plan::image_name(&chrono::Local::now().format("%Y-%m-%d %H%M%S").to_string());
+    Ok(image_png()?.and_then(|png| bytes_upload(std::path::Path::new(&name), png)).into_iter().collect())
 }
 
 #[cfg(windows)]
@@ -253,24 +162,11 @@ fn png_format() -> Option<u32> {
 
 #[cfg(windows)]
 fn text_paths() -> Vec<PathBuf> {
+    if !clipboard_win::is_format_avail(clipboard_win::formats::CF_UNICODETEXT) {
+        return Vec::new();
+    }
     let text: String = clipboard_win::get_clipboard_string().unwrap_or_default();
     clip_plan::paths_in_text(&text).into_iter().filter(|p| p.exists()).collect()
-}
-
-#[cfg(windows)]
-fn other_content() -> Result<Vec<PathBuf>, String> {
-    if crate::clipboard_ole::available() {
-        let dir = workspace("paste").ok_or("No folder to prepare the pasted files in")?;
-        return crate::clipboard_ole::extract(&dir, MAX_VIRTUAL_BYTES);
-    }
-    if let Some(image) = image_png()? {
-        let dir = workspace("paste").ok_or("No folder to prepare the pasted image in")?;
-        let name = clip_plan::image_name(&chrono_stamp());
-        let path = dir.join(name);
-        std::fs::write(&path, image).map_err(|e| e.to_string())?;
-        return Ok(vec![path]);
-    }
-    Ok(text_paths())
 }
 
 /// A bare copied image as PNG bytes: the app's own PNG when it gave one, else the bitmap converted.
@@ -296,12 +192,6 @@ fn image_png() -> Result<Option<Vec<u8>>, String> {
     let mut png = std::io::Cursor::new(Vec::new());
     image.write_to(&mut png, image::ImageFormat::Png).map_err(|e| e.to_string())?;
     Ok(Some(png.into_inner()))
-}
-
-/// Local time for a pasted image's name: "2026-10-16 183405".
-#[cfg(windows)]
-fn chrono_stamp() -> String {
-    chrono::Local::now().format("%Y-%m-%d %H%M%S").to_string()
 }
 
 #[cfg(windows)]
@@ -335,13 +225,19 @@ pub fn sequence() -> u64 {
 }
 
 #[cfg(not(windows))]
+fn in_memory() -> Result<Vec<UploadFile>, String> {
+    let _ = (MAX_IN_MEMORY, bytes_upload as fn(&std::path::Path, Vec<u8>) -> Option<UploadFile>);
+    Ok(Vec::new())
+}
+
+#[cfg(not(windows))]
 fn pastable_now() -> bool {
     false
 }
 
 #[cfg(not(windows))]
-fn other_content() -> Result<Vec<PathBuf>, String> {
-    Ok(Vec::new())
+fn text_paths() -> Vec<PathBuf> {
+    Vec::new()
 }
 
 #[cfg(not(windows))]
@@ -353,7 +249,7 @@ fn clear_clipboard() -> bool {
 fn set_clipboard(paths: &[PathBuf]) -> Result<(), String> {
     // Other systems take file URIs from text; most file managers accept them.
     let uris: Vec<String> = paths.iter().map(|p| format!("file://{}", p.to_string_lossy())).collect();
-    Err(format!("Saved to {}. Copy them from there.", uris.join(" ")))
+    Err(format!("The files are in Cloud Drive at {}.", uris.join(" ")))
 }
 
 #[cfg(not(windows))]

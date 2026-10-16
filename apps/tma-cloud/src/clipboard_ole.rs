@@ -3,8 +3,7 @@
 //! hands them out through OLE as memory, a stream or a structured storage.
 #![allow(unsafe_code)]
 
-use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use windows::Win32::Foundation::HGLOBAL;
 use windows::Win32::System::Com::StructuredStorage::{
@@ -71,21 +70,19 @@ unsafe fn global_bytes(memory: HGLOBAL, len: Option<usize>) -> Result<Vec<u8>, S
     }
 }
 
-fn write_contents(
+fn read_contents(
     data: &IDataObject,
     format: u16,
     index: i32,
     only: bool,
-    path: &Path,
     size: Option<u64>,
-) -> Result<(), String> {
+) -> Result<Vec<u8>, String> {
     let tymed = TYMED(TYMED_HGLOBAL.0 | TYMED_ISTREAM.0 | TYMED_ISTORAGE.0);
     // Some apps answer a lone file only without an index.
     let medium = match get(data, format, index, tymed) {
         Err(_) if only => get(data, format, -1, tymed)?,
         other => other?,
     };
-    let mut file = std::fs::File::create(path).map_err(|e| e.to_string())?;
     let tymed = TYMED(medium.0.tymed as i32);
     let bytes = if tymed == TYMED_HGLOBAL {
         // SAFETY: TYMED_HGLOBAL means `hGlobal` is the member GetData filled in.
@@ -93,6 +90,7 @@ fn write_contents(
     } else if tymed == TYMED_ISTREAM {
         // SAFETY: TYMED_ISTREAM means `pstm` is the member GetData filled in.
         let stream = unsafe { &*medium.0.u.pstm }.as_ref().ok_or("The copied file is empty")?;
+        let mut out = Vec::with_capacity(size.unwrap_or(0) as usize);
         let mut buffer = vec![0u8; 256 * 1024];
         loop {
             let mut read = 0u32;
@@ -101,9 +99,9 @@ fn write_contents(
             if result.is_err() || read == 0 {
                 break;
             }
-            file.write_all(&buffer[..read as usize]).map_err(|e| e.to_string())?;
+            out.extend_from_slice(&buffer[..read as usize]);
         }
-        return Ok(());
+        out
     } else if tymed == TYMED_ISTORAGE {
         // SAFETY: TYMED_ISTORAGE means `pstg` is the member GetData filled in.
         let storage = unsafe { &*medium.0.u.pstg }.as_ref().ok_or("The copied item is empty")?;
@@ -122,11 +120,11 @@ fn write_contents(
     } else {
         return Err("The copied file comes in a form TMA Cloud cannot read".into());
     };
-    file.write_all(&bytes).map_err(|e| e.to_string())
+    Ok(bytes)
 }
 
-/// Write the clipboard's virtual files under `dest`; returns the top-level paths.
-pub fn extract(dest: &Path, limit: u64) -> Result<Vec<PathBuf>, String> {
+/// The clipboard's virtual files in memory, as (path inside the copy, bytes).
+pub fn read_all(limit: u64) -> Result<Vec<(PathBuf, Vec<u8>)>, String> {
     let (Some(descriptor), Some(contents)) = (format("FileGroupDescriptorW"), format("FileContents")) else {
         return Ok(Vec::new());
     };
@@ -144,18 +142,16 @@ pub fn extract(dest: &Path, limit: u64) -> Result<Vec<PathBuf>, String> {
     if total > limit {
         return Err(format!("The copied files are larger than {} MB", limit / (1024 * 1024)));
     }
-    let mut written = Vec::new();
-    for (index, entry) in entries.iter().enumerate() {
-        let path = dest.join(&entry.path);
-        if entry.is_dir {
-            std::fs::create_dir_all(&path).map_err(|e| e.to_string())?;
-        } else {
-            if let Some(parent) = path.parent() {
-                std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-            }
-            write_contents(&data, contents, index as i32, entries.len() == 1, &path, entry.size)?;
+    let only = entries.len() == 1;
+    let mut files = Vec::new();
+    let mut read = 0u64;
+    for (index, entry) in entries.iter().enumerate().filter(|(_, e)| !e.is_dir) {
+        let bytes = read_contents(&data, contents, index as i32, only, entry.size)?;
+        read += bytes.len() as u64;
+        if read > limit {
+            return Err(format!("The copied files are larger than {} MB", limit / (1024 * 1024)));
         }
-        written.push(entry.path.clone());
+        files.push((entry.path.clone(), bytes));
     }
-    Ok(clip_plan::top_level(&written, dest))
+    Ok(files)
 }

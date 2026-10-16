@@ -1,9 +1,7 @@
 //! What Windows asks of the sync engine: list a folder being browsed, download
 //! a file being opened, and agree to deletes and renames of placeholders.
 
-use std::io::Read;
 use std::sync::Arc;
-use std::sync::atomic::Ordering;
 
 use cloud_filter::error::{CResult, CloudErrorKind};
 use cloud_filter::filter::{Request, SyncFilter, info, ticket};
@@ -15,6 +13,7 @@ use crate::cloud_files::worker::Shared;
 use crate::sync_plan::Stamp;
 
 /// Transfers must be whole 4 KiB pages, except the last one.
+const PAGE: usize = 4096;
 const CHUNK: usize = 1024 * 1024;
 
 pub struct Filter {
@@ -48,29 +47,42 @@ fn unsuccessful(what: &str, err: impl std::fmt::Display) -> CloudErrorKind {
 impl Filter {
     fn hydrate(&self, request: &Request, ticket: &ticket::FetchData) -> CResult<()> {
         let core = &self.shared.core;
-        if core.deny_read.load(Ordering::Relaxed) {
+        let path = request.path();
+        if !self.shared.rel(&path).is_some_and(|rel| core.may_read(&rel)) {
+            log::info!("[drive] save-only: refused to open {}", path.display());
             return Err(CloudErrorKind::AccessDenied);
         }
         let stamp = Stamp::decode(request.file_blob()).ok_or(CloudErrorKind::InvalidRequest)?;
-        log::debug!("[drive] download {}", request.path().display());
+        log::debug!("[drive] download {}", path.display());
         let size = request.file_size();
-        let staged = core.new_staging_file();
-        let result = (|| {
-            core.backend().download(&stamp.id, &staged).map_err(|e| unsuccessful("download", e))?;
-            let mut file = std::fs::File::open(&staged).map_err(|e| unsuccessful("staged file", e))?;
-            let mut buf = vec![0u8; CHUNK];
-            let mut offset = 0u64;
-            while offset < size {
-                let len = CHUNK.min((size - offset) as usize);
-                file.read_exact(&mut buf[..len]).map_err(|e| unsuccessful("server copy is shorter", e))?;
-                ticket.write_at(&buf[..len], offset).map_err(|e| unsuccessful("transfer", e))?;
-                offset += len as u64;
-                let _ = ticket.report_progress(size, offset);
+        // Straight from the server into the placeholder: whole pages, the last one may be short.
+        let mut pending: Vec<u8> = Vec::with_capacity(CHUNK);
+        let mut offset = 0u64;
+        let flush = |pending: &mut Vec<u8>, offset: &mut u64| -> Result<(), String> {
+            ticket.write_at(pending, *offset).map_err(|e| format!("transfer: {e}"))?;
+            *offset += pending.len() as u64;
+            pending.clear();
+            let _ = ticket.report_progress(size, *offset);
+            Ok(())
+        };
+        let mut sink = |chunk: &[u8]| -> Result<(), String> {
+            pending.extend_from_slice(chunk);
+            if pending.len() >= CHUNK {
+                let whole = pending.len() - pending.len() % PAGE;
+                let rest = pending.split_off(whole);
+                flush(&mut pending, &mut offset)?;
+                pending = rest;
             }
             Ok(())
-        })();
-        let _ = std::fs::remove_file(&staged);
-        result
+        };
+        core.backend().download_with(&stamp.id, &mut sink).map_err(|e| unsuccessful("download", e))?;
+        if !pending.is_empty() {
+            flush(&mut pending, &mut offset).map_err(|e| unsuccessful("download", e))?;
+        }
+        if offset < size {
+            return Err(unsuccessful("download", "the server copy is shorter than the file"));
+        }
+        Ok(())
     }
 }
 

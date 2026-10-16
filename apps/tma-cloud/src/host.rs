@@ -9,11 +9,10 @@ use tma_core::api::{FileItem, User};
 use tma_ui::{Host, HostKind, SavedSession, Tasks};
 
 use crate::drive::{Drive, Status};
-use crate::edit::Edits;
 use crate::notify_ui::Notifier;
 
 /// What to open for the drive: "Z:\\" on Windows, the mount folder elsewhere.
-fn drive_root(point: &str) -> String {
+pub fn drive_root(point: &str) -> String {
     if cfg!(windows) && point.ends_with(':') { format!("{point}\\") } else { point.to_string() }
 }
 
@@ -29,13 +28,12 @@ pub struct DesktopHost {
     pub server: Option<String>,
     pub client_id: String,
     heartbeat_stop: Option<Arc<AtomicBool>>,
-    edits: Edits,
     drive: Drive,
 }
 
 impl DesktopHost {
     pub fn new(server: Option<String>, client_id: String) -> Self {
-        Self { server, client_id, heartbeat_stop: None, edits: Edits::default(), drive: Drive::default() }
+        Self { server, client_id, heartbeat_stop: None, drive: Drive::default() }
     }
 
     fn entry(server: &str) -> Option<keyring::Entry> {
@@ -217,12 +215,12 @@ impl Host for DesktopHost {
     }
 
     fn edit_in_app(&mut self, client: &Client, file: &FileItem, tasks: &Tasks) -> bool {
-        self.edits.open(client.clone(), file.clone(), Notifier::new(tasks));
+        crate::edit::open(self.drive.paths(), client.clone(), file.clone(), Notifier::new(tasks));
         true
     }
 
     fn clipboard_copy(&mut self, client: &Client, items: &[FileItem], cut: bool, tasks: &Tasks) -> bool {
-        crate::clipboard::copied(client.clone(), items.to_vec(), cut, Notifier::new(tasks));
+        crate::clipboard::copied(self.drive.paths(), client.clone(), items.to_vec(), cut, Notifier::new(tasks));
         true
     }
 
@@ -232,6 +230,10 @@ impl Host for DesktopHost {
 
     fn clipboard_files(&self) -> Vec<std::path::PathBuf> {
         crate::clipboard::files()
+    }
+
+    fn clipboard_contents(&self) -> Vec<tma_client::UploadFile> {
+        crate::clipboard::contents()
     }
 
     fn clipboard_sequence(&self) -> u64 {

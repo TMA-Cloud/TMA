@@ -85,8 +85,14 @@ Layers: `routes → services / models → storage / crypto / util / config`.
 - `cloud_files/` (Windows) is a sync engine instead: placeholders download on
   open, a watcher uploads local changes, and server events resync folders that
   have been browsed. What to change is planned in the pure `sync_plan.rs`.
+  Downloads stream straight into the placeholder; nothing is staged on disk.
   Windows never calls the engine for its own process, so drive it from another
   process when testing (the `mount_test` example does).
+- `cloud-filter` is a patched copy in `vendor/cloud-filter` (see its
+  `PATCHES.md`): the published crate panics inside Windows callbacks.
+- The desktop app's Edit in app and Copy hand other apps paths inside the
+  mounted drive, never temporary copies. `Core::allow_read` lets those paths
+  through save-only mode for a while.
 - `nfs_fs.rs` (macOS) is a localhost NFSv3 server; it builds on Linux too, so
   test it there with `TMA_ADAPTER=nfs cargo run -p tma-drive --example mount_test`.
 - WinFsp is only a fallback on Windows without Cloud Files. It is linked lazily

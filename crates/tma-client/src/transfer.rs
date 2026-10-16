@@ -170,6 +170,24 @@ impl Client {
         self.json(self.request(reqwest::Method::POST, &path).multipart(form)).await
     }
 
+    /// Hand a file's bytes to `sink` as they arrive, without writing them anywhere first.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub async fn download_with(
+        &self,
+        id: &str,
+        mut sink: impl FnMut(&[u8]) -> Result<(), String> + Send,
+    ) -> ApiResult<()> {
+        use futures::StreamExt;
+        let response = self
+            .send(self.request(reqwest::Method::GET, &format!("/api/files/{}/download", crate::http::enc(id))))
+            .await?;
+        let mut body = response.bytes_stream();
+        while let Some(chunk) = body.next().await {
+            sink(&chunk.map_err(ApiError::network)?).map_err(ApiError::local)?;
+        }
+        Ok(())
+    }
+
     /// Stream a download to `dest`.
     #[cfg(not(target_arch = "wasm32"))]
     pub async fn download_to(&self, id: &str, dest: &std::path::Path, progress: Arc<Progress>) -> ApiResult<()> {

@@ -86,6 +86,8 @@ pub struct Core {
     local_empty: Mutex<HashSet<String>>,
     path_locks: Vec<Mutex<()>>,
     pub deny_read: AtomicBool,
+    /// Paths TMA Cloud itself opened or copied, readable in save-only mode until they expire.
+    readable: Mutex<Vec<(String, Instant)>>,
     /// Bumped whenever every listing is dropped, so adapters can resync.
     generation: AtomicU64,
     total: AtomicU64,
@@ -108,6 +110,7 @@ impl Core {
             local_empty: Mutex::new(HashSet::new()),
             path_locks: (0..64).map(|_| Mutex::new(())).collect(),
             deny_read: AtomicBool::new(false),
+            readable: Mutex::new(Vec::new()),
             generation: AtomicU64::new(0),
             total: AtomicU64::new(SYNTHETIC_CAPACITY),
             free: AtomicU64::new(SYNTHETIC_CAPACITY),
@@ -127,6 +130,33 @@ impl Core {
         paths::key(path).hash(&mut h);
         let index = (h.finish() as usize) % self.path_locks.len();
         lock(&self.path_locks[index])
+    }
+
+    /// Let other apps read `path` and what is under it for `time`, even in save-only
+    /// mode: the user opened or copied it from TMA Cloud on purpose.
+    pub fn allow_read(&self, path: &str, time: Duration) {
+        let now = Instant::now();
+        let mut readable = lock(&self.readable);
+        readable.retain(|(_, until)| *until > now);
+        readable.push((paths::normalize(path), now + time));
+    }
+
+    /// Whether another app may read `path`: save-only is off, or TMA Cloud opened it.
+    pub fn may_read(&self, path: &str) -> bool {
+        if !self.deny_read.load(Ordering::Relaxed) {
+            return true;
+        }
+        let now = Instant::now();
+        lock(&self.readable).iter().any(|(root, until)| *until > now && paths::is_at_or_under(path, root))
+    }
+
+    /// The drive path of an item from its server folder names and name.
+    pub fn local_path(&self, folders: &[String], name: &str) -> String {
+        let mut path = ROOT.to_string();
+        for part in folders.iter().map(String::as_str).chain(std::iter::once(name)) {
+            path = paths::join(&path, &self.to_local_name(part));
+        }
+        path
     }
 
     fn to_local_name(&self, server: &str) -> String {
