@@ -1,0 +1,34 @@
+[package]
+name = "tma-ui"
+description = "TMA Cloud user interface in egui, shared by the desktop and web apps"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+tma-core = { workspace = true }
+tma-client = { workspace = true }
+egui = { workspace = true, features = ["default_fonts"] }
+egui-phosphor = { workspace = true }
+rfd = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+log = { workspace = true }
+bytes = { workspace = true }
+image = { workspace = true }
+data-encoding = "2"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
+web-sys = { version = "0.3", features = ["Window", "Document", "Element", "HtmlElement", "HtmlAnchorElement", "Location", "File", "FileList", "Blob", "Url", "Node", "HtmlFormElement"] }
+
+[dev-dependencies]
+egui_kittest = { version = "0.36", features = ["wgpu", "snapshot"] }
