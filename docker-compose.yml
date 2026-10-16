@@ -15,7 +15,7 @@ services:
     container_name: tma-cloud-app
     restart: unless-stopped
     ports:
-      - "${PORT:-3000}:3000"
+      - '${PORT:-3000}:3000'
     env_file:
       - .env
     environment:
@@ -24,7 +24,7 @@ services:
     secrets:
       - file_encryption_key
     healthcheck:
-      test: ["CMD", "tma-server", "healthcheck"]
+      test: ['CMD', 'tma-server', 'healthcheck']
       interval: 30s
       timeout: 5s
       retries: 3
@@ -54,7 +54,7 @@ services:
         exec docker-entrypoint.sh "$$@"
       - sh
     #ports:
-      #- "127.0.0.1:5432:5432"
+    #- "127.0.0.1:5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql
     networks:
@@ -66,7 +66,7 @@ services:
       -c maintenance_work_mem=128MB
       -c max_connections=100
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -q -d \"$$DATABASE_URL\""]
+      test: ['CMD-SHELL', 'pg_isready -q -d "$$DATABASE_URL"']
       interval: 10s
       timeout: 5s
       retries: 5
@@ -92,7 +92,8 @@ services:
     networks:
       - tma-cloud-network
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli -u \"$$REDIS_URL\" -h 127.0.0.1 -p 6379 --no-auth-warning ping | grep -q PONG || exit 1"]
+      test:
+        ['CMD-SHELL', 'redis-cli -u "$$REDIS_URL" -h 127.0.0.1 -p 6379 --no-auth-warning ping | grep -q PONG || exit 1']
       interval: 10s
       timeout: 3s
       retries: 3
@@ -108,7 +109,7 @@ services:
       - FILE_ENCRYPTION_KEY_FILE=/run/secrets/file_encryption_key
     secrets:
       - file_encryption_key
-    command: ["tma-server", "worker"]
+    command: ['tma-server', 'worker']
     # The image's check calls the API port, which the worker does not serve. A
     # crashed worker exits, and the restart policy brings it back.
     healthcheck:

@@ -10,15 +10,7 @@
     {
       "name": "wiki",
       "runtimeExecutable": "npm",
-      "runtimeArgs": [
-        "run",
-        "dev",
-        "--prefix",
-        "../TMAWiki",
-        "--",
-        "-p",
-        "3100"
-      ],
+      "runtimeArgs": ["run", "dev", "--prefix", "../TMAWiki", "--", "-p", "3100"],
       "port": 3100
     }
   ]

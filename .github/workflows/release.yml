@@ -52,12 +52,12 @@ jobs:
         run: |
           # List tags sorted by creation date, exclude the current tag, and grab the most recent one
           PREV_TAG=$(git tag --sort=-creatordate | grep -v "^${{ steps.version.outputs.tag }}$" | head -n 1)
-          
+
           # If no previous tag exists (e.g., first release), fallback to the initial commit hash
           if [ -z "$PREV_TAG" ]; then
             PREV_TAG=$(git rev-list --max-parents=0 HEAD | tail -n 1)
           fi
-          
+
           echo "tag=$PREV_TAG" >> $GITHUB_OUTPUT
           echo "Previous tag resolved to: $PREV_TAG"
 
