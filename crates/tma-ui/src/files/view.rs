@@ -205,7 +205,10 @@ fn list(main: &mut Main, ui: &mut Ui, t: &Tokens, desktop: bool, actions: &mut V
     if let Some(index) = main.browser.scroll_to.take() {
         area = area.vertical_scroll_offset((index as f32 * pitch - ui.available_height() / 2.0).max(0.0));
     }
-    area.show_rows(ui, ROW_HEIGHT, count + usize::from(more), |ui, range| {
+    if let Some(offset) = main.browser.scroll_set.take() {
+        area = area.vertical_scroll_offset(offset);
+    }
+    let output = area.show_rows(ui, ROW_HEIGHT, count + usize::from(more), |ui, range| {
         let background = super::marquee::background(ui);
         let origin = egui::pos2(ui.max_rect().left(), ui.max_rect().top() - range.start as f32 * pitch);
         let layout = super::marquee::Layout::Rows { pitch, height: ROW_HEIGHT, width };
@@ -257,4 +260,5 @@ fn list(main: &mut Main, ui: &mut Ui, t: &Tokens, desktop: bool, actions: &mut V
         }
         super::marquee::update(main, ui, &background, origin, layout, t);
     });
+    main.browser.scroll = output.state.offset.y;
 }

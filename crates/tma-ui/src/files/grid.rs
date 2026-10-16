@@ -27,7 +27,10 @@ pub(super) fn grid(main: &mut Main, ui: &mut Ui, t: &Tokens, desktop: bool, acti
     if let Some(index) = main.browser.scroll_to.take() {
         area = area.vertical_scroll_offset(((index / per_row) as f32 * pitch.y - ui.available_height() / 2.0).max(0.0));
     }
-    area.show_rows(ui, row_height, rows, |ui, range| {
+    if let Some(offset) = main.browser.scroll_set.take() {
+        area = area.vertical_scroll_offset(offset);
+    }
+    let output = area.show_rows(ui, row_height, rows, |ui, range| {
         let background = super::marquee::background(ui);
         let origin = egui::pos2(ui.max_rect().left(), ui.max_rect().top() - range.start as f32 * pitch.y);
         let layout = super::marquee::Layout::Tiles { per_row, pitch, tile: TILE };
@@ -110,4 +113,5 @@ pub(super) fn grid(main: &mut Main, ui: &mut Ui, t: &Tokens, desktop: bool, acti
         }
         super::marquee::update(main, ui, &background, origin, layout, t);
     });
+    main.browser.scroll = output.state.offset.y;
 }

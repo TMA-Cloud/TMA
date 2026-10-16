@@ -2,6 +2,7 @@
 //! results), its selection and clipboard, paged in from the server.
 
 mod actions;
+mod cache;
 mod conflicts;
 mod download;
 mod grid;
@@ -71,6 +72,12 @@ pub struct Browser {
     pub thumbs: thumbs::Thumbs,
     /// Uploads waiting for a Replace or Keep both answer.
     pub conflicts: Option<conflicts::Pending>,
+    /// Listings seen this session, shown at once when revisited.
+    cache: cache::ListingCache,
+    /// The list's scroll offset, read back each frame.
+    pub scroll: f32,
+    /// An offset to scroll to on the next frame (top of a new place, or where Back left it).
+    pub scroll_set: Option<f32>,
     request: u64,
 }
 
@@ -102,6 +109,9 @@ impl Default for Browser {
             marquee: None,
             thumbs: thumbs::Thumbs::default(),
             conflicts: None,
+            cache: cache::ListingCache::default(),
+            scroll: 0.0,
+            scroll_set: None,
             request: 0,
         }
     }
@@ -149,7 +159,12 @@ impl Browser {
             }
             self.forward.clear();
         }
-        self.show(place, path, tasks, client, generation, prefs);
+        // Going up to a folder on the current path returns to where it was scrolled.
+        let up = place == Place::Folder
+            && self.place == Place::Folder
+            && path.len() < self.path.len()
+            && self.path.starts_with(&path);
+        self.show(place, path, up, tasks, client, generation, prefs);
     }
 
     /// Step through history: `true` goes back, `false` forward.
@@ -157,26 +172,48 @@ impl Browser {
         let (from, to) = if back { (&mut self.back, &mut self.forward) } else { (&mut self.forward, &mut self.back) };
         let Some((place, path)) = from.pop() else { return };
         to.push((self.place.clone(), self.path.clone()));
-        self.show(place, path, tasks, client, generation, prefs);
+        self.show(place, path, true, tasks, client, generation, prefs);
     }
 
+    /// Switch to a place: its last listing at once if seen before, then a fresh one.
+    #[allow(clippy::too_many_arguments)]
     fn show(
         &mut self,
         place: Place,
         path: Vec<(String, String)>,
+        restore_scroll: bool,
         tasks: &Tasks,
         client: &Client,
         generation: u64,
         prefs: &Prefs,
     ) {
+        let leaving = self.cache_key(prefs);
+        self.cache.remember_scroll(&leaving, self.scroll);
         self.place = place;
         self.path = path;
         self.scroll_to = None;
-        self.items.clear();
         self.selected.clear();
         self.anchor = None;
-        self.loaded = false;
+        match self.cache.get(&self.cache_key(prefs)) {
+            Some(seen) => {
+                self.items = seen.items;
+                self.cursor = seen.cursor;
+                self.loaded = true;
+                self.scroll_set = Some(if restore_scroll { seen.scroll } else { 0.0 });
+            }
+            None => {
+                self.items.clear();
+                self.cursor = None;
+                self.loaded = false;
+                self.scroll_set = Some(0.0);
+            }
+        }
         self.load(tasks, client, generation, prefs);
+    }
+
+    fn cache_key(&self, prefs: &Prefs) -> String {
+        let query = self.query(prefs, None);
+        cache::key(&self.place, &self.path, query.sort.unwrap_or_default(), query.order.unwrap_or_default())
     }
 
     pub fn enter_folder(
@@ -267,6 +304,7 @@ fn apply_page(
     result: tma_client::ApiResult<tma_client::Listing>,
     append: bool,
 ) {
+    let prefs = app.prefs.clone();
     let Some(main) = app.main_mut(generation) else { return };
     let browser = &mut main.browser;
     if browser.request != request {
@@ -285,6 +323,8 @@ fn apply_page(
             }
             browser.cursor = page.next_cursor;
             browser.loaded = true;
+            let key = browser.cache_key(&prefs);
+            browser.cache.put(key, browser.items.clone(), browser.cursor.clone());
         }
         Err(err) => {
             browser.error = Some(err.message.clone());
