@@ -130,9 +130,17 @@ pub fn icon_button(ui: &mut Ui, icon: &str, tip: &str) -> Response {
 
 /// An iOS-style switch.
 pub fn toggle(ui: &mut Ui, on: &mut bool) -> Response {
+    let id = ui.next_auto_id();
+    toggle_with_id(ui, id, on)
+}
+
+/// A switch with a stable id, for lists whose rows can appear while loading:
+/// an id from widget order could hand a click to the switch that was there before.
+pub fn toggle_with_id(ui: &mut Ui, id: egui::Id, on: &mut bool) -> Response {
     let t = tokens(ui);
     let size = Vec2::new(36.0, 21.0);
-    let (rect, mut response) = ui.allocate_exact_size(size, Sense::click());
+    let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
+    let mut response = ui.interact(rect, id, Sense::click());
     if response.clicked() {
         *on = !*on;
         response.mark_changed();

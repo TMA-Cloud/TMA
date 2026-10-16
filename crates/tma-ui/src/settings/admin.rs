@@ -89,7 +89,9 @@ fn policy(
     let busy = main.settings.busy == Some("policy");
     let mut changed = false;
     widgets::setting_row(ui, title, description, |ui| {
-        ui.add_enabled_ui(allowed && !busy, |ui| changed = widgets::toggle(ui, &mut value).changed());
+        ui.add_enabled_ui(allowed && !busy, |ui| {
+            changed = widgets::toggle_with_id(ui, egui::Id::new(("policy", title)), &mut value).changed()
+        });
     });
     if !changed {
         return;

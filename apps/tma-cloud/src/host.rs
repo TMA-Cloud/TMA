@@ -180,6 +180,20 @@ impl Host for DesktopHost {
                     ui.label(err);
                 }
             });
+            if let (Status::Mounted(_), Some(save_only)) = (&status, self.drive.save_only()) {
+                let (mode, note) = if save_only {
+                    (
+                        "Save-only",
+                        "Other apps can browse the drive and save into it, but not open or copy files from it",
+                    )
+                } else {
+                    ("Full access", "Other apps can open and copy files from the drive")
+                };
+                tma_ui::widgets::setting_row(ui, "Access mode", note, |ui| {
+                    ui.label(mode);
+                });
+                ui.label(widgets::muted(ui, "Set by the administrator for every desktop app.").size(12.0));
+            }
             if restart {
                 self.drive.start(client, ui.ctx().clone());
             }

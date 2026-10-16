@@ -2,7 +2,7 @@
 //! follows the server's save-only setting and drops cached listings when files
 //! change elsewhere.
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::{Arc, Mutex};
 
 use tma_client::Client;
@@ -22,6 +22,12 @@ pub enum Status {
 pub struct Drive {
     status: Arc<Mutex<Status>>,
     stop: Option<std::sync::mpsc::Sender<()>>,
+    /// The mounted drive's mode: 0 unknown, 1 save-only, 2 full access.
+    mode: Arc<AtomicU8>,
+}
+
+fn store_mode(mode: &AtomicU8, save_only: bool) {
+    mode.store(if save_only { 1 } else { 2 }, Ordering::Relaxed);
 }
 
 fn set(status: &Arc<Mutex<Status>>, value: Status) {
@@ -33,15 +39,25 @@ impl Drive {
         self.status.lock().unwrap_or_else(|e| e.into_inner()).clone()
     }
 
+    /// Whether the mounted drive is save-only, as the administrator set it.
+    pub fn save_only(&self) -> Option<bool> {
+        match self.mode.load(Ordering::Relaxed) {
+            1 => Some(true),
+            2 => Some(false),
+            _ => None,
+        }
+    }
+
     pub fn start(&mut self, client: &Client, ctx: egui::Context) {
         self.stop();
         let (tx, rx) = std::sync::mpsc::channel::<()>();
         self.stop = Some(tx);
         let status = self.status.clone();
         set(&status, Status::Starting);
-        let client = client.clone();
+        let (client, mode) = (client.clone(), self.mode.clone());
+        mode.store(0, Ordering::Relaxed);
         let spawned = std::thread::Builder::new().name("cloud-drive".into()).spawn(move || {
-            run(client, &status, &rx);
+            run(client, &status, &mode, &rx);
             ctx.request_repaint();
         });
         if let Err(err) = spawned {
@@ -104,7 +120,7 @@ fn mount(core: Arc<tma_drive::Core>) -> Result<(String, Guard), Status> {
 }
 
 #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
-fn run(client: Client, status: &Arc<Mutex<Status>>, rx: &std::sync::mpsc::Receiver<()>) {
+fn run(client: Client, status: &Arc<Mutex<Status>>, mode: &Arc<AtomicU8>, rx: &std::sync::mpsc::Receiver<()>) {
     let staging = std::env::temp_dir().join("tma-cloud-fs");
     let backend: Arc<dyn tma_drive::Backend> = Arc::new(tma_drive::ClientBackend::new(client.clone()));
     // Windows refuses some characters in names; they map to look-alikes and back.
@@ -116,7 +132,11 @@ fn run(client: Client, status: &Arc<Mutex<Status>>, rx: &std::sync::mpsc::Receiv
         }
     };
     // Until the server answers, the drive stays save-only: the safer of the two modes.
-    core.deny_read.store(backend.save_only().unwrap_or(true), Ordering::Relaxed);
+    let save_only = backend.save_only();
+    core.deny_read.store(save_only.as_ref().copied().unwrap_or(true), Ordering::Relaxed);
+    if let Ok(save_only) = save_only {
+        store_mode(mode, save_only);
+    }
     let (point, mounted) = match mount(core.clone()) {
         Ok(m) => m,
         Err(err) => {
@@ -130,7 +150,7 @@ fn run(client: Client, status: &Arc<Mutex<Status>>, rx: &std::sync::mpsc::Receiv
     // A change made anywhere (web, another device) shows up in the drive at once.
     let _events = tma_client::events::subscribe(&client, Arc::new(move |_| events_core.invalidate_all()));
     let polling = Arc::new(AtomicBool::new(true));
-    let (poll_core, poll_flag) = (core.clone(), polling.clone());
+    let (poll_core, poll_flag, poll_mode) = (core.clone(), polling.clone(), mode.clone());
     let _ = std::thread::Builder::new().name("drive-mode".into()).spawn(move || {
         while poll_flag.load(Ordering::Relaxed) {
             for _ in 0..60 {
@@ -141,6 +161,7 @@ fn run(client: Client, status: &Arc<Mutex<Status>>, rx: &std::sync::mpsc::Receiv
             }
             if let Ok(save_only) = poll_core.backend().save_only() {
                 poll_core.deny_read.store(save_only, Ordering::Relaxed);
+                store_mode(&poll_mode, save_only);
             }
         }
     });
@@ -151,6 +172,6 @@ fn run(client: Client, status: &Arc<Mutex<Status>>, rx: &std::sync::mpsc::Receiv
 }
 
 #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
-fn run(_client: Client, status: &Arc<Mutex<Status>>, _rx: &std::sync::mpsc::Receiver<()>) {
+fn run(_client: Client, status: &Arc<Mutex<Status>>, _mode: &Arc<AtomicU8>, _rx: &std::sync::mpsc::Receiver<()>) {
     set(status, Status::Unavailable("Cloud Drive is not available on this system.".into()));
 }

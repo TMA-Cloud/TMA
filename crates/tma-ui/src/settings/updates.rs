@@ -52,8 +52,14 @@ pub fn load(main: &mut Main, tasks: &Tasks) {
     }
 }
 
+/// A release number, or nothing for the feed's placeholders ("unknown").
+fn version(v: Option<&str>) -> Option<&str> {
+    v.filter(|v| v.starts_with(|c: char| c.is_ascii_digit()) && v.chars().all(|c| c.is_ascii_digit() || c == '.'))
+}
+
 /// A component's version beside its state against the release feed.
 fn row(ui: &mut egui::Ui, name: &str, current: Option<&str>, latest: Option<&str>, checking: bool) {
+    let latest = version(latest);
     let description = match latest {
         Some(l) => format!("Latest available: v{l}"),
         None if checking => "Checking update feed…".into(),
@@ -136,6 +142,13 @@ mod tests {
 
     fn versions(backend: &str, desktop: &str) -> Versions {
         Versions { backend: Some(backend.into()), desktop: Some(desktop.into()), ..Default::default() }
+    }
+
+    #[test]
+    fn feed_placeholders_are_not_versions() {
+        assert_eq!(version(Some("4.0.1")), Some("4.0.1"));
+        assert_eq!(version(Some("unknown")), None);
+        assert_eq!(version(None), None);
     }
 
     #[test]
