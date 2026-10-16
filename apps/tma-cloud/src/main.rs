@@ -4,7 +4,6 @@
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 mod clipboard;
-#[cfg(windows)]
 mod cursors;
 mod drive;
 mod edit;
@@ -24,7 +23,6 @@ struct Shell {
     app: tma_ui::App,
     client_id: String,
     keys: shortcuts::ClipboardKeys,
-    #[cfg(windows)]
     cursors: cursors::Cursors,
 }
 
@@ -36,10 +34,7 @@ impl eframe::App for Shell {
 
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         self.app.ui(ui);
-        #[cfg(windows)]
         self.cursors.apply(ui.ctx(), frame, tma_ui::widgets::tokens(ui).dark);
-        #[cfg(not(windows))]
-        let _ = frame;
     }
 
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
@@ -89,7 +84,6 @@ fn main() -> eframe::Result {
                 app,
                 client_id,
                 keys: shortcuts::ClipboardKeys::default(),
-                #[cfg(windows)]
                 cursors: cursors::Cursors::default(),
             }))
         }),
