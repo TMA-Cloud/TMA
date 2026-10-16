@@ -213,6 +213,24 @@ pub fn apply(ctx: &egui::Context, t: &Tokens) {
         style.spacing.interact_size.y = 26.0;
         style.spacing.menu_margin = egui::Margin::same(6);
         style.spacing.window_margin = egui::Margin::same(18);
+        // A thin, soft handle in a gutter of its own: it never covers rows, and no track shows.
+        style.spacing.scroll = egui::style::ScrollStyle {
+            floating: true,
+            bar_width: 8.0,
+            floating_width: 6.0,
+            floating_allocated_width: 10.0,
+            bar_inner_margin: 2.0,
+            bar_outer_margin: 0.0,
+            handle_min_length: 28.0,
+            foreground_color: true,
+            dormant_background_opacity: 0.0,
+            active_background_opacity: 0.0,
+            interact_background_opacity: 0.0,
+            dormant_handle_opacity: 0.22,
+            active_handle_opacity: 0.32,
+            interact_handle_opacity: 0.5,
+            ..egui::style::ScrollStyle::floating()
+        };
         style.interaction.selectable_labels = false;
         // Menus, dialogs and panels ease in over about the old web app's timing, not egui's 1/12 s.
         style.animation_time = 0.16;
