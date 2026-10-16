@@ -138,9 +138,9 @@ impl Host for DesktopHost {
             ui,
             tma_ui::icons::ph::DESKTOP,
             "Desktop app",
-            "Features of the desktop app on this computer.",
+            "Settings for the desktop app on this computer.",
         );
-        widgets::section(ui, "This computer", "Where the app connects and what it adds.", |ui| {
+        widgets::section(ui, "This computer", "", |ui| {
             tma_ui::widgets::setting_row(ui, "Server", "", |ui| {
                 ui.label(client.base_url());
             });
@@ -150,13 +150,13 @@ impl Host for DesktopHost {
             tma_ui::widgets::setting_row(
                 ui,
                 "Edit in desktop apps",
-                "Right-click a file and choose Edit in desktop app; every save uploads back.",
+                "Open files in installed apps; saved changes upload automatically.",
                 |ui| {
                     ui.label("On");
                 },
             );
         });
-        let note = "Your files as a drive in File Explorer and every app's Open and Save dialogs.";
+        let note = "Your files in File Explorer and in every app's Open and Save dialogs.";
         widgets::section(ui, "Cloud Drive", note, |ui| {
             let status = self.drive.status();
             let mut restart = false;
@@ -192,7 +192,7 @@ impl Host for DesktopHost {
                 tma_ui::widgets::setting_row(ui, "Access mode", note, |ui| {
                     ui.label(mode);
                 });
-                ui.label(widgets::muted(ui, "Set by the administrator for every desktop app.").size(12.0));
+                ui.label(widgets::muted(ui, "Set by your administrator.").size(12.0));
             }
             if restart {
                 self.drive.start(client, ui.ctx().clone());

@@ -36,7 +36,7 @@ fn google(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
         ui,
         ph::SIGN_IN,
         "Google sign-in",
-        "Let people sign in with their Google account",
+        "Allow users to sign in with a Google account",
         status,
         open,
         |ui| {
@@ -71,7 +71,7 @@ fn google(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
             if let Some(at) = summary.as_ref().filter(|_| configured).and_then(|g| g.updated_at) {
                 parts::readonly(ui, "Last changed", &tma_core::format::full_date(at), "");
             }
-            ui.label(widgets::muted(ui, "Saving checks the client ID and secret with Google first. Accounts that sign in with Google for the first time are created only while signup is allowed.").size(12.0));
+            ui.label(widgets::muted(ui, "The client ID and secret are verified with Google before saving. New accounts are created through Google sign-in only while sign-up is allowed.").size(12.0));
             ui.horizontal(|ui| {
                 if configured {
                     let t = widgets::tokens(ui);
@@ -148,7 +148,7 @@ fn onlyoffice(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
     let open = main.settings.open.contains("onlyoffice");
     let busy = main.settings.busy == Some("onlyoffice");
     let mut action = None;
-    let description = "Edit and view documents, spreadsheets and presentations in the browser";
+    let description = "View and edit documents, spreadsheets and presentations in the browser";
     let clicked = parts::config_card(ui, ph::FILE_TEXT, "OnlyOffice", description, status, open, |ui| {
         if configured {
             parts::note(
@@ -201,7 +201,7 @@ fn share_url(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
     let url = saved.as_ref().and_then(|s| s.url.clone()).filter(|u| !u.is_empty());
     let status = saved.as_ref().map(|_| match &url {
         Some(_) => (Tone::Success, "Configured".to_string()),
-        None => (Tone::Info, "Using sign-in address".to_string()),
+        None => (Tone::Info, "Server address".to_string()),
     });
     let open = main.settings.open.contains("share");
     let busy = main.settings.busy == Some("share-url");
@@ -210,7 +210,7 @@ fn share_url(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
         ui,
         ph::LINK,
         "Share link address",
-        "A custom base URL for public share links",
+        "Use a separate address for public share links",
         status,
         open,
         |ui| {
@@ -221,10 +221,7 @@ fn share_url(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
                 false,
                 "https://share.example.com",
             );
-            parts::hint(
-                ui,
-                "Public share links use this address. Leave it empty to use the address people sign in at.",
-            );
+            parts::hint(ui, "Public share links use this address. Leave it empty to use the server address.");
             action = parts::form_actions(ui, busy, "Save", "Saving…");
         },
     );

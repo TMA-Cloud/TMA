@@ -34,16 +34,16 @@ enum Policy {
 impl Policy {
     fn toast(self, on: bool) -> &'static str {
         match (self, on) {
-            (Policy::Signup, true) => "Signup enabled",
-            (Policy::Signup, false) => "Signup disabled",
-            (Policy::Password, true) => "Password changes allowed",
-            (Policy::Password, false) => "Password changes blocked",
+            (Policy::Signup, true) => "Sign-up turned on",
+            (Policy::Signup, false) => "Sign-up turned off",
+            (Policy::Password, true) => "Password changes turned on",
+            (Policy::Password, false) => "Password changes turned off",
             (Policy::Extensions, true) => "File extensions hidden",
             (Policy::Extensions, false) => "File extensions visible",
-            (Policy::DesktopOnly, true) => "Web access disabled: desktop app only",
-            (Policy::DesktopOnly, false) => "Web access enabled: browsers allowed again",
-            (Policy::SaveOnly, true) => "Cloud Drive is save-only",
-            (Policy::SaveOnly, false) => "Cloud Drive has full access",
+            (Policy::DesktopOnly, true) => "Browser sign-in turned off",
+            (Policy::DesktopOnly, false) => "Browser sign-in turned on",
+            (Policy::SaveOnly, true) => "Cloud Drive set to save-only",
+            (Policy::SaveOnly, false) => "Cloud Drive set to full access",
         }
     }
 }
@@ -131,7 +131,7 @@ fn stats(main: &Main, ui: &mut egui::Ui) {
     let width = parts::tile_width(ui, 3);
     ui.horizontal_wrapped(|ui| {
         let total = status.map(|s| s.total_users.map_or("Unavailable".into(), |n| n.to_string()));
-        parts::stat(ui, width, ph::USERS, "Total users", total, "Including you");
+        parts::stat(ui, width, ph::USERS, "Total users", total, "Including your account");
         let other = status.map(|s| match s.additional_users {
             Some(0) => "None yet".into(),
             Some(n) => n.to_string(),
@@ -144,68 +144,68 @@ fn stats(main: &Main, ui: &mut egui::Ui) {
             ph::USER_PLUS,
             "Other users",
             other,
-            if open { "Signup is open" } else { "Signup is closed" },
+            if open { "Sign-up is on" } else { "Sign-up is off" },
         );
         let clients = main.settings.clients.as_ref().map(|c| match c.clients.len() {
             0 => "None online".to_string(),
             n => n.to_string(),
         });
-        parts::stat(ui, width, ph::DESKTOP, "Active desktop clients", clients, "Seen in the last 5 minutes");
+        parts::stat(ui, width, ph::DESKTOP, "Active desktop clients", clients, "Active in the last 5 minutes");
     });
 }
 
 pub fn show(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks, desktop: bool) {
-    widgets::heading(ui, ph::GEAR_SIX, "Administration", "Access, visibility and maintenance.");
+    widgets::heading(
+        ui,
+        ph::GEAR_SIX,
+        "Administration",
+        "Users, policies, integrations and maintenance for this server.",
+    );
     ui.add_space(8.0);
     stats(main, ui);
     let s = main.settings.signup.clone().unwrap_or_default();
-    section(ui, "Policies", "Rules applied to everyone who uses this workspace.", |ui| {
+    section(ui, "Policies", "These apply to every user on this server.", |ui| {
         policy(
             main,
             ui,
             tasks,
             Policy::Signup,
-            "Allow user signup",
-            "Let new people register their own account",
+            "Allow sign-up",
+            "Anyone who can reach this server can create an account",
             s.can_toggle,
         );
-        let password = "Let users change their own password";
+        let password = "Users can change their password from the Security page";
         policy(
             main,
             ui,
             tasks,
             Policy::Password,
-            "Allow password change",
+            "Allow password changes",
             password,
             s.can_toggle_allow_password_change,
         );
         // Turned on from a browser it would lock that browser out at once.
         let desktop_only = s.can_toggle_electron_only_access && (desktop || s.electron_only_access);
         let note = if desktop {
-            "Block browsers; sign-in from the desktop app only. Share links keep working."
+            "Only the desktop app can sign in. Public share links stay available."
         } else {
-            "Block browsers; sign-in from the desktop app only. Turn it on from the desktop app."
+            "Only the desktop app can sign in. Turn this on from the desktop app."
         };
-        policy(main, ui, tasks, Policy::DesktopOnly, "Desktop app only access", note, desktop_only);
-        let ext = "Show file names without their extensions";
+        policy(main, ui, tasks, Policy::DesktopOnly, "Desktop app only", note, desktop_only);
+        let ext = "Display file names without their extensions";
         policy(main, ui, tasks, Policy::Extensions, "Hide file extensions", ext, s.can_toggle_hide_file_extensions);
-        let drive = "Desktop apps can browse Cloud Drive and save into it, but not open files from it";
+        let drive = "Other apps can save to Cloud Drive but cannot open or copy files from it";
         let can = main.settings.cloud_drive.is_some_and(|d| d.can_configure);
         policy(main, ui, tasks, Policy::SaveOnly, "Cloud Drive save-only", drive, can);
     });
     let mut open = None;
-    section(ui, "People & devices", "Review who holds an account and what is connected.", |ui| {
-        widgets::setting_row(
-            ui,
-            "Registered users",
-            "Every account currently registered, with its storage use",
-            |ui| {
-                if widgets::secondary(ui, format!("{}  Show all users", ph::USERS_THREE)).clicked() {
-                    open = Some(Dialog::Users);
-                }
-            },
-        );
-        let description = "Desktop apps that checked in within the last 5 minutes";
+    section(ui, "Users and devices", "Accounts on this server and connected desktop apps.", |ui| {
+        widgets::setting_row(ui, "Registered users", "All accounts with their storage use and limits", |ui| {
+            if widgets::secondary(ui, format!("{}  Show all users", ph::USERS_THREE)).clicked() {
+                open = Some(Dialog::Users);
+            }
+        });
+        let description = "Desktop apps active in the last 5 minutes";
         widgets::setting_row(ui, "Active desktop clients", description, |ui| {
             if widgets::secondary(ui, format!("{}  View clients", ph::DESKTOP)).clicked() {
                 open = Some(Dialog::Clients);
@@ -220,22 +220,22 @@ pub fn show(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks, desktop: bool) {
     if open.is_some() {
         main.settings.dialog = open;
     }
-    section(ui, "Sessions & activity", "How long sign-ins last and what opening a file records.", |ui| {
+    section(ui, "Sessions and activity", "Session length and file access tracking.", |ui| {
         session_card(main, ui, tasks);
         access_card(main, ui, tasks);
     });
-    section(ui, "Networking", "How the server reads requests that arrive through a proxy.", |ui| {
+    section(ui, "Network", "Settings for running behind a reverse proxy.", |ui| {
         proxies_card(main, ui, tasks);
     });
-    section(ui, "Integrations", "External services this workspace talks to.", |ui| {
+    section(ui, "Integrations", "Services connected to this server.", |ui| {
         super::integrations::show(main, ui, tasks);
     });
     parts::danger_group(
         ui,
         "Maintenance",
-        "These actions delete data and cannot be undone. Review what is listed before confirming.",
+        "These actions permanently delete data. Review the results carefully before you confirm.",
         |ui| {
-            let description = "Find stored files with no database record, and records with no file";
+            let description = "Find stored data without a file record, and file records without stored data";
             widgets::setting_row(ui, "Orphaned files", description, |ui| {
                 let t = widgets::tokens(ui);
                 let label = RichText::new(format!("{}  Review orphans", ph::TRASH)).color(t.destructive_text);
@@ -257,7 +257,7 @@ fn session_card(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
         ui,
         ph::CLOCK,
         "Session timeout",
-        "Sign people out after this long without using the app",
+        "Sign users out after a period of inactivity",
         status,
         open,
         |ui| {
@@ -266,7 +266,7 @@ fn session_card(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
             parts::hint(
                 ui,
                 &format!(
-                    "{min} to {max} days. Using the app restarts the count, so an active person is never signed out. A shorter timeout applies to existing sessions right away."
+                    "{min} to {max} days. Any activity resets the timer, so active users stay signed in. A shorter timeout also applies to existing sessions."
                 ),
             );
             action = parts::form_actions(ui, busy, "Save", "Saving…");
@@ -314,20 +314,20 @@ fn access_card(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
         ui,
         ph::CLOCK_COUNTER_CLOCKWISE,
         "Last opened tracking",
-        "Record when files and folders were last opened",
+        "Record when files and folders are opened",
         status,
         open,
         |ui| {
             let f = &mut main.settings.forms;
             ui.checkbox(&mut f.access_enabled, "Record when items are opened");
-            parts::hint(ui, "Turned off, the Recent list and Last opened dates stop changing.");
+            parts::hint(ui, "When off, Recent files and Last opened dates are no longer updated.");
             let (wmin, wmax) = ActivitySettings::WINDOW_MINUTES;
             let (fmin, fmax) = ActivitySettings::FLUSH_SECONDS;
             ui.add_enabled_ui(f.access_enabled, |ui| {
             widgets::field(ui, "Update window (minutes)", &mut f.access_window, false, "60");
-            parts::hint(ui, &format!("{wmin} to {wmax}. An item opened again within this time keeps its stored date, which saves a database write per open. 0 records every open."));
+            parts::hint(ui, &format!("{wmin} to {wmax}. Repeat opens within this window are not recorded again, which reduces database writes. Use 0 to record every open."));
             widgets::field(ui, "Write interval (seconds)", &mut f.access_flush, false, "10");
-            parts::hint(ui, &format!("{fmin} to {fmax}. Opens are collected in memory and written together this often."));
+            parts::hint(ui, &format!("{fmin} to {fmax}. How often recorded opens are written to the database."));
         });
             action = parts::form_actions(ui, busy, "Save", "Saving…");
         },
@@ -388,7 +388,7 @@ fn proxies_card(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
         ui,
         ph::GLOBE_HEMISPHERE_WEST,
         "Known proxies",
-        "Trust forwarded client IPs only from these reverse proxies",
+        "Reverse proxies allowed to report the client IP address",
         status,
         open,
         |ui| {
@@ -401,7 +401,7 @@ fn proxies_card(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
             );
             parts::hint(
                 ui,
-                "IP addresses, CIDR ranges or hostnames, separated by commas or lines. Only listed proxies may supply X-Forwarded-For; with none, forwarded client IP headers are ignored. A server restart is required after a change.",
+                "Enter IP addresses, CIDR ranges or host names, separated by commas or new lines. Only these proxies may set X-Forwarded-For; with none listed, the header is ignored. Changes take effect after a server restart.",
             );
             action = parts::form_actions(ui, busy, "Save", "Saving…");
         },
@@ -430,7 +430,7 @@ fn proxies_card(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
                     main.settings.restart_required = v.restart_required.unwrap_or(true);
                     main.settings.proxies = Some(v);
                     main.settings.open.remove("proxies");
-                    toasts.success("Known proxies saved. Restart the server to apply them.");
+                    toasts.success("Known proxies saved. Restart the server to apply the change.");
                 },
             );
         }

@@ -363,7 +363,7 @@ fn menu_column(
     let top = ui.cursor().top();
     egui::Frame::new().inner_margin(Margin { left: 16, right: 16, top: 22, bottom: 12 }).show(ui, |ui| {
         ui.spacing_mut().item_spacing.y = 4.0;
-        ui.label(RichText::new("CONTROL CENTER").size(10.5).semibold().extra_letter_spacing(3.5).color(t.accent));
+        ui.label(RichText::new("TMA CLOUD").size(10.5).semibold().extra_letter_spacing(3.5).color(t.accent));
         ui.label(RichText::new("Settings").size(20.0).bold().color(t.label));
         ui.add_space(6.0);
         ui.horizontal(|ui| {
@@ -409,7 +409,7 @@ fn menu_column(
     ui.add_space((height - used - 62.0).max(8.0));
     hairline(ui, t);
     egui::Frame::new().inner_margin(Margin::symmetric(16, 12)).show(ui, |ui| {
-        ui.label(RichText::new("Manage your preferences and application controls").size(11.5).color(t.label_tertiary));
+        ui.label(RichText::new("Account, security and server settings").size(11.5).color(t.label_tertiary));
     });
 }
 

@@ -62,8 +62,8 @@ fn row(ui: &mut egui::Ui, name: &str, current: Option<&str>, latest: Option<&str
     let latest = version(latest);
     let description = match latest {
         Some(l) => format!("Latest available: v{l}"),
-        None if checking => "Checking update feed…".into(),
-        None => "Version reported by this installation".into(),
+        None if checking => "Checking for updates…".into(),
+        None => "Installed version".into(),
     };
     widgets::setting_row(ui, name, &description, |ui| {
         let (tone, label) = match (current, latest) {
@@ -80,7 +80,7 @@ fn row(ui: &mut egui::Ui, name: &str, current: Option<&str>, latest: Option<&str
 }
 
 pub fn show(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks, app_version: &str, desktop: bool) {
-    widgets::heading(ui, ph::ARROWS_CLOCKWISE, "Updates", "Version status for this deployment.");
+    widgets::heading(ui, ph::ARROWS_CLOCKWISE, "Updates", "Installed versions and available updates.");
     ui.add_space(4.0);
     if let Some(error) = &main.settings.version_error {
         ui.add_space(6.0);
@@ -89,7 +89,7 @@ pub fn show(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks, app_version: &str
     let current = main.settings.versions.clone().unwrap_or_default();
     let latest = main.settings.latest.clone().unwrap_or_default();
     let checking = main.settings.busy == Some("latest");
-    section(ui, "Components", "What each part of this deployment is currently running.", |ui| {
+    section(ui, "Components", "Versions installed on this server and this computer.", |ui| {
         row(ui, "Server", current.backend.as_deref(), latest.backend.as_deref(), checking);
         if current.frontend.is_some() {
             row(ui, "Web app", current.frontend.as_deref(), latest.frontend.as_deref(), checking);
@@ -99,12 +99,12 @@ pub fn show(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks, app_version: &str
         }
     });
     let note = if desktop {
-        "The desktop app installs its own updates in the background once nothing is transferring. The server is updated by whoever runs it."
+        "The desktop app installs updates automatically when no transfers are running. Server updates are installed by your administrator."
     } else {
-        "Nothing is installed from here; this compares versions against the release feed."
+        "Compares the installed versions with the latest releases. Nothing is installed from here."
     };
     section(ui, "Update check", note, |ui| {
-        widgets::setting_row(ui, "Check for updates", "Fetches the latest release versions", |ui| {
+        widgets::setting_row(ui, "Check for updates", "Look up the latest published releases", |ui| {
             let label =
                 if checking { "Checking…".to_string() } else { format!("{}  Check now", ph::MAGNIFYING_GLASS) };
             if ui.add_enabled(!checking, egui::Button::new(label)).clicked() {

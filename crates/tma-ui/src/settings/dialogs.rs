@@ -106,7 +106,7 @@ fn password_problem(form: &PasswordForm) -> Option<&'static str> {
     } else if form.new != form.confirm {
         Some("The new passwords don't match")
     } else if form.new == form.current {
-        Some("Choose a password you haven't used")
+        Some("The new password must be different from the current one")
     } else {
         None
     }
@@ -124,7 +124,7 @@ fn password(ui: &mut egui::Ui, main: &mut Main, tasks: &Tasks, form: &mut Passwo
     parts::secret_field(ui, "Current password", &mut form.current, "");
     ui.add_space(4.0);
     parts::secret_field(ui, "New password", &mut form.new, "");
-    parts::hint(ui, "At least 8 characters. Avoid anything easy to guess.");
+    parts::hint(ui, "Use at least 8 characters.");
     let r = parts::secret_field(ui, "Confirm new password", &mut form.confirm, "");
     let mut enter = r.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
     if mfa {
@@ -288,7 +288,7 @@ mod tests {
         assert_eq!(password_problem(&form("old", "longenough", "different")), Some("The new passwords don't match"));
         assert_eq!(
             password_problem(&form("samesame", "samesame", "samesame")),
-            Some("Choose a password you haven't used")
+            Some("The new password must be different from the current one")
         );
         assert_eq!(password_problem(&form("old", "longenough", "longenough")), None);
     }

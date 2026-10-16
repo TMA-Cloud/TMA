@@ -34,30 +34,28 @@ pub fn load(main: &mut Main, tasks: &Tasks) {
 }
 
 pub fn show(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
-    widgets::heading(ui, ph::HARD_DRIVES, "Storage", "Usage, bucket and upload limits.");
+    widgets::heading(ui, ph::HARD_DRIVES, "Storage", "Storage use, the storage bucket and upload limits.");
     ui.add_space(4.0);
     let admin = main.instance.is_first_user;
     if admin {
-        section(ui, "Bucket", "Where this deployment keeps its files.", |ui| bucket_card(main, ui, tasks));
+        section(ui, "Bucket", "The S3-compatible bucket where all files are stored.", |ui| {
+            bucket_card(main, ui, tasks)
+        });
     } else if !main.instance.storage_configured {
         ui.add_space(6.0);
         parts::note(
             ui,
             Tone::Warning,
-            "No storage bucket is connected yet, so files cannot be uploaded or opened. Ask whoever administers this deployment to set it up.",
+            "Storage is not set up yet, so files cannot be uploaded or opened. Contact your administrator.",
         );
     }
     let usage = main.instance.usage;
-    section(ui, "Usage", "How much of this account's space is taken.", |ui| parts::meter(ui, usage));
+    section(ui, "Usage", "Storage used by your account.", |ui| parts::meter(ui, usage));
     if admin {
-        section(ui, "Limits", "Applies to every user on this deployment.", |ui| upload_card(main, ui, tasks));
+        section(ui, "Limits", "These apply to every user on this server.", |ui| upload_card(main, ui, tasks));
     } else {
         ui.add_space(8.0);
-        parts::note(
-            ui,
-            Tone::Neutral,
-            "Storage limits and the maximum upload size are set by whoever administers this deployment.",
-        );
+        parts::note(ui, Tone::Neutral, "Storage limits and the maximum upload size are managed by your administrator.");
     }
 }
 
@@ -70,7 +68,7 @@ fn upload_card(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
         ui,
         ph::UPLOAD_SIMPLE,
         "Max upload size",
-        "The largest single file anyone can upload",
+        "Maximum size of a single uploaded file",
         status,
         open,
         |ui| {
@@ -172,7 +170,7 @@ fn bucket_card(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
     let mut test = false;
     let mut save_now = false;
     let mut cancel = false;
-    let description = "The S3-compatible bucket that holds every file, encrypted";
+    let description = "Files are encrypted before they are stored";
     let clicked = parts::config_card(ui, ph::DATABASE, "Storage bucket", description, status, open, |ui| {
         let f = &mut main.settings.forms;
         let before = f.bucket.clone();
@@ -180,7 +178,7 @@ fn bucket_card(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
             parts::note(
                 ui,
                 Tone::Warning,
-                "No bucket is connected yet, so nobody can upload or open files. Create a private bucket and an access key limited to it, then enter them here.",
+                "No storage bucket is connected, so files cannot be uploaded or opened. Create a private bucket and an access key restricted to it, then enter the details below.",
             );
             ui.add_space(4.0);
         }
@@ -291,7 +289,7 @@ fn bucket_card(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
                 main.settings.forms.bucket_result = Some(match result {
                     Ok(r) => CheckResult {
                         ok: true,
-                        message: "Connection works. Save to start using this bucket.".into(),
+                        message: "Connection successful. Save to start using this bucket.".into(),
                         step: None,
                         checks: r.checks,
                     },

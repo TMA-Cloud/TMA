@@ -179,7 +179,7 @@ pub fn users(ui: &mut egui::Ui, main: &mut Main, tasks: &Tasks, keep: &mut bool)
         ui.add_space(6.0);
         widgets::card(ui, |ui| {
             ui.set_width(ui.available_width());
-            ui.label(RichText::new(format!("{}  MFA statistics", ph::SHIELD)).semibold());
+            ui.label(RichText::new(format!("{}  Two-factor authentication", ph::SHIELD)).semibold());
             ui.columns(3, |cols| {
                 for (col, (label, value)) in cols.iter_mut().zip([
                     ("Enabled", on.to_string()),
@@ -199,7 +199,7 @@ pub fn users(ui: &mut egui::Ui, main: &mut Main, tasks: &Tasks, keep: &mut bool)
     let mut reached_end = false;
     egui::ScrollArea::both().max_height(ui.ctx().content_rect().height() * 0.5).show(ui, |ui| {
         egui::Grid::new("users").num_columns(6).striped(true).spacing([16.0, 8.0]).show(ui, |ui| {
-            for h in ["Name", "Email", "Storage", "Limit", "MFA", "Joined"] {
+            for h in ["Name", "Email", "Storage", "Limit", "Two-factor", "Joined"] {
                 ui.label(RichText::new(h).size(11.5).semibold().color(t.label_tertiary));
             }
             ui.end_row();
@@ -265,7 +265,7 @@ pub fn users(ui: &mut egui::Ui, main: &mut Main, tasks: &Tasks, keep: &mut bool)
         }
     });
     if page.users.is_empty() {
-        ui.label(widgets::muted(ui, "Once people sign up, their accounts appear here."));
+        ui.label(widgets::muted(ui, "Accounts appear here once people sign up."));
     }
     if reached_end {
         load_more(main, tasks);
@@ -301,7 +301,7 @@ pub fn clients(ui: &mut egui::Ui, main: &mut Main, tasks: &Tasks, keep: &mut boo
     }
     if list.clients.is_empty() {
         ui.add_space(6.0);
-        ui.label(widgets::muted(ui, "No desktop app has checked in during the last 5 minutes."));
+        ui.label(widgets::muted(ui, "No desktop app has been active in the last 5 minutes."));
     }
     egui::ScrollArea::vertical().max_height(ui.ctx().content_rect().height() * 0.55).show(ui, |ui| {
         for c in &list.clients {

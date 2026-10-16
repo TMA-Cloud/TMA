@@ -49,7 +49,7 @@ fn checklist(ui: &mut egui::Ui, available: &[PermissionInfo], value: &mut Vec<St
                         value.clear();
                     }
                     let all = available.iter().all(|p| value.contains(&p.key));
-                    if ui.add_enabled(!all, egui::Button::new("Allow all")).clicked() {
+                    if ui.add_enabled(!all, egui::Button::new("Select all")).clicked() {
                         *value = available.iter().map(|p| p.key.clone()).collect();
                     }
                 });
@@ -76,11 +76,7 @@ fn checklist(ui: &mut egui::Ui, available: &[PermissionInfo], value: &mut Vec<St
         });
         if value.is_empty() {
             ui.add_space(4.0);
-            parts::note(
-                ui,
-                Tone::Warning,
-                "With nothing ticked this person can browse and search but cannot download or change anything.",
-            );
+            parts::note(ui, Tone::Warning, "With no permissions selected, this person can only browse and search.");
         }
     });
 }
@@ -191,7 +187,7 @@ fn row(ui: &mut egui::Ui, main: &mut Main, tasks: &Tasks, sub: &SubUser, availab
                     main.settings.sub_user_draft =
                         if expanded { None } else { Some((sub.id.clone(), sub.permissions.clone())) };
                 }
-                let mfa = if sub.mfa_enabled { "MFA enabled" } else { "MFA disabled" };
+                let mfa = if sub.mfa_enabled { "Two-factor on" } else { "Two-factor off" };
                 let added = tma_core::format::full_date(sub.created_at);
                 ui.label(RichText::new(format!("{mfa} · Added {added}")).size(11.5).color(t.label_tertiary));
             });
@@ -264,10 +260,10 @@ fn row(ui: &mut egui::Ui, main: &mut Main, tasks: &Tasks, sub: &SubUser, availab
 }
 
 pub fn show(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
-    widgets::heading(ui, ph::USERS, "Sub-users", "Separate logins for the same files.");
+    widgets::heading(ui, ph::USERS, "Sub-users", "Additional sign-ins that share your files and storage.");
     ui.add_space(8.0);
     if main.user.is_sub_user {
-        ui.label(widgets::muted(ui, "Only the account owner manages sub-users."));
+        ui.label(widgets::muted(ui, "Only the account owner can manage sub-users."));
         return;
     }
     let list = main.settings.sub_users.clone();
@@ -276,13 +272,13 @@ pub fn show(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
         n => n.to_string(),
     });
     let width = parts::tile_width(ui, 3).max(220.0);
-    parts::stat(ui, width, ph::USERS, "Sub-users", count, "Share your files and quota, with their own sign-in");
+    parts::stat(ui, width, ph::USERS, "Sub-users", count, "Each signs in separately and shares your files and storage");
     let available = catalog(main);
-    section(ui, "Management", "Create sub-users and choose what each one may do.", |ui| {
+    section(ui, "Manage sub-users", "Add sub-users and choose what each one can do.", |ui| {
         parts::note(
             ui,
             Tone::Neutral,
-            "Sub-users share your files and quota but sign in with their own credentials, so audit logs stay accurate. You choose their permissions; they can't create accounts.",
+            "Sub-users sign in with their own credentials and work in your files and storage, so every action in the audit log is attributed to the right person. You decide what each sub-user can do.",
         );
         ui.add_space(4.0);
         let header = list.as_ref().map_or("Loading sub-users…".to_string(), |l| match l.sub_users.len() {
@@ -311,10 +307,7 @@ pub fn show(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
                 ui.spinner();
             }
             Some(l) if l.sub_users.is_empty() => {
-                ui.label(widgets::muted(
-                    ui,
-                    "Add sub-users to give colleagues their own login to the same files and storage.",
-                ));
+                ui.label(widgets::muted(ui, "Add a sub-user to give a colleague their own sign-in to your files."));
             }
             Some(l) => {
                 for sub in &l.sub_users {

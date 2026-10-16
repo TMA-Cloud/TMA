@@ -271,16 +271,12 @@ pub fn meter(ui: &mut egui::Ui, usage: Option<StorageUsage>) {
             ui.label(RichText::new(tma_core::format::storage_size(usage.used)).size(24.0).bold().color(t.label));
             let of = match total {
                 Some(total) => format!("of {} used", tma_core::format::storage_size(total)),
-                None => "used — no quota set".into(),
+                None => "used · no storage limit".into(),
             };
             ui.label(widgets::muted(ui, of));
         });
         let Some(total) = total else {
-            ui.label(
-                RichText::new("This account has no storage limit, so there is nothing to fill up.")
-                    .size(12.0)
-                    .color(t.label_tertiary),
-            );
+            ui.label(RichText::new("This account does not have a storage limit.").size(12.0).color(t.label_tertiary));
             return;
         };
         let raw = usage.used as f64 * 100.0 / total as f64;

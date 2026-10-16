@@ -115,7 +115,7 @@ fn delete(main: &mut Main, tasks: &Tasks, state: &mut OrphanState) {
             let (deleted, skipped) = (r.storage.deleted + r.database.deleted, r.storage.skipped + r.database.skipped);
             let noun = |n: i64| if n == 1 { "orphan" } else { "orphans" };
             match (deleted, skipped) {
-                (0, _) => toasts.info("Nothing deleted: every entry still checks out"),
+                (0, _) => toasts.info("Nothing was deleted: every entry is still in use"),
                 (d, 0) => toasts.success(format!("Deleted {d} {}", noun(d))),
                 (d, s) => toasts.info(format!("Deleted {d} {}, skipped {s}", noun(d))),
             }
@@ -190,11 +190,7 @@ pub fn show(ui: &mut egui::Ui, main: &mut Main, tasks: &Tasks, state: &mut Orpha
     }
     let scanning = main.settings.busy == Some("orphans");
     let deleting = state.progress.is_some();
-    parts::note(
-        ui,
-        Tone::Info,
-        "Nothing is deleted automatically. Orphans are only removed when you select them here.",
-    );
+    parts::note(ui, Tone::Info, "Nothing is deleted automatically. Only the entries you select here are removed.");
     ui.add_space(6.0);
     ui.horizontal(|ui| {
         ui.label("Ignore anything newer than");
@@ -246,9 +242,9 @@ pub fn show(ui: &mut egui::Ui, main: &mut Main, tasks: &Tasks, state: &mut Orpha
     });
     ui.label(
         RichText::new(match state.tab {
-            Tab::Storage => "Unlinked data taking up storage. Deleting it frees the space and cannot be undone.",
+            Tab::Storage => "Stored data that no file refers to. Deleting it frees the space and cannot be undone.",
             Tab::Database => {
-                "Records pointing to data that is gone. Deleting them clears the broken entry without touching storage."
+                "File records whose stored data is missing. Deleting them removes the broken entries without touching storage."
             }
         })
         .size(12.0)

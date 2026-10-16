@@ -117,7 +117,7 @@ pub fn show(ui: &mut egui::Ui, main: &mut Main, tasks: &Tasks, state: &mut MfaDi
             if enabled {
                 status_enabled(ui, main, state);
             } else {
-                let label = if busy { "Setting up…".to_string() } else { format!("{}  Enable MFA", ph::SHIELD_PLUS) };
+                let label = if busy { "Setting up…".to_string() } else { format!("{}  Turn on", ph::SHIELD_PLUS) };
                 if widgets::primary_enabled(ui, !busy, label).clicked() {
                     save(
                         tasks,
@@ -144,7 +144,7 @@ pub fn show(ui: &mut egui::Ui, main: &mut Main, tasks: &Tasks, state: &mut MfaDi
             parts::note(
                 ui,
                 Tone::Warning,
-                "This invalidates every existing backup code and creates new ones. Make sure you no longer need the old list.",
+                "Your current backup codes will stop working and a new set will be created.",
             );
             widgets::dialog_footer(ui, |ui| {
                 if widgets::primary_enabled(ui, !busy, if busy { "Regenerating…" } else { "Regenerate" }).clicked() {
@@ -158,7 +158,7 @@ pub fn show(ui: &mut egui::Ui, main: &mut Main, tasks: &Tasks, state: &mut MfaDi
         Step::Codes { codes, then_prompt } => {
             ui.label(widgets::muted(
                 ui,
-                "Each code signs you in once if you lose your phone. Store them somewhere safe; they are shown only now.",
+                "Use a backup code to sign in if you lose access to your authenticator app. Each code works once. Store them in a safe place; they are not shown again.",
             ));
             ui.add_space(8.0);
             egui::Grid::new("codes").num_columns(2).spacing([28.0, 6.0]).show(ui, |ui| {
@@ -188,7 +188,10 @@ pub fn show(ui: &mut egui::Ui, main: &mut Main, tasks: &Tasks, state: &mut MfaDi
             ui.vertical_centered(|ui| {
                 ui.label(RichText::new(ph::SHIELD).size(34.0).color(t.accent));
                 ui.label(RichText::new("Sign out of other sessions?").size(17.0).semibold());
-                ui.label(widgets::muted(ui, "For security, end every other signed-in session now."));
+                ui.label(widgets::muted(
+                    ui,
+                    "We recommend ending all other sessions after changing two-factor settings.",
+                ));
             });
             widgets::dialog_footer(ui, |ui| {
                 if widgets::primary_enabled(ui, !busy, if busy { "Signing out…" } else { "Yes" }).clicked() {
@@ -212,7 +215,7 @@ pub fn show(ui: &mut egui::Ui, main: &mut Main, tasks: &Tasks, state: &mut MfaDi
                     );
                 }
                 if widgets::secondary(ui, "Skip").clicked() {
-                    main.settings.notice_ok = Some("Two-factor settings updated".into());
+                    main.settings.notice_ok = Some("Two-factor authentication updated".into());
                     *keep = false;
                 }
             });
@@ -222,11 +225,7 @@ pub fn show(ui: &mut egui::Ui, main: &mut Main, tasks: &Tasks, state: &mut MfaDi
 
 fn status_enabled(ui: &mut egui::Ui, main: &mut Main, state: &mut MfaDialog) {
     if let Some(n) = main.settings.backup_codes {
-        parts::note(
-            ui,
-            Tone::Warning,
-            &format!("Backup codes: {n} remaining. Keep them somewhere safe; each code works only once."),
-        );
+        parts::note(ui, Tone::Warning, &format!("{n} backup codes remaining. Each code can be used once."));
         ui.add_space(6.0);
     }
     let now = ui.input(|i| i.time);
@@ -243,8 +242,7 @@ fn status_enabled(ui: &mut egui::Ui, main: &mut Main, state: &mut MfaDialog) {
         if ui.add_enabled(wait.is_none(), egui::Button::new(label)).clicked() {
             state.step = Step::ConfirmRegenerate;
         }
-        let off =
-            egui::Button::new(RichText::new(format!("{}  Disable MFA", ph::SHIELD_SLASH)).color(t.destructive_text));
+        let off = egui::Button::new(RichText::new(format!("{}  Turn off", ph::SHIELD_SLASH)).color(t.destructive_text));
         if ui.add(off).clicked() {
             state.code.clear();
             state.step = Step::Disable;
@@ -321,17 +319,16 @@ fn disable(ui: &mut egui::Ui, main: &mut Main, tasks: &Tasks, state: &mut MfaDia
     parts::note(
         ui,
         Tone::Danger,
-        "Enter a verification code to turn off two-factor authentication. This removes the extra security layer from your account.",
+        "Enter a verification code to turn off two-factor authentication. Your password alone will then be enough to sign in.",
     );
     ui.add_space(8.0);
     let enter = code_box(ui, &mut state.code, "000000 or ABCD-EFGH");
     state.code = forms::any_code_input(&state.code);
-    parts::hint(ui, "The 6-digit code from your app, or an 8-character backup code (dashes are fine).");
+    parts::hint(ui, "Enter the 6-digit code from your authenticator app or an 8-character backup code.");
     let code = forms::any_code(&state.code);
     let ready = code.is_some() && !busy;
     widgets::dialog_footer(ui, |ui| {
-        if widgets::danger(ui, if busy { "Disabling…" } else { "Disable MFA" }).clicked() && ready || (enter && ready)
-        {
+        if widgets::danger(ui, if busy { "Disabling…" } else { "Turn off" }).clicked() && ready || (enter && ready) {
             let code = code.clone().unwrap_or_default();
             attempt(
                 tasks,
