@@ -28,7 +28,7 @@ use tma_core::api::*;
 
 use crate::app::{App, Main, Screen};
 use crate::host::Host;
-use crate::icons::{self, ph};
+use crate::icons::ph;
 use crate::tasks::Tasks;
 use crate::theme::Tokens;
 use crate::theme::Weight;
@@ -245,9 +245,6 @@ fn nav_row(ui: &mut egui::Ui, icon: &str, label: &str, active: bool) -> bool {
     );
     let font = FontId::new(13.0, if active { crate::theme::semibold() } else { egui::FontFamily::Proportional });
     ui.painter().text(rect.left_center() + Vec2::new(37.0, 0.0), Align2::LEFT_CENTER, label, font, text_color);
-    if active {
-        ui.painter().circle_filled(rect.right_center() - Vec2::new(12.0, 0.0), 2.5, t.accent);
-    }
     if response.hovered() {
         ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
     }
@@ -296,7 +293,9 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
     }
 }
 
-/// The settings menu as a column beside the page, when there is room for both.
+/// The settings menu as a plain column beside the page, when there is room for
+/// both: no card around it, no repeated name or storage meter (the header and the
+/// Storage page show those), and the page next to it at a readable width.
 fn side_menu_layout(
     main: &mut Main,
     ui: &mut egui::Ui,
@@ -306,126 +305,47 @@ fn side_menu_layout(
     tasks: &Tasks,
     t: Tokens,
 ) {
-    const MENU: f32 = 234.0;
+    const MENU: f32 = 216.0;
     let height = ui.available_height();
-    let outer =
-        egui::Frame::new().fill(t.surface).stroke(Stroke::new(1.0, t.separator)).corner_radius(CornerRadius::same(18));
-    outer.show(ui, |ui| {
-        ui.set_min_size(egui::vec2(ui.available_width(), height - 2.0));
-        let card = ui.max_rect();
-        // The menu column is a lighter panel along the card's left edge.
-        let column = egui::Rect::from_min_size(card.min, egui::vec2(MENU, card.height()));
-        ui.painter().rect_filled(column, CornerRadius { nw: 18, sw: 18, ne: 0, se: 0 }, t.surface_raised);
-        ui.painter().vline(column.right(), column.y_range(), Stroke::new(1.0, t.separator));
-        ui.horizontal_top(|ui| {
-            ui.spacing_mut().item_spacing = egui::vec2(0.0, 0.0);
-            ui.allocate_ui_with_layout(
-                egui::vec2(MENU, height - 2.0),
-                egui::Layout::top_down(egui::Align::Min),
-                |ui| {
-                    ui.set_width(MENU);
-                    menu_column(main, ui, pages, switch, &t, height - 2.0);
-                },
-            );
-            ui.allocate_ui_with_layout(
-                egui::vec2(ui.available_width(), height - 2.0),
-                egui::Layout::top_down(egui::Align::Min),
-                |ui| {
-                    egui::ScrollArea::vertical().id_salt("settings-page").auto_shrink([false, false]).show(ui, |ui| {
-                        egui::Frame::new().inner_margin(Margin { left: 32, right: 32, top: 28, bottom: 28 }).show(
-                            ui,
-                            |ui| {
-                                // Readable line lengths: the column stops growing and sits centred.
-                                let (width, before) = page_column(ui.available_width());
-                                ui.horizontal_top(|ui| {
-                                    ui.add_space(before);
-                                    ui.vertical(|ui| {
-                                        ui.set_width(width);
-                                        ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
-                                        page_body(main, host, tasks, ui);
-                                    });
-                                });
-                            },
-                        );
-                    });
-                },
-            );
-        });
-    });
-}
-
-/// The page column's width, and the space before it that centres it, inside a
-/// pane `inner` wide (already less its margins): at most `MAX` wide.
-fn page_column(inner: f32) -> (f32, f32) {
-    const MAX: f32 = 920.0;
-    let width = inner.clamp(0.0, MAX);
-    (width, ((inner - width) / 2.0).floor())
-}
-
-fn hairline(ui: &mut egui::Ui, t: &Tokens) {
-    let rect = ui.available_rect_before_wrap();
-    ui.painter().hline(rect.x_range(), rect.top(), Stroke::new(1.0, t.separator));
-}
-
-fn menu_column(
-    main: &Main,
-    ui: &mut egui::Ui,
-    pages: &[(Page, &str, &str)],
-    switch: &mut Option<Page>,
-    t: &Tokens,
-    height: f32,
-) {
-    let top = ui.cursor().top();
-    egui::Frame::new().inner_margin(Margin { left: 16, right: 16, top: 22, bottom: 12 }).show(ui, |ui| {
-        ui.spacing_mut().item_spacing.y = 4.0;
-        ui.label(RichText::new("TMA CLOUD").size(10.5).semibold().extra_letter_spacing(3.5).color(t.accent));
-        ui.label(RichText::new("Settings").size(20.0).bold().color(t.label));
-        ui.add_space(6.0);
-        ui.horizontal(|ui| {
-            let name = main.user.name.clone().filter(|n| !n.is_empty()).unwrap_or_else(|| main.user.email.clone());
-            let (rect, _) = ui.allocate_exact_size(Vec2::splat(26.0), Sense::hover());
-            icons::avatar(ui.painter(), rect.center(), 13.0, &name, t);
-            ui.add_space(6.0);
-            ui.vertical(|ui| {
-                ui.spacing_mut().item_spacing.y = 0.0;
-                ui.add(egui::Label::new(RichText::new(name).size(12.0).semibold().color(t.label)).truncate());
-                ui.add(egui::Label::new(RichText::new(&main.user.email).size(11.0).color(t.label_tertiary)).truncate());
+    ui.horizontal_top(|ui| {
+        ui.spacing_mut().item_spacing = egui::vec2(0.0, 0.0);
+        ui.allocate_ui_with_layout(egui::vec2(MENU, height), egui::Layout::top_down(egui::Align::Min), |ui| {
+            ui.set_width(MENU);
+            egui::Frame::new().inner_margin(Margin { left: 4, right: 16, top: 6, bottom: 12 }).show(ui, |ui| {
+                ui.spacing_mut().item_spacing.y = 2.0;
+                ui.label(RichText::new("Settings").size(20.0).semibold().color(t.label));
+                ui.add_space(12.0);
+                for (page, icon, label) in pages {
+                    if nav_row(ui, icon, label, main.settings.page == *page) {
+                        *switch = Some(*page);
+                    }
+                }
             });
         });
-    });
-    hairline(ui, t);
-    if let Some(usage) = main.instance.usage {
-        egui::Frame::new().inner_margin(Margin::symmetric(16, 12)).show(ui, |ui| {
-            let total = usage.total.filter(|t| *t > 0);
-            let used = tma_core::format::storage_size(usage.used);
-            let of = total.map(tma_core::format::storage_size).unwrap_or_else(|| "Unlimited".into());
-            ui.horizontal(|ui| {
-                ui.label(RichText::new("Storage").size(11.0).semibold().color(t.label));
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    ui.label(RichText::new(format!("{used} of {of}")).size(11.0).color(t.label_secondary));
+        let rule = ui.available_rect_before_wrap();
+        ui.painter().vline(rule.left(), rule.top()..=rule.top() + height, Stroke::new(1.0, t.separator));
+        ui.allocate_ui_with_layout(
+            egui::vec2(ui.available_width(), height),
+            egui::Layout::top_down(egui::Align::Min),
+            |ui| {
+                egui::ScrollArea::vertical().id_salt("settings-page").auto_shrink([false, false]).show(ui, |ui| {
+                    egui::Frame::new().inner_margin(Margin { left: 40, right: 28, top: 6, bottom: 32 }).show(
+                        ui,
+                        |ui| {
+                            ui.set_width(page_width(ui.available_width()));
+                            ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
+                            page_body(main, host, tasks, ui);
+                        },
+                    );
                 });
-            });
-            ui.add_space(4.0);
-            let fraction = total.map(|t| usage.used as f32 / t as f32).unwrap_or(0.0);
-            widgets::progress_bar(ui, fraction, ui.available_width());
-        });
-        hairline(ui, t);
-    }
-    egui::Frame::new().inner_margin(Margin::symmetric(10, 10)).show(ui, |ui| {
-        ui.spacing_mut().item_spacing.y = 2.0;
-        for (page, icon, label) in pages {
-            if nav_row(ui, icon, label, main.settings.page == *page) {
-                *switch = Some(*page);
-            }
-        }
+            },
+        );
     });
-    // A short note pinned to the bottom of the column.
-    let used = ui.cursor().top() - top;
-    ui.add_space((height - used - 62.0).max(8.0));
-    hairline(ui, t);
-    egui::Frame::new().inner_margin(Margin::symmetric(16, 12)).show(ui, |ui| {
-        ui.label(RichText::new("Account, security and server settings").size(11.5).color(t.label_tertiary));
-    });
+}
+
+/// Settings read best in a column: it grows with the window up to this width.
+fn page_width(available: f32) -> f32 {
+    available.clamp(0.0, 780.0)
 }
 
 /// Below this width the settings menu moves above the page.

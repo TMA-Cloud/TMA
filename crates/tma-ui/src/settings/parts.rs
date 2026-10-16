@@ -97,40 +97,34 @@ pub fn tile_width(ui: &egui::Ui, n: usize) -> f32 {
     ((ui.available_width() - gap * (per_row as f32 - 1.0)) / per_row as f32).max(120.0)
 }
 
-/// A boxed note in a tone: a warning, or plain context.
+/// A boxed note in a tone: a warning, or plain context. Inside a section card it
+/// is one more row instead of a box within the box.
 pub fn note(ui: &mut egui::Ui, tone: Tone, text: &str) {
     let t = widgets::tokens(ui);
     let color = tone.color(&t);
-    Frame::new()
-        .fill(tint(color, 22))
-        .stroke(Stroke::new(1.0, tint(color, 70)))
-        .corner_radius(CornerRadius::same(12))
-        .inner_margin(Margin::symmetric(12, 9))
-        .show(ui, |ui| {
-            ui.set_width(ui.available_width());
-            ui.horizontal_top(|ui| {
-                ui.label(RichText::new(tone.icon().unwrap_or(ph::INFO)).color(color));
-                ui.add(egui::Label::new(RichText::new(text).size(12.5).color(t.label)).wrap());
-            });
+    let frame = if widgets::in_section(ui) {
+        widgets::row_frame(ui)
+    } else {
+        Frame::new()
+            .fill(tint(color, 22))
+            .stroke(Stroke::new(1.0, tint(color, 70)))
+            .corner_radius(CornerRadius::same(12))
+            .inner_margin(Margin::symmetric(12, 9))
+    };
+    frame.show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        ui.horizontal_top(|ui| {
+            ui.label(RichText::new(tone.icon().unwrap_or(ph::INFO)).color(color));
+            ui.add(egui::Label::new(RichText::new(text).size(12.5).color(t.label)).wrap());
         });
+    });
 }
 
-/// A band of actions that are hard to undo, framed in red.
+/// A section of actions that are hard to undo: its title and card in red.
 pub fn danger_group(ui: &mut egui::Ui, title: &str, description: &str, add: impl FnOnce(&mut egui::Ui)) {
     let t = widgets::tokens(ui);
-    ui.add_space(10.0);
-    Frame::new()
-        .fill(tint(t.destructive, 12))
-        .stroke(Stroke::new(1.0, tint(t.destructive, 60)))
-        .corner_radius(CornerRadius::same(16))
-        .inner_margin(Margin::same(14))
-        .show(ui, |ui| {
-            ui.set_width(ui.available_width());
-            ui.label(RichText::new(title.to_uppercase()).size(11.0).semibold().color(t.destructive_text));
-            ui.label(RichText::new(description).size(12.5).color(t.label_secondary));
-            ui.add_space(6.0);
-            add(ui);
-        });
+    let card = (tint(t.destructive, 10), tint(t.destructive, 70));
+    widgets::grouped(ui, (title, t.destructive_text), description, card, add);
 }
 
 /// A list dialog's count line with a Refresh button; true when refresh is clicked.
@@ -160,55 +154,45 @@ pub fn config_card(
 ) -> bool {
     let t = widgets::tokens(ui);
     let mut clicked = false;
-    Frame::new()
-        .stroke(Stroke::new(1.0, t.separator))
-        .corner_radius(CornerRadius::same(14))
-        .inner_margin(Margin::symmetric(14, 11))
-        .show(ui, |ui| {
-            ui.set_width(ui.available_width());
-            let width = ui.available_width();
-            let header = ui
-                .horizontal(|ui| {
-                    ui.set_width(width);
-                    let (badge, _) = ui.allocate_exact_size(Vec2::splat(34.0), Sense::hover());
-                    ui.painter().rect_filled(badge, 10.0, t.accent_fill);
-                    ui.painter().text(
-                        badge.center(),
-                        Align2::CENTER_CENTER,
-                        icon,
-                        FontId::proportional(17.0),
-                        t.accent,
-                    );
-                    ui.vertical(|ui| {
-                        ui.set_max_width((width - 230.0).max(140.0));
-                        ui.spacing_mut().item_spacing.y = 1.0;
-                        ui.label(RichText::new(title).size(14.0).semibold().color(t.label));
-                        ui.label(RichText::new(description).size(12.0).color(t.label_secondary));
-                    });
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        let caret = if open { ph::CARET_UP } else { ph::CARET_DOWN };
-                        ui.label(RichText::new(caret).size(15.0).color(t.label_tertiary));
-                        match &status {
-                            Some((tone, text)) => {
-                                chip(ui, *tone, text);
-                            }
-                            None => {
-                                ui.spinner();
-                            }
+    widgets::row_frame(ui).show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        let width = ui.available_width();
+        let header = ui
+            .horizontal(|ui| {
+                ui.set_width(width);
+                let (badge, _) = ui.allocate_exact_size(Vec2::splat(34.0), Sense::hover());
+                ui.painter().rect_filled(badge, 10.0, t.accent_fill);
+                ui.painter().text(badge.center(), Align2::CENTER_CENTER, icon, FontId::proportional(17.0), t.accent);
+                ui.vertical(|ui| {
+                    ui.set_max_width((width - 230.0).max(140.0));
+                    ui.spacing_mut().item_spacing.y = 1.0;
+                    ui.label(RichText::new(title).size(13.5).semibold().color(t.label));
+                    ui.label(RichText::new(description).size(12.0).color(t.label_tertiary));
+                });
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let caret = if open { ph::CARET_UP } else { ph::CARET_DOWN };
+                    ui.label(RichText::new(caret).size(15.0).color(t.label_tertiary));
+                    match &status {
+                        Some((tone, text)) => {
+                            chip(ui, *tone, text);
                         }
-                    });
-                })
-                .response;
-            let response = ui.interact(header.rect, ui.id().with(("card", title)), Sense::click());
-            if response.hovered() {
-                ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
-            }
-            clicked = response.clicked() && status.is_some();
-            if open {
-                ui.add_space(10.0);
-                body(ui);
-            }
-        });
+                        None => {
+                            ui.spinner();
+                        }
+                    }
+                });
+            })
+            .response;
+        let response = ui.interact(header.rect, ui.id().with(("card", title)), Sense::click());
+        if response.hovered() {
+            ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+        }
+        clicked = response.clicked() && status.is_some();
+        if open {
+            ui.add_space(10.0);
+            body(ui);
+        }
+    });
     clicked
 }
 

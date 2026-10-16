@@ -204,12 +204,15 @@ fn bucket_card(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
     if !open && let Some(s) = summary.as_ref().filter(|s| s.configured) {
         let endpoint = s.endpoint.clone().unwrap_or_default();
         let key = s.access_key_id_masked.clone().unwrap_or_default();
-        ui.label(
-            RichText::new(format!("{endpoint} · access key {key}"))
-                .size(11.5)
-                .monospace()
-                .color(widgets::tokens(ui).label_tertiary),
-        );
+        // Under the card's title, lined up with its text.
+        egui::Frame::new().inner_margin(egui::Margin { left: 66, right: 16, top: 0, bottom: 12 }).show(ui, |ui| {
+            ui.label(
+                RichText::new(format!("{endpoint} · access key {key}"))
+                    .size(11.5)
+                    .monospace()
+                    .color(widgets::tokens(ui).label_tertiary),
+            );
+        });
     }
     if clicked
         && main.settings.toggle_card("bucket")

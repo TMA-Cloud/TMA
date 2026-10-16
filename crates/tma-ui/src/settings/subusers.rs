@@ -280,41 +280,44 @@ pub fn show(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
             Tone::Neutral,
             "Sub-users sign in with their own credentials and work in your files and storage, so every action in the audit log is attributed to the right person. You decide what each sub-user can do.",
         );
-        ui.add_space(4.0);
-        let header = list.as_ref().map_or("Loading sub-users…".to_string(), |l| match l.sub_users.len() {
-            0 => "No sub-users yet".into(),
-            n => tma_core::format::count(n, "sub-user", "sub-users"),
-        });
-        if parts::count_header(ui, &header, list.is_none()) {
-            load(main, tasks);
-        }
-        if main.settings.sub_user_form.is_some() {
-            create_form(ui, main, tasks, &available);
-        } else if widgets::secondary(ui, format!("{}  Add sub-user", ph::USER_PLUS)).clicked() {
-            // Full access is the common case for a colleague who needs the same files.
-            let permissions = available.iter().map(|p| p.key.clone()).collect();
-            main.settings.sub_user_form = Some(NewSubUser {
-                name: String::new(),
-                email: String::new(),
-                password: String::new(),
-                permissions,
-                error: None,
+        // The list and its controls form one padded row of the section card.
+        widgets::row_frame(ui).show(ui, |ui| {
+            ui.spacing_mut().item_spacing.y = 6.0;
+            let header = list.as_ref().map_or("Loading sub-users…".to_string(), |l| match l.sub_users.len() {
+                0 => "No sub-users yet".into(),
+                n => tma_core::format::count(n, "sub-user", "sub-users"),
             });
-        }
-        ui.add_space(6.0);
-        match &list {
-            None => {
-                ui.spinner();
+            if parts::count_header(ui, &header, list.is_none()) {
+                load(main, tasks);
             }
-            Some(l) if l.sub_users.is_empty() => {
-                ui.label(widgets::muted(ui, "Add a sub-user to give a colleague their own sign-in to your files."));
+            if main.settings.sub_user_form.is_some() {
+                create_form(ui, main, tasks, &available);
+            } else if widgets::secondary(ui, format!("{}  Add sub-user", ph::USER_PLUS)).clicked() {
+                // Full access is the common case for a colleague who needs the same files.
+                let permissions = available.iter().map(|p| p.key.clone()).collect();
+                main.settings.sub_user_form = Some(NewSubUser {
+                    name: String::new(),
+                    email: String::new(),
+                    password: String::new(),
+                    permissions,
+                    error: None,
+                });
             }
-            Some(l) => {
-                for sub in &l.sub_users {
-                    row(ui, main, tasks, sub, &available);
-                    ui.add_space(4.0);
+            ui.add_space(6.0);
+            match &list {
+                None => {
+                    ui.spinner();
+                }
+                Some(l) if l.sub_users.is_empty() => {
+                    ui.label(widgets::muted(ui, "Add a sub-user to give a colleague their own sign-in to your files."));
+                }
+                Some(l) => {
+                    for sub in &l.sub_users {
+                        row(ui, main, tasks, sub, &available);
+                        ui.add_space(4.0);
+                    }
                 }
             }
-        }
+        });
     });
 }

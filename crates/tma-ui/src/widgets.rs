@@ -25,6 +25,10 @@ pub fn store_tokens(ctx: &egui::Context, t: Tokens) {
 
 pub fn card<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
     let t = tokens(ui);
+    // Inside a section card it is a row of that card, not a card within it.
+    if in_section(ui) {
+        return row_frame(ui).show(ui, add).inner;
+    }
     Frame::new()
         .fill(t.surface_raised)
         .stroke(Stroke::new(1.0, t.separator))
@@ -208,27 +212,16 @@ pub fn badge(ui: &mut Ui, text: &str, color: Color32) -> Response {
         .response
 }
 
-/// A page header: a tinted icon badge, the title and a line of context.
-pub fn heading(ui: &mut Ui, icon: &str, title: &str, subtitle: &str) {
+/// A page header: the title and a line of context. The menu beside it already
+/// shows the page's icon, so the header does not repeat it.
+pub fn heading(ui: &mut Ui, _icon: &str, title: &str, subtitle: &str) {
     let t = tokens(ui);
-    ui.horizontal(|ui| {
-        let (badge, _) = ui.allocate_exact_size(Vec2::splat(28.0), Sense::hover());
-        ui.painter().circle_filled(badge.center(), 14.0, t.accent_fill);
-        ui.painter().text(
-            badge.center(),
-            egui::Align2::CENTER_CENTER,
-            icon,
-            egui::FontId::proportional(14.0),
-            t.accent,
-        );
-        ui.add_space(4.0);
-        ui.vertical(|ui| {
-            ui.spacing_mut().item_spacing.y = 0.0;
-            ui.label(RichText::new(title).size(17.0).semibold().color(t.label));
-            if !subtitle.is_empty() {
-                ui.label(RichText::new(subtitle).size(13.0).color(t.label_secondary));
-            }
-        });
+    ui.vertical(|ui| {
+        ui.spacing_mut().item_spacing.y = 2.0;
+        ui.label(RichText::new(title).size(22.0).semibold().color(t.label));
+        if !subtitle.is_empty() {
+            ui.label(RichText::new(subtitle).size(13.0).color(t.label_secondary));
+        }
     });
     ui.add_space(6.0);
 }
@@ -266,30 +259,26 @@ pub fn empty_state(ui: &mut Ui, icon: &str, title: &str, body: &str) {
 /// A settings row, a bordered card: title and description on the left, the control on the right.
 pub fn setting_row(ui: &mut Ui, title: &str, description: &str, control: impl FnOnce(&mut Ui)) {
     let t = tokens(ui);
-    Frame::new()
-        .stroke(Stroke::new(1.0, t.separator))
-        .corner_radius(CornerRadius::same(14))
-        .inner_margin(Margin::symmetric(14, 11))
-        .show(ui, |ui| {
-            let width = ui.available_width();
-            ui.horizontal(|ui| {
-                ui.set_width(width);
-                ui.vertical(|ui| {
-                    ui.set_max_width((width - 220.0).max(160.0));
-                    ui.spacing_mut().item_spacing.y = 1.0;
-                    ui.label(RichText::new(title).size(14.0).semibold().color(t.label));
-                    if !description.is_empty() {
-                        ui.label(RichText::new(description).size(12.5).color(t.label_secondary));
-                    }
-                });
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    ui.style_mut().override_font_id = Some(egui::FontId::new(14.0, crate::theme::semibold()));
-                    ui.data_mut(|d| d.insert_temp(egui::Id::new(ROW_ACTIONS), true));
-                    control(ui);
-                    ui.data_mut(|d| d.remove::<bool>(egui::Id::new(ROW_ACTIONS)));
-                });
+    row_frame(ui).show(ui, |ui| {
+        let width = ui.available_width();
+        ui.horizontal(|ui| {
+            ui.set_width(width);
+            ui.vertical(|ui| {
+                ui.set_max_width((width - 220.0).max(160.0));
+                ui.spacing_mut().item_spacing.y = 1.0;
+                ui.label(RichText::new(title).size(13.5).semibold().color(t.label));
+                if !description.is_empty() {
+                    ui.label(RichText::new(description).size(12.0).color(t.label_tertiary));
+                }
+            });
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                ui.style_mut().override_font_id = Some(egui::FontId::new(14.0, crate::theme::semibold()));
+                ui.data_mut(|d| d.insert_temp(egui::Id::new(ROW_ACTIONS), true));
+                control(ui);
+                ui.data_mut(|d| d.remove::<bool>(egui::Id::new(ROW_ACTIONS)));
             });
         });
+    });
 }
 
 pub fn separator(ui: &mut Ui) {
@@ -341,17 +330,67 @@ pub fn modal(ctx: &egui::Context, id: &str) -> egui::Modal {
     )
 }
 
-/// A group of settings: an uppercase label, a line of context, then its rows.
+/// A group of settings: a title, a line of context, then its rows in one card,
+/// divided by hairlines (rows draw their own card only outside a section).
 pub fn section(ui: &mut Ui, title: &str, subtitle: &str, add: impl FnOnce(&mut Ui)) {
     let t = tokens(ui);
-    ui.add_space(10.0);
-    ui.label(RichText::new(title.to_uppercase()).size(11.0).semibold().color(t.label));
+    grouped(ui, (title, t.label), subtitle, (t.surface, t.separator), add);
+}
+
+/// A section with its own title colour and card fill and border: the danger zone
+/// is one in red.
+pub fn grouped(
+    ui: &mut Ui,
+    (title, title_color): (&str, Color32),
+    subtitle: &str,
+    (fill, border): (Color32, Color32),
+    add: impl FnOnce(&mut Ui),
+) {
+    let t = tokens(ui);
+    ui.add_space(14.0);
+    ui.label(RichText::new(title).size(14.0).semibold().color(title_color));
     if !subtitle.is_empty() {
-        ui.add_space(-6.0);
-        ui.label(RichText::new(subtitle).size(13.0).color(t.label_secondary));
+        ui.add_space(-5.0);
+        ui.label(RichText::new(subtitle).size(12.5).color(t.label_tertiary));
     }
-    ui.add_space(2.0);
-    add(ui);
+    ui.add_space(4.0);
+    let card = Frame::new().fill(fill).stroke(Stroke::new(1.0, border)).corner_radius(CornerRadius::same(12));
+    card.show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        ui.spacing_mut().item_spacing.y = 0.0;
+        ui.data_mut(|d| d.insert_temp(egui::Id::new(GROUP_ROWS), 0u32));
+        add(ui);
+        ui.data_mut(|d| d.remove::<u32>(egui::Id::new(GROUP_ROWS)));
+    });
+}
+
+/// Whether rows are being drawn inside a section card.
+pub fn in_section(ui: &Ui) -> bool {
+    ui.data(|d| d.get_temp::<u32>(egui::Id::new(GROUP_ROWS))).is_some()
+}
+
+/// Rows drawn so far in the open section; absent outside one.
+const GROUP_ROWS: &str = "tma-settings-group-rows";
+
+/// The frame for one settings row: inside a section, no border of its own and a
+/// hairline above every row but the first; outside, a card of its own.
+pub fn row_frame(ui: &mut Ui) -> Frame {
+    let t = tokens(ui);
+    let id = egui::Id::new(GROUP_ROWS);
+    match ui.data(|d| d.get_temp::<u32>(id)) {
+        Some(drawn) => {
+            if drawn > 0 {
+                let rect = ui.available_rect_before_wrap();
+                ui.painter().hline(rect.x_range().shrink(16.0), rect.top(), Stroke::new(1.0, t.separator));
+            }
+            ui.data_mut(|d| d.insert_temp(id, drawn + 1));
+            Frame::new().inner_margin(Margin::symmetric(16, 12))
+        }
+        None => Frame::new()
+            .stroke(Stroke::new(1.0, t.separator))
+            .corner_radius(CornerRadius::same(12))
+            .inner_margin(Margin::symmetric(16, 12)),
+    }
 }
 
 /// Whether the last pointer input came from a touch screen: touch turns it on,
