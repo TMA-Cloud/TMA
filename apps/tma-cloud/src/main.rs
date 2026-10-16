@@ -3,6 +3,8 @@
 #![windows_subsystem = "windows"]
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
+// Pure and tested on every system; only the Windows clipboard calls it so far.
+#[cfg_attr(not(windows), allow(dead_code))]
 mod clip_plan;
 mod clipboard;
 #[cfg(windows)]

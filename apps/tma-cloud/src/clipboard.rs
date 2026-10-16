@@ -12,6 +12,7 @@ use std::time::Duration;
 use tma_client::{Client, Source, UploadFile};
 use tma_core::api::FileItem;
 
+#[cfg(windows)]
 use crate::clip_plan;
 use crate::drive::Paths;
 use crate::notify_ui::Notifier;
