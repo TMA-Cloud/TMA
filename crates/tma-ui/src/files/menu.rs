@@ -87,12 +87,6 @@ pub(super) fn context_menu(main: &Main, ui: &mut Ui, items: &[FileItem], desktop
     if user.can(Permission::Download) {
         item(ui, ph::DOWNLOAD_SIMPLE, "Download", Action::Download(items.to_vec()));
     }
-    if let Some(first) = single.clone().filter(|f| desktop && !f.is_folder() && user.can(Permission::Edit)) {
-        item(ui, ph::DESKTOP, "Open on desktop", Action::EditInApp(first));
-    }
-    if desktop && user.can(Permission::Download) {
-        item(ui, ph::CLIPBOARD, "Copy to other apps", Action::CopyToSystem(items.to_vec()));
-    }
     if user.can(Permission::Edit) {
         let all_starred = items.iter().all(|i| i.starred);
         let label = if all_starred { "Remove from Starred" } else { "Add to Starred" };

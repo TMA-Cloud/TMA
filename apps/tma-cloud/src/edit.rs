@@ -87,18 +87,25 @@ impl Edits {
                 notifier.error("No folder to keep the file in while you edit it");
                 return;
             };
+            let path = dir.join(safe_name(&file.name));
+            // Already open and watched: its saves upload, so the local copy is current.
+            let watched = edits.sessions.lock().map(|s| s.contains_key(&file.id)).unwrap_or(false);
+            if watched && path.exists() {
+                launch(&path, &file.name, &notifier);
+                return;
+            }
             if let Err(err) = std::fs::create_dir_all(&dir) {
                 notifier.error(format!("Cannot prepare the file: {err}"));
                 return;
             }
-            let path = dir.join(safe_name(&file.name));
-            notifier.info(format!("Opening {}…", file.name));
-            if let Err(err) = client.download_to(&file.id, &path, Progress::new(0)).await {
+            let progress = notifier.track_download(&file.name);
+            if let Err(err) = client.download_to(&file.id, &path, progress.clone()).await {
+                notifier.finish_download(&progress, Some(err.message.clone()));
                 notifier.error(format!("Cannot download {}: {}", file.name, err.message));
                 return;
             }
-            if let Err(err) = open::that_detached(&path) {
-                notifier.error(format!("No app opens {}: {err}", file.name));
+            notifier.finish_download(&progress, None);
+            if !launch(&path, &file.name, &notifier) {
                 return;
             }
             match watch(client, file.clone(), dir, path, notifier.clone()) {
@@ -111,6 +118,22 @@ impl Edits {
             }
         });
     }
+}
+
+/// Open a file in its app; Windows asks which app when none is set for the type.
+fn launch(path: &Path, name: &str, notifier: &Notifier) -> bool {
+    if open::that_detached(path).is_ok() {
+        return true;
+    }
+    #[cfg(windows)]
+    {
+        let chooser = std::process::Command::new("rundll32.exe").arg("shell32.dll,OpenAs_RunDLL").arg(path).spawn();
+        if chooser.is_ok() {
+            return true;
+        }
+    }
+    notifier.error(format!("No app opens {name}"));
+    false
 }
 
 /// Watch the edit folder: saves of the file replace it, Save As copies upload beside it.

@@ -16,7 +16,7 @@ mod shell;
 mod tasks;
 pub mod theme;
 mod toast;
-mod transfers;
+pub mod transfers;
 pub mod widgets;
 
 pub use app::{App, Prefs};

@@ -214,6 +214,14 @@ impl App {
         }
     }
 
+    /// The signed-in session's transfer list, for work the host runs itself.
+    pub fn transfers_mut(&mut self) -> Option<&mut crate::transfers::Transfers> {
+        match &mut self.screen {
+            Screen::Main(main) => Some(&mut main.transfers),
+            _ => None,
+        }
+    }
+
     pub fn main_mut(&mut self, generation: u64) -> Option<&mut Main> {
         match &mut self.screen {
             Screen::Main(main) if main.generation == generation => Some(main),

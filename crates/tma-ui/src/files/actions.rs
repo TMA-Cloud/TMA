@@ -2,6 +2,7 @@
 //! runs after the frame with the whole app at hand.
 
 use tma_client::UploadFile;
+use tma_core::Permission;
 use tma_core::api::{FileItem, SortBy, SortOrder};
 
 use super::{Clip, Place};
@@ -126,6 +127,12 @@ pub fn run(app: &mut App, action: Action) {
         Action::Open(item) => {
             if main.browser.place == Place::Trash {
                 app.toasts.info("Restore the file to open it");
+            } else if !main.user.can(Permission::Download) {
+                // Every way of opening reads the file, which the server allows only with Download.
+                app.toasts.error("You don't have permission to open files. Ask the account owner.");
+            } else if app.host.kind() == HostKind::Desktop {
+                // The desktop app hands every file to the computer, which opens it in its own app.
+                run(app, Action::EditInApp(item));
             } else if is_image(&item) {
                 let images: Vec<FileItem> = main.browser.items.iter().filter(|i| is_image(i)).cloned().collect();
                 let images = if images.iter().any(|i| i.id == item.id) { images } else { vec![item.clone()] };

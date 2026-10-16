@@ -96,6 +96,28 @@ impl Transfers {
         (self.next_id, progress)
     }
 
+    /// Show a download the host runs on its own thread (opening a file in its app).
+    pub fn track_download(&mut self, name: &str, progress: Arc<Progress>) {
+        self.next_id += 1;
+        self.items.push(Transfer {
+            id: self.next_id,
+            name: name.to_string(),
+            direction: Direction::Down,
+            progress,
+            state: State::Running,
+            upload: None,
+            replace: None,
+        });
+        self.expanded = true;
+    }
+
+    /// Finish a download started with `track_download`, found by its counters.
+    pub fn finish_tracked(&mut self, progress: &Arc<Progress>, state: State) {
+        if let Some(item) = self.items.iter_mut().find(|i| Arc::ptr_eq(&i.progress, progress)) {
+            item.state = state;
+        }
+    }
+
     pub fn finish(&mut self, id: u64, state: State) {
         if let Some(item) = self.items.iter_mut().find(|i| i.id == id) {
             item.state = state;
