@@ -93,11 +93,26 @@ jobs:
       - name: Integration tests
         run: cargo test -p tma-server --test api -- --test-threads=1
 
-  windows:
-    name: Desktop app (Windows)
-    runs-on: windows-latest
+  desktop:
+    name: Desktop app (${{ matrix.name }})
+    # Each system has its own Cloud Drive adapter and app glue, built only there.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows
+            os: windows-latest
+          - name: macOS
+            os: macos-latest
+          - name: Linux
+            os: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Linux libraries
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
 
       - name: Build and test
         shell: bash
