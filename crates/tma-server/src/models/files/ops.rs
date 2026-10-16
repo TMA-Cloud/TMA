@@ -58,12 +58,7 @@ async fn allocate_target_names(
 
 /// Move items under `parent` (root when `None`). Hierarchy changes of one
 /// account are serialised across processes by an advisory lock.
-pub async fn move_items(
-    pool: &PgPool,
-    ids: &[String],
-    parent: Option<&str>,
-    owner: &str,
-) -> anyhow::Result<Vec<Option<String>>> {
+pub async fn move_items(pool: &PgPool, ids: &[String], parent: Option<&str>, owner: &str) -> anyhow::Result<()> {
     let mut tx = pool.begin().await?;
     sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))").bind(owner).execute(&mut *tx).await?;
     let rows: Vec<(String, Option<String>, String, String)> = sqlx::query_as(
@@ -112,11 +107,6 @@ pub async fn move_items(
     // Items already in the target stay put, like a paste back into the same folder.
     let moving: Vec<&(String, Option<String>, String, String)> =
         rows.iter().filter(|r| r.1.as_deref() != parent).collect();
-    let old_parents: Vec<Option<String>> = {
-        let mut v: Vec<Option<String>> = moving.iter().map(|r| r.1.clone()).collect();
-        v.dedup();
-        v
-    };
     if !moving.is_empty() {
         let items: Vec<(Option<String>, String, String)> =
             moving.iter().map(|r| (Some(r.0.clone()), r.3.clone(), r.2.clone())).collect();
@@ -134,7 +124,7 @@ pub async fn move_items(
         .await?;
     }
     tx.commit().await?;
-    Ok(old_parents)
+    Ok(())
 }
 
 /// Reserve quota for a long object copy without holding the account row lock during I/O.
