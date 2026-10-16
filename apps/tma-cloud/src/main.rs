@@ -17,6 +17,7 @@ mod shortcuts;
 #[cfg(windows)]
 mod single;
 mod update;
+mod window;
 
 const PREFS_KEY: &str = "prefs";
 const SERVER_KEY: &str = "server";
@@ -27,6 +28,7 @@ struct Shell {
     client_id: String,
     keys: shortcuts::ClipboardKeys,
     cursors: cursors::Cursors,
+    placement: window::Placement,
 }
 
 impl eframe::App for Shell {
@@ -37,6 +39,8 @@ impl eframe::App for Shell {
 
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         self.app.ui(ui);
+        let info = ui.ctx().input(|i| i.viewport().clone());
+        self.placement.observe(&info);
         self.cursors.apply(ui.ctx(), frame, tma_ui::widgets::tokens(ui).dark);
     }
 
@@ -44,6 +48,9 @@ impl eframe::App for Shell {
         self.app.remember_session();
         eframe::set_value(storage, PREFS_KEY, &self.app.prefs);
         eframe::set_value(storage, CLIENT_ID_KEY, &self.client_id);
+        self.placement.save();
+        // eframe still reads the window size it saved before, which would win over ours.
+        storage.remove_string("window");
         if let Some(server) = self.app.server_url() {
             eframe::set_value(storage, SERVER_KEY, &server);
         }
@@ -83,19 +90,21 @@ fn main() -> eframe::Result {
     #[cfg(windows)]
     let Some(_single) = single::claim() else { return Ok(()) };
     forget_old_copies();
-    let mut viewport = egui::ViewportBuilder::default()
-        .with_title("TMA Cloud")
-        .with_inner_size([1280.0, 820.0])
-        .with_min_inner_size([880.0, 560.0])
-        .with_app_id("tma-cloud");
+    let placement = window::Placement::load().unwrap_or_default();
+    let mut viewport = placement.apply(
+        egui::ViewportBuilder::default()
+            .with_title("TMA Cloud")
+            .with_min_inner_size([880.0, 560.0])
+            .with_app_id("tma-cloud"),
+    );
     if let Some(icon) = icon() {
         viewport = viewport.with_icon(icon);
     }
-    let options = eframe::NativeOptions { viewport, persist_window: true, ..Default::default() };
+    let options = eframe::NativeOptions { viewport, persist_window: false, ..Default::default() };
     eframe::run_native(
         "TMA Cloud",
         options,
-        Box::new(|cc| {
+        Box::new(move |cc| {
             let storage = cc.storage;
             let prefs = storage.and_then(|s| eframe::get_value::<tma_ui::Prefs>(s, PREFS_KEY)).unwrap_or_default();
             let server = storage.and_then(|s| eframe::get_value::<String>(s, SERVER_KEY));
@@ -109,6 +118,7 @@ fn main() -> eframe::Result {
                 client_id,
                 keys: shortcuts::ClipboardKeys::default(),
                 cursors: cursors::Cursors::default(),
+                placement,
             }))
         }),
     )
