@@ -69,7 +69,12 @@ pub async fn serve(
             header::CONTENT_TYPE,
             HeaderValue::from_str(&mime).unwrap_or(HeaderValue::from_static("application/octet-stream")),
         )
-        .header(header::ACCEPT_RANGES, "bytes");
+        .header(header::ACCEPT_RANGES, "bytes")
+        // Uploaded HTML or SVG opened directly runs no script on this origin.
+        .header(
+            header::CONTENT_SECURITY_POLICY,
+            "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; sandbox",
+        );
     if let Ok(value) = HeaderValue::from_str(&content_disposition(disposition, &file.name)) {
         builder = builder.header(header::CONTENT_DISPOSITION, value);
     }

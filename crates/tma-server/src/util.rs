@@ -118,12 +118,15 @@ pub fn normalize_email(email: &str) -> Option<String> {
 
 /// RFC 6266 Content-Disposition with an ASCII fallback and the UTF-8 name.
 pub fn content_disposition(disposition: &str, filename: &str) -> String {
-    let ext = tma_core::names::extname(filename);
-    let ascii: String =
-        filename.chars().map(|c| if (' '..='~').contains(&c) && c != '"' && c != '\\' { c } else { '_' }).collect();
+    // The fallback must be plain ASCII, or the whole header is invalid and dropped.
+    let to_ascii = |s: &str| -> String {
+        s.chars().map(|c| if (' '..='~').contains(&c) && c != '"' && c != '\\' { c } else { '_' }).collect()
+    };
+    let ext = to_ascii(tma_core::names::extname(filename));
+    let ascii = to_ascii(filename);
     let ascii = ascii.trim().trim_start_matches('_');
     let legacy = if ascii.is_empty() { "download".to_string() } else { ascii.to_string() };
-    let fallback = if legacy.ends_with(ext) { legacy } else { format!("{legacy}{ext}") };
+    let fallback = if legacy.ends_with(&ext) { legacy } else { format!("{legacy}{ext}") };
     let encoded = percent_encoding::utf8_percent_encode(filename, URI_COMPONENT);
     format!("{disposition}; filename=\"{fallback}\"; filename*=UTF-8''{encoded}")
 }
@@ -261,5 +264,9 @@ mod tests {
             "attachment; filename=\"a.txt\"; filename*=UTF-8''a.txt"
         );
         assert!(content_disposition("inline", "résumé.pdf").contains("filename*=UTF-8''r%C3%A9sum%C3%A9.pdf"));
+        for name in ["x.é", "日本.文書", "a.\"b", "  .tx\t"] {
+            let value = content_disposition("attachment", name);
+            assert!(axum::http::HeaderValue::from_str(&value).is_ok(), "{name}: {value}");
+        }
     }
 }

@@ -219,6 +219,20 @@ async fn full_workflow() {
     let archive = zip.bytes().await.unwrap();
     assert!(archive.starts_with(b"PK\x03\x04"));
     assert!(archive.windows(8).any(|w| w == b"note.txt"));
+    // A non-ASCII extension still gets an attachment header, and stored bytes run in a sandbox.
+    let page = admin
+        .upload(&text_file("page.htmlé", "<script>alert(1)</script>", None), &UploadOptions::default(), Progress::new(0))
+        .await
+        .unwrap();
+    let raw = http
+        .get(admin.url(&format!("/api/files/{}/download", page.id)))
+        .header("cookie", format!("token={}", admin.session_token().unwrap()))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(raw.status().as_u16(), 200);
+    assert!(raw.headers()["content-disposition"].to_str().unwrap().starts_with("attachment;"));
+    assert!(raw.headers()["content-security-policy"].to_str().unwrap().ends_with("sandbox"));
     // The ticket is bound to the session that asked for it.
     let elsewhere = post_ticket(Some(format!("token={}", other.session_token().unwrap()))).await.unwrap();
     assert_eq!(elsewhere.status().as_u16(), 401);

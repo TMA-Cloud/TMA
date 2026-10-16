@@ -61,7 +61,10 @@ pub async fn security_headers(State(state): State<AppState>, mut req: Request, n
     set(headers, "x-xss-protection", "0");
     set(headers, "referrer-policy", "strict-origin-when-cross-origin");
     set(headers, "permissions-policy", "camera=(), microphone=(), geolocation=()");
-    set(headers, "content-security-policy", &csp);
+    // A response with its own policy (stored file bytes) keeps that stricter one.
+    if !headers.contains_key("content-security-policy") {
+        set(headers, "content-security-policy", &csp);
+    }
     response
 }
 
