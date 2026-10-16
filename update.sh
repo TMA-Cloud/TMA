@@ -164,7 +164,8 @@ main() {
   # A newer update.sh runs the rest of the update, so its own steps apply.
   if [[ -z "${TMA_UPDATE_REEXEC:-}" ]]; then
     install_file "${staging}/update.sh" update.sh 700
-    if [[ " ${replaced[*]} " == *" update.sh "* ]]; then
+    # The "-" and "+" forms keep empty arrays working under set -u in bash 3.2 (macOS).
+    if [[ " ${replaced[*]-} " == *" update.sh "* ]]; then
       info "update.sh changed; running the new version"
       rm -rf .update.lock "$staging" "$new_compose"
       trap - EXIT
@@ -267,7 +268,7 @@ main() {
   ((${#added[@]})) && success "Added to .env: ${added[*]}. Review them: ${dir}/.env"
   ((${#unused[@]})) && info "No longer used by this version (safe to remove from .env): ${unused[*]}"
   local name
-  for name in "${kept[@]}"; do
+  for name in ${kept[@]+"${kept[@]}"}; do
     warn "${name} has local edits, so it was kept. The new version is ${name}.new; merge it, or rerun with TMA_FORCE=1."
   done
 
@@ -306,7 +307,7 @@ main() {
   local new_image version
   app_id="$(docker compose ps -q app)"
   new_image="$(docker inspect -f '{{.Image}}' "$app_id")"
-  version="$(docker inspect -f '{{index .Config.Labels "version"}}' "$app_id" 2>/dev/null || true)"
+  version="$(docker inspect -f '{{index .Config.Labels "org.opencontainers.image.version"}}' "$app_id" 2>/dev/null || true)"
   if [[ -n "$old_image" && "$old_image" == "$new_image" ]]; then
     success "TMA Cloud is running; the image was already current${version:+ (${version})}"
     [[ -n "$rollback_tag" ]] && docker rmi "$rollback_tag" >/dev/null 2>&1
