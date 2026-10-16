@@ -1,175 +1,322 @@
-//! Storage: how much space the account uses, and (first user) the bucket the
-//! instance stores files in, tested against the live service before saving.
+//! Storage: the bucket every file lives in (first user), the account's usage,
+//! and the largest file anyone may upload.
 
 use egui::RichText;
-use tma_core::api::StorageSettingsInput;
 
-use super::{fetch, save, section};
+use super::bucket_form::{self, BucketForm, CheckResult};
+use super::forms::{self, Unit};
+use super::parts::{self, FormAction, Tone};
+use super::{attempt, fetch, save, section};
 use crate::app::Main;
 use crate::icons::ph;
 use crate::tasks::Tasks;
-use crate::theme::Weight;
 use crate::widgets;
 
 pub fn load(main: &mut Main, tasks: &Tasks) {
     crate::app::load_usage(tasks, &main.client, main.generation);
-    if main.instance.is_first_user {
-        fetch(
-            tasks,
-            main,
-            |c| async move { c.storage_config().await },
-            |s, v| {
-                s.forms.storage = StorageSettingsInput {
-                    provider: v.provider.clone().unwrap_or_else(|| "s3".into()),
-                    endpoint: v.endpoint.clone(),
-                    region: v.region.clone(),
-                    bucket: v.bucket.clone(),
-                    force_path_style: v.force_path_style,
-                    access_key_id: None,
-                    secret_access_key: None,
-                    expected_version: Some(v.version),
-                };
-                s.storage = Some(v);
-            },
+    if !main.instance.is_first_user {
+        return;
+    }
+    fetch(
+        tasks,
+        main,
+        |c| async move { c.storage_config().await },
+        |s, v| {
+            s.forms.bucket = BucketForm::from_summary(&v);
+            // With nothing connected there is nothing else to show: open the form.
+            if !v.configured {
+                s.open.insert("bucket");
+            }
+            s.storage = Some(v);
+        },
+    );
+    fetch(tasks, main, |c| async move { c.max_upload().await }, |s, v| s.max_upload = Some(v));
+}
+
+pub fn show(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
+    widgets::heading(ui, ph::HARD_DRIVES, "Storage", "Usage, bucket and upload limits.");
+    ui.add_space(4.0);
+    let admin = main.instance.is_first_user;
+    if admin {
+        section(ui, "Bucket", "Where this deployment keeps its files.", |ui| bucket_card(main, ui, tasks));
+    } else if !main.instance.storage_configured {
+        ui.add_space(6.0);
+        parts::note(
+            ui,
+            Tone::Warning,
+            "No storage bucket is connected yet, so files cannot be uploaded or opened. Ask whoever administers this deployment to set it up.",
+        );
+    }
+    let usage = main.instance.usage;
+    section(ui, "Usage", "How much of this account's space is taken.", |ui| parts::meter(ui, usage));
+    if admin {
+        section(ui, "Limits", "Applies to every user on this deployment.", |ui| upload_card(main, ui, tasks));
+    } else {
+        ui.add_space(8.0);
+        parts::note(
+            ui,
+            Tone::Neutral,
+            "Storage limits and the maximum upload size are set by whoever administers this deployment.",
         );
     }
 }
 
-fn text(ui: &mut egui::Ui, label: &str, value: &mut Option<String>, hint: &str, password: bool) {
-    let mut s = value.clone().unwrap_or_default();
-    if widgets::field(ui, label, &mut s, password, hint).changed() {
-        *value = Some(s).filter(|v| !v.is_empty());
+fn upload_card(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
+    let status = main.settings.max_upload.map(|m| (Tone::Neutral, forms::upload_limit_label(m.max_bytes)));
+    let open = main.settings.open.contains("upload");
+    let busy = main.settings.busy == Some("max-upload");
+    let mut action = None;
+    let clicked = parts::config_card(
+        ui,
+        ph::UPLOAD_SIMPLE,
+        "Max upload size",
+        "The largest single file anyone can upload",
+        status,
+        open,
+        |ui| {
+            let f = &mut main.settings.forms;
+            ui.label(RichText::new("Max upload size").size(12.0).color(widgets::tokens(ui).label_secondary));
+            ui.horizontal(|ui| {
+                widgets::text_edit(ui, &mut f.max_upload, "10", 120.0);
+                let before = f.max_upload_unit;
+                egui::ComboBox::from_id_salt("upload-unit")
+                    .selected_text(f.max_upload_unit.label())
+                    .width(60.0)
+                    .show_ui(ui, |ui| {
+                        for unit in [Unit::Mb, Unit::Gb] {
+                            ui.selectable_value(&mut f.max_upload_unit, unit, unit.label());
+                        }
+                    });
+                if before != f.max_upload_unit {
+                    f.max_upload = forms::convert_size(&f.max_upload, before, f.max_upload_unit);
+                }
+            });
+            parts::hint(ui, "Allowed range: 1 MB to 100 GB per file");
+            action = parts::form_actions(ui, busy, "Save", "Saving…");
+        },
+    );
+    if clicked
+        && main.settings.toggle_card("upload")
+        && let Some(m) = main.settings.max_upload
+    {
+        let (value, unit) = forms::split_size(Some(m.max_bytes), Unit::Gb);
+        main.settings.forms.max_upload = value;
+        main.settings.forms.max_upload_unit = unit;
     }
+    match action {
+        Some(FormAction::Cancel) => {
+            main.settings.open.remove("upload");
+        }
+        Some(FormAction::Save) => {
+            let f = &main.settings.forms;
+            let (min, max) = forms::UPLOAD_LIMIT;
+            match forms::size_bytes(&f.max_upload, f.max_upload_unit).filter(|b| (min..=max).contains(b)) {
+                None => main.settings.report("Enter a value between 1 MB and 100 GB".into()),
+                Some(bytes) => save(
+                    tasks,
+                    main,
+                    "max-upload",
+                    move |c| async move { c.save_max_upload(bytes).await },
+                    |main, toasts, v| {
+                        main.instance.max_upload = v.max_bytes;
+                        main.settings.max_upload = Some(v);
+                        main.settings.open.remove("upload");
+                        toasts.success("Max upload size saved");
+                    },
+                ),
+            }
+        }
+        None => {}
+    }
+}
+
+fn text(ui: &mut egui::Ui, label: &str, value: &mut String, hint: &str) {
+    widgets::field(ui, label, value, false, hint);
+}
+
+fn combo(ui: &mut egui::Ui, id: &str, label: &str, value: &mut String, options: &[(&str, &str)]) {
+    let t = widgets::tokens(ui);
+    ui.label(RichText::new(label).size(12.0).color(t.label_secondary));
+    let shown = options.iter().find(|o| o.0 == value).map_or("", |o| o.1);
+    egui::ComboBox::from_id_salt(id).selected_text(shown).width(ui.available_width().min(360.0)).show_ui(ui, |ui| {
+        for (key, name) in options {
+            ui.selectable_value(value, key.to_string(), *name);
+        }
+    });
     ui.add_space(4.0);
 }
 
-pub fn show(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
-    let t = widgets::tokens(ui);
-    widgets::heading(ui, ph::HARD_DRIVES, "Storage", "Space used by your files.");
-    ui.add_space(12.0);
-    section(ui, "Usage", "", |ui| {
-        if let Some(usage) = main.instance.usage {
-            let total = usage.total.filter(|v| *v > 0);
-            let label = match total {
-                Some(total) => format!(
-                    "{} of {} used",
-                    tma_core::format::storage_size(usage.used),
-                    tma_core::format::storage_size(total)
-                ),
-                None => format!("{} used · no limit", tma_core::format::storage_size(usage.used)),
-            };
-            ui.label(RichText::new(label).size(15.0).semibold());
-            if let Some(total) = total {
-                ui.add_space(6.0);
-                widgets::progress_bar(ui, usage.used as f32 / total as f32, ui.available_width());
-            }
-        } else {
-            ui.spinner();
-        }
-    });
-    if !main.instance.is_first_user {
-        return;
-    }
-    let configured = main.settings.storage.as_ref().is_some_and(|s| s.configured);
-    let subtitle = if configured {
-        "Files are stored in this S3-compatible bucket."
+fn result_box(ui: &mut egui::Ui, result: &CheckResult) {
+    let passed = if result.checks.is_empty() {
+        String::new()
     } else {
-        "Connect an S3-compatible bucket to start storing files."
+        let names: Vec<&str> = result.checks.iter().map(|c| bucket_form::check_label(c)).collect();
+        format!("\nPassed: {}", names.join(" · "))
     };
+    let failed =
+        result.step.as_deref().map(|s| format!("{} failed: ", bucket_form::check_label(s))).unwrap_or_default();
+    let tone = if result.ok { Tone::Success } else { Tone::Danger };
+    parts::note(ui, tone, &format!("{failed}{}{passed}", result.message));
+}
+
+fn bucket_card(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
+    let summary = main.settings.storage.clone();
+    let configured = summary.as_ref().is_some_and(|s| s.configured);
+    let status = summary.as_ref().map(|s| match (&s.provider, &s.bucket) {
+        (Some(p), Some(b)) if s.configured => (Tone::Success, format!("{} · {b}", bucket_form::provider_label(p))),
+        _ => (Tone::Warning, "Not set up".to_string()),
+    });
+    let open = main.settings.open.contains("bucket");
     let busy = main.settings.busy;
-    section(ui, "Object storage", subtitle, |ui| {
-        if let Some(summary) = &main.settings.storage
-            && summary.configured
-        {
-            ui.horizontal(|ui| {
-                widgets::badge(ui, "Connected", t.positive_text);
-                if let Some(key) = &summary.access_key_id_masked {
-                    ui.label(widgets::muted(ui, format!("Access key {key}")));
-                }
-            });
-            ui.add_space(8.0);
-        }
+    let working = matches!(busy, Some("storage-test" | "storage-save"));
+    let mut test = false;
+    let mut save_now = false;
+    let mut cancel = false;
+    let description = "The S3-compatible bucket that holds every file, encrypted";
+    let clicked = parts::config_card(ui, ph::DATABASE, "Storage bucket", description, status, open, |ui| {
         let f = &mut main.settings.forms;
-        ui.label(RichText::new("Provider").size(12.0).color(t.label_secondary));
-        egui::ComboBox::from_id_salt("provider")
-            .selected_text(match f.storage.provider.as_str() {
-                "aws" => "Amazon S3",
-                "r2" => "Cloudflare R2",
-                _ => "S3-compatible (MinIO, RustFS, Ceph…)",
-            })
-            .width(320.0)
-            .show_ui(ui, |ui| {
-                ui.selectable_value(&mut f.storage.provider, "s3".to_string(), "S3-compatible (MinIO, RustFS, Ceph…)");
-                ui.selectable_value(&mut f.storage.provider, "aws".to_string(), "Amazon S3");
-                ui.selectable_value(&mut f.storage.provider, "r2".to_string(), "Cloudflare R2");
-            });
-        ui.add_space(6.0);
-        let endpoint_hint = if f.storage.provider == "r2" {
-            "https://<account>.r2.cloudflarestorage.com"
-        } else {
-            "https://s3.example.com"
-        };
-        text(ui, "Endpoint", &mut f.storage.endpoint, endpoint_hint, false);
-        text(ui, "Region", &mut f.storage.region, if f.storage.provider == "r2" { "auto" } else { "us-east-1" }, false);
-        text(ui, "Bucket", &mut f.storage.bucket, "tma-cloud", false);
-        let key_hint = if configured { "Leave blank to keep the saved key" } else { "" };
-        text(ui, "Access key ID", &mut f.storage.access_key_id, key_hint, false);
-        text(ui, "Secret access key", &mut f.storage.secret_access_key, key_hint, true);
-        if f.storage.provider == "s3" {
-            let mut path_style = f.storage.force_path_style.unwrap_or(true);
-            widgets::setting_row(ui, "Path-style addressing", "Most self-hosted servers need this.", |ui| {
-                if widgets::toggle(ui, &mut path_style).changed() {
-                    f.storage.force_path_style = Some(path_style);
-                }
-            });
-        }
-        if !f.storage_checks.is_empty() {
-            for check in &f.storage_checks {
-                ui.label(RichText::new(format!("{}  {check}", ph::CHECK)).color(t.positive_text));
-            }
+        let before = f.bucket.clone();
+        if !configured {
+            parts::note(
+                ui,
+                Tone::Warning,
+                "No bucket is connected yet, so nobody can upload or open files. Create a private bucket and an access key limited to it, then enter them here.",
+            );
             ui.add_space(4.0);
         }
-        ui.add_space(6.0);
-        let input = f.storage.clone();
-        ui.horizontal(|ui| {
-            if widgets::secondary(ui, if busy == Some("storage-test") { "Testing…" } else { "Test connection" })
-                .clicked()
-                && busy.is_none()
-            {
-                let input = input.clone();
-                save(
-                    tasks,
-                    main,
-                    "storage-test",
-                    move |c| async move { c.test_storage_config(&input).await },
-                    |main, toasts, result| {
-                        main.settings.forms.storage_checks = result.checks;
-                        toasts.success("The bucket works");
-                    },
-                );
-            }
-            if widgets::primary_enabled(
+        let b = &mut f.bucket;
+        combo(ui, "provider", "Provider", &mut b.provider, &bucket_form::PROVIDERS);
+        if b.provider == "r2" {
+            text(ui, "Account ID", &mut b.account_id, "0123456789abcdef0123456789abcdef");
+            parts::hint(ui, "Shown on the R2 overview page in the Cloudflare dashboard");
+            combo(ui, "jurisdiction", "Jurisdiction", &mut b.jurisdiction, &bucket_form::JURISDICTIONS);
+        } else {
+            let aws = b.provider == "aws";
+            let placeholder = if aws { "https://s3.eu-west-1.amazonaws.com" } else { "https://s3.example.com" };
+            text(ui, if aws { "Endpoint (optional)" } else { "Endpoint URL" }, &mut b.endpoint, placeholder);
+            parts::hint(
                 ui,
-                busy.is_none(),
-                if busy == Some("storage-save") { "Saving…" } else { "Save" },
-            )
-            .clicked()
-            {
-                save(
-                    tasks,
-                    main,
-                    "storage-save",
-                    move |c| async move { c.save_storage_config(&input).await },
-                    |main, toasts, summary| {
-                        main.settings.forms.storage.expected_version = Some(summary.version);
-                        main.settings.forms.storage.access_key_id = None;
-                        main.settings.forms.storage.secret_access_key = None;
-                        main.settings.storage = Some(summary);
-                        main.instance.storage_configured = true;
-                        toasts.success("Storage saved");
-                    },
-                );
+                if aws {
+                    "Leave blank to use the standard endpoint for the region"
+                } else {
+                    "https:// for public hosts; http:// is accepted only on a private network"
+                },
+            );
+            text(
+                ui,
+                if aws { "Region" } else { "Region (optional)" },
+                &mut b.region,
+                if aws { "eu-west-1" } else { "us-east-1" },
+            );
+            ui.add_space(4.0);
+        }
+        text(ui, "Bucket name", &mut b.bucket, "tma-cloud-files");
+        ui.add_space(4.0);
+        if b.provider == "s3" {
+            ui.checkbox(&mut b.force_path_style, "Path-style addressing");
+            parts::hint(ui, "Needed by RustFS and MinIO unless they serve buckets on their own subdomains");
+        }
+        let masked = summary.as_ref().and_then(|s| s.access_key_id_masked.clone());
+        let keep_key = masked.map(|m| format!("Keep {m}")).unwrap_or_default();
+        text(ui, "Access key ID", &mut b.access_key_id, if configured { &keep_key } else { "" });
+        ui.add_space(4.0);
+        parts::secret_field(
+            ui,
+            "Secret access key",
+            &mut b.secret_access_key,
+            if configured { "Keep the saved secret" } else { "" },
+        );
+        if configured {
+            ui.add_space(4.0);
+            parts::note(
+                ui,
+                Tone::Neutral,
+                "Leave both keys blank to keep the saved ones. A different endpoint or bucket is only accepted if it already holds the files stored so far.",
+            );
+        }
+        if *b != before {
+            f.bucket_result = None;
+        }
+        if let Some(result) = &f.bucket_result {
+            ui.add_space(4.0);
+            result_box(ui, result);
+        }
+        widgets::dialog_footer(ui, |ui| {
+            let saving = if busy == Some("storage-save") { "Verifying and saving…" } else { "Save" };
+            save_now = widgets::primary_enabled(ui, !working, saving).clicked();
+            let testing = if busy == Some("storage-test") { "Testing…" } else { "Test connection" };
+            test = ui.add_enabled(!working, egui::Button::new(testing)).clicked();
+            if configured {
+                cancel = ui.add_enabled(!working, egui::Button::new("Cancel")).clicked();
             }
         });
     });
+    if !open && let Some(s) = summary.as_ref().filter(|s| s.configured) {
+        let endpoint = s.endpoint.clone().unwrap_or_default();
+        let key = s.access_key_id_masked.clone().unwrap_or_default();
+        ui.label(
+            RichText::new(format!("{endpoint} · access key {key}"))
+                .size(11.5)
+                .monospace()
+                .color(widgets::tokens(ui).label_tertiary),
+        );
+    }
+    if clicked
+        && main.settings.toggle_card("bucket")
+        && let Some(s) = &summary
+    {
+        main.settings.forms.bucket = BucketForm::from_summary(s);
+        main.settings.forms.bucket_result = None;
+    }
+    if cancel {
+        main.settings.open.remove("bucket");
+        main.settings.forms.bucket_result = None;
+    }
+    if !(test || save_now) {
+        return;
+    }
+    let form = main.settings.forms.bucket.clone();
+    if let Some(problem) = form.problem(configured) {
+        main.settings.forms.bucket_result = Some(CheckResult { message: problem.into(), ..Default::default() });
+        return;
+    }
+    if test {
+        let input = form.to_input(None);
+        attempt(
+            tasks,
+            main,
+            "storage-test",
+            move |c| async move { c.test_storage_config(&input).await },
+            |main, _, result| {
+                main.settings.forms.bucket_result = Some(match result {
+                    Ok(r) => CheckResult {
+                        ok: true,
+                        message: "Connection works. Save to start using this bucket.".into(),
+                        step: None,
+                        checks: r.checks,
+                    },
+                    Err(err) => CheckResult::failed(&err),
+                });
+            },
+        );
+    } else {
+        let input = form.to_input(summary.as_ref().map(|s| s.version));
+        attempt(
+            tasks,
+            main,
+            "storage-save",
+            move |c| async move { c.save_storage_config(&input).await },
+            |main, toasts, result| match result {
+                Ok(summary) => {
+                    main.settings.forms.bucket = BucketForm::from_summary(&summary);
+                    main.settings.forms.bucket_result = None;
+                    main.settings.storage = Some(summary);
+                    main.settings.open.remove("bucket");
+                    main.instance.storage_configured = true;
+                    toasts.success("Storage connected");
+                }
+                Err(err) => main.settings.forms.bucket_result = Some(CheckResult::failed(&err)),
+            },
+        );
+    }
 }

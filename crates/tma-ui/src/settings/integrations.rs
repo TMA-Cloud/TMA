@@ -1,235 +1,254 @@
-//! Integrations and limits (first user only): OnlyOffice, the share link
-//! address, the upload size limit, Google sign-in and Cloud Drive mode.
+//! Integrations (first user only), each a collapsible card: Google sign-in,
+//! OnlyOffice and the share link address.
 
 use egui::RichText;
 use tma_core::api::GoogleAuthInput;
 
-use super::{fetch, save, section};
+use super::parts::{self, FormAction, Tone};
+use super::{fetch, forms, save};
 use crate::app::Main;
+use crate::icons::ph;
 use crate::tasks::Tasks;
 use crate::widgets;
 
-const GIB: f64 = 1024.0 * 1024.0 * 1024.0;
-
 pub fn load(main: &mut Main, tasks: &Tasks) {
-    fetch(
-        tasks,
-        main,
-        |c| async move { c.onlyoffice_config().await },
-        |s, v| {
-            s.forms.onlyoffice_url = v.url.clone().unwrap_or_default();
-            s.forms.onlyoffice_secret.clear();
-            s.onlyoffice = Some(v);
-        },
-    );
-    fetch(
-        tasks,
-        main,
-        |c| async move { c.share_base_url().await },
-        |s, v| {
-            s.forms.share_url = v.url.clone().unwrap_or_default();
-            s.share_url = Some(v);
-        },
-    );
-    fetch(
-        tasks,
-        main,
-        |c| async move { c.max_upload().await },
-        |s, v| {
-            s.forms.max_upload_gb = format!("{}", (v.max_bytes as f64 / GIB * 100.0).round() / 100.0);
-            s.max_upload = Some(v);
-        },
-    );
-    fetch(
-        tasks,
-        main,
-        |c| async move { c.google_config().await },
-        |s, v| {
-            s.forms.google = GoogleAuthInput {
-                client_id: v.client_id.clone().unwrap_or_default(),
-                client_secret: None,
-                redirect_uri: v.redirect_uri.clone().unwrap_or_default(),
-                expected_version: Some(v.version),
-            };
-            s.google = Some(v);
-        },
-    );
-    fetch(tasks, main, |c| async move { c.cloud_drive_config().await }, |s, v| s.cloud_drive = Some(v));
+    fetch(tasks, main, |c| async move { c.onlyoffice_config().await }, |s, v| s.onlyoffice = Some(v));
+    fetch(tasks, main, |c| async move { c.share_base_url().await }, |s, v| s.share_url = Some(v));
+    fetch(tasks, main, |c| async move { c.google_config().await }, |s, v| s.google = Some(v));
 }
 
 pub fn show(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
-    let t = widgets::tokens(ui);
-    let busy = main.settings.busy;
-    let oo_set = main.settings.onlyoffice.as_ref().is_some_and(|o| o.url.is_some() && o.jwt_secret_set);
-    section(ui, "OnlyOffice", "Open and edit documents, spreadsheets and presentations in the browser.", |ui| {
-        if oo_set {
-            widgets::badge(ui, "Configured", t.positive_text);
-            ui.add_space(6.0);
+    google(main, ui, tasks);
+    onlyoffice(main, ui, tasks);
+    share_url(main, ui, tasks);
+}
+
+fn google(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
+    let summary = main.settings.google.clone();
+    let configured = summary.as_ref().is_some_and(|g| g.configured);
+    let status =
+        summary.as_ref().map(|_| if configured { (Tone::Success, "On".into()) } else { (Tone::Info, "Off".into()) });
+    let open = main.settings.open.contains("google");
+    let busy = main.settings.busy == Some("google");
+    let mut action = None;
+    let mut turn_off = false;
+    let clicked = parts::config_card(
+        ui,
+        ph::SIGN_IN,
+        "Google sign-in",
+        "Let people sign in with their Google account",
+        status,
+        open,
+        |ui| {
+            let f = &mut main.settings.forms;
+            widgets::field(ui, "Authorized redirect URI", &mut f.google.redirect_uri, false, "");
+            parts::hint(
+                ui,
+                "In Google Cloud, create an OAuth client of type Web application and add this exact URI under Authorized redirect URIs. Google allows plain http only for localhost.",
+            );
+            widgets::field(
+                ui,
+                "Client ID",
+                &mut f.google.client_id,
+                false,
+                "123456789-abc123.apps.googleusercontent.com",
+            );
+            parts::hint(ui, "Ends in .apps.googleusercontent.com");
+            parts::secret_field(
+                ui,
+                "Client secret",
+                &mut f.google_secret,
+                if configured { "Saved" } else { "GOCSPX-…" },
+            );
+            parts::hint(
+                ui,
+                if configured {
+                    "Leave empty to keep the saved secret. It is stored encrypted and never shown again."
+                } else {
+                    "Stored encrypted and never shown again."
+                },
+            );
+            if let Some(at) = summary.as_ref().filter(|_| configured).and_then(|g| g.updated_at) {
+                parts::readonly(ui, "Last changed", &tma_core::format::full_date(at), "");
+            }
+            ui.label(widgets::muted(ui, "Saving checks the client ID and secret with Google first. Accounts that sign in with Google for the first time are created only while signup is allowed.").size(12.0));
+            ui.horizontal(|ui| {
+                if configured {
+                    let t = widgets::tokens(ui);
+                    let label = if busy { "Turning off…" } else { "Turn off Google sign-in" };
+                    turn_off = ui
+                        .add_enabled(!busy, egui::Button::new(RichText::new(label).color(t.destructive_text)))
+                        .clicked();
+                }
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    action = parts::form_actions(ui, busy, "Check and save", "Checking…");
+                });
+            });
+        },
+    );
+    if clicked && main.settings.toggle_card("google") {
+        let g = summary.clone().unwrap_or_default();
+        main.settings.forms.google = GoogleAuthInput {
+            client_id: g.client_id.unwrap_or_default(),
+            client_secret: None,
+            redirect_uri: g.redirect_uri.unwrap_or_else(|| forms::redirect_uri_for(main.client.base_url())),
+            expected_version: Some(g.version),
+        };
+        main.settings.forms.google_secret.clear();
+    }
+    if turn_off {
+        let version = summary.as_ref().map(|g| g.version);
+        save(
+            tasks,
+            main,
+            "google",
+            move |c| async move { c.clear_google_config(version).await },
+            |main, toasts, v| {
+                main.settings.google = Some(v);
+                main.settings.open.remove("google");
+                toasts.success("Google sign-in is off");
+            },
+        );
+    }
+    match action {
+        Some(FormAction::Cancel) => {
+            main.settings.open.remove("google");
+        }
+        Some(FormAction::Save) => {
+            let f = &main.settings.forms;
+            let input = GoogleAuthInput {
+                client_id: f.google.client_id.trim().to_string(),
+                client_secret: Some(f.google_secret.trim().to_string()).filter(|s| !s.is_empty()),
+                redirect_uri: f.google.redirect_uri.trim().to_string(),
+                expected_version: summary.as_ref().map(|g| g.version),
+            };
+            save(
+                tasks,
+                main,
+                "google",
+                move |c| async move { c.save_google_config(&input).await },
+                |main, toasts, v| {
+                    main.settings.google = Some(v);
+                    main.settings.forms.google_secret.clear();
+                    main.settings.open.remove("google");
+                    toasts.success("Google sign-in is on");
+                },
+            );
+        }
+        None => {}
+    }
+}
+
+fn onlyoffice(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
+    let summary = main.settings.onlyoffice.clone();
+    let configured = summary.as_ref().is_some_and(|o| o.url.is_some() && o.jwt_secret_set);
+    let status = summary
+        .as_ref()
+        .map(|_| if configured { (Tone::Success, "Configured".into()) } else { (Tone::Info, "Not set up".into()) });
+    let open = main.settings.open.contains("onlyoffice");
+    let busy = main.settings.busy == Some("onlyoffice");
+    let mut action = None;
+    let description = "Edit and view documents, spreadsheets and presentations in the browser";
+    let clicked = parts::config_card(ui, ph::FILE_TEXT, "OnlyOffice", description, status, open, |ui| {
+        if configured {
+            parts::note(
+                ui,
+                Tone::Info,
+                "To update, enter both the URL and the JWT secret again. To turn it off, clear both fields.",
+            );
+            ui.add_space(4.0);
         }
         let f = &mut main.settings.forms;
-        widgets::field(ui, "Document Server URL", &mut f.onlyoffice_url, false, "https://office.example.com");
-        let hint =
-            if oo_set { "Leave blank to keep the saved secret" } else { "The JWT secret set on the Document Server" };
-        widgets::field(ui, "JWT secret", &mut f.onlyoffice_secret, true, hint);
-        ui.add_space(6.0);
-        let (url, secret) = (
-            f.onlyoffice_url.trim().to_string(),
-            Some(f.onlyoffice_secret.trim().to_string()).filter(|s| !s.is_empty()),
-        );
-        if widgets::primary_enabled(ui, busy.is_none(), "Save OnlyOffice").clicked() {
+        widgets::field(ui, "Document Server URL", &mut f.onlyoffice_url, false, "https://documentserver.example.com");
+        parts::hint(ui, "Base URL of your OnlyOffice Document Server");
+        parts::secret_field(ui, "JWT secret", &mut f.onlyoffice_secret, "Enter JWT secret");
+        parts::hint(ui, "Secret key for signing OnlyOffice requests");
+        action = parts::form_actions(ui, busy, "Save", "Saving…");
+    });
+    if clicked && main.settings.toggle_card("onlyoffice") {
+        main.settings.forms.onlyoffice_url = summary.and_then(|o| o.url).unwrap_or_default();
+        main.settings.forms.onlyoffice_secret.clear();
+    }
+    match action {
+        Some(FormAction::Cancel) => {
+            main.settings.open.remove("onlyoffice");
+        }
+        Some(FormAction::Save) => {
+            let f = &main.settings.forms;
+            let url = f.onlyoffice_url.trim().to_string();
+            let secret = Some(f.onlyoffice_secret.trim().to_string()).filter(|s| !s.is_empty());
             save(
                 tasks,
                 main,
                 "onlyoffice",
                 move |c| async move { c.save_onlyoffice_config(&url, secret.as_deref()).await },
                 |main, toasts, v| {
-                    main.instance.onlyoffice = v.url.is_some() && v.jwt_secret_set;
+                    let on = v.url.is_some() && v.jwt_secret_set;
+                    main.instance.onlyoffice = on;
                     main.settings.forms.onlyoffice_secret.clear();
                     main.settings.onlyoffice = Some(v);
-                    toasts.success("OnlyOffice saved");
+                    main.settings.open.remove("onlyoffice");
+                    toasts.success(if on { "OnlyOffice saved" } else { "OnlyOffice turned off" });
                 },
             );
         }
+        None => {}
+    }
+}
+
+fn share_url(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
+    let saved = main.settings.share_url.clone();
+    let url = saved.as_ref().and_then(|s| s.url.clone()).filter(|u| !u.is_empty());
+    let status = saved.as_ref().map(|_| match &url {
+        Some(_) => (Tone::Success, "Configured".to_string()),
+        None => (Tone::Info, "Using sign-in address".to_string()),
     });
-    section(
+    let open = main.settings.open.contains("share");
+    let busy = main.settings.busy == Some("share-url");
+    let mut action = None;
+    let clicked = parts::config_card(
         ui,
+        ph::LINK,
         "Share link address",
-        "Public share links use this address instead of the one people sign in at.",
+        "A custom base URL for public share links",
+        status,
+        open,
         |ui| {
-            widgets::field(ui, "Base URL", &mut main.settings.forms.share_url, false, "https://share.example.com");
-            ui.add_space(6.0);
-            let url = main.settings.forms.share_url.trim().to_string();
-            if widgets::primary_enabled(ui, busy.is_none(), "Save address").clicked() {
-                save(
-                    tasks,
-                    main,
-                    "share-url",
-                    move |c| async move { c.save_share_base_url(&url).await },
-                    |main, toasts, v| {
-                        main.settings.share_url = Some(v);
-                        toasts.success("Saved");
-                    },
-                );
-            }
+            widgets::field(
+                ui,
+                "Share base URL",
+                &mut main.settings.forms.share_url,
+                false,
+                "https://share.example.com",
+            );
+            parts::hint(
+                ui,
+                "Public share links use this address. Leave it empty to use the address people sign in at.",
+            );
+            action = parts::form_actions(ui, busy, "Save", "Saving…");
         },
     );
-    section(ui, "Upload limit", "The largest single file anyone can upload.", |ui| {
-        ui.horizontal(|ui| {
-            widgets::text_edit(ui, &mut main.settings.forms.max_upload_gb, "10", 80.0);
-            ui.label("GB");
-        });
-        ui.add_space(6.0);
-        let bytes = main
-            .settings
-            .forms
-            .max_upload_gb
-            .trim()
-            .parse::<f64>()
-            .ok()
-            .filter(|v| *v > 0.0)
-            .map(|gb| (gb * GIB) as i64);
-        if widgets::primary_enabled(ui, busy.is_none() && bytes.is_some(), "Save limit").clicked()
-            && let Some(bytes) = bytes
-        {
+    if clicked && main.settings.toggle_card("share") {
+        main.settings.forms.share_url = url.unwrap_or_default();
+    }
+    match action {
+        Some(FormAction::Cancel) => {
+            main.settings.open.remove("share");
+        }
+        Some(FormAction::Save) => {
+            let url = main.settings.forms.share_url.trim().to_string();
             save(
                 tasks,
                 main,
-                "max-upload",
-                move |c| async move { c.save_max_upload(bytes).await },
+                "share-url",
+                move |c| async move { c.save_share_base_url(&url).await },
                 |main, toasts, v| {
-                    main.instance.max_upload = v.max_bytes;
-                    main.settings.max_upload = Some(v);
-                    toasts.success("Saved");
+                    main.settings.share_url = Some(v);
+                    main.settings.open.remove("share");
+                    toasts.success("Share link address saved");
                 },
             );
         }
-    });
-    let google_on = main.settings.google.as_ref().is_some_and(|g| g.configured);
-    section(
-        ui,
-        "Google sign-in",
-        "Let people sign in with their Google account. The client is verified with Google before saving.",
-        |ui| {
-            if google_on {
-                widgets::badge(ui, "Enabled", t.positive_text);
-                ui.add_space(6.0);
-            }
-            let g = &mut main.settings.forms.google;
-            widgets::field(ui, "Client ID", &mut g.client_id, false, "1234.apps.googleusercontent.com");
-            let mut secret = g.client_secret.clone().unwrap_or_default();
-            if widgets::field(
-                ui,
-                "Client secret",
-                &mut secret,
-                true,
-                if google_on { "Leave blank to keep the saved secret" } else { "" },
-            )
-            .changed()
-            {
-                g.client_secret = Some(secret).filter(|s| !s.is_empty());
-            }
-            widgets::field(
-                ui,
-                "Redirect URI",
-                &mut g.redirect_uri,
-                false,
-                "https://cloud.example.com/api/google/callback",
-            );
-            ui.add_space(6.0);
-            let input = g.clone();
-            ui.horizontal(|ui| {
-                if widgets::primary_enabled(ui, busy.is_none(), "Save Google sign-in").clicked() {
-                    save(
-                        tasks,
-                        main,
-                        "google",
-                        move |c| async move { c.save_google_config(&input).await },
-                        |main, toasts, v| {
-                            main.settings.forms.google.expected_version = Some(v.version);
-                            main.settings.forms.google.client_secret = None;
-                            main.settings.google = Some(v);
-                            toasts.success("Google sign-in saved");
-                        },
-                    );
-                }
-                if google_on && widgets::ghost(ui, RichText::new("Turn off").color(t.destructive_text)).clicked() {
-                    let version = main.settings.google.as_ref().map(|g| g.version);
-                    save(
-                        tasks,
-                        main,
-                        "google",
-                        move |c| async move { c.clear_google_config(version).await },
-                        |main, toasts, v| {
-                            main.settings.google = Some(v);
-                            toasts.success("Google sign-in turned off");
-                        },
-                    );
-                }
-            });
-        },
-    );
-    if let Some(drive) = main.settings.cloud_drive {
-        section(ui, "Cloud Drive", "How the desktop app's Windows drive behaves for everyone.", |ui| {
-            let mut save_only = drive.save_only;
-            widgets::setting_row(
-                ui,
-                "Save-only drive",
-                "Apps can save new files into the drive but cannot open existing ones from it.",
-                |ui| {
-                    if widgets::toggle(ui, &mut save_only).changed() {
-                        save(
-                            tasks,
-                            main,
-                            "cloud-drive",
-                            move |c| async move { c.set_cloud_drive_save_only(save_only).await },
-                            |main, toasts, v| {
-                                main.settings.cloud_drive = Some(v);
-                                toasts.success("Saved");
-                            },
-                        );
-                    }
-                },
-            );
-        });
+        None => {}
     }
 }

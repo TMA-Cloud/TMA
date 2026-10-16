@@ -181,6 +181,24 @@ pub async fn save_path(suggested: String) -> Option<std::path::PathBuf> {
         .map(|h| h.path().to_path_buf())
 }
 
+/// Save text as a file the user keeps; false when they cancelled.
+#[cfg(not(target_arch = "wasm32"))]
+pub async fn save_text(name: String, content: String) -> Result<bool, String> {
+    let Some(path) = save_path(name).await else { return Ok(false) };
+    std::fs::write(&path, content).map(|_| true).map_err(|e| e.to_string())
+}
+
+/// Save text as a file the user keeps: the browser downloads it.
+#[cfg(target_arch = "wasm32")]
+pub async fn save_text(name: String, content: String) -> Result<bool, String> {
+    let parts = js_sys::Array::of1(&wasm_bindgen::JsValue::from_str(&content));
+    let blob = web_sys::Blob::new_with_str_sequence(&parts).map_err(|_| "Cannot build the file".to_string())?;
+    let url = web_sys::Url::create_object_url_with_blob(&blob).map_err(|_| "Cannot build the file".to_string())?;
+    // Not revoked: some browsers read the URL after the click returns.
+    browser_download(&url, &name);
+    Ok(true)
+}
+
 /// Show TMA Cloud's own pointers over the page, from the light or dark set.
 #[cfg(target_arch = "wasm32")]
 pub fn use_app_cursors(dark: bool) {

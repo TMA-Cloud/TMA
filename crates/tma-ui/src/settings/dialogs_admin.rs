@@ -1,246 +1,343 @@
-//! Administration dialogs: every user with storage limits, desktop clients
-//! online now, and the orphan review.
+//! Administration dialogs: every account with its storage and limit, and the
+//! desktop clients online now.
 
-use egui::RichText;
+use egui::{Key, RichText};
+use tma_core::api::AdminUser;
 
-use super::dialogs::OrphanState;
-use super::save;
+use super::forms::{self, Unit};
+use super::parts::{self, Tone};
+use super::{LimitEdit, fetch, save};
 use crate::app::Main;
 use crate::icons::ph;
 use crate::tasks::Tasks;
 use crate::theme::Weight;
 use crate::widgets;
 
-const GIB: f64 = 1024.0 * 1024.0 * 1024.0;
+pub fn load_users(main: &mut Main, tasks: &Tasks) {
+    main.settings.users = None;
+    main.settings.limit_edit = None;
+    fetch(tasks, main, |c| async move { c.users(None).await }, |s, v| s.users = Some(v));
+}
 
-pub fn users(ui: &mut egui::Ui, main: &mut Main, tasks: &Tasks, keep: &mut bool) {
-    let t = widgets::tokens(ui);
-    ui.label(RichText::new("Registered users").size(17.0).semibold());
-    ui.add_space(8.0);
-    let Some(page) = main.settings.users.clone() else {
-        ui.spinner();
+pub fn load_clients(main: &mut Main, tasks: &Tasks) {
+    main.settings.clients = None;
+    fetch(tasks, main, |c| async move { c.active_clients().await }, |s, v| s.clients = Some(v));
+}
+
+fn load_more(main: &mut Main, tasks: &Tasks) {
+    let Some(cursor) = main.settings.users.as_ref().and_then(|p| p.next_cursor.clone()) else { return };
+    if main.settings.users_more {
         return;
-    };
-    let mut set_limit: Option<(String, Option<i64>)> = None;
-    egui::ScrollArea::vertical().max_height(420.0).show(ui, |ui| {
-        egui::Grid::new("users").num_columns(6).striped(true).spacing([14.0, 8.0]).show(ui, |ui| {
-            for h in ["Name", "Email", "Storage", "Limit", "MFA", "Joined"] {
-                ui.label(RichText::new(h).size(11.0).semibold().color(t.label_tertiary));
-            }
-            ui.end_row();
-            for user in &page.users {
-                let sub = user.parent_user_id.is_some();
-                ui.horizontal(|ui| {
-                    if sub {
-                        ui.label(RichText::new("↳").color(t.label_tertiary));
-                    }
-                    ui.label(user.name.clone().unwrap_or_default());
-                    if sub {
-                        widgets::badge(ui, "Sub-user", t.accent);
-                    }
-                });
-                ui.label(&user.email);
-                ui.label(if sub {
-                    "Shares owner's".to_string()
-                } else {
-                    tma_core::format::file_size(user.storage_used)
-                });
-                if sub {
-                    ui.label(RichText::new("Inherited").color(t.label_tertiary));
-                } else {
-                    let id = egui::Id::new(("limit", &user.id));
-                    let mut text = ui.data_mut(|d| d.get_temp::<String>(id)).unwrap_or_else(|| {
-                        user.storage_limit
-                            .map(|l| format!("{}", (l as f64 / GIB * 100.0).round() / 100.0))
-                            .unwrap_or_default()
-                    });
-                    let r = ui.add(egui::TextEdit::singleline(&mut text).desired_width(70.0).hint_text("No limit"));
-                    if r.changed() {
-                        ui.data_mut(|d| d.insert_temp(id, text.clone()));
-                    }
-                    if r.lost_focus() {
-                        let limit = text.trim().parse::<f64>().ok().filter(|v| *v > 0.0).map(|gb| (gb * GIB) as i64);
-                        if limit != user.storage_limit {
-                            set_limit = Some((user.id.clone(), limit));
-                        }
-                        ui.data_mut(|d| d.remove::<String>(id));
-                    }
-                }
-                ui.label(if user.mfa_enabled {
-                    RichText::new("On").color(t.positive_text)
-                } else {
-                    RichText::new("Off").color(t.label_tertiary)
-                });
-                ui.label(user.created_at.format("%b %-d, %Y").to_string());
-                ui.end_row();
+    }
+    main.settings.users_more = true;
+    let generation = main.generation;
+    let client = main.client.clone();
+    tasks.run(async move { client.users(Some(&cursor)).await }, move |app, result| {
+        if let Some(main) = app.main_mut(generation) {
+            main.settings.users_more = false;
+        }
+        app.finish(generation, result, |main, _, page| {
+            if let Some(list) = &mut main.settings.users {
+                let fresh: Vec<AdminUser> =
+                    page.users.into_iter().filter(|u| !list.users.iter().any(|k| k.id == u.id)).collect();
+                list.users.extend(fresh);
+                list.next_cursor = page.next_cursor;
             }
         });
     });
-    if let Some((id, limit)) = set_limit {
-        save(
-            tasks,
-            main,
-            "limit",
-            move |c| async move {
-                c.set_storage_limit(&id, limit).await?;
-                c.users(None).await
-            },
-            |main, toasts, page| {
-                main.settings.users = Some(page);
-                toasts.success("Storage limit saved");
+}
+
+/// Save a limit (None removes it) and reload the list.
+fn set_limit(main: &mut Main, tasks: &Tasks, user_id: String, limit: Option<i64>) {
+    let own = user_id == main.user.id;
+    save(
+        tasks,
+        main,
+        "limit",
+        move |c| async move {
+            c.set_storage_limit(&user_id, limit).await?;
+            c.users(None).await
+        },
+        move |main, toasts, page| {
+            main.settings.users = Some(page);
+            main.settings.limit_edit = None;
+            main.settings.limit_error = None;
+            toasts.success(if limit.is_some() { "Storage limit updated" } else { "Storage limit removed" });
+            if own {
+                main.instance.usage = None;
+                main.settings.reload_usage = true;
+            }
+        },
+    );
+}
+
+fn mfa_label(ui: &mut egui::Ui, on: bool) {
+    let t = widgets::tokens(ui);
+    let (icon, text, color) =
+        if on { (ph::SHIELD_CHECK, "Enabled", t.positive_text) } else { (ph::SHIELD, "Disabled", t.label_tertiary) };
+    ui.label(RichText::new(format!("{icon} {text}")).size(12.0).color(color));
+}
+
+/// The limit cell: the value with an edit button, or the editor.
+fn limit_cell(ui: &mut egui::Ui, main: &mut Main, tasks: &Tasks, user: &AdminUser) {
+    let busy = main.settings.busy == Some("limit");
+    let editing = main.settings.limit_edit.as_ref().is_some_and(|e| e.user_id == user.id);
+    if !editing {
+        ui.horizontal(|ui| {
+            let value = user.storage_limit.filter(|l| *l > 0).map(tma_core::format::file_size);
+            ui.label(RichText::new(value.unwrap_or_else(|| "Default".into())).size(12.0));
+            if ui
+                .add_enabled(!busy, egui::Button::new(ph::PENCIL_SIMPLE).frame(false))
+                .on_hover_text("Edit storage limit")
+                .clicked()
+            {
+                let (value, unit) = forms::split_size(user.storage_limit, Unit::Tb);
+                main.settings.limit_edit = Some(LimitEdit { user_id: user.id.clone(), value, unit });
+                main.settings.limit_error = None;
+            }
+        });
+        return;
+    }
+    let Some(edit) = &mut main.settings.limit_edit else { return };
+    let mut action = None;
+    ui.horizontal(|ui| {
+        let r = ui.add_enabled(!busy, egui::TextEdit::singleline(&mut edit.value).desired_width(64.0).hint_text("0"));
+        if r.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter)) {
+            action = Some("save");
+        }
+        if ui.input(|i| i.key_pressed(Key::Escape)) {
+            action = Some("cancel");
+        }
+        egui::ComboBox::from_id_salt(("unit", &user.id)).selected_text(edit.unit.label()).width(54.0).show_ui(
+            ui,
+            |ui| {
+                for unit in Unit::ALL {
+                    ui.selectable_value(&mut edit.unit, unit, unit.label());
+                }
             },
         );
-    }
-    ui.add_space(8.0);
-    ui.label(widgets::muted(ui, "Limits are in GB; leave empty for no limit."));
-    ui.add_space(8.0);
-    if widgets::primary(ui, "Done").clicked() {
-        *keep = false;
-    }
-}
-
-pub fn clients(ui: &mut egui::Ui, main: &mut Main, keep: &mut bool) {
-    let t = widgets::tokens(ui);
-    ui.label(RichText::new("Active desktop clients").size(17.0).semibold());
-    ui.add_space(8.0);
-    match &main.settings.clients {
-        None => {
-            ui.spinner();
+        if ui.add_enabled(!busy, egui::Button::new(ph::CHECK).frame(false)).on_hover_text("Save").clicked() {
+            action = Some("save");
         }
-        Some(list) if list.clients.is_empty() => {
-            ui.label(widgets::muted(ui, "No desktop app has checked in during the last 5 minutes."));
+        if ui
+            .add_enabled(!busy, egui::Button::new(ph::ARROW_COUNTER_CLOCKWISE).frame(false))
+            .on_hover_text("Reset to default")
+            .clicked()
+        {
+            action = Some("reset");
         }
-        Some(list) => {
-            let now = chrono::Utc::now();
-            for c in &list.clients {
-                ui.horizontal(|ui| {
-                    ui.label(RichText::new(ph::DESKTOP).size(18.0).color(t.label_tertiary));
-                    ui.vertical(|ui| {
-                        ui.label(
-                            RichText::new(c.user_name.clone().or(c.user_email.clone()).unwrap_or_default()).semibold(),
-                        );
-                        let detail = format!(
-                            "v{} · {} · {} · seen {}",
-                            c.app_version,
-                            c.platform.clone().unwrap_or_default(),
-                            c.ip_address.clone().unwrap_or_default(),
-                            tma_core::format::relative_date(c.last_seen_at, now)
-                        );
-                        ui.label(RichText::new(detail).size(11.0).color(t.label_tertiary));
-                    });
-                });
-                widgets::separator(ui);
-            }
-        }
-    }
-    ui.add_space(8.0);
-    if widgets::primary(ui, "Done").clicked() {
-        *keep = false;
-    }
-}
-
-pub fn orphans(ui: &mut egui::Ui, main: &mut Main, tasks: &Tasks, state: &mut OrphanState, keep: &mut bool) {
-    let t = widgets::tokens(ui);
-    ui.label(RichText::new("Orphaned files").size(17.0).semibold());
-    ui.label(widgets::muted(ui, "Objects in the bucket with no file record, and records whose object is missing. Recent items are skipped so uploads in progress are never touched."));
-    ui.add_space(8.0);
-    ui.horizontal(|ui| {
-        ui.label("Skip items newer than");
-        widgets::text_edit(ui, &mut state.grace_hours, "24", 50.0);
-        ui.label("hours");
-        let grace = state.grace_hours.trim().parse::<i64>().ok().map(|h| h * 60);
-        if widgets::secondary(ui, if state.scanning { "Scanning…" } else { "Scan" }).clicked() && !state.scanning {
-            state.scanning = true;
-            state.keys.clear();
-            state.ids.clear();
-            save(
-                tasks,
-                main,
-                "orphans",
-                move |c| async move { c.scan_orphans(grace).await },
-                |main, _, report| {
-                    main.settings.orphans = Some(report);
-                    if let Some(super::dialogs::Dialog::Orphans(s)) = &mut main.settings.dialog {
-                        s.scanning = false;
-                    }
-                },
-            );
+        if ui.add_enabled(!busy, egui::Button::new(ph::X).frame(false)).on_hover_text("Cancel").clicked() {
+            action = Some("cancel");
         }
     });
-    if main.settings.busy != Some("orphans") {
-        state.scanning = false;
+    let (value, unit) = (edit.value.clone(), edit.unit);
+    match action {
+        Some("cancel") => main.settings.limit_edit = None,
+        Some("reset") => set_limit(main, tasks, user.id.clone(), None),
+        Some(_) if value.trim().is_empty() => set_limit(main, tasks, user.id.clone(), None),
+        Some(_) => match forms::size_bytes(&value, unit) {
+            None => main.settings.limit_error = Some("Enter a positive number".into()),
+            Some(bytes) if bytes < user.storage_used => {
+                main.settings.limit_error = Some(format!(
+                    "The limit can't be below the {} already stored",
+                    tma_core::format::file_size(user.storage_used)
+                ));
+            }
+            Some(bytes) => set_limit(main, tasks, user.id.clone(), Some(bytes)),
+        },
+        None => {}
     }
-    let Some(report) = main.settings.orphans.clone() else {
-        if state.scanning {
-            ui.spinner();
+}
+
+pub fn users(ui: &mut egui::Ui, main: &mut Main, tasks: &Tasks, keep: &mut bool) {
+    let t = widgets::tokens(ui);
+    let page = main.settings.users.clone();
+    let rows = page.as_ref().map(|p| forms::account_rows(&p.users)).unwrap_or_default();
+    let count = match &page {
+        None => "Loading users…".to_string(),
+        Some(p) if p.users.is_empty() => "No users to display yet".into(),
+        Some(p) => {
+            let accounts = rows.iter().filter(|(_, owner)| owner.is_none()).count();
+            let subs = p.users.len() - accounts;
+            let base = tma_core::format::count(accounts, "account", "accounts");
+            if subs > 0 {
+                format!("{base} · {}", tma_core::format::count(subs, "sub-user", "sub-users"))
+            } else {
+                format!("{base} total")
+            }
         }
-        ui.add_space(8.0);
-        if widgets::secondary(ui, "Close").clicked() {
-            *keep = false;
-        }
+    };
+    if parts::count_header(ui, &count, page.is_none()) {
+        load_users(main, tasks);
+    }
+    let Some(page) = page else {
+        ui.vertical_centered(|ui| ui.spinner());
         return;
     };
-    ui.add_space(8.0);
-    ui.label(format!(
-        "Scanned {} objects and {} records; {} too recent to judge.",
-        report.totals.stored_objects, report.totals.database_rows, report.totals.skipped_too_recent
-    ));
-    egui::ScrollArea::vertical().max_height(360.0).show(ui, |ui| {
-        widgets::section_title(
-            ui,
-            &format!(
-                "Stored without a record ({}, {})",
-                report.storage_orphans.count,
-                tma_core::format::file_size(report.storage_orphans.total_bytes)
-            ),
-        );
-        for item in &report.storage_orphans.items {
-            let mut on = state.keys.contains(&item.key);
-            if ui.checkbox(&mut on, format!("{}  ·  {}", item.key, tma_core::format::file_size(item.size))).changed() {
-                if on {
-                    state.keys.insert(item.key.clone());
-                } else {
-                    state.keys.remove(&item.key);
+    if !page.users.is_empty() {
+        let (on, off, percent) = forms::mfa_adoption(&page.users);
+        ui.add_space(6.0);
+        widgets::card(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.label(RichText::new(format!("{}  MFA statistics", ph::SHIELD)).semibold());
+            ui.columns(3, |cols| {
+                for (col, (label, value)) in cols.iter_mut().zip([
+                    ("Enabled", on.to_string()),
+                    ("Disabled", off.to_string()),
+                    ("Adoption", format!("{percent}%")),
+                ]) {
+                    col.label(RichText::new(label).size(12.0).color(t.label_secondary));
+                    col.label(RichText::new(value).size(16.0).bold());
                 }
+            });
+        });
+    }
+    if let Some(error) = main.settings.limit_error.clone() {
+        widgets::error_text(ui, &error);
+    }
+    ui.add_space(6.0);
+    let mut reached_end = false;
+    egui::ScrollArea::both().max_height(ui.ctx().content_rect().height() * 0.5).show(ui, |ui| {
+        egui::Grid::new("users").num_columns(6).striped(true).spacing([16.0, 8.0]).show(ui, |ui| {
+            for h in ["Name", "Email", "Storage", "Limit", "MFA", "Joined"] {
+                ui.label(RichText::new(h).size(11.5).semibold().color(t.label_tertiary));
             }
-        }
-        widgets::section_title(ui, &format!("Records without a stored file ({})", report.database_orphans.count));
-        for item in &report.database_orphans.items {
-            let mut on = state.ids.contains(&item.id);
-            let owner = item.owner_email.clone().unwrap_or_default();
-            if ui.checkbox(&mut on, format!("{}  ·  {owner}", item.name)).changed() {
-                if on {
-                    state.ids.insert(item.id.clone());
-                } else {
-                    state.ids.remove(&item.id);
+            ui.end_row();
+            for &(index, owner) in &rows {
+                let user = &page.users[index];
+                let owner = owner.map(|o| &page.users[o]);
+                let name = user.name.clone().filter(|n| !n.is_empty()).unwrap_or_else(|| "Unnamed".into());
+                ui.horizontal(|ui| {
+                    if owner.is_some() {
+                        ui.add_space(10.0);
+                        ui.label(RichText::new(ph::ARROW_ELBOW_DOWN_RIGHT).color(t.label_tertiary));
+                    }
+                    ui.label(name);
+                    if owner.is_some() {
+                        parts::chip(ui, Tone::Neutral, "Sub-user");
+                    }
+                });
+                ui.label(&user.email);
+                match owner {
+                    Some(o) => {
+                        let label = o.name.clone().filter(|n| !n.is_empty()).unwrap_or_else(|| o.email.clone());
+                        ui.label(RichText::new(format!("Shares {label}")).size(12.0).color(t.label_tertiary));
+                    }
+                    None => {
+                        ui.vertical(|ui| {
+                            ui.add(
+                                egui::Label::new(
+                                    RichText::new(tma_core::format::file_size(user.storage_used)).semibold(),
+                                )
+                                .extend(),
+                            );
+                            if let Some(total) = user.storage_total.filter(|t| *t > 0) {
+                                let percent = (user.storage_used as f64 * 100.0 / total as f64).round();
+                                let text = format!("{percent}% of {}", tma_core::format::file_size(total));
+                                ui.add(
+                                    egui::Label::new(RichText::new(text).size(11.0).color(t.label_tertiary)).extend(),
+                                );
+                            }
+                        });
+                    }
                 }
+                if owner.is_some() {
+                    ui.label(RichText::new("Inherited").size(12.0).color(t.label_tertiary));
+                } else {
+                    limit_cell(ui, main, tasks, user);
+                }
+                mfa_label(ui, user.mfa_enabled);
+                ui.label(
+                    RichText::new(tma_core::format::full_date(user.created_at)).size(12.0).color(t.label_secondary),
+                );
+                ui.end_row();
             }
+        });
+        if page.next_cursor.is_some() {
+            let r = ui.horizontal(|ui| {
+                if main.settings.users_more {
+                    ui.spinner();
+                } else if ui.button("Load more").clicked() {
+                    reached_end = true;
+                }
+            });
+            reached_end |= ui.is_rect_visible(r.response.rect);
         }
     });
-    ui.add_space(10.0);
-    ui.horizontal(|ui| {
-        let selected = state.keys.len() + state.ids.len();
-        if widgets::danger(ui, format!("Delete {selected} selected")).clicked() && selected > 0 {
-            let (keys, ids): (Vec<String>, Vec<String>) =
-                (state.keys.iter().cloned().collect(), state.ids.iter().cloned().collect());
-            let grace = report.grace_minutes;
-            save(
-                tasks,
-                main,
-                "orphans",
-                move |c| async move { c.delete_orphans(&keys, &ids, grace).await },
-                |main, toasts, r| {
-                    toasts.success(format!(
-                        "Deleted {} object(s) and {} record(s)",
-                        r.storage.deleted, r.database.deleted
-                    ));
-                    main.settings.orphans = None;
-                },
-            );
-        }
-        if widgets::secondary(ui, "Close").clicked() {
+    if page.users.is_empty() {
+        ui.label(widgets::muted(ui, "Once people sign up, their accounts appear here."));
+    }
+    if reached_end {
+        load_more(main, tasks);
+    }
+    widgets::dialog_footer(ui, |ui| {
+        if widgets::primary(ui, "Done").clicked() {
             *keep = false;
         }
-        let _ = t;
+    });
+}
+
+pub fn clients(ui: &mut egui::Ui, main: &mut Main, tasks: &Tasks, keep: &mut bool) {
+    let t = widgets::tokens(ui);
+    let list = main.settings.clients.clone();
+    let count = list.as_ref().map_or("Loading clients…".to_string(), |l| match l.clients.len() {
+        0 => "No active desktop clients".into(),
+        n => tma_core::format::count(n, "active client", "active clients"),
+    });
+    if parts::count_header(ui, &count, list.is_none()) {
+        load_clients(main, tasks);
+    }
+    let Some(list) = list else {
+        ui.vertical_centered(|ui| ui.spinner());
+        return;
+    };
+    let groups = forms::version_groups(&list.clients);
+    if groups.len() > 1 {
+        ui.horizontal_wrapped(|ui| {
+            for (version, n) in &groups {
+                parts::chip(ui, Tone::Info, &format!("v{version} × {n}"));
+            }
+        });
+    }
+    if list.clients.is_empty() {
+        ui.add_space(6.0);
+        ui.label(widgets::muted(ui, "No desktop app has checked in during the last 5 minutes."));
+    }
+    egui::ScrollArea::vertical().max_height(ui.ctx().content_rect().height() * 0.55).show(ui, |ui| {
+        for c in &list.clients {
+            widgets::card(ui, |ui| {
+                ui.set_width(ui.available_width());
+                ui.horizontal_top(|ui| {
+                    ui.label(RichText::new(ph::DESKTOP).size(18.0).color(t.label_tertiary));
+                    ui.vertical(|ui| {
+                        ui.set_max_width(ui.available_width() - 90.0);
+                        let email = c.user_email.clone().unwrap_or_default();
+                        ui.label(RichText::new(c.user_name.clone().unwrap_or_else(|| email.clone())).semibold());
+                        let small = |text: String| RichText::new(text).size(11.5).color(t.label_tertiary);
+                        if c.user_name.is_some() {
+                            ui.label(small(email));
+                        }
+                        ui.label(small(format!(
+                            "Platform: {} · Version: v{}",
+                            forms::platform_label(c.platform.as_deref()),
+                            c.app_version
+                        )));
+                        if let Some(ip) = &c.ip_address {
+                            ui.label(small(format!("IP: {ip}")));
+                        }
+                        ui.label(small(format!("Last seen: {}", tma_core::format::full_date(c.last_seen_at))));
+                    });
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
+                        parts::chip(ui, Tone::Success, &format!("v{}", c.app_version));
+                    });
+                });
+            });
+            ui.add_space(4.0);
+        }
+    });
+    widgets::dialog_footer(ui, |ui| {
+        if widgets::primary(ui, "Done").clicked() {
+            *keep = false;
+        }
     });
 }

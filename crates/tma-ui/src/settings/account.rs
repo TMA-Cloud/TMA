@@ -1,200 +1,189 @@
-//! Profile and Security: the account's details, password, two-factor
-//! authentication and signed-in devices.
+//! Profile and Security: who you are signed in as, and what it takes to sign
+//! in: password, two-factor authentication and signed-in devices.
 
-use egui::RichText;
+use egui::{CornerRadius, Frame, Margin, RichText, Sense, Stroke, Vec2};
 
-use super::dialogs::Dialog;
-use super::{fetch, save, section};
+use super::dialogs::{Dialog, PasswordForm};
+use super::parts::{self, Tone};
+use super::{Page, fetch, save, section};
 use crate::app::Main;
-use crate::icons::ph;
+use crate::icons::{self, ph};
 use crate::tasks::Tasks;
+use crate::theme::Weight;
 use crate::widgets;
 
 pub fn load_security(main: &mut Main, tasks: &Tasks) {
     fetch(tasks, main, |c| async move { c.mfa_status().await }, |s, v| s.mfa = Some(v.enabled));
-    fetch(tasks, main, |c| async move { c.mfa_backup_count().await }, |s, v| s.backup_codes = Some(v));
     fetch(tasks, main, |c| async move { c.signup_status().await }, |s, v| s.signup = Some(v));
+    load_sessions(main, tasks);
+    if main.settings.mfa.unwrap_or(main.user.mfa_enabled) {
+        fetch(tasks, main, |c| async move { c.mfa_backup_count().await }, |s, v| s.backup_codes = Some(v));
+    }
 }
 
-fn row(ui: &mut egui::Ui, label: &str, value: &str) {
-    widgets::setting_row(ui, label, "", |ui| {
-        ui.label(value);
+pub fn load_sessions(main: &Main, tasks: &Tasks) {
+    fetch(tasks, main, |c| async move { c.sessions(true).await }, |s, v| s.sessions = Some(v.sessions));
+}
+
+fn row(ui: &mut egui::Ui, label: &str, description: &str, value: &str) {
+    widgets::setting_row(ui, label, description, |ui| {
+        ui.label(RichText::new(value).semibold());
     });
+}
+
+fn account_kind(main: &Main) -> &'static str {
+    if main.user.is_sub_user { "Sub-user" } else { "Account owner" }
+}
+
+/// Identity as a card: name, address and the kind of account.
+fn identity_card(ui: &mut egui::Ui, main: &Main) {
+    let t = widgets::tokens(ui);
+    Frame::new()
+        .fill(t.surface_raised)
+        .stroke(Stroke::new(1.0, t.separator))
+        .corner_radius(CornerRadius::same(18))
+        .inner_margin(Margin::symmetric(18, 16))
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.horizontal(|ui| {
+                let name = main.user.name.clone().filter(|n| !n.is_empty());
+                let (rect, _) = ui.allocate_exact_size(Vec2::splat(56.0), Sense::hover());
+                icons::avatar(ui.painter(), rect.center(), 28.0, name.as_deref().unwrap_or(&main.user.email), &t);
+                ui.add_space(8.0);
+                ui.vertical(|ui| {
+                    ui.set_max_width((ui.available_width() - 130.0).max(120.0));
+                    ui.add_space(6.0);
+                    let title = name.unwrap_or_else(|| "Unnamed account".into());
+                    ui.add(egui::Label::new(RichText::new(title).size(18.0).bold().color(t.label)).truncate());
+                    ui.add(
+                        egui::Label::new(RichText::new(&main.user.email).size(12.5).color(t.label_secondary))
+                            .truncate(),
+                    );
+                });
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    parts::chip(ui, Tone::Neutral, account_kind(main));
+                });
+            });
+        });
 }
 
 pub fn profile(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
-    let t = widgets::tokens(ui);
     widgets::heading(ui, ph::USER, "Profile", "Who you are signed in as.");
-    ui.add_space(12.0);
+    ui.add_space(8.0);
+    identity_card(ui, main);
     let user = main.user.clone();
-    section(ui, "Account details", "", |ui| {
-        row(ui, "Name", user.name.as_deref().unwrap_or("—"));
-        row(ui, "Email address", &user.email);
-        if let Some(created) = user.created_at {
-            row(ui, "Member since", &created.format("%B %-d, %Y").to_string());
-        }
-        let kind = if user.is_sub_user {
-            "Sub-user"
-        } else if main.instance.is_first_user {
-            "Administrator"
+    section(ui, "Account details", "Recorded when the account was created.", |ui| {
+        row(ui, "Email address", "Used to sign in", &user.email);
+        let since = user.created_at.map(|c| c.format("%B %-d, %Y").to_string()).unwrap_or_else(|| "Unknown".into());
+        row(ui, "Member since", "The day this account was created", &since);
+        let description = if user.is_sub_user {
+            "You share the owner's files and quota, with the permissions they granted"
         } else {
-            "Account owner"
+            "You own these files and can grant sub-users access to them"
         };
-        row(ui, "Account type", kind);
-        if user.is_sub_user {
-            ui.add_space(4.0);
-            ui.label(widgets::muted(ui, "You use the owner's files and storage with the permissions they granted."));
+        row(ui, "Account type", description, account_kind(main));
+        if main.instance.is_first_user {
+            row(ui, "Role", "The first account administers this server", "Administrator");
         }
     });
     let mfa = main.settings.mfa.unwrap_or(user.mfa_enabled);
-    section(ui, "Sign-in security", "", |ui| {
-        widgets::setting_row(
-            ui,
-            "Multi-factor authentication",
-            "Require a code from your phone when you sign in.",
-            |ui| {
-                if mfa {
-                    widgets::badge(ui, "Enabled", t.positive_text);
-                } else if widgets::secondary(ui, format!("{}  Set up MFA", ph::SHIELD_PLUS)).clicked() {
-                    main.settings.dialog = Some(Dialog::mfa_setup());
-                    fetch(
-                        tasks,
-                        main,
-                        |c| async move { c.mfa_setup().await },
-                        |s, v| {
-                            if let Some(Dialog::MfaSetup(setup)) = &mut s.dialog {
-                                setup.set_secret(v);
-                            }
-                        },
-                    );
-                }
-            },
-        );
+    let mut manage = false;
+    section(ui, "Sign-in security", "Changed in the Security section.", |ui| {
+        let description =
+            if mfa { "A second step is required when you sign in" } else { "Your password alone can sign you in" };
+        widgets::setting_row(ui, "Multi-factor authentication", description, |ui| {
+            let (icon, label) = if mfa { (ph::SHIELD_CHECK, "Manage MFA") } else { (ph::KEY, "Set up MFA") };
+            manage = widgets::secondary(ui, format!("{icon}  {label}")).clicked();
+            if mfa {
+                parts::chip(ui, Tone::Success, "Enabled");
+            }
+        });
     });
+    if manage {
+        main.settings.page = Page::Security;
+        super::opened(main, tasks);
+    }
 }
 
 pub fn security(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
-    let t = widgets::tokens(ui);
-    widgets::heading(ui, ph::SHIELD, "Security", "Your password, two-factor authentication and devices.");
-    ui.add_space(12.0);
-    let allowed = main.instance.is_first_user || main.settings.signup.as_ref().is_some_and(|s| s.allow_password_change);
+    widgets::heading(ui, ph::SHIELD, "Security", "Credentials and signed-in devices.");
+    ui.add_space(8.0);
+    let allowed = main.settings.signup.as_ref().map(|s| s.allow_password_change);
     let mfa = main.settings.mfa.unwrap_or(main.user.mfa_enabled);
-    section(
-        ui,
-        "Password",
-        if allowed { "Use at least 8 characters." } else { "The administrator has turned off password changes." },
-        |ui| {
-            if !allowed {
-                return;
+    let mut open = None;
+    section(ui, "Sign-in", "What it takes to get into this account.", |ui| {
+        let description = match (mfa, main.settings.backup_codes) {
+            (true, Some(n)) => {
+                format!("On · {} left", tma_core::format::count(n as usize, "backup code", "backup codes"))
             }
-            let f = &mut main.settings.forms;
-            widgets::field(ui, "Current password", &mut f.old_password, true, "");
-            widgets::field(ui, "New password", &mut f.new_password, true, "");
-            widgets::field(ui, "Confirm new password", &mut f.confirm_password, true, "");
+            (true, None) => "On · a code is needed at every sign-in".into(),
+            (false, _) => "Require a second step when signing in".into(),
+        };
+        widgets::setting_row(ui, "Multi-factor authentication", &description, |ui| {
+            if widgets::secondary(ui, format!("{}  Manage MFA", ph::KEY)).clicked() {
+                open = Some(Dialog::Mfa(Default::default()));
+            }
             if mfa {
-                widgets::field(ui, "Authentication code", &mut f.password_mfa, false, "123456");
-            }
-            ui.add_space(8.0);
-            let mismatch = !f.confirm_password.is_empty() && f.new_password != f.confirm_password;
-            if mismatch {
-                widgets::error_text(ui, "The new passwords do not match");
-            }
-            let ready =
-                !f.old_password.is_empty() && f.new_password.len() >= 8 && !mismatch && !f.confirm_password.is_empty();
-            if widgets::primary_enabled(ui, ready && main.settings.busy.is_none(), "Change password").clicked() {
-                let (old, new, code) = (
-                    f.old_password.clone(),
-                    f.new_password.clone(),
-                    Some(f.password_mfa.trim().to_string()).filter(|c| !c.is_empty()),
-                );
-                save(
-                    tasks,
-                    main,
-                    "password",
-                    move |c| async move { c.change_password(&old, &new, code.as_deref()).await },
-                    |main, toasts, _| {
-                        main.settings.forms.old_password.clear();
-                        main.settings.forms.new_password.clear();
-                        main.settings.forms.confirm_password.clear();
-                        main.settings.forms.password_mfa.clear();
-                        toasts.success("Password changed. Other devices were signed out.");
-                    },
-                );
-            }
-        },
-    );
-    section(ui, "Two-factor authentication", "A code from an authenticator app is needed at every sign-in.", |ui| {
-        widgets::setting_row(ui, "Status", "", |ui| {
-            if mfa {
-                widgets::badge(ui, "Enabled", t.positive_text);
-            } else {
-                widgets::badge(ui, "Off", t.label_tertiary);
+                parts::chip(ui, Tone::Success, "Enabled");
             }
         });
-        ui.horizontal(|ui| {
-            if mfa {
-                if widgets::secondary(ui, format!("{}  New backup codes", ph::KEY)).clicked() {
-                    main.settings.dialog = Some(Dialog::BackupCodes(Vec::new()));
-                    fetch(
-                        tasks,
-                        main,
-                        |c| async move { c.mfa_regenerate_codes().await },
-                        |s, v| {
-                            s.dialog = Some(Dialog::BackupCodes(v.backup_codes));
-                        },
-                    );
+        match allowed {
+            Some(true) => widgets::setting_row(ui, "Password", "Set a new account password", |ui| {
+                if widgets::secondary(ui, format!("{}  Change password", ph::LOCK)).clicked() {
+                    open = Some(Dialog::Password(PasswordForm::default()));
                 }
-                if widgets::secondary(
-                    ui,
-                    RichText::new(format!("{}  Turn off", ph::SHIELD_SLASH)).color(t.destructive_text),
-                )
-                .clicked()
-                {
-                    main.settings.dialog = Some(Dialog::MfaDisable(String::new()));
-                }
-            } else if widgets::primary(ui, format!("{}  Set up", ph::SHIELD_PLUS)).clicked() {
-                main.settings.dialog = Some(Dialog::mfa_setup());
-                fetch(
-                    tasks,
-                    main,
-                    |c| async move { c.mfa_setup().await },
-                    |s, v| {
-                        if let Some(Dialog::MfaSetup(setup)) = &mut s.dialog {
-                            setup.set_secret(v);
-                        }
-                    },
-                );
+            }),
+            Some(false) => parts::note(ui, Tone::Neutral, "Password changes are turned off for this deployment."),
+            None => {
+                ui.spinner();
             }
-        });
-        if let (true, Some(n)) = (mfa, main.settings.backup_codes) {
-            ui.add_space(4.0);
-            ui.label(widgets::muted(ui, format!("{n} backup code(s) left.")));
         }
     });
-    section(ui, "Devices", "Browsers and apps signed in to your account.", |ui| {
-        ui.horizontal(|ui| {
-            if widgets::secondary(ui, format!("{}  Manage sessions", ph::DEVICES)).clicked() {
-                main.settings.dialog = Some(Dialog::Sessions);
-                main.settings.sessions = None;
-                fetch(tasks, main, |c| async move { c.sessions(true).await }, |s, v| s.sessions = Some(v.sessions));
-            }
-            if widgets::secondary(
-                ui,
-                RichText::new(format!("{}  Sign out everywhere", ph::SIGN_OUT)).color(t.destructive_text),
-            )
-            .clicked()
-            {
-                save(
-                    tasks,
-                    main,
-                    "logout-all",
-                    |c| async move { c.logout_all().await },
-                    |main, toasts, _| {
-                        main.change_pending = false;
-                        toasts.info("Signed out of every device");
-                    },
-                );
+    section(ui, "Devices", "Where this account is currently signed in.", |ui| {
+        let description = match &main.settings.sessions {
+            None => "Counting active sessions…".to_string(),
+            Some(list) if list.is_empty() => "No other devices are signed in".to_string(),
+            Some(list) => format!(
+                "{}, including this one",
+                tma_core::format::count(list.len(), "active session", "active sessions")
+            ),
+        };
+        widgets::setting_row(ui, "Active sessions", &description, |ui| {
+            if widgets::secondary(ui, format!("{}  View sessions", ph::DEVICES)).clicked() {
+                open = Some(Dialog::Sessions);
             }
         });
     });
+    if let Some(dialog) = open {
+        if matches!(dialog, Dialog::Sessions) {
+            main.settings.sessions = None;
+            load_sessions(main, tasks);
+        }
+        if matches!(dialog, Dialog::Mfa(_)) && mfa {
+            fetch(tasks, main, |c| async move { c.mfa_backup_count().await }, |s, v| s.backup_codes = Some(v));
+        }
+        main.settings.dialog = Some(dialog);
+    }
+    let busy = main.settings.busy == Some("logout-all");
+    parts::danger_group(
+        ui,
+        "Danger zone",
+        "This ends every session, including the one you are using right now. You will have to sign in again.",
+        |ui| {
+            widgets::setting_row(ui, "Sign out of all devices", "Revokes every active session at once", |ui| {
+                let label =
+                    if busy { "Signing out…".to_string() } else { format!("{}  Sign out everywhere", ph::SIGN_OUT) };
+                let t = widgets::tokens(ui);
+                if ui.add_enabled(!busy, egui::Button::new(RichText::new(label).color(t.destructive_text))).clicked() {
+                    save(
+                        tasks,
+                        main,
+                        "logout-all",
+                        |c| async move { c.logout_all().await },
+                        |main, _, _| super::sign_out_after_now(main, "Signed out on all devices"),
+                    );
+                }
+            });
+        },
+    );
 }

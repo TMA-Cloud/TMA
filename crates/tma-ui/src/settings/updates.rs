@@ -2,7 +2,8 @@
 
 use egui::RichText;
 
-use super::{fetch, save, section};
+use super::parts::{self, Tone};
+use super::{attempt, fetch, section};
 use tma_core::api::Versions;
 
 use crate::app::Main;
@@ -46,62 +47,86 @@ pub fn available(current: &Versions, latest: &Versions, desktop: bool) -> Vec<(&
 
 pub fn load(main: &mut Main, tasks: &Tasks) {
     fetch(tasks, main, |c| async move { c.versions().await }, |s, v| s.versions = Some(v));
+    if main.settings.latest.is_none() {
+        fetch(tasks, main, |c| async move { c.latest_versions().await }, |s, v| s.latest = Some(v));
+    }
 }
 
-fn row(ui: &mut egui::Ui, name: &str, description: &str, current: Option<&str>, latest: Option<&str>) {
-    let t = widgets::tokens(ui);
-    widgets::setting_row(ui, name, description, |ui| {
-        match (current, latest) {
-            (Some(c), Some(l)) if tma_core::is_newer_version(l, c) => {
-                widgets::badge(ui, &format!("{l} available"), t.warning_text);
-            }
-            (Some(_), Some(_)) => {
-                widgets::badge(ui, "Up to date", t.positive_text);
-            }
-            _ => {}
+/// A component's version beside its state against the release feed.
+fn row(ui: &mut egui::Ui, name: &str, current: Option<&str>, latest: Option<&str>, checking: bool) {
+    let description = match latest {
+        Some(l) => format!("Latest available: v{l}"),
+        None if checking => "Checking update feed…".into(),
+        None => "Version reported by this installation".into(),
+    };
+    widgets::setting_row(ui, name, &description, |ui| {
+        let (tone, label) = match (current, latest) {
+            (None, _) => (Tone::Neutral, "Loading…"),
+            (Some(_), None) => (Tone::Neutral, "Not checked"),
+            (Some(c), Some(l)) if tma_core::is_newer_version(l, c) => (Tone::Warning, "Update available"),
+            (Some(_), Some(_)) => (Tone::Success, "Up to date"),
+        };
+        parts::chip(ui, tone, label);
+        if let Some(c) = current {
+            ui.label(RichText::new(format!("v{c}")).semibold());
         }
-        ui.label(RichText::new(current.map(|c| format!("v{c}")).unwrap_or_else(|| "—".into())).semibold());
     });
 }
 
-pub fn show(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks, app_version: &str) {
-    widgets::heading(ui, ph::ARROWS_CLOCKWISE, "Updates", "What is running and whether a newer release exists.");
-    ui.add_space(12.0);
+pub fn show(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks, app_version: &str, desktop: bool) {
+    widgets::heading(ui, ph::ARROWS_CLOCKWISE, "Updates", "Version status for this deployment.");
+    ui.add_space(4.0);
+    if let Some(error) = &main.settings.version_error {
+        ui.add_space(6.0);
+        parts::note(ui, Tone::Warning, error);
+    }
     let current = main.settings.versions.clone().unwrap_or_default();
-    let latest = main.settings.latest.clone();
-    section(ui, "Components", "", |ui| {
-        row(
-            ui,
-            "Server",
-            "The API and web app on this server.",
-            current.backend.as_deref(),
-            latest.as_ref().and_then(|l| l.backend.as_deref()),
-        );
-        row(
-            ui,
-            "This app",
-            "The app you are using now.",
-            Some(app_version),
-            latest.as_ref().and_then(|l| l.desktop.as_deref().or(l.frontend.as_deref())),
-        );
-    });
+    let latest = main.settings.latest.clone().unwrap_or_default();
     let checking = main.settings.busy == Some("latest");
-    section(ui, "Update check", "Compares against the published release list.", |ui| {
-        if widgets::secondary(
-            ui,
-            if checking { "Checking…".to_string() } else { format!("{}  Check for updates", ph::ARROWS_CLOCKWISE) },
-        )
-        .clicked()
-            && !checking
-        {
-            save(
-                tasks,
-                main,
-                "latest",
-                |c| async move { c.latest_versions().await },
-                |main, _, v| main.settings.latest = Some(v),
-            );
+    section(ui, "Components", "What each part of this deployment is currently running.", |ui| {
+        row(ui, "Server", current.backend.as_deref(), latest.backend.as_deref(), checking);
+        if current.frontend.is_some() {
+            row(ui, "Web app", current.frontend.as_deref(), latest.frontend.as_deref(), checking);
         }
+        if desktop {
+            row(ui, "Desktop app", Some(app_version), latest.desktop.as_deref(), checking);
+        }
+    });
+    let note = if desktop {
+        "The desktop app installs its own updates in the background once nothing is transferring. The server is updated by whoever runs it."
+    } else {
+        "Nothing is installed from here; this compares versions against the release feed."
+    };
+    section(ui, "Update check", note, |ui| {
+        widgets::setting_row(ui, "Check for updates", "Fetches the latest release versions", |ui| {
+            let label =
+                if checking { "Checking…".to_string() } else { format!("{}  Check now", ph::MAGNIFYING_GLASS) };
+            if ui.add_enabled(!checking, egui::Button::new(label)).clicked() {
+                attempt(
+                    tasks,
+                    main,
+                    "latest",
+                    |c| async move { Ok((c.versions().await?, c.latest_versions().await?)) },
+                    move |main, toasts, result: tma_client::ApiResult<(Versions, Versions)>| match result {
+                        Ok((current, latest)) => {
+                            let newer = available(&current, &latest, desktop);
+                            toasts.success(if newer.is_empty() {
+                                "Everything is up to date"
+                            } else {
+                                "Updates available"
+                            });
+                            main.settings.version_error = None;
+                            main.settings.versions = Some(current);
+                            main.settings.latest = Some(latest);
+                        }
+                        Err(_) => {
+                            main.settings.version_error = Some("Unable to check for updates right now".into());
+                            toasts.error("Failed to check for updates");
+                        }
+                    },
+                );
+            }
+        });
     });
 }
 

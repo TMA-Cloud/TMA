@@ -3,15 +3,21 @@
 
 mod account;
 mod admin;
+mod bucket_form;
 mod dialogs;
 mod dialogs_admin;
+mod forms;
 mod integrations;
+mod mfa;
+mod orphans;
+mod parts;
 mod storage;
 mod subusers;
 pub(crate) mod updates;
 
 pub use dialogs::show as modals;
 
+use std::collections::BTreeSet;
 use std::future::Future;
 
 use egui::{Align2, CornerRadius, FontId, Margin, RichText, Sense, Stroke, Vec2};
@@ -42,49 +48,96 @@ pub enum Page {
 /// Values a form edits before saving.
 #[derive(Default)]
 pub struct Forms {
-    pub old_password: String,
-    pub new_password: String,
-    pub confirm_password: String,
-    pub password_mfa: String,
     pub onlyoffice_url: String,
     pub onlyoffice_secret: String,
     pub share_url: String,
-    pub max_upload_gb: String,
+    pub max_upload: String,
+    pub max_upload_unit: forms::Unit,
     pub proxies: String,
     pub idle_days: String,
     pub access_window: String,
     pub access_flush: String,
     pub access_enabled: bool,
-    pub storage: StorageSettingsInput,
-    pub storage_checks: Vec<String>,
+    pub bucket: bucket_form::BucketForm,
+    pub bucket_result: Option<bucket_form::CheckResult>,
     pub google: GoogleAuthInput,
-    pub orphan_grace: String,
+    pub google_secret: String,
+}
+
+/// A storage limit being edited in the user list.
+pub struct LimitEdit {
+    pub user_id: String,
+    pub value: String,
+    pub unit: forms::Unit,
 }
 
 #[derive(Default)]
 pub struct SettingsState {
     pub page: Page,
     pub forms: Forms,
+    /// Configuration cards that are expanded, by key.
+    pub open: BTreeSet<&'static str>,
     pub signup: Option<SignupStatus>,
     pub mfa: Option<bool>,
     pub backup_codes: Option<i64>,
+    /// When backup codes may be regenerated again (egui time, seconds).
+    pub regenerate_after: Option<f64>,
+    pub regenerate_from_now: Option<f64>,
+    /// Backup codes to save as a file on the next frame (the browser downloads them at once).
+    pub save_codes: Option<Vec<String>>,
     pub sessions: Option<Vec<SessionInfo>>,
     pub sub_users: Option<SubUserList>,
+    pub sub_user_form: Option<subusers::NewSubUser>,
+    pub sub_user_draft: Option<(String, Vec<String>)>,
+    pub sub_user_removing: Option<String>,
     pub users: Option<AdminUserPage>,
+    pub users_more: bool,
+    pub limit_edit: Option<LimitEdit>,
+    pub limit_error: Option<String>,
+    /// The account's own limit changed; reload its usage on the next frame.
+    pub reload_usage: bool,
     pub clients: Option<ActiveClients>,
     pub onlyoffice: Option<OnlyOfficeSettings>,
     pub share_url: Option<UrlSetting>,
     pub max_upload: Option<MaxUploadSize>,
     pub proxies: Option<KnownProxies>,
+    pub restart_required: bool,
     pub activity: Option<ActivitySettings>,
     pub cloud_drive: Option<CloudDriveConfig>,
     pub storage: Option<StorageSettingsSummary>,
     pub google: Option<GoogleAuthSummary>,
     pub versions: Option<Versions>,
     pub latest: Option<Versions>,
+    pub version_error: Option<String>,
     pub orphans: Option<OrphanReport>,
+    pub orphan_notes: Vec<String>,
+    pub orphan_error: Option<String>,
+    /// Entries a delete kept; set when it finishes so the dialog rescans.
+    pub orphan_rescan: Option<Vec<String>>,
     pub busy: Option<&'static str>,
+    pub end_session: Option<String>,
+    /// A form problem to show as an error toast on the next frame.
+    pub notice: Option<String>,
+    /// A confirmation to show as a toast on the next frame.
+    pub notice_ok: Option<String>,
     pub dialog: Option<dialogs::Dialog>,
+}
+
+impl SettingsState {
+    /// Show a form problem as an error toast.
+    pub fn report(&mut self, message: String) {
+        self.notice = Some(message);
+    }
+
+    /// Open or close a configuration card; true when it is now open.
+    pub fn toggle_card(&mut self, key: &'static str) -> bool {
+        if self.open.remove(key) {
+            false
+        } else {
+            self.open.insert(key);
+            true
+        }
+    }
 }
 
 /// Fetch with the session's client and store the result in the settings state.
@@ -114,14 +167,47 @@ pub fn save<T, Fut>(
     T: MaybeSend + 'static,
     Fut: Future<Output = ApiResult<T>> + MaybeSend + 'static,
 {
+    attempt(tasks, main, label, call, move |main, toasts, result| match result {
+        Ok(value) => done(main, toasts, value),
+        Err(err) => toasts.error(err.message),
+    });
+}
+
+/// Like `save`, but `done` also handles failures (an ended session still signs out).
+pub fn attempt<T, Fut>(
+    tasks: &Tasks,
+    main: &mut Main,
+    label: &'static str,
+    call: impl FnOnce(Client) -> Fut,
+    done: impl FnOnce(&mut Main, &mut crate::toast::Toasts, ApiResult<T>) + MaybeSend + 'static,
+) where
+    T: MaybeSend + 'static,
+    Fut: Future<Output = ApiResult<T>> + MaybeSend + 'static,
+{
     let generation = main.generation;
     main.settings.busy = Some(label);
     tasks.run(call(main.client.clone()), move |app, result: ApiResult<T>| {
         if let Some(main) = app.main_mut(generation) {
             main.settings.busy = None;
         }
-        app.finish(generation, result, done);
+        if let Err(err) = &result
+            && err.is_unauthorized()
+        {
+            app.fail(generation, err);
+            return;
+        }
+        if let Screen::Main(main) = &mut app.screen
+            && main.generation == generation
+        {
+            done(main, &mut app.toasts, result);
+        }
     });
+}
+
+/// End this session here after the server ended every session (password
+/// change, sign out everywhere); the dialogs pass applies it with the whole app.
+pub fn sign_out_after_now(main: &mut Main, message: &str) {
+    main.settings.end_session = Some(message.to_string());
 }
 
 /// Load what the current page needs.
@@ -129,7 +215,7 @@ pub fn opened(main: &mut Main, tasks: &Tasks) {
     match main.settings.page {
         Page::Profile => fetch(tasks, main, |c| async move { c.mfa_status().await }, |s, v| s.mfa = Some(v.enabled)),
         Page::Storage => storage::load(main, tasks),
-        Page::SubUsers => fetch(tasks, main, |c| async move { c.sub_users().await }, |s, v| s.sub_users = Some(v)),
+        Page::SubUsers => subusers::load(main, tasks),
         Page::Administration => admin::load(main, tasks),
         Page::Updates => updates::load(main, tasks),
         Page::Security => account::load_security(main, tasks),
@@ -331,16 +417,13 @@ fn menu_column(
 const NARROW_BELOW: f32 = 640.0;
 
 fn page_body(main: &mut Main, host: &mut dyn Host, tasks: &Tasks, ui: &mut egui::Ui) {
+    let desktop = host.kind() == crate::host::HostKind::Desktop;
     match main.settings.page {
         Page::Profile => account::profile(main, ui, tasks),
         Page::Storage => storage::show(main, ui, tasks),
         Page::SubUsers => subusers::show(main, ui, tasks),
-        Page::Administration => {
-            admin::show(main, ui, tasks);
-            ui.add_space(12.0);
-            integrations::show(main, ui, tasks);
-        }
-        Page::Updates => updates::show(main, ui, tasks, host.app_version()),
+        Page::Administration => admin::show(main, ui, tasks, desktop),
+        Page::Updates => updates::show(main, ui, tasks, host.app_version(), desktop),
         Page::Security => account::security(main, ui, tasks),
         Page::Host => {
             let client = main.client.clone();
