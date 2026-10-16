@@ -1,6 +1,6 @@
 [package]
 name = "tma-drive"
-description = "Cloud Drive: TMA Cloud mounted as a local drive (WinFsp on Windows, FUSE on Linux and macOS)"
+description = "Cloud Drive: TMA Cloud mounted as a local drive (WinFsp on Windows, FUSE on Linux, NFS on macOS)"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -12,8 +12,8 @@ workspace = true
 
 [features]
 default = ["mount"]
-# The OS adapters (WinFsp, FUSE); without them only the core builds, for tests.
-mount = ["dep:winfsp", "dep:windows", "dep:fuser", "dep:libc"]
+# The OS adapters (WinFsp, FUSE, NFS); without them only the core builds, for tests.
+mount = ["dep:winfsp", "dep:windows", "dep:fuser", "dep:libc", "dep:nfsserve", "dep:async-trait", "dep:tokio"]
 
 [dependencies]
 tma-client = { workspace = true }
@@ -28,7 +28,12 @@ winfsp = { version = "0.13", default-features = false, features = ["delayload"],
 # Matches the version winfsp itself uses, so status codes convert between them.
 windows = { version = "0.61", features = ["Win32_Foundation", "Win32_Storage_FileSystem", "Win32_Security", "Win32_Security_Authorization", "Win32_System_Threading", "Win32_System_Registry", "Win32_System_LibraryLoader"], optional = true }
 
-[target.'cfg(any(target_os = "linux", target_os = "macos"))'.dependencies]
+[target.'cfg(target_os = "linux")'.dependencies]
 fuser = { version = "0.18", default-features = false, optional = true }
 libc = { version = "0.2", optional = true }
 
+[target.'cfg(unix)'.dependencies]
+# macOS mounts Cloud Drive with its built-in NFS client, so no macFUSE is needed.
+nfsserve = { version = "0.11", optional = true }
+async-trait = { version = "0.1", optional = true }
+tokio = { workspace = true, optional = true }

@@ -1,5 +1,5 @@
-//! The Linux and macOS adapter: FUSE requests translated to the core. FUSE
-//! speaks in inode numbers, so this keeps a two-way inode/path table.
+//! The Linux adapter: FUSE requests translated to the core. FUSE
+//! speaks in inode numbers, which the shared id table maps to paths.
 
 use std::collections::HashMap;
 use std::ffi::OsStr;
@@ -15,7 +15,8 @@ use fuser::{
 };
 
 use crate::core::{Core, FsError, Handle, Node};
-use crate::paths::{self, ROOT};
+use crate::ids::IdTable;
+use crate::paths;
 
 const TTL: Duration = Duration::from_secs(1);
 
@@ -34,52 +35,9 @@ impl From<FsError> for Errno {
     }
 }
 
-#[derive(Default)]
-struct Inodes {
-    by_path: HashMap<String, u64>,
-    paths: HashMap<u64, String>,
-    next: u64,
-}
-
-impl Inodes {
-    fn ino(&mut self, path: &str) -> u64 {
-        if path == ROOT {
-            return INodeNo::ROOT.0;
-        }
-        let key = paths::key(path);
-        if let Some(ino) = self.by_path.get(&key) {
-            self.paths.insert(*ino, path.to_string());
-            return *ino;
-        }
-        self.next = self.next.max(1) + 1;
-        self.by_path.insert(key, self.next);
-        self.paths.insert(self.next, path.to_string());
-        self.next
-    }
-
-    fn path(&self, ino: u64) -> Option<String> {
-        if ino == INodeNo::ROOT.0 { Some(ROOT.to_string()) } else { self.paths.get(&ino).cloned() }
-    }
-
-    /// Point everything under `from` at `to` after a rename.
-    fn rename(&mut self, from: &str, to: &str) {
-        let moved: Vec<(u64, String)> = self
-            .paths
-            .iter()
-            .filter(|(_, p)| paths::is_at_or_under(p, from))
-            .map(|(i, p)| (*i, format!("{to}{}", &p[from.len().min(p.len())..])))
-            .collect();
-        for (ino, path) in moved {
-            self.by_path.retain(|_, v| *v != ino);
-            self.by_path.insert(paths::key(&path), ino);
-            self.paths.insert(ino, path);
-        }
-    }
-}
-
 pub struct CloudFuse {
     core: Arc<Core>,
-    inodes: Mutex<Inodes>,
+    inodes: Mutex<IdTable>,
     handles: Mutex<HashMap<u64, Arc<Handle>>>,
     next_fh: Mutex<u64>,
     uid: u32,
@@ -139,7 +97,7 @@ impl CloudFuse {
 
     fn entry_for(&self, path: &str) -> Result<FileAttr, Errno> {
         let node = self.core.resolve(path)?.ok_or(Errno::ENOENT)?;
-        let ino = lock(&self.inodes).ino(&node.path);
+        let ino = lock(&self.inodes).id(&node.path);
         Ok(self.attr(ino, &node, node.size))
     }
 
@@ -215,7 +173,7 @@ impl Filesystem for CloudFuse {
         let result = self.child(parent, name).and_then(|path| {
             let handle = self.core.create(&path, true)?;
             let node = handle.node();
-            let ino = lock(&self.inodes).ino(&node.path);
+            let ino = lock(&self.inodes).id(&node.path);
             Ok(self.attr(ino, &node, 0))
         });
         match result {
@@ -350,13 +308,13 @@ impl Filesystem for CloudFuse {
         let result = (|| -> Result<Vec<(u64, FileType, String)>, Errno> {
             let path = self.path(ino)?;
             let folder = self.core.resolve(&path)?.ok_or(Errno::ENOENT)?;
-            let parent_ino = paths::parent(&path).map(|p| lock(&self.inodes).ino(&p)).unwrap_or(ino.0);
+            let parent_ino = paths::parent(&path).map(|p| lock(&self.inodes).id(&p)).unwrap_or(ino.0);
             let mut entries = vec![
                 (ino.0, FileType::Directory, ".".to_string()),
                 (parent_ino, FileType::Directory, "..".to_string()),
             ];
             for child in self.core.children(&folder)? {
-                let child_ino = lock(&self.inodes).ino(&child.path);
+                let child_ino = lock(&self.inodes).id(&child.path);
                 entries.push((
                     child_ino,
                     if child.is_folder { FileType::Directory } else { FileType::RegularFile },
@@ -391,7 +349,7 @@ impl Filesystem for CloudFuse {
         let result = self.child(parent, name).and_then(|path| {
             let handle = self.core.create(&path, false)?;
             let node = handle.node();
-            let ino = lock(&self.inodes).ino(&node.path);
+            let ino = lock(&self.inodes).id(&node.path);
             let attr = self.attr(ino, &node, 0);
             Ok((self.store(handle).0, attr))
         });
@@ -409,11 +367,7 @@ impl Filesystem for CloudFuse {
 
 /// Whether FUSE is usable here (the device and the mount helper exist).
 pub fn is_available() -> bool {
-    if cfg!(target_os = "macos") {
-        Path::new("/Library/Filesystems/macfuse.fs").exists()
-    } else {
-        Path::new("/dev/fuse").exists()
-    }
+    Path::new("/dev/fuse").exists()
 }
 
 /// A mounted drive; dropping it unmounts.
@@ -437,7 +391,7 @@ pub fn mount(core: Arc<Core>, label: &str, at: Option<&str>) -> Result<Mounted, 
     let meta = std::fs::metadata(&point).map_err(|e| e.to_string())?;
     let fs = CloudFuse {
         core: core.clone(),
-        inodes: Mutex::new(Inodes::default()),
+        inodes: Mutex::new(IdTable::default()),
         handles: Mutex::new(HashMap::new()),
         next_fh: Mutex::new(0),
         uid: meta.uid(),
