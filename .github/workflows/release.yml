@@ -108,8 +108,6 @@ jobs:
 
       - name: Build installers
         shell: bash
-        env:
-          LIBCLANG_PATH: ${{ runner.os == 'Windows' && 'C:\Program Files\LLVM\bin' || '' }}
         run: |
           rustup update stable --no-self-update && rustup default stable
           cargo install cargo-packager --locked

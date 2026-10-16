@@ -199,7 +199,7 @@ fn save_only_refuses_reading_existing_files() {
     let h = core.open("\\s.txt").unwrap();
     let mut buf = [0u8; 8];
     assert_eq!(core.read(&h, 0, &mut buf), Err(FsError::AccessDenied));
-    // FUSE, NFS and WinFsp honour the same exception for what TMA Cloud opened.
+    // FUSE and NFS honour the same exception for what TMA Cloud opened.
     core.allow_read("\\s.txt", std::time::Duration::from_secs(60));
     let h = core.open("\\s.txt").unwrap();
     assert_eq!(core.read(&h, 0, &mut buf), Ok(6));

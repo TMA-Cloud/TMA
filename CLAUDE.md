@@ -31,10 +31,9 @@ into one image; `make build` tags it with the workspace version.
   `foo/mod.rs` re-exporting focused siblings. Keep the module graph acyclic.
 - **Pure logic goes in its own module** so tests can cover it directly.
 - **Never crash.** Crates `deny(clippy::unwrap_used, expect_used, panic)` outside
-  tests; return errors with `?`. `unsafe` is denied workspace-wide; only the
-  WinFsp adapter, `cloud_files/cfapi.rs` and the desktop app's Windows glue
-  (`cursors/windows.rs`, `single.rs`, `clipboard_ole.rs`) allow it, with a `SAFETY:`
-  comment on every block.
+  tests; return errors with `?`. `unsafe` is denied workspace-wide; only
+  `cloud_files/cfapi.rs` and the desktop app's Windows glue (`cursors/windows.rs`,
+  `single.rs`, `clipboard_ole.rs`) allow it, with a `SAFETY:` comment on every block.
 - **Comments are short and explain why**, in one line rather than a paragraph.
   Don't restate the code, and don't add banner dividers.
 - **Wire format is the contract.** JSON field names come from `tma-core` types
@@ -81,7 +80,7 @@ Layers: `routes → services / models → storage / crypto / util / config`.
 
 - `core/` holds all filesystem behaviour (five-second listing cache, staging
   files, save-only mode, create-empty-then-write and temp-then-rename saves) and
-  is tested with an in-memory backend. FUSE, NFS and WinFsp only translate calls.
+  is tested with an in-memory backend. FUSE and NFS only translate calls.
 - `cloud_files/` (Windows) is a sync engine instead: placeholders download on
   open, a watcher uploads local changes, and server events resync folders that
   have been browsed. What to change is planned in the pure `sync_plan.rs`.
@@ -95,9 +94,6 @@ Layers: `routes → services / models → storage / crypto / util / config`.
   through save-only mode for a while.
 - `nfs_fs.rs` (macOS) is a localhost NFSv3 server; it builds on Linux too, so
   test it there with `TMA_ADAPTER=nfs cargo run -p tma-drive --example mount_test`.
-- WinFsp is only a fallback on Windows without Cloud Files. It is linked lazily
-  (delay-load), so the app starts without it. Building the bindings needs
-  libclang (`LIBCLANG_PATH`).
 
 ## Before you finish
 

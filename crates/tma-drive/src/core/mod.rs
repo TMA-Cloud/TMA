@@ -1,4 +1,4 @@
-//! The drive's logic, shared by the WinFsp and FUSE adapters: resolving paths
+//! The drive's logic, shared by the FUSE and NFS adapters: resolving paths
 //! against short-lived folder listings, staging file contents in local temp
 //! files, and the bookkeeping that keeps editors' save patterns working
 //! (create-empty-then-write, write-temp-then-rename).

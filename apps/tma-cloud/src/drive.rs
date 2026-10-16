@@ -120,19 +120,14 @@ pub fn forget() {}
 /// A mounted drive of whichever adapter this system uses; dropping it unmounts.
 type Guard = Box<dyn std::any::Any>;
 
-/// Windows: a Cloud Files folder (built in since Windows 10 1709), or a WinFsp
-/// drive letter where Cloud Files is missing and WinFsp is installed.
+/// Windows: a Cloud Files folder, built in since Windows 10 1709.
 #[cfg(windows)]
 fn mount(core: Arc<tma_drive::Core>) -> Result<(String, Guard), Status> {
-    if tma_drive::is_available() {
-        let m = tma_drive::mount(core, "TMA Cloud", None).map_err(Status::Failed)?;
-        return Ok((m.mount_point.clone(), Box::new(m)));
+    if !tma_drive::is_available() {
+        return Err(Status::Unavailable("Cloud Drive needs Windows 10 version 1709 or later.".into()));
     }
-    if tma_drive::winfsp_fs::is_available() {
-        let m = tma_drive::winfsp_fs::mount(core, "TMA Cloud", None).map_err(Status::Failed)?;
-        return Ok((m.mount_point.clone(), Box::new(m)));
-    }
-    Err(Status::Unavailable("Cloud Drive needs Windows 10 version 1709 or later.".into()))
+    let m = tma_drive::mount(core, "TMA Cloud", None).map_err(Status::Failed)?;
+    Ok((m.mount_point.clone(), Box::new(m)))
 }
 
 /// macOS mounts a local NFS share with its built-in client; Linux uses FUSE.
@@ -158,7 +153,7 @@ fn run(
     slot: &Arc<Mutex<Option<Arc<tma_drive::Core>>>>,
     rx: &std::sync::mpsc::Receiver<()>,
 ) {
-    // FUSE, NFS and WinFsp keep open files here; Cloud Files streams and never uses it.
+    // FUSE and NFS keep open files here; Cloud Files streams and never uses it.
     let Some(staging) = dirs::cache_dir().map(|d| d.join("TMA Cloud").join("drive")) else {
         set(status, Status::Failed("No folder for the drive's open files".into()));
         return;

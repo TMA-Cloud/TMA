@@ -99,11 +99,8 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # Runners ship LLVM; the WinFsp bindings are generated with its libclang.
       - name: Build and test
         shell: bash
-        env:
-          LIBCLANG_PATH: C:\Program Files\LLVM\bin
         run: |
           rustup update stable --no-self-update && rustup default stable
           cargo clippy -p tma-cloud -p tma-drive --all-targets -- -D warnings

@@ -1,15 +1,9 @@
-//! Link WinFsp lazily on Windows, so the app starts (without Cloud Drive)
-//! on machines where WinFsp is not installed, and give the .exe its icon and
-//! version details for Explorer, the taskbar and installer shortcuts.
+//! Give the Windows .exe its icon and version details for Explorer, the
+//! taskbar and installer shortcuts.
 
 fn main() {
     #[cfg(windows)]
     {
-        winfsp::build::winfsp_link_delayload();
-        // The test binary never calls WinFsp and would warn that the delay-load is unused.
-        if std::env::var("CARGO_CFG_TARGET_ENV").is_ok_and(|e| e == "msvc") {
-            println!("cargo:rustc-link-arg=/IGNORE:4199");
-        }
         println!("cargo:rerun-if-changed=assets/icons/icon.ico");
         let mut res = winresource::WindowsResource::new();
         res.set_icon("assets/icons/icon.ico")

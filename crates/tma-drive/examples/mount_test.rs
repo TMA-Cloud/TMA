@@ -200,28 +200,22 @@ struct Mounted {
     _guard: Box<dyn std::any::Any>,
 }
 
-/// `TMA_ADAPTER=nfs` on Linux tests the macOS adapter; `winfsp` on Windows the fallback.
+/// `TMA_ADAPTER=nfs` on Linux tests the macOS adapter.
 fn mount(core: std::sync::Arc<tma_drive::Core>) -> Result<Mounted, String> {
-    let adapter = std::env::var("TMA_ADAPTER").unwrap_or_default();
     #[cfg(target_os = "linux")]
-    if adapter == "nfs" {
+    if std::env::var("TMA_ADAPTER").is_ok_and(|a| a == "nfs") {
         let at = std::env::temp_dir().join("tma-nfs-test");
         let m = tma_drive::nfs_fs::mount(core, "TMA Cloud Test", at.to_str())?;
         return Ok(Mounted { mount_point: m.mount_point.clone(), _guard: Box::new(m) });
     }
     #[cfg(windows)]
     {
-        if adapter == "winfsp" {
-            let m = tma_drive::winfsp_fs::mount(core, "TMA Cloud Test", None)?;
-            return Ok(Mounted { mount_point: m.mount_point.clone(), _guard: Box::new(m) });
-        }
         let at = std::env::temp_dir().join("TMA Cloud Test");
         let m = tma_drive::cloud_files::mount(core, "TMA Cloud Test", at.to_str())?;
         return Ok(Mounted { mount_point: m.mount_point.clone(), _guard: Box::new(Forget(Some(m))) });
     }
     #[allow(unreachable_code)]
     {
-        let _ = adapter;
         let m = tma_drive::mount(core, "TMA Cloud Test", None)?;
         Ok(Mounted { mount_point: m.mount_point.clone(), _guard: Box::new(m) })
     }
