@@ -328,7 +328,6 @@ pub fn show(main: &mut Main, ctx: &egui::Context) {
                             RichText::new(ph::CHECK_CIRCLE).color(t.positive_text)
                         };
                         ui.label(icon.size(16.0));
-                        ui.add(egui::Label::new(RichText::new(&title).semibold()).truncate());
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             if !busy && widgets::icon_button(ui, ph::X, "Dismiss").clicked() {
                                 clear = true;
@@ -338,6 +337,10 @@ pub fn show(main: &mut Main, ctx: &egui::Context) {
                             if widgets::icon_button(ui, icon, tip).clicked() {
                                 main.transfers.expanded = !main.transfers.expanded;
                             }
+                            // The buttons take their room first; the heading truncates in what is left.
+                            ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                                ui.add(egui::Label::new(RichText::new(&title).semibold()).truncate());
+                            });
                         });
                     });
                     let fraction = {
