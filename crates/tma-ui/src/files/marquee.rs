@@ -1,5 +1,6 @@
 //! Rubber-band selection: dragging on empty space in the listing selects every
-//! item the rectangle touches, including rows scrolled out of view.
+//! item the rectangle touches, including rows scrolled out of view. The band's
+//! start is kept in content coordinates, so it stays put while the list scrolls.
 
 use std::collections::BTreeSet;
 
@@ -8,12 +9,44 @@ use egui::{Id, Pos2, Rect, Response, Sense, Stroke, Ui, Vec2};
 use crate::app::Main;
 use crate::theme::Tokens;
 
+/// How a band combines with the selection it started from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Mode {
+    /// A plain drag: the band is the selection.
+    Replace,
+    /// Shift: the band adds to what was selected.
+    Add,
+    /// Ctrl (Cmd on a Mac): items the band touches flip, as in Explorer and Finder.
+    Toggle,
+}
+
 /// A drag in progress, in content coordinates so scrolling does not move its start.
 #[derive(Debug, Clone)]
 pub struct Drag {
     start: Pos2,
-    /// The selection a Ctrl-drag adds to.
+    mode: Mode,
+    /// The selection when the drag began.
     base: BTreeSet<String>,
+}
+
+/// The selection while a band touches `touched`.
+pub fn combine(base: &BTreeSet<String>, touched: impl IntoIterator<Item = String>, mode: Mode) -> BTreeSet<String> {
+    match mode {
+        Mode::Replace => touched.into_iter().collect(),
+        Mode::Add => base.iter().cloned().chain(touched).collect(),
+        Mode::Toggle => {
+            let touched: BTreeSet<String> = touched.into_iter().collect();
+            base.symmetric_difference(&touched).cloned().collect()
+        }
+    }
+}
+
+/// Scrolling speed in points per second while the pointer is `past` points beyond an
+/// edge (negative inside it): it starts slow and speeds up the farther out it goes.
+pub fn edge_speed(past: f32) -> f32 {
+    const ZONE: f32 = 32.0;
+    let depth = (past + ZONE).max(0.0);
+    (depth * 18.0).min(2400.0)
 }
 
 /// Where items sit, measured from the top-left of the listing's content.
@@ -77,17 +110,23 @@ pub fn scroll_source(ctx: &egui::Context) -> egui::scroll_area::ScrollSource {
 
 /// Follow a drag on the background; `origin` is the content's top-left on screen.
 pub fn update(main: &mut Main, ui: &mut Ui, background: &Response, origin: Pos2, layout: Layout, t: &Tokens) {
-    let command = ui.input(|i| i.modifiers.command);
+    let modifiers = ui.input(|i| i.modifiers);
     let b = &mut main.browser;
-    if background.clicked() && !command {
+    if background.clicked() && !modifiers.command && !modifiers.shift {
         b.selected.clear();
         b.anchor = None;
     }
     if background.drag_started()
         && let Some(press) = ui.input(|i| i.pointer.press_origin())
     {
-        let base = if command { b.selected.clone() } else { BTreeSet::new() };
-        b.marquee = Some(Drag { start: press - origin.to_vec2(), base });
+        let mode = if modifiers.command {
+            Mode::Toggle
+        } else if modifiers.shift {
+            Mode::Add
+        } else {
+            Mode::Replace
+        };
+        b.marquee = Some(Drag { start: press - origin.to_vec2(), mode, base: b.selected.clone() });
     }
     let Some(drag) = b.marquee.clone() else { return };
     if background.drag_stopped() || !ui.input(|i| i.pointer.primary_down()) {
@@ -97,9 +136,9 @@ pub fn update(main: &mut Main, ui: &mut Ui, background: &Response, origin: Pos2,
     let Some(pointer) = ui.input(|i| i.pointer.latest_pos()) else { return };
     let rect = Rect::from_two_pos(drag.start, pointer - origin.to_vec2());
     let touched = hits(layout, rect, b.items.len());
-    b.selected = drag.base.clone();
-    b.selected.extend(touched.iter().filter_map(|i| b.items.get(*i)).map(|item| item.id.clone()));
-    if drag.base.is_empty() {
+    let ids = touched.iter().filter_map(|i| b.items.get(*i)).map(|item| item.id.clone());
+    b.selected = combine(&drag.base, ids, drag.mode);
+    if drag.mode == Mode::Replace {
         b.anchor = touched.first().and_then(|i| b.items.get(*i)).map(|item| item.id.clone());
     }
     let view = ui.clip_rect();
@@ -110,17 +149,14 @@ pub fn update(main: &mut Main, ui: &mut Ui, background: &Response, origin: Pos2,
         Stroke::new(1.0, t.accent),
         egui::StrokeKind::Inside,
     );
-    // Dragging past the top or bottom edge scrolls, so the band can reach any row.
-    let edge = 24.0;
-    let delta = if pointer.y < view.top() + edge {
-        (view.top() + edge - pointer.y).min(40.0)
-    } else if pointer.y > view.bottom() - edge {
-        -(pointer.y - view.bottom() + edge).min(40.0)
-    } else {
-        0.0
-    };
+    // Near the top or bottom edge the list scrolls under the band, by time rather than
+    // per frame, so it moves at the same speed on any display.
+    let dt = ui.input(|i| i.stable_dt).min(0.1);
+    let up = edge_speed(view.top() - pointer.y);
+    let down = edge_speed(pointer.y - view.bottom());
+    let delta = (up - down) * dt;
     if delta != 0.0 {
-        ui.scroll_with_delta(Vec2::new(0.0, delta * 0.5));
+        ui.scroll_with_delta(Vec2::new(0.0, delta));
         ui.ctx().request_repaint();
     }
 }
@@ -143,6 +179,27 @@ mod tests {
         assert_eq!(hits(rows, rect(0.0, 300.0, 50.0, 900.0), 8), vec![6, 7]);
         // Beside the listing.
         assert!(hits(rows, rect(610.0, 0.0, 700.0, 100.0), 10).is_empty());
+    }
+
+    fn set(ids: &[&str]) -> BTreeSet<String> {
+        ids.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn bands_combine_like_explorer() {
+        let base = set(&["a", "b"]);
+        let touched = || vec!["b".to_string(), "c".to_string()];
+        assert_eq!(combine(&base, touched(), Mode::Replace), set(&["b", "c"]));
+        assert_eq!(combine(&base, touched(), Mode::Add), set(&["a", "b", "c"]));
+        assert_eq!(combine(&base, touched(), Mode::Toggle), set(&["a", "c"]));
+    }
+
+    #[test]
+    fn edge_scrolling_speeds_up_past_the_edge() {
+        assert_eq!(edge_speed(-100.0), 0.0);
+        assert!(edge_speed(-10.0) > 0.0);
+        assert!(edge_speed(40.0) > edge_speed(0.0));
+        assert_eq!(edge_speed(10_000.0), 2400.0);
     }
 
     #[test]

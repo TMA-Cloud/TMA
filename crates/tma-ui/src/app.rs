@@ -209,7 +209,7 @@ impl App {
             client,
             user,
             generation,
-            section: Section::Dashboard,
+            section: Section::Files,
             browser: files::Browser::default(),
             dashboard: dashboard::Dashboard::default(),
             settings: settings::SettingsState::default(),

@@ -43,7 +43,7 @@ pub(super) fn grid(main: &mut Main, ui: &mut Ui, t: &Tokens, desktop: bool, acti
                         break;
                     };
                     let (rect, _) = ui.allocate_exact_size(TILE, Sense::hover());
-                    let response = interact(main, ui, rect, &item, desktop, actions);
+                    let response = interact(main, ui, rect, rect, &item, desktop, actions);
                     // Every tile is a card; selection and hover tint it.
                     ui.painter().rect(
                         rect,

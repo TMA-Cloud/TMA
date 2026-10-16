@@ -97,10 +97,14 @@ fn click_select(main: &mut Main, id: &str, modifiers: Modifiers) {
 }
 
 /// Selection, drag and drop, and the context menu for one row or tile.
+/// An item's surface: the whole `rect` selects and opens; dragging `grab` (its icon
+/// and name) moves it, while a drag elsewhere on the row draws a selection band, as
+/// in Finder and Explorer.
 pub(super) fn interact(
     main: &mut Main,
     ui: &mut Ui,
     rect: Rect,
+    grab: Rect,
     item: &FileItem,
     desktop: bool,
     actions: &mut Vec<Action>,
@@ -108,8 +112,13 @@ pub(super) fn interact(
     // Not focusable: the listing handles the keyboard itself, so egui must not move focus between rows.
     // On touch a drag scrolls, so rows only take taps (and long presses, for the menu).
     let touch = crate::widgets::touch_mode(ui.ctx());
-    let sense = if touch { Sense::CLICK } else { Sense::CLICK | Sense::DRAG };
-    let response = ui.interact(rect, Id::new(("item", &item.id)), sense);
+    let row = ui.interact(rect, Id::new(("item", &item.id)), Sense::CLICK);
+    let response = if touch {
+        row
+    } else {
+        // Registered after the row, so it wins where they overlap.
+        row.union(ui.interact(grab.intersect(rect), Id::new(("grab", &item.id)), Sense::CLICK | Sense::DRAG))
+    };
     // Rows are surfaces, not buttons: the arrow over them, a closed hand while dragging items.
     if response.dragged() {
         ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
@@ -244,7 +253,13 @@ fn list(main: &mut Main, ui: &mut Ui, t: &Tokens, desktop: bool, actions: &mut V
                 continue;
             };
             let (rect, _) = ui.allocate_exact_size(Vec2::new(width, ROW_HEIGHT), Sense::hover());
-            let response = interact(main, ui, rect, &item, desktop, actions);
+            let text_left = rect.min.x + 50.0;
+            let label = name_label(main, &item);
+            let galley = ui.painter().layout_no_wrap(label, FontId::new(14.0, crate::theme::semibold()), t.label);
+            let name_width = galley.size().x;
+            // The icon and name move the item; the rest of the row starts a selection band.
+            let grab = Rect::from_min_max(rect.min, egui::pos2(text_left + name_width + 8.0, rect.max.y));
+            let response = interact(main, ui, rect, grab, &item, desktop, actions);
             paint_item_fill(ui, main, &item, rect, response.hovered(), 12, t);
             let icon_rect = Rect::from_center_size(rect.left_center() + Vec2::new(25.0, 0.0), Vec2::splat(29.0));
             if item.is_folder() {
@@ -252,13 +267,9 @@ fn list(main: &mut Main, ui: &mut Ui, t: &Tokens, desktop: bool, actions: &mut V
             } else {
                 icons::file(ui.painter(), icon_rect, t, &item.name, item.mime_type.as_deref());
             }
-            let text_left = rect.min.x + 50.0;
             let name_rect =
                 Rect::from_min_max(egui::pos2(text_left, rect.min.y), egui::pos2(rect.max.x - 12.0, rect.max.y));
             let painter = ui.painter().with_clip_rect(name_rect);
-            let galley =
-                painter.layout_no_wrap(name_label(main, &item), FontId::new(14.0, crate::theme::semibold()), t.label);
-            let name_width = galley.size().x;
             painter.galley(egui::pos2(text_left, rect.center().y - 18.0), galley, t.label);
             let mut x = text_left + name_width + 6.0;
             for (show, icon, color) in
