@@ -1,0 +1,73 @@
+[workspace]
+resolver = "3"
+members = ["crates/*", "apps/*", "xtask"]
+
+[workspace.package]
+version = "4.0.0"
+edition = "2024"
+license = "MIT"
+rust-version = "1.90"
+repository = "https://github.com/TMA-Cloud/TMA"
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(tma_integration)"] }
+
+[workspace.lints.clippy]
+dbg_macro = "warn"
+todo = "warn"
+unwrap_used = "warn"
+expect_used = "warn"
+
+[workspace.dependencies]
+# internal
+tma-core = { path = "crates/tma-core" }
+tma-client = { path = "crates/tma-client" }
+tma-ui = { path = "crates/tma-ui" }
+tma-drive = { path = "crates/tma-drive" }
+
+# foundation
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+anyhow = "1"
+log = "0.4"
+chrono = { version = "0.4", default-features = false, features = ["serde", "clock", "std"] }
+base64 = "0.22"
+url = "2"
+percent-encoding = "2"
+bytes = "1"
+futures = "0.3"
+futures-util = "0.3"
+mime_guess = "2"
+regex = "1"
+uuid = { version = "1", features = ["v4", "serde"] }
+tokio = { version = "1", features = ["full"] }
+tokio-util = { version = "0.7", features = ["io", "compat"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+reqwest = { version = "0.13", default-features = false, features = ["json", "stream", "rustls", "multipart", "cookies", "query", "form"] }
+
+# ui
+egui = "0.36"
+eframe = { version = "0.36", default-features = false }
+egui_extras = { version = "0.36", default-features = false }
+egui-phosphor = { version = "0.14", default-features = false, features = ["regular", "fill"] }
+rfd = { version = "0.17", default-features = false, features = ["xdg-portal"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp", "bmp"] }
+
+[profile.dev.package."*"]
+opt-level = 2
+
+[profile.dev]
+opt-level = 1
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "debuginfo"
+
+[profile.wasm-release]
+inherits = "release"
+opt-level = "s"
+lto = "fat"

@@ -1,0 +1,20 @@
+[package]
+name = "tma-core"
+description = "TMA Cloud core: API types, file kinds, names and formatting shared by the server and every client (pure, wasm-safe)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+mime_guess = { workspace = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+chrono = { workspace = true, features = ["wasmbind"] }
