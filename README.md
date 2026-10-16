@@ -6,7 +6,7 @@ A self-hosted cloud storage platform with file storage and management capabiliti
 
 - **[Encrypted storage](https://tma-cloud.github.io/Wiki/docs/concepts/file-system#storage)** --- Encrypt files with AES-256-GCM in any S3-compatible bucket
 - **[Desktop app](https://tma-cloud.github.io/Wiki/docs/getting-started/desktop-app)** --- A native app for Windows, macOS and Linux, and the same interface in the browser
-- **[Cloud Drive](https://tma-cloud.github.io/Wiki/docs/getting-started/desktop-app#cloud-drive-mounted-windows-drive)** --- Open and save cloud files from any app, as a drive on Windows or a folder on Linux and macOS
+- **[Cloud Drive](https://tma-cloud.github.io/Wiki/docs/getting-started/desktop-app#cloud-drive-mounted-windows-drive)** --- Open and save cloud files from any app, as a folder that needs no extra driver on Windows, Linux or macOS
 - **[Document editing](https://tma-cloud.github.io/Wiki/docs/getting-started/desktop-app#edit-in-desktop-app)** --- Edit with OnlyOffice or desktop apps and sync changes back
 - **[Controlled sharing](https://tma-cloud.github.io/Wiki/docs/concepts/sharing-model)** --- Create read-only links with expiry and a separate domain
 - **[Sub-user access](https://tma-cloud.github.io/Wiki/docs/guides/user/sub-users)** --- Give each login separate permissions over the same files
