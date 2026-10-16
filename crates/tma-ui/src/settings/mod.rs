@@ -326,7 +326,6 @@ fn side_menu_layout(
                     menu_column(main, ui, pages, switch, &t, height - 2.0);
                 },
             );
-            let width = (ui.available_width() - 64.0).min(860.0);
             ui.allocate_ui_with_layout(
                 egui::vec2(ui.available_width(), height - 2.0),
                 egui::Layout::top_down(egui::Align::Min),
@@ -335,9 +334,16 @@ fn side_menu_layout(
                         egui::Frame::new().inner_margin(Margin { left: 32, right: 32, top: 28, bottom: 28 }).show(
                             ui,
                             |ui| {
-                                ui.set_width(width);
-                                ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
-                                page_body(main, host, tasks, ui);
+                                // Readable line lengths: the column stops growing and sits centred.
+                                let (width, before) = page_column(ui.available_width());
+                                ui.horizontal_top(|ui| {
+                                    ui.add_space(before);
+                                    ui.vertical(|ui| {
+                                        ui.set_width(width);
+                                        ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
+                                        page_body(main, host, tasks, ui);
+                                    });
+                                });
                             },
                         );
                     });
@@ -345,6 +351,14 @@ fn side_menu_layout(
             );
         });
     });
+}
+
+/// The page column's width, and the space before it that centres it, inside a
+/// pane `inner` wide (already less its margins): at most `MAX` wide.
+fn page_column(inner: f32) -> (f32, f32) {
+    const MAX: f32 = 920.0;
+    let width = inner.clamp(0.0, MAX);
+    (width, ((inner - width) / 2.0).floor())
 }
 
 fn hairline(ui: &mut egui::Ui, t: &Tokens) {
