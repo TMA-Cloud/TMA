@@ -244,13 +244,13 @@ fn header(app: &mut App, root: &mut egui::Ui) {
                         FontId::proportional(12.0),
                         t.label_tertiary,
                     );
-                    egui::Popup::menu(&menu).show(|ui| {
-                        ui.set_min_width(180.0);
+                    // As wide as the account button and under its right edge, not the header's width.
+                    egui::Popup::menu(&menu).align(egui::RectAlign::BOTTOM_END).width(rect.width()).show(|ui| {
                         let sign = egui::Button::new(
                             RichText::new(format!("{}  Sign out", ph::SIGN_OUT)).size(14.0).color(t.destructive_text),
                         )
                         .frame(false)
-                        .min_size(Vec2::new(ui.available_width(), 32.0));
+                        .min_size(Vec2::new(rect.width() - 12.0, 32.0));
                         if ui.add(sign).clicked() {
                             sign_out = true;
                         }
