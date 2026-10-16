@@ -18,6 +18,11 @@ impl Notifier {
         Self { tx: tasks.sender(), ctx: tasks.ctx().clone() }
     }
 
+    /// Run `apply` with the whole app on the next frame.
+    pub fn apply(&self, apply: impl FnOnce(&mut App) + Send + 'static) {
+        self.send(apply);
+    }
+
     fn send(&self, apply: impl FnOnce(&mut App) + Send + 'static) {
         let _ = self.tx.send(Box::new(apply));
         self.ctx.request_repaint();

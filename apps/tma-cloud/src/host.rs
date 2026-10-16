@@ -91,6 +91,7 @@ impl Host for DesktopHost {
 
     fn signed_in(&mut self, client: &Client, _user: &User, tasks: &Tasks) {
         self.drive.start(client, tasks.ctx().clone());
+        crate::update::check(client.clone(), Notifier::new(tasks));
         if let Some(stop) = self.heartbeat_stop.take() {
             stop.store(true, Ordering::Relaxed);
         }

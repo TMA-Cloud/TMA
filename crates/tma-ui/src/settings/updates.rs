@@ -13,18 +13,11 @@ pub fn load(main: &mut Main, tasks: &Tasks) {
     fetch(tasks, main, |c| async move { c.versions().await }, |s, v| s.versions = Some(v));
 }
 
-/// Whether `latest` is a newer dotted version than `current`.
-pub fn is_newer(latest: &str, current: &str) -> bool {
-    let parse =
-        |v: &str| v.trim_start_matches('v').split('.').map(|p| p.parse::<u64>().unwrap_or(0)).collect::<Vec<_>>();
-    parse(latest) > parse(current)
-}
-
 fn row(ui: &mut egui::Ui, name: &str, description: &str, current: Option<&str>, latest: Option<&str>) {
     let t = widgets::tokens(ui);
     widgets::setting_row(ui, name, description, |ui| {
         match (current, latest) {
-            (Some(c), Some(l)) if is_newer(l, c) => {
+            (Some(c), Some(l)) if tma_core::is_newer_version(l, c) => {
                 widgets::badge(ui, &format!("{l} available"), t.warning_text);
             }
             (Some(_), Some(_)) => {
@@ -75,16 +68,4 @@ pub fn show(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks, app_version: &str
             );
         }
     });
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn versions() {
-        assert!(is_newer("4.1.0", "4.0.9"));
-        assert!(!is_newer("4.0.0", "4.0.0"));
-        assert!(is_newer("v4.0.10", "4.0.9"));
-    }
 }

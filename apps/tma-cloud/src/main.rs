@@ -14,6 +14,7 @@ mod notify_ui;
 mod shortcuts;
 #[cfg(windows)]
 mod single;
+mod update;
 
 const PREFS_KEY: &str = "prefs";
 const SERVER_KEY: &str = "server";

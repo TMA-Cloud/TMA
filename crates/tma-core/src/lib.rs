@@ -19,3 +19,20 @@ pub const DESKTOP_HEADER_VALUE: &str = "tma-electron-client-v1";
 
 /// Product name shown in titles and the About page.
 pub const PRODUCT_NAME: &str = "TMA Cloud";
+
+/// Whether `latest` is a newer dotted version than `current` (a leading `v` is ignored).
+pub fn is_newer_version(latest: &str, current: &str) -> bool {
+    let parse =
+        |v: &str| v.trim_start_matches('v').split('.').map(|p| p.parse::<u64>().unwrap_or(0)).collect::<Vec<_>>();
+    parse(latest) > parse(current)
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn versions() {
+        assert!(super::is_newer_version("4.1.0", "4.0.9"));
+        assert!(!super::is_newer_version("4.0.0", "4.0.0"));
+        assert!(super::is_newer_version("v4.0.10", "4.0.9"));
+    }
+}
