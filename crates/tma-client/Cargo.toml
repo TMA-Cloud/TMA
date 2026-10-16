@@ -1,0 +1,35 @@
+[package]
+name = "tma-client"
+description = "TMA Cloud API client shared by the desktop and web apps (native and wasm)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+tma-core = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+futures = { workspace = true }
+bytes = { workspace = true }
+url = { workspace = true }
+thiserror = { workspace = true }
+log = { workspace = true }
+mime_guess = { workspace = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+reqwest = { workspace = true }
+tokio = { workspace = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+reqwest = { version = "0.13", default-features = false, features = ["json", "multipart", "stream", "query", "form"] }
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
+web-sys = { version = "0.3", features = ["Window", "Location", "EventSource", "EventSourceInit", "MessageEvent", "Event"] }
+gloo-timers = { version = "0.3", features = ["futures"] }
