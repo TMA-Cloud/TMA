@@ -1,26 +1,17 @@
-# Allowlist: the image is built from frontend/ and backend/ only, so nothing
-# else (secrets, electron, desktop-fs, backups) reaches the build context.
+# Allowlist: the image builds from the Cargo workspace only, so nothing else
+# (secrets, backups, local build output) reaches the build context.
 *
-!frontend/
-!backend/
+!Cargo.toml
+!Cargo.lock
+!rustfmt.toml
+!crates/
+!apps/
+!xtask/
 
 # Secrets
 **/.env
 **/.env.*
 
-# Installed or rebuilt inside the image
-**/node_modules/
-frontend/dist/
-**/*.tsbuildinfo
-
-# Tests, tooling and local output that the image doesn't use
-**/tests/
-**/coverage/
-**/coverage-integration/
-**/*.log
-**/.prettierrc
-**/.prettierignore
-**/eslint.config.*
-**/vitest*.config.*
-frontend/eslint-rules/
-backend/uploads/
+# Local build output
+**/target/
+apps/tma-cloud-web/dist/

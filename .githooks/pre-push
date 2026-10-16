@@ -1,6 +1,6 @@
 #!/bin/sh
 # Runs the CI checks (minus integration tests, which need Postgres and Redis)
-# for each package the pushed commits touch. It runs against the working tree,
+# when the pushed commits touch Rust code. It runs against the working tree,
 # so uncommitted changes are included in the run.
 set -eu
 
@@ -36,8 +36,6 @@ $(git diff --name-only "$base" "$local_sha")"
   fi
 done
 
-touched() { [ "$check_all" -eq 1 ] || printf '%s\n' "$changed" | grep -q "^$1/"; }
-
 status=0
 run() {
   _pkg=$1
@@ -49,28 +47,15 @@ run() {
   fi
 }
 
-for pkg in $NODE_PACKAGES; do
-  touched "$pkg" || continue
-  has_node_modules "$pkg" || continue
-  run "$pkg" npm run --silent lint
-  run "$pkg" npm run --silent format:check
-  if [ "$pkg" = frontend ]; then
-    run "$pkg" ./node_modules/.bin/tsc --noEmit -p tsconfig.app.json
-    run "$pkg" ./node_modules/.bin/tsc -b tsconfig.test.json
-  fi
-  # Only packages that have adopted knip define the script.
-  if grep -q '"knip":' "$pkg/package.json"; then
-    run "$pkg" npm run --silent knip
-  fi
-  run "$pkg" npm test --silent
-done
+rust_changed() {
+  [ "$check_all" -eq 1 ] || printf '%s\n' "$changed" | grep -qE '^(crates|apps|xtask)/|^Cargo\.(toml|lock)$|^rustfmt\.toml$'
+}
 
-if touched desktop-fs; then
-  if command -v dotnet >/dev/null 2>&1; then
-    run desktop-fs dotnet build --nologo -v quiet -warnaserror
-    run desktop-fs dotnet format --verify-no-changes
+if rust_changed; then
+  if command -v cargo >/dev/null 2>&1; then
+    run . cargo xtask ci
   else
-    warn "desktop-fs: dotnet not found, skipping build"
+    warn "cargo not found, skipping the Rust checks"
   fi
 fi
 

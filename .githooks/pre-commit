@@ -13,8 +13,6 @@ unstaged=$(git -c core.quotePath=false diff --name-only)
 status=0
 max_bytes=$((5 * 1024 * 1024))
 
-# --- Guards ---------------------------------------------------------------
-
 env_files=$(printf '%s\n' "$staged" | grep -E '(^|/)\.env(\.[^/]*)?$' | grep -vE '\.env\.(example|test)$' || true)
 if [ -n "$env_files" ]; then
   fail "refusing to commit environment files (secrets):"
@@ -37,66 +35,27 @@ printf '%s\n' "$staged" | while IFS= read -r f; do
   fi
 done || status=1
 
-# --- Node packages: Prettier + ESLint -------------------------------------
-
-for pkg in $NODE_PACKAGES; do
-  files=$(printf '%s\n' "$staged" | sed -n "s|^$pkg/||p")
-  [ -n "$files" ] || continue
-  has_node_modules "$pkg" || continue
-
-  partial=$(filter_by "$files" "$(printf '%s\n' "$unstaged" | sed -n "s|^$pkg/||p")" keep)
-  clean=$(filter_by "$files" "$partial" drop)
-  lintable='\.(c|m)?[jt]sx?$'
-  step "$pkg: prettier + eslint on $(printf '%s\n' "$files" | wc -l | tr -d ' ') file(s)"
-
-  if [ -n "$clean" ]; then
-    if ! printf '%s\n' "$clean" | nul | (cd "$pkg" && xargs -0 ./node_modules/.bin/prettier --check --ignore-unknown --no-error-on-unmatched-pattern --log-level warn); then
-      fail "$pkg: formatting; fix with: (cd $pkg && npx prettier --write <files>)"
+rs_files=$(printf '%s\n' "$staged" | grep -E '\.rs$' || true)
+if [ -n "$rs_files" ]; then
+  if command -v rustfmt >/dev/null 2>&1; then
+    step "rustfmt on $(printf '%s\n' "$rs_files" | wc -l | tr -d ' ') file(s)"
+    partial=$(filter_by "$rs_files" "$unstaged" keep)
+    clean=$(filter_by "$rs_files" "$partial" drop)
+    if [ -n "$clean" ] && ! printf '%s\n' "$clean" | nul | xargs -0 rustfmt --edition 2024 --check >/dev/null; then
+      fail "formatting; fix with: cargo fmt"
       status=1
     fi
-    clean_lint=$(printf '%s\n' "$clean" | grep -E "$lintable" || true)
-    if [ -n "$clean_lint" ] &&
-      ! printf '%s\n' "$clean_lint" | nul | (cd "$pkg" && xargs -0 ./node_modules/.bin/eslint --no-warn-ignored); then
-      fail "$pkg: eslint"
-      status=1
-    fi
-  fi
-
-  # Half-staged files: check the staged blob, not the working copy.
-  if [ -n "$partial" ]; then
     tmp=$(mktemp)
-    printf '%s\n' "$partial" | while IFS= read -r f; do
-      git show ":$pkg/$f" >"$tmp"
-      if ! (cd "$pkg" && ./node_modules/.bin/prettier --stdin-filepath "$f" <"$tmp" | cmp -s - "$tmp"); then
-        fail "$pkg/$f: staged content isn't formatted"
-        echo 1 >"$tmp.failed"
+    printf '%s\n' "$partial" | sed '/^$/d' | while IFS= read -r f; do
+      git show ":$f" >"$tmp"
+      if ! rustfmt --edition 2024 --config-path rustfmt.toml --emit stdout <"$tmp" 2>/dev/null | cmp -s - "$tmp"; then
+        fail "$f: staged content isn't formatted"
+        exit 1
       fi
-      if printf '%s\n' "$f" | grep -qE "$lintable" &&
-        ! (cd "$pkg" && ./node_modules/.bin/eslint --no-warn-ignored --stdin --stdin-filename "$f" <"$tmp"); then
-        echo 1 >"$tmp.failed"
-      fi
-    done
-    [ -f "$tmp.failed" ] && status=1
-    rm -f "$tmp" "$tmp.failed"
-  fi
-done
-
-# --- desktop-fs: dotnet format whitespace ---------------------------------
-
-cs_files=$(printf '%s\n' "$staged" | sed -n 's|^desktop-fs/\(.*\.cs\)$|\1|p')
-if [ -n "$cs_files" ]; then
-  if command -v dotnet >/dev/null 2>&1; then
-    step "desktop-fs: dotnet format whitespace"
-    if [ -n "$(filter_by "$cs_files" "$(printf '%s\n' "$unstaged" | sed -n 's|^desktop-fs/||p')" keep)" ]; then
-      warn "desktop-fs: some .cs files are half-staged; checking the working copy"
-    fi
-    if ! printf '%s\n' "$cs_files" | nul |
-      (cd desktop-fs && xargs -0 dotnet format whitespace TmaCloudFs.csproj --verify-no-changes --include); then
-      fail "desktop-fs: formatting; fix with: (cd desktop-fs && dotnet format whitespace)"
-      status=1
-    fi
+    done || status=1
+    rm -f "$tmp"
   else
-    warn "desktop-fs: dotnet not found, skipping format check"
+    warn "rustfmt not found, skipping the format check"
   fi
 fi
 

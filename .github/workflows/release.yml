@@ -39,11 +39,11 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Tag: $TAG, Version: $VERSION"
 
-      - name: Verify version matches package.json
+      - name: Verify version matches Cargo.toml
         run: |
-          PKG_VERSION=$(node -p "require('./backend/package.json').version")
+          PKG_VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n1)
           if [ "$PKG_VERSION" != "${{ steps.version.outputs.version }}" ]; then
-            echo "Warning: Package version ($PKG_VERSION) doesn't match tag version (${{ steps.version.outputs.version }})"
+            echo "Warning: Workspace version ($PKG_VERSION) doesn't match tag version (${{ steps.version.outputs.version }})"
           fi
 
       - name: Get previous tag
@@ -81,3 +81,46 @@ jobs:
           prerelease: ${{ contains(steps.version.outputs.tag, '-') }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  desktop:
+    name: Desktop app (${{ matrix.name }})
+    needs: release
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows
+            os: windows-latest
+          - name: macOS
+            os: macos-latest
+          - name: Linux
+            os: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Linux libraries
+        if: runner.os == 'Linux'
+        # libfuse2 runs the AppImage tooling; the app itself uses FUSE 3.
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config libfuse2t64
+
+      - name: Build installers
+        shell: bash
+        env:
+          LIBCLANG_PATH: ${{ runner.os == 'Windows' && 'C:\Program Files\LLVM\bin' || '' }}
+        run: |
+          rustup update stable --no-self-update && rustup default stable
+          cargo install cargo-packager --locked
+          cargo xtask package
+
+      - name: Upload
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
+        run: |
+          # The installers only; the packager also leaves working folders (the .app bundle) here.
+          find target/packages -maxdepth 1 -type f \( -name '*.exe' -o -name '*.msi' -o -name '*.dmg' -o -name '*.deb' -o -name '*.AppImage' \) -print0 |
+            xargs -0 gh release upload "$TAG" --clobber

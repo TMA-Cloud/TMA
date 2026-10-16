@@ -24,9 +24,9 @@ services:
     secrets:
       - file_encryption_key
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:3000/health || exit 1"]
+      test: ["CMD", "tma-server", "healthcheck"]
       interval: 30s
-      timeout: 3s
+      timeout: 5s
       retries: 3
       start_period: 40s
     depends_on:
@@ -108,8 +108,8 @@ services:
       - FILE_ENCRYPTION_KEY_FILE=/run/secrets/file_encryption_key
     secrets:
       - file_encryption_key
-    command: node backend/audit-worker.js
-    # The image's check curls the API port, which the worker does not serve. A
+    command: ["tma-server", "worker"]
+    # The image's check calls the API port, which the worker does not serve. A
     # crashed worker exits, and the restart policy brings it back.
     healthcheck:
       disable: true

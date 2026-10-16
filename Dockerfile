@@ -1,108 +1,54 @@
-# =============================================================================
-# Production Dockerfile for TMA Cloud
-# =============================================================================
-# Multi-stage Dockerfile that builds both frontend and backend into a single
-# production-ready image.
+# syntax=docker/dockerfile:1.7
+# TMA Cloud: one image with the server (API, worker, admin commands) and the
+# web app it serves.
 #
-# Build:
-#   docker build -t tma-cloud:latest .
-#
-# Run:
-#   docker run -p 3000:3000 -e DATABASE_URL=postgresql://... -e REDIS_URL=redis://... ... tma-cloud:latest
-# =============================================================================
+#   docker build --build-arg VERSION=4.0.0 -t tma-cloud .
+#   docker run -p 3000:3000 --env-file .env tma-cloud            # API + web app
+#   docker run --env-file .env tma-cloud tma-server worker       # background worker
 
-# -----------------------------------------------------------------------------
-# Stage 1: Build Frontend (React + Vite)
-# -----------------------------------------------------------------------------
-FROM node:26-alpine AS frontend-builder
+ARG RUST_VERSION=1
+ARG TRUNK_VERSION=0.21.14
 
-# Set working directory
-WORKDIR /app/frontend
+# The web app: the egui interface compiled to WebAssembly by trunk.
+FROM rust:${RUST_VERSION}-bookworm AS web
+ARG TRUNK_VERSION
+RUN rustup target add wasm32-unknown-unknown \
+    && curl -fsSL "https://github.com/trunk-rs/trunk/releases/download/v${TRUNK_VERSION}/trunk-x86_64-unknown-linux-gnu.tar.gz" | tar -xz -C /usr/local/bin \
+    && apt-get update && apt-get install -y --no-install-recommends brotli && rm -rf /var/lib/apt/lists/*
+WORKDIR /src
+COPY . .
+RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,id=tma-web-target,target=/src/target \
+    cd apps/tma-cloud-web \
+    && trunk build --release --cargo-profile wasm-release \
+    && find dist -type f \( -name '*.wasm' -o -name '*.js' -o -name '*.html' -o -name '*.webmanifest' \) \
+       -exec gzip -9 -k {} \; -exec brotli -q 11 -k {} \; \
+    && cp -r dist /web
 
-# Copy package files first for better layer caching
-COPY frontend/package*.json ./
+# The server.
+FROM rust:${RUST_VERSION}-bookworm AS server
+WORKDIR /src
+COPY . .
+RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,id=tma-server-target,target=/src/target \
+    cargo build --release --locked -p tma-server \
+    && cp target/release/tma-server /tma-server
 
-# Install all dependencies (including devDependencies for build)
-RUN npm ci && \
-    npm cache clean --force
-
-# Copy frontend source code
-COPY frontend/ ./
-
-# Build frontend for production
-# This creates optimized static files in frontend/dist/
-RUN npm run build
-
-# -----------------------------------------------------------------------------
-# Stage 2: Install Backend Dependencies
-# -----------------------------------------------------------------------------
-FROM node:26-alpine AS backend-builder
-
-WORKDIR /app/backend
-
-# Copy package files
-COPY backend/package*.json ./
-
-# Install only production dependencies
-RUN npm ci --only=production && \
-    npm cache clean --force
-
-# -----------------------------------------------------------------------------
-# Stage 3: Production Image
-# -----------------------------------------------------------------------------
-FROM node:26-alpine AS production
-
-# Build argument for version (passed from Makefile)
-ARG VERSION
-
-# Add metadata labels
-LABEL maintainer="ZIDAN44"
-LABEL description="TMA Cloud"
-LABEL version="${VERSION}"
-
-# Install system dependencies
-RUN apk add --no-cache \
-    dumb-init \
-    curl \
-    && rm -rf /var/cache/apk/*
-
-# Create non-root user
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nodejs -u 1001
-
-# Set working directory
-WORKDIR /app
-
-# Copy backend dependencies from builder stage
-COPY --from=backend-builder --chown=nodejs:nodejs /app/backend/node_modules ./backend/node_modules
-
-# Copy backend source code
-COPY --chown=nodejs:nodejs backend/ ./backend/
-
-# Copy built frontend static files
-COPY --from=frontend-builder --chown=nodejs:nodejs /app/frontend/dist ./frontend/dist
-
-# Copy database migrations
-COPY --chown=nodejs:nodejs backend/migrations ./backend/migrations
-
-
-# Set production environment
-ENV NODE_ENV=production
-
-# Switch to non-root user for security
-USER nodejs
-
-# Expose the application port
+# Runtime: glibc and nothing else; the server needs no shell, curl or OpenSSL.
+FROM gcr.io/distroless/cc-debian12
+ARG VERSION=unknown
+LABEL org.opencontainers.image.title="TMA Cloud" \
+      org.opencontainers.image.description="Self-hosted cloud storage" \
+      org.opencontainers.image.source="https://github.com/TMA-Cloud/TMA" \
+      org.opencontainers.image.version="${VERSION}"
+COPY --from=server /tma-server /usr/local/bin/tma-server
+COPY --from=web /web /app/web
+ENV APP_ENV=production \
+    WEB_DIST_DIR=/app/web \
+    PORT=3000
+# Matches the uid that setup.sh gives the encryption key file to.
+USER 1001:1001
 EXPOSE 3000
-
-# Health check configuration
-# Checks the /health endpoint every 30 seconds
-# Start period allows time for application to initialize
-HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
-  CMD curl -f http://localhost:3000/health || exit 1
-
-# Use dumb-init for proper signal handling
-ENTRYPOINT ["dumb-init", "--"]
-
-# Start the server
-CMD ["node", "backend/server.js"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 CMD ["tma-server", "healthcheck"]
+ENTRYPOINT []
+CMD ["tma-server", "serve"]

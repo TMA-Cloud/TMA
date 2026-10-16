@@ -6,35 +6,20 @@
 .cursor/
 CLAUDE.local.md
 
-# Dependencies
-node_modules/
-
 # Environment variables
 .env
 .env.*
 !.env.example
 !.env.test
 
-# Test output
-coverage/
-coverage-integration/
-backend/tests/.tmp/
-*.tsbuildinfo
+# Build output
+/target/
+apps/tma-cloud-web/dist/
+*.tgz
 
 # Logs
 logs/
 *.log
-
-# Build output
-frontend/dist/
-electron/dist-client/
-electron/dist-electron/
-electron/clouddrive-dist/
-electron/build-assets/
-electron/src/config/build-config.json
-desktop-fs/bin/
-desktop-fs/obj/
-*.tgz
 
 # Local data
 backups/

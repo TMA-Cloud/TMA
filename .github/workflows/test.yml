@@ -6,63 +6,46 @@ on:
   pull_request:
   workflow_dispatch:
 
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -D warnings
+
 jobs:
-  backend:
-    name: Backend
+  rust:
+    name: Format, lint and test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 26
-          cache: npm
-          cache-dependency-path: backend/package-lock.json
+      - name: Toolchain
+        run: |
+          rustup update stable --no-self-update
+          rustup default stable
+          rustup component add rustfmt clippy
+          rustup target add wasm32-unknown-unknown
 
-      - name: Install dependencies
-        working-directory: backend
-        run: npm ci
+      # The desktop app's Linux build links against D-Bus (keyring) at test time.
+      - name: System libraries
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
 
-      - name: Lint
-        working-directory: backend
-        run: npm run lint
+      - name: Format
+        run: cargo fmt --all --check
 
-      - name: Check formatting
-        working-directory: backend
-        run: npm run format:check
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
 
-      - name: Find unused code
-        working-directory: backend
-        run: npm run knip
+      - name: Tests
+        run: cargo test --workspace
 
-      - name: Test
-        working-directory: backend
-        run: npm run test:coverage
-
-      - name: Upload coverage
-        if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: backend-coverage
-          path: backend/coverage
-          retention-days: 7
-
-  scripts:
-    name: Install scripts
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      # These scripts write keys and passwords on users' servers; shellcheck ships with the runner.
-      - name: Shellcheck
-        run: shellcheck setup.sh update.sh rotate.sh scripts/db-backup-restore.sh
+      - name: Web build (wasm)
+        run: cargo clippy -p tma-cloud-web -p tma-ui -p tma-client --target wasm32-unknown-unknown -- -D warnings
 
   integration:
-    name: Backend integration
+    name: Server integration
     runs-on: ubuntu-latest
 
-    # The suite talks to a real database and cache. Locally these come from
-    # .env; in CI they are throwaway service containers.
+    # The suite talks to a real database, cache and bucket; here they are
+    # throwaway containers.
     services:
       postgres:
         image: postgres:18-alpine
@@ -86,110 +69,52 @@ jobs:
           --health-retries 5
 
     env:
-      DATABASE_URL: postgresql://tma:tma@localhost:5432/tma_cloud_test
-      REDIS_URL: redis://localhost:6379/15
+      TMA_TEST_DATABASE_URL: postgresql://tma:tma@localhost:5432/tma_cloud_test
+      TMA_TEST_REDIS_URL: redis://localhost:6379/15
+      TMA_TEST_S3_ENDPOINT: http://localhost:9000
+      TMA_TEST_S3_ACCESS_KEY: tmatestkey
+      TMA_TEST_S3_SECRET_KEY: tmatestsecret123
+      TMA_TEST_S3_BUCKET: tma-test
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 26
-          cache: npm
-          cache-dependency-path: backend/package-lock.json
+      # Service containers cannot take arguments, and RustFS needs its data path.
+      - name: Object storage
+        run: |
+          docker run -d --name rustfs -p 9000:9000 \
+            -e RUSTFS_ACCESS_KEY=tmatestkey -e RUSTFS_SECRET_KEY=tmatestsecret123 \
+            rustfs/rustfs:latest /data
+          for i in $(seq 1 30); do curl -s -o /dev/null http://localhost:9000/ && break; sleep 1; done
 
-      - name: Install dependencies
-        working-directory: backend
-        run: npm ci
+      - name: Toolchain
+        run: rustup update stable --no-self-update && rustup default stable
 
       - name: Integration tests
-        working-directory: backend
-        run: npm run test:integration
+        run: cargo test -p tma-server --test api -- --test-threads=1
 
-  electron:
-    name: Desktop app
-    runs-on: ubuntu-latest
-
-    # Tests only. The suite replaces the electron runtime with an
-    # in-memory double, so it runs on Linux with no display and no binary.
+  windows:
+    name: Desktop app (Windows)
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 26
-          cache: npm
-          cache-dependency-path: electron/package-lock.json
+      # Runners ship LLVM; the WinFsp bindings are generated with its libclang.
+      - name: Build and test
+        shell: bash
+        env:
+          LIBCLANG_PATH: C:\Program Files\LLVM\bin
+        run: |
+          rustup update stable --no-self-update && rustup default stable
+          cargo clippy -p tma-cloud -p tma-drive --all-targets -- -D warnings
+          cargo test -p tma-drive -p tma-cloud
 
-      - name: Install dependencies
-        working-directory: electron
-        # --ignore-scripts skips the Electron binary download.
-        run: npm ci --ignore-scripts
-
-      - name: Lint
-        working-directory: electron
-        run: npm run lint
-
-      - name: Check formatting
-        working-directory: electron
-        run: npm run format:check
-
-      - name: Find unused code
-        working-directory: electron
-        run: npm run knip
-
-      - name: Test
-        working-directory: electron
-        run: npm run test:coverage
-
-      - name: Upload coverage
-        if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: electron-coverage
-          path: electron/coverage
-          retention-days: 7
-
-  frontend:
-    name: Frontend
+  scripts:
+    name: Install scripts
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 26
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-
-      - name: Install dependencies
-        working-directory: frontend
-        run: npm ci
-
-      - name: Lint
-        working-directory: frontend
-        run: npm run lint
-
-      - name: Check formatting
-        working-directory: frontend
-        run: npm run format:check
-
-      - name: Typecheck tests
-        working-directory: frontend
-        run: npx tsc -b tsconfig.test.json
-
-      - name: Find unused code
-        working-directory: frontend
-        run: npm run knip
-
-      - name: Test
-        working-directory: frontend
-        run: npm run test:coverage
-
-      - name: Upload coverage
-        if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: frontend-coverage
-          path: frontend/coverage
-          retention-days: 7
+      # These scripts write keys and passwords on users' servers; shellcheck ships with the runner.
+      - name: Shellcheck
+        run: shellcheck setup.sh update.sh rotate.sh scripts/db-backup-restore.sh .githooks/pre-commit .githooks/pre-push .githooks/commit-msg

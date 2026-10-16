@@ -24,7 +24,7 @@ jobs:
       - name: Extract version
         id: version
         run: |
-          VERSION=$(node -p "require('./backend/package.json').version")
+          VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n1)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Version: $VERSION"
 

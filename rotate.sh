@@ -52,7 +52,7 @@ main() {
   command -v docker >/dev/null 2>&1 || die "Docker is required"
 
   # stdin stays closed unless a command needs it, so a piped script is never read as input.
-  app_cli() { docker compose exec -T app node backend/scripts/rotate.js "$@"; }
+  app_cli() { docker compose exec -T app tma-server rotate "$@"; }
 
   # A key rotation works with the app stopped, as it is when it refuses a passphrase key.
   if [[ "$command" != "key" ]]; then
