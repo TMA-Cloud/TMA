@@ -10,7 +10,8 @@ use cloud_filter::utility::WriteAt;
 
 use crate::cloud_files::local;
 use crate::cloud_files::worker::Shared;
-use crate::sync_plan::Stamp;
+use crate::paths;
+use crate::sync_plan::{self, Stamp};
 
 /// Transfers must be whole 4 KiB pages, except the last one.
 const PAGE: usize = 4096;
@@ -45,10 +46,30 @@ fn unsuccessful(what: &str, err: impl std::fmt::Display) -> CloudErrorKind {
 }
 
 impl Filter {
+    /// For a save's backup copy (see `sync_plan::is_save_backup`), the drive path of
+    /// the document it was renamed from, which the server still has under that name.
+    fn backup_of(&self, rel: &str, blob: &[u8]) -> Option<String> {
+        let name = paths::leaf(rel);
+        if !sync_plan::is_local_only(name) {
+            return None;
+        }
+        let stamp = Stamp::decode(blob)?;
+        let core = &self.shared.core;
+        let folder = core.resolve(&paths::parent(rel)?).ok().flatten()?;
+        let children = core.children(&folder).ok()?;
+        children
+            .into_iter()
+            .find(|n| {
+                n.id.as_deref() == Some(stamp.id.as_str()) && paths::key(paths::leaf(&n.path)) != paths::key(name)
+            })
+            .map(|n| n.path)
+    }
+
     fn hydrate(&self, request: &Request, ticket: &ticket::FetchData) -> CResult<()> {
         let core = &self.shared.core;
         let path = request.path();
-        if !self.shared.rel(&path).is_some_and(|rel| core.may_read(&rel)) {
+        let rel = self.shared.rel(&path).map(|rel| self.backup_of(&rel, request.file_blob()).unwrap_or(rel));
+        if !rel.is_some_and(|rel| core.may_read(&rel)) {
             log::info!("[drive] save-only: refused to open {}", path.display());
             return Err(CloudErrorKind::AccessDenied);
         }
@@ -117,7 +138,11 @@ impl SyncFilter for Filter {
         if !ours(&request)
             && let Some(stamp) = Stamp::decode(request.file_blob())
         {
-            self.shared.queue_delete(stamp.id, request.path());
+            // A save's backup goes once the new copy is written; the server file is that copy.
+            let backup = self.shared.rel(&request.path()).and_then(|rel| self.backup_of(&rel, request.file_blob()));
+            if backup.is_none() {
+                self.shared.queue_delete(stamp.id, request.path());
+            }
         }
         Ok(())
     }
@@ -140,10 +165,26 @@ impl SyncFilter for Filter {
         let (Some(from_rel), Some(to_rel)) = (self.shared.rel(&from), self.shared.rel(&to)) else {
             return Err(CloudErrorKind::NotUnderSyncRoot);
         };
+        let same_folder =
+            paths::parent(&from_rel).map(|p| paths::key(&p)) == paths::parent(&to_rel).map(|p| paths::key(&p));
+        let mut server_from = from_rel.clone();
+        if let Some(original) = self.backup_of(&from_rel, request.file_blob()) {
+            // A backup put back (the save failed) or moved to another scratch name: nothing changes on the server.
+            if paths::key(&original) == paths::key(&to_rel) || sync_plan::is_local_only(paths::leaf(&to_rel)) {
+                return ticket.pass().map_err(|e| unsuccessful("rename", e));
+            }
+            server_from = original;
+        } else if same_folder
+            && !from.is_dir()
+            && sync_plan::is_save_backup(paths::leaf(&from_rel), paths::leaf(&to_rel))
+        {
+            log::debug!("[drive] save backup {from_rel} -> {to_rel} stays local");
+            return ticket.pass().map_err(|e| unsuccessful("rename", e));
+        }
         // Refuse the rename if the server cannot follow, so both sides stay the same.
         self.shared
             .core
-            .rename(&from_rel, &to_rel)
+            .rename(&server_from, &to_rel)
             .map_err(|e| unsuccessful("rename on the server", format!("{e:?}")))?;
         ticket.pass().map_err(|e| unsuccessful("rename", e))
     }

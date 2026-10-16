@@ -73,7 +73,20 @@ pub fn is_local_only(name: &str) -> bool {
     lower.starts_with("~$")
         || lower.starts_with(".~lock.")
         || lower.ends_with(".tmp")
+        || is_excel_scratch(name)
         || matches!(lower.as_str(), "desktop.ini" | "thumbs.db" | ".ds_store")
+}
+
+/// Excel saves through files named with eight uppercase hex digits and no extension.
+fn is_excel_scratch(name: &str) -> bool {
+    name.len() == 8 && name.bytes().all(|b| b.is_ascii_digit() || (b'A'..=b'F').contains(&b))
+}
+
+/// Word and Excel save by renaming the document to a scratch name as a backup,
+/// writing the new copy under the real name, then deleting the backup. That
+/// rename stays local, so the server file keeps its name and id for the new copy.
+pub fn is_save_backup(from: &str, to: &str) -> bool {
+    !is_local_only(from) && is_local_only(to)
 }
 
 fn key(name: &str) -> String {
@@ -96,6 +109,10 @@ pub fn reconcile(local: &[Local], server: &[Entry]) -> Vec<Fix> {
         match by_id.get(stamp.id.as_str()) {
             Some(entry) if same_type(item, entry) => {
                 claimed.insert(entry.id.as_str());
+                // A save's backup copy: renaming it back would undo the app's save.
+                if entry.name != item.name && is_local_only(&item.name) {
+                    continue;
+                }
                 if entry.name != item.name {
                     let free = key(&entry.name) == key(&item.name) || !local_names.contains(&key(&entry.name));
                     if free {
@@ -212,6 +229,28 @@ mod tests {
         let server = vec![entry("2", "a.txt", false, 5)];
         let fixes = reconcile(&local, &server);
         assert_eq!(fixes, vec![Fix::Remove("a.txt".into()), Fix::Create(server[0].clone())]);
+    }
+
+    #[test]
+    fn office_scratch_names_stay_local() {
+        for name in ["~WRL0001.tmp", "~WRD0000.tmp", "ppt1A2B.tmp", "B9EC1600", "~$port.docx"] {
+            assert!(is_local_only(name), "{name}");
+        }
+        for name in ["Contacts.csv", "b9ec1600", "B9EC160", "B9EC1600.csv", "DEADBEEF1"] {
+            assert!(!is_local_only(name), "{name}");
+        }
+        assert!(is_save_backup("Roadmap 2027.docx", "~WRL0001.tmp"));
+        assert!(is_save_backup("Contacts.csv", "B9EC1600"));
+        assert!(!is_save_backup("~WRD0000.tmp", "Roadmap 2027.docx"));
+        assert!(!is_save_backup("a.txt", "b.txt"));
+    }
+
+    #[test]
+    fn a_save_backup_is_not_renamed_back() {
+        // Word renamed the document to its backup name; the server still has the real name.
+        let local = vec![placeholder("~WRL0001.tmp", "1", 5, true)];
+        let server = vec![entry("1", "Roadmap 2027.docx", false, 5)];
+        assert!(reconcile(&local, &server).is_empty());
     }
 
     #[test]
