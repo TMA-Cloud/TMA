@@ -61,7 +61,11 @@ impl Toasts {
                 ui.set_max_width(360.0);
                 for toast in &self.items {
                     let age = now - toast.shown_at;
-                    let alpha = ((LIFETIME - age).min(0.3) / 0.3).clamp(0.0, 1.0) as f32;
+                    // In over 0.18 s, out over the last 0.3 s.
+                    let alpha = (age.min(0.18) / 0.18).min((LIFETIME - age).min(0.3) / 0.3).clamp(0.0, 1.0) as f32;
+                    if age < 0.18 {
+                        ctx.request_repaint();
+                    }
                     let (icon, color) = match toast.level {
                         Level::Info => (ph::INFO, t.accent),
                         Level::Success => (ph::CHECK_CIRCLE, t.positive),

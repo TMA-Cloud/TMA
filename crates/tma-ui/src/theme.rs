@@ -214,6 +214,8 @@ pub fn apply(ctx: &egui::Context, t: &Tokens) {
         style.spacing.menu_margin = egui::Margin::same(6);
         style.spacing.window_margin = egui::Margin::same(18);
         style.interaction.selectable_labels = false;
+        // Menus, dialogs and panels ease in over about the old web app's timing, not egui's 1/12 s.
+        style.animation_time = 0.16;
         style.text_styles = [
             (TextStyle::Small, FontId::new(11.0, FontFamily::Proportional)),
             (TextStyle::Body, FontId::new(13.0, FontFamily::Proportional)),
