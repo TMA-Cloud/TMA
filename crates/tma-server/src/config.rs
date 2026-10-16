@@ -17,6 +17,8 @@ pub struct Config {
     pub jwt_secret: String,
     pub force_insecure_cookies: bool,
     pub metrics_allowed_ips: Vec<String>,
+    /// The release feed behind `/api/version/latest`.
+    pub versions_url: String,
     pub worker_concurrency: usize,
     pub web_dist_dir: Option<PathBuf>,
     pub onlyoffice_reject_unauthorized: bool,
@@ -66,6 +68,9 @@ pub fn load_dotenv() {
     }
 }
 
+/// Published from the TMA-Cloud/updates repository.
+const DEFAULT_VERSIONS_URL: &str = "https://tma-cloud.github.io/updates/versions.json";
+
 impl Config {
     pub fn from_env() -> Result<Self> {
         let env = std::env::var("APP_ENV").or_else(|_| std::env::var("NODE_ENV")).unwrap_or_default();
@@ -92,6 +97,10 @@ impl Config {
             jwt_secret,
             force_insecure_cookies: env_flag("FORCE_INSECURE_COOKIES"),
             metrics_allowed_ips,
+            versions_url: std::env::var("VERSIONS_URL")
+                .ok()
+                .filter(|u| u.starts_with("https://"))
+                .unwrap_or_else(|| DEFAULT_VERSIONS_URL.into()),
             worker_concurrency,
             web_dist_dir: locate_web_dist(),
             onlyoffice_reject_unauthorized: std::env::var("ONLYOFFICE_REJECT_UNAUTHORIZED")

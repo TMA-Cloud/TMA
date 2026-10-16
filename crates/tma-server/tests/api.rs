@@ -55,6 +55,7 @@ async fn start(env: &Env) -> String {
         jwt_secret: "integration-test-secret".into(),
         force_insecure_cookies: true,
         metrics_allowed_ips: vec!["127.0.0.1".into()],
+        versions_url: "https://tma-cloud.github.io/updates/versions.json".into(),
         worker_concurrency: 4,
         web_dist_dir: None,
         onlyoffice_reject_unauthorized: true,

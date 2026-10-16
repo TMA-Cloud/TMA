@@ -16,7 +16,6 @@ use crate::error::{ApiError, ApiResult};
 use crate::middleware::ReqCtx;
 use crate::state::AppState;
 
-const VERSIONS_URL: &str = "https://tma-cloud.github.io/updates/versions.json";
 /// Releases are rare; without this every user's update check refetches the file.
 const LATEST_TTL: Duration = Duration::from_secs(600);
 
@@ -69,14 +68,15 @@ async fn latest(State(state): State<AppState>) -> ApiResult<Json<Value>> {
     if let Some((_, body)) = cached.as_ref().filter(|(at, _)| at.elapsed() < LATEST_TTL) {
         return Ok(Json(body.clone()));
     }
-    let response = state.http.get(VERSIONS_URL).timeout(Duration::from_secs(10)).send().await.map_err(|err| {
-        tracing::error!(error = %err, "Error fetching latest versions");
-        if err.is_timeout() {
-            ApiError::new(StatusCode::GATEWAY_TIMEOUT, "Request timeout while fetching versions")
-        } else {
-            ApiError::internal_msg("Failed to fetch latest versions", err)
-        }
-    })?;
+    let response =
+        state.http.get(&state.config.versions_url).timeout(Duration::from_secs(10)).send().await.map_err(|err| {
+            tracing::error!(error = %err, "Error fetching latest versions");
+            if err.is_timeout() {
+                ApiError::new(StatusCode::GATEWAY_TIMEOUT, "Request timeout while fetching versions")
+            } else {
+                ApiError::internal_msg("Failed to fetch latest versions", err)
+            }
+        })?;
     if !response.status().is_success() {
         return Err(ApiError::new(
             StatusCode::BAD_GATEWAY,
