@@ -48,6 +48,8 @@ if [ -n "$rs_files" ]; then
     tmp=$(mktemp)
     printf '%s\n' "$partial" | sed '/^$/d' | while IFS= read -r f; do
       git show ":$f" >"$tmp"
+      # Both sides of the pipe only read $tmp.
+      # shellcheck disable=SC2094
       if ! rustfmt --edition 2024 --config-path rustfmt.toml --emit stdout <"$tmp" 2>/dev/null | cmp -s - "$tmp"; then
         fail "$f: staged content isn't formatted"
         exit 1
@@ -56,6 +58,21 @@ if [ -n "$rs_files" ]; then
     rm -f "$tmp"
   else
     warn "rustfmt not found, skipping the format check"
+  fi
+fi
+
+# Prettier formats what rustfmt does not; the version matches xtask's.
+pretty_files=$(printf '%s\n' "$staged" | grep -E '\.(md|ya?ml|json|html|css)$' | grep -vE '^(vendor|target)/' || true)
+if [ -n "$pretty_files" ]; then
+  if command -v npx >/dev/null 2>&1; then
+    step "prettier on $(printf '%s\n' "$pretty_files" | wc -l | tr -d ' ') file(s)"
+    whole=$(filter_by "$pretty_files" "$unstaged" drop)
+    if [ -n "$whole" ] && ! printf '%s\n' "$whole" | nul | xargs -0 npx --yes prettier@3.9.9 --check --log-level warn; then
+      fail "formatting; fix with: cargo xtask fmt"
+      status=1
+    fi
+  else
+    warn "npx not found, skipping the Prettier check"
   fi
 fi
 

@@ -6,16 +6,16 @@ desktop app and in the browser as WebAssembly, and Cloud Drive, which shows the
 store as a folder with no extra driver (Cloud Files on Windows, FUSE on Linux, a
 local NFS mount on macOS). User docs live in the [Wiki](https://tma-cloud.github.io/Wiki).
 
-| Crate                  | What it is                                                                |
-| ---------------------- | ------------------------------------------------------------------------- |
-| `crates/tma-core`      | Pure, wasm-safe shared code: API types, file kinds, names, formatting     |
-| `crates/tma-server`    | axum API, job worker and CLI (`tma-server serve\|worker\|rotate\|s3\|import`) |
-| `crates/tma-client`    | The API client for both apps (reqwest natively, fetch in the browser)     |
-| `crates/tma-ui`        | The egui interface shared by the desktop and web apps                     |
-| `crates/tma-drive`     | Cloud Drive: a platform-independent core plus Cloud Files, FUSE and NFS   |
-| `apps/tma-cloud`       | The desktop app (eframe): saved sign-in, edit in local apps, Cloud Drive  |
-| `apps/tma-cloud-web`   | The web app (eframe web runner, built with trunk, served by the server)   |
-| `xtask`                | `cargo xtask ci`: the checks CI runs                                      |
+| Crate                | What it is                                                                    |
+| -------------------- | ----------------------------------------------------------------------------- |
+| `crates/tma-core`    | Pure, wasm-safe shared code: API types, file kinds, names, formatting         |
+| `crates/tma-server`  | axum API, job worker and CLI (`tma-server serve\|worker\|rotate\|s3\|import`) |
+| `crates/tma-client`  | The API client for both apps (reqwest natively, fetch in the browser)         |
+| `crates/tma-ui`      | The egui interface shared by the desktop and web apps                         |
+| `crates/tma-drive`   | Cloud Drive: a platform-independent core plus Cloud Files, FUSE and NFS       |
+| `apps/tma-cloud`     | The desktop app (eframe): saved sign-in, edit in local apps, Cloud Drive      |
+| `apps/tma-cloud-web` | The web app (eframe web runner, built with trunk, served by the server)       |
+| `xtask`              | `cargo xtask ci`: the checks CI runs                                          |
 
 One Cargo workspace (edition 2024, resolver 3); shared dependency versions live in
 the root `Cargo.toml`. The root `Dockerfile` builds the web app and the server
@@ -23,8 +23,14 @@ into one image; `make build` tags it with the workspace version.
 
 ## Rules for every crate
 
-- **No source file over 550 real lines.** Blank lines and comments don't count;
-  tests are exempt. When a file reaches the limit, split it. Don't raise the limit.
+- **No source file over 400 lines of code, no function over 150.** Blank lines,
+  comments and the `#[cfg(test)]` module don't count. Split by concern before you
+  get there; never raise either limit. `cargo xtask house` and Clippy's
+  `too_many_lines` enforce them; `cargo xtask house --sizes` lists the largest files.
+- **No copied code.** A run of 10 or more identical code lines in two places
+  fails `cargo xtask house`; share one function instead. After a refactor, run
+  `cargo xtask house --near` to find copies that differ only in strings or numbers
+  (it also flags data tables, so CI does not run it).
 - **Refactors keep public shapes stable.** Public names, module paths and the
   REST wire format stay the same, so no consumer (or deployed client) has to change.
 - **Split by concern and keep the re-exports.** An oversized `foo.rs` becomes
@@ -34,6 +40,9 @@ into one image; `make build` tags it with the workspace version.
   tests; return errors with `?`. `unsafe` is denied workspace-wide; only
   `cloud_files/cfapi.rs` and the desktop app's Windows glue (`cursors/windows.rs`,
   `single.rs`, `clipboard_ole.rs`) allow it, with a `SAFETY:` comment on every block.
+- **Colours come from `theme::Tokens`** in `tma-ui` and the apps: `cargo xtask house`
+  rejects literal colours outside `theme.rs` (use `theme::with_alpha`, `theme::mix`
+  or `theme::NO_TINT`), and curly apostrophes in strings.
 - **Comments are short and explain why**, in one line rather than a paragraph.
   Don't restate the code, and don't add banner dividers.
 - **Wire format is the contract.** JSON field names come from `tma-core` types
@@ -94,24 +103,25 @@ Layers: `routes → services / models → storage / crypto / util / config`.
 - The desktop app's Edit in app and Copy hand other apps paths inside the
   mounted drive, never temporary copies. `Core::allow_read` lets those paths
   through save-only mode for a while.
-- `nfs_fs.rs` (macOS) is a localhost NFSv3 server; it builds on Linux too, so
+- `nfs_fs/` (macOS) is a localhost NFSv3 server; it builds on Linux too, so
   test it there with `TMA_ADAPTER=nfs cargo run -p tma-drive --example mount_test`.
 
 ## Before you finish
 
-| What                 | Command                                                            |
-| -------------------- | ------------------------------------------------------------------ |
-| Format, lint, test   | `cargo xtask ci` (fmt, clippy `-D warnings`, tests, wasm lint)     |
-| Server end to end    | `cargo test -p tma-server --test api` with the `TMA_TEST_*` vars   |
-| Web app              | `cd apps/tma-cloud-web && trunk build --release`                   |
-| Desktop installers   | `cargo xtask package` (needs `cargo install cargo-packager`)      |
-| Root scripts         | `shellcheck setup.sh update.sh rotate.sh scripts/db-backup-restore.sh` |
+| What               | Command                                                                                      |
+| ------------------ | -------------------------------------------------------------------------------------------- |
+| Format, lint, test | `cargo xtask ci` (rustfmt and Prettier, house rules, clippy `-D warnings`, tests, wasm lint) |
+| Format everything  | `cargo xtask fmt` (Prettier 3.9.9 through npx for Markdown, YAML, JSON, HTML, CSS)           |
+| Server end to end  | `cargo test -p tma-server --test api` with the `TMA_TEST_*` vars                             |
+| Web app            | `cd apps/tma-cloud-web && trunk build --release`                                             |
+| Desktop installers | `cargo xtask package` (needs `cargo install cargo-packager`)                                 |
+| Root scripts       | `shellcheck setup.sh update.sh rotate.sh scripts/db-backup-restore.sh`                       |
 
 ## Git
 
 - **Hooks** live in `.githooks/`. Turn them on once per clone with `make hooks`.
-  - `pre-commit` checks staged files: rustfmt, and blocks `.env` files, conflict
-    markers and files over 5 MB.
+  - `pre-commit` checks staged files: rustfmt and Prettier, and blocks `.env`
+    files, conflict markers and files over 5 MB.
   - `commit-msg` enforces the message rules below.
   - `pre-push` runs `cargo xtask ci` when the pushed commits touch Rust code.
   - Bypass with `--no-verify` only when you have a good reason.

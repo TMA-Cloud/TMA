@@ -1,12 +1,14 @@
 # TMA Cloud: Docker image and developer shortcuts.
 #
 #   make              Build the Docker image (default)
-#   make ci           What CI runs: format, lints, tests, wasm build
+#   make ci           What CI runs: format, lints, house rules, tests, wasm build
+#   make fmt          Format Rust (rustfmt) and everything else (Prettier)
+#   make house        File size, copied code and theme colour rules
 #   make web          Build the web app into apps/tma-cloud-web/dist
 #   make desktop      Build the desktop app (release)
 #   make hooks        Use the repo's git hooks (.githooks/)
 
-.PHONY: help build build-no-cache clean ci web desktop hooks
+.PHONY: help build build-no-cache clean ci fmt house web desktop hooks
 
 IMAGE_NAME ?= tma-cloud
 IMAGE_TAG ?= latest
@@ -29,6 +31,12 @@ clean:
 
 ci:
 	cargo xtask ci
+
+fmt:
+	cargo xtask fmt
+
+house:
+	cargo xtask house
 
 web:
 	cd apps/tma-cloud-web && trunk build --release --cargo-profile wasm-release

@@ -1,0 +1,2 @@
+# Long functions get split like long files; see CLAUDE.md.
+too-many-lines-threshold = 150

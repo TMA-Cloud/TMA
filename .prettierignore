@@ -1,0 +1,5 @@
+# Rust is formatted by rustfmt; build output and vendored code are not ours.
+target/
+vendor/
+apps/tma-cloud-web/dist/
+Cargo.lock

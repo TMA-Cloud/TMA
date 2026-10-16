@@ -1,40 +1,56 @@
-//! Developer tasks: `cargo xtask ci` runs the same checks as CI; `cargo xtask
-//! package` builds the desktop installers.
+//! Developer tasks:
+//!
+//! - `cargo xtask ci`: everything CI checks.
+//! - `cargo xtask fmt [--check]`: rustfmt for Rust, Prettier for Markdown, YAML,
+//!   JSON, HTML and CSS.
+//! - `cargo xtask house [--near | --sizes]`: the project's own rules (file size,
+//!   copied code, theme colours); `--near` also matches copies that differ only in
+//!   literals, `--sizes` lists the largest files.
+//! - `cargo xtask package`: the desktop installers.
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use std::path::PathBuf;
+mod house;
+
+use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
+
+/// Pinned, so every machine and CI format the same way (the wiki uses the same release).
+const PRETTIER: &str = "prettier@3.9.9";
 
 fn run(program: &str, args: &[&str]) -> bool {
     println!("$ {program} {}", args.join(" "));
     Command::new(program).args(args).status().map(|s| s.success()).unwrap_or(false)
 }
 
+/// Prettier through npx; without Node.js only the Rust half is checked, with a note.
+fn prettier(check: bool) -> bool {
+    let npx = if cfg!(windows) { "npx.cmd" } else { "npx" };
+    if Command::new(npx).arg("--version").output().is_err() {
+        println!("Prettier skipped: Node.js (npx) is not installed. CI still checks it.");
+        return true;
+    }
+    run(npx, &["--yes", PRETTIER, if check { "--check" } else { "--write" }, "--log-level", "warn", "."])
+}
+
+fn fmt(check: bool) -> bool {
+    let rust = if check { run("cargo", &["fmt", "--all", "--check"]) } else { run("cargo", &["fmt", "--all"]) };
+    rust && prettier(check)
+}
+
 fn ci() -> bool {
-    run("cargo", &["fmt", "--all", "--check"])
+    fmt(true)
+        && house::check(Path::new("."), false)
         && run("cargo", &["clippy", "--workspace", "--all-targets", "--", "-D", "warnings"])
         && run("cargo", &["test", "--workspace"])
         && wasm()
 }
 
 fn wasm() -> bool {
-    run(
-        "cargo",
-        &[
-            "clippy",
-            "-p",
-            "tma-cloud-web",
-            "-p",
-            "tma-ui",
-            "-p",
-            "tma-client",
-            "--target",
-            "wasm32-unknown-unknown",
-            "--",
-            "-D",
-            "warnings",
-        ],
-    )
+    let crates = ["-p", "tma-cloud-web", "-p", "tma-ui", "-p", "tma-client"];
+    let mut args = vec!["clippy"];
+    args.extend(crates);
+    args.extend(["--target", "wasm32-unknown-unknown", "--", "-D", "warnings"]);
+    run("cargo", &args)
 }
 
 /// Build the desktop app in release mode and package its installers into target/packages.
@@ -52,13 +68,20 @@ fn package() -> bool {
 }
 
 fn main() -> ExitCode {
-    let task = std::env::args().nth(1).unwrap_or_default();
-    let ok = match task.as_str() {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    let flag = args.get(1).map(String::as_str);
+    let ok = match args.first().map(String::as_str).unwrap_or_default() {
         "ci" => ci(),
+        "fmt" => fmt(flag == Some("--check")),
+        "house" if flag == Some("--sizes") => {
+            house::sizes(Path::new("."), 25);
+            true
+        }
+        "house" => house::check(Path::new("."), flag == Some("--near")),
         "wasm" => wasm(),
         "package" => package(),
         _ => {
-            eprintln!("usage: cargo xtask <ci|wasm|package>");
+            eprintln!("usage: cargo xtask <ci|fmt [--check]|house [--near|--sizes]|wasm|package>");
             false
         }
     };

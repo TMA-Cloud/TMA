@@ -16,6 +16,7 @@ unexpected_cfgs = { level = "warn", check-cfg = ["cfg(tma_integration)"] }
 
 [workspace.lints.clippy]
 dbg_macro = "warn"
+too_many_lines = "warn"
 todo = "warn"
 unwrap_used = "warn"
 expect_used = "warn"

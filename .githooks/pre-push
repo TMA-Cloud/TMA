@@ -7,7 +7,6 @@ set -eu
 cd "$(git rev-parse --show-toplevel)"
 . .githooks/lib.sh
 
-zero=0000000000000000000000000000000000000000
 changed=''
 check_all=0
 
