@@ -70,7 +70,10 @@ pub fn dialog_header(ui: &mut Ui, title: &str) -> bool {
 /// The buttons at the foot of a dialog, right-aligned; add the main action first.
 pub fn dialog_footer<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
     ui.add_space(8.0);
-    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), add).inner
+    // One row tall: a bare right-to-left layout would claim the remaining height
+    // and keep a dialog from shrinking when its content does.
+    let size = Vec2::new(ui.available_width(), ui.spacing().interact_size.y);
+    ui.allocate_ui_with_layout(size, egui::Layout::right_to_left(egui::Align::Center), add).inner
 }
 
 pub fn primary(ui: &mut Ui, text: impl Into<String>) -> Response {
@@ -157,29 +160,33 @@ fn lerp(a: u8, b: u8, f: f32) -> u8 {
     (a as f32 + (b as f32 - a as f32) * f).round() as u8
 }
 
+/// Add a text field with a hairline border, so it reads as a field on any surface.
+pub fn bordered_field(ui: &mut Ui, edit: egui::TextEdit<'_>) -> Response {
+    let t = tokens(ui);
+    ui.scope(|ui| {
+        let widgets = &mut ui.visuals_mut().widgets;
+        widgets.inactive.bg_stroke = Stroke::new(1.0, t.separator_strong);
+        widgets.hovered.bg_stroke = Stroke::new(1.0, t.label_tertiary);
+        ui.add(edit.background_color(t.surface_raised))
+    })
+    .inner
+}
+
 /// A labelled single-line field; `password` hides the text.
 pub fn field(ui: &mut Ui, label: &str, value: &mut String, password: bool, hint: &str) -> Response {
     let t = tokens(ui);
     ui.label(RichText::new(label).size(12.0).color(t.label_secondary));
-    ui.add(
-        egui::TextEdit::singleline(value)
-            .password(password)
-            .hint_text(hint)
-            .desired_width(f32::INFINITY)
-            .margin(Margin::symmetric(10, 7))
-            .background_color(t.surface),
-    )
+    let edit = egui::TextEdit::singleline(value)
+        .password(password)
+        .hint_text(hint)
+        .desired_width(f32::INFINITY)
+        .margin(Margin::symmetric(10, 7));
+    bordered_field(ui, edit)
 }
 
 pub fn text_edit(ui: &mut Ui, value: &mut String, hint: &str, width: f32) -> Response {
-    let t = tokens(ui);
-    ui.add(
-        egui::TextEdit::singleline(value)
-            .hint_text(hint)
-            .desired_width(width)
-            .margin(Margin::symmetric(10, 6))
-            .background_color(t.surface),
-    )
+    let edit = egui::TextEdit::singleline(value).hint_text(hint).desired_width(width).margin(Margin::symmetric(10, 6));
+    bordered_field(ui, edit)
 }
 
 pub fn badge(ui: &mut Ui, text: &str, color: Color32) -> Response {
