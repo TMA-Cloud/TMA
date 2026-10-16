@@ -1,7 +1,7 @@
 //! Dialogs over the file browser: new folder, rename, confirmations, Get Info,
 //! sharing and the image viewer.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 
 use egui::{Align2, Color32, Key, RichText, Vec2};
 use tma_core::api::{FileInfo, FileItem};
@@ -10,6 +10,11 @@ use crate::app::{App, Screen};
 use crate::icons::{self, ph};
 use crate::theme::Weight;
 use crate::widgets;
+
+mod viewer;
+
+pub use viewer::Viewer;
+use viewer::{decode, viewer_overlay};
 
 #[derive(Debug, Clone)]
 pub enum ConfirmAction {
@@ -37,14 +42,6 @@ pub struct Share {
     pub busy: bool,
 }
 
-pub struct Viewer {
-    pub items: Vec<FileItem>,
-    pub index: usize,
-    textures: HashMap<String, egui::TextureHandle>,
-    failed: HashMap<String, String>,
-    loading: Option<String>,
-}
-
 pub enum Modal {
     NewFolder { name: String, parent: Option<String> },
     Rename { item: FileItem, name: String },
@@ -65,7 +62,7 @@ impl Modal {
     }
 
     pub fn viewer(items: Vec<FileItem>, index: usize) -> Self {
-        Self::Viewer(Viewer { items, index, textures: HashMap::new(), failed: HashMap::new(), loading: None })
+        Self::Viewer(Viewer::new(items, index))
     }
 }
 
@@ -313,110 +310,6 @@ fn expiry_option(ui: &mut egui::Ui, chosen: bool, label: &str) -> bool {
         color,
     );
     response.clicked()
-}
-
-fn round_button(ui: &mut egui::Ui, pos: egui::Pos2, icon: &str, id: &str) -> bool {
-    let r = egui::Rect::from_center_size(pos, Vec2::splat(36.0));
-    let resp = ui.interact(r, egui::Id::new(("viewer-btn", id)), egui::Sense::click());
-    if resp.hovered() {
-        ui.painter().circle_filled(r.center(), 18.0, Color32::from_white_alpha(30));
-    }
-    ui.painter().text(r.center(), Align2::CENTER_CENTER, icon, egui::FontId::proportional(20.0), Color32::WHITE);
-    resp.clicked()
-}
-
-fn viewer_overlay(ctx: &egui::Context, t: &crate::theme::Tokens, viewer: &mut Viewer, outcome: &mut Option<Outcome>) {
-    let Some(item) = viewer.items.get(viewer.index).cloned() else {
-        *outcome = Some(Outcome::Close);
-        return;
-    };
-    if !viewer.textures.contains_key(&item.id)
-        && !viewer.failed.contains_key(&item.id)
-        && viewer.loading.as_deref() != Some(item.id.as_str())
-    {
-        viewer.loading = Some(item.id.clone());
-        *outcome = Some(Outcome::LoadImage(item.id.clone()));
-    }
-    let screen = ctx.content_rect();
-    egui::Area::new(egui::Id::new("viewer")).order(egui::Order::Foreground).fixed_pos(screen.min).show(ctx, |ui| {
-        let (rect, response) = ui.allocate_exact_size(screen.size(), egui::Sense::click());
-        ui.painter().rect_filled(rect, 0.0, Color32::from_black_alpha(235));
-        let _ = response;
-        let bar = egui::Rect::from_min_size(rect.min, Vec2::new(rect.width(), 52.0));
-        ui.painter().text(
-            bar.left_center() + Vec2::new(20.0, 0.0),
-            Align2::LEFT_CENTER,
-            &item.name,
-            egui::FontId::proportional(15.0),
-            Color32::WHITE,
-        );
-        ui.painter().text(
-            bar.left_center() + Vec2::new(20.0, 18.0),
-            Align2::LEFT_CENTER,
-            format!("{} of {}", viewer.index + 1, viewer.items.len()),
-            egui::FontId::proportional(11.0),
-            Color32::from_white_alpha(150),
-        );
-        if round_button(ui, bar.right_center() - Vec2::new(28.0, 0.0), ph::X, "close") {
-            *outcome = Some(Outcome::Close);
-        }
-        if round_button(ui, bar.right_center() - Vec2::new(72.0, 0.0), ph::DOWNLOAD_SIMPLE, "download") {
-            *outcome = Some(Outcome::Download(item.clone()));
-        }
-        let stage = egui::Rect::from_min_max(rect.min + Vec2::new(70.0, 60.0), rect.max - Vec2::new(70.0, 24.0));
-        if let Some(texture) = viewer.textures.get(&item.id) {
-            let size = texture.size_vec2();
-            let scale = (stage.width() / size.x).min(stage.height() / size.y).min(1.0);
-            let shown = egui::Rect::from_center_size(stage.center(), size * scale);
-            ui.painter().image(
-                texture.id(),
-                shown,
-                egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
-                Color32::WHITE,
-            );
-        } else if let Some(err) = viewer.failed.get(&item.id) {
-            ui.painter().text(
-                stage.center(),
-                Align2::CENTER_CENTER,
-                err,
-                egui::FontId::proportional(14.0),
-                Color32::from_white_alpha(200),
-            );
-        } else {
-            ui.put(
-                egui::Rect::from_center_size(stage.center(), Vec2::splat(32.0)),
-                egui::Spinner::new().size(32.0).color(Color32::WHITE),
-            );
-        }
-        let many = viewer.items.len() > 1;
-        if many && round_button(ui, egui::pos2(rect.left() + 34.0, rect.center().y), ph::CARET_LEFT, "prev") {
-            viewer.index = (viewer.index + viewer.items.len() - 1) % viewer.items.len();
-        }
-        if many && round_button(ui, egui::pos2(rect.right() - 34.0, rect.center().y), ph::CARET_RIGHT, "next") {
-            viewer.index = (viewer.index + 1) % viewer.items.len();
-        }
-    });
-    ctx.input(|i| {
-        if i.key_pressed(Key::Escape) {
-            *outcome = Some(Outcome::Close);
-        }
-        if viewer.items.len() > 1 && i.key_pressed(Key::ArrowRight) {
-            viewer.index = (viewer.index + 1) % viewer.items.len();
-        }
-        if viewer.items.len() > 1 && i.key_pressed(Key::ArrowLeft) {
-            viewer.index = (viewer.index + viewer.items.len() - 1) % viewer.items.len();
-        }
-    });
-    let _ = t;
-}
-
-/// Decode an image off the frame (any format the `image` crate reads).
-fn decode(bytes: &[u8]) -> Result<egui::ColorImage, String> {
-    let image = image::load_from_memory(bytes).map_err(|e| format!("Cannot show this image: {e}"))?;
-    // Very large photos are scaled down; the screen cannot show more pixels anyway.
-    let image = if image.width() > 4096 || image.height() > 4096 { image.thumbnail(4096, 4096) } else { image };
-    let rgba = image.to_rgba8();
-    Ok(egui::ColorImage::from_rgba_unmultiplied([rgba.width() as usize, rgba.height() as usize], rgba.as_raw()))
 }
 
 fn apply(app: &mut App, outcome: Outcome) {
