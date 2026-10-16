@@ -12,6 +12,8 @@ mod fonts;
 mod host;
 mod notify_ui;
 mod shortcuts;
+#[cfg(windows)]
+mod single;
 
 const PREFS_KEY: &str = "prefs";
 const SERVER_KEY: &str = "server";
@@ -59,6 +61,8 @@ fn main() -> eframe::Result {
         drive::forget();
         return Ok(());
     }
+    #[cfg(windows)]
+    let Some(_single) = single::claim() else { return Ok(()) };
     let mut viewport = egui::ViewportBuilder::default()
         .with_title("TMA Cloud")
         .with_inner_size([1280.0, 820.0])
