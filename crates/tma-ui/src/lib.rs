@@ -4,6 +4,7 @@
 
 mod app;
 mod auth;
+pub mod cursors;
 mod dashboard;
 mod files;
 mod host;

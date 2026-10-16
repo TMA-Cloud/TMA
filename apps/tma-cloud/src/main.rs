@@ -4,6 +4,8 @@
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 mod clipboard;
+#[cfg(windows)]
+mod cursors;
 mod drive;
 mod edit;
 mod fonts;
@@ -19,6 +21,8 @@ struct Shell {
     app: tma_ui::App,
     client_id: String,
     keys: shortcuts::ClipboardKeys,
+    #[cfg(windows)]
+    cursors: cursors::Cursors,
 }
 
 impl eframe::App for Shell {
@@ -27,8 +31,12 @@ impl eframe::App for Shell {
         self.keys.restore(raw_input, ctx.input(|i| i.modifiers), ctx.text_edit_focused());
     }
 
-    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+    fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         self.app.ui(ui);
+        #[cfg(windows)]
+        self.cursors.apply(ui.ctx(), frame, tma_ui::widgets::tokens(ui).dark);
+        #[cfg(not(windows))]
+        let _ = frame;
     }
 
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
@@ -72,7 +80,13 @@ fn main() -> eframe::Result {
                 .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
             let host = host::DesktopHost::new(server, client_id.clone());
             let app = tma_ui::App::new(&cc.egui_ctx, Box::new(host), prefs, fonts::system_ui_font());
-            Ok(Box::new(Shell { app, client_id, keys: shortcuts::ClipboardKeys::default() }))
+            Ok(Box::new(Shell {
+                app,
+                client_id,
+                keys: shortcuts::ClipboardKeys::default(),
+                #[cfg(windows)]
+                cursors: cursors::Cursors::default(),
+            }))
         }),
     )
 }

@@ -255,6 +255,7 @@ impl App {
         let tokens = Tokens::for_choice(self.prefs.theme, system_dark);
         if tokens.dark != self.t.dark || ctx.cumulative_frame_nr() == 0 {
             theme::apply(ctx, &tokens);
+            crate::platform::use_app_cursors(tokens.dark);
         }
         self.t = tokens;
         widgets::store_tokens(ctx, tokens);

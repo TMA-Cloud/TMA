@@ -136,6 +136,27 @@ pub async fn save_path(suggested: String) -> Option<std::path::PathBuf> {
         .map(|h| h.path().to_path_buf())
 }
 
+/// Show TMA Cloud's own pointers over the page, from the light or dark set.
+#[cfg(target_arch = "wasm32")]
+pub fn use_app_cursors(dark: bool) {
+    const STYLE: &str = "tma-cursors";
+    let Some(document) = web_sys::window().and_then(|w| w.document()) else { return };
+    if let Some(root) = document.document_element() {
+        let _ = root.set_attribute("data-theme", if dark { "dark" } else { "light" });
+    }
+    if document.get_element_by_id(STYLE).is_none()
+        && let (Ok(style), Some(head)) = (document.create_element("style"), document.head())
+    {
+        style.set_id(STYLE);
+        style.set_text_content(Some(&crate::cursors::css()));
+        let _ = head.append_child(&style);
+    }
+}
+
+/// Natively the desktop host swaps the cursor itself.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn use_app_cursors(_dark: bool) {}
+
 /// Let the browser download a URL (the session cookie authorizes it).
 #[cfg(target_arch = "wasm32")]
 pub fn browser_download(url: &str, name: &str) {

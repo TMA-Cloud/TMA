@@ -107,6 +107,12 @@ pub(super) fn interact(
 ) -> egui::Response {
     // Not focusable: the listing handles the keyboard itself, so egui must not move focus between rows.
     let response = ui.interact(rect, Id::new(("item", &item.id)), Sense::CLICK | Sense::DRAG);
+    // Rows are surfaces, not buttons: the arrow over them, a closed hand while dragging items.
+    if response.dragged() {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
+    } else if response.hovered() {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::Default);
+    }
     if response.clicked() {
         let modifiers = ui.input(|i| i.modifiers);
         click_select(main, &item.id, modifiers);

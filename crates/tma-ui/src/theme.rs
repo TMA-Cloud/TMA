@@ -168,6 +168,8 @@ pub fn apply(ctx: &egui::Context, t: &Tokens) {
     visuals.window_stroke = Stroke::new(1.0, t.separator);
     visuals.window_corner_radius = CornerRadius::same(18);
     visuals.menu_corner_radius = CornerRadius::same(16);
+    // Buttons and links show the pointing hand, as on the web.
+    visuals.interact_cursor = Some(egui::CursorIcon::PointingHand);
     visuals.window_shadow = egui::epaint::Shadow {
         offset: [0, 10],
         blur: 32,
