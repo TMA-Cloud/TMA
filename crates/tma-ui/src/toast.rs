@@ -54,8 +54,10 @@ impl Toasts {
         if self.items.is_empty() {
             return;
         }
+        let panel = ctx.data(|d| d.get_temp::<f32>(egui::Id::new(crate::transfers::PANEL_HEIGHT))).unwrap_or(0.0);
+        let lift = if panel > 0.0 { panel + 10.0 } else { 0.0 };
         egui::Area::new(egui::Id::new("toasts"))
-            .anchor(Align2::RIGHT_BOTTOM, [-18.0, -18.0])
+            .anchor(Align2::RIGHT_BOTTOM, [-18.0, -18.0 - lift])
             .order(egui::Order::Tooltip)
             .show(ctx, |ui| {
                 ui.set_max_width(360.0);

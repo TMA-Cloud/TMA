@@ -420,10 +420,7 @@ fn apply(app: &mut App, outcome: Outcome) {
                 },
                 move |app, result: tma_client::ApiResult<String>| {
                     crate::files::settle_job(app, generation, row, &result);
-                    app.finish(generation, result, |main, toasts, _| {
-                        toasts.success("Deleted permanently");
-                        main.change_pending = true;
-                    });
+                    app.finish(generation, result, |main, _, _| main.change_pending = true);
                 },
             );
         }

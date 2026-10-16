@@ -49,6 +49,33 @@ pub struct Transfers {
     pub items: Vec<Transfer>,
     next_id: u64,
     pub expanded: bool,
+    /// When everything last finished without a failure; the panel hides a little after.
+    finished_at: Option<f64>,
+}
+
+/// Where the panel leaves its height for the toasts, which sit above it.
+pub const PANEL_HEIGHT: &str = "tma-transfer-panel-height";
+
+/// Seconds a finished, failure-free panel stays up before it hides itself.
+const HIDE_AFTER: f64 = 5.0;
+
+fn kind(direction: Direction) -> crate::transfer_text::Kind {
+    use crate::transfer_text::Kind;
+    match direction {
+        Direction::Up => Kind::Upload,
+        Direction::Down => Kind::Download,
+        Direction::Job(_) => Kind::Job,
+    }
+}
+
+fn outcome(state: &State) -> crate::transfer_text::Outcome {
+    use crate::transfer_text::Outcome;
+    match state {
+        State::Queued | State::Running => Outcome::Pending,
+        State::Done => Outcome::Done,
+        State::Failed(reason) if reason == "Cancelled" => Outcome::Cancelled,
+        State::Failed(_) => Outcome::Failed,
+    }
 }
 
 impl Transfers {
@@ -245,23 +272,37 @@ pub fn show(main: &mut Main, ctx: &egui::Context) {
     let phone = widgets::mobile(ctx);
     let width = if phone { (ctx.content_rect().width() - 40.0).min(420.0) } else { 320.0 };
     let t = crate::widgets::tokens_ctx(ctx);
+    ctx.data_mut(|d| d.insert_temp(egui::Id::new(PANEL_HEIGHT), 0.0f32));
     if main.transfers.items.is_empty() {
         return;
     }
-    let total = main.transfers.items.len();
-    let done = main.transfers.items.iter().filter(|i| matches!(i.state, State::Done)).count();
-    let failed = main.transfers.items.iter().filter(|i| matches!(i.state, State::Failed(_))).count();
+    let failed =
+        main.transfers.items.iter().filter(|i| outcome(&i.state) == crate::transfer_text::Outcome::Failed).count();
     let busy = main.transfers.is_busy();
+    let now = ctx.input(|i| i.time);
     if busy {
+        main.transfers.finished_at = None;
         ctx.request_repaint_after(std::time::Duration::from_millis(150));
+    } else if failed == 0 {
+        let since = *main.transfers.finished_at.get_or_insert(now);
+        if now - since > HIDE_AFTER {
+            main.transfers.items.clear();
+            main.transfers.finished_at = None;
+            return;
+        }
+        ctx.request_repaint_after(std::time::Duration::from_millis(500));
     }
+    let title = {
+        let rows: Vec<_> =
+            main.transfers.items.iter().map(|i| (kind(i.direction), outcome(&i.state), i.name.as_str())).collect();
+        crate::transfer_text::headline(&rows)
+    };
     let mut clear = false;
-    egui::Area::new(egui::Id::new("transfers"))
-        // Bottom-left, as the web app had it, so toasts (bottom-right) never cover it;
-        // on a phone it spans the width above the tab bar.
+    let area = egui::Area::new(egui::Id::new("transfers"))
+        // Bottom-right with the toasts stacked above it; on a phone it spans the width above the tab bar.
         .anchor(
-            if phone { Align2::CENTER_BOTTOM } else { Align2::LEFT_BOTTOM },
-            if phone { [0.0, -70.0] } else { [18.0, -18.0] },
+            if phone { Align2::CENTER_BOTTOM } else { Align2::RIGHT_BOTTOM },
+            if phone { [0.0, -70.0] } else { [-18.0, -18.0] },
         )
         .order(egui::Order::Foreground)
         .show(ctx, |ui| {
@@ -279,26 +320,22 @@ pub fn show(main: &mut Main, ctx: &egui::Context) {
                 .show(ui, |ui| {
                     ui.set_width(width);
                     ui.horizontal(|ui| {
-                        let working = main
-                            .transfers
-                            .items
-                            .iter()
-                            .any(|i| matches!(i.direction, Direction::Job(_)) && i.state == State::Running);
-                        let title = if busy {
-                            let verb = if working { "Working on" } else { "Transferring" };
-                            format!("{verb} {} of {total}", (done + failed + 1).min(total))
+                        let icon = if busy {
+                            RichText::new(ph::ARROWS_DOWN_UP).color(t.accent)
                         } else if failed > 0 {
-                            format!("{done} done, {failed} failed")
+                            RichText::new(ph::WARNING_CIRCLE).color(t.destructive_text)
                         } else {
-                            format!("{done} done")
+                            RichText::new(ph::CHECK_CIRCLE).color(t.positive_text)
                         };
-                        ui.label(RichText::new(title).semibold());
+                        ui.label(icon.size(16.0));
+                        ui.add(egui::Label::new(RichText::new(&title).semibold()).truncate());
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if !busy && widgets::icon_button(ui, ph::X, "Clear").clicked() {
+                            if !busy && widgets::icon_button(ui, ph::X, "Dismiss").clicked() {
                                 clear = true;
                             }
                             let icon = if main.transfers.expanded { ph::CARET_DOWN } else { ph::CARET_UP };
-                            if widgets::icon_button(ui, icon, "Details").clicked() {
+                            let tip = if main.transfers.expanded { "Hide details" } else { "Show details" };
+                            if widgets::icon_button(ui, icon, tip).clicked() {
                                 main.transfers.expanded = !main.transfers.expanded;
                             }
                         });
@@ -330,7 +367,13 @@ pub fn show(main: &mut Main, ctx: &egui::Context) {
                                     ui.label(RichText::new(icon).color(t.label_tertiary));
                                     ui.vertical(|ui| {
                                         ui.set_width(230.0);
-                                        ui.add(egui::Label::new(&item.name).truncate());
+                                        let name = match (item.direction, &item.state) {
+                                            (Direction::Job(_), State::Done) => {
+                                                crate::transfer_text::finished(&item.name)
+                                            }
+                                            _ => item.name.clone(),
+                                        };
+                                        ui.add(egui::Label::new(name).truncate());
                                         match &item.state {
                                             State::Queued => {
                                                 ui.label(RichText::new("Waiting").size(11.0).color(t.label_tertiary));
@@ -343,7 +386,8 @@ pub fn show(main: &mut Main, ctx: &egui::Context) {
                                                 widgets::progress_bar(ui, item.progress.fraction(), 220.0)
                                             }
                                             State::Done => {
-                                                ui.label(RichText::new("Done").size(11.0).color(t.positive_text));
+                                                let status = crate::transfer_text::row_status(kind(item.direction));
+                                                ui.label(RichText::new(status).size(11.0).color(t.positive_text));
                                             }
                                             State::Failed(msg) => {
                                                 ui.label(RichText::new(msg).size(11.0).color(t.destructive_text));
@@ -361,6 +405,12 @@ pub fn show(main: &mut Main, ctx: &egui::Context) {
                     }
                 });
         });
+    // Reading it keeps a finished panel up while the pointer is over it.
+    // Toasts share the corner and stack above the panel.
+    ctx.data_mut(|d| d.insert_temp(egui::Id::new(PANEL_HEIGHT), area.response.rect.height()));
+    if area.response.contains_pointer() && main.transfers.finished_at.is_some() {
+        main.transfers.finished_at = Some(now);
+    }
     for item in &mut main.transfers.items {
         if item.state == State::Queued && item.progress.is_cancelled() {
             item.state = State::Failed("Cancelled".into());

@@ -18,6 +18,7 @@ mod shell;
 mod tasks;
 pub mod theme;
 mod toast;
+mod transfer_text;
 pub mod transfers;
 pub mod widgets;
 

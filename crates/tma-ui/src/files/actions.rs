@@ -294,8 +294,7 @@ pub fn run(app: &mut App, action: Action) {
                 },
                 move |app, result: tma_client::ApiResult<()>| {
                     settle_job(app, generation, row, &result);
-                    app.finish(generation, result, |main, toasts, ()| {
-                        toasts.success(format!("Moved {} to the trash", items_label(count)));
+                    app.finish(generation, result, |main, _, ()| {
                         main.change_pending = true;
                     });
                 },
@@ -316,15 +315,14 @@ pub fn run(app: &mut App, action: Action) {
                 },
                 move |app, result: tma_client::ApiResult<()>| {
                     settle_job(app, generation, row, &result);
-                    app.finish(generation, result, |main, toasts, ()| {
-                        toasts.success(format!("Restored {}", items_label(count)));
+                    app.finish(generation, result, |main, _, ()| {
                         main.change_pending = true;
                     });
                 },
             );
         }
         Action::DeleteForever(ids) => {
-            let body = format!("{} item(s) will be deleted permanently. This cannot be undone.", ids.len());
+            let body = format!("{} will be deleted permanently. This cannot be undone.", items_label(ids.len()));
             main.modal = Some(Modal::Confirm(Confirm::new(
                 "Delete forever?",
                 body,
@@ -357,7 +355,7 @@ pub fn run(app: &mut App, action: Action) {
             main.browser.clip = Some(Clip { ids, cut, seq: app.host.clipboard_sequence() });
             if !app.host.clipboard_copy(&client, &items, cut, tasks) {
                 let done = if cut { "cut" } else { "copied" };
-                app.toasts.info(format!("{n} item(s) {done}. Paste them in another folder."));
+                app.toasts.info(format!("{} {done}. Paste them in another folder.", items_label(n)));
             }
         }
         Action::Back | Action::Forward => {
@@ -402,8 +400,7 @@ pub fn run(app: &mut App, action: Action) {
                     },
                     move |app, result: tma_client::ApiResult<usize>| {
                         settle_job(app, generation, row, &result);
-                        app.finish(generation, result, |main, toasts, n| {
-                            toasts.success(format!("Copied {}", items_label(n)));
+                        app.finish(generation, result, |main, _, _| {
                             main.change_pending = true;
                         });
                     },
@@ -420,8 +417,7 @@ pub fn run(app: &mut App, action: Action) {
                 async move { client.move_items(&ids, target.as_deref()).await.map(|_| ids.len()) },
                 move |app, result| {
                     settle_job(app, generation, row, &result);
-                    app.finish(generation, result, |main, toasts, n| {
-                        toasts.success(format!("Moved {}", items_label(n)));
+                    app.finish(generation, result, |main, _, _| {
                         main.change_pending = true;
                     });
                 },
