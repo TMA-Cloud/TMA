@@ -3,11 +3,46 @@
 use egui::RichText;
 
 use super::{fetch, save, section};
+use tma_core::api::Versions;
+
 use crate::app::Main;
 use crate::icons::ph;
 use crate::tasks::Tasks;
 use crate::theme::Weight;
 use crate::widgets;
+
+/// Read the running and latest versions once after sign-in, for the sidebar's
+/// notice; a feed that cannot be reached just leaves the notice out.
+pub fn check(main: &Main, tasks: &Tasks) {
+    let (client, generation) = (main.client.clone(), main.generation);
+    tasks.run(
+        async move { (client.versions().await.ok(), client.latest_versions().await.ok()) },
+        move |app, (current, latest)| {
+            if let Some(main) = app.main_mut(generation) {
+                main.settings.versions = current.or(main.settings.versions.take());
+                main.settings.latest = latest.or(main.settings.latest.take());
+            }
+        },
+    );
+}
+
+/// Components with a newer release, as (name, version): the server, and the
+/// desktop app when running in it (the web app is the server's own build).
+pub fn available(current: &Versions, latest: &Versions, desktop: bool) -> Vec<(&'static str, String)> {
+    let mut out = Vec::new();
+    let newer = |c: &Option<String>, l: &Option<String>| match (c, l) {
+        (Some(c), Some(l)) if tma_core::is_newer_version(l, c) => Some(l.clone()),
+        _ => None,
+    };
+    if let Some(v) = newer(&current.backend, &latest.backend) {
+        out.push(("Server", v));
+    }
+    let app = Some(env!("CARGO_PKG_VERSION").to_string());
+    if let Some(v) = newer(&app, &latest.desktop).filter(|_| desktop) {
+        out.push(("Desktop app", v));
+    }
+    out
+}
 
 pub fn load(main: &mut Main, tasks: &Tasks) {
     fetch(tasks, main, |c| async move { c.versions().await }, |s, v| s.versions = Some(v));
@@ -68,4 +103,25 @@ pub fn show(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks, app_version: &str
             );
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn versions(backend: &str, desktop: &str) -> Versions {
+        Versions { backend: Some(backend.into()), desktop: Some(desktop.into()), ..Default::default() }
+    }
+
+    #[test]
+    fn lists_only_newer_components() {
+        let current = versions("4.0.0", "4.0.0");
+        assert!(available(&current, &versions("4.0.0", "0.0.1"), true).is_empty());
+        let latest = versions("4.2.0", "999.0.0");
+        assert_eq!(
+            available(&current, &latest, true),
+            vec![("Server", "4.2.0".into()), ("Desktop app", "999.0.0".into())]
+        );
+        assert_eq!(available(&current, &latest, false), vec![("Server", "4.2.0".into())]);
+    }
 }

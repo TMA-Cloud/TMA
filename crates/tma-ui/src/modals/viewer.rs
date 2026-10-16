@@ -20,9 +20,13 @@ pub struct Viewer {
     pan: Vec2,
     /// The image the zoom belongs to; another image starts fitted again.
     zoomed: usize,
+    /// How far a drag on a fitted image has gone sideways; far enough turns the page.
+    swipe: f32,
 }
 
 const MAX_ZOOM: f32 = 8.0;
+/// A sideways drag this long moves to the next or previous image.
+const SWIPE: f32 = 60.0;
 /// A double-click zooms to this, or back to fitted.
 const CLOSE_UP: f32 = 2.5;
 
@@ -37,6 +41,7 @@ impl Viewer {
             zoom: 1.0,
             pan: Vec2::ZERO,
             zoomed: index,
+            swipe: 0.0,
         }
     }
 }
@@ -107,7 +112,16 @@ pub(super) fn viewer_overlay(
         if round_button(ui, bar.right_center() - Vec2::new(72.0, 0.0), ph::DOWNLOAD_SIMPLE, "download") {
             *outcome = Some(Outcome::Download(item.clone()));
         }
-        let stage = egui::Rect::from_min_max(rect.min + Vec2::new(70.0, 60.0), rect.max - Vec2::new(70.0, 24.0));
+        if round_button(ui, bar.right_center() - Vec2::new(116.0, 0.0), ph::MAGNIFYING_GLASS_PLUS, "zoom-in") {
+            (viewer.zoom, viewer.pan) = zoom_at(viewer.zoom, viewer.pan, 1.25, Vec2::ZERO);
+        }
+        if round_button(ui, bar.right_center() - Vec2::new(160.0, 0.0), ph::MAGNIFYING_GLASS_MINUS, "zoom-out") {
+            (viewer.zoom, viewer.pan) = zoom_at(viewer.zoom, viewer.pan, 0.8, Vec2::ZERO);
+        }
+        // Phones keep the whole width for the image; the arrows sit over it.
+        let side = if rect.width() < 600.0 { 8.0 } else { 70.0 };
+        let stage = egui::Rect::from_min_max(rect.min + Vec2::new(side, 60.0), rect.max - Vec2::new(side, 24.0));
+        let mut step = 0i32;
         if viewer.zoomed != viewer.index {
             (viewer.zoom, viewer.pan, viewer.zoomed) = (1.0, Vec2::ZERO, viewer.index);
         }
@@ -126,6 +140,14 @@ pub(super) fn viewer_overlay(
             }
             if viewer.zoom > 1.0 && input.dragged() {
                 viewer.pan += input.drag_delta();
+            } else if input.dragged() {
+                viewer.swipe += input.drag_delta().x;
+            }
+            if input.drag_stopped() {
+                if viewer.swipe.abs() > SWIPE {
+                    step = if viewer.swipe < 0.0 { 1 } else { -1 };
+                }
+                viewer.swipe = 0.0;
             }
             viewer.pan = clamp_pan(viewer.pan, size * fit * viewer.zoom, stage.size());
             let icon = if input.dragged() && viewer.zoom > 1.0 {
@@ -161,6 +183,10 @@ pub(super) fn viewer_overlay(
             );
         }
         let many = viewer.items.len() > 1;
+        if many && step != 0 {
+            let n = viewer.items.len() as i32;
+            viewer.index = (viewer.index as i32 + step).rem_euclid(n) as usize;
+        }
         if many && round_button(ui, egui::pos2(rect.left() + 34.0, rect.center().y), ph::CARET_LEFT, "prev") {
             viewer.index = (viewer.index + viewer.items.len() - 1) % viewer.items.len();
         }

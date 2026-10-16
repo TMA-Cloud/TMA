@@ -14,7 +14,8 @@ mod thumbs;
 mod toolbar;
 mod view;
 
-pub use actions::{Action, download, run as run_action, upload_files};
+pub use actions::{Action, download, run as run_action, stage_files, upload_files};
+pub(crate) use actions::{items_label, settle_job};
 pub use view::show;
 
 use std::collections::BTreeSet;
@@ -72,6 +73,10 @@ pub struct Browser {
     pub thumbs: thumbs::Thumbs,
     /// Uploads waiting for a Replace or Keep both answer.
     pub conflicts: Option<conflicts::Pending>,
+    /// Folders seen shared in a listing, so items inside one can join its share.
+    pub shared_folders: std::collections::HashSet<String>,
+    /// On a touch screen, taps select instead of opening (the web app's multi-select mode).
+    pub select_mode: bool,
     /// Listings seen this session, shown at once when revisited.
     cache: cache::ListingCache,
     /// The list's scroll offset, read back each frame.
@@ -109,6 +114,8 @@ impl Default for Browser {
             marquee: None,
             thumbs: thumbs::Thumbs::default(),
             conflicts: None,
+            select_mode: false,
+            shared_folders: std::collections::HashSet::new(),
             cache: cache::ListingCache::default(),
             scroll: 0.0,
             scroll_set: None,
@@ -194,6 +201,7 @@ impl Browser {
         self.scroll_to = None;
         self.selected.clear();
         self.anchor = None;
+        self.select_mode = false;
         match self.cache.get(&self.cache_key(prefs)) {
             Some(seen) => {
                 self.items = seen.items;
@@ -286,6 +294,11 @@ impl Browser {
         self.anchor = Some(id.to_string());
     }
 
+    /// Whether the open folder is shared (its items can join that share).
+    pub fn in_shared_folder(&self) -> bool {
+        self.folder_id().is_some_and(|id| self.shared_folders.contains(&id))
+    }
+
     pub fn title(&self) -> String {
         match &self.place {
             Place::Folder => self.path.last().map(|(_, n)| n.clone()).unwrap_or_else(|| "My Files".into()),
@@ -295,6 +308,11 @@ impl Browser {
             Place::Search(q) => format!("Results for “{q}”"),
         }
     }
+}
+
+/// Shared, and the link has not expired.
+pub fn is_shared(item: &FileItem) -> bool {
+    item.shared && item.expires_at.is_none_or(|at| at > chrono::Utc::now())
 }
 
 fn apply_page(
@@ -318,6 +336,13 @@ fn apply_page(
                 browser.items.extend(page.files);
             } else {
                 browser.items = page.files;
+                for item in browser.items.iter().filter(|i| i.is_folder()) {
+                    if is_shared(item) {
+                        browser.shared_folders.insert(item.id.clone());
+                    } else {
+                        browser.shared_folders.remove(&item.id);
+                    }
+                }
                 let ids: BTreeSet<String> = browser.items.iter().map(|i| i.id.clone()).collect();
                 browser.selected.retain(|id| ids.contains(id));
             }

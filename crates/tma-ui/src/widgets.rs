@@ -294,6 +294,19 @@ pub fn progress_bar(ui: &mut Ui, fraction: f32, width: f32) {
     ui.painter().rect_filled(done, 2.0, t.accent);
 }
 
+/// A bar for work of unknown length: a segment that sweeps across.
+pub fn busy_bar(ui: &mut Ui, width: f32) {
+    let t = tokens(ui);
+    let (rect, _) = ui.allocate_exact_size(Vec2::new(width, 4.0), Sense::hover());
+    ui.painter().rect_filled(rect, 2.0, t.fill_secondary);
+    let phase = (ui.input(|i| i.time) * 0.8).fract() as f32;
+    let segment = rect.width() * 0.3;
+    let left = rect.left() - segment + (rect.width() + segment) * phase;
+    let bar = egui::Rect::from_x_y_ranges(left.max(rect.left())..=(left + segment).min(rect.right()), rect.y_range());
+    ui.painter().rect_filled(bar, 2.0, t.accent);
+    ui.ctx().request_repaint();
+}
+
 /// A dialog over a dimmed backdrop, in the app's surface style.
 pub fn modal(ctx: &egui::Context, id: &str) -> egui::Modal {
     let t = tokens_ctx(ctx);
@@ -323,4 +336,45 @@ pub fn section(ui: &mut Ui, title: &str, subtitle: &str, add: impl FnOnce(&mut U
     }
     ui.add_space(2.0);
     add(ui);
+}
+
+/// Whether the last pointer input came from a touch screen: touch turns it on,
+/// a mouse moving without touch turns it off, so a laptop with both follows use.
+pub fn touch_mode(ctx: &egui::Context) -> bool {
+    let id = egui::Id::new("touch-mode");
+    let (touched, moved) = ctx.input(|i| {
+        let touched = i.raw.events.iter().any(|e| matches!(e, egui::Event::Touch { .. }));
+        let moved = i.raw.events.iter().any(|e| matches!(e, egui::Event::PointerMoved(_)));
+        (touched, moved)
+    });
+    let mut on = ctx.data(|d| d.get_temp::<bool>(id)).unwrap_or(false);
+    if touched {
+        on = true;
+    } else if moved {
+        on = false;
+    }
+    ctx.data_mut(|d| d.insert_temp(id, on));
+    on
+}
+
+/// The phone and tablet layout (tab bar, compact header): a narrow window, or a
+/// touch screen up to tablet width, as the web app decided.
+pub fn is_mobile(width: f32, touch: bool) -> bool {
+    width < 720.0 || (touch && width <= 1024.0)
+}
+
+/// `is_mobile` for this frame's window.
+pub fn mobile(ctx: &egui::Context) -> bool {
+    is_mobile(ctx.content_rect().width(), touch_mode(ctx))
+}
+
+#[cfg(test)]
+mod layout_tests {
+    #[test]
+    fn mobile_layout_follows_width_and_touch() {
+        assert!(super::is_mobile(390.0, false));
+        assert!(super::is_mobile(900.0, true));
+        assert!(!super::is_mobile(900.0, false), "the desktop app's narrowest window keeps the sidebar");
+        assert!(!super::is_mobile(1280.0, true));
+    }
 }

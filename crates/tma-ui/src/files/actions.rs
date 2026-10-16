@@ -8,7 +8,9 @@ use tma_core::api::{FileItem, SortBy, SortOrder};
 use super::{Clip, Place};
 use crate::app::{App, Section};
 use crate::host::HostKind;
+use crate::icons::ph;
 use crate::modals::{Confirm, Modal};
+use crate::transfers::State;
 
 #[derive(Debug, Clone)]
 pub enum Action {
@@ -30,6 +32,16 @@ pub enum Action {
     Download(Vec<FileItem>),
     Share(Vec<FileItem>),
     Info(FileItem),
+    /// Open the upload dialog.
+    OpenUpload,
+    /// Turn the touch selection mode on or off.
+    SelectMode(bool),
+    /// Show an image in the built-in viewer (the desktop app opens files in their own apps).
+    Preview(FileItem),
+    /// Copy the share links of shared items.
+    CopyLinks(Vec<String>),
+    /// Add items to the share of the folder they are in (no new link).
+    LinkToFolderShare(Vec<String>),
     PickUpload,
     #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     PickFolder,
@@ -43,11 +55,38 @@ pub enum Action {
     OpenLocation(FileItem),
 }
 
+/// "1 item", "3 items".
+pub(crate) fn items_label(n: usize) -> String {
+    if n == 1 { "1 item".into() } else { format!("{n} items") }
+}
+
+/// Mark a job's row in the transfers panel done or failed once the server answers.
+pub(crate) fn settle_job<T>(app: &mut App, generation: u64, row: u64, result: &tma_client::ApiResult<T>) {
+    if let Some(main) = app.main_mut(generation) {
+        let state = match result {
+            Ok(_) => State::Done,
+            Err(err) => State::Failed(err.message.clone()),
+        };
+        main.transfers.finish(row, state);
+    }
+}
+
 fn ids(items: &[FileItem]) -> Vec<String> {
     items.iter().map(|i| i.id.clone()).collect()
 }
 
 /// Queue uploads into the current folder (the root outside My Files).
+/// Picked or dropped files: into the upload dialog when it is open, else straight up.
+pub fn stage_files(app: &mut App, files: Vec<UploadFile>) {
+    if let crate::app::Screen::Main(main) = &mut app.screen
+        && let Some(Modal::Upload(staged)) = &mut main.modal
+    {
+        crate::modals::stage(staged, files);
+        return;
+    }
+    upload_files(app, files);
+}
+
 pub fn upload_files(app: &mut App, files: Vec<UploadFile>) {
     let crate::app::Screen::Main(main) = &mut app.screen else { return };
     if files.is_empty() {
@@ -106,7 +145,7 @@ fn is_document(name: &str) -> bool {
     EXTS.contains(&tma_core::names::extension_of(name).as_str())
 }
 
-fn is_image(item: &FileItem) -> bool {
+pub(super) fn is_image(item: &FileItem) -> bool {
     item.mime_type.as_deref().is_some_and(|m| m.starts_with("image/") && m != "image/svg+xml")
 }
 
@@ -133,10 +172,7 @@ pub fn run(app: &mut App, action: Action) {
                 // The desktop app hands every file to the computer, which opens it in its own app.
                 run(app, Action::EditInApp(item));
             } else if is_image(&item) {
-                let images: Vec<FileItem> = main.browser.items.iter().filter(|i| is_image(i)).cloned().collect();
-                let images = if images.iter().any(|i| i.id == item.id) { images } else { vec![item.clone()] };
-                let index = images.iter().position(|i| i.id == item.id).unwrap_or(0);
-                main.modal = Some(Modal::viewer(images, index));
+                run(app, Action::Preview(item));
             } else if is_document(&item.name) && main.instance.onlyoffice {
                 run(app, Action::OpenDocument(item));
             } else {
@@ -145,9 +181,31 @@ pub fn run(app: &mut App, action: Action) {
         }
         Action::OpenDocument(item) => {
             let theme = if app.t.dark { "dark" } else { "light" };
+            let tab = client.url(&format!("/api/onlyoffice/viewer/{}?theme={theme}", item.id));
             match app.host.kind() {
+                // On a phone the editor gets the whole tab, as before.
+                HostKind::Web if crate::widgets::mobile(app.tasks.ctx()) => app.host.open_url(&tab),
                 HostKind::Web => {
-                    app.host.open_url(&client.url(&format!("/api/onlyoffice/viewer/{}?theme={theme}", item.id)))
+                    let css = |c: egui::Color32| format!("rgb({},{},{})", c.r(), c.g(), c.b());
+                    let t = app.t;
+                    let look = crate::document::Look {
+                        background: css(t.canvas),
+                        surface: css(t.surface),
+                        text: css(t.label),
+                        separator: css(t.separator),
+                    };
+                    let theme = theme.to_string();
+                    tasks.run(
+                        async move {
+                            let reply = client.document_editor(&item.id, &theme).await.map_err(|e| e.message)?;
+                            crate::document::open(&item.name, reply, &look, &tab).await
+                        },
+                        |app, result: Result<(), String>| {
+                            if let Err(err) = result {
+                                app.toasts.error(err);
+                            }
+                        },
+                    );
                 }
                 HostKind::Desktop => {
                     let theme = theme.to_string();
@@ -225,25 +283,45 @@ pub fn run(app: &mut App, action: Action) {
             let ids = ids(&items);
             main.browser.items.retain(|i| !ids.contains(&i.id));
             main.browser.selected.clear();
-            tasks.run(async move { client.trash(&ids).await }, move |app, result| {
-                app.finish(generation, result, |main, toasts, r| {
-                    toasts.success(if r.queued {
-                        "Moving to trash…".to_string()
-                    } else {
-                        format!("Moved {count} item(s) to trash")
+            let row = main.transfers.start_job(format!("Moving {} to the trash", items_label(count)), ph::TRASH);
+            tasks.run(
+                async move {
+                    let queued = client.trash(&ids).await?;
+                    if let Some(job) = &queued.job_id {
+                        client.wait_for_job(job).await?;
+                    }
+                    Ok(())
+                },
+                move |app, result: tma_client::ApiResult<()>| {
+                    settle_job(app, generation, row, &result);
+                    app.finish(generation, result, |main, toasts, ()| {
+                        toasts.success(format!("Moved {} to the trash", items_label(count)));
+                        main.change_pending = true;
                     });
-                    main.change_pending = true;
-                });
-            });
+                },
+            );
         }
         Action::Restore(ids) => {
             main.browser.items.retain(|i| !ids.contains(&i.id));
-            tasks.run(async move { client.restore(&ids).await }, move |app, result| {
-                app.finish(generation, result, |main, toasts, r| {
-                    toasts.success(if r.message.is_empty() { "Restored".to_string() } else { r.message });
-                    main.change_pending = true;
-                });
-            });
+            let count = ids.len();
+            let row =
+                main.transfers.start_job(format!("Restoring {}", items_label(count)), ph::ARROW_COUNTER_CLOCKWISE);
+            tasks.run(
+                async move {
+                    let queued = client.restore(&ids).await?;
+                    if let Some(job) = &queued.job_id {
+                        client.wait_for_job(job).await?;
+                    }
+                    Ok(())
+                },
+                move |app, result: tma_client::ApiResult<()>| {
+                    settle_job(app, generation, row, &result);
+                    app.finish(generation, result, |main, toasts, ()| {
+                        toasts.success(format!("Restored {}", items_label(count)));
+                        main.change_pending = true;
+                    });
+                },
+            );
         }
         Action::DeleteForever(ids) => {
             let body = format!("{} item(s) will be deleted permanently. This cannot be undone.", ids.len());
@@ -313,6 +391,7 @@ pub fn run(app: &mut App, action: Action) {
                 main.browser.clip = None;
                 run(app, Action::MoveTo(clip.ids, target));
             } else {
+                let row = main.transfers.start_job(format!("Copying {}", items_label(clip.ids.len())), ph::COPY);
                 tasks.run(
                     async move {
                         let queued = client.copy_items(&clip.ids, target.as_deref()).await?;
@@ -322,13 +401,13 @@ pub fn run(app: &mut App, action: Action) {
                         Ok(clip.ids.len())
                     },
                     move |app, result: tma_client::ApiResult<usize>| {
+                        settle_job(app, generation, row, &result);
                         app.finish(generation, result, |main, toasts, n| {
-                            toasts.success(format!("Copied {n} item(s)"));
+                            toasts.success(format!("Copied {}", items_label(n)));
                             main.change_pending = true;
                         });
                     },
                 );
-                app.toasts.info("Copying…");
             }
         }
         Action::MoveTo(ids, target) => {
@@ -336,19 +415,58 @@ pub fn run(app: &mut App, action: Action) {
                 return;
             }
             main.browser.items.retain(|i| !ids.contains(&i.id));
+            let row = main.transfers.start_job(format!("Moving {}", items_label(ids.len())), ph::ARROWS_OUT_CARDINAL);
             tasks.run(
                 async move { client.move_items(&ids, target.as_deref()).await.map(|_| ids.len()) },
                 move |app, result| {
+                    settle_job(app, generation, row, &result);
                     app.finish(generation, result, |main, toasts, n| {
-                        toasts.success(format!("Moved {n} item(s)"));
+                        toasts.success(format!("Moved {}", items_label(n)));
                         main.change_pending = true;
                     });
                 },
             );
         }
         Action::Download(items) => super::download::start_download(app, items),
-        Action::PickUpload => tasks.run(crate::platform::pick_files(), upload_files),
-        Action::PickFolder => tasks.run(crate::platform::pick_folder(), upload_files),
+        Action::OpenUpload => main.modal = Some(Modal::Upload(Vec::new())),
+        Action::Preview(item) => {
+            let images: Vec<FileItem> = main.browser.items.iter().filter(|i| is_image(i)).cloned().collect();
+            let images = if images.iter().any(|i| i.id == item.id) { images } else { vec![item.clone()] };
+            let index = images.iter().position(|i| i.id == item.id).unwrap_or(0);
+            main.modal = Some(Modal::viewer(images, index));
+        }
+        Action::CopyLinks(ids) => {
+            tasks.run(async move { client.share_links(&ids).await }, move |app, result| {
+                let ctx = app.tasks.ctx().clone();
+                app.finish(generation, result, |_, toasts, links| {
+                    let list: Vec<String> = links.links.into_values().collect();
+                    if !list.is_empty() {
+                        ctx.copy_text(list.join("\n"));
+                        toasts.success(if list.len() == 1 {
+                            "Link copied".to_string()
+                        } else {
+                            format!("{} links copied", list.len())
+                        });
+                    }
+                });
+            });
+        }
+        Action::LinkToFolderShare(ids) => {
+            tasks.run(async move { client.link_parent_share(&ids).await }, move |app, result| {
+                app.finish(generation, result, |main, toasts, _| {
+                    toasts.success("Linked to the folder's share");
+                    main.change_pending = true;
+                });
+            });
+        }
+        Action::SelectMode(on) => {
+            main.browser.select_mode = on;
+            if !on {
+                main.browser.selected.clear();
+            }
+        }
+        Action::PickUpload => tasks.run(crate::platform::pick_files(), stage_files),
+        Action::PickFolder => tasks.run(crate::platform::pick_folder(), stage_files),
         Action::Refresh => main.browser.reload(tasks, &client, generation, prefs),
         Action::LoadMore => main.browser.load_more(tasks, &client, generation, prefs),
         Action::Sort(sort) => {

@@ -165,6 +165,12 @@ impl Client {
             .ok_or_else(|| crate::ApiError::local("The server did not return a document link"))
     }
 
+    /// The editor config for a document, to mount OnlyOffice inside the web app:
+    /// `config`, `token` and `onlyofficeJsUrl` (the document server's API script).
+    pub async fn document_editor(&self, id: &str, theme: &str) -> ApiResult<Value> {
+        self.get(&format!("/api/onlyoffice/config/{}?theme={}", enc(id), enc(theme))).await
+    }
+
     /// Where a file downloads from (the session cookie authorizes it).
     pub fn download_url(&self, id: &str) -> String {
         self.url(&format!("/api/files/{}/download", enc(id)))

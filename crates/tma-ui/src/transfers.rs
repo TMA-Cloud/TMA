@@ -27,6 +27,8 @@ pub enum State {
 pub enum Direction {
     Up,
     Down,
+    /// Work the server does (moving to the trash, copying), shown while it runs.
+    Job(&'static str),
 }
 
 pub struct Transfer {
@@ -38,6 +40,8 @@ pub struct Transfer {
     upload: Option<(UploadFile, UploadOptions)>,
     /// The existing file this upload replaces, keeping its ID.
     replace: Option<String>,
+    /// A failure already listed in the upload issues dialog.
+    reported: bool,
 }
 
 #[derive(Default)]
@@ -59,6 +63,7 @@ impl Transfers {
                 state: State::Queued,
                 upload: Some((file, UploadOptions { parent_id: parent.clone() })),
                 replace: None,
+                reported: false,
             });
         }
         self.expanded = true;
@@ -75,6 +80,7 @@ impl Transfers {
             state: State::Queued,
             upload: Some((file, UploadOptions::default())),
             replace: Some(existing_id),
+            reported: false,
         });
         self.expanded = true;
     }
@@ -91,6 +97,7 @@ impl Transfers {
             state: State::Running,
             upload: None,
             replace: None,
+            reported: false,
         });
         self.expanded = true;
         (self.next_id, progress)
@@ -107,6 +114,7 @@ impl Transfers {
             state: State::Running,
             upload: None,
             replace: None,
+            reported: false,
         });
         self.expanded = true;
     }
@@ -116,6 +124,22 @@ impl Transfers {
         if let Some(item) = self.items.iter_mut().find(|i| Arc::ptr_eq(&i.progress, progress)) {
             item.state = state;
         }
+    }
+
+    /// Show a server job until `finish` is called with its id.
+    pub fn start_job(&mut self, name: String, icon: &'static str) -> u64 {
+        self.next_id += 1;
+        self.items.push(Transfer {
+            id: self.next_id,
+            name,
+            direction: Direction::Job(icon),
+            progress: Progress::new(0),
+            state: State::Running,
+            upload: None,
+            replace: None,
+            reported: false,
+        });
+        self.next_id
     }
 
     pub fn finish(&mut self, id: u64, state: State) {
@@ -133,9 +157,60 @@ impl Transfers {
     }
 }
 
-/// Start queued uploads while fewer than three run.
+/// Failed uploads grouped by reason, largest group first: one heading saying 40
+/// files did not match their type reads better than 40 lines saying the same.
+pub fn group_failures(failures: &[(String, String)]) -> Vec<(String, Vec<String>)> {
+    let mut groups: Vec<(String, Vec<String>)> = Vec::new();
+    for (name, reason) in failures {
+        // The server names the extension inside some reasons; the file name already shows it.
+        let read_error;
+        let heading = if reason.starts_with("File content does not match extension") {
+            "Content does not match the file extension"
+        } else if reason.starts_with("Invalid file name") {
+            "File name is not allowed"
+        } else if let Some((_, why)) = reason.strip_prefix("Cannot read ").and_then(|r| r.rsplit_once(": ")) {
+            // The local path differs per file; the name underneath already says which one.
+            read_error = format!("The file could not be read: {why}");
+            read_error.as_str()
+        } else {
+            reason.as_str()
+        };
+        match groups.iter_mut().find(|(r, _)| r == heading) {
+            Some((_, names)) => names.push(name.clone()),
+            None => groups.push((heading.to_string(), vec![name.clone()])),
+        }
+    }
+    groups.sort_by_key(|(_, names)| std::cmp::Reverse(names.len()));
+    groups
+}
+
+/// Once a batch of uploads is done, failures not yet reported, as (name, reason).
+fn unreported_failures(transfers: &mut Transfers) -> Vec<(String, String)> {
+    if transfers.is_busy() {
+        return Vec::new();
+    }
+    let mut out = Vec::new();
+    for item in &mut transfers.items {
+        if let (Direction::Up, State::Failed(reason), false) = (item.direction, &item.state, item.reported) {
+            item.reported = true;
+            // Cancelling is the user's own choice, not an issue to report.
+            if reason != "Cancelled" {
+                out.push((item.name.clone(), reason.clone()));
+            }
+        }
+    }
+    out
+}
+
+/// Start queued uploads while fewer than three run; report a finished batch's failures.
 pub fn pump(main: &mut Main, tasks: &Tasks) {
     let generation = main.generation;
+    if main.modal.is_none() {
+        let failures = unreported_failures(&mut main.transfers);
+        if !failures.is_empty() {
+            main.modal = Some(crate::modals::Modal::UploadIssues(group_failures(&failures)));
+        }
+    }
     while main.transfers.running() < PARALLEL {
         let Some(item) = main.transfers.items.iter_mut().find(|i| i.state == State::Queued) else { break };
         let Some((file, options)) = item.upload.take() else {
@@ -167,6 +242,8 @@ pub fn pump(main: &mut Main, tasks: &Tasks) {
 
 /// The floating panel in the bottom-left corner.
 pub fn show(main: &mut Main, ctx: &egui::Context) {
+    let phone = widgets::mobile(ctx);
+    let width = if phone { (ctx.content_rect().width() - 40.0).min(420.0) } else { 320.0 };
     let t = crate::widgets::tokens_ctx(ctx);
     if main.transfers.items.is_empty() {
         return;
@@ -180,7 +257,12 @@ pub fn show(main: &mut Main, ctx: &egui::Context) {
     }
     let mut clear = false;
     egui::Area::new(egui::Id::new("transfers"))
-        .anchor(Align2::RIGHT_BOTTOM, [-18.0, -18.0])
+        // Bottom-left, as the web app had it, so toasts (bottom-right) never cover it;
+        // on a phone it spans the width above the tab bar.
+        .anchor(
+            if phone { Align2::CENTER_BOTTOM } else { Align2::LEFT_BOTTOM },
+            if phone { [0.0, -70.0] } else { [18.0, -18.0] },
+        )
         .order(egui::Order::Foreground)
         .show(ctx, |ui| {
             Frame::new()
@@ -195,14 +277,20 @@ pub fn show(main: &mut Main, ctx: &egui::Context) {
                     color: egui::Color32::from_black_alpha(45),
                 })
                 .show(ui, |ui| {
-                    ui.set_width(320.0);
+                    ui.set_width(width);
                     ui.horizontal(|ui| {
+                        let working = main
+                            .transfers
+                            .items
+                            .iter()
+                            .any(|i| matches!(i.direction, Direction::Job(_)) && i.state == State::Running);
                         let title = if busy {
-                            format!("Transferring {} of {total}", (done + failed + 1).min(total))
+                            let verb = if working { "Working on" } else { "Transferring" };
+                            format!("{verb} {} of {total}", (done + failed + 1).min(total))
                         } else if failed > 0 {
                             format!("{done} done, {failed} failed")
                         } else {
-                            format!("{done} transfer(s) complete")
+                            format!("{done} done")
                         };
                         ui.label(RichText::new(title).semibold());
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -224,16 +312,21 @@ pub fn show(main: &mut Main, ctx: &egui::Context) {
                         });
                         if tot == 0 { 0.0 } else { d as f32 / tot as f32 }
                     };
-                    if busy {
-                        widgets::progress_bar(ui, fraction, 320.0);
+                    if busy && fraction == 0.0 {
+                        widgets::busy_bar(ui, width);
+                    } else if busy {
+                        widgets::progress_bar(ui, fraction, width);
                     }
                     if main.transfers.expanded {
                         ui.add_space(6.0);
                         egui::ScrollArea::vertical().max_height(220.0).show(ui, |ui| {
                             for item in main.transfers.items.iter().rev() {
                                 ui.horizontal(|ui| {
-                                    let icon =
-                                        if item.direction == Direction::Up { ph::ARROW_UP } else { ph::ARROW_DOWN };
+                                    let icon = match item.direction {
+                                        Direction::Up => ph::ARROW_UP,
+                                        Direction::Down => ph::ARROW_DOWN,
+                                        Direction::Job(icon) => icon,
+                                    };
                                     ui.label(RichText::new(icon).color(t.label_tertiary));
                                     ui.vertical(|ui| {
                                         ui.set_width(230.0);
@@ -241,6 +334,10 @@ pub fn show(main: &mut Main, ctx: &egui::Context) {
                                         match &item.state {
                                             State::Queued => {
                                                 ui.label(RichText::new("Waiting").size(11.0).color(t.label_tertiary));
+                                            }
+                                            // No byte counts: a bar that moves rather than one that fills.
+                                            State::Running if item.progress.total.load(Ordering::Relaxed) == 0 => {
+                                                widgets::busy_bar(ui, 220.0)
                                             }
                                             State::Running => {
                                                 widgets::progress_bar(ui, item.progress.fraction(), 220.0)
@@ -271,5 +368,56 @@ pub fn show(main: &mut Main, ctx: &egui::Context) {
     }
     if clear {
         main.transfers.items.clear();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn failure(name: &str, reason: &str) -> (String, String) {
+        (name.into(), reason.into())
+    }
+
+    #[test]
+    fn failures_group_by_what_to_do() {
+        let groups = group_failures(&[
+            failure("a.mp4", "File content does not match extension .mp4"),
+            failure("big.iso", "Storage limit exceeded"),
+            failure("b.mpeg", "File content does not match extension .mpeg"),
+        ]);
+        assert_eq!(groups.len(), 2);
+        assert_eq!(groups[0].0, "Content does not match the file extension");
+        assert_eq!(groups[0].1, vec!["a.mp4".to_string(), "b.mpeg".to_string()]);
+        assert_eq!(groups[1], ("Storage limit exceeded".to_string(), vec!["big.iso".to_string()]));
+        let unreadable = group_failures(&[
+            failure("a.txt", r"Cannot read C:\Temp\a.txt: not found"),
+            failure("b.txt", r"Cannot read C:\Temp\b.txt: not found"),
+        ]);
+        assert_eq!(
+            unreadable,
+            vec![("The file could not be read: not found".to_string(), vec!["a.txt".into(), "b.txt".into()])]
+        );
+    }
+
+    #[test]
+    fn a_batch_reports_once_and_skips_cancelled() {
+        let mut transfers = Transfers::default();
+        transfers.queue_uploads(Vec::new(), None);
+        for (name, state) in [("x", State::Failed("Nope".into())), ("y", State::Failed("Cancelled".into()))] {
+            transfers.next_id += 1;
+            transfers.items.push(Transfer {
+                id: transfers.next_id,
+                name: name.into(),
+                direction: Direction::Up,
+                progress: Progress::new(1),
+                state,
+                upload: None,
+                replace: None,
+                reported: false,
+            });
+        }
+        assert_eq!(unreported_failures(&mut transfers), vec![failure("x", "Nope")]);
+        assert!(unreported_failures(&mut transfers).is_empty());
     }
 }

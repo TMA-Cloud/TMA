@@ -189,6 +189,7 @@ impl App {
         main.browser.load(&self.tasks, &main.client, generation, &self.prefs);
         dashboard::load(&self.tasks, &main.client, generation);
         load_instance(&self.tasks, &main.client, generation);
+        settings::updates::check(&main, &self.tasks);
         self.screen = Screen::Main(Box::new(main));
     }
 

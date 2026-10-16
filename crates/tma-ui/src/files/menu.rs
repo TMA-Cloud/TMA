@@ -77,12 +77,26 @@ pub(super) fn context_menu(main: &Main, ui: &mut Ui, items: &[FileItem], desktop
     let single = items.first().filter(|_| n == 1).cloned();
     if let Some(first) = single.clone() {
         item(ui, ph::ARROW_SQUARE_OUT, "Open", Action::Open(first.clone()));
+        if desktop && super::actions::is_image(&first) && user.can(Permission::Download) {
+            item(ui, ph::EYE, "Preview", Action::Preview(first.clone()));
+        }
         if matches!(main.browser.place, Place::Search(_) | Place::Starred | Place::Shared) {
             item(ui, ph::FOLDER_OPEN, "Show in folder", Action::OpenLocation(first.clone()));
         }
     }
     if user.can(Permission::Share) {
         item(ui, ph::SHARE_NETWORK, "Share", Action::Share(items.to_vec()));
+        if items.iter().any(super::is_shared) {
+            item(
+                ui,
+                ph::LINK,
+                "Copy link",
+                Action::CopyLinks(items.iter().filter(|i| super::is_shared(i)).map(|i| i.id.clone()).collect()),
+            );
+        }
+        if main.browser.in_shared_folder() && !items.iter().any(super::is_shared) {
+            item(ui, ph::LINK_SIMPLE, "Link to folder share", Action::LinkToFolderShare(ids.clone()));
+        }
     }
     if user.can(Permission::Download) {
         item(ui, ph::DOWNLOAD_SIMPLE, "Download", Action::Download(items.to_vec()));

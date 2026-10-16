@@ -106,18 +106,30 @@ pub(super) fn interact(
     actions: &mut Vec<Action>,
 ) -> egui::Response {
     // Not focusable: the listing handles the keyboard itself, so egui must not move focus between rows.
-    let response = ui.interact(rect, Id::new(("item", &item.id)), Sense::CLICK | Sense::DRAG);
+    // On touch a drag scrolls, so rows only take taps (and long presses, for the menu).
+    let touch = crate::widgets::touch_mode(ui.ctx());
+    let sense = if touch { Sense::CLICK } else { Sense::CLICK | Sense::DRAG };
+    let response = ui.interact(rect, Id::new(("item", &item.id)), sense);
     // Rows are surfaces, not buttons: the arrow over them, a closed hand while dragging items.
     if response.dragged() {
         ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
     } else if response.hovered() {
         ui.ctx().set_cursor_icon(egui::CursorIcon::Default);
     }
-    if response.clicked() {
+    if touch && response.clicked() {
+        // A tap opens, as on any phone; in selection mode it adds or removes the item.
+        if main.browser.select_mode {
+            if !main.browser.selected.remove(&item.id) {
+                main.browser.selected.insert(item.id.clone());
+            }
+        } else {
+            actions.push(Action::Open(item.clone()));
+        }
+    } else if response.clicked() {
         let modifiers = ui.input(|i| i.modifiers);
         click_select(main, &item.id, modifiers);
     }
-    if response.double_clicked() {
+    if !touch && response.double_clicked() {
         actions.push(Action::Open(item.clone()));
     }
     if response.secondary_clicked() && !main.browser.selected.contains(&item.id) {
@@ -145,6 +157,23 @@ pub(super) fn interact(
     let selection = main.browser.selected_items();
     response.context_menu(|ui| super::menu::context_menu(main, ui, &selection, desktop, actions));
     response
+}
+
+/// When the item was shared and how long its link lasts, on hovering the link badge.
+pub(super) fn share_tip(ui: &Ui, item: &FileItem, badge: Rect, now: chrono::DateTime<chrono::Utc>) {
+    let hovered = ui.rect_contains_pointer(badge.expand(3.0));
+    if hovered {
+        let since = item.shared_at.map(|at| format!("Shared {}", tma_core::format::full_date(at)));
+        let left = tma_core::format::share_remaining(item.expires_at, now);
+        let tip = [since.unwrap_or_else(|| "Shared".into()), left].join(" · ");
+        egui::Tooltip::always_open(
+            ui.ctx().clone(),
+            ui.layer_id(),
+            Id::new(("share-tip", &item.id)),
+            egui::PopupAnchor::Pointer,
+        )
+        .show(|ui| ui.label(tip));
+    }
 }
 
 pub(super) fn name_label(main: &Main, item: &FileItem) -> String {
@@ -194,11 +223,7 @@ fn list(main: &mut Main, ui: &mut Ui, t: &Tokens, desktop: bool, actions: &mut V
     let more = main.browser.cursor.is_some();
     // Dragging on empty space draws a selection band rather than scrolling.
     let mut area =
-        egui::ScrollArea::vertical().auto_shrink([false, false]).scroll_source(egui::scroll_area::ScrollSource {
-            scroll_bar: true,
-            mouse_wheel: true,
-            ..egui::scroll_area::ScrollSource::NONE
-        });
+        egui::ScrollArea::vertical().auto_shrink([false, false]).scroll_source(super::marquee::scroll_source(ui.ctx()));
     ui.spacing_mut().item_spacing.y = ROW_GAP;
     let pitch = ROW_HEIGHT + ROW_GAP;
     // Keyboard moves bring their row to the middle of the view.
@@ -237,16 +262,19 @@ fn list(main: &mut Main, ui: &mut Ui, t: &Tokens, desktop: bool, actions: &mut V
             painter.galley(egui::pos2(text_left, rect.center().y - 18.0), galley, t.label);
             let mut x = text_left + name_width + 6.0;
             for (show, icon, color) in
-                [(item.starred, egui_phosphor::fill::STAR, t.warning), (item.shared, ph::LINK, t.accent)]
+                [(item.starred, egui_phosphor::fill::STAR, t.warning), (super::is_shared(&item), ph::LINK, t.accent)]
             {
                 if show {
-                    painter.text(
+                    let badge = painter.text(
                         egui::pos2(x, rect.center().y - 9.0),
                         Align2::LEFT_CENTER,
                         icon,
                         FontId::proportional(12.0),
                         color,
                     );
+                    if icon == ph::LINK {
+                        share_tip(ui, &item, badge, now);
+                    }
                     x += 16.0;
                 }
             }

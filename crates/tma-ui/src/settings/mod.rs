@@ -8,7 +8,7 @@ mod dialogs_admin;
 mod integrations;
 mod storage;
 mod subusers;
-mod updates;
+pub(crate) mod updates;
 
 pub use dialogs::show as modals;
 

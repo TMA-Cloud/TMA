@@ -132,7 +132,7 @@ pub fn show(app: &mut App, ui: &mut Ui) {
                 ui.horizontal_wrapped(|ui| {
                     if main.user.can(Permission::Upload) && quick(ui, ph::UPLOAD_SIMPLE, t.accent, "Upload files", card)
                     {
-                        actions.push(Action::PickUpload);
+                        actions.push(Action::OpenUpload);
                     }
                     if main.user.can(Permission::Upload) && quick(ui, ph::FOLDER_PLUS, t.positive, "New folder", card) {
                         go = Some((Section::Files, Place::Folder));

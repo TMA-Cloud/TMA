@@ -6,6 +6,7 @@ mod app;
 mod auth;
 pub mod cursors;
 mod dashboard;
+mod document;
 mod files;
 mod host;
 pub mod icons;

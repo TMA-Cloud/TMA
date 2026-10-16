@@ -61,7 +61,18 @@ pub fn hits(layout: Layout, rect: Rect, count: usize) -> Vec<usize> {
 
 /// The listing's background: register it before the items so they stay on top.
 pub fn background(ui: &mut Ui) -> Response {
-    ui.interact(ui.clip_rect(), Id::new("listing-background"), Sense::click_and_drag())
+    // On touch a drag scrolls the list, so the background only takes taps.
+    let sense = if crate::widgets::touch_mode(ui.ctx()) { Sense::click() } else { Sense::click_and_drag() };
+    ui.interact(ui.clip_rect(), Id::new("listing-background"), sense)
+}
+
+/// Wheel and scroll bar with a mouse (a drag draws a selection band); dragging too on touch.
+pub fn scroll_source(ctx: &egui::Context) -> egui::scroll_area::ScrollSource {
+    if crate::widgets::touch_mode(ctx) {
+        egui::scroll_area::ScrollSource::ALL
+    } else {
+        egui::scroll_area::ScrollSource { scroll_bar: true, mouse_wheel: true, ..egui::scroll_area::ScrollSource::NONE }
+    }
 }
 
 /// Follow a drag on the background; `origin` is the content's top-left on screen.

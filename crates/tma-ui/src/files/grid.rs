@@ -5,7 +5,7 @@ use egui::{Align2, CornerRadius, FontId, Rect, Sense, Stroke, Ui, Vec2};
 use super::actions::Action;
 use super::view::{TILE, interact, meta_line, name_label, paint_item_fill};
 use crate::app::Main;
-use crate::icons;
+use crate::icons::{self, ph};
 use crate::theme::Tokens;
 
 pub(super) fn grid(main: &mut Main, ui: &mut Ui, t: &Tokens, desktop: bool, actions: &mut Vec<Action>) {
@@ -19,11 +19,7 @@ pub(super) fn grid(main: &mut Main, ui: &mut Ui, t: &Tokens, desktop: bool, acti
     main.browser.drop_target = None;
     let pitch = Vec2::new(TILE.x + gap.x, row_height + gap.y);
     let mut area =
-        egui::ScrollArea::vertical().auto_shrink([false, false]).scroll_source(egui::scroll_area::ScrollSource {
-            scroll_bar: true,
-            mouse_wheel: true,
-            ..egui::scroll_area::ScrollSource::NONE
-        });
+        egui::ScrollArea::vertical().auto_shrink([false, false]).scroll_source(super::marquee::scroll_source(ui.ctx()));
     if let Some(index) = main.browser.scroll_to.take() {
         area = area.vertical_scroll_offset(((index / per_row) as f32 * pitch.y - ui.available_height() / 2.0).max(0.0));
     }
@@ -99,14 +95,26 @@ pub(super) fn grid(main: &mut Main, ui: &mut Ui, t: &Tokens, desktop: bool, acti
                         FontId::proportional(11.0),
                         t.label_tertiary,
                     );
+                    let mut corner = rect.right_top() + Vec2::new(-16.0, 16.0);
                     if item.starred {
                         ui.painter().text(
-                            rect.right_top() + Vec2::new(-16.0, 16.0),
+                            corner,
                             Align2::CENTER_CENTER,
                             egui_phosphor::fill::STAR,
                             FontId::proportional(12.0),
                             t.warning,
                         );
+                        corner.x -= 16.0;
+                    }
+                    if super::is_shared(&item) {
+                        let badge = ui.painter().text(
+                            corner,
+                            Align2::CENTER_CENTER,
+                            ph::LINK,
+                            FontId::proportional(12.0),
+                            t.accent,
+                        );
+                        super::view::share_tip(ui, &item, badge, now);
                     }
                 }
             });

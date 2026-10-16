@@ -1,5 +1,6 @@
 //! The signed-in frame: sidebar, header (search, upload, account) and the
-//! section in the middle, plus dropped files, transfers and dialogs.
+//! section in the middle, plus dropped files, transfers and dialogs. Phones and
+//! tablets get a tab bar and compact header instead (`mobile`).
 
 use egui::{Align, Align2, Color32, CornerRadius, FontId, Layout, Margin, RichText, Sense, Stroke, Vec2};
 
@@ -8,6 +9,8 @@ use crate::files::{Action, Place, run_action};
 use crate::icons::{self, ph};
 use crate::theme::{self, ThemeChoice, Weight};
 use crate::widgets;
+
+mod mobile;
 
 /// Switch section, opening its listing.
 pub fn navigate(app: &mut App, section: Section, place: Place) {
@@ -63,6 +66,8 @@ fn nav_item(ui: &mut egui::Ui, icon: &str, label: &str, active: bool) -> bool {
 fn sidebar(app: &mut App, root: &mut egui::Ui) {
     let t = app.t;
     let mut go = None;
+    let mut to_updates = false;
+    let desktop = app.host.kind() == crate::host::HostKind::Desktop;
     let Screen::Main(main) = &mut app.screen else { return };
     egui::Panel::left("sidebar")
         .exact_size(SIDEBAR_WIDTH)
@@ -105,11 +110,45 @@ fn sidebar(app: &mut App, root: &mut egui::Ui) {
                 });
                 let line = ui.available_rect_before_wrap();
                 ui.painter().hline(line.x_range(), line.bottom(), Stroke::new(1.0, t.separator));
+                let newer = match (&main.settings.versions, &main.settings.latest) {
+                    (Some(current), Some(latest)) => crate::settings::updates::available(current, latest, desktop),
+                    _ => Vec::new(),
+                };
+                if !newer.is_empty() {
+                    egui::Frame::new().inner_margin(Margin::same(10)).show(ui, |ui| {
+                        to_updates = update_card(ui, &newer);
+                    });
+                }
             });
         });
     if let Some((section, place)) = go {
         navigate(app, section, place);
     }
+    if to_updates && let Screen::Main(main) = &mut app.screen {
+        main.settings.page = crate::settings::Page::Updates;
+        navigate(app, Section::Settings, Place::Folder);
+    }
+}
+
+/// The sidebar's notice that newer releases exist, as the web app had; it opens Updates.
+fn update_card(ui: &mut egui::Ui, newer: &[(&str, String)]) -> bool {
+    let t = widgets::tokens(ui);
+    let card = egui::Frame::new()
+        .fill(t.accent_fill)
+        .corner_radius(CornerRadius::same(12))
+        .inner_margin(Margin::same(10))
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.label(RichText::new(format!("{}  Updates available", ph::ARROW_CIRCLE_UP)).semibold().color(t.accent));
+            for (name, version) in newer {
+                ui.label(RichText::new(format!("{name} → {version}")).size(12.0).color(t.label_secondary));
+            }
+        });
+    let response = ui.interact(card.response.rect, egui::Id::new("update-card"), Sense::click());
+    if response.hovered() {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+    }
+    response.on_hover_text("See Updates in Settings").clicked()
 }
 
 /// A round, borderless icon button for the header.
@@ -146,7 +185,6 @@ fn header(app: &mut App, root: &mut egui::Ui) {
     let mut search = None;
     let mut sign_out = false;
     let mut upload = None;
-    let desktop = app.host.kind() == crate::host::HostKind::Desktop;
     let Screen::Main(main) = &mut app.screen else { return };
     egui::Panel::top("header")
         .exact_size(52.0)
@@ -219,20 +257,8 @@ fn header(app: &mut App, root: &mut egui::Ui) {
                     });
                     if main.user.can(tma_core::Permission::Upload) {
                         ui.add_space(4.0);
-                        let pill = pill_button(ui, ph::UPLOAD_SIMPLE, "Upload");
-                        // Browsers cannot pick folders here, so only the desktop app asks which.
-                        if desktop {
-                            egui::Popup::menu(&pill).show(|ui| {
-                                ui.set_min_width(170.0);
-                                if ui.button(format!("{}  Upload files", ph::FILE)).clicked() {
-                                    upload = Some(Action::PickUpload);
-                                }
-                                if ui.button(format!("{}  Upload folder", ph::FOLDER)).clicked() {
-                                    upload = Some(Action::PickFolder);
-                                }
-                            });
-                        } else if pill.clicked() {
-                            upload = Some(Action::PickUpload);
+                        if pill_button(ui, ph::UPLOAD_SIMPLE, "Upload").clicked() {
+                            upload = Some(Action::OpenUpload);
                         }
                     }
                     ui.add_space(4.0);
@@ -259,12 +285,18 @@ fn header(app: &mut App, root: &mut egui::Ui) {
     }
 }
 
-fn storage_banner(app: &App, ui: &mut egui::Ui) {
-    let Screen::Main(main) = &app.screen else { return };
-    if main.instance.storage_configured || main.instance.max_upload == 0 && !main.instance.is_first_user {
+/// Shown everywhere but Settings while no bucket is connected, since every upload
+/// and download fails until one is; only the first user gets the button to fix it.
+fn storage_banner(app: &mut App, ui: &mut egui::Ui) {
+    let t = app.t;
+    let Screen::Main(main) = &mut app.screen else { return };
+    if main.instance.storage_configured
+        || main.section == Section::Settings
+        || main.instance.max_upload == 0 && !main.instance.is_first_user
+    {
         return;
     }
-    let t = app.t;
+    let mut set_up = false;
     egui::Frame::new()
         .fill(t.warning.gamma_multiply(0.15))
         .corner_radius(10)
@@ -273,59 +305,78 @@ fn storage_banner(app: &App, ui: &mut egui::Ui) {
             ui.horizontal(|ui| {
                 ui.label(RichText::new(ph::WARNING).color(t.warning_text));
                 let text = if main.instance.is_first_user {
-                    "Storage is not set up yet. Connect a bucket in Settings > Storage to upload files."
+                    "Connect a storage bucket before anyone can upload or open files."
                 } else {
-                    "Storage is not set up yet. Ask the administrator to connect a storage bucket."
+                    "Storage is not set up yet, so files cannot be uploaded or opened. Ask your administrator to connect a bucket."
                 };
                 ui.label(RichText::new(text).color(t.warning_text));
+                if main.instance.is_first_user {
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        set_up = widgets::secondary(ui, "Set up storage").clicked();
+                    });
+                }
             });
         });
     ui.add_space(8.0);
+    if set_up {
+        main.section = Section::Settings;
+        main.settings.page = crate::settings::Page::Storage;
+        crate::settings::opened(main, &app.tasks);
+    }
 }
 
 pub fn show(app: &mut App, root: &mut egui::Ui) {
     let ctx = &root.ctx().clone();
-    if !app.prefs.sidebar_hidden {
-        sidebar(app, root);
+    let phone = widgets::mobile(ctx);
+    if phone {
+        mobile::tab_bar(app, root);
+        mobile::top_bar(app, root);
+    } else {
+        if !app.prefs.sidebar_hidden {
+            sidebar(app, root);
+        }
+        header(app, root);
     }
-    header(app, root);
     let dropped = ctx.input(|i| i.raw.dropped_files.clone());
     if !dropped.is_empty() {
-        app.tasks.run(crate::platform::dropped(dropped), crate::files::upload_files);
+        app.tasks.run(crate::platform::dropped(dropped), crate::files::stage_files);
     }
     let hovering_files = ctx.input(|i| !i.raw.hovered_files.is_empty());
     let t = app.t;
-    egui::CentralPanel::default()
-        .frame(egui::Frame::new().fill(t.canvas).inner_margin(Margin { left: 26, right: 26, top: 28, bottom: 12 }))
-        .show(root, |ui| {
-            storage_banner(app, ui);
-            let section = match &app.screen {
-                Screen::Main(main) => main.section,
-                _ => return,
-            };
-            match section {
-                Section::Dashboard => crate::dashboard::show(app, ui),
-                Section::Settings => crate::settings::show(app, ui),
-                _ => crate::files::show(app, ui),
-            }
-            if hovering_files {
-                let rect = ui.max_rect();
-                ui.painter().rect(
-                    rect,
-                    CornerRadius::same(16),
-                    t.accent_fill,
-                    Stroke::new(2.0, t.accent),
-                    egui::StrokeKind::Inside,
-                );
-                ui.painter().text(
-                    rect.center(),
-                    Align2::CENTER_CENTER,
-                    format!("{}  Drop to upload", ph::UPLOAD_SIMPLE),
-                    FontId::proportional(18.0),
-                    t.accent,
-                );
-            }
-        });
+    let margin = if phone {
+        Margin { left: 12, right: 12, top: 8, bottom: 8 }
+    } else {
+        Margin { left: 26, right: 26, top: 28, bottom: 12 }
+    };
+    egui::CentralPanel::default().frame(egui::Frame::new().fill(t.canvas).inner_margin(margin)).show(root, |ui| {
+        storage_banner(app, ui);
+        let section = match &app.screen {
+            Screen::Main(main) => main.section,
+            _ => return,
+        };
+        match section {
+            Section::Dashboard => crate::dashboard::show(app, ui),
+            Section::Settings => crate::settings::show(app, ui),
+            _ => crate::files::show(app, ui),
+        }
+        if hovering_files {
+            let rect = ui.max_rect();
+            ui.painter().rect(
+                rect,
+                CornerRadius::same(16),
+                t.accent_fill,
+                Stroke::new(2.0, t.accent),
+                egui::StrokeKind::Inside,
+            );
+            ui.painter().text(
+                rect.center(),
+                Align2::CENTER_CENTER,
+                format!("{}  Drop to upload", ph::UPLOAD_SIMPLE),
+                FontId::proportional(18.0),
+                t.accent,
+            );
+        }
+    });
     let Screen::Main(main) = &mut app.screen else { return };
     crate::transfers::pump(main, &app.tasks);
     crate::transfers::show(main, ctx);

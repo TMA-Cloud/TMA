@@ -103,20 +103,47 @@ fn crumbs(main: &Main, ui: &mut Ui, actions: &mut Vec<Action>) {
         crumb(ui, &b.title(), true);
         return;
     }
+    let phone = crate::widgets::mobile(ui.ctx());
     if b.path.is_empty() {
         crumb(ui, "My Files", true);
         return;
     }
-    if crumb(ui, "My Files", false).clicked() {
+    // On a phone the house is My Files; the words would crowd out the folder's own name.
+    if !phone && crumb(ui, "My Files", false).clicked() {
         actions.push(Action::Crumb(None));
     }
     let last = b.path.len() - 1;
-    for (i, (_, name)) in b.path.iter().enumerate() {
-        chevron(ui);
+    let shown = shown_from(b.path.len(), phone);
+    if shown > 0 {
+        if !phone {
+            chevron(ui);
+        }
+        // The folders in between fold into one menu, so a deep path keeps its end in view.
+        let more = crumb(ui, "…", false);
+        egui::Popup::menu(&more).show(|ui| {
+            ui.set_min_width(170.0);
+            for (i, (_, name)) in b.path.iter().enumerate().take(shown) {
+                if ui.button(format!("{}  {name}", ph::FOLDER)).clicked() {
+                    actions.push(Action::Crumb(Some(i)));
+                }
+            }
+        });
+    }
+    for (i, (_, name)) in b.path.iter().enumerate().skip(shown) {
+        // The house already has its chevron when nothing on a phone sits between them.
+        if !(phone && shown == 0 && i == 0) {
+            chevron(ui);
+        }
         if crumb(ui, name, i == last).clicked() && i != last {
             actions.push(Action::Crumb(Some(i)));
         }
     }
+}
+
+/// The first crumb shown in full: the last two folders (one on a phone), the rest in "…".
+pub fn shown_from(depth: usize, phone: bool) -> usize {
+    let keep = if phone { 1 } else { 2 };
+    if depth > keep + 1 { depth - keep } else { 0 }
 }
 
 fn sort_menu(ui: &mut Ui, prefs: &Prefs, actions: &mut Vec<Action>) {
@@ -186,6 +213,16 @@ fn selection_tools(main: &Main, ui: &mut Ui, selection: &[FileItem], actions: &m
 }
 
 /// The view controls and the place's own buttons (New folder, Paste, Empty trash).
+/// Touch has no Ctrl or Shift, so selecting several items is a mode, as in the web app.
+fn select_toggle(main: &Main, ui: &mut Ui, actions: &mut Vec<Action>) {
+    if widgets::touch_mode(ui.ctx()) && main.browser.place != Place::Trash || main.browser.select_mode {
+        let on = main.browser.select_mode;
+        if tool(ui, ph::CHECK_SQUARE, if on { "Done selecting" } else { "Select" }, on, None).clicked() {
+            actions.push(Action::SelectMode(!on));
+        }
+    }
+}
+
 fn view_tools(main: &Main, ui: &mut Ui, prefs: &Prefs, actions: &mut Vec<Action>) {
     let place = &main.browser.place;
     if *place != Place::Trash && !matches!(place, Place::Search(_)) {
@@ -211,6 +248,7 @@ fn view_tools(main: &Main, ui: &mut Ui, prefs: &Prefs, actions: &mut Vec<Action>
     {
         actions.push(Action::Paste);
     }
+    select_toggle(main, ui, actions);
     if tool(ui, ph::LIST_BULLETS, "List view", !prefs.grid_view, None).clicked() {
         actions.push(Action::Grid(false));
     }
@@ -222,19 +260,30 @@ fn view_tools(main: &Main, ui: &mut Ui, prefs: &Prefs, actions: &mut Vec<Action>
 pub fn show(main: &Main, ui: &mut Ui, prefs: &Prefs, actions: &mut Vec<Action>) {
     let t = widgets::tokens(ui);
     let selection = main.browser.selected_items();
+    let phone = crate::widgets::mobile(ui.ctx());
     egui::Frame::new()
         .fill(t.surface)
         .stroke(Stroke::new(1.0, t.separator))
         .corner_radius(CornerRadius::same(18))
-        .inner_margin(egui::Margin::symmetric(18, 12))
+        .inner_margin(egui::Margin::symmetric(if phone { 10 } else { 18 }, 12))
         .show(ui, |ui| {
             ui.set_width(ui.available_width());
             ui.horizontal(|ui| {
                 ui.set_min_height(34.0);
-                history(main, ui, actions);
+                // A phone shows the place in its header and has the system Back; the room goes to the tools.
+                if !phone {
+                    history(main, ui, actions);
+                }
                 // The tools are placed first; the breadcrumbs get the room that is left and truncate.
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     ui.spacing_mut().item_spacing.x = 2.0;
+                    // A phone has room for the selection or the view, not both: what was picked wins.
+                    if phone && !selection.is_empty() {
+                        select_toggle(main, ui, actions);
+                        divider(ui);
+                        selection_tools(main, ui, &selection, actions);
+                        return;
+                    }
                     view_tools(main, ui, prefs, actions);
                     if !selection.is_empty() {
                         divider(ui);
@@ -244,4 +293,15 @@ pub fn show(main: &Main, ui: &mut Ui, prefs: &Prefs, actions: &mut Vec<Action>) 
                 });
             });
         });
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn deep_paths_fold_the_middle() {
+        assert_eq!(super::shown_from(2, false), 0);
+        assert_eq!(super::shown_from(3, false), 0);
+        assert_eq!(super::shown_from(5, false), 3);
+        assert_eq!(super::shown_from(3, true), 2);
+    }
 }

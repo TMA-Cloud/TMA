@@ -33,7 +33,7 @@ pub async fn pick_files() -> Vec<UploadFile> {
     out
 }
 
-/// A whole folder, keeping its structure (desktop only; browsers cannot pick folders here).
+/// A whole folder, keeping its structure.
 pub async fn pick_folder() -> Vec<UploadFile> {
     #[cfg(not(target_arch = "wasm32"))]
     {
@@ -47,7 +47,52 @@ pub async fn pick_folder() -> Vec<UploadFile> {
         out
     }
     #[cfg(target_arch = "wasm32")]
-    Vec::new()
+    browser_folder().await
+}
+
+/// A folder input (`webkitdirectory`), as the web app used: each file comes with its
+/// path inside the folder. A cancelled picker resolves empty.
+#[cfg(target_arch = "wasm32")]
+async fn browser_folder() -> Vec<UploadFile> {
+    use wasm_bindgen::JsCast;
+    use wasm_bindgen::closure::Closure;
+    let Some(document) = web_sys::window().and_then(|w| w.document()) else { return Vec::new() };
+    let Ok(input) = document.create_element("input").map(|e| e.unchecked_into::<web_sys::HtmlInputElement>()) else {
+        return Vec::new();
+    };
+    input.set_type("file");
+    let _ = input.set_attribute("webkitdirectory", "");
+    let _ = input.set_attribute("multiple", "");
+    let picked = js_sys::Promise::new(&mut |resolve, _| {
+        let done = Closure::<dyn FnMut()>::once_into_js(move || {
+            let _ = resolve.call0(&wasm_bindgen::JsValue::NULL);
+        });
+        let target: &web_sys::EventTarget = input.as_ref();
+        let _ = target.add_event_listener_with_callback("change", done.unchecked_ref());
+        let _ = target.add_event_listener_with_callback("cancel", done.unchecked_ref());
+    });
+    input.click();
+    let _ = wasm_bindgen_futures::JsFuture::from(picked).await;
+    let Some(files) = input.files() else { return Vec::new() };
+    let mut out = Vec::new();
+    for index in 0..files.length() {
+        let Some(file) = files.get(index) else { continue };
+        let path = js_sys::Reflect::get(&file, &"webkitRelativePath".into())
+            .ok()
+            .and_then(|v| v.as_string())
+            .unwrap_or_else(|| file.name());
+        let Ok(buffer) = wasm_bindgen_futures::JsFuture::from(file.array_buffer()).await else { continue };
+        let bytes = js_sys::Uint8Array::new(&buffer).to_vec();
+        let relative_dir = path.rsplit_once('/').map(|(dir, _)| dir.to_string()).filter(|d| !d.is_empty());
+        out.push(UploadFile {
+            name: file.name(),
+            size: bytes.len() as u64,
+            source: Source::Bytes(bytes.into()),
+            modified_ms: Some(file.last_modified() as i64),
+            relative_dir,
+        });
+    }
+    out
 }
 
 #[cfg(not(target_arch = "wasm32"))]

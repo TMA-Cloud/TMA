@@ -11,8 +11,10 @@ use crate::icons::{self, ph};
 use crate::theme::Weight;
 use crate::widgets;
 
+mod upload;
 mod viewer;
 
+pub use upload::add as stage;
 pub use viewer::Viewer;
 use viewer::{decode, viewer_overlay};
 
@@ -43,12 +45,25 @@ pub struct Share {
 }
 
 pub enum Modal {
-    NewFolder { name: String, parent: Option<String> },
-    Rename { item: FileItem, name: String },
+    NewFolder {
+        name: String,
+        parent: Option<String>,
+    },
+    Rename {
+        item: FileItem,
+        name: String,
+    },
     Confirm(Confirm),
-    Info { item: FileItem, info: Option<FileInfo> },
+    Info {
+        item: FileItem,
+        info: Option<FileInfo>,
+    },
     Share(Share),
     Viewer(Viewer),
+    /// Files and folders gathered for upload, before they are sent.
+    Upload(Vec<tma_client::UploadFile>),
+    /// Uploads that failed, grouped by reason, kept until the user dismisses them.
+    UploadIssues(Vec<(String, Vec<String>)>),
 }
 
 impl Modal {
@@ -74,6 +89,9 @@ enum Outcome {
     ShareSet(Vec<String>, bool, &'static str),
     LoadImage(String),
     Download(FileItem),
+    /// Add files (`true`: a folder) to the upload dialog.
+    Pick(bool),
+    Upload,
 }
 
 /// A dialog with the standard header; true when it should close (Esc, backdrop or the close button).
@@ -169,10 +187,53 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
             }
         }
         Modal::Viewer(viewer) => viewer_overlay(ctx, &t, viewer, &mut outcome),
+        Modal::Upload(staged) => {
+            let close = dialog(ctx, "upload", 520.0, "Upload", |ui| upload::body(ui, staged, &mut outcome));
+            if close && outcome.is_none() {
+                outcome = Some(Outcome::Close);
+            }
+        }
+        Modal::UploadIssues(groups) => {
+            let count: usize = groups.iter().map(|(_, names)| names.len()).sum();
+            let title = format!("{} not uploaded", if count == 1 { "1 file".into() } else { format!("{count} files") });
+            let close = dialog(ctx, "upload-issues", 460.0, &title, |ui| issues_body(ui, groups, &mut outcome));
+            if close && outcome.is_none() {
+                outcome = Some(Outcome::Close);
+            }
+        }
     }
     if let Some(outcome) = outcome {
         apply(app, outcome);
     }
+}
+
+/// Enough names to see the shape of the problem; the dialog still opens at once after a huge folder.
+const ISSUE_NAMES: usize = 50;
+
+fn issues_body(ui: &mut egui::Ui, groups: &[(String, Vec<String>)], outcome: &mut Option<Outcome>) {
+    let t = widgets::tokens(ui);
+    egui::ScrollArea::vertical().max_height(320.0).show(ui, |ui| {
+        for (reason, names) in groups {
+            ui.label(RichText::new(reason).semibold());
+            for name in names.iter().take(ISSUE_NAMES) {
+                ui.add(egui::Label::new(RichText::new(name).size(12.0).color(t.label_secondary)).truncate());
+            }
+            if names.len() > ISSUE_NAMES {
+                ui.label(widgets::muted(ui, format!("and {} more", names.len() - ISSUE_NAMES)));
+            }
+            ui.add_space(8.0);
+        }
+    });
+    widgets::dialog_footer(ui, |ui| {
+        if widgets::primary(ui, "OK").clicked() {
+            *outcome = Some(Outcome::Close);
+        }
+        if widgets::secondary(ui, format!("{}  Copy details", ph::COPY)).clicked() {
+            let details: Vec<String> =
+                groups.iter().flat_map(|(reason, names)| names.iter().map(move |n| format!("{n}: {reason}"))).collect();
+            ui.ctx().copy_text(details.join("\n"));
+        }
+    });
 }
 
 fn info_row(ui: &mut egui::Ui, label: &str, value: String) {
@@ -339,6 +400,13 @@ fn apply(app: &mut App, outcome: Outcome) {
         }
         Outcome::Confirmed(action) => {
             main.modal = None;
+            let title = match &action {
+                ConfirmAction::DeleteForever(ids) => {
+                    format!("Deleting {} forever", crate::files::items_label(ids.len()))
+                }
+                ConfirmAction::EmptyTrash => "Emptying the trash".to_string(),
+            };
+            let row = main.transfers.start_job(title, ph::TRASH);
             app.tasks.run(
                 async move {
                     let queued = match &action {
@@ -351,6 +419,7 @@ fn apply(app: &mut App, outcome: Outcome) {
                     Ok(queued.message)
                 },
                 move |app, result: tma_client::ApiResult<String>| {
+                    crate::files::settle_job(app, generation, row, &result);
                     app.finish(generation, result, |main, toasts, _| {
                         toasts.success("Deleted permanently");
                         main.change_pending = true;
@@ -398,5 +467,13 @@ fn apply(app: &mut App, outcome: Outcome) {
             );
         }
         Outcome::Download(item) => crate::files::download(app, vec![item]),
+        Outcome::Pick(folder) => {
+            let pick = if folder { crate::files::Action::PickFolder } else { crate::files::Action::PickUpload };
+            crate::files::run_action(app, pick);
+        }
+        Outcome::Upload => {
+            let Some(Modal::Upload(staged)) = main.modal.take() else { return };
+            crate::files::upload_files(app, staged);
+        }
     }
 }
