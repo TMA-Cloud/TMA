@@ -5,8 +5,9 @@ A self-hosted cloud storage platform with file storage and management capabiliti
 ## Features
 
 - **[Encrypted storage](https://tma-cloud.github.io/Wiki/docs/concepts/file-system#storage)** --- Encrypt files with AES-256-GCM in any S3-compatible bucket
-- **[Windows cloud drive](https://tma-cloud.github.io/Wiki/docs/getting-started/desktop-app#cloud-drive-mounted-windows-drive)** --- Open and save cloud files from any Windows app
-- **[Document editing](https://tma-cloud.github.io/Wiki/docs/getting-started/desktop-app#open-on-desktop)** --- Edit with OnlyOffice or desktop apps and sync changes back
+- **[Desktop app](https://tma-cloud.github.io/Wiki/docs/getting-started/desktop-app)** --- A native app for Windows, macOS and Linux, and the same interface in the browser
+- **[Cloud Drive](https://tma-cloud.github.io/Wiki/docs/getting-started/desktop-app#cloud-drive-mounted-windows-drive)** --- Open and save cloud files from any app, as a drive on Windows or a folder on Linux and macOS
+- **[Document editing](https://tma-cloud.github.io/Wiki/docs/getting-started/desktop-app#edit-in-desktop-app)** --- Edit with OnlyOffice or desktop apps and sync changes back
 - **[Controlled sharing](https://tma-cloud.github.io/Wiki/docs/concepts/sharing-model)** --- Create read-only links with expiry and a separate domain
 - **[Sub-user access](https://tma-cloud.github.io/Wiki/docs/guides/user/sub-users)** --- Give each login separate permissions over the same files
 - **[Large-file workflows](https://tma-cloud.github.io/Wiki/docs/concepts/file-system#large-file-handling)** --- Stream transfers and queue bulk file operations
@@ -20,6 +21,19 @@ curl -fsSL https://raw.githubusercontent.com/TMA-Cloud/TMA/main/setup.sh | bash
 ```
 
 For detailed setup instructions, see the [Documentation Wiki](https://tma-cloud.github.io/Wiki).
+
+## Building from source
+
+TMA Cloud is written in Rust: the server, the web app (WebAssembly) and the desktop app share one workspace.
+
+```bash
+cargo run -p tma-server -- serve --with-worker   # API, web app and background worker
+cd apps/tma-cloud-web && trunk build --release   # the web app the server serves
+cargo run -p tma-cloud                           # the desktop app
+cargo xtask ci                                   # format, lints and tests, as CI runs them
+```
+
+The server reads its settings from `.env` (see `.env.example`).
 
 ## UI Preview
 

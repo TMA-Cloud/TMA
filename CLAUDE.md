@@ -1,161 +1,99 @@
 # TMA Cloud
 
-Self-hosted cloud storage: an Express API with a background worker, a React web
-app, an Electron desktop app for Windows, and a WinFsp host that mounts the store
-as a Windows drive. User docs live in the [Wiki](https://tma-cloud.github.io/Wiki).
+Self-hosted cloud storage, written in Rust: a server (API, background worker and
+admin commands in one binary), one egui interface that runs natively as the
+desktop app and in the browser as WebAssembly, and Cloud Drive, which mounts the
+store as a drive (WinFsp on Windows, FUSE on Linux and macOS). User docs live in
+the [Wiki](https://tma-cloud.github.io/Wiki).
 
-| Package       | Stack                                         | What it is                                          |
-| ------------- | --------------------------------------------- | --------------------------------------------------- |
-| `backend/`    | Node (CommonJS), Express, Postgres, Redis, S3 | API (`server.js`) and worker (`audit-worker.js`)    |
-| `frontend/`   | React, TypeScript, Vite, Tailwind             | Web app, also loaded by the desktop app             |
-| `electron/`   | Electron main process (`.cjs`)                | Windows desktop app, updater, Cloud Drive bridge    |
-| `desktop-fs/` | C# / .NET 10, WinFsp                          | Cloud Drive host, mounts the REST store as a volume |
+| Crate                  | What it is                                                                |
+| ---------------------- | ------------------------------------------------------------------------- |
+| `crates/tma-core`      | Pure, wasm-safe shared code: API types, file kinds, names, formatting     |
+| `crates/tma-server`    | axum API, job worker and CLI (`tma-server serve\|worker\|rotate\|s3\|import`) |
+| `crates/tma-client`    | The API client for both apps (reqwest natively, fetch in the browser)     |
+| `crates/tma-ui`        | The egui interface shared by the desktop and web apps                     |
+| `crates/tma-drive`     | Cloud Drive: a platform-independent core plus WinFsp and FUSE adapters    |
+| `apps/tma-cloud`       | The desktop app (eframe): saved sign-in, edit in local apps, Cloud Drive  |
+| `apps/tma-cloud-web`   | The web app (eframe web runner, built with trunk, served by the server)   |
+| `xtask`                | `cargo xtask ci`: the checks CI runs                                      |
 
-Every package has its own `package.json` (or `.csproj`) and lockfile. There is no
-root workspace, so run each command inside its package directory. Node `^22 || ^24 || >=26`
-(CI and Docker use 26). The root `Dockerfile` builds frontend and backend into a
-single image; `make build` tags it with the backend version.
+One Cargo workspace (edition 2024, resolver 3); shared dependency versions live in
+the root `Cargo.toml`. The root `Dockerfile` builds the web app and the server
+into one image; `make build` tags it with the workspace version.
 
-## Rules for every package
+## Rules for every crate
 
-- **No source file over 550 real lines.** Blank lines and comments don't count.
-  ESLint's `max-lines` enforces this for the JS/TS packages; tests, `scripts/` and
-  `migrations/` are exempt. In `desktop-fs/` it is a review convention. When a
-  file reaches the limit, split it. Don't raise the limit.
-- **Refactors keep public shapes stable.** Exported names, import paths, props and
-  context values stay the same, so no consumer has to change. Behaviour and tests
-  stay the same too.
-- **Split by concern and keep the barrel.** The oversized file becomes an index
-  that re-exports its focused siblings from a folder of the same name. Shared
-  private helpers go in a `*.helpers.*` sibling. Keep the import graph acyclic.
+- **No source file over 550 real lines.** Blank lines and comments don't count;
+  tests are exempt. When a file reaches the limit, split it. Don't raise the limit.
+- **Refactors keep public shapes stable.** Public names, module paths and the
+  REST wire format stay the same, so no consumer (or deployed client) has to change.
+- **Split by concern and keep the re-exports.** An oversized `foo.rs` becomes
+  `foo/mod.rs` re-exporting focused siblings. Keep the module graph acyclic.
 - **Pure logic goes in its own module** so tests can cover it directly.
+- **Never crash.** Crates `deny(clippy::unwrap_used, expect_used, panic)` outside
+  tests; return errors with `?`. `unsafe` is denied workspace-wide; only the
+  WinFsp adapter allows it, with a `SAFETY:` comment on every block.
 - **Comments are short and explain why**, in one line rather than a paragraph.
-  Don't restate the code or narrate it, and don't add `// ==== Banner ====`
-  dividers, since the filename already names the concern.
+  Don't restate the code, and don't add banner dividers.
+- **Wire format is the contract.** JSON field names come from `tma-core` types
+  (serde renames); the web app, desktop app and old clients all depend on them.
 - Never commit `.env` or secrets. New settings go in `.env.example` with a comment.
 
-## backend/
+## crates/tma-server
 
-Layers: `routes → controllers → services / models → utils / config`.
+Layers: `routes → services / models → storage / crypto / util / config`.
 
-- **Routes** connect URLs to controller handlers and hold no logic.
-- **Controllers** parse the request, call a model or service, and shape the
-  response. No SQL or business rules.
-- **Models** own the database (SQL and caching). **Services** own cross-cutting
-  work such as the audit queue, events and share URLs.
-- **Utils** are pure, stateless helpers. **Config** is wiring (db, logger, storage).
-- Splits to copy: `controllers/file.controller.js` over `controllers/file/` (split
-  by HTTP concern: `file.upload`, `file.download`, `file.listing`) and
-  `models/file.model.js` over `models/file/`. Shared helpers:
-  `controllers/file/file.upload.helpers.js`, `models/user/user.admin.helpers.model.js`.
-  Pure logic: `utils/fileEncryption/format.js`.
-- **Migrations** are `migrations/NNN_snake_case.sql`, numbered after the highest
-  existing number. `server.js` applies them at startup, each one atomically and
-  under an advisory lock. Never edit a migration that has shipped. Add a new one.
-- Durable or slow work belongs in the worker, not on the API request path.
-- `npm run knip` fails on unused files, exports and dependencies (config in
-  `knip.jsonc`). Modules export through one `export { ... }` list, which
-  knip's `@internal` tag cannot mark, so the production check that ignores
-  tests is an audit, `npm run knip:production`, not a gate. Its findings
-  should all be test seams: exports a module uses itself and tests reach.
-- Tests: `tests/unit` (mocked), `tests/integration*` (needs Postgres and Redis
-  from `.env`), `tests/integration-s3` (`npm run test:s3`). See
-  [the testing guide](https://tma-cloud.github.io/Wiki/docs/guides/operations/testing).
+- **Routes** parse the request, call a model or service, and shape the response.
+  No SQL in routes. One file per area (`routes/files/*`, `routes/admin/*`).
+- **Models** own SQL and caching. **Services** own cross-cutting work (audit
+  batching, events, access times, rate limits, OnlyOffice).
+- **Jobs** (`jobs/`) are the durable Postgres queue (migration 055): requests
+  enqueue, the worker claims with `FOR UPDATE SKIP LOCKED`, woken by `NOTIFY`.
+  Slow or retryable work (copies, permanent deletes, orphan scans) belongs there.
+- **Migrations** are `crates/tma-server/migrations/NNN_snake_case.sql`, embedded
+  at build time and applied at startup under an advisory lock, each atomically.
+  Never edit a migration that has shipped; add a new one.
+- Dynamic SQL goes through `sqlx::AssertSqlSafe` and never interpolates input.
+- Tests: unit tests next to the code; `tests/api.rs` is the end-to-end suite
+  (real Postgres, Redis and an S3 bucket via `TMA_TEST_*` variables).
 
-## frontend/
+## crates/tma-ui
 
-- **Providers compose and hooks implement.** A provider only wires hooks together
-  and builds the context value, with no `fetch` or business logic inline. Each
-  concern gets its own `useX` hook. Example: `contexts/AppProvider.tsx` over `contexts/app/`.
-- **One concern per hook.** Shared plumbing (operation queue, `refreshFiles`,
-  shared refs) comes in as arguments, never from a global.
-- **Components render and hooks hold the logic.** Keyboard handling, drag-and-drop,
-  marquee selection, clipboard and modal state machines go in a hook in a local
-  `hooks/` folder. Examples: `components/fileManager/hooks/`, `components/upload/useUploadStaging.ts`.
-- **Pure logic goes in plain modules**, such as `contexts/app/helpers.ts` and
-  `components/upload/uploadStaging.ts`.
-- **The API layer is split by domain** in `utils/api/` and re-exported by
-  `utils/api.ts`, so code keeps importing `from '../utils/api'`.
-- CSS uses ITCSS-ordered partials under `src/styles/` (tokens → base → components
-  → utilities), imported by `index.css`. Use tokens, not literal colours.
-- `npm run knip` fails on unused files, exports and dependencies, first with
-  tests and then without them. An export only tests use is dead unless it is a
-  test seam; tag that `/** @internal Exported for tests. */`. Config lives in
-  `knip.jsonc`.
-- New cross-cutting conventions become rules in the local `house` ESLint plugin
-  (`eslint-rules/house.js`). Make a rule an error only where the code already
-  follows it, then widen it over time.
+- **Views render; actions run after the frame.** A view records an action (for
+  example `files::Action`) and it runs with the whole `App` at hand.
+- **Background work goes through `Tasks::run`**: a future plus a closure applied to
+  the app on the next frame. Check the session `generation` (via `App::finish`)
+  so results for an old session are dropped.
+- **Colours come from `theme::Tokens`** (the light and dark palettes); never literals.
+- Host differences (sessions, links, Cloud Drive, edit in app) go through the
+  `Host` trait; platform differences (pickers, downloads) through `platform.rs`.
+- Everything must build for `wasm32-unknown-unknown` (`cargo xtask wasm`).
 
-## electron/
+## crates/tma-drive
 
-Main process only (`src/main/`), organised by concern:
-
-- **`index.cjs`** is the entry point. It creates the window, registers IPC handlers
-  and schedules cleanup, with no feature logic inline.
-- **`ipc/`** has one file per IPC surface (`files`, `clipboard`, `app`). A handler
-  validates the sender (`ipcGuard.cjs`), parses the payload, calls a util and
-  shapes the reply.
-- **`utils/`** holds stateless helpers (`file-utils`, `mime-types`, `powershell`).
-- **`config.cjs`, `window.cjs`, `updater.cjs`, `theme.cjs`** are wiring.
-- **`clouddrive/`** is the WinFsp bridge: pipe RPC, SSE and the mount lifecycle.
-- Splits to copy: `utils/file-utils.cjs` over `utils/file-utils/` (`http`,
-  `download`, `upload`) and `ipc/clipboard.cjs` over `ipc/clipboard/`.
-- **Mutable state that tests reset through `freshRequire` must live in the barrel**,
-  because `freshRequire` only clears the barrel's own cache entry, not a
-  submodule's. Put the state in a class or factory that the barrel instantiates,
-  as in `clouddrive/driver.cjs` → `clouddrive.cjs` and `ipc/files/watchers.cjs` →
-  `ipc/files.cjs`. Stateless modules can stay plain.
-- **Resolve `child_process.spawn` at call time** (`require('child_process').spawn`)
-  in a cached module. If you destructure it at the top, it binds to a stale test
-  spy. Calling `net.createServer` on the object is fine.
-- Tests replace the Electron runtime with an in-memory double, so they run on any
-  OS without a display.
-- `npm run knip` fails on unused files, exports and dependencies, with tests
-  and without them (config in `knip.jsonc`). knip reads destructured
-  `require` and named imports; it cannot see a member read off a default
-  import, so tests import helpers by name.
-
-## desktop-fs/
-
-A small WinFsp host. Electron holds the credentials and makes the authenticated
-REST calls; this process only talks to Electron over a named pipe.
-
-- **`Program.cs`** is the entry point: the `Fsp.Service` host, argument parsing and mount.
-- **`Bridge.cs`** is the JSON-RPC client that talks to Electron over the pipe.
-- **`Node.cs`** has the data model (`Node`, `DirCache`, `OpenFile`). Keep these
-  types here, not in the partials.
-- **`CloudFileSystem` is split with `partial class`, not new types**, because all
-  its overrides belong to WinFsp's one `FileSystemBase` contract. Each concern
-  gets its own `CloudFileSystem.<Concern>.cs`: `Volume`, `Lookup`, `ReadWrite`,
-  `DeleteRename`, `Security`, `Directory`, `Backend`, `Helpers`. The core
-  `CloudFileSystem.cs` keeps the fields, constants, constructor, `RefreshStats`
-  and `Dispose`. The SDK compiles every `.cs` file, so no `.csproj` edit is needed.
-- Files use CRLF line endings (`.editorconfig`, `.gitattributes`). Use XML `///`
-  docs only where their length is justified.
+- `core/` holds all filesystem behaviour (five-second listing cache, staging
+  files, save-only mode, create-empty-then-write and temp-then-rename saves) and
+  is tested with an in-memory backend. Adapters only translate calls.
+- WinFsp is linked lazily (delay-load) and found through the registry, so the
+  app starts without it. Building the bindings needs libclang (`LIBCLANG_PATH`).
 
 ## Before you finish
 
-Run these in each package you touched. CI (`.github/workflows/test.yml`) runs the
-same commands, except for desktop-fs.
-
-| Package       | Commands                                                                                                                                                            |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `backend/`    | `npm run lint` · `npm run format:check` · `npm run knip` · `npm test` · `npm run test:integration`                                                                  |
-| `frontend/`   | `npm run lint` · `npm run format:check` · `npx tsc --noEmit -p tsconfig.app.json` · `npx tsc -b tsconfig.test.json` · `npm run knip` · `npm test` · `npm run build` |
-| `electron/`   | `npm run lint` · `npm run format:check` · `npm run knip` · `npm test`                                                                                               |
-| `desktop-fs/` | `dotnet build` (0 warnings, 0 errors) · `dotnet format --verify-no-changes`                                                                                         |
-| Root scripts  | `shellcheck setup.sh update.sh rotate.sh scripts/db-backup-restore.sh`                                                                                              |
+| What                 | Command                                                            |
+| -------------------- | ------------------------------------------------------------------ |
+| Format, lint, test   | `cargo xtask ci` (fmt, clippy `-D warnings`, tests, wasm lint)     |
+| Server end to end    | `cargo test -p tma-server --test api` with the `TMA_TEST_*` vars   |
+| Web app              | `cd apps/tma-cloud-web && trunk build --release`                   |
+| Desktop installers   | `cargo xtask package` (needs `cargo install cargo-packager`)      |
+| Root scripts         | `shellcheck setup.sh update.sh rotate.sh scripts/db-backup-restore.sh` |
 
 ## Git
 
-- **Hooks** live in `.githooks/`. Turn them on once per clone with `make hooks`
-  (which runs `git config core.hooksPath .githooks`).
-  - `pre-commit` checks only staged files: Prettier and ESLint per package,
-    `dotnet format whitespace` for `.cs` files, and blocks `.env` files, conflict
+- **Hooks** live in `.githooks/`. Turn them on once per clone with `make hooks`.
+  - `pre-commit` checks staged files: rustfmt, and blocks `.env` files, conflict
     markers and files over 5 MB.
   - `commit-msg` enforces the message rules below.
-  - `pre-push` runs lint, format check and unit tests for each package changed
-    since the upstream branch.
+  - `pre-push` runs `cargo xtask ci` when the pushed commits touch Rust code.
   - Bypass with `--no-verify` only when you have a good reason.
 - **Commit messages** follow git's own conventions (`commit-msg` enforces them):
   - The subject is imperative and in sentence case ("Lock Cloud Drive creates per
@@ -167,4 +105,4 @@ same commands, except for desktop-fs.
   - Keep the body short: about 20 lines at most, and 40 is the hard limit. A
     longer body usually means the commit should be split.
   - Always sign off with `git commit -s`.
-- Version bumps get their own commit ("Bump backend frontend electron versions").
+- Version bumps get their own commit ("Bump workspace version").
