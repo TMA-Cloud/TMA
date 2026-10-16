@@ -1,5 +1,6 @@
 //! Cloud Drive: TMA Cloud as a local drive. The core is platform independent;
-//! WinFsp mounts it on Windows, FUSE on Linux and a local NFS server on macOS.
+//! Cloud Files syncs it on Windows (WinFsp is the fallback), FUSE mounts it on
+//! Linux and a local NFS server on macOS.
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
@@ -7,15 +8,18 @@ pub mod backend;
 pub mod core;
 pub mod ids;
 pub mod paths;
+pub mod sync_plan;
 
 #[cfg(all(windows, feature = "mount"))]
-mod winfsp_fs;
+pub mod cloud_files;
+#[cfg(all(windows, feature = "mount"))]
+pub mod winfsp_fs;
 
 pub use backend::{Backend, ClientBackend};
 pub use core::{Core, FsError};
 
 #[cfg(all(windows, feature = "mount"))]
-pub use winfsp_fs::{Mounted, is_available, mount};
+pub use cloud_files::{Mounted, default_mount_point, is_available, mount};
 
 #[cfg(all(target_os = "linux", feature = "mount"))]
 mod fuse_fs;

@@ -1,6 +1,6 @@
 [package]
 name = "tma-drive"
-description = "Cloud Drive: TMA Cloud mounted as a local drive (WinFsp on Windows, FUSE on Linux, NFS on macOS)"
+description = "Cloud Drive: TMA Cloud mounted as a local drive (Cloud Files on Windows, FUSE on Linux, NFS on macOS)"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -12,8 +12,8 @@ workspace = true
 
 [features]
 default = ["mount"]
-# The OS adapters (WinFsp, FUSE, NFS); without them only the core builds, for tests.
-mount = ["dep:winfsp", "dep:windows", "dep:fuser", "dep:libc", "dep:nfsserve", "dep:async-trait", "dep:tokio"]
+# The OS adapters (Cloud Files and WinFsp, FUSE, NFS); without them only the core builds, for tests.
+mount = ["dep:cloud-filter", "dep:notify", "dep:winfsp", "dep:windows", "dep:fuser", "dep:libc", "dep:nfsserve", "dep:async-trait", "dep:tokio"]
 
 [dependencies]
 tma-client = { workspace = true }
@@ -26,7 +26,10 @@ thiserror = { workspace = true }
 [target.'cfg(windows)'.dependencies]
 winfsp = { version = "0.13", default-features = false, features = ["delayload"], optional = true }
 # Matches the version winfsp itself uses, so status codes convert between them.
-windows = { version = "0.61", features = ["Win32_Foundation", "Win32_Storage_FileSystem", "Win32_Security", "Win32_Security_Authorization", "Win32_System_Threading", "Win32_System_Registry", "Win32_System_LibraryLoader"], optional = true }
+windows = { version = "0.61", features = ["Win32_Foundation", "Win32_Storage_FileSystem", "Win32_Security", "Win32_Security_Authorization", "Win32_System_Threading", "Win32_System_Registry", "Win32_System_LibraryLoader", "Win32_Storage_CloudFilters", "Win32_System_CorrelationVector"], optional = true }
+# The Cloud Files API (OneDrive's), so the drive needs no driver on Windows.
+cloud-filter = { version = "0.0.6", optional = true }
+notify = { version = "8", optional = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 fuser = { version = "0.18", default-features = false, optional = true }
@@ -37,3 +40,6 @@ libc = { version = "0.2", optional = true }
 nfsserve = { version = "0.11", optional = true }
 async-trait = { version = "0.1", optional = true }
 tokio = { workspace = true, optional = true }
+
+[dev-dependencies]
+env_logger = "0.11"

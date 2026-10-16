@@ -86,6 +86,8 @@ pub struct Core {
     local_empty: Mutex<HashSet<String>>,
     path_locks: Vec<Mutex<()>>,
     pub deny_read: AtomicBool,
+    /// Bumped whenever every listing is dropped, so adapters can resync.
+    generation: AtomicU64,
     total: AtomicU64,
     free: AtomicU64,
 }
@@ -106,6 +108,7 @@ impl Core {
             local_empty: Mutex::new(HashSet::new()),
             path_locks: (0..64).map(|_| Mutex::new(())).collect(),
             deny_read: AtomicBool::new(false),
+            generation: AtomicU64::new(0),
             total: AtomicU64::new(SYNTHETIC_CAPACITY),
             free: AtomicU64::new(SYNTHETIC_CAPACITY),
         };
@@ -130,7 +133,7 @@ impl Core {
         if self.windows_names { tma_core::names::server_to_windows(server) } else { server.to_string() }
     }
 
-    fn to_server_name(&self, local: &str) -> String {
+    pub(crate) fn to_server_name(&self, local: &str) -> String {
         if self.windows_names { tma_core::names::windows_to_server(local) } else { local.to_string() }
     }
 
@@ -219,6 +222,11 @@ impl Core {
     /// Forget every listing (a change was made elsewhere).
     pub fn invalidate_all(&self) {
         lock(&self.dirs).clear();
+        self.generation.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub fn generation(&self) -> u64 {
+        self.generation.load(Ordering::Relaxed)
     }
 
     fn track_created(&self, path: &str, id: &str) {
@@ -277,7 +285,7 @@ impl Core {
         lock(&self.dirs).retain(|k, _| !paths::is_at_or_under(k, old));
     }
 
-    fn new_staging_file(&self) -> PathBuf {
+    pub(crate) fn new_staging_file(&self) -> PathBuf {
         self.staging.join(format!("{}.tmp", uuid::Uuid::new_v4().simple()))
     }
 

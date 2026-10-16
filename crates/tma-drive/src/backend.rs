@@ -42,6 +42,10 @@ pub trait Backend: Send + Sync {
     fn space(&self) -> BackendResult<Space>;
     /// Whether the instance only allows saving into the drive.
     fn save_only(&self) -> BackendResult<bool>;
+    /// Who is signed in, so a drive folder is never reused for another account.
+    fn account(&self) -> BackendResult<String> {
+        Ok(String::new())
+    }
 }
 
 /// The API client, driven from the shared async runtime.
@@ -134,5 +138,9 @@ impl Backend for ClientBackend {
 
     fn save_only(&self) -> BackendResult<bool> {
         tma_client::rt::block_on(self.client.cloud_drive_config()).map(|c| c.save_only).map_err(|e| e.message)
+    }
+
+    fn account(&self) -> BackendResult<String> {
+        tma_client::rt::block_on(self.client.profile()).map(|u| u.id).map_err(|e| e.message)
     }
 }
