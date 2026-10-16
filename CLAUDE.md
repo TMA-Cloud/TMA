@@ -32,8 +32,8 @@ into one image; `make build` tags it with the workspace version.
 - **Pure logic goes in its own module** so tests can cover it directly.
 - **Never crash.** Crates `deny(clippy::unwrap_used, expect_used, panic)` outside
   tests; return errors with `?`. `unsafe` is denied workspace-wide; only the
-  WinFsp adapter and `cloud_files/cfapi.rs` allow it, with a `SAFETY:` comment
-  on every block.
+  WinFsp adapter, `cloud_files/cfapi.rs` and the desktop app's Windows glue
+  (`cursors.rs`, `single.rs`) allow it, with a `SAFETY:` comment on every block.
 - **Comments are short and explain why**, in one line rather than a paragraph.
   Don't restate the code, and don't add banner dividers.
 - **Wire format is the contract.** JSON field names come from `tma-core` types
@@ -66,6 +66,11 @@ Layers: `routes → services / models → storage / crypto / util / config`.
   the app on the next frame. Check the session `generation` (via `App::finish`)
   so results for an old session are dropped.
 - **Colours come from `theme::Tokens`** (the light and dark palettes); never literals.
+- **Pointers come from `cursors.rs`**: the app's own artwork replaces system
+  cursors (CSS on the web, Win32 on Windows). Set the `egui::CursorIcon` you mean;
+  file rows keep the arrow, buttons get the hand from `interact_cursor`.
+- **Folder listings are cached** (`files/cache.rs`): a revisited place shows
+  its last listing at once while the fresh one loads; Back restores its scroll.
 - Host differences (sessions, links, Cloud Drive, edit in app) go through the
   `Host` trait; platform differences (pickers, downloads) through `platform.rs`.
 - Everything must build for `wasm32-unknown-unknown` (`cargo xtask wasm`).
