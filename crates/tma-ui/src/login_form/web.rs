@@ -115,7 +115,18 @@ pub fn field(ctx: &egui::Context, field: Field<'_>, t: &crate::theme::Tokens) ->
             *slot = new_form(&doc);
         }
         let Some(form) = slot else { return Seen::default() };
-        let sheet = format!("#{FORM_ID} input::placeholder{{color:{};opacity:1}}", css(t.label_tertiary));
+        // Browsers paint autofilled inputs with their own light background and dark text;
+        // the text colour is set back, and the background change waits out the session.
+        let sheet = format!(
+            "#{FORM_ID} input::placeholder{{color:{placeholder};opacity:1}}\
+             #{FORM_ID} input:-webkit-autofill,#{FORM_ID} input:-webkit-autofill:hover,\
+             #{FORM_ID} input:-webkit-autofill:focus{{-webkit-text-fill-color:{text};caret-color:{caret};\
+             transition:background-color 100000s 0s,color 100000s 0s;}}\
+             #{FORM_ID} input:autofill{{filter:none;background:transparent;color:{text};}}",
+            placeholder = css(t.label_tertiary),
+            text = css(t.label),
+            caret = css(t.accent),
+        );
         if form.sheet_text != sheet {
             form.sheet.set_text_content(Some(&sheet));
             form.sheet_text = sheet;
