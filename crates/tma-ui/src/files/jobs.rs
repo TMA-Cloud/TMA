@@ -26,7 +26,7 @@ fn job_finished<T>(app: &mut App, generation: u64, row: u64, result: tma_client:
     app.finish(generation, result, |main, _, _| main.change_pending = true);
 }
 
-pub(super) fn trash(app: &mut App, items: Vec<FileItem>) {
+pub(crate) fn trash(app: &mut App, items: Vec<FileItem>) {
     let Screen::Main(main) = &mut app.screen else { return };
     let (client, generation) = (main.client.clone(), main.generation);
     let ids = ids(&items);
@@ -90,7 +90,7 @@ pub(super) fn paste(app: &mut App) {
     }
 }
 
-pub(super) fn move_to(app: &mut App, ids: Vec<String>, target: Option<String>) {
+pub(crate) fn move_to(app: &mut App, ids: Vec<String>, target: Option<String>) {
     let Screen::Main(main) = &mut app.screen else { return };
     if target.as_ref().is_some_and(|t| ids.contains(t)) {
         return;

@@ -25,6 +25,8 @@ pub enum Action {
     Forward,
     Paste,
     MoveTo(Vec<String>, Option<String>),
+    /// Items dragged onto a folder: confirmed before they move.
+    DropOnto(Vec<String>, String),
     Download(Vec<FileItem>),
     Share(Vec<FileItem>),
     Info(FileItem),
@@ -51,6 +53,14 @@ pub enum Action {
     OpenLocation(FileItem),
 }
 
+/// The items an action names: “Report.pdf” for one, "3 items" for more.
+pub(super) fn subject(names: &[&str]) -> String {
+    match names {
+        [one] => format!("“{one}”"),
+        _ => items_label(names.len()),
+    }
+}
+
 /// "1 item", "3 items".
 pub(crate) fn items_label(n: usize) -> String {
     if n == 1 { "1 item".into() } else { format!("{n} items") }
@@ -61,15 +71,22 @@ pub(super) fn ids(items: &[FileItem]) -> Vec<String> {
 }
 
 /// Queue uploads into the current folder (the root outside My Files).
-/// Picked or dropped files: into the upload dialog when it is open, else straight up.
+/// Picked or dropped files go to the upload dialog, opened for them if need be,
+/// so the list is checked before anything is sent.
 pub fn stage_files(app: &mut App, files: Vec<UploadFile>) {
-    if let crate::app::Screen::Main(main) = &mut app.screen
-        && let Some(Modal::Upload(staged)) = &mut main.modal
-    {
-        crate::modals::stage(staged, files);
+    let crate::app::Screen::Main(main) = &mut app.screen else { return };
+    if files.is_empty() {
         return;
     }
-    upload_files(app, files);
+    match &mut main.modal {
+        Some(Modal::Upload(staged)) => crate::modals::stage(staged, files),
+        None => {
+            let mut staged = Vec::new();
+            crate::modals::stage(&mut staged, files);
+            main.modal = Some(Modal::Upload(staged));
+        }
+        Some(_) => app.toasts.info("Close the open dialog first, then drop the files again"),
+    }
 }
 
 pub fn upload_files(app: &mut App, files: Vec<UploadFile>) {
@@ -155,7 +172,17 @@ pub fn run(app: &mut App, action: Action) {
         Action::Rename(item) => main.modal = Some(Modal::rename(&item, main.instance.hide_extensions)),
         Action::Info(item) => super::sharing::info(app, item),
         Action::Share(items) => super::sharing::share(app, items),
-        Action::Trash(items) => super::jobs::trash(app, items),
+        Action::Trash(items) => {
+            let names: Vec<&str> = items.iter().map(|i| i.name.as_str()).collect();
+            let body =
+                format!("{} will move to the trash, where it stays for 15 days before it is deleted.", subject(&names));
+            main.modal = Some(Modal::Confirm(Confirm::new(
+                "Move to trash?",
+                body,
+                "Move to trash",
+                crate::modals::ConfirmAction::Trash(items),
+            )));
+        }
         Action::Restore(ids) => super::jobs::restore(app, ids),
         Action::DeleteForever(ids) => {
             let body = format!("{} will be deleted permanently. This cannot be undone.", items_label(ids.len()));
@@ -201,6 +228,16 @@ pub fn run(app: &mut App, action: Action) {
         }
         Action::Paste => super::jobs::paste(app),
         Action::MoveTo(ids, target) => super::jobs::move_to(app, ids, target),
+        Action::DropOnto(ids, target) => {
+            let b = &main.browser;
+            let names: Vec<&str> = b.items.iter().filter(|i| ids.contains(&i.id)).map(|i| i.name.as_str()).collect();
+            let folder = b.items.iter().find(|i| i.id == target).map_or("the folder", |i| i.name.as_str());
+            let body = format!("{} will move into “{folder}”.", subject(&names));
+            let action = crate::modals::ConfirmAction::Move(ids, target);
+            let title =
+                if names.len() == 1 { "Move item?".to_string() } else { format!("Move {}?", items_label(names.len())) };
+            main.modal = Some(Modal::Confirm(Confirm::new(&title, body, "Move", action).safe()));
+        }
         Action::Download(items) => super::download::start_download(app, items),
         Action::OpenUpload => main.modal = Some(Modal::Upload(Vec::new())),
         Action::Preview(item) => {

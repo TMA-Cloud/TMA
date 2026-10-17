@@ -19,7 +19,7 @@ mod view;
 
 pub(crate) use actions::items_label;
 pub use actions::{Action, download, run as run_action, stage_files, upload_files};
-pub(crate) use jobs::settle_job;
+pub(crate) use jobs::{move_to, settle_job, trash};
 pub use view::show;
 
 use std::collections::BTreeSet;

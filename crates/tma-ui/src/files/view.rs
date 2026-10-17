@@ -160,7 +160,7 @@ pub(super) fn interact(
         if let Some(payload) = response.dnd_release_payload::<DragIds>()
             && !payload.0.contains(&item.id)
         {
-            actions.push(Action::MoveTo(payload.0.clone(), Some(item.id.clone())));
+            actions.push(Action::DropOnto(payload.0.clone(), item.id.clone()));
         }
     }
     let selection = main.browser.selected_items();

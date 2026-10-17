@@ -23,6 +23,8 @@ use viewer::{decode, viewer_overlay};
 
 #[derive(Debug, Clone)]
 pub enum ConfirmAction {
+    Trash(Vec<FileItem>),
+    Move(Vec<String>, String),
     DeleteForever(Vec<String>),
     EmptyTrash,
 }
@@ -32,11 +34,17 @@ pub struct Confirm {
     pub body: String,
     pub button: String,
     pub action: ConfirmAction,
+    /// The button in the destructive colour; a move is undone by moving back.
+    pub danger: bool,
 }
 
 impl Confirm {
     pub fn new(title: &str, body: String, button: &str, action: ConfirmAction) -> Self {
-        Self { title: title.into(), body, button: button.into(), action }
+        Self { title: title.into(), body, button: button.into(), action, danger: true }
+    }
+
+    pub fn safe(self) -> Self {
+        Self { danger: false, ..self }
     }
 }
 
@@ -152,8 +160,11 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
         Modal::Confirm(c) => {
             let close = dialog(ctx, "confirm", 400.0, &c.title.clone(), |ui| {
                 ui.label(widgets::muted(ui, &c.body));
+                let enter = ui.input(|i| i.key_pressed(Key::Enter));
                 widgets::dialog_footer(ui, |ui| {
-                    if widgets::danger(ui, &c.button).clicked() {
+                    let button =
+                        if c.danger { widgets::danger(ui, &c.button) } else { widgets::primary(ui, &c.button) };
+                    if button.clicked() || enter {
                         outcome = Some(Outcome::Confirmed(c.action.clone()));
                     }
                     if widgets::secondary(ui, "Cancel").clicked() {
@@ -252,20 +263,30 @@ fn apply(app: &mut App, outcome: Outcome) {
                 });
             });
         }
+        Outcome::Confirmed(ConfirmAction::Trash(items)) => {
+            main.modal = None;
+            crate::files::trash(app, items);
+        }
+        Outcome::Confirmed(ConfirmAction::Move(ids, target)) => {
+            main.modal = None;
+            crate::files::move_to(app, ids, Some(target));
+        }
         Outcome::Confirmed(action) => {
             main.modal = None;
-            let title = match &action {
+            // Some ids delete those items forever, none empties the trash.
+            let (title, ids) = match action {
                 ConfirmAction::DeleteForever(ids) => {
-                    format!("Deleting {} forever", crate::files::items_label(ids.len()))
+                    (format!("Deleting {} forever", crate::files::items_label(ids.len())), Some(ids))
                 }
-                ConfirmAction::EmptyTrash => "Emptying the trash".to_string(),
+                ConfirmAction::EmptyTrash => ("Emptying the trash".to_string(), None),
+                ConfirmAction::Trash(_) | ConfirmAction::Move(..) => return,
             };
             let row = main.transfers.start_job(title, ph::TRASH);
             app.tasks.run(
                 async move {
-                    let queued = match &action {
-                        ConfirmAction::DeleteForever(ids) => client.delete_forever(ids).await?,
-                        ConfirmAction::EmptyTrash => client.empty_trash().await?,
+                    let queued = match &ids {
+                        Some(ids) => client.delete_forever(ids).await?,
+                        None => client.empty_trash().await?,
                     };
                     if let Some(job) = &queued.job_id {
                         client.wait_for_job(job).await?;
