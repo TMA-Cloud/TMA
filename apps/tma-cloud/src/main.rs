@@ -58,8 +58,6 @@ impl eframe::App for Shell {
         eframe::set_value(storage, PREFS_KEY, &self.app.prefs);
         eframe::set_value(storage, CLIENT_ID_KEY, &self.client_id);
         self.placement.save();
-        // eframe still reads the window size it saved before, which would win over ours.
-        storage.remove_string("window");
         if let Some(server) = self.app.server_url() {
             eframe::set_value(storage, SERVER_KEY, &server);
         }
@@ -100,25 +98,6 @@ fn icon() -> Option<egui::IconData> {
     Some(egui::IconData { width: image.width(), height: image.height(), rgba: image.into_raw() })
 }
 
-/// Earlier versions kept prepared copies in these folders; files now open in Cloud Drive.
-fn forget_old_copies() {
-    let mut old = vec![std::env::temp_dir().join("tma-cloud-fs")];
-    if let Some(local) = dirs::data_local_dir().map(|d| d.join("TMA Cloud")) {
-        old.extend(["clipboard", "edit", "paste"].map(|name| local.join(name)));
-    }
-    for dir in old {
-        let _ = std::fs::remove_dir_all(dir);
-    }
-    if let Ok(entries) = std::fs::read_dir(std::env::temp_dir()) {
-        for entry in entries.flatten() {
-            let name = entry.file_name().to_string_lossy().to_string();
-            if name.starts_with("tma-cloud-") && name.ends_with("-setup.exe") {
-                let _ = std::fs::remove_file(entry.path());
-            }
-        }
-    }
-}
-
 fn main() -> eframe::Result {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info,wgpu=warn,naga=warn")).init();
     if std::env::args().nth(1).as_deref() == Some("--forget-drive") {
@@ -128,7 +107,6 @@ fn main() -> eframe::Result {
     #[cfg(windows)]
     let Some(_single) = single::claim() else { return Ok(()) };
     credentials::init();
-    forget_old_copies();
     let placement = window::Placement::load().unwrap_or_default();
     let mut viewport = placement.apply(
         egui::ViewportBuilder::default()
