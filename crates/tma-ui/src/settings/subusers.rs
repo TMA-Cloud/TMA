@@ -261,25 +261,15 @@ fn row(ui: &mut egui::Ui, main: &mut Main, tasks: &Tasks, sub: &SubUser, availab
 
 pub fn show(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
     widgets::heading(ui, ph::USERS, "Sub-users", "Additional sign-ins that share your files and storage.");
-    ui.add_space(8.0);
     if main.user.is_sub_user {
         ui.label(widgets::muted(ui, "Only the account owner can manage sub-users."));
         return;
     }
     let list = main.settings.sub_users.clone();
-    let count = list.as_ref().map(|l| match l.sub_users.len() {
-        0 => "None yet".to_string(),
-        n => n.to_string(),
-    });
-    let width = parts::tile_width(ui, 3).max(220.0);
-    parts::stat(ui, width, ph::USERS, "Sub-users", count, "Each signs in separately and shares your files and storage");
     let available = catalog(main);
-    section(ui, "Manage sub-users", "Add sub-users and choose what each one can do.", |ui| {
-        parts::note(
-            ui,
-            Tone::Neutral,
-            "Sub-users sign in with their own credentials and work in your files and storage, so every action in the audit log is attributed to the right person. You decide what each sub-user can do.",
-        );
+    // The count lives in the list's own header; one line of context says what a sub-user is.
+    let about = "Each signs in with their own email and password and can do only what you allow. The audit log names who did what.";
+    section(ui, "Your sub-users", about, |ui| {
         // The list and its controls form one padded row of the section card.
         widgets::row_frame(ui).show(ui, |ui| {
             ui.spacing_mut().item_spacing.y = 6.0;
@@ -292,7 +282,7 @@ pub fn show(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
             }
             if main.settings.sub_user_form.is_some() {
                 create_form(ui, main, tasks, &available);
-            } else if widgets::secondary(ui, format!("{}  Add sub-user", ph::USER_PLUS)).clicked() {
+            } else if widgets::primary(ui, format!("{}  Add sub-user", ph::USER_PLUS)).clicked() {
                 // Full access is the common case for a colleague who needs the same files.
                 let permissions = available.iter().map(|p| p.key.clone()).collect();
                 main.settings.sub_user_form = Some(NewSubUser {
@@ -308,9 +298,7 @@ pub fn show(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
                 None => {
                     ui.spinner();
                 }
-                Some(l) if l.sub_users.is_empty() => {
-                    ui.label(widgets::muted(ui, "Add a sub-user to give a colleague their own sign-in to your files."));
-                }
+                Some(l) if l.sub_users.is_empty() => {}
                 Some(l) => {
                     for sub in &l.sub_users {
                         row(ui, main, tasks, sub, &available);

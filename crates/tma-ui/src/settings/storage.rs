@@ -35,7 +35,6 @@ pub fn load(main: &mut Main, tasks: &Tasks) {
 
 pub fn show(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
     widgets::heading(ui, ph::HARD_DRIVES, "Storage", "Storage use, the storage bucket and upload limits.");
-    ui.add_space(4.0);
     let admin = main.instance.is_first_user;
     if admin {
         section(ui, "Bucket", "The S3-compatible bucket where all files are stored.", |ui| {
@@ -170,7 +169,7 @@ fn bucket_card(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
     let summary = main.settings.storage.clone();
     let configured = summary.as_ref().is_some_and(|s| s.configured);
     let status = summary.as_ref().map(|s| match (&s.provider, &s.bucket) {
-        (Some(p), Some(b)) if s.configured => (Tone::Success, format!("{} · {b}", bucket_form::provider_label(p))),
+        (Some(p), Some(b)) if s.configured => (Tone::Success, format!("{b} on {}", bucket_form::provider_label(p))),
         _ => (Tone::Warning, "Not set up".to_string()),
     });
     let open = main.settings.open.contains("bucket");
@@ -215,12 +214,8 @@ fn bucket_card(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
         let key = s.access_key_id_masked.clone().unwrap_or_default();
         // Under the card's title, lined up with its text.
         egui::Frame::new().inner_margin(egui::Margin { left: 66, right: 16, top: 0, bottom: 12 }).show(ui, |ui| {
-            ui.label(
-                RichText::new(format!("{endpoint} · access key {key}"))
-                    .size(11.5)
-                    .monospace()
-                    .color(widgets::tokens(ui).label_tertiary),
-            );
+            let line = format!("{endpoint}, access key {key}");
+            ui.label(RichText::new(line).size(12.0).color(widgets::tokens(ui).label_tertiary));
         });
     }
     if clicked

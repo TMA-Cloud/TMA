@@ -107,12 +107,11 @@ pub fn primary_enabled(ui: &mut Ui, enabled: bool, text: impl Into<String>) -> R
 pub fn secondary(ui: &mut Ui, text: impl Into<WidgetText>) -> Response {
     let t = tokens(ui);
     if ui.data(|d| d.get_temp::<bool>(egui::Id::unique(ROW_ACTIONS)).unwrap_or(false)) {
-        let text: WidgetText = text.into();
-        let text = text.color(t.accent);
+        // Neutral, so the accent is left for the one action a page leads with.
         return ui.add(
             egui::Button::new(text)
-                .fill(t.accent_fill.gamma_multiply(0.4))
-                .stroke(Stroke::new(1.0, t.accent.gamma_multiply(0.7)))
+                .fill(t.fill_quaternary)
+                .stroke(Stroke::new(1.0, t.separator_strong))
                 .corner_radius(CornerRadius::same(15))
                 .min_size(Vec2::new(0.0, 30.0)),
         );
@@ -120,7 +119,7 @@ pub fn secondary(ui: &mut Ui, text: impl Into<WidgetText>) -> Response {
     ui.add(sized(egui::Button::new(text).fill(t.fill_quaternary).stroke(Stroke::new(1.0, t.separator))))
 }
 
-/// Set while a setting row draws its control, so buttons there take the accent outline.
+/// Set while a setting row draws its control, so buttons there take the quieter row style.
 const ROW_ACTIONS: &str = "tma-row-actions";
 
 pub fn danger(ui: &mut Ui, text: impl Into<String>) -> Response {
@@ -228,13 +227,13 @@ pub fn badge(ui: &mut Ui, text: &str, color: Color32) -> Response {
 pub fn heading(ui: &mut Ui, _icon: &str, title: &str, subtitle: &str) {
     let t = tokens(ui);
     ui.vertical(|ui| {
-        ui.spacing_mut().item_spacing.y = 2.0;
-        ui.label(RichText::new(title).size(22.0).semibold().color(t.label));
+        ui.spacing_mut().item_spacing.y = 4.0;
+        ui.label(RichText::new(title).size(24.0).semibold().color(t.label));
         if !subtitle.is_empty() {
-            ui.label(RichText::new(subtitle).size(13.0).color(t.label_secondary));
+            ui.label(RichText::new(subtitle).size(13.5).color(t.label_secondary));
         }
     });
-    ui.add_space(6.0);
+    ui.add_space(12.0);
 }
 
 pub fn section_title(ui: &mut Ui, title: &str) {
@@ -270,24 +269,38 @@ pub fn empty_state(ui: &mut Ui, icon: &str, title: &str, body: &str) {
 /// A settings row, a bordered card: title and description on the left, the control on the right.
 pub fn setting_row(ui: &mut Ui, title: &str, description: &str, control: impl FnOnce(&mut Ui)) {
     let t = tokens(ui);
+    // The text gets what the controls left on the last frame, so a toggle does not
+    // wrap a description that a wide button would have needed the room for.
+    let key = egui::Id::unique(("setting-row-control", title, description));
+    let control_width = ui.data(|d| d.get_temp::<f32>(key)).unwrap_or(160.0);
     row_frame(ui).show(ui, |ui| {
         let width = ui.available_width();
         ui.horizontal(|ui| {
             ui.set_width(width);
             ui.vertical(|ui| {
-                ui.set_max_width((width - 220.0).max(160.0));
-                ui.spacing_mut().item_spacing.y = 1.0;
-                ui.label(RichText::new(title).size(13.5).semibold().color(t.label));
+                ui.set_max_width((width - control_width - 24.0).max(160.0));
+                ui.spacing_mut().item_spacing.y = 2.0;
+                // A title alone sits level with the 30-point controls beside it.
+                if description.is_empty() {
+                    ui.add_space(6.0);
+                }
+                ui.label(RichText::new(title).size(13.5).medium().color(t.label));
                 if !description.is_empty() {
-                    ui.label(RichText::new(description).size(12.0).color(t.label_tertiary));
+                    ui.label(RichText::new(description).size(12.5).color(t.label_tertiary));
                 }
             });
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                ui.style_mut().override_font_id = Some(egui::FontId::new(14.0, crate::theme::semibold()));
+            let controls = ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                ui.style_mut().override_font_id = Some(egui::FontId::proportional(13.5));
                 ui.data_mut(|d| d.insert_temp(egui::Id::unique(ROW_ACTIONS), true));
                 control(ui);
                 ui.data_mut(|d| d.remove::<bool>(egui::Id::unique(ROW_ACTIONS)));
+                ui.min_rect().width()
             });
+            let used = controls.inner;
+            if (used - control_width).abs() > 0.5 {
+                ui.data_mut(|d| d.insert_temp(key, used));
+                ui.ctx().request_repaint();
+            }
         });
     });
 }
@@ -358,13 +371,16 @@ pub fn grouped(
     add: impl FnOnce(&mut Ui),
 ) {
     let t = tokens(ui);
-    ui.add_space(14.0);
-    ui.label(RichText::new(title).size(14.0).semibold().color(title_color));
-    if !subtitle.is_empty() {
-        ui.add_space(-5.0);
-        ui.label(RichText::new(subtitle).size(12.5).color(t.label_tertiary));
-    }
-    ui.add_space(4.0);
+    // Sections stand apart from each other, and their titles above the rows' own.
+    ui.add_space(24.0);
+    ui.vertical(|ui| {
+        ui.spacing_mut().item_spacing.y = 3.0;
+        ui.label(RichText::new(title).size(16.0).semibold().color(title_color));
+        if !subtitle.is_empty() {
+            ui.label(RichText::new(subtitle).size(12.5).color(t.label_secondary));
+        }
+    });
+    ui.add_space(10.0);
     let card = Frame::new().fill(fill).stroke(Stroke::new(1.0, border)).corner_radius(CornerRadius::same(12));
     card.show(ui, |ui| {
         ui.set_width(ui.available_width());
@@ -395,12 +411,12 @@ pub fn row_frame(ui: &mut Ui) -> Frame {
                 ui.painter().hline(rect.x_range().shrink(16.0), rect.top(), Stroke::new(1.0, t.separator));
             }
             ui.data_mut(|d| d.insert_temp(id, drawn + 1));
-            Frame::new().inner_margin(Margin::symmetric(16, 12))
+            Frame::new().inner_margin(Margin::symmetric(16, 14))
         }
         None => Frame::new()
             .stroke(Stroke::new(1.0, t.separator))
             .corner_radius(CornerRadius::same(12))
-            .inner_margin(Margin::symmetric(16, 12)),
+            .inner_margin(Margin::symmetric(16, 14)),
     }
 }
 

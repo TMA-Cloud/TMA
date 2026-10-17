@@ -354,7 +354,7 @@ const NARROW_BELOW: f32 = 640.0;
 fn page_body(main: &mut Main, host: &mut dyn Host, tasks: &Tasks, ui: &mut egui::Ui) {
     let desktop = host.kind() == crate::host::HostKind::Desktop;
     match main.settings.page {
-        Page::Profile => account::profile(main, ui, tasks),
+        Page::Profile => account::profile(main, ui),
         Page::Storage => storage::show(main, ui, tasks),
         Page::SubUsers => subusers::show(main, ui, tasks),
         Page::Administration => admin::show(main, ui, tasks, desktop),

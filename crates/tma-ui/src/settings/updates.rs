@@ -85,7 +85,6 @@ pub fn show(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks, host: &mut dyn Ho
     let mode = host.update_mode();
     let app_version = host.app_version().to_string();
     widgets::heading(ui, ph::ARROWS_CLOCKWISE, "Updates", "Installed versions and available updates.");
-    ui.add_space(4.0);
     if let Some(error) = &main.settings.version_error {
         ui.add_space(6.0);
         parts::note(ui, Tone::Warning, error);
