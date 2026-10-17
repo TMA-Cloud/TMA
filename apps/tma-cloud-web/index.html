@@ -18,8 +18,23 @@
     <link data-trunk rel="copy-file" href="public/tma-maskable-192.png" />
     <link data-trunk rel="copy-file" href="public/tma-maskable-512.png" />
     <link data-trunk rel="copy-file" href="public/tma.png" />
+    <link data-trunk rel="copy-file" href="../../crates/tma-ui/assets/fonts/Geist-Regular.ttf" />
+    <link data-trunk rel="copy-file" href="../../crates/tma-ui/assets/fonts/Geist-SemiBold.ttf" />
     <link data-trunk rel="rust" data-bin="tma-cloud-web" data-wasm-opt="z" data-weak-refs />
     <style>
+      /* The page's own inputs (sign-in) and bars use the font the canvas draws with. */
+      @font-face {
+        font-family: Geist;
+        src: url('/Geist-Regular.ttf') format('truetype');
+        font-weight: 400;
+        font-display: swap;
+      }
+      @font-face {
+        font-family: Geist;
+        src: url('/Geist-SemiBold.ttf') format('truetype');
+        font-weight: 600;
+        font-display: swap;
+      }
       html,
       body {
         margin: 0;

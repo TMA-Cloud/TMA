@@ -265,7 +265,7 @@ pub fn apply(ctx: &egui::Context, t: &Tokens) {
         // Menus, dialogs and panels ease in over about the old web app's timing, not egui's 1/12 s.
         style.animation_time = 0.16;
         style.text_styles = [
-            (TextStyle::Small, FontId::new(11.0, FontFamily::Proportional)),
+            (TextStyle::Small, FontId::new(12.0, FontFamily::Proportional)),
             (TextStyle::Body, FontId::new(13.0, FontFamily::Proportional)),
             (TextStyle::Button, FontId::new(13.0, FontFamily::Proportional)),
             (TextStyle::Heading, FontId::new(20.0, FontFamily::Proportional)),
@@ -275,13 +275,14 @@ pub fn apply(ctx: &egui::Context, t: &Tokens) {
     });
 }
 
-/// Inter, the web app's face, in the weights the design uses (OFL, trimmed to
-/// Latin, Greek and Cyrillic; other scripts fall back to the system or egui font).
-const INTER: [(&str, &[u8]); 4] = [
-    ("inter-regular", include_bytes!("../assets/fonts/Inter-Regular.ttf")),
-    ("inter-medium", include_bytes!("../assets/fonts/Inter-Medium.ttf")),
-    ("inter-semibold", include_bytes!("../assets/fonts/Inter-SemiBold.ttf")),
-    ("inter-bold", include_bytes!("../assets/fonts/Inter-Bold.ttf")),
+/// Geist (OFL), drawn for interfaces: open shapes that stay clear at the 12 to 14
+/// point sizes most of the app uses. It covers Latin and Cyrillic; other scripts
+/// fall back to the system or egui font.
+const GEIST: [(&str, &[u8]); 4] = [
+    ("geist-regular", include_bytes!("../assets/fonts/Geist-Regular.ttf")),
+    ("geist-medium", include_bytes!("../assets/fonts/Geist-Medium.ttf")),
+    ("geist-semibold", include_bytes!("../assets/fonts/Geist-SemiBold.ttf")),
+    ("geist-bold", include_bytes!("../assets/fonts/Geist-Bold.ttf")),
 ];
 
 pub fn medium() -> FontFamily {
@@ -315,11 +316,11 @@ impl Weight for egui::RichText {
     }
 }
 
-/// Inter in four weights, the icon font in every family so icons mix into any
+/// Geist in four weights, the icon font in every family so icons mix into any
 /// label, and the system UI font (desktop) then egui's faces as fallbacks.
 pub fn install_fonts(ctx: &egui::Context, system_font: Option<Vec<u8>>) {
     let mut fonts = egui::FontDefinitions::default();
-    for (name, bytes) in INTER {
+    for (name, bytes) in GEIST {
         fonts.font_data.insert(name.into(), egui::FontData::from_static(bytes).into());
     }
     egui_phosphor::add_to_fonts(&mut fonts, egui_phosphor::Variant::Regular);
@@ -329,9 +330,9 @@ pub fn install_fonts(ctx: &egui::Context, system_font: Option<Vec<u8>>) {
         fallbacks.insert(0, "system-ui".into());
     }
     let with = |primary: &str| std::iter::once(primary.to_string()).chain(fallbacks.iter().cloned()).collect();
-    fonts.families.insert(FontFamily::Proportional, with("inter-regular"));
-    fonts.families.insert(medium(), with("inter-medium"));
-    fonts.families.insert(semibold(), with("inter-semibold"));
-    fonts.families.insert(bold(), with("inter-bold"));
+    fonts.families.insert(FontFamily::Proportional, with("geist-regular"));
+    fonts.families.insert(medium(), with("geist-medium"));
+    fonts.families.insert(semibold(), with("geist-semibold"));
+    fonts.families.insert(bold(), with("geist-bold"));
     ctx.set_fonts(fonts);
 }
