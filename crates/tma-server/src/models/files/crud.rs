@@ -68,9 +68,54 @@ async fn insert_folder(
         .await?)
 }
 
+/// Refused when a new or renamed item would share its name with a live sibling.
+pub const NAME_TAKEN: &str = "An item with this name is already here";
+
+/// Serialise name changes under one parent and name, so two requests cannot both
+/// find a name free; uploads that merge into a folder take the same lock.
+async fn lock_name(
+    tx: &mut Transaction<'_, Postgres>,
+    owner: &str,
+    parent: Option<&str>,
+    name: &str,
+) -> anyhow::Result<()> {
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
+        .bind(format!("folder:{owner}:{}:{}", parent.unwrap_or(""), name.to_lowercase()))
+        .execute(&mut **tx)
+        .await?;
+    Ok(())
+}
+
+/// Refuse `name` when a live sibling other than `except` has it, ignoring case as
+/// Explorer and Finder do; files and folders share one set of names.
+async fn refuse_taken(
+    tx: &mut Transaction<'_, Postgres>,
+    owner: &str,
+    parent: Option<&str>,
+    name: &str,
+    except: Option<&str>,
+) -> anyhow::Result<()> {
+    let taken: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM files WHERE user_id = $1 AND deleted_at IS NULL
+            AND parent_id IS NOT DISTINCT FROM $2 AND LOWER(name) = LOWER($3) AND id IS DISTINCT FROM $4)",
+    )
+    .bind(owner)
+    .bind(parent)
+    .bind(name)
+    .bind(except)
+    .fetch_one(&mut **tx)
+    .await?;
+    if taken {
+        return Err(DomainError::Conflict(NAME_TAKEN.into()).into());
+    }
+    Ok(())
+}
+
 pub async fn create_folder(pool: &PgPool, name: &str, parent: Option<&str>, owner: &str) -> anyhow::Result<FileItem> {
     let mut tx = pool.begin().await?;
+    lock_name(&mut tx, owner, parent, name).await?;
     assert_live_folders(&mut *tx, &[parent.map(String::from)], owner).await?;
+    refuse_taken(&mut tx, owner, parent, name, None).await?;
     let row = insert_folder(&mut tx, name, parent, owner).await?;
     tx.commit().await?;
     Ok(row.into())
@@ -85,10 +130,7 @@ pub async fn find_or_create_folder(
     owner: &str,
 ) -> anyhow::Result<(FileItem, bool)> {
     let mut tx = pool.begin().await?;
-    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
-        .bind(format!("folder:{owner}:{}:{}", parent.unwrap_or(""), name.to_lowercase()))
-        .execute(&mut *tx)
-        .await?;
+    lock_name(&mut tx, owner, parent, name).await?;
     assert_live_folders(&mut *tx, &[parent.map(String::from)], owner).await?;
     let existing = sqlx::query_as::<_, ListRow>(
         "SELECT id, name, type, size, modified, accessed_at, shared_at, mime_type, starred, shared FROM files
@@ -234,20 +276,25 @@ pub async fn rename(
     name: &str,
     owner: &str,
 ) -> anyhow::Result<Option<(FileItem, String, Option<String>)>> {
+    let mut tx = pool.begin().await?;
     let old: Option<(String, Option<String>)> =
         sqlx::query_as("SELECT name, parent_id FROM files WHERE id = $1 AND user_id = $2")
             .bind(id)
             .bind(owner)
-            .fetch_optional(pool)
+            .fetch_optional(&mut *tx)
             .await?;
     let Some((old_name, parent)) = old else { return Ok(None) };
+    lock_name(&mut tx, owner, parent.as_deref(), name).await?;
+    // The item itself does not count, so a change of case alone goes through.
+    refuse_taken(&mut tx, owner, parent.as_deref(), name, Some(id)).await?;
     let sql = format!("UPDATE files SET name = $1, modified = NOW() WHERE id = $2 AND user_id = $3 {RETURNING}");
     let row = sqlx::query_as::<_, ListRow>(sqlx::AssertSqlSafe(sql))
         .bind(name)
         .bind(id)
         .bind(owner)
-        .fetch_optional(pool)
+        .fetch_optional(&mut *tx)
         .await?;
+    tx.commit().await?;
     Ok(row.map(|r| (r.into(), old_name, parent)))
 }
 

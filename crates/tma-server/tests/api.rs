@@ -135,6 +135,17 @@ async fn assert_name_order(client: &Client) {
     assert_eq!(paged, expected);
 }
 
+/// A new folder or a rename may not take a sibling's name in any case; an item may change its own case.
+async fn assert_names_are_unique(client: &Client) {
+    assert_eq!(client.create_folder("documents", None).await.unwrap_err().status, 409);
+    let alpha = root(client).await.into_iter().find(|f| f.name == "alpha").unwrap();
+    assert_eq!(client.rename(&alpha.id, "PHOTO 2").await.unwrap_err().status, 409);
+    client.rename(&alpha.id, "Alpha").await.unwrap();
+    // The same name is free inside another folder.
+    let docs = root(client).await.into_iter().find(|f| f.name == "Documents").unwrap();
+    client.create_folder("Alpha", Some(&docs.id)).await.unwrap();
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn full_workflow() {
     let Some(env) = env() else {
@@ -175,6 +186,7 @@ async fn full_workflow() {
     admin.rename(&docs.id, "Documents").await.unwrap();
     assert!(root(&admin).await.iter().any(|f| f.name == "Documents" && f.is_folder()));
     assert_name_order(&admin).await;
+    assert_names_are_unique(&admin).await;
 
     let Some((endpoint, access, secret, bucket)) = env.s3.clone() else {
         eprintln!("bucket not configured: skipping upload checks");
