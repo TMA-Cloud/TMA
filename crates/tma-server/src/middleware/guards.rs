@@ -56,7 +56,7 @@ h1{margin:0 0 8px;font-size:20px}p{margin:0;color:var(--muted);line-height:1.55;
 /// When the first user limits the instance to the desktop app, refuse everything
 /// else except share links, health checks and the OnlyOffice server's own calls.
 pub async fn desktop_only(State(state): State<AppState>, req: Request, next: Next) -> Response {
-    if state.settings.get().await.require_electron_client != Some(true) {
+    if state.settings.get().await.desktop_only != Some(true) {
         return next.run(req).await;
     }
     let path = req.uri().path();

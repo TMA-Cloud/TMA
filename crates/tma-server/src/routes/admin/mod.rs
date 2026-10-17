@@ -30,7 +30,7 @@ pub fn routes() -> Router<AppState> {
         .route("/max-upload-size-config", get(config::max_upload).put(config::save_max_upload))
         .route("/known-proxies-config", get(config::known_proxies).put(config::save_known_proxies))
         .route("/hide-file-extensions-config", get(config::hide_extensions).put(config::save_hide_extensions))
-        .route("/electron-only-access-config", get(config::desktop_only).put(config::save_desktop_only))
+        .route("/desktop-only-config", get(config::desktop_only).put(config::save_desktop_only))
         .route("/cloud-drive-config", get(config::cloud_drive).put(config::save_cloud_drive))
         .route("/password-change-config", get(config::password_change).put(config::save_password_change))
         .route("/activity-config", get(config::activity))

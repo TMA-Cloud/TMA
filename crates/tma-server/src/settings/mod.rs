@@ -34,7 +34,7 @@ pub struct AppSettings {
     pub share_base_url: Option<String>,
     pub max_upload_size_bytes: Option<i64>,
     pub hide_file_extensions: Option<bool>,
-    pub require_electron_client: Option<bool>,
+    pub desktop_only: Option<bool>,
     pub allow_password_change: Option<bool>,
     pub known_proxies: Vec<String>,
     pub session_idle_days: i32,
@@ -57,7 +57,7 @@ impl Default for AppSettings {
             share_base_url: None,
             max_upload_size_bytes: Some(DEFAULT_MAX_UPLOAD_BYTES),
             hide_file_extensions: Some(false),
-            require_electron_client: Some(false),
+            desktop_only: Some(false),
             allow_password_change: Some(false),
             known_proxies: Vec::new(),
             session_idle_days: a.session_idle_days,
@@ -129,7 +129,7 @@ impl AppSettings {
 
 const SELECT_SETTINGS: &str =
     "SELECT signup_enabled, first_user_id, onlyoffice_jwt_secret, onlyoffice_url, share_base_url,
-        max_upload_size_bytes, hide_file_extensions, require_electron_client, allow_password_change,
+        max_upload_size_bytes, hide_file_extensions, desktop_only, allow_password_change,
         COALESCE(known_proxies, ARRAY[]::text[]) AS known_proxies, session_idle_days, access_time_tracking,
         access_time_window_minutes, access_time_flush_seconds, cloud_drive_save_only, storage_config_version,
         google_config_version

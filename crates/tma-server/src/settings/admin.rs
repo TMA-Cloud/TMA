@@ -40,7 +40,7 @@ pub async fn verify_first_user(tx: &mut Transaction<'_, Postgres>, user_id: &str
 pub enum FlagSetting {
     SignupEnabled,
     HideFileExtensions,
-    RequireDesktopClient,
+    DesktopOnly,
     AllowPasswordChange,
     CloudDriveSaveOnly,
 }
@@ -50,7 +50,7 @@ impl FlagSetting {
         match self {
             Self::SignupEnabled => "signup_enabled",
             Self::HideFileExtensions => "hide_file_extensions",
-            Self::RequireDesktopClient => "require_electron_client",
+            Self::DesktopOnly => "desktop_only",
             Self::AllowPasswordChange => "allow_password_change",
             Self::CloudDriveSaveOnly => "cloud_drive_save_only",
         }
@@ -60,7 +60,7 @@ impl FlagSetting {
         match self {
             Self::SignupEnabled => "toggle signup",
             Self::HideFileExtensions => "configure hide file extensions",
-            Self::RequireDesktopClient => "configure desktop-only access",
+            Self::DesktopOnly => "configure desktop-only access",
             Self::AllowPasswordChange => "configure password change",
             Self::CloudDriveSaveOnly => "configure the Cloud Drive mode",
         }

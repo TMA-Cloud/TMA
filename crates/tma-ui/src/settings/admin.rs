@@ -61,7 +61,7 @@ fn policy_value(main: &mut Main, policy: Policy, set: Option<bool>) -> Option<bo
         Policy::Signup => &mut s.signup_enabled,
         Policy::Password => &mut s.allow_password_change,
         Policy::Extensions => &mut s.hide_file_extensions,
-        _ => &mut s.electron_only_access,
+        _ => &mut s.desktop_only,
     };
     if let Some(v) = set {
         *field = v;
@@ -184,7 +184,7 @@ pub fn show(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks, desktop: bool) {
             s.can_toggle_allow_password_change,
         );
         // Turned on from a browser it would lock that browser out at once.
-        let desktop_only = s.can_toggle_electron_only_access && (desktop || s.electron_only_access);
+        let desktop_only = s.can_toggle_desktop_only && (desktop || s.desktop_only);
         let note = if desktop {
             "Only the desktop app can sign in. Public share links stay available."
         } else {

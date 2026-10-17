@@ -34,8 +34,8 @@ pub async fn signup_status(State(state): State<AppState>, auth: AuthUser) -> Api
         additional_users: total.map(|t| (t - 1).max(0)),
         hide_file_extensions: s.hide_file_extensions == Some(true),
         can_toggle_hide_file_extensions: first,
-        electron_only_access: s.require_electron_client == Some(true),
-        can_toggle_electron_only_access: first,
+        desktop_only: s.desktop_only == Some(true),
+        can_toggle_desktop_only: first,
         allow_password_change: s.allow_password_change == Some(true),
         can_toggle_allow_password_change: first,
     }))
@@ -129,7 +129,7 @@ pub async fn save_hide_extensions(
 }
 
 pub async fn desktop_only(State(state): State<AppState>) -> Json<Value> {
-    Json(json!({ "electronOnlyAccess": state.settings.get().await.require_electron_client == Some(true) }))
+    Json(json!({ "desktopOnly": state.settings.get().await.desktop_only == Some(true) }))
 }
 
 pub async fn save_desktop_only(
@@ -139,14 +139,14 @@ pub async fn save_desktop_only(
     JsonBody(body): JsonBody<Value>,
 ) -> ApiResult<Json<Value>> {
     let switch = Switch {
-        flag: FlagSetting::RequireDesktopClient,
+        flag: FlagSetting::DesktopOnly,
         field: "enabled",
         invalid: "Enabled must be a boolean",
-        action: "update_electron_only_access",
+        action: "update_desktop_only",
         forbidden: "Only the first user can configure desktop-only access",
-        setting: "electron_only_access",
+        setting: "desktop_only",
         audit_key: "enabled",
-        reply_key: "electronOnlyAccess",
+        reply_key: "desktopOnly",
     };
     flip(&state, &ctx, &auth, &body, &switch).await
 }

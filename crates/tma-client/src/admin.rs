@@ -45,7 +45,7 @@ impl Client {
     }
 
     pub async fn set_desktop_only(&self, enabled: bool) -> ApiResult<Value> {
-        self.put("/api/user/electron-only-access-config", &json!({ "enabled": enabled })).await
+        self.put("/api/user/desktop-only-config", &json!({ "enabled": enabled })).await
     }
 
     pub async fn set_password_change(&self, enabled: bool) -> ApiResult<Value> {

@@ -21,9 +21,9 @@ pub struct SignupStatus {
     #[serde(default)]
     pub can_toggle_hide_file_extensions: bool,
     #[serde(default)]
-    pub electron_only_access: bool,
+    pub desktop_only: bool,
     #[serde(default)]
-    pub can_toggle_electron_only_access: bool,
+    pub can_toggle_desktop_only: bool,
     #[serde(default)]
     pub allow_password_change: bool,
     #[serde(default)]
@@ -58,8 +58,8 @@ pub struct HideExtensions {
 
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-pub struct DesktopOnlyAccess {
-    pub electron_only_access: bool,
+pub struct DesktopOnly {
+    pub desktop_only: bool,
 }
 
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]

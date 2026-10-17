@@ -140,7 +140,7 @@ async fn full_workflow() {
     assert_eq!(admin.set_hide_extensions(true).await.unwrap()["hideFileExtensions"], true);
     assert!(admin.hide_extensions().await.unwrap());
     admin.set_hide_extensions(false).await.unwrap();
-    assert_eq!(admin.set_desktop_only(false).await.unwrap()["electronOnlyAccess"], false);
+    assert_eq!(admin.set_desktop_only(false).await.unwrap()["desktopOnly"], false);
     assert_eq!(admin.set_password_change(true).await.unwrap()["allowPasswordChange"], true);
     assert!(admin.set_cloud_drive_save_only(true).await.unwrap().save_only);
     assert!(admin.cloud_drive_config().await.unwrap().save_only);

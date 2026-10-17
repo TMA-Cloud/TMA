@@ -46,7 +46,8 @@ into one image; `make build` tags it with the workspace version.
 - **Comments are short and explain why**, in one line rather than a paragraph.
   Don't restate the code, and don't add banner dividers.
 - **Wire format is the contract.** JSON field names come from `tma-core` types
-  (serde renames); the web app, desktop app and old clients all depend on them.
+  (serde renames); the server, web app and desktop app all depend on them, so a
+  rename changes all three, and its docs, in one commit.
 - Never commit `.env` or secrets. New settings go in `.env.example` with a comment.
 
 ## crates/tma-server
