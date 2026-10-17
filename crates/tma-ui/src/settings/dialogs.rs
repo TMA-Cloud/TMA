@@ -113,28 +113,25 @@ fn password_problem(form: &PasswordForm) -> Option<&'static str> {
 }
 
 fn password(ui: &mut egui::Ui, main: &mut Main, tasks: &Tasks, form: &mut PasswordForm, keep: &mut bool) {
+    ui.spacing_mut().item_spacing.y = widgets::FORM_GAP;
     parts::note(
         ui,
         Tone::Warning,
         "After changing your password you are signed out on every device, this one included. Use a strong \
          password you don't use on other sites.",
     );
-    ui.add_space(8.0);
     let mfa = main.settings.mfa.unwrap_or(main.user.mfa_enabled);
     parts::secret_field(ui, "Current password", &mut form.current, "");
-    ui.add_space(4.0);
     parts::secret_field(ui, "New password", &mut form.new, "");
     parts::hint(ui, "Use at least 8 characters.");
     let r = parts::secret_field(ui, "Confirm new password", &mut form.confirm, "");
     let mut enter = r.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
     if mfa {
-        ui.add_space(4.0);
         let r = widgets::field(ui, "Authentication code", &mut form.code, false, "Code from your app or a backup code");
         form.code = forms::any_code_input(&form.code);
         enter |= r.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
     }
     if let Some(error) = &form.error {
-        ui.add_space(4.0);
         widgets::error_text(ui, error);
     }
     let busy = main.settings.busy == Some("password");
@@ -197,9 +194,11 @@ fn sessions(ui: &mut egui::Ui, main: &mut Main, tasks: &Tasks, keep: &mut bool) 
                     ui.label(RichText::new(ph::DEVICES).size(20.0).color(t.label_tertiary));
                     ui.vertical(|ui| {
                         ui.set_max_width(ui.available_width() - 110.0);
+                        ui.spacing_mut().item_spacing.y = 2.0;
                         let agent = s.user_agent.clone().unwrap_or_else(|| "Unknown device".into());
-                        ui.horizontal_wrapped(|ui| {
-                            ui.label(RichText::new(forms::device_label(&agent)).semibold());
+                        // Centred, so the chips sit level with the device name.
+                        ui.horizontal(|ui| {
+                            ui.label(RichText::new(forms::device_label(&agent)).size(14.0).semibold());
                             if s.is_current {
                                 parts::chip(ui, Tone::Info, "Current");
                             }
@@ -209,11 +208,12 @@ fn sessions(ui: &mut egui::Ui, main: &mut Main, tasks: &Tasks, keep: &mut bool) 
                                 parts::chip(ui, Tone::Neutral, "Offline");
                             }
                         });
-                        let small = |text: String| RichText::new(text).size(11.5).color(t.label_tertiary);
+                        ui.add_space(4.0);
+                        let small = |text: String| RichText::new(text).size(12.0).color(t.label_tertiary);
                         ui.add(egui::Label::new(small(agent)).truncate());
-                        ui.label(small(format!("IP: {}", s.ip_address.as_deref().unwrap_or("Unknown location"))));
-                        ui.label(small(format!("Created: {}", tma_core::format::full_date(s.created_at))));
-                        ui.label(small(format!("Last activity: {}", tma_core::format::full_date(s.last_activity))));
+                        ui.label(small(s.ip_address.clone().unwrap_or_else(|| "Unknown address".into())));
+                        ui.label(small(format!("Signed in {}", tma_core::format::full_date(s.created_at))));
+                        ui.label(small(format!("Last active {}", tma_core::format::full_date(s.last_activity))));
                     });
                     if !s.is_current {
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {

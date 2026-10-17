@@ -131,25 +131,22 @@ fn upload_card(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
 fn text(ui: &mut egui::Ui, label: &str, value: &mut String, placeholder: &str, hint: &str) {
     widgets::field(ui, label, value, false, placeholder);
     if !hint.is_empty() {
-        ui.add_space(2.0);
         parts::hint(ui, hint);
     }
-    ui.add_space(8.0);
 }
 
 /// A labelled choice as wide as the fields under it.
 fn combo(ui: &mut egui::Ui, id: &str, label: &str, value: &mut String, options: &[(&str, &str)]) {
-    let t = widgets::tokens(ui);
-    ui.label(RichText::new(label).size(12.0).color(t.label_secondary));
     let shown = options.iter().find(|o| o.0 == value).map_or("", |o| o.1);
-    let width = ui.available_width();
-    ui.spacing_mut().interact_size.y = 32.0;
-    egui::ComboBox::from_id_salt(id).selected_text(shown).width(width).show_ui(ui, |ui| {
-        for (key, name) in options {
-            ui.selectable_value(value, key.to_string(), *name);
-        }
+    widgets::labelled(ui, label, |ui| {
+        let width = ui.available_width();
+        ui.spacing_mut().interact_size.y = 34.0;
+        egui::ComboBox::from_id_salt(id).selected_text(shown).width(width).show_ui(ui, |ui| {
+            for (key, name) in options {
+                ui.selectable_value(value, key.to_string(), *name);
+            }
+        });
     });
-    ui.add_space(8.0);
 }
 
 fn result_box(ui: &mut egui::Ui, result: &CheckResult) {
@@ -157,7 +154,7 @@ fn result_box(ui: &mut egui::Ui, result: &CheckResult) {
         String::new()
     } else {
         let names: Vec<&str> = result.checks.iter().map(|c| bucket_form::check_label(c)).collect();
-        format!("\nPassed: {}", names.join(" · "))
+        format!("\nPassed: {}", names.join(", "))
     };
     let failed =
         result.step.as_deref().map(|s| format!("{} failed: ", bucket_form::check_label(s))).unwrap_or_default();
@@ -269,10 +266,13 @@ fn bucket_fields(ui: &mut egui::Ui, b: &mut BucketForm, configured: bool, masked
     }
     if b.provider == "s3" {
         ui.checkbox(&mut b.force_path_style, "Path-style addressing");
-        // Lined up with the label, past the box.
-        ui.horizontal(|ui| {
-            ui.add_space(ui.spacing().icon_width + ui.spacing().icon_spacing);
-            parts::hint(ui, "Needed by RustFS and MinIO unless they serve buckets on their own subdomains");
+        // Close under the box and lined up with its label.
+        let t = widgets::tokens(ui);
+        ui.add_space(4.0 - ui.spacing().item_spacing.y);
+        let indent = (ui.spacing().icon_width + ui.spacing().icon_spacing) as i8;
+        egui::Frame::new().inner_margin(egui::Margin { left: indent, ..Default::default() }).show(ui, |ui| {
+            let note = "Needed by RustFS and MinIO unless they serve buckets on their own subdomains";
+            ui.add(egui::Label::new(RichText::new(note).size(12.0).color(t.label_tertiary)).wrap());
         });
     }
     let note = if configured { "Leave both blank to keep the saved key." } else { "A key restricted to this bucket." };

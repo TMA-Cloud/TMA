@@ -256,7 +256,7 @@ fn verify(ui: &mut egui::Ui, main: &mut Main, tasks: &Tasks, state: &mut MfaDial
         ui.add_space(6.0);
         ui.label(RichText::new("Or enter this code manually:").size(12.0).color(t.label_secondary));
         ui.horizontal(|ui| {
-            ui.add(egui::Label::new(RichText::new(&secret).monospace().size(12.5)).wrap());
+            ui.add(egui::Label::new(RichText::new(&secret).monospace().size(13.0)).wrap());
             if widgets::icon_button(ui, ph::COPY, "Copy secret").clicked() {
                 ui.ctx().copy_text(secret.clone());
             }

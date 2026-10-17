@@ -101,7 +101,7 @@ pub(super) fn grid(main: &mut Main, ui: &mut Ui, t: &Tokens, desktop: bool, acti
                         egui::pos2(text_rect.center().x, text_rect.min.y + name_height + 3.0),
                         Align2::CENTER_TOP,
                         meta_line(main, &item, now),
-                        FontId::proportional(11.0),
+                        FontId::proportional(12.0),
                         t.label_tertiary,
                     );
                     let mut corner = rect.right_top() + Vec2::new(-16.0, 16.0);

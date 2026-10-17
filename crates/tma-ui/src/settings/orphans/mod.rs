@@ -82,7 +82,7 @@ fn entry(ui: &mut egui::Ui, checked: bool, title: &str, details: &[String], size
                         }
                     });
                     for line in details {
-                        ui.add(egui::Label::new(RichText::new(line).size(11.5).color(t.label_tertiary)).wrap());
+                        ui.add(egui::Label::new(RichText::new(line).size(12.0).color(t.label_tertiary)).wrap());
                     }
                 });
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
@@ -124,7 +124,7 @@ pub fn show(ui: &mut egui::Ui, main: &mut Main, tasks: &Tasks, state: &mut Orpha
             summary.push_str(&format!(" · {} held back as too recent", r.totals.skipped_too_recent));
         }
         summary.push_str(&format!(" · {}", tma_core::format::full_date(r.scanned_at)));
-        ui.label(RichText::new(summary).size(11.5).color(t.label_tertiary));
+        ui.label(RichText::new(summary).size(12.0).color(t.label_tertiary));
     }
     ui.add_space(4.0);
     tabs(ui, state, report.as_ref(), &t);

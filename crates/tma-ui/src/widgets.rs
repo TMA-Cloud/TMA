@@ -195,16 +195,40 @@ pub fn bordered_field(ui: &mut Ui, edit: egui::TextEdit<'_>) -> Response {
     .inner
 }
 
+/// Space between the groups of a form (a label with its field and hint), on the 4-point grid.
+pub const FORM_GAP: f32 = 12.0;
+
+/// Lay out a form: groups `FORM_GAP` apart, whatever spacing the container uses
+/// (section cards stack their rows with none).
+pub fn form<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
+    ui.scope(|ui| {
+        ui.spacing_mut().item_spacing.y = FORM_GAP;
+        add(ui)
+    })
+    .inner
+}
+
+/// A field's label, 6 points above what it labels.
+pub fn labelled<R>(ui: &mut Ui, label: &str, add: impl FnOnce(&mut Ui) -> R) -> R {
+    let t = tokens(ui);
+    ui.scope(|ui| {
+        ui.spacing_mut().item_spacing.y = 6.0;
+        ui.label(RichText::new(label).size(13.0).medium().color(t.label_secondary));
+        add(ui)
+    })
+    .inner
+}
+
 /// A labelled single-line field; `password` hides the text.
 pub fn field(ui: &mut Ui, label: &str, value: &mut String, password: bool, hint: &str) -> Response {
-    let t = tokens(ui);
-    ui.label(RichText::new(label).size(12.0).color(t.label_secondary));
-    let edit = egui::TextEdit::singleline(value)
-        .password(password)
-        .hint_text(hint)
-        .desired_width(f32::INFINITY)
-        .margin(Margin::symmetric(10, 7));
-    bordered_field(ui, edit)
+    labelled(ui, label, |ui| {
+        let edit = egui::TextEdit::singleline(value)
+            .password(password)
+            .hint_text(hint)
+            .desired_width(f32::INFINITY)
+            .margin(Margin::symmetric(10, 8));
+        bordered_field(ui, edit)
+    })
 }
 
 pub fn text_edit(ui: &mut Ui, value: &mut String, hint: &str, width: f32) -> Response {
@@ -218,7 +242,7 @@ pub fn badge(ui: &mut Ui, text: &str, color: Color32) -> Response {
         .fill(fill)
         .corner_radius(CornerRadius::same(RADIUS_MD))
         .inner_margin(Margin::symmetric(7, 2))
-        .show(ui, |ui| ui.label(RichText::new(text).size(11.0).color(color).semibold()))
+        .show(ui, |ui| ui.label(RichText::new(text).size(12.0).color(color).semibold()))
         .response
 }
 
@@ -230,7 +254,7 @@ pub fn heading(ui: &mut Ui, _icon: &str, title: &str, subtitle: &str) {
         ui.spacing_mut().item_spacing.y = 4.0;
         ui.label(RichText::new(title).size(24.0).semibold().color(t.label));
         if !subtitle.is_empty() {
-            ui.label(RichText::new(subtitle).size(13.5).color(t.label_secondary));
+            ui.label(RichText::new(subtitle).size(14.0).color(t.label_secondary));
         }
     });
     ui.add_space(12.0);
@@ -238,8 +262,9 @@ pub fn heading(ui: &mut Ui, _icon: &str, title: &str, subtitle: &str) {
 
 pub fn section_title(ui: &mut Ui, title: &str) {
     let t = tokens(ui);
+    // Sentence case: a quiet title, not a tracked-out capital label.
     ui.add_space(6.0);
-    ui.label(RichText::new(title.to_uppercase()).size(11.0).semibold().color(t.label_tertiary));
+    ui.label(RichText::new(title).size(13.0).semibold().color(t.label_secondary));
     ui.add_space(2.0);
 }
 
@@ -284,13 +309,13 @@ pub fn setting_row(ui: &mut Ui, title: &str, description: &str, control: impl Fn
                 if description.is_empty() {
                     ui.add_space(6.0);
                 }
-                ui.label(RichText::new(title).size(13.5).medium().color(t.label));
+                ui.label(RichText::new(title).size(14.0).medium().color(t.label));
                 if !description.is_empty() {
-                    ui.label(RichText::new(description).size(12.5).color(t.label_tertiary));
+                    ui.label(RichText::new(description).size(13.0).color(t.label_tertiary));
                 }
             });
             let controls = ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                ui.style_mut().override_font_id = Some(egui::FontId::proportional(13.5));
+                ui.style_mut().override_font_id = Some(egui::FontId::proportional(14.0));
                 ui.data_mut(|d| d.insert_temp(egui::Id::unique(ROW_ACTIONS), true));
                 control(ui);
                 ui.data_mut(|d| d.remove::<bool>(egui::Id::unique(ROW_ACTIONS)));
@@ -377,7 +402,7 @@ pub fn grouped(
         ui.spacing_mut().item_spacing.y = 3.0;
         ui.label(RichText::new(title).size(16.0).semibold().color(title_color));
         if !subtitle.is_empty() {
-            ui.label(RichText::new(subtitle).size(12.5).color(t.label_secondary));
+            ui.label(RichText::new(subtitle).size(13.0).color(t.label_secondary));
         }
     });
     ui.add_space(10.0);

@@ -98,7 +98,7 @@ impl Toasts {
                             ui.horizontal_top(|ui| {
                                 ui.spacing_mut().item_spacing.x = 8.0;
                                 ui.label(RichText::new(icon).size(15.0).color(color));
-                                ui.add(egui::Label::new(RichText::new(&toast.text).size(12.5)).wrap());
+                                ui.add(egui::Label::new(RichText::new(&toast.text).size(13.0)).wrap());
                             });
                         });
                     ui.add_space(6.0);

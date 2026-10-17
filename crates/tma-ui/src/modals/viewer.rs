@@ -104,7 +104,7 @@ pub(super) fn viewer_overlay(
             bar.left_center() + Vec2::new(20.0, 18.0),
             Align2::LEFT_CENTER,
             format!("{} of {}", viewer.index + 1, viewer.items.len()),
-            egui::FontId::proportional(11.0),
+            egui::FontId::proportional(12.0),
             Color32::from_white_alpha(150),
         );
         if round_button(ui, bar.right_center() - Vec2::new(28.0, 0.0), ph::X, "close") {

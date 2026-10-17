@@ -43,7 +43,7 @@ fn checklist(ui: &mut egui::Ui, available: &[PermissionInfo], value: &mut Vec<St
         ui.set_width(ui.available_width());
         ui.add_enabled_ui(enabled, |ui| {
             ui.horizontal(|ui| {
-                ui.label(RichText::new("PERMISSIONS").size(11.0).semibold().color(t.label_tertiary));
+                ui.label(RichText::new("Permissions").size(14.0).semibold().color(t.label));
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if ui.add_enabled(!value.is_empty(), egui::Button::new("Clear all")).clicked() {
                         value.clear();
@@ -69,7 +69,7 @@ fn checklist(ui: &mut egui::Ui, available: &[PermissionInfo], value: &mut Vec<St
                     ui.vertical(|ui| {
                         ui.spacing_mut().item_spacing.y = 1.0;
                         ui.label(RichText::new(&permission.label).semibold());
-                        ui.label(RichText::new(&permission.description).size(11.5).color(t.label_tertiary));
+                        ui.label(RichText::new(&permission.description).size(12.0).color(t.label_tertiary));
                     });
                 });
             }
@@ -88,22 +88,27 @@ fn create_form(ui: &mut egui::Ui, main: &mut Main, tasks: &Tasks, available: &[P
     let mut cancel = false;
     widgets::card(ui, |ui| {
         ui.set_width(ui.available_width());
-        ui.columns(if ui.available_width() > 520.0 { 2 } else { 1 }, |cols| {
-            widgets::field(&mut cols[0], "Name", &mut form.name, false, "Jane Doe");
-            let last = cols.len() - 1;
-            widgets::field(&mut cols[last], "Email", &mut form.email, false, "jane@example.com");
-        });
-        ui.add_space(4.0);
-        parts::secret_field(ui, "Password", &mut form.password, "At least 8 characters");
-        ui.add_space(6.0);
-        checklist(ui, available, &mut form.permissions, !busy);
-        if let Some(error) = &form.error {
-            widgets::error_text(ui, error);
-        }
-        ui.horizontal(|ui| {
-            let label = if busy { "Creating…".to_string() } else { format!("{}  Create sub-user", ph::USER_PLUS) };
-            submit = widgets::primary_enabled(ui, !busy, label).clicked();
-            cancel = ui.add_enabled(!busy, egui::Button::new("Cancel")).clicked();
+        widgets::form(ui, |ui| {
+            parts::pair(
+                ui,
+                |ui| {
+                    widgets::field(ui, "Name", &mut form.name, false, "Jane Doe");
+                },
+                |ui| {
+                    widgets::field(ui, "Email", &mut form.email, false, "jane@example.com");
+                },
+            );
+            parts::secret_field(ui, "Password", &mut form.password, "At least 8 characters");
+            checklist(ui, available, &mut form.permissions, !busy);
+            if let Some(error) = &form.error {
+                widgets::error_text(ui, error);
+            }
+            ui.horizontal(|ui| {
+                let label =
+                    if busy { "Creating…".to_string() } else { format!("{}  Create sub-user", ph::USER_PLUS) };
+                submit = widgets::primary_enabled(ui, !busy, label).clicked();
+                cancel = ui.add_enabled_ui(!busy, |ui| widgets::secondary(ui, "Cancel")).inner.clicked();
+            });
         });
     });
     if cancel {
@@ -189,7 +194,7 @@ fn row(ui: &mut egui::Ui, main: &mut Main, tasks: &Tasks, sub: &SubUser, availab
                 }
                 let mfa = if sub.mfa_enabled { "Two-factor on" } else { "Two-factor off" };
                 let added = tma_core::format::full_date(sub.created_at);
-                ui.label(RichText::new(format!("{mfa} · Added {added}")).size(11.5).color(t.label_tertiary));
+                ui.label(RichText::new(format!("{mfa} · Added {added}")).size(12.0).color(t.label_tertiary));
             });
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if confirming {

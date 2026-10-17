@@ -218,7 +218,7 @@ fn header(app: &mut App, root: &mut egui::Ui) {
                         rect.left_center() + Vec2::new(36.0, 8.0),
                         Align2::LEFT_CENTER,
                         &main.user.email,
-                        FontId::proportional(11.0),
+                        FontId::proportional(12.0),
                         t.label_tertiary,
                     );
                     ui.painter().text(

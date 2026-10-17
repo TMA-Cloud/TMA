@@ -56,7 +56,7 @@ fn identity_card(ui: &mut egui::Ui, main: &Main) {
                     let title = name.unwrap_or_else(|| "Unnamed account".into());
                     ui.add(egui::Label::new(RichText::new(title).size(18.0).bold().color(t.label)).truncate());
                     ui.add(
-                        egui::Label::new(RichText::new(&main.user.email).size(12.5).color(t.label_secondary))
+                        egui::Label::new(RichText::new(&main.user.email).size(13.0).color(t.label_secondary))
                             .truncate(),
                     );
                 });

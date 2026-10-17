@@ -198,9 +198,9 @@ pub fn users(ui: &mut egui::Ui, main: &mut Main, tasks: &Tasks, keep: &mut bool)
     ui.add_space(6.0);
     let mut reached_end = false;
     egui::ScrollArea::both().max_height(ui.ctx().content_rect().height() * 0.5).show(ui, |ui| {
-        egui::Grid::new("users").num_columns(6).striped(true).spacing([16.0, 8.0]).show(ui, |ui| {
+        egui::Grid::new("users").num_columns(6).striped(true).spacing([20.0, 12.0]).show(ui, |ui| {
             for h in ["Name", "Email", "Storage", "Limit", "Two-factor", "Joined"] {
-                ui.label(RichText::new(h).size(11.5).semibold().color(t.label_tertiary));
+                ui.label(RichText::new(h).size(12.0).semibold().color(t.label_tertiary));
             }
             ui.end_row();
             for &(index, owner) in &rows {
@@ -224,21 +224,25 @@ pub fn users(ui: &mut egui::Ui, main: &mut Main, tasks: &Tasks, keep: &mut bool)
                         ui.label(RichText::new(format!("Shares {label}")).size(12.0).color(t.label_tertiary));
                     }
                     None => {
-                        ui.vertical(|ui| {
-                            ui.add(
-                                egui::Label::new(
-                                    RichText::new(tma_core::format::file_size(user.storage_used)).semibold(),
-                                )
-                                .extend(),
-                            );
-                            if let Some(total) = user.storage_total.filter(|t| *t > 0) {
-                                let percent = (user.storage_used as f64 * 100.0 / total as f64).round();
-                                let text = format!("{percent}% of {}", tma_core::format::file_size(total));
-                                ui.add(
-                                    egui::Label::new(RichText::new(text).size(11.0).color(t.label_tertiary)).extend(),
-                                );
+                        let used = RichText::new(tma_core::format::file_size(user.storage_used));
+                        // A second line only with a limit; alone, the size stays level with the row.
+                        match user.storage_total.filter(|t| *t > 0) {
+                            Some(total) => {
+                                ui.vertical(|ui| {
+                                    ui.spacing_mut().item_spacing.y = 2.0;
+                                    ui.add(egui::Label::new(used).extend());
+                                    let percent = (user.storage_used as f64 * 100.0 / total as f64).round();
+                                    let text = format!("{percent}% of {}", tma_core::format::file_size(total));
+                                    ui.add(
+                                        egui::Label::new(RichText::new(text).size(12.0).color(t.label_tertiary))
+                                            .extend(),
+                                    );
+                                });
                             }
-                        });
+                            None => {
+                                ui.add(egui::Label::new(used).extend());
+                            }
+                        }
                     }
                 }
                 if owner.is_some() {
@@ -311,21 +315,24 @@ pub fn clients(ui: &mut egui::Ui, main: &mut Main, tasks: &Tasks, keep: &mut boo
                     ui.label(RichText::new(ph::DESKTOP).size(18.0).color(t.label_tertiary));
                     ui.vertical(|ui| {
                         ui.set_max_width(ui.available_width() - 90.0);
+                        // Who first, then where and when; the chip beside it already gives the version.
+                        ui.spacing_mut().item_spacing.y = 2.0;
                         let email = c.user_email.clone().unwrap_or_default();
-                        ui.label(RichText::new(c.user_name.clone().unwrap_or_else(|| email.clone())).semibold());
-                        let small = |text: String| RichText::new(text).size(11.5).color(t.label_tertiary);
+                        ui.label(
+                            RichText::new(c.user_name.clone().unwrap_or_else(|| email.clone())).size(14.0).semibold(),
+                        );
                         if c.user_name.is_some() {
-                            ui.label(small(email));
+                            ui.label(RichText::new(email).size(13.0).color(t.label_secondary));
                         }
-                        ui.label(small(format!(
-                            "Platform: {} · Version: v{}",
-                            forms::platform_label(c.platform.as_deref()),
-                            c.app_version
-                        )));
-                        if let Some(ip) = &c.ip_address {
-                            ui.label(small(format!("IP: {ip}")));
-                        }
-                        ui.label(small(format!("Last seen: {}", tma_core::format::full_date(c.last_seen_at))));
+                        ui.add_space(4.0);
+                        let small = |text: String| RichText::new(text).size(12.0).color(t.label_tertiary);
+                        let platform = forms::platform_label(c.platform.as_deref());
+                        let place = match &c.ip_address {
+                            Some(ip) => format!("{platform}, {ip}"),
+                            None => platform.to_string(),
+                        };
+                        ui.label(small(place));
+                        ui.label(small(format!("Last seen {}", tma_core::format::full_date(c.last_seen_at))));
                     });
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
                         parts::chip(ui, Tone::Success, &format!("v{}", c.app_version));

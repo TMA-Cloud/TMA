@@ -200,11 +200,11 @@ fn footer(ui: &mut Ui, staged: &mut Vec<UploadFile>, max: i64, outcome: &mut Opt
         if !staged.is_empty() {
             let files = if count == 1 { "1 file".to_string() } else { format!("{count} files") };
             let summary = format!("{files} · {}", tma_core::format::file_size(bytes as i64));
-            ui.label(RichText::new(summary).size(12.5).semibold().color(t.label_secondary));
+            ui.label(RichText::new(summary).size(13.0).semibold().color(t.label_secondary));
             if over > 0 {
-                ui.label(RichText::new(format!("· {over} too large")).size(12.5).color(t.destructive_text));
+                ui.label(RichText::new(format!("· {over} too large")).size(13.0).color(t.destructive_text));
             }
-            if ui.add(egui::Button::new(RichText::new("Clear").size(12.5).color(t.accent)).frame(false)).clicked() {
+            if ui.add(egui::Button::new(RichText::new("Clear").size(13.0).color(t.accent)).frame(false)).clicked() {
                 staged.clear();
             }
         }

@@ -171,7 +171,7 @@ fn row(ui: &mut egui::Ui, item: &Transfer, t: &crate::theme::Tokens) {
             }
             if item.state == State::Queued {
                 let waiting =
-                    ui.painter().layout_no_wrap("Waiting".into(), egui::FontId::proportional(11.0), t.label_tertiary);
+                    ui.painter().layout_no_wrap("Waiting".into(), egui::FontId::proportional(12.0), t.label_tertiary);
                 name_right = cancel.left() - waiting.size().x - 8.0;
                 ui.painter().galley(
                     egui::pos2(name_right + 4.0, top - waiting.size().y / 2.0),
@@ -225,7 +225,7 @@ fn row(ui: &mut egui::Ui, item: &Transfer, t: &crate::theme::Tokens) {
         State::Failed(msg) => {
             let mut job = egui::text::LayoutJob::simple_singleline(
                 msg.clone(),
-                egui::FontId::proportional(11.0),
+                egui::FontId::proportional(12.0),
                 t.destructive_text,
             );
             job.wrap = egui::text::TextWrapping::truncate_at_width(line.width().max(20.0));

@@ -56,7 +56,7 @@ pub fn chip(ui: &mut egui::Ui, tone: Tone, text: &str) -> egui::Response {
                 if let Some(icon) = tone.icon() {
                     ui.label(RichText::new(icon).size(12.0).color(color));
                 }
-                ui.label(RichText::new(text).size(11.5).semibold().color(color));
+                ui.label(RichText::new(text).size(12.0).semibold().color(color));
             });
         })
         .response
@@ -84,7 +84,7 @@ pub fn stat(ui: &mut egui::Ui, width: f32, icon: &str, label: &str, value: Optio
                 let color = if loading { t.label_quaternary } else { t.label };
                 ui.label(RichText::new(value).size(size).bold().color(color));
                 if !hint.is_empty() {
-                    ui.label(RichText::new(hint).size(11.0).color(t.label_tertiary));
+                    ui.label(RichText::new(hint).size(12.0).color(t.label_tertiary));
                 }
             });
         });
@@ -102,20 +102,17 @@ pub fn tile_width(ui: &egui::Ui, n: usize) -> f32 {
 pub fn note(ui: &mut egui::Ui, tone: Tone, text: &str) {
     let t = widgets::tokens(ui);
     let color = tone.color(&t);
-    let frame = if widgets::in_section(ui) {
-        widgets::row_frame(ui)
-    } else {
-        Frame::new()
-            .fill(tint(color, 22))
-            .stroke(Stroke::new(1.0, tint(color, 70)))
-            .corner_radius(CornerRadius::same(12))
-            .inner_margin(Margin::symmetric(12, 9))
-    };
+    // Always its own tinted box: drawn as a section row it would add a divider inside a card's form.
+    let frame = Frame::new()
+        .fill(tint(color, 22))
+        .stroke(Stroke::new(1.0, tint(color, 70)))
+        .corner_radius(CornerRadius::same(12))
+        .inner_margin(Margin::symmetric(12, 10));
     frame.show(ui, |ui| {
         ui.set_width(ui.available_width());
         ui.horizontal_top(|ui| {
             ui.label(RichText::new(tone.icon().unwrap_or(ph::INFO)).color(color));
-            ui.add(egui::Label::new(RichText::new(text).size(12.5).color(t.label)).wrap());
+            ui.add(egui::Label::new(RichText::new(text).size(13.0).color(t.label)).wrap());
         });
     });
 }
@@ -166,7 +163,7 @@ pub fn config_card(
                 ui.vertical(|ui| {
                     ui.set_max_width((width - 230.0).max(140.0));
                     ui.spacing_mut().item_spacing.y = 1.0;
-                    ui.label(RichText::new(title).size(13.5).semibold().color(t.label));
+                    ui.label(RichText::new(title).size(14.0).semibold().color(t.label));
                     ui.label(RichText::new(description).size(12.0).color(t.label_tertiary));
                 });
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -189,8 +186,8 @@ pub fn config_card(
         }
         clicked = response.clicked() && status.is_some();
         if open {
-            ui.add_space(10.0);
-            body(ui);
+            ui.add_space(16.0);
+            widgets::form(ui, body);
         }
     });
     clicked
@@ -199,21 +196,20 @@ pub fn config_card(
 /// A label and a value that is shown, not edited.
 pub fn readonly(ui: &mut egui::Ui, label: &str, value: &str, empty: &str) {
     let t = widgets::tokens(ui);
-    ui.label(RichText::new(label).size(12.0).color(t.label_secondary));
     let text = if value.is_empty() {
         RichText::new(empty).italics().color(t.label_tertiary)
     } else {
-        RichText::new(value).monospace()
+        RichText::new(value).color(t.label)
     };
-    ui.add(egui::Label::new(text).wrap());
-    ui.add_space(4.0);
+    widgets::labelled(ui, label, |ui| ui.add(egui::Label::new(text).wrap()));
 }
 
 /// A field's small print under it.
 pub fn hint(ui: &mut egui::Ui, text: &str) {
     let t = widgets::tokens(ui);
-    ui.add(egui::Label::new(RichText::new(text).size(11.5).color(t.label_tertiary)).wrap());
-    ui.add_space(4.0);
+    // Close under the field it explains, however far apart the form spaces its groups.
+    ui.add_space(4.0 - ui.spacing().item_spacing.y);
+    ui.add(egui::Label::new(RichText::new(text).size(12.0).color(t.label_tertiary)).wrap());
 }
 
 /// A password field with an eye inside its right edge to show what was typed,
@@ -222,13 +218,12 @@ pub fn secret_field(ui: &mut egui::Ui, label: &str, value: &mut String, hint: &s
     let t = widgets::tokens(ui);
     let id = ui.scope_id().with(("show", label));
     let mut shown = ui.data(|d| d.get_temp::<bool>(id)).unwrap_or(false);
-    ui.label(RichText::new(label).size(12.0).color(t.label_secondary));
     let edit = egui::TextEdit::singleline(value)
         .password(!shown)
         .hint_text(hint)
         .desired_width(f32::INFINITY)
-        .margin(Margin { left: 10, right: 34, top: 7, bottom: 7 });
-    let response = widgets::bordered_field(ui, edit);
+        .margin(Margin { left: 10, right: 34, top: 8, bottom: 8 });
+    let response = widgets::labelled(ui, label, |ui| widgets::bordered_field(ui, edit));
     let eye = egui::Rect::from_center_size(response.rect.right_center() - Vec2::new(17.0, 0.0), Vec2::splat(24.0));
     let (icon, tip) = if shown { (ph::EYE_SLASH, "Hide") } else { (ph::EYE, "Show") };
     let button = egui::Button::new(RichText::new(icon).size(15.0).color(t.label_tertiary)).frame(false);
@@ -255,12 +250,15 @@ pub fn pair(ui: &mut egui::Ui, left: impl FnOnce(&mut egui::Ui), right: impl FnO
 /// A group heading inside a form, with room above to set it off from the last field.
 pub fn form_heading(ui: &mut egui::Ui, title: &str, note: &str) {
     let t = widgets::tokens(ui);
-    ui.add_space(10.0);
-    ui.label(RichText::new(title).size(13.0).semibold().color(t.label));
-    if !note.is_empty() {
-        ui.add(egui::Label::new(RichText::new(note).size(11.5).color(t.label_tertiary)).wrap());
-    }
-    ui.add_space(2.0);
+    // A step more room above than between fields, so the groups read as groups.
+    ui.add_space(8.0);
+    ui.scope(|ui| {
+        ui.spacing_mut().item_spacing.y = 2.0;
+        ui.label(RichText::new(title).size(14.0).semibold().color(t.label));
+        if !note.is_empty() {
+            ui.add(egui::Label::new(RichText::new(note).size(12.0).color(t.label_tertiary)).wrap());
+        }
+    });
 }
 
 /// Usage against the quota: amber once nearly full, red once it effectively is.
@@ -282,7 +280,7 @@ pub fn meter(ui: &mut egui::Ui, usage: Option<StorageUsage>) {
             ui.label(widgets::muted(ui, of));
         });
         let Some(total) = total else {
-            ui.label(RichText::new("No storage limit").size(12.5).color(t.label_tertiary));
+            ui.label(RichText::new("No storage limit").size(13.0).color(t.label_tertiary));
             return;
         };
         let raw = usage.used as f64 * 100.0 / total as f64;
@@ -328,7 +326,7 @@ pub fn form_actions(ui: &mut egui::Ui, busy: bool, save: &str, saving: &str) -> 
         if widgets::primary_enabled(ui, !busy, if busy { saving } else { save }).clicked() {
             action = Some(FormAction::Save);
         }
-        if ui.add_enabled(!busy, egui::Button::new("Cancel")).clicked() {
+        if ui.add_enabled_ui(!busy, |ui| widgets::secondary(ui, "Cancel")).inner.clicked() {
             action = Some(FormAction::Cancel);
         }
     });
