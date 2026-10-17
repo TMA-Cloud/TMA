@@ -13,8 +13,8 @@ Changes:
 - `Cargo.toml`: egui `0.37` instead of `0.36`. The dev-dependencies, examples and
   tests are left out.
 - Only the `regular` and `fill` fonts (`res/Phosphor.ttf`, `res/Phosphor-Fill.ttf`)
-  and their sources are kept, the two variants the app uses. `thin`, `light`, `bold`
-  and `subset` stay declared but fail to build if enabled.
+  are kept, the two variants the app uses. The `thin`, `light` and `bold` features
+  and `subset` (which needs all five) stay declared but fail to build if enabled.
 
 The source files are unchanged. Drop this copy once an egui-phosphor release
 supports the egui version the workspace uses.

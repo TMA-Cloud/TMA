@@ -14,8 +14,8 @@ egui = { version = "0.37", default-features = false }
 default = ["regular"]
 regular = []
 fill = []
-# Declared so the source's cfg checks stay valid; this copy ships neither these
-# fonts nor subset.rs, so enabling them fails to build (see PATCHES.md).
+# Declared so the source's cfg checks stay valid; this copy ships only the regular
+# and fill fonts, so enabling these fails to build (see PATCHES.md).
 thin = []
 light = []
 bold = []
