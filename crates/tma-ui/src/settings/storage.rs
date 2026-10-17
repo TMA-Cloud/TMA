@@ -36,26 +36,25 @@ pub fn load(main: &mut Main, tasks: &Tasks) {
 pub fn show(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
     widgets::heading(ui, ph::HARD_DRIVES, "Storage", "Storage use, the storage bucket and upload limits.");
     let admin = main.instance.is_first_user;
+    // What you use comes first; what the server is set up with follows, for those who set it.
+    let usage = main.instance.usage;
+    section(ui, "", "", |ui| parts::meter(ui, usage));
     if admin {
-        section(ui, "Bucket", "The S3-compatible bucket where all files are stored.", |ui| {
-            bucket_card(main, ui, tasks)
+        section(ui, "Server settings", "These apply to every user on this server.", |ui| {
+            bucket_card(main, ui, tasks);
+            upload_card(main, ui, tasks);
         });
-    } else if !main.instance.storage_configured {
-        ui.add_space(6.0);
+        return;
+    }
+    ui.add_space(8.0);
+    if !main.instance.storage_configured {
         parts::note(
             ui,
             Tone::Warning,
             "Storage is not set up yet, so files cannot be uploaded or opened. Contact your administrator.",
         );
     }
-    let usage = main.instance.usage;
-    section(ui, "Usage", "Storage used by your account.", |ui| parts::meter(ui, usage));
-    if admin {
-        section(ui, "Limits", "These apply to every user on this server.", |ui| upload_card(main, ui, tasks));
-    } else {
-        ui.add_space(8.0);
-        parts::note(ui, Tone::Neutral, "Storage limits and the maximum upload size are managed by your administrator.");
-    }
+    parts::note(ui, Tone::Neutral, "Storage limits and the maximum upload size are managed by your administrator.");
 }
 
 fn upload_card(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {

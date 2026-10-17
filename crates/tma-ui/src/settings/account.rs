@@ -90,7 +90,7 @@ pub fn security(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
     let mfa = main.settings.mfa.unwrap_or(main.user.mfa_enabled);
     let mut open = None;
     let mut sign_out_all = false;
-    section(ui, "Sign-in", "How you verify your identity when you sign in.", |ui| {
+    section(ui, "Sign-in", "", |ui| {
         let description = match (mfa, main.settings.backup_codes) {
             (true, Some(n)) => {
                 format!("On, with {} left", tma_core::format::count(n as usize, "backup code", "backup codes"))
@@ -120,7 +120,7 @@ pub fn security(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
             }
         }
     });
-    section(ui, "Devices", "Browsers and apps signed in to your account.", |ui| {
+    section(ui, "Devices", "", |ui| {
         let description = match &main.settings.sessions {
             None => "Counting active sessions…".to_string(),
             Some(list) if list.is_empty() => "Only this device is signed in".to_string(),

@@ -198,7 +198,7 @@ pub fn show(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks, desktop: bool) {
         policy(main, ui, tasks, Policy::SaveOnly, "Cloud Drive save-only", drive, can);
     });
     let mut open = None;
-    section(ui, "Users and devices", "Accounts on this server and connected desktop apps.", |ui| {
+    section(ui, "Users and devices", "", |ui| {
         widgets::setting_row(ui, "Registered users", "All accounts with their storage use and limits", |ui| {
             if widgets::secondary(ui, format!("{}  Show all users", ph::USERS_THREE)).clicked() {
                 open = Some(Dialog::Users);
@@ -219,14 +219,14 @@ pub fn show(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks, desktop: bool) {
     if open.is_some() {
         main.settings.dialog = open;
     }
-    section(ui, "Sessions and activity", "Session length and file access tracking.", |ui| {
+    section(ui, "Sessions and activity", "", |ui| {
         super::admin_activity::session_card(main, ui, tasks);
         super::admin_activity::access_card(main, ui, tasks);
     });
-    section(ui, "Network", "Settings for running behind a reverse proxy.", |ui| {
+    section(ui, "Network", "", |ui| {
         super::admin_activity::proxies_card(main, ui, tasks);
     });
-    section(ui, "Integrations", "Services connected to this server.", |ui| {
+    section(ui, "Integrations", "", |ui| {
         super::integrations::show(main, ui, tasks);
     });
     parts::danger_group(

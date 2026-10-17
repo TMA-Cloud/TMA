@@ -67,7 +67,9 @@ fn sidebar(app: &mut App, root: &mut egui::Ui) {
     let t = app.t;
     let mut go = None;
     let mut to_updates = false;
+    let mut page = None;
     let desktop = app.host.kind() == crate::host::HostKind::Desktop;
+    let host_title = app.host.settings_title();
     let Screen::Main(main) = &mut app.screen else { return };
     egui::Panel::left("sidebar")
         .exact_size(SIDEBAR_WIDTH)
@@ -88,28 +90,51 @@ fn sidebar(app: &mut App, root: &mut egui::Ui) {
                 });
             });
             let section = main.section;
-            egui::Frame::new().inner_margin(Margin::symmetric(10, 0)).show(ui, |ui| {
-                ui.spacing_mut().item_spacing.y = 2.0;
-                for (sec, place, icon, label) in [
-                    (Section::Dashboard, Place::Folder, ph::HOUSE, "Dashboard"),
-                    (Section::Files, Place::Folder, ph::FOLDER_OPEN, "My Files"),
-                    (Section::Shared, Place::Shared, ph::SHARE_NETWORK, "Shared"),
-                    (Section::Starred, Place::Starred, ph::STAR, "Starred"),
-                    (Section::Trash, Place::Trash, ph::TRASH, "Trash"),
-                ] {
-                    if nav_item(ui, icon, label, section == sec) {
-                        go = Some((sec, place));
+            // Settings takes the sidebar over, so its pages need no column of their own.
+            if section == Section::Settings {
+                egui::Frame::new().inner_margin(Margin::symmetric(10, 0)).show(ui, |ui| {
+                    ui.spacing_mut().item_spacing.y = 2.0;
+                    if nav_item(ui, ph::ARROW_LEFT, "Back to files", false) {
+                        go = Some((Section::Files, Place::Folder));
                     }
-                }
-            });
-            ui.with_layout(Layout::bottom_up(Align::Min), |ui| {
-                egui::Frame::new().inner_margin(Margin::same(10)).show(ui, |ui| {
-                    if nav_item(ui, ph::GEAR_SIX, "Settings", section == Section::Settings) {
-                        go = Some((Section::Settings, Place::Folder));
+                    ui.add_space(16.0);
+                    ui.horizontal(|ui| {
+                        ui.add_space(12.0);
+                        ui.label(RichText::new("Settings").size(12.0).semibold().color(t.label_tertiary));
+                    });
+                    ui.add_space(4.0);
+                    for (p, icon, label) in crate::settings::pages(main, host_title) {
+                        if nav_item(ui, icon, label, main.settings.page == p) {
+                            page = Some(p);
+                        }
                     }
                 });
-                let line = ui.available_rect_before_wrap();
-                ui.painter().hline(line.x_range(), line.bottom(), Stroke::new(1.0, t.separator));
+            } else {
+                egui::Frame::new().inner_margin(Margin::symmetric(10, 0)).show(ui, |ui| {
+                    ui.spacing_mut().item_spacing.y = 2.0;
+                    for (sec, place, icon, label) in [
+                        (Section::Dashboard, Place::Folder, ph::HOUSE, "Dashboard"),
+                        (Section::Files, Place::Folder, ph::FOLDER_OPEN, "My Files"),
+                        (Section::Shared, Place::Shared, ph::SHARE_NETWORK, "Shared"),
+                        (Section::Starred, Place::Starred, ph::STAR, "Starred"),
+                        (Section::Trash, Place::Trash, ph::TRASH, "Trash"),
+                    ] {
+                        if nav_item(ui, icon, label, section == sec) {
+                            go = Some((sec, place));
+                        }
+                    }
+                });
+            }
+            ui.with_layout(Layout::bottom_up(Align::Min), |ui| {
+                if section != Section::Settings {
+                    egui::Frame::new().inner_margin(Margin::same(10)).show(ui, |ui| {
+                        if nav_item(ui, ph::GEAR_SIX, "Settings", false) {
+                            go = Some((Section::Settings, Place::Folder));
+                        }
+                    });
+                    let line = ui.available_rect_before_wrap();
+                    ui.painter().hline(line.x_range(), line.bottom(), Stroke::new(1.0, t.separator));
+                }
                 let newer = match (&main.settings.versions, &main.settings.latest) {
                     (Some(current), Some(latest)) => crate::settings::updates::available(current, latest, desktop),
                     _ => Vec::new(),
@@ -121,6 +146,11 @@ fn sidebar(app: &mut App, root: &mut egui::Ui) {
                 }
             });
         });
+    if let Some(p) = page
+        && let Screen::Main(main) = &mut app.screen
+    {
+        crate::settings::switch_to(main, p, &app.tasks);
+    }
     if let Some((section, place)) = go {
         navigate(app, section, place);
     }

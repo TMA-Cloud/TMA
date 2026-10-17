@@ -151,6 +151,9 @@ pub fn config_card(
 ) -> bool {
     let t = widgets::tokens(ui);
     let mut clicked = false;
+    // The text gets what the status chip left on the last frame, as setting rows do.
+    let key = egui::Id::unique(("config-card-status", title));
+    let status_width = ui.data(|d| d.get_temp::<f32>(key)).unwrap_or(180.0);
     widgets::row_frame(ui).show(ui, |ui| {
         ui.set_width(ui.available_width());
         let width = ui.available_width();
@@ -161,12 +164,12 @@ pub fn config_card(
                 ui.painter().rect_filled(badge, 10.0, t.accent_fill);
                 ui.painter().text(badge.center(), Align2::CENTER_CENTER, icon, FontId::proportional(17.0), t.accent);
                 ui.vertical(|ui| {
-                    ui.set_max_width((width - 230.0).max(140.0));
-                    ui.spacing_mut().item_spacing.y = 1.0;
+                    ui.set_max_width((width - 34.0 - status_width - 32.0).max(140.0));
+                    ui.spacing_mut().item_spacing.y = 2.0;
                     ui.label(RichText::new(title).size(14.0).semibold().color(t.label));
-                    ui.label(RichText::new(description).size(12.0).color(t.label_tertiary));
+                    ui.label(RichText::new(description).size(13.0).color(t.label_tertiary));
                 });
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let used = ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     let caret = if open { ph::CARET_UP } else { ph::CARET_DOWN };
                     ui.label(RichText::new(caret).size(15.0).color(t.label_tertiary));
                     match &status {
@@ -177,7 +180,12 @@ pub fn config_card(
                             ui.spinner();
                         }
                     }
+                    ui.min_rect().width()
                 });
+                if (used.inner - status_width).abs() > 0.5 {
+                    ui.data_mut(|d| d.insert_temp(key, used.inner));
+                    ui.ctx().request_repaint();
+                }
             })
             .response;
         let response = ui.interact(header.rect, ui.scope_id().with(("card", title)), Sense::click());

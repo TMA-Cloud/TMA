@@ -21,7 +21,7 @@ pub use dialogs::show as modals;
 use std::collections::BTreeSet;
 use std::future::Future;
 
-use egui::{Align2, CornerRadius, FontId, Margin, RichText, Sense, Stroke, Vec2};
+use egui::Margin;
 use tma_client::rt::MaybeSend;
 use tma_client::{ApiResult, Client};
 use tma_core::api::*;
@@ -30,8 +30,6 @@ use crate::app::{App, Main, Screen};
 use crate::host::Host;
 use crate::icons::ph;
 use crate::tasks::Tasks;
-use crate::theme::Tokens;
-use crate::theme::Weight;
 use crate::widgets;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -224,37 +222,8 @@ pub fn opened(main: &mut Main, tasks: &Tasks) {
     }
 }
 
-fn nav_row(ui: &mut egui::Ui, icon: &str, label: &str, active: bool) -> bool {
-    let t = widgets::tokens(ui);
-    let (rect, response) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 34.0), Sense::click());
-    let fill = if active {
-        t.accent_fill
-    } else if response.hovered() {
-        t.fill_quaternary
-    } else {
-        egui::Color32::TRANSPARENT
-    };
-    ui.painter().rect_filled(rect, CornerRadius::same(10), fill);
-    let (icon_color, text_color) = if active { (t.accent, t.accent) } else { (t.label_tertiary, t.label_secondary) };
-    ui.painter().text(
-        rect.left_center() + Vec2::new(19.0, 0.0),
-        Align2::CENTER_CENTER,
-        icon,
-        FontId::proportional(17.0),
-        icon_color,
-    );
-    let font = FontId::new(13.0, if active { crate::theme::semibold() } else { egui::FontFamily::Proportional });
-    ui.painter().text(rect.left_center() + Vec2::new(37.0, 0.0), Align2::LEFT_CENTER, label, font, text_color);
-    if response.hovered() {
-        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
-    }
-    response.clicked()
-}
-
-pub fn show(app: &mut App, ui: &mut egui::Ui) {
-    let t = app.t;
-    let host_title = app.host.settings_title();
-    let Screen::Main(main) = &mut app.screen else { return };
+/// The settings pages this account can open, in menu order.
+pub(crate) fn pages(main: &Main, host_title: Option<&'static str>) -> Vec<(Page, &'static str, &'static str)> {
     let mut pages = vec![(Page::Profile, ph::USER, "Profile"), (Page::Storage, ph::HARD_DRIVES, "Storage")];
     if !main.user.is_sub_user {
         pages.push((Page::SubUsers, ph::USERS, "Sub-users"));
@@ -267,9 +236,25 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
     if let Some(title) = host_title {
         pages.push((Page::Host, ph::DESKTOP, title));
     }
+    pages
+}
+
+/// Open a settings page, loading what it shows.
+pub(crate) fn switch_to(main: &mut Main, page: Page, tasks: &Tasks) {
+    main.settings.page = page;
+    opened(main, tasks);
+}
+
+/// A settings page. Its menu is in the app's sidebar, which turns into it while
+/// Settings is open (see `shell`); without that sidebar (hidden, or on a phone)
+/// a picker above the page takes its place.
+pub fn show(app: &mut App, ui: &mut egui::Ui) {
+    let host_title = app.host.settings_title();
+    let menu_in_sidebar = !app.prefs.sidebar_hidden && !widgets::mobile(ui.ctx());
+    let Screen::Main(main) = &mut app.screen else { return };
     let mut switch = None;
-    if ui.available_width() < NARROW_BELOW {
-        // A menu above the page instead of beside it, so the page keeps the whole width.
+    if !menu_in_sidebar {
+        let pages = pages(main, host_title);
         let current = pages.iter().find(|p| p.0 == main.settings.page).map_or("Settings", |p| p.2);
         egui::ComboBox::from_id_salt("settings-menu").selected_text(current).width(220.0).show_ui(ui, |ui| {
             for (page, icon, label) in &pages {
@@ -278,78 +263,27 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                 }
             }
         });
-        ui.add_space(10.0);
-        egui::ScrollArea::vertical().id_salt("settings-page").auto_shrink([false, false]).show(ui, |ui| {
+        ui.add_space(12.0);
+    }
+    egui::ScrollArea::vertical().id_salt("settings-page").auto_shrink([false, false]).show(ui, |ui| {
+        let margin = if menu_in_sidebar { Margin { left: 40, right: 32, top: 8, bottom: 40 } } else { Margin::same(0) };
+        egui::Frame::new().inner_margin(margin).show(ui, |ui| {
+            ui.set_width(page_width(ui.available_width()));
+            ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
             page_body(main, &mut *app.host, &app.tasks, ui);
         });
-    } else {
-        side_menu_layout(main, ui, &pages, &mut switch, &mut *app.host, &app.tasks, t);
-    }
+    });
     if let Some(page) = switch
         && let Screen::Main(main) = &mut app.screen
     {
-        main.settings.page = page;
-        opened(main, &app.tasks);
+        switch_to(main, page, &app.tasks);
     }
-}
-
-/// The settings menu as a plain column beside the page, when there is room for
-/// both: no card around it, no repeated name or storage meter (the header and the
-/// Storage page show those), and the page next to it at a readable width.
-fn side_menu_layout(
-    main: &mut Main,
-    ui: &mut egui::Ui,
-    pages: &[(Page, &str, &str)],
-    switch: &mut Option<Page>,
-    host: &mut dyn Host,
-    tasks: &Tasks,
-    t: Tokens,
-) {
-    const MENU: f32 = 216.0;
-    let height = ui.available_height();
-    ui.horizontal_top(|ui| {
-        ui.spacing_mut().item_spacing = egui::vec2(0.0, 0.0);
-        ui.allocate_ui_with_layout(egui::vec2(MENU, height), egui::Layout::top_down(egui::Align::Min), |ui| {
-            ui.set_width(MENU);
-            egui::Frame::new().inner_margin(Margin { left: 4, right: 16, top: 6, bottom: 12 }).show(ui, |ui| {
-                ui.spacing_mut().item_spacing.y = 2.0;
-                ui.label(RichText::new("Settings").size(20.0).semibold().color(t.label));
-                ui.add_space(12.0);
-                for (page, icon, label) in pages {
-                    if nav_row(ui, icon, label, main.settings.page == *page) {
-                        *switch = Some(*page);
-                    }
-                }
-            });
-        });
-        let rule = ui.available_rect_before_wrap();
-        ui.painter().vline(rule.left(), rule.top()..=rule.top() + height, Stroke::new(1.0, t.separator));
-        ui.allocate_ui_with_layout(
-            egui::vec2(ui.available_width(), height),
-            egui::Layout::top_down(egui::Align::Min),
-            |ui| {
-                egui::ScrollArea::vertical().id_salt("settings-page").auto_shrink([false, false]).show(ui, |ui| {
-                    egui::Frame::new().inner_margin(Margin { left: 40, right: 28, top: 6, bottom: 32 }).show(
-                        ui,
-                        |ui| {
-                            ui.set_width(page_width(ui.available_width()));
-                            ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
-                            page_body(main, host, tasks, ui);
-                        },
-                    );
-                });
-            },
-        );
-    });
 }
 
 /// Settings read best in a column: it grows with the window up to this width.
 fn page_width(available: f32) -> f32 {
-    available.clamp(0.0, 780.0)
+    available.clamp(0.0, 680.0)
 }
-
-/// Below this width the settings menu moves above the page.
-const NARROW_BELOW: f32 = 640.0;
 
 fn page_body(main: &mut Main, host: &mut dyn Host, tasks: &Tasks, ui: &mut egui::Ui) {
     let desktop = host.kind() == crate::host::HostKind::Desktop;

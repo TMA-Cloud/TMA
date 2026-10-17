@@ -92,7 +92,7 @@ pub fn show(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks, host: &mut dyn Ho
     let current = main.settings.versions.clone().unwrap_or_default();
     let latest = main.settings.latest.clone().unwrap_or_default();
     let checking = main.settings.busy == Some("latest");
-    section(ui, "Components", "Versions installed on this server and this computer.", |ui| {
+    section(ui, "Versions", "", |ui| {
         row(ui, "Server", current.backend.as_deref(), latest.backend.as_deref(), checking);
         if current.frontend.is_some() {
             row(ui, "Web app", current.frontend.as_deref(), latest.frontend.as_deref(), checking);
@@ -118,8 +118,8 @@ pub fn show(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks, host: &mut dyn Ho
         }
         UpdateMode::None => "Compares the installed versions with the latest releases. Nothing is installed from here.",
     };
-    section(ui, "Update check", note, |ui| {
-        widgets::setting_row(ui, "Check for updates", "Look up the latest published releases", |ui| {
+    section(ui, "", "", |ui| {
+        widgets::setting_row(ui, "Check for updates", note, |ui| {
             let label =
                 if checking { "Checking…".to_string() } else { format!("{}  Check now", ph::MAGNIFYING_GLASS) };
             if ui.add_enabled(!checking, egui::Button::new(label)).clicked() {
