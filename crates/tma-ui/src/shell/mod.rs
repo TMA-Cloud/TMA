@@ -197,15 +197,7 @@ fn header(app: &mut App, root: &mut egui::Ui) {
                     app.prefs.sidebar_hidden = !app.prefs.sidebar_hidden;
                 }
                 ui.add_space(4.0);
-                let hint = format!("{}  Search files and folders", ph::MAGNIFYING_GLASS);
-                let width = ui.available_width().clamp(160.0, 320.0) - 60.0;
-                let (r, query) = widgets::search_field(ui, &mut main.search, &hint, width, &t);
-                if query.is_some() {
-                    search = query;
-                }
-                if ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::K)) {
-                    r.request_focus();
-                }
+                // The buttons on the right are placed first; the search box takes the room left.
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     let name =
                         main.user.name.clone().filter(|n| !n.is_empty()).unwrap_or_else(|| main.user.email.clone());
@@ -262,7 +254,21 @@ fn header(app: &mut App, root: &mut egui::Ui) {
                     if round_icon(ui, icon, tip).clicked() {
                         app.prefs.theme = next;
                     }
-                    app.host.header_status(ui);
+                    // The drive status is the first thing to go when the window is narrow.
+                    if ui.available_width() > 320.0 {
+                        app.host.header_status(ui);
+                    }
+                    ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
+                        let hint = format!("{}  Search files and folders", ph::MAGNIFYING_GLASS);
+                        let width = (ui.available_width() - 16.0).clamp(120.0, 260.0);
+                        let (r, query) = widgets::search_field(ui, &mut main.search, &hint, width, &t);
+                        if query.is_some() {
+                            search = query;
+                        }
+                        if ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::K)) {
+                            r.request_focus();
+                        }
+                    });
                 });
             });
         });
