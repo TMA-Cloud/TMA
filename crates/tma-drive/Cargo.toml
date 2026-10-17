@@ -24,7 +24,7 @@ uuid = { workspace = true }
 thiserror = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]
-windows = { version = "0.61", features = ["Win32_Foundation", "Win32_Storage_FileSystem", "Win32_Storage_CloudFilters", "Win32_System_CorrelationVector"], optional = true }
+windows = { version = "0.62", features = ["Win32_Foundation", "Win32_Storage_FileSystem", "Win32_Storage_CloudFilters", "Win32_System_CorrelationVector"], optional = true }
 # The Cloud Files API (OneDrive's), so the drive needs no driver on Windows.
 cloud-filter = { version = "0.0.6", optional = true }
 notify = { version = "8", optional = true }
