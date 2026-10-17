@@ -158,14 +158,6 @@ impl Host for DesktopHost {
             tma_ui::widgets::setting_row(ui, "Version", "", |ui| {
                 ui.label(format!("v{}", env!("CARGO_PKG_VERSION")));
             });
-            tma_ui::widgets::setting_row(
-                ui,
-                "Edit in desktop apps",
-                "Open files in installed apps; saved changes upload automatically.",
-                |ui| {
-                    ui.label("On");
-                },
-            );
         });
         let note = "Your files in File Explorer and in every app's Open and Save dialogs.";
         widgets::section(ui, "Cloud Drive", note, |ui| {
@@ -195,15 +187,14 @@ impl Host for DesktopHost {
                 let (mode, note) = if save_only {
                     (
                         "Save-only",
-                        "Other apps can browse the drive and save into it, but not open or copy files from it",
+                        "Other apps can browse the drive and save into it, but not open or copy files from it. Set by your administrator.",
                     )
                 } else {
-                    ("Full access", "Other apps can open and copy files from the drive")
+                    ("Full access", "Other apps can open and copy files from the drive. Set by your administrator.")
                 };
                 tma_ui::widgets::setting_row(ui, "Access mode", note, |ui| {
                     ui.label(mode);
                 });
-                ui.label(widgets::muted(ui, "Set by your administrator.").size(12.0));
             }
             if restart {
                 self.drive.start(client, ui.ctx().clone());
