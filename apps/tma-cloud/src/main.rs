@@ -11,6 +11,7 @@ mod clipboard;
 mod clipboard_ole;
 #[cfg(windows)]
 mod cloak;
+mod credentials;
 mod cursors;
 mod drive;
 mod edit;
@@ -126,6 +127,7 @@ fn main() -> eframe::Result {
     }
     #[cfg(windows)]
     let Some(_single) = single::claim() else { return Ok(()) };
+    credentials::init();
     forget_old_copies();
     let placement = window::Placement::load().unwrap_or_default();
     let mut viewport = placement.apply(

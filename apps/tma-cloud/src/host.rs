@@ -36,8 +36,8 @@ impl DesktopHost {
         Self { server, client_id, heartbeat_stop: None, drive: Drive::default() }
     }
 
-    fn entry(server: &str) -> Option<keyring::Entry> {
-        keyring::Entry::new(KEYRING_SERVICE, server).ok()
+    fn entry(server: &str) -> Option<keyring_core::Entry> {
+        keyring_core::Entry::new(KEYRING_SERVICE, server).ok()
     }
 }
 
@@ -74,7 +74,7 @@ impl Host for DesktopHost {
             Some(token) if entry.get_password().is_ok_and(|saved| saved == *token) => Ok(()),
             Some(token) => entry.set_password(token),
             None => match entry.delete_credential() {
-                Err(keyring::Error::NoEntry) => Ok(()),
+                Err(keyring_core::Error::NoEntry) => Ok(()),
                 other => other,
             },
         };
