@@ -100,18 +100,7 @@ impl Core {
         }
         if is_dir {
             let _guard = self.path_lock(&path);
-            // A folder an app just made (or one that exists already) is reused, not duplicated.
-            let existing = match self.created_id(&path) {
-                Some(id) => Some(id),
-                None => self.find_child(parent.id.as_deref(), &name, true)?.map(|e| e.id),
-            };
-            let id = match existing {
-                Some(id) => id,
-                None => self.backend.mkdir(parent.id.as_deref(), &self.to_server_name(&name)).map_err(|e| {
-                    log::warn!("mkdir failed: {e}");
-                    FsError::AccessDenied
-                })?,
-            };
+            let id = self.folder_for(&path, parent.id.as_deref(), &name)?;
             self.track_created(&path, &id);
             self.invalidate(&parent_path);
             let node =

@@ -16,6 +16,8 @@ struct Mock {
     items: Mutex<HashMap<String, Item>>,
     next: Mutex<u32>,
     uploads: Mutex<u32>,
+    /// An item the next listing leaves out, as a listing taken just before it was made would.
+    hide_once: Mutex<Option<String>>,
 }
 
 impl Mock {
@@ -36,12 +38,13 @@ impl Mock {
 
 impl Backend for Mock {
     fn list(&self, parent: Option<&str>) -> BackendResult<Vec<Entry>> {
+        let hidden = self.hide_once.lock().unwrap().take();
         Ok(self
             .items
             .lock()
             .unwrap()
             .iter()
-            .filter(|(_, v)| v.0.as_deref() == parent)
+            .filter(|(k, v)| v.0.as_deref() == parent && hidden.as_deref() != Some(k.as_str()))
             .map(|(k, v)| Entry {
                 id: k.clone(),
                 name: v.1.clone(),
@@ -71,6 +74,16 @@ impl Backend for Mock {
         Ok(())
     }
     fn mkdir(&self, parent: Option<&str>, name: &str) -> BackendResult<String> {
+        // As the server: a live sibling's name, in any case, is refused.
+        let taken = self
+            .items
+            .lock()
+            .unwrap()
+            .values()
+            .any(|v| v.0.as_deref() == parent && v.1.to_lowercase() == name.to_lowercase());
+        if taken {
+            return Err("An item with this name is already here".into());
+        }
         let id = self.id();
         self.items.lock().unwrap().insert(id.clone(), (parent.map(String::from), name.into(), true, Vec::new()));
         Ok(id)
@@ -324,4 +337,26 @@ fn drive_paths_use_windows_names() {
     let expected = format!(r"\{}\{}", local("Q1: plans"), local("a?.txt"));
     assert_eq!(core.local_path(&["Q1: plans".into()], "a?.txt"), expected);
     assert_eq!(core.local_path(&[], "a.txt"), r"\a.txt");
+}
+
+fn folders_named(mock: &Mock, name: &str) -> usize {
+    mock.items.lock().unwrap().values().filter(|v| v.2 && v.1.to_lowercase() == name.to_lowercase()).count()
+}
+
+#[test]
+fn mkdir_reuses_a_folder_whatever_its_case() {
+    let (mock, core, _d) = setup();
+    mock.items.lock().unwrap().insert("old".into(), (None, "Äpfel".into(), true, Vec::new()));
+    core.create("\\äpfel", true).unwrap();
+    assert_eq!(folders_named(&mock, "äpfel"), 1);
+}
+
+#[test]
+fn mkdir_after_a_stale_lookup_uses_the_existing_folder() {
+    let (mock, core, _d) = setup();
+    mock.items.lock().unwrap().insert("docs".into(), (None, "Docs".into(), true, Vec::new()));
+    // The first lookup misses it; the server then refuses the name, and the second lookup finds it.
+    *mock.hide_once.lock().unwrap() = Some("docs".into());
+    core.create("\\Docs", true).unwrap();
+    assert_eq!(folders_named(&mock, "docs"), 1);
 }

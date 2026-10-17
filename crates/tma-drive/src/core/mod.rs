@@ -255,8 +255,9 @@ impl Core {
 
     fn find_child(&self, parent_id: Option<&str>, name: &str, folder: bool) -> FsResult<Option<Entry>> {
         let entries = self.backend.list(parent_id).map_err(FsError::Io)?;
-        let wanted = self.to_server_name(name);
-        Ok(entries.into_iter().find(|e| e.is_folder == folder && e.name.eq_ignore_ascii_case(&wanted)))
+        // Lowercased in full, as the server compares names, not only ASCII letters.
+        let wanted = self.to_server_name(name).to_lowercase();
+        Ok(entries.into_iter().find(|e| e.is_folder == folder && e.name.to_lowercase() == wanted))
     }
 
     pub fn invalidate(&self, dir: &str) {
@@ -279,6 +280,25 @@ impl Core {
             created.clear();
         }
         created.insert(paths::key(path), id.to_string());
+    }
+
+    /// The folder `name` under `parent_id`, reused rather than duplicated: one an app
+    /// just made at `path`, one the server already has, or a new one. The server
+    /// refuses a name taken since the lookup, and the folder found then is the one.
+    fn folder_for(&self, path: &str, parent_id: Option<&str>, name: &str) -> FsResult<String> {
+        if let Some(id) = self.created_id(path) {
+            return Ok(id);
+        }
+        if let Some(found) = self.find_child(parent_id, name, true)? {
+            return Ok(found.id);
+        }
+        match self.backend.mkdir(parent_id, &self.to_server_name(name)) {
+            Ok(id) => Ok(id),
+            Err(e) => self.find_child(parent_id, name, true)?.map(|found| found.id).ok_or_else(|| {
+                log::warn!("mkdir failed: {e}");
+                FsError::AccessDenied
+            }),
+        }
     }
 
     fn created_id(&self, path: &str) -> Option<String> {
