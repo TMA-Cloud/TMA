@@ -272,8 +272,9 @@ pub async fn folder_page(
                 CASE WHEN f.type = 'folder' THEN 0 ELSE 1 END AS sort_rank
            FROM share_link_files s JOIN files f ON s.file_id = f.id
           WHERE s.share_id = $1 AND f.parent_id = $2 AND f.deleted_at IS NULL
-            AND ($3::integer IS NULL OR (CASE WHEN f.type = 'folder' THEN 0 ELSE 1 END, LOWER(f.name), f.id) > ($3, $4, $5))
-          ORDER BY sort_rank, LOWER(f.name), f.id LIMIT $6",
+            AND ($3::integer IS NULL OR (CASE WHEN f.type = 'folder' THEN 0 ELSE 1 END, LOWER(f.name) COLLATE tma_natural, f.id)
+                > ($3, LOWER($4), $5))
+          ORDER BY sort_rank, LOWER(f.name) COLLATE tma_natural, f.id LIMIT $6",
     )
     .bind(token)
     .bind(folder_id)
@@ -287,7 +288,7 @@ pub async fn folder_page(
     let kept: Vec<SharedRow> = rows.into_iter().take(limit as usize).collect();
     let next_cursor = if has_more {
         kept.last().map(|last| {
-            let c = PageCursor { rank: last.sort_rank, name: last.name.to_lowercase(), id: last.id.clone() };
+            let c = PageCursor { rank: last.sort_rank, name: last.name.clone(), id: last.id.clone() };
             base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(serde_json::to_vec(&c).unwrap_or_default())
         })
     } else {

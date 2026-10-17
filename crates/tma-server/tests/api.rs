@@ -10,7 +10,7 @@
 use std::net::SocketAddr;
 
 use tma_client::{Client, ListQuery, Progress, Source, UploadFile, UploadOptions, View};
-use tma_core::api::{CreateSubUserRequest, StorageSettingsInput};
+use tma_core::api::{CreateSubUserRequest, SortBy, SortOrder, StorageSettingsInput};
 use tma_server::config::Config;
 use tma_server::crypto::{Keyring, generate_key};
 use tma_server::server::{Role, build_state_with_keyring};
@@ -111,6 +111,30 @@ async fn root(client: &Client) -> Vec<tma_core::api::FileItem> {
     client.list(&View::Folder(None), &ListQuery::default()).await.unwrap().files
 }
 
+/// Names sort ignoring case and with numbers by value, page by page as well.
+async fn assert_name_order(client: &Client) {
+    for name in ["photo 10", "Photo 2", "alpha"] {
+        client.create_folder(name, None).await.unwrap();
+    }
+    let expected = ["alpha", "Documents", "Photo 2", "photo 10"];
+    let by_name = ListQuery { sort: Some(SortBy::Name), order: Some(SortOrder::Asc), ..ListQuery::default() };
+    let names: Vec<String> =
+        client.list(&View::Folder(None), &by_name).await.unwrap().files.into_iter().map(|f| f.name).collect();
+    assert_eq!(names, expected);
+    // One row per page walks the cursor through every comparison.
+    let (mut paged, mut cursor) = (Vec::new(), None);
+    loop {
+        let query = ListQuery { cursor: cursor.take(), limit: Some(1), ..by_name.clone() };
+        let page = client.list(&View::Folder(None), &query).await.unwrap();
+        paged.extend(page.files.into_iter().map(|f| f.name));
+        match page.next_cursor {
+            Some(next) => cursor = Some(next),
+            None => break,
+        }
+    }
+    assert_eq!(paged, expected);
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn full_workflow() {
     let Some(env) = env() else {
@@ -150,6 +174,7 @@ async fn full_workflow() {
     let docs = admin.create_folder("Docs", None).await.unwrap();
     admin.rename(&docs.id, "Documents").await.unwrap();
     assert!(root(&admin).await.iter().any(|f| f.name == "Documents" && f.is_folder()));
+    assert_name_order(&admin).await;
 
     let Some((endpoint, access, secret, bucket)) = env.s3.clone() else {
         eprintln!("bucket not configured: skipping upload checks");

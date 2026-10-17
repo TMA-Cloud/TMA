@@ -94,9 +94,12 @@ struct Cursor {
     id: String,
 }
 
+/// Case-insensitive, numbers by value (migration 057); matches the name index.
+pub const NAME_ORDER: &str = "LOWER(f.name) COLLATE tma_natural";
+
 fn sort_expr(sort: SortBy) -> &'static str {
     match sort {
-        SortBy::Name => "f.name",
+        SortBy::Name => NAME_ORDER,
         SortBy::Size => "COALESCE(CASE WHEN f.type = 'folder' THEN f.aggregate_size ELSE f.size END, 0)",
         SortBy::Modified => "f.modified",
         SortBy::AccessedAt => "f.accessed_at",
@@ -129,7 +132,7 @@ impl Keyset {
         let expr = sort_expr(self.sort);
         let push_value = |qb: &mut QueryBuilder<Postgres>| match self.sort {
             SortBy::Name => {
-                qb.push_bind(c.value.as_str().unwrap_or("").to_string());
+                qb.push("LOWER(").push_bind(c.value.as_str().unwrap_or("").to_string()).push(")");
             }
             SortBy::Size => {
                 qb.push_bind(c.value.as_i64().or_else(|| c.value.as_str().and_then(|s| s.parse().ok())).unwrap_or(0));
