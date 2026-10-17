@@ -190,7 +190,13 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
         }
         Modal::Viewer(viewer) => viewer_overlay(ctx, &t, viewer, &mut outcome),
         Modal::Upload(staged) => {
-            let close = dialog(ctx, "upload", 520.0, "Upload", |ui| upload::body(ui, staged, &mut outcome));
+            // Uploads go to the open folder, or to My Files from anywhere else.
+            let b = &main.browser;
+            let into_folder = main.section == crate::app::Section::Files && b.place == crate::files::Place::Folder;
+            let to = format!("To {}", if into_folder { b.title() } else { "My Files".into() });
+            let max = main.instance.max_upload;
+            let close =
+                dialog_with(ctx, "upload", 540.0, "Upload", &to, |ui| upload::body(ui, staged, max, &mut outcome));
             if close && outcome.is_none() {
                 outcome = Some(Outcome::Close);
             }
