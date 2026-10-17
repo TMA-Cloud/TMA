@@ -91,12 +91,13 @@ impl Host for DesktopHost {
 
     fn signed_in(&mut self, client: &Client, _user: &User, tasks: &Tasks) {
         self.drive.start(client, tasks.ctx().clone());
-        crate::update::check(client.clone(), Notifier::new(tasks));
         if let Some(stop) = self.heartbeat_stop.take() {
             stop.store(true, Ordering::Relaxed);
         }
         let stop = Arc::new(AtomicBool::new(false));
         self.heartbeat_stop = Some(stop.clone());
+        // Stops with the heartbeat at sign-out; the next sign-in starts a new one.
+        crate::update::watch(client.clone(), Notifier::new(tasks), stop.clone());
         let (client, client_id, notifier) = (client.clone(), self.client_id.clone(), Notifier::new(tasks));
         tma_client::rt::spawn(async move {
             while !stop.load(Ordering::Relaxed) {

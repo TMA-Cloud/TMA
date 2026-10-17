@@ -28,6 +28,11 @@ impl Notifier {
         self.ctx.request_repaint();
     }
 
+    /// Close the window, which ends the app the same way the close button does.
+    pub fn close_app(&self) {
+        self.ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+    }
+
     pub fn info(&self, text: impl Into<String>) {
         let text = text.into();
         self.send(move |app| app.toasts.info(text));

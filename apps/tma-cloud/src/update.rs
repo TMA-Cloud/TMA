@@ -5,8 +5,9 @@
 //! `TMA_UPDATE_REPO` at build time (TMA-Cloud/TMA by default).
 
 use std::io::Write;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use tma_client::Client;
 
@@ -18,7 +19,14 @@ const REPO: &str = match option_env!("TMA_UPDATE_REPO") {
     None => "TMA-Cloud/TMA",
 };
 /// How often an install waiting for transfers to finish checks again.
-const RETRY: std::time::Duration = std::time::Duration::from_secs(10);
+const RETRY: Duration = Duration::from_secs(10);
+/// How often a running app asks the feed again, so one left open for days still updates.
+const RECHECK: Duration = Duration::from_secs(6 * 60 * 60);
+
+/// One download or install per run, even across sign-ins; cleared when it fails so a later check retries.
+static BUSY: AtomicBool = AtomicBool::new(false);
+/// The version the releases-page notice was shown for, so a re-check does not repeat it.
+static NOTIFIED: Mutex<Option<String>> = Mutex::new(None);
 
 /// A version from the release feed is used in a URL and its download is run; keep it strict.
 pub fn valid_version(version: &str) -> bool {
@@ -31,40 +39,77 @@ pub fn installer_url(version: &str) -> String {
     format!("https://github.com/{REPO}/releases/download/v{version}/tma-cloud_{version}_x64-setup.exe")
 }
 
-/// Check the release feed once; on Windows, download and install a newer release.
-pub fn check(client: Client, notifier: Notifier) {
+/// The feed's desktop version when it is newer than this app.
+pub fn newer_version(latest: Option<String>, current: &str) -> Option<String> {
+    latest.filter(|v| valid_version(v) && tma_core::is_newer_version(v, current))
+}
+
+/// Check the release feed now, then every few hours until `stop` is set (sign-out).
+pub fn watch(client: Client, notifier: Notifier, stop: Arc<AtomicBool>) {
     tma_client::rt::spawn(async move {
-        let Ok(latest) = client.latest_versions().await else { return };
-        let Some(version) = latest.desktop.filter(|v| valid_version(v)) else { return };
-        if !tma_core::is_newer_version(&version, env!("CARGO_PKG_VERSION")) {
-            return;
-        }
-        if !cfg!(windows) {
-            notifier.info(format!("TMA Cloud {version} is available on the releases page."));
-            return;
-        }
-        let progress = notifier.track_download(&format!("TMA Cloud {version}"));
-        // The installer must be a file to run; it goes in the app's own folder, replacing any older one.
-        let Some(dir) = dirs::data_local_dir().map(|d| d.join("TMA Cloud").join("updates")) else { return };
-        let _ = std::fs::remove_dir_all(&dir);
-        if std::fs::create_dir_all(&dir).is_err() {
-            return;
-        }
-        let path = dir.join(format!("tma-cloud-{version}-setup.exe"));
-        match download(&installer_url(&version), &path, &progress).await {
-            Ok(()) => notifier.finish_download(&progress, None),
-            Err(err) => {
-                notifier.finish_download(&progress, Some(err.clone()));
-                log::warn!("update download: {err}");
-                return;
+        while !stop.load(Ordering::Relaxed) {
+            check(&client, &notifier).await;
+            let mut waited = Duration::ZERO;
+            while waited < RECHECK && !stop.load(Ordering::Relaxed) {
+                tma_client::rt::sleep(Duration::from_secs(60)).await;
+                waited += Duration::from_secs(60);
             }
         }
-        install_when_idle(path, version, notifier);
     });
 }
 
+/// One look at the feed; on Windows, download and install a newer release.
+async fn check(client: &Client, notifier: &Notifier) {
+    if BUSY.load(Ordering::Relaxed) {
+        return;
+    }
+    let Ok(latest) = client.latest_versions().await else { return };
+    let Some(version) = newer_version(latest.desktop, env!("CARGO_PKG_VERSION")) else { return };
+    if !cfg!(windows) {
+        let mut shown = NOTIFIED.lock().unwrap_or_else(|e| e.into_inner());
+        if shown.as_deref() != Some(version.as_str()) {
+            notifier.info(format!("TMA Cloud {version} is available on the releases page."));
+            *shown = Some(version);
+        }
+        return;
+    }
+    if BUSY.swap(true, Ordering::Relaxed) {
+        return;
+    }
+    match fetch(&version, notifier).await {
+        Some(path) => install_when_idle(path, version, notifier.clone()),
+        None => BUSY.store(false, Ordering::Relaxed),
+    }
+}
+
+/// Download the installer into the app's own folder, replacing any older one.
+async fn fetch(version: &str, notifier: &Notifier) -> Option<std::path::PathBuf> {
+    let dir = dirs::data_local_dir()?.join("TMA Cloud").join("updates");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).ok()?;
+    let path = dir.join(format!("tma-cloud-{version}-setup.exe"));
+    let progress = notifier.track_download(&format!("TMA Cloud {version}"));
+    match download(&installer_url(version), &path, &progress).await {
+        Ok(()) => {
+            notifier.finish_download(&progress, None);
+            Some(path)
+        }
+        Err(err) => {
+            notifier.finish_download(&progress, Some(err.clone()));
+            log::warn!("update download: {err}");
+            None
+        }
+    }
+}
+
 async fn download(url: &str, path: &std::path::Path, progress: &tma_client::Progress) -> Result<(), String> {
-    let mut response = reqwest::get(url).await.map_err(|e| e.to_string())?;
+    // Without timeouts a stalled download would hold the update for the whole run.
+    let http = reqwest::Client::builder()
+        .connect_timeout(Duration::from_secs(15))
+        .read_timeout(Duration::from_secs(60))
+        .build()
+        .map_err(|e| e.to_string())?;
+    let mut response = http.get(url).send().await.map_err(|e| e.to_string())?;
     // A redirect must not hand over the installer without TLS.
     if response.url().scheme() != "https" {
         return Err("The update was redirected off https".into());
@@ -81,12 +126,13 @@ async fn download(url: &str, path: &std::path::Path, progress: &tma_client::Prog
     file.sync_all().map_err(|e| e.to_string())
 }
 
-/// Installing closes the app, so it waits until no upload or download is running.
+/// Installing replaces the app, so it waits until no upload or download is running.
 fn install_when_idle(installer: std::path::PathBuf, version: String, notifier: Notifier) {
-    let started = Arc::new(AtomicBool::new(false));
+    let done = Arc::new(AtomicBool::new(false));
     let _ = std::thread::Builder::new().name("update".into()).spawn(move || {
-        while !started.load(Ordering::Relaxed) {
-            let (installer, version, flag) = (installer.clone(), version.clone(), started.clone());
+        while !done.load(Ordering::Relaxed) {
+            let (installer, version, flag, closer) =
+                (installer.clone(), version.clone(), done.clone(), notifier.clone());
             notifier.apply(move |app| {
                 if flag.load(Ordering::Relaxed) || app.transfers_mut().is_some_and(|t| t.is_busy()) {
                     return;
@@ -94,8 +140,16 @@ fn install_when_idle(installer: std::path::PathBuf, version: String, notifier: N
                 flag.store(true, Ordering::Relaxed);
                 // Silent, and /R starts the new version once it is installed.
                 match std::process::Command::new(&installer).args(["/S", "/R"]).spawn() {
-                    Ok(_) => app.toasts.info(format!("Installing TMA Cloud {version}. It restarts in a moment.")),
-                    Err(err) => app.toasts.error(format!("Could not start the update: {err}")),
+                    // Close at once: the installer ends a copy that is still running, and
+                    // closing first shuts Cloud Drive down cleanly and saves the window's place.
+                    Ok(_) => {
+                        log::info!("installing TMA Cloud {version}");
+                        closer.close_app();
+                    }
+                    Err(err) => {
+                        app.toasts.error(format!("Could not start the update: {err}"));
+                        BUSY.store(false, Ordering::Relaxed);
+                    }
                 }
             });
             std::thread::sleep(RETRY);
@@ -106,6 +160,15 @@ fn install_when_idle(installer: std::path::PathBuf, version: String, notifier: N
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_newer_plain_versions_update() {
+        assert_eq!(newer_version(Some("4.0.1".into()), "4.0.0").as_deref(), Some("4.0.1"));
+        assert_eq!(newer_version(Some("4.0.0".into()), "4.0.0"), None);
+        assert_eq!(newer_version(Some("3.9.9".into()), "4.0.0"), None);
+        assert_eq!(newer_version(Some("unknown".into()), "4.0.0"), None);
+        assert_eq!(newer_version(None, "4.0.0"), None);
+    }
 
     #[test]
     fn only_plain_versions_reach_the_url() {
