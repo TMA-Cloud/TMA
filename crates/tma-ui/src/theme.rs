@@ -21,8 +21,10 @@ pub fn with_alpha(color: Color32, alpha: u8) -> Color32 {
 
 /// Between two token colours, `t` from 0 (all `a`) to 1 (all `b`), for animated changes.
 pub fn mix(a: Color32, b: Color32, t: f32) -> Color32 {
+    // Color32 keeps its channels premultiplied, so blend them as they are: reading
+    // them back as unmultiplied would apply a translucent colour's alpha twice.
     let lerp = |x: u8, y: u8| (x as f32 + (y as f32 - x as f32) * t.clamp(0.0, 1.0)).round() as u8;
-    Color32::from_rgba_unmultiplied(lerp(a.r(), b.r()), lerp(a.g(), b.g()), lerp(a.b(), b.b()), lerp(a.a(), b.a()))
+    Color32::from_rgba_premultiplied(lerp(a.r(), b.r()), lerp(a.g(), b.g()), lerp(a.b(), b.b()), lerp(a.a(), b.a()))
 }
 
 /// Which palette is showing.
@@ -335,4 +337,17 @@ pub fn install_fonts(ctx: &egui::Context, system_font: Option<Vec<u8>>) {
     fonts.families.insert(semibold(), with("figtree-semibold"));
     fonts.families.insert(bold(), with("figtree-bold"));
     ctx.set_fonts(fonts);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mixing_keeps_translucent_colours() {
+        let translucent = Color32::from_rgba_unmultiplied(240, 239, 233, 158);
+        assert_eq!(mix(translucent, Color32::WHITE, 0.0), translucent);
+        assert_eq!(mix(Color32::BLACK, translucent, 1.0), translucent);
+        assert_eq!(mix(Color32::TRANSPARENT, Color32::WHITE, 0.5).a(), 128);
+    }
 }
