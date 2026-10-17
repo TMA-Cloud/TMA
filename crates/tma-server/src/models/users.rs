@@ -62,7 +62,7 @@ pub async fn by_id(state: &AppState, id: &str) -> anyhow::Result<Option<ProfileR
     .fetch_optional(&state.pool)
     .await?;
     if let Some(row) = &row {
-        state.cache.set(&key, row, DEFAULT_TTL * 2).await;
+        state.cache.fill(&key, row, DEFAULT_TTL * 2).await;
     }
     Ok(row)
 }
@@ -92,7 +92,7 @@ pub async fn token_version(state: &AppState, id: &str) -> anyhow::Result<Option<
         .fetch_optional(&state.pool)
         .await?;
     if let Some(v) = v {
-        state.cache.set(&key, &v, DEFAULT_TTL).await;
+        state.cache.fill(&key, &v, DEFAULT_TTL).await;
     }
     Ok(v)
 }
@@ -116,7 +116,7 @@ pub async fn account(state: &AppState, id: &str) -> anyhow::Result<Option<Accoun
         permissions: if is_sub_user { tma_core::permissions::normalize(&permissions) } else { Vec::new() },
         is_sub_user,
     };
-    state.cache.set(&key, &account, DEFAULT_TTL * 2).await;
+    state.cache.fill(&key, &account, DEFAULT_TTL * 2).await;
     Ok(Some(account))
 }
 
@@ -169,13 +169,13 @@ pub async fn set_google_id(state: &AppState, user_id: &str, google_id: &str) -> 
         .bind(user_id)
         .execute(&state.pool)
         .await?;
-    state.cache.delete(&cache::keys::user_by_id(user_id)).await;
+    state.cache.invalidate(&[cache::keys::user_by_id(user_id)]).await;
     Ok(())
 }
 
 pub async fn set_password(state: &AppState, user_id: &str, hash: &str) -> anyhow::Result<()> {
     sqlx::query("UPDATE users SET password = $1 WHERE id = $2").bind(hash).bind(user_id).execute(&state.pool).await?;
-    state.cache.delete(&cache::keys::user_by_id(user_id)).await;
+    state.cache.invalidate(&[cache::keys::user_by_id(user_id)]).await;
     Ok(())
 }
 
@@ -188,8 +188,7 @@ pub async fn invalidate_all_sessions(state: &AppState, user_id: &str) -> anyhow:
     .fetch_optional(&state.pool)
     .await?
     .ok_or_else(|| anyhow::anyhow!("User not found"))?;
-    state.cache.delete(&cache::keys::user_by_id(user_id)).await;
-    state.cache.delete(&cache::keys::token_version(user_id)).await;
+    state.cache.invalidate(&[cache::keys::user_by_id(user_id), cache::keys::token_version(user_id)]).await;
     tracing::info!(user_id, "All user sessions invalidated");
     Ok(v)
 }
@@ -236,8 +235,11 @@ pub async fn handle_first_user_setup(state: &AppState, user_id: &str) -> anyhow:
     Ok(())
 }
 
-/// Forget every cached fact about an identity.
+/// Forget every cached fact about an identity; its sessions go with their rows.
 pub async fn forget(state: &AppState, user_id: &str) {
-    state.cache.delete_prefix(&cache::keys::user_prefix(user_id)).await;
-    state.cache.delete_prefix(&cache::keys::session_prefix(user_id)).await;
+    let id = user_id;
+    state
+        .cache
+        .invalidate(&[cache::keys::user_by_id(id), cache::keys::token_version(id), cache::keys::account(id)])
+        .await;
 }

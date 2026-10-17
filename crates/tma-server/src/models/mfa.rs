@@ -38,13 +38,13 @@ pub async fn set_secret(state: &AppState, user_id: &str, secret: &str, enabled: 
         .bind(user_id)
         .execute(&state.pool)
         .await?;
-    state.cache.delete(&cache::keys::user_by_id(user_id)).await;
+    state.cache.invalidate(&[cache::keys::user_by_id(user_id)]).await;
     Ok(())
 }
 
 pub async fn enable(state: &AppState, user_id: &str) -> anyhow::Result<()> {
     sqlx::query("UPDATE users SET mfa_enabled = TRUE WHERE id = $1").bind(user_id).execute(&state.pool).await?;
-    state.cache.delete(&cache::keys::user_by_id(user_id)).await;
+    state.cache.invalidate(&[cache::keys::user_by_id(user_id)]).await;
     Ok(())
 }
 
@@ -56,7 +56,7 @@ pub async fn disable(state: &AppState, user_id: &str) -> anyhow::Result<()> {
         .execute(&mut *tx)
         .await?;
     tx.commit().await?;
-    state.cache.delete(&cache::keys::user_by_id(user_id)).await;
+    state.cache.invalidate(&[cache::keys::user_by_id(user_id)]).await;
     Ok(())
 }
 

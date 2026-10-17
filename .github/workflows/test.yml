@@ -96,7 +96,7 @@ jobs:
         run: rustup update stable --no-self-update && rustup default stable
 
       - name: Integration tests
-        run: cargo test -p tma-server --test api -- --test-threads=1
+        run: cargo test -p tma-server --test api --test cache -- --test-threads=1
 
   desktop:
     name: Desktop app (${{ matrix.name }})

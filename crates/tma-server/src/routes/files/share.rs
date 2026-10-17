@@ -79,9 +79,7 @@ pub async fn share(
     let items = listing::briefs(&state.pool, &ids, &auth.owner_id, false).await?;
     if !shared {
         let affected = shares::unshare_roots(&state.pool, &ids, &auth.owner_id).await?;
-        for token in &affected {
-            shares::forget_token(&state.cache, token).await;
-        }
+        shares::forget_tokens(&state.cache, &affected).await;
         state.audit.log(
             &ctx,
             Event::new("share.delete")
@@ -100,9 +98,7 @@ pub async fn share(
     let expiry_label = expiry.clone().unwrap_or_else(|| "7d".into());
     let (tokens, counts, created) =
         shares::upsert_roots(&state.pool, &ids, &auth.owner_id, expires_at(expiry.as_deref())).await?;
-    for token in tokens.values() {
-        shares::forget_token(&state.cache, token).await;
-    }
+    shares::forget_tokens(&state.cache, tokens.values()).await;
     for root in &created {
         let token = tokens.get(root).cloned().unwrap_or_default();
         state.audit.log(
@@ -149,9 +145,9 @@ pub async fn link_parent(
     let ids = require_ids(&body.ids)?;
     let mappings = shares::link_to_parent_shares(&state.pool, &ids, &auth.owner_id).await?;
     let base = base_url(&state, &ctx).await;
+    shares::forget_tokens(&state.cache, mappings.iter().map(|(_, token)| token)).await;
     let mut links = BTreeMap::new();
     for (root, token) in &mappings {
-        shares::forget_token(&state.cache, token).await;
         links.insert(root.clone(), link(&base, token));
     }
     let linked: Vec<String> = links.keys().cloned().collect();

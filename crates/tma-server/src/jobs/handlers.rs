@@ -65,9 +65,7 @@ async fn file_operation(state: &AppState, job: &Job) -> anyhow::Result<Value> {
     let (count, event) = match task {
         "trash" => {
             let trashed = trash::trash(&state.pool, &ids, owner).await?;
-            for token in trash::shares_containing(&state.pool, &trashed).await? {
-                shares::forget_token(&state.cache, &token).await;
-            }
+            shares::forget_tokens(&state.cache, trash::shares_containing(&state.pool, &trashed).await?).await;
             (trashed.len() as i64, types::FILE_DELETED)
         }
         "restore" => (trash::restore(&state.pool, &ids, owner).await?, types::FILE_RESTORED),

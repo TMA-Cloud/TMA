@@ -65,8 +65,6 @@ pub async fn apply_share_linking(state: &AppState, owner: &str, item_ids: &[Stri
     let mut tokens: Vec<&String> = mappings.iter().map(|(_, s)| s).collect();
     tokens.sort();
     tokens.dedup();
-    for token in tokens {
-        shares::forget_token(&state.cache, token).await;
-    }
+    shares::forget_tokens(&state.cache, tokens).await;
     Ok(mappings.len())
 }

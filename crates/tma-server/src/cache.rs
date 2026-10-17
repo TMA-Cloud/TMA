@@ -14,8 +14,10 @@ use tokio::sync::RwLock;
 
 /// Default lifetime of a cache entry.
 pub const DEFAULT_TTL: u64 = 300;
-/// Longest lifetime of a cache entry; prefix registries outlive it, so none expires before its keys.
-const MAX_TTL: u64 = DEFAULT_TTL * 2;
+/// Not JSON, so reads of an invalidated key miss.
+const INVALIDATED: &str = "!invalidated";
+/// Longer than any database read a fill waits on.
+const INVALIDATED_TTL: u64 = 60;
 
 #[derive(Clone)]
 pub struct Cache {
@@ -72,58 +74,38 @@ impl Cache {
     pub async fn get<T: DeserializeOwned>(&self, key: &str) -> Option<T> {
         let mut conn = self.conn().await?;
         let raw: Option<String> =
-            conn.get(key).await.map_err(|e| tracing::warn!(error = %e, key, "Error getting from cache")).ok()?;
+            conn.get(key).await.map_err(|e| tracing::warn!(error = %e, "Error getting from cache")).ok()?;
         raw.and_then(|s| serde_json::from_str(&s).ok())
     }
 
-    pub async fn set<T: Serialize + ?Sized>(&self, key: &str, value: &T, ttl: u64) {
+    /// Store what a lookup read from the database, unless the key holds a value
+    /// or an invalidation marker: a fill that read before a change must not undo it.
+    pub async fn fill<T: Serialize + ?Sized>(&self, key: &str, value: &T, ttl: u64) {
         let Some(mut conn) = self.conn().await else { return };
         let Ok(text) = serde_json::to_string(value) else { return };
-        let ttl = ttl.min(MAX_TTL);
-        let prefixes = registry_prefixes(key);
-        let mut pipe = redis::pipe();
-        pipe.set_ex(key, text, ttl).ignore();
-        let now = now_ms();
-        for prefix in prefixes {
-            let registry = format!("{REGISTRY}{prefix}");
-            pipe.zadd(&registry, key, now + ttl as i64 * 1000).ignore();
-            pipe.zrembyscore(&registry, 0, now).ignore();
-            pipe.expire(&registry, MAX_TTL as i64 + 60).ignore();
-        }
-        if let Err(err) = pipe.query_async::<()>(&mut conn).await {
-            tracing::warn!(error = %err, key, "Error setting cache");
+        let options = redis::SetOptions::default()
+            .conditional_set(redis::ExistenceCheck::NX)
+            .with_expiration(redis::SetExpiry::EX(ttl));
+        if let Err(err) = conn.set_options::<_, _, ()>(key, text, options).await {
+            tracing::warn!(error = %err, "Error setting cache");
         }
     }
 
-    pub async fn delete(&self, key: &str) {
-        let Some(mut conn) = self.conn().await else { return };
-        let _: Result<(), _> = conn.del(key).await;
-    }
-
-    pub async fn delete_many(&self, keys: &[String]) {
+    /// Drop cached values after a database change. Each key holds a marker for a
+    /// while, which reads treat as a miss and which blocks fills already in flight.
+    pub async fn invalidate(&self, keys: &[String]) {
         if keys.is_empty() {
             return;
         }
         let Some(mut conn) = self.conn().await else { return };
-        let _: Result<(), _> = conn.unlink(keys).await;
-    }
-
-    /// Delete every live key starting with `prefix`, found through its registry
-    /// rather than a keyspace scan.
-    pub async fn delete_prefix(&self, prefix: &str) {
-        let Some(registry_prefix) = registry_prefixes(prefix).into_iter().next() else { return };
-        let Some(mut conn) = self.conn().await else { return };
-        let registry = format!("{REGISTRY}{registry_prefix}");
-        let now = now_ms();
-        let _: Result<(), _> = conn.zrembyscore(&registry, 0, now).await;
-        let keys: Vec<String> = conn.zrangebyscore(&registry, now, "+inf").await.unwrap_or_default();
-        let matching: Vec<String> = keys.iter().filter(|k| k.starts_with(prefix)).cloned().collect();
-        if matching.is_empty() {
-            return;
+        let mut pipe = redis::pipe();
+        for key in keys {
+            pipe.set_ex(key, INVALIDATED, INVALIDATED_TTL).ignore();
         }
-        let _: Result<(), _> = conn.unlink(&matching).await;
-        // Removes only what was read, so a key registered meanwhile stays findable.
-        let _: Result<(), _> = conn.zrem(&registry, &matching).await;
+        if let Err(err) = pipe.query_async::<()>(&mut conn).await {
+            // Keys carry session ids and share tokens, so they stay out of the log.
+            tracing::error!(error = %err, count = keys.len(), "Failed to invalidate cache");
+        }
     }
 
     /// Publish a message on a channel; false when Redis did not take it.
@@ -136,23 +118,6 @@ impl Cache {
                 false
             }
         }
-    }
-}
-
-const REGISTRY: &str = "__cache_index_v2__:";
-
-fn now_ms() -> i64 {
-    chrono::Utc::now().timestamp_millis()
-}
-
-/// The registries a key is indexed under, so a prefix can be invalidated.
-fn registry_prefixes(key: &str) -> Vec<String> {
-    let parts: Vec<&str> = key.split(':').collect();
-    match parts.as_slice() {
-        [ns @ ("session" | "user"), id, ..] if !id.is_empty() => {
-            vec![format!("{ns}:{id}")]
-        }
-        _ => Vec::new(),
     }
 }
 
@@ -170,28 +135,7 @@ pub mod keys {
     pub fn session(session_id: &str, user_id: &str, token_version: i32) -> String {
         format!("session:{user_id}:{session_id}:{token_version}")
     }
-    pub fn session_prefix(user_id: &str) -> String {
-        format!("session:{user_id}:")
-    }
-    pub fn user_prefix(user_id: &str) -> String {
-        format!("user:{user_id}:")
-    }
-    pub fn setting(name: &str) -> String {
-        format!("app:{name}")
-    }
     pub fn share_by_token(token: &str) -> String {
         format!("share:token:{token}")
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn registries() {
-        assert_eq!(registry_prefixes("user:abc:account"), vec!["user:abc"]);
-        assert_eq!(registry_prefixes("session:u1:s1:2"), vec!["session:u1"]);
-        assert!(registry_prefixes("app:signup_enabled").is_empty());
     }
 }

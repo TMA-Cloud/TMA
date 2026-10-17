@@ -247,9 +247,7 @@ pub async fn trash(
             let (state, owner) = (state.clone(), owner.clone());
             async move {
                 let trashed = trash_model::trash(&state.pool, &chunk, &owner).await?;
-                for token in trash_model::shares_containing(&state.pool, &trashed).await? {
-                    shares::forget_token(&state.cache, &token).await;
-                }
+                shares::forget_tokens(&state.cache, trash_model::shares_containing(&state.pool, &trashed).await?).await;
                 anyhow::Ok(())
             }
         }

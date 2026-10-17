@@ -210,7 +210,7 @@ pub async fn by_token(pool: &PgPool, cache: &Cache, token: &str) -> anyhow::Resu
     let now = Utc::now();
     if let Some(root) = cache.get::<SharedRoot>(&key).await {
         if root.expires_at.is_some_and(|e| e < now) {
-            cache.delete(&key).await;
+            cache.invalidate(&[key]).await;
             return Ok(TokenLookup::Expired);
         }
         return Ok(TokenLookup::Found(root));
@@ -228,12 +228,13 @@ pub async fn by_token(pool: &PgPool, cache: &Cache, token: &str) -> anyhow::Resu
         return Ok(TokenLookup::Expired);
     }
     let ttl = root.expires_at.map(|e| ((e - now).num_seconds().max(1) as u64).min(DEFAULT_TTL)).unwrap_or(DEFAULT_TTL);
-    cache.set(&key, &root, ttl).await;
+    cache.fill(&key, &root, ttl).await;
     Ok(TokenLookup::Found(root))
 }
 
-pub async fn forget_token(cache: &Cache, token: &str) {
-    cache.delete(&cache::keys::share_by_token(token)).await;
+pub async fn forget_tokens<T: AsRef<str>>(cache: &Cache, tokens: impl IntoIterator<Item = T>) {
+    let keys: Vec<String> = tokens.into_iter().map(|t| cache::keys::share_by_token(t.as_ref())).collect();
+    cache.invalidate(&keys).await;
 }
 
 #[derive(Serialize, Deserialize)]
@@ -379,9 +380,7 @@ pub async fn cleanup_expired(pool: &PgPool, cache: &Cache) -> anyhow::Result<u64
         .await?;
         tx.commit().await?;
         total += ids.len() as u64;
-        for id in &ids {
-            forget_token(cache, id).await;
-        }
+        forget_tokens(cache, &ids).await;
         if ids.len() < 500 {
             break;
         }

@@ -68,8 +68,8 @@ pub async fn is_valid(
     .fetch_optional(&state.pool)
     .await?;
     match last {
-        Some(ms) => state.cache.set(&key, &ms, DEFAULT_TTL).await,
-        None => state.cache.set(&key, &false, DEFAULT_TTL).await,
+        Some(ms) => state.cache.fill(&key, &ms, DEFAULT_TTL).await,
+        None => state.cache.fill(&key, &false, DEFAULT_TTL).await,
     }
     Ok(last.is_some_and(|ms| ms > cutoff))
 }
@@ -161,27 +161,38 @@ pub async fn delete(state: &AppState, session_id: &str, user_id: &str) -> anyhow
             .fetch_optional(&state.pool)
             .await?;
     if let Some(v) = version {
-        state.cache.delete(&cache::keys::session(session_id, user_id, v)).await;
+        state.cache.invalidate(&[cache::keys::session(session_id, user_id, v)]).await;
     }
     Ok(version.is_some())
 }
 
 pub async fn delete_others(state: &AppState, user_id: &str, keep: &str, token_version: i32) -> anyhow::Result<i64> {
-    let deleted = sqlx::query("DELETE FROM sessions WHERE user_id = $1 AND token_version = $2 AND id != $3")
-        .bind(user_id)
-        .bind(token_version)
-        .bind(keep)
-        .execute(&state.pool)
-        .await?
-        .rows_affected();
-    state.cache.delete_prefix(&cache::keys::session_prefix(user_id)).await;
-    Ok(deleted as i64)
+    let deleted: Vec<(String, i32)> = sqlx::query_as(
+        "DELETE FROM sessions WHERE user_id = $1 AND token_version = $2 AND id != $3 RETURNING id, token_version",
+    )
+    .bind(user_id)
+    .bind(token_version)
+    .bind(keep)
+    .fetch_all(&state.pool)
+    .await?;
+    forget(state, user_id, &deleted).await;
+    Ok(deleted.len() as i64)
 }
 
 pub async fn delete_all(state: &AppState, user_id: &str) -> anyhow::Result<()> {
-    sqlx::query("DELETE FROM sessions WHERE user_id = $1").bind(user_id).execute(&state.pool).await?;
-    state.cache.delete_prefix(&cache::keys::session_prefix(user_id)).await;
+    let deleted: Vec<(String, i32)> =
+        sqlx::query_as("DELETE FROM sessions WHERE user_id = $1 RETURNING id, token_version")
+            .bind(user_id)
+            .fetch_all(&state.pool)
+            .await?;
+    forget(state, user_id, &deleted).await;
     Ok(())
+}
+
+/// Invalidate the cached verdicts of deleted `(id, token_version)` sessions.
+async fn forget(state: &AppState, user_id: &str, deleted: &[(String, i32)]) {
+    let keys: Vec<String> = deleted.iter().map(|(id, v)| cache::keys::session(id, user_id, *v)).collect();
+    state.cache.invalidate(&keys).await;
 }
 
 /// Whether the user signed in within `max_age_secs` (re-authentication gate).
