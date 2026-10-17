@@ -131,12 +131,11 @@ impl Host for DesktopHost {
         Some("Desktop app")
     }
 
-    // Windows installs itself; macOS and Linux installs are replaced by hand (DMG, .deb, AppImage).
+    // Automatic where this copy can replace itself (see update::target), by hand elsewhere.
     fn update_mode(&self) -> tma_ui::UpdateMode {
-        if cfg!(windows) {
-            tma_ui::UpdateMode::Automatic
-        } else {
-            tma_ui::UpdateMode::Manual(crate::update::releases_url())
+        match crate::update::target() {
+            Some(_) => tma_ui::UpdateMode::Automatic,
+            None => tma_ui::UpdateMode::Manual(crate::update::releases_url()),
         }
     }
 

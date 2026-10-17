@@ -138,7 +138,7 @@ fn main() -> eframe::Result {
         viewport = viewport.with_icon(icon);
     }
     let options = eframe::NativeOptions { viewport, persist_window: false, ..Default::default() };
-    eframe::run_native(
+    let result = eframe::run_native(
         "TMA Cloud",
         options,
         Box::new(move |cc| {
@@ -160,5 +160,8 @@ fn main() -> eframe::Result {
                 reveal: window::Reveal::default(),
             }))
         }),
-    )
+    );
+    // An update that closed the app starts its new version only now, once nothing of this copy runs.
+    update::finish();
+    result
 }
