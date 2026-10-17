@@ -314,6 +314,9 @@ impl App {
         }
         self.host.tick(ctx, &self.tasks);
         self.refresh_after_events(ctx);
+        if !matches!(self.screen, Screen::Auth(_)) {
+            crate::login_form::remove();
+        }
         match &mut self.screen {
             Screen::Loading => {
                 egui::CentralPanel::default().show(ui, |ui| {

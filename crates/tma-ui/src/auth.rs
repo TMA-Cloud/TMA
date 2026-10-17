@@ -7,6 +7,7 @@ use tma_client::{ApiResult, Client};
 use crate::app::App;
 use crate::host::HostKind;
 use crate::icons::{self, ph};
+use crate::login_form::{self, Field, Kind};
 use crate::theme::Weight;
 use crate::widgets;
 
@@ -104,6 +105,7 @@ fn submit(app: &mut App) {
         state.error = Some("Passwords do not match".into());
         return;
     }
+    login_form::submitted();
     let (mode, server) = (state.mode, state.server.clone());
     let (name, email, password) =
         (state.name.trim().to_string(), state.email.trim().to_string(), state.password.clone());
@@ -147,12 +149,60 @@ fn submit(app: &mut App) {
     );
 }
 
+fn shown_id(placeholder: &str) -> egui::Id {
+    egui::Id::unique(("show-password", placeholder))
+}
+
+/// Whether the password field with this placeholder shows its text.
+fn shown(ui: &egui::Ui, placeholder: &str) -> bool {
+    ui.data(|d| d.get_temp::<bool>(shown_id(placeholder))).unwrap_or(false)
+}
+
+/// The eye at the right end of a password field, which shows what was typed.
+fn eye(ui: &mut egui::Ui, field: egui::Rect, placeholder: &str) {
+    let t = widgets::tokens(ui);
+    let shown = shown(ui, placeholder);
+    let eye = egui::Rect::from_center_size(field.right_center() - egui::vec2(20.0, 0.0), egui::Vec2::splat(26.0));
+    let toggle = ui.interact(eye, shown_id(placeholder).with("toggle"), egui::Sense::click());
+    let icon = if shown { ph::EYE_SLASH } else { ph::EYE };
+    let color = if toggle.hovered() { t.label } else { t.label_tertiary };
+    ui.painter().text(eye.center(), egui::Align2::CENTER_CENTER, icon, egui::FontId::proportional(16.0), color);
+    if toggle.on_hover_text(if shown { "Hide password" } else { "Show password" }).clicked() {
+        ui.data_mut(|d| d.insert_temp(shown_id(placeholder), !shown));
+    }
+}
+
+/// A sign-in field; true when Enter is pressed in it. On the web it is a browser
+/// input over a drawn frame, so password managers can fill and save it.
+fn entry(ui: &mut egui::Ui, value: &mut String, kind: Kind, placeholder: &str, signing_up: bool) -> bool {
+    let password = matches!(kind, Kind::Password | Kind::Confirm);
+    if !login_form::NATIVE_INPUTS {
+        let r = pill_input(ui, value, password, placeholder);
+        return r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+    }
+    let t = widgets::tokens(ui);
+    let (rect, _) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 38.0), egui::Sense::hover());
+    ui.painter().rect_filled(rect, 12.0, t.fill_quaternary);
+    let text = egui::Rect::from_min_max(
+        rect.min + egui::vec2(12.0, 0.0),
+        rect.max - egui::vec2(if password { 38.0 } else { 12.0 }, 0.0),
+    );
+    let shown = password && shown(ui, placeholder);
+    let field = Field { kind, rect: text, value, placeholder, shown, signing_up };
+    let seen = login_form::field(ui.ctx(), field, &t);
+    if seen.focused {
+        ui.painter().rect_stroke(rect, 12.0, egui::Stroke::new(1.5, t.accent), egui::StrokeKind::Inside);
+    }
+    if password {
+        eye(ui, rect, placeholder);
+    }
+    seen.enter
+}
+
 /// A full-width filled input with a placeholder, as on the web sign-in card.
 fn pill_input(ui: &mut egui::Ui, value: &mut String, password: bool, placeholder: &str) -> egui::Response {
     let t = widgets::tokens(ui);
-    // Password fields carry an eye that shows what was typed, as in the web app.
-    let shown_id = egui::Id::unique(("show-password", placeholder));
-    let shown = password && ui.data(|d| d.get_temp::<bool>(shown_id)).unwrap_or(false);
+    let shown = password && shown(ui, placeholder);
     let response = ui.add(
         egui::TextEdit::singleline(value)
             .password(password && !shown)
@@ -166,15 +216,7 @@ fn pill_input(ui: &mut egui::Ui, value: &mut String, password: bool, placeholder
             ),
     );
     if password {
-        let eye =
-            egui::Rect::from_center_size(response.rect.right_center() - egui::vec2(20.0, 0.0), egui::Vec2::splat(26.0));
-        let toggle = ui.interact(eye, shown_id.with("toggle"), egui::Sense::click());
-        let icon = if shown { ph::EYE_SLASH } else { ph::EYE };
-        let color = if toggle.hovered() { t.label } else { t.label_tertiary };
-        ui.painter().text(eye.center(), egui::Align2::CENTER_CENTER, icon, egui::FontId::proportional(16.0), color);
-        if toggle.on_hover_text(if shown { "Hide password" } else { "Show password" }).clicked() {
-            ui.data_mut(|d| d.insert_temp(shown_id, !shown));
-        }
+        eye(ui, response.rect, placeholder);
     }
     response
 }
@@ -250,20 +292,20 @@ pub fn show(app: &mut App, root: &mut egui::Ui) {
                     {
                         do_probe = true;
                     }
-                    if state.mode == Mode::SignUp {
-                        pill_input(ui, &mut state.name, false, "Name");
+                    let up = state.mode == Mode::SignUp;
+                    login_form::begin();
+                    if up {
+                        entry(ui, &mut state.name, Kind::Name, "Name", up);
                     }
-                    pill_input(ui, &mut state.email, false, "Email");
-                    let pw = pill_input(ui, &mut state.password, true, "Password");
-                    let mut enter = pw.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
-                    if state.mode == Mode::SignUp {
-                        let r = pill_input(ui, &mut state.confirm, true, "Confirm password");
-                        enter |= r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+                    let mut enter = entry(ui, &mut state.email, Kind::Email, "Email", up) && login_form::NATIVE_INPUTS;
+                    enter |= entry(ui, &mut state.password, Kind::Password, "Password", up);
+                    if up {
+                        enter |= entry(ui, &mut state.confirm, Kind::Confirm, "Confirm password", up);
                     }
                     if state.needs_mfa {
-                        let r = pill_input(ui, &mut state.mfa_code, false, "Authentication or backup code");
-                        enter |= r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+                        enter |= entry(ui, &mut state.mfa_code, Kind::Code, "Authentication or backup code", up);
                     }
+                    login_form::end();
                     if let Some(err) = &state.error {
                         widgets::error_text(ui, err);
                     }
