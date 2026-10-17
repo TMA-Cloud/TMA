@@ -45,7 +45,7 @@ mime_guess = { workspace = true }
 percent-encoding = { workspace = true }
 prometheus = { version = "0.14", default-features = false, features = ["process"] }
 qrcode = { version = "0.14", default-features = false, features = ["image"] }
-rand = "0.8"
+rand = "0.10"
 redis = { version = "1", features = ["tokio-comp", "aio", "connection-manager", "tokio-rustls-comp"] }
 regex = { workspace = true }
 reqwest = { workspace = true }

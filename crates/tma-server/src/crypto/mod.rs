@@ -24,8 +24,9 @@ pub fn random_bytes<const N: usize>() -> [u8; N] {
     let mut out = [0u8; N];
     // SystemRandom only fails when the OS has no entropy source at all.
     if SystemRandom::new().fill(&mut out).is_err() {
-        use rand::RngCore;
-        rand::rngs::OsRng.fill_bytes(&mut out);
+        use rand::Rng;
+        // UnwrapErr panics only if the OS has no randomness either; zeros would be worse.
+        rand::rand_core::UnwrapErr(rand::rngs::SysRng).fill_bytes(&mut out);
     }
     out
 }

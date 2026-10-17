@@ -1,13 +1,14 @@
 //! Small pure helpers: IDs, input validation, HTTP header values.
 
-use rand::Rng;
+use rand::RngExt;
 
 const ID_ALPHABET: &[u8] = b"123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 
 /// A random 16-character ID in the alphabet the API has always used.
 pub fn generate_id() -> String {
-    let mut rng = rand::rngs::OsRng;
-    (0..16).map(|_| ID_ALPHABET[rng.gen_range(0..ID_ALPHABET.len())] as char).collect()
+    // Straight from the OS generator, as IDs double as share link tokens.
+    let mut rng = rand::rand_core::UnwrapErr(rand::rngs::SysRng);
+    (0..16).map(|_| ID_ALPHABET[rng.random_range(0..ID_ALPHABET.len())] as char).collect()
 }
 
 /// Whether `id` has the shape of a stored item ID (16 alphanumerics).
