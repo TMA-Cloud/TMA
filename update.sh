@@ -214,6 +214,20 @@ main() {
   chmod 600 .env.example.tmp-update
   mv -f .env.example.tmp-update .env.example
 
+  # Renamed settings keep their values under the new name, unless .env already sets it.
+  local -a renamed=()
+  local pair old new
+  for pair in NODE_ENV=APP_ENV AUDIT_WORKER_CONCURRENCY=WORKER_CONCURRENCY; do
+    old="${pair%%=*}" new="${pair#*=}"
+    if grep -q "^${old}=" .env && ! grep -q "^${new}=" .env; then
+      [[ -f "${backup}/.env" ]] || { mkdir -p "$backup" && cp -p .env "${backup}/.env"; }
+      sed "s/^${old}=/${new}=/" .env >.env.tmp-update
+      chmod 600 .env.tmp-update
+      mv -f .env.tmp-update .env
+      renamed+=("${old} to ${new}")
+    fi
+  done
+
   # Append settings the new .env.example has and .env lacks, each with the
   # comment lines right above it. Existing lines are never touched.
   local additions="${staging}/env-additions"
@@ -240,7 +254,7 @@ main() {
 
   if ((${#added[@]})); then
     mkdir -p "$backup"
-    cp -p .env "${backup}/.env"
+    [[ -f "${backup}/.env" ]] || cp -p .env "${backup}/.env"
     cp -p .env .env.tmp-update
     [[ -n "$(tail -c1 .env.tmp-update)" ]] && echo >>.env.tmp-update
     {
@@ -265,6 +279,7 @@ main() {
 
   ((${#replaced[@]})) && success "Updated: ${replaced[*]}"
   ((${#replaced[@]})) || info "compose.yml and the scripts were already current"
+  ((${#renamed[@]})) && success "Renamed in .env: ${renamed[*]}"
   ((${#added[@]})) && success "Added to .env: ${added[*]}. Review them: ${dir}/.env"
   ((${#unused[@]})) && info "No longer used by this version (safe to remove from .env): ${unused[*]}"
   local name

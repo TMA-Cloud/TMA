@@ -73,7 +73,7 @@ const DEFAULT_VERSIONS_URL: &str = "https://tma-cloud.github.io/updates/versions
 
 impl Config {
     pub fn from_env() -> Result<Self> {
-        let env = std::env::var("APP_ENV").or_else(|_| std::env::var("NODE_ENV")).unwrap_or_default();
+        let env = std::env::var("APP_ENV").unwrap_or_default();
         let production = env.eq_ignore_ascii_case("production");
         let port = std::env::var("PORT").ok().and_then(|p| p.parse().ok()).unwrap_or(3000);
         let jwt_secret = read_secret("JWT_SECRET")?.context("JWT_SECRET environment variable is required")?;
@@ -84,7 +84,7 @@ impl Config {
             .filter(|s| !s.is_empty())
             .collect();
         let worker_concurrency =
-            std::env::var("AUDIT_WORKER_CONCURRENCY").ok().and_then(|v| v.parse().ok()).filter(|n| *n > 0).unwrap_or(5);
+            std::env::var("WORKER_CONCURRENCY").ok().and_then(|v| v.parse().ok()).filter(|n| *n > 0).unwrap_or(5);
         Ok(Self {
             production,
             port,
