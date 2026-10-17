@@ -6453,7 +6453,7 @@ dependencies = [
  "aws-sdk-s3",
  "aws-smithy-types",
  "axum",
- "base64 0.22.1",
+ "base64 0.23.1",
  "bcrypt",
  "bytes",
  "chrono",
