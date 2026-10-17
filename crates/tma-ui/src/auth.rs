@@ -151,7 +151,7 @@ fn submit(app: &mut App) {
 fn pill_input(ui: &mut egui::Ui, value: &mut String, password: bool, placeholder: &str) -> egui::Response {
     let t = widgets::tokens(ui);
     // Password fields carry an eye that shows what was typed, as in the web app.
-    let shown_id = egui::Id::new(("show-password", placeholder));
+    let shown_id = egui::Id::unique(("show-password", placeholder));
     let shown = password && ui.data(|d| d.get_temp::<bool>(shown_id)).unwrap_or(false);
     let response = ui.add(
         egui::TextEdit::singleline(value)

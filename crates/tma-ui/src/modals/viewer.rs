@@ -61,7 +61,7 @@ pub fn clamp_pan(pan: Vec2, image: Vec2, stage: Vec2) -> Vec2 {
 
 fn round_button(ui: &mut egui::Ui, pos: egui::Pos2, icon: &str, id: &str) -> bool {
     let r = egui::Rect::from_center_size(pos, Vec2::splat(36.0));
-    let resp = ui.interact(r, egui::Id::new(("viewer-btn", id)), egui::Sense::click());
+    let resp = ui.interact(r, egui::Id::unique(("viewer-btn", id)), egui::Sense::click());
     let t = crate::widgets::tokens(ui);
     if resp.hovered() {
         ui.painter().circle_filled(r.center(), 18.0, crate::theme::with_alpha(t.on_media, 30));
@@ -88,7 +88,7 @@ pub(super) fn viewer_overlay(
         *outcome = Some(Outcome::LoadImage(item.id.clone()));
     }
     let screen = ctx.content_rect();
-    egui::Area::new(egui::Id::new("viewer")).order(egui::Order::Foreground).fixed_pos(screen.min).show(ctx, |ui| {
+    egui::Area::new(egui::Id::unique("viewer")).order(egui::Order::Foreground).fixed_pos(screen.min).show(ctx, |ui| {
         let (rect, response) = ui.allocate_exact_size(screen.size(), egui::Sense::click());
         ui.painter().rect_filled(rect, 0.0, Color32::from_black_alpha(235));
         let _ = response;
@@ -129,7 +129,7 @@ pub(super) fn viewer_overlay(
         if let Some(texture) = viewer.textures.get(&item.id) {
             let size = texture.size_vec2();
             let fit = (stage.width() / size.x).min(stage.height() / size.y).min(1.0);
-            let input = ui.interact(stage, egui::Id::new("viewer-stage"), egui::Sense::click_and_drag());
+            let input = ui.interact(stage, egui::Id::unique("viewer-stage"), egui::Sense::click_and_drag());
             let focus = input.hover_pos().map(|p| p - stage.center()).unwrap_or(Vec2::ZERO);
             let scroll = ui.input(|i| i.smooth_scroll_delta.y + i.zoom_delta().ln() * 400.0);
             if input.hovered() && scroll != 0.0 {

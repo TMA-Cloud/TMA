@@ -89,7 +89,7 @@ fn policy(
     let mut changed = false;
     widgets::setting_row(ui, title, description, |ui| {
         ui.add_enabled_ui(allowed && !busy, |ui| {
-            changed = widgets::toggle_with_id(ui, egui::Id::new(("policy", title)), &mut value).changed()
+            changed = widgets::toggle_with_id(ui, egui::Id::unique(("policy", title)), &mut value).changed()
         });
     });
     if !changed {

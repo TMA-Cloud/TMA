@@ -121,5 +121,5 @@ pub(super) fn grid(main: &mut Main, ui: &mut Ui, t: &Tokens, desktop: bool, acti
         }
         super::marquee::update(main, ui, &background, origin, layout, t);
     });
-    main.browser.scroll = output.state.offset.y;
+    main.browser.scroll = output.state.clamped_offset().y;
 }

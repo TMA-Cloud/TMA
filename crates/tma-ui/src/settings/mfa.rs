@@ -74,7 +74,7 @@ fn code_box(ui: &mut egui::Ui, code: &mut String, hint: &str) -> bool {
         ui,
         egui::TextEdit::singleline(code)
             .font(FontId::monospace(26.0))
-            .horizontal_align(egui::Align::Center)
+            .align(egui::Align2::CENTER_TOP)
             .hint_text(hint)
             .desired_width(f32::INFINITY)
             .margin(egui::Margin::symmetric(12, 10)),

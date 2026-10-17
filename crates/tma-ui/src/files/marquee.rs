@@ -96,7 +96,7 @@ pub fn hits(layout: Layout, rect: Rect, count: usize) -> Vec<usize> {
 pub fn background(ui: &mut Ui) -> Response {
     // On touch a drag scrolls the list, so the background only takes taps.
     let sense = if crate::widgets::touch_mode(ui.ctx()) { Sense::click() } else { Sense::click_and_drag() };
-    ui.interact(ui.clip_rect(), Id::new("listing-background"), sense)
+    ui.interact(ui.clip_rect(), Id::unique("listing-background"), sense)
 }
 
 /// Wheel and scroll bar with a mouse (a drag draws a selection band); dragging too on touch.

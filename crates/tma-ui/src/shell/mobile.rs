@@ -29,7 +29,7 @@ fn title(main: &crate::app::Main) -> String {
 pub(super) fn top_bar(app: &mut App, root: &mut egui::Ui) {
     let t = app.t;
     let (mut upload, mut sign_out, mut searching, mut search) = (false, false, false, None);
-    let open_id = egui::Id::new("mobile-search");
+    let open_id = egui::Id::unique("mobile-search");
     let Screen::Main(main) = &mut app.screen else { return };
     let search_open = root.ctx().data(|d| d.get_temp::<bool>(open_id)).unwrap_or(false);
     egui::Panel::top("mobile-header")
@@ -111,7 +111,7 @@ pub(super) fn tab_bar(app: &mut App, root: &mut egui::Ui) {
                     egui::pos2(full.left() + width * i as f32, full.top()),
                     Vec2::new(width, full.height()),
                 );
-                let response = ui.interact(rect, egui::Id::new(("tab", i)), Sense::click());
+                let response = ui.interact(rect, egui::Id::unique(("tab", i)), Sense::click());
                 let active = current == *section;
                 let color = if active { t.accent } else { t.label_tertiary };
                 if active {

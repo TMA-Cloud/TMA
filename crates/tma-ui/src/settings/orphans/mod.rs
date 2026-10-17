@@ -91,7 +91,7 @@ fn entry(ui: &mut egui::Ui, checked: bool, title: &str, details: &[String], size
             });
         })
         .response;
-    toggled || ui.interact(r.rect, ui.id().with(("orphan", title)), egui::Sense::click()).clicked()
+    toggled || ui.interact(r.rect, ui.scope_id().with(("orphan", title)), egui::Sense::click()).clicked()
 }
 
 fn date(d: Option<chrono::DateTime<chrono::Utc>>) -> String {

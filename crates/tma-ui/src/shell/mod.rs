@@ -144,7 +144,7 @@ fn update_card(ui: &mut egui::Ui, newer: &[(&str, String)]) -> bool {
                 ui.label(RichText::new(format!("{name} → {version}")).size(12.0).color(t.label_secondary));
             }
         });
-    let response = ui.interact(card.response.rect, egui::Id::new("update-card"), Sense::click());
+    let response = ui.interact(card.response.rect, egui::Id::unique("update-card"), Sense::click());
     if response.hovered() {
         ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
     }

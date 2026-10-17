@@ -95,7 +95,7 @@ pub fn primary_enabled(ui: &mut Ui, enabled: bool, text: impl Into<String>) -> R
 
 pub fn secondary(ui: &mut Ui, text: impl Into<WidgetText>) -> Response {
     let t = tokens(ui);
-    if ui.data(|d| d.get_temp::<bool>(egui::Id::new(ROW_ACTIONS)).unwrap_or(false)) {
+    if ui.data(|d| d.get_temp::<bool>(egui::Id::unique(ROW_ACTIONS)).unwrap_or(false)) {
         let text: WidgetText = text.into();
         let text = text.color(t.accent);
         return ui.add(
@@ -273,9 +273,9 @@ pub fn setting_row(ui: &mut Ui, title: &str, description: &str, control: impl Fn
             });
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.style_mut().override_font_id = Some(egui::FontId::new(14.0, crate::theme::semibold()));
-                ui.data_mut(|d| d.insert_temp(egui::Id::new(ROW_ACTIONS), true));
+                ui.data_mut(|d| d.insert_temp(egui::Id::unique(ROW_ACTIONS), true));
                 control(ui);
-                ui.data_mut(|d| d.remove::<bool>(egui::Id::new(ROW_ACTIONS)));
+                ui.data_mut(|d| d.remove::<bool>(egui::Id::unique(ROW_ACTIONS)));
             });
         });
     });
@@ -315,7 +315,7 @@ pub fn busy_bar(ui: &mut Ui, width: f32) {
 /// A dialog over a dimmed backdrop, in the app's surface style.
 pub fn modal(ctx: &egui::Context, id: &str) -> egui::Modal {
     let t = tokens_ctx(ctx);
-    egui::Modal::new(egui::Id::new(id)).backdrop_color(t.scrim).frame(
+    egui::Modal::new(egui::Id::unique(id)).backdrop_color(t.scrim).frame(
         Frame::new()
             .fill(t.surface)
             .stroke(Stroke::new(1.0, t.separator))
@@ -358,15 +358,15 @@ pub fn grouped(
     card.show(ui, |ui| {
         ui.set_width(ui.available_width());
         ui.spacing_mut().item_spacing.y = 0.0;
-        ui.data_mut(|d| d.insert_temp(egui::Id::new(GROUP_ROWS), 0u32));
+        ui.data_mut(|d| d.insert_temp(egui::Id::unique(GROUP_ROWS), 0u32));
         add(ui);
-        ui.data_mut(|d| d.remove::<u32>(egui::Id::new(GROUP_ROWS)));
+        ui.data_mut(|d| d.remove::<u32>(egui::Id::unique(GROUP_ROWS)));
     });
 }
 
 /// Whether rows are being drawn inside a section card.
 pub fn in_section(ui: &Ui) -> bool {
-    ui.data(|d| d.get_temp::<u32>(egui::Id::new(GROUP_ROWS))).is_some()
+    ui.data(|d| d.get_temp::<u32>(egui::Id::unique(GROUP_ROWS))).is_some()
 }
 
 /// Rows drawn so far in the open section; absent outside one.
@@ -376,7 +376,7 @@ const GROUP_ROWS: &str = "tma-settings-group-rows";
 /// hairline above every row but the first; outside, a card of its own.
 pub fn row_frame(ui: &mut Ui) -> Frame {
     let t = tokens(ui);
-    let id = egui::Id::new(GROUP_ROWS);
+    let id = egui::Id::unique(GROUP_ROWS);
     match ui.data(|d| d.get_temp::<u32>(id)) {
         Some(drawn) => {
             if drawn > 0 {
@@ -396,7 +396,7 @@ pub fn row_frame(ui: &mut Ui) -> Frame {
 /// Whether the last pointer input came from a touch screen: touch turns it on,
 /// a mouse moving without touch turns it off, so a laptop with both follows use.
 pub fn touch_mode(ctx: &egui::Context) -> bool {
-    let id = egui::Id::new("touch-mode");
+    let id = egui::Id::unique("touch-mode");
     let (touched, moved) = ctx.input(|i| {
         let touched = i.raw.events.iter().any(|e| matches!(e, egui::Event::Touch { .. }));
         let moved = i.raw.events.iter().any(|e| matches!(e, egui::Event::PointerMoved(_)));

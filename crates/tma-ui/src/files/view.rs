@@ -112,12 +112,12 @@ pub(super) fn interact(
     // Not focusable: the listing handles the keyboard itself, so egui must not move focus between rows.
     // On touch a drag scrolls, so rows only take taps (and long presses, for the menu).
     let touch = crate::widgets::touch_mode(ui.ctx());
-    let row = ui.interact(rect, Id::new(("item", &item.id)), Sense::CLICK);
+    let row = ui.interact(rect, Id::unique(("item", &item.id)), Sense::CLICK);
     let response = if touch {
         row
     } else {
         // Registered after the row, so it wins where they overlap.
-        row.union(ui.interact(grab.intersect(rect), Id::new(("grab", &item.id)), Sense::CLICK | Sense::DRAG))
+        row.union(ui.interact(grab.intersect(rect), Id::unique(("grab", &item.id)), Sense::CLICK | Sense::DRAG))
     };
     // Rows are surfaces, not buttons: the arrow over them, a closed hand while dragging items.
     if response.dragged() {
@@ -178,7 +178,7 @@ pub(super) fn share_tip(ui: &Ui, item: &FileItem, badge: Rect, now: chrono::Date
         egui::Tooltip::always_open(
             ui.ctx().clone(),
             ui.layer_id(),
-            Id::new(("share-tip", &item.id)),
+            Id::unique(("share-tip", &item.id)),
             egui::PopupAnchor::Pointer,
         )
         .show(|ui| ui.label(tip));
@@ -299,5 +299,5 @@ fn list(main: &mut Main, ui: &mut Ui, t: &Tokens, desktop: bool, actions: &mut V
         }
         super::marquee::update(main, ui, &background, origin, layout, t);
     });
-    main.browser.scroll = output.state.offset.y;
+    main.browser.scroll = output.state.clamped_offset().y;
 }

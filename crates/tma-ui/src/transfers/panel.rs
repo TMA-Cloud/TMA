@@ -15,7 +15,7 @@ pub fn show(main: &mut Main, ctx: &egui::Context) {
     let phone = widgets::mobile(ctx);
     let width = if phone { (ctx.content_rect().width() - 40.0).min(420.0) } else { 320.0 };
     let t = crate::widgets::tokens_ctx(ctx);
-    ctx.data_mut(|d| d.insert_temp(egui::Id::new(PANEL_HEIGHT), 0.0f32));
+    ctx.data_mut(|d| d.insert_temp(egui::Id::unique(PANEL_HEIGHT), 0.0f32));
     if main.transfers.items.is_empty() {
         return;
     }
@@ -41,7 +41,7 @@ pub fn show(main: &mut Main, ctx: &egui::Context) {
         crate::transfer_text::headline(&rows)
     };
     let mut clear = false;
-    let area = egui::Area::new(egui::Id::new("transfers"))
+    let area = egui::Area::new(egui::Id::unique("transfers"))
         // Bottom-right with the toasts stacked above it; on a phone it spans the width above the tab bar.
         .anchor(
             if phone { Align2::CENTER_BOTTOM } else { Align2::RIGHT_BOTTOM },
@@ -112,7 +112,7 @@ pub fn show(main: &mut Main, ctx: &egui::Context) {
         });
     // Reading it keeps a finished panel up while the pointer is over it.
     // Toasts share the corner and stack above the panel.
-    ctx.data_mut(|d| d.insert_temp(egui::Id::new(PANEL_HEIGHT), area.response.rect.height()));
+    ctx.data_mut(|d| d.insert_temp(egui::Id::unique(PANEL_HEIGHT), area.response.rect.height()));
     if area.response.contains_pointer() && main.transfers.finished_at.is_some() {
         main.transfers.finished_at = Some(now);
     }

@@ -183,7 +183,7 @@ pub fn config_card(
                 });
             })
             .response;
-        let response = ui.interact(header.rect, ui.id().with(("card", title)), Sense::click());
+        let response = ui.interact(header.rect, ui.scope_id().with(("card", title)), Sense::click());
         if response.hovered() {
             ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
         }
@@ -219,7 +219,7 @@ pub fn hint(ui: &mut egui::Ui, text: &str) {
 /// A password field with an eye to show what was typed.
 pub fn secret_field(ui: &mut egui::Ui, label: &str, value: &mut String, hint: &str) -> egui::Response {
     let t = widgets::tokens(ui);
-    let id = ui.id().with(("show", label));
+    let id = ui.scope_id().with(("show", label));
     let mut shown = ui.data(|d| d.get_temp::<bool>(id)).unwrap_or(false);
     ui.label(RichText::new(label).size(12.0).color(t.label_secondary));
     let response = ui
