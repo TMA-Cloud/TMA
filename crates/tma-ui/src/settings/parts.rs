@@ -216,29 +216,51 @@ pub fn hint(ui: &mut egui::Ui, text: &str) {
     ui.add_space(4.0);
 }
 
-/// A password field with an eye to show what was typed.
+/// A password field with an eye inside its right edge to show what was typed,
+/// so it lines up with the plain fields around it.
 pub fn secret_field(ui: &mut egui::Ui, label: &str, value: &mut String, hint: &str) -> egui::Response {
     let t = widgets::tokens(ui);
     let id = ui.scope_id().with(("show", label));
     let mut shown = ui.data(|d| d.get_temp::<bool>(id)).unwrap_or(false);
     ui.label(RichText::new(label).size(12.0).color(t.label_secondary));
-    let response = ui
-        .horizontal(|ui| {
-            let edit = egui::TextEdit::singleline(value)
-                .password(!shown)
-                .hint_text(hint)
-                .desired_width(ui.available_width() - 36.0)
-                .margin(Margin::symmetric(10, 7));
-            let r = widgets::bordered_field(ui, edit);
-            let tip = if shown { "Hide" } else { "Show" };
-            if widgets::icon_button(ui, if shown { ph::EYE_SLASH } else { ph::EYE }, tip).clicked() {
-                shown = !shown;
-            }
-            r
-        })
-        .inner;
+    let edit = egui::TextEdit::singleline(value)
+        .password(!shown)
+        .hint_text(hint)
+        .desired_width(f32::INFINITY)
+        .margin(Margin { left: 10, right: 34, top: 7, bottom: 7 });
+    let response = widgets::bordered_field(ui, edit);
+    let eye = egui::Rect::from_center_size(response.rect.right_center() - Vec2::new(17.0, 0.0), Vec2::splat(24.0));
+    let (icon, tip) = if shown { (ph::EYE_SLASH, "Hide") } else { (ph::EYE, "Show") };
+    let button = egui::Button::new(RichText::new(icon).size(15.0).color(t.label_tertiary)).frame(false);
+    if ui.put(eye, button).on_hover_text(tip).clicked() {
+        shown = !shown;
+    }
     ui.data_mut(|d| d.insert_temp(id, shown));
     response
+}
+
+/// Two fields side by side when there is room for both, one under the other when not.
+pub fn pair(ui: &mut egui::Ui, left: impl FnOnce(&mut egui::Ui), right: impl FnOnce(&mut egui::Ui)) {
+    if ui.available_width() < 440.0 {
+        left(ui);
+        right(ui);
+        return;
+    }
+    ui.columns(2, |cols| {
+        left(&mut cols[0]);
+        right(&mut cols[1]);
+    });
+}
+
+/// A group heading inside a form, with room above to set it off from the last field.
+pub fn form_heading(ui: &mut egui::Ui, title: &str, note: &str) {
+    let t = widgets::tokens(ui);
+    ui.add_space(10.0);
+    ui.label(RichText::new(title).size(13.0).semibold().color(t.label));
+    if !note.is_empty() {
+        ui.add(egui::Label::new(RichText::new(note).size(11.5).color(t.label_tertiary)).wrap());
+    }
+    ui.add_space(2.0);
 }
 
 /// Usage against the quota: amber once nearly full, red once it effectively is.

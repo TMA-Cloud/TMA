@@ -128,20 +128,29 @@ fn upload_card(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
     }
 }
 
-fn text(ui: &mut egui::Ui, label: &str, value: &mut String, hint: &str) {
-    widgets::field(ui, label, value, false, hint);
+/// A labelled field with an optional hint under it, and the same gap after every field.
+fn text(ui: &mut egui::Ui, label: &str, value: &mut String, placeholder: &str, hint: &str) {
+    widgets::field(ui, label, value, false, placeholder);
+    if !hint.is_empty() {
+        ui.add_space(2.0);
+        parts::hint(ui, hint);
+    }
+    ui.add_space(8.0);
 }
 
+/// A labelled choice as wide as the fields under it.
 fn combo(ui: &mut egui::Ui, id: &str, label: &str, value: &mut String, options: &[(&str, &str)]) {
     let t = widgets::tokens(ui);
     ui.label(RichText::new(label).size(12.0).color(t.label_secondary));
     let shown = options.iter().find(|o| o.0 == value).map_or("", |o| o.1);
-    egui::ComboBox::from_id_salt(id).selected_text(shown).width(ui.available_width().min(360.0)).show_ui(ui, |ui| {
+    let width = ui.available_width();
+    ui.spacing_mut().interact_size.y = 32.0;
+    egui::ComboBox::from_id_salt(id).selected_text(shown).width(width).show_ui(ui, |ui| {
         for (key, name) in options {
             ui.selectable_value(value, key.to_string(), *name);
         }
     });
-    ui.add_space(4.0);
+    ui.add_space(8.0);
 }
 
 fn result_box(ui: &mut egui::Ui, result: &CheckResult) {
@@ -195,9 +204,9 @@ fn bucket_card(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
             let saving = if busy == Some("storage-save") { "Verifying and saving…" } else { "Save" };
             save_now = widgets::primary_enabled(ui, !working, saving).clicked();
             let testing = if busy == Some("storage-test") { "Testing…" } else { "Test connection" };
-            test = ui.add_enabled(!working, egui::Button::new(testing)).clicked();
+            test = ui.add_enabled_ui(!working, |ui| widgets::secondary(ui, testing)).inner.clicked();
             if configured {
-                cancel = ui.add_enabled(!working, egui::Button::new("Cancel")).clicked();
+                cancel = ui.add_enabled_ui(!working, |ui| widgets::secondary(ui, "Cancel")).inner.clicked();
             }
         });
     });
@@ -231,55 +240,64 @@ fn bucket_card(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
     test_or_save(main, tasks, test, configured, summary.as_ref().map(|s| s.version));
 }
 
-/// The bucket form: provider, where the bucket is, and the access key.
+/// The bucket form in two groups, where the bucket is and the key that opens it;
+/// short fields pair up so the form reads as a grid rather than a long column.
 fn bucket_fields(ui: &mut egui::Ui, b: &mut BucketForm, configured: bool, masked: Option<String>) {
+    parts::form_heading(ui, "Location", "");
     combo(ui, "provider", "Provider", &mut b.provider, &bucket_form::PROVIDERS);
     if b.provider == "r2" {
-        text(ui, "Account ID", &mut b.account_id, "0123456789abcdef0123456789abcdef");
-        parts::hint(ui, "Shown on the R2 overview page in the Cloudflare dashboard");
-        combo(ui, "jurisdiction", "Jurisdiction", &mut b.jurisdiction, &bucket_form::JURISDICTIONS);
+        let hint = "Shown on the R2 overview page in the Cloudflare dashboard";
+        text(ui, "Account ID", &mut b.account_id, "0123456789abcdef0123456789abcdef", hint);
+        parts::pair(
+            ui,
+            |ui| combo(ui, "jurisdiction", "Jurisdiction", &mut b.jurisdiction, &bucket_form::JURISDICTIONS),
+            |ui| text(ui, "Bucket name", &mut b.bucket, "tma-cloud-files", ""),
+        );
     } else {
         let aws = b.provider == "aws";
-        let placeholder = if aws { "https://s3.eu-west-1.amazonaws.com" } else { "https://s3.example.com" };
-        text(ui, if aws { "Endpoint (optional)" } else { "Endpoint URL" }, &mut b.endpoint, placeholder);
-        parts::hint(
+        let (label, placeholder, hint) = if aws {
+            (
+                "Endpoint (optional)",
+                "https://s3.eu-west-1.amazonaws.com",
+                "Leave blank to use the region's standard endpoint",
+            )
+        } else {
+            ("Endpoint URL", "https://s3.example.com", "https:// for public hosts; http:// only on a private network")
+        };
+        text(ui, label, &mut b.endpoint, placeholder, hint);
+        let region = if aws { ("Region", "eu-west-1") } else { ("Region (optional)", "us-east-1") };
+        parts::pair(
             ui,
-            if aws {
-                "Leave blank to use the standard endpoint for the region"
-            } else {
-                "https:// for public hosts; http:// is accepted only on a private network"
-            },
+            |ui| text(ui, region.0, &mut b.region, region.1, ""),
+            |ui| text(ui, "Bucket name", &mut b.bucket, "tma-cloud-files", ""),
         );
-        text(
-            ui,
-            if aws { "Region" } else { "Region (optional)" },
-            &mut b.region,
-            if aws { "eu-west-1" } else { "us-east-1" },
-        );
-        ui.add_space(4.0);
     }
-    text(ui, "Bucket name", &mut b.bucket, "tma-cloud-files");
-    ui.add_space(4.0);
     if b.provider == "s3" {
         ui.checkbox(&mut b.force_path_style, "Path-style addressing");
-        parts::hint(ui, "Needed by RustFS and MinIO unless they serve buckets on their own subdomains");
+        // Lined up with the label, past the box.
+        ui.horizontal(|ui| {
+            ui.add_space(ui.spacing().icon_width + ui.spacing().icon_spacing);
+            parts::hint(ui, "Needed by RustFS and MinIO unless they serve buckets on their own subdomains");
+        });
     }
+    let note = if configured { "Leave both blank to keep the saved key." } else { "A key restricted to this bucket." };
+    parts::form_heading(ui, "Access key", note);
     let keep_key = masked.map(|m| format!("Keep {m}")).unwrap_or_default();
-    text(ui, "Access key ID", &mut b.access_key_id, if configured { &keep_key } else { "" });
-    ui.add_space(4.0);
-    parts::secret_field(
+    parts::pair(
         ui,
-        "Secret access key",
-        &mut b.secret_access_key,
-        if configured { "Keep the saved secret" } else { "" },
+        |ui| text(ui, "Access key ID", &mut b.access_key_id, if configured { &keep_key } else { "" }, ""),
+        |ui| {
+            parts::secret_field(
+                ui,
+                "Secret access key",
+                &mut b.secret_access_key,
+                if configured { "Keep the saved secret" } else { "" },
+            );
+        },
     );
     if configured {
         ui.add_space(4.0);
-        parts::note(
-            ui,
-            Tone::Neutral,
-            "Leave both keys blank to keep the saved ones. A different endpoint or bucket is only accepted if it already holds the files stored so far.",
-        );
+        parts::hint(ui, "A different endpoint or bucket is accepted only if it already holds the files stored so far.");
     }
 }
 
