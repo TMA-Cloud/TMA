@@ -8,16 +8,25 @@ use crate::app::Main;
 use crate::icons::{self, ph};
 use crate::theme::Tokens;
 
+/// As many columns of at least `min` as fit in `width`, widened to fill it, so the
+/// row ends flush with the edge instead of leaving a strip of space.
+pub fn columns(width: f32, min: f32, gap: f32) -> (usize, f32) {
+    let per_row = (((width + gap) / (min + gap)).floor() as usize).max(1);
+    let tile = ((width - gap * (per_row - 1) as f32) / per_row as f32).max(min.min(width));
+    (per_row, tile.floor())
+}
+
 pub(super) fn grid(main: &mut Main, ui: &mut Ui, t: &Tokens, desktop: bool, actions: &mut Vec<Action>) {
     let width = ui.available_width();
     let gap = ui.spacing().item_spacing;
-    let per_row = (((width + gap.x) / (TILE.x + gap.x)).floor() as usize).max(1);
+    let (per_row, tile_width) = columns(width, TILE.x, gap.x);
+    let tile = Vec2::new(tile_width, TILE.y);
     // Each row is exactly this tall, the height show_rows assumes, so offsets stay exact.
     let row_height = TILE.y + 4.0;
     let count = main.browser.items.len();
     let rows = count.div_ceil(per_row) + usize::from(main.browser.cursor.is_some());
     main.browser.drop_target = None;
-    let pitch = Vec2::new(TILE.x + gap.x, row_height + gap.y);
+    let pitch = Vec2::new(tile.x + gap.x, row_height + gap.y);
     let mut area =
         egui::ScrollArea::vertical().auto_shrink([false, false]).scroll_source(super::marquee::scroll_source(ui.ctx()));
     if let Some(index) = main.browser.scroll_to.take() {
@@ -29,7 +38,7 @@ pub(super) fn grid(main: &mut Main, ui: &mut Ui, t: &Tokens, desktop: bool, acti
     let output = area.show_rows(ui, row_height, rows, |ui, range| {
         let background = super::marquee::background(ui);
         let origin = egui::pos2(ui.max_rect().left(), ui.max_rect().top() - range.start as f32 * pitch.y);
-        let layout = super::marquee::Layout::Tiles { per_row, pitch, tile: TILE };
+        let layout = super::marquee::Layout::Tiles { per_row, pitch, tile };
         let now = chrono::Utc::now();
         for row in range {
             ui.horizontal(|ui| {
@@ -42,7 +51,7 @@ pub(super) fn grid(main: &mut Main, ui: &mut Ui, t: &Tokens, desktop: bool, acti
                         }
                         break;
                     };
-                    let (rect, _) = ui.allocate_exact_size(TILE, Sense::hover());
+                    let (rect, _) = ui.allocate_exact_size(tile, Sense::hover());
                     let response = interact(main, ui, rect, rect, &item, desktop, actions);
                     // Every tile is a card; selection and hover tint it.
                     ui.painter().rect(
@@ -122,4 +131,16 @@ pub(super) fn grid(main: &mut Main, ui: &mut Ui, t: &Tokens, desktop: bool, acti
         super::marquee::update(main, ui, &background, origin, layout, t);
     });
     main.browser.scroll = output.state.clamped_offset().y;
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn tiles_fill_the_row() {
+        // 5 tiles of 156 and 4 gaps of 8 need 812; the 100 left are shared out.
+        let (n, w) = super::columns(912.0, 156.0, 8.0);
+        assert_eq!(n, 5);
+        assert!((n as f32 * w + 4.0 * 8.0 - 912.0).abs() < 5.0);
+        assert_eq!(super::columns(100.0, 156.0, 8.0), (1, 100.0));
+    }
 }
