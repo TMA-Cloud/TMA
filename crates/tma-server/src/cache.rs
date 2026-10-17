@@ -14,6 +14,8 @@ use tokio::sync::RwLock;
 
 /// Default lifetime of a cache entry.
 pub const DEFAULT_TTL: u64 = 300;
+/// Longest lifetime of a cache entry; prefix registries outlive it, so none expires before its keys.
+const MAX_TTL: u64 = DEFAULT_TTL * 2;
 
 #[derive(Clone)]
 pub struct Cache {
@@ -52,7 +54,10 @@ impl Cache {
                 tracing::warn!(error = %err, "Redis connection failed");
                 false
             }
-            Err(_) => false,
+            Err(_) => {
+                tracing::warn!("Redis connection timed out");
+                false
+            }
         }
     }
 
@@ -62,10 +67,6 @@ impl Cache {
 
     async fn conn(&self) -> Option<ConnectionManager> {
         self.conn.read().await.clone()
-    }
-
-    pub async fn is_connected(&self) -> bool {
-        self.conn.read().await.is_some()
     }
 
     pub async fn get<T: DeserializeOwned>(&self, key: &str) -> Option<T> {
@@ -78,6 +79,7 @@ impl Cache {
     pub async fn set<T: Serialize + ?Sized>(&self, key: &str, value: &T, ttl: u64) {
         let Some(mut conn) = self.conn().await else { return };
         let Ok(text) = serde_json::to_string(value) else { return };
+        let ttl = ttl.min(MAX_TTL);
         let prefixes = registry_prefixes(key);
         let mut pipe = redis::pipe();
         pipe.set_ex(key, text, ttl).ignore();
@@ -86,7 +88,7 @@ impl Cache {
             let registry = format!("{REGISTRY}{prefix}");
             pipe.zadd(&registry, key, now + ttl as i64 * 1000).ignore();
             pipe.zrembyscore(&registry, 0, now).ignore();
-            pipe.expire(&registry, ttl as i64 + 60).ignore();
+            pipe.expire(&registry, MAX_TTL as i64 + 60).ignore();
         }
         if let Err(err) = pipe.query_async::<()>(&mut conn).await {
             tracing::warn!(error = %err, key, "Error setting cache");
@@ -120,18 +122,19 @@ impl Cache {
             return;
         }
         let _: Result<(), _> = conn.unlink(&matching).await;
-        if matching.len() == keys.len() {
-            let _: Result<(), _> = conn.del(&registry).await;
-        } else {
-            let _: Result<(), _> = conn.zrem(&registry, &matching).await;
-        }
+        // Removes only what was read, so a key registered meanwhile stays findable.
+        let _: Result<(), _> = conn.zrem(&registry, &matching).await;
     }
 
-    /// Publish a message on a channel; best effort.
-    pub async fn publish(&self, channel: &str, message: &str) {
-        let Some(mut conn) = self.conn().await else { return };
-        if let Err(err) = conn.publish::<_, _, ()>(channel, message).await {
-            tracing::error!(error = %err, channel, "Failed to publish");
+    /// Publish a message on a channel; false when Redis did not take it.
+    pub async fn publish(&self, channel: &str, message: &str) -> bool {
+        let Some(mut conn) = self.conn().await else { return false };
+        match conn.publish::<_, _, ()>(channel, message).await {
+            Ok(()) => true,
+            Err(err) => {
+                tracing::error!(error = %err, channel, "Failed to publish");
+                false
+            }
         }
     }
 }
@@ -146,7 +149,7 @@ fn now_ms() -> i64 {
 fn registry_prefixes(key: &str) -> Vec<String> {
     let parts: Vec<&str> = key.split(':').collect();
     match parts.as_slice() {
-        [ns @ ("files" | "file" | "search" | "session" | "user" | "storage"), id, ..] if !id.is_empty() => {
+        [ns @ ("session" | "user"), id, ..] if !id.is_empty() => {
             vec![format!("{ns}:{id}")]
         }
         _ => Vec::new(),
