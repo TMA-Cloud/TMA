@@ -21,7 +21,8 @@ tma-core = { workspace = true }
 tma-drive = { workspace = true }
 chrono = { workspace = true }
 egui = { workspace = true }
-eframe = { workspace = true, features = ["default_fonts", "wgpu", "accesskit", "persistence", "wayland", "x11"] }
+# clipboard: copy, cut and paste in text fields (its own feature since eframe 0.37).
+eframe = { workspace = true, features = ["clipboard", "default_fonts", "wgpu", "accesskit", "persistence", "wayland", "x11"] }
 image = { workspace = true }
 log = { workspace = true }
 serde = { workspace = true }
