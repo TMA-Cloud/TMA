@@ -15,6 +15,8 @@ use crate::cache::Cache;
 
 const CHANNEL_PREFIX: &str = "file:events:";
 pub const MAX_CONNECTIONS: usize = 10_000;
+const PING_EVERY: Duration = Duration::from_secs(30);
+const PING_TIMEOUT: Duration = Duration::from_secs(5);
 
 pub mod types {
     pub const FILE_UPLOADED: &str = "file.uploaded";
@@ -73,10 +75,9 @@ impl EventHub {
         }
     }
 
+    // Without Redis this process's own streams still get the event.
     async fn send(&self, user_id: &str, message: String) {
-        if self.cache.is_connected().await {
-            self.cache.publish(&format!("{CHANNEL_PREFIX}{user_id}"), &message).await;
-        } else {
+        if !self.cache.publish(&format!("{CHANNEL_PREFIX}{user_id}"), &message).await {
             self.deliver_local(user_id, &message);
         }
     }
@@ -126,8 +127,23 @@ impl EventHub {
         let mut pubsub = self.cache.client().get_async_pubsub().await?;
         pubsub.psubscribe(format!("{CHANNEL_PREFIX}*")).await?;
         pubsub.subscribe(crate::settings::CHANGED_CHANNEL).await?;
-        let mut messages = pubsub.on_message();
-        while let Some(msg) = messages.next().await {
+        let (mut sink, mut messages) = pubsub.split();
+        // A connection that died without closing never ends the stream, so ping it.
+        let mut ping = tokio::time::interval(PING_EVERY);
+        ping.tick().await;
+        loop {
+            let msg = tokio::select! {
+                msg = messages.next() => match msg {
+                    Some(msg) => msg,
+                    None => return Ok(()),
+                },
+                _ = ping.tick() => {
+                    tokio::time::timeout(PING_TIMEOUT, sink.ping::<()>())
+                        .await
+                        .map_err(|_| anyhow::anyhow!("Redis did not answer a ping"))??;
+                    continue;
+                }
+            };
             let channel = msg.get_channel_name().to_string();
             let Ok(payload) = msg.get_payload::<String>() else { continue };
             if let Some(user_id) = channel.strip_prefix(CHANNEL_PREFIX) {
@@ -136,6 +152,5 @@ impl EventHub {
                 on_settings(payload);
             }
         }
-        Ok(())
     }
 }
