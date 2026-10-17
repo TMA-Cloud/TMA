@@ -63,7 +63,8 @@ long-description = "Your TMA Cloud files on the desktop: browse, upload and shar
 category = "Productivity"
 homepage = "https://tma-cloud.github.io/Wiki"
 license-file = "../../LICENSE"
-copyright = "MIT License"
+# The notice from LICENSE; shown in Finder and the package details.
+copyright = "Copyright (c) 2025 Zinadin Zidan"
 icons = [
     "assets/icons/32x32.png",
     "assets/icons/128x128.png",
@@ -81,9 +82,19 @@ installer-mode = "currentUser"
 installer-icon = "assets/icons/icon.ico"
 sidebar-image = "assets/icons/installer-sidebar.bmp"
 appdata-paths = ["$APPDATA/TMA Cloud", "$LOCALAPPDATA/TMA Cloud"]
-# Runs before the template's own uninstall section (uninstaller sections run in
-# order). An update runs the old uninstaller with /P; the drive folder stays then.
+# ForgetCloudDrive runs before the template's own uninstall section (uninstaller
+# sections run in order); an update runs the old uninstaller with /P, and the drive
+# folder stays then. SupportInfo adds the links and note Programs and Features shows,
+# which the template does not write; the install section keeps them, and uninstalling
+# removes the whole key.
 preinstall-section = """
+Section "SupportInfo"
+  WriteRegStr SHCTX "${UNINSTKEY}" "HelpLink" "https://tma-cloud.github.io/Wiki"
+  WriteRegStr SHCTX "${UNINSTKEY}" "URLInfoAbout" "https://github.com/TMA-Cloud/TMA"
+  WriteRegStr SHCTX "${UNINSTKEY}" "URLUpdateInfo" "https://github.com/TMA-Cloud/TMA/releases"
+  WriteRegStr SHCTX "${UNINSTKEY}" "Comments" "Desktop app for TMA Cloud, with Cloud Drive"
+SectionEnd
+
 Section "un.ForgetCloudDrive"
   ${GetOptions} $CMDLINE "/P" $R0
   IfErrors 0 forget_done

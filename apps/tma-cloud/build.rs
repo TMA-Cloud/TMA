@@ -10,7 +10,9 @@ fn main() {
             .set("ProductName", "TMA Cloud")
             .set("FileDescription", "TMA Cloud")
             .set("CompanyName", "TMA Cloud")
-            .set("LegalCopyright", "MIT License");
+            .set("LegalCopyright", "Copyright (c) 2025 Zinadin Zidan")
+            .set("OriginalFilename", "tma-cloud.exe")
+            .set("InternalName", "tma-cloud");
         // A missing resource compiler only costs the icon, not the build.
         if let Err(err) = res.compile() {
             println!("cargo:warning=No icon embedded in the .exe: {err}");
