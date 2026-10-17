@@ -98,7 +98,5 @@ pub struct Versions {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub backend: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub electron: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub desktop: Option<String>,
 }

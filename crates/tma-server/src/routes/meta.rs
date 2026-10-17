@@ -59,7 +59,7 @@ pub fn version_routes() -> Router<AppState> {
 /// One build serves the API, the web app and the desktop app, so they share a version.
 async fn current() -> Json<Versions> {
     let version = Some(env!("CARGO_PKG_VERSION").to_string());
-    Json(Versions { frontend: version.clone(), backend: version.clone(), desktop: version, ..Default::default() })
+    Json(Versions { frontend: version.clone(), backend: version.clone(), desktop: version })
 }
 
 async fn latest(State(state): State<AppState>) -> ApiResult<Json<Value>> {
@@ -86,7 +86,7 @@ async fn latest(State(state): State<AppState>) -> ApiResult<Json<Value>> {
     let versions: Value =
         response.json().await.map_err(|err| ApiError::internal_msg("Failed to parse versions data", err))?;
     let pick = |key: &str| versions.get(key).and_then(Value::as_str).unwrap_or("unknown").to_string();
-    let body = json!({ "frontend": pick("frontend"), "backend": pick("backend"), "electron": pick("electron"), "desktop": pick("desktop") });
+    let body = json!({ "frontend": pick("frontend"), "backend": pick("backend"), "desktop": pick("desktop") });
     *cached = Some((Instant::now(), body.clone()));
     Ok(Json(body))
 }
