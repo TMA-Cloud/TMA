@@ -149,7 +149,8 @@ pub fn run(app: &mut App, action: Action) {
             main.browser.open(Place::Folder, path, tasks, &client, generation, prefs);
         }
         Action::NewFolder => {
-            main.modal = Some(Modal::NewFolder { name: String::new(), parent: main.browser.folder_id() })
+            let names = main.browser.items.iter().map(|i| i.name.as_str());
+            main.modal = Some(Modal::new_folder(main.browser.folder_id(), names));
         }
         Action::Rename(item) => main.modal = Some(Modal::rename(&item, main.instance.hide_extensions)),
         Action::Info(item) => super::sharing::info(app, item),

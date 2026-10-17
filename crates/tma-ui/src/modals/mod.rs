@@ -12,6 +12,7 @@ use crate::theme::Weight;
 use crate::widgets;
 
 mod info;
+mod name;
 mod share;
 mod upload;
 mod viewer;
@@ -50,10 +51,13 @@ pub enum Modal {
     NewFolder {
         name: String,
         parent: Option<String>,
+        /// Not drawn yet: the name is selected on the first frame.
+        fresh: bool,
     },
     Rename {
         item: FileItem,
         name: String,
+        fresh: bool,
     },
     Confirm(Confirm),
     Info {
@@ -71,7 +75,12 @@ pub enum Modal {
 impl Modal {
     pub fn rename(item: &FileItem, hide_extensions: bool) -> Self {
         let name = tma_core::names::display_name(&item.name, !item.is_folder(), hide_extensions).to_string();
-        Self::Rename { item: item.clone(), name }
+        Self::Rename { item: item.clone(), name, fresh: true }
+    }
+
+    /// A new folder under `parent`, named "New folder" or the first free "New folder (n)".
+    pub fn new_folder<'a>(parent: Option<String>, names: impl IntoIterator<Item = &'a str> + Clone) -> Self {
+        Self::NewFolder { name: tma_core::names::first_free("New folder", names, false), parent, fresh: true }
     }
 
     pub fn share(items: Vec<FileItem>) -> Self {
@@ -98,11 +107,23 @@ enum Outcome {
 
 /// A dialog with the standard header; true when it should close (Esc, backdrop or the close button).
 fn dialog(ctx: &egui::Context, id: &str, width: f32, title: &str, add: impl FnOnce(&mut egui::Ui)) -> bool {
+    dialog_with(ctx, id, width, title, "", add)
+}
+
+/// A dialog whose header also says where or what it acts on.
+fn dialog_with(
+    ctx: &egui::Context,
+    id: &str,
+    width: f32,
+    title: &str,
+    subtitle: &str,
+    add: impl FnOnce(&mut egui::Ui),
+) -> bool {
     let mut closed = false;
     let response = widgets::modal(ctx, id).show(ctx, |ui| {
         ui.set_min_width(width);
         ui.set_max_width(width);
-        closed = widgets::dialog_header(ui, title);
+        closed = widgets::dialog_header_with(ui, title, subtitle);
         add(ui);
     });
     response.should_close() || closed
@@ -115,50 +136,18 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
     let mut outcome = None;
     let hide_ext = main.instance.hide_extensions;
     match modal {
-        Modal::NewFolder { name, parent } => {
-            let close = dialog(ctx, "new-folder", 380.0, "New Folder", |ui| {
-                ui.label(RichText::new("Folder name").size(12.0).semibold());
-                let r = widgets::text_edit(ui, name, "", f32::INFINITY);
-                r.request_focus();
-                let enter = r.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
-                widgets::dialog_footer(ui, |ui| {
-                    let ok = !name.trim().is_empty();
-                    if widgets::primary_enabled(ui, ok, "Create").clicked() || (enter && ok) {
-                        outcome = Some(Outcome::CreateFolder(name.trim().to_string(), parent.clone()));
-                    }
-                    if widgets::secondary(ui, "Cancel").clicked() {
-                        outcome = Some(Outcome::Close);
-                    }
-                });
-            });
-            if close && outcome.is_none() {
-                outcome = Some(Outcome::Close);
-            }
+        Modal::NewFolder { name: typed, parent, fresh } => {
+            // The open listing knows the folder's names only when it is that folder.
+            let b = &main.browser;
+            let here = b.place == crate::files::Place::Folder && b.folder_id() == *parent;
+            let taken: Vec<&str> = if here { b.items.iter().map(|i| i.name.as_str()).collect() } else { Vec::new() };
+            let folder = if here { b.title() } else { "My Files".to_string() };
+            let place = name::Place { name: &folder, taken: &taken };
+            outcome = name::new_folder(ctx, typed, parent, fresh, &place);
         }
-        Modal::Rename { item, name } => {
-            let close = dialog(ctx, "rename", 400.0, "Rename", |ui| {
-                ui.label(RichText::new("New name").size(12.0).semibold());
-                let r = widgets::text_edit(ui, name, "", f32::INFINITY);
-                r.request_focus();
-                let enter = r.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
-                widgets::dialog_footer(ui, |ui| {
-                    let ok = !name.trim().is_empty();
-                    if widgets::primary_enabled(ui, ok, "Rename").clicked() || (enter && ok) {
-                        let full = if hide_ext && !item.is_folder() {
-                            tma_core::names::full_name_for_rename(name.trim(), &item.name)
-                        } else {
-                            name.trim().to_string()
-                        };
-                        outcome = Some(Outcome::Rename(item.id.clone(), full));
-                    }
-                    if widgets::secondary(ui, "Cancel").clicked() {
-                        outcome = Some(Outcome::Close);
-                    }
-                });
-            });
-            if close && outcome.is_none() {
-                outcome = Some(Outcome::Close);
-            }
+        Modal::Rename { item, name: typed, fresh } => {
+            let taken: Vec<&str> = main.browser.items.iter().map(|i| i.name.as_str()).collect();
+            outcome = name::rename(ctx, item, typed, fresh, hide_ext, &taken);
         }
         Modal::Confirm(c) => {
             let close = dialog(ctx, "confirm", 400.0, &c.title.clone(), |ui| {

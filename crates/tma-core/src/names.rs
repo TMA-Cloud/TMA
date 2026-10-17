@@ -83,6 +83,34 @@ pub fn numbered_name(name: &str, counter: u32, is_file: bool) -> String {
     }
 }
 
+/// Whether `name` is already taken among `names`, ignoring case as Windows and macOS do.
+pub fn is_taken<'a>(name: &str, names: impl IntoIterator<Item = &'a str>) -> bool {
+    let wanted = name.trim().to_lowercase();
+    names.into_iter().any(|n| n.trim().to_lowercase() == wanted)
+}
+
+/// `base`, or the first of "base (2)", "base (3)"… that none of `names` takes.
+pub fn first_free<'a>(base: &str, names: impl IntoIterator<Item = &'a str> + Clone, is_file: bool) -> String {
+    if !is_taken(base, names.clone()) {
+        return base.to_string();
+    }
+    (2..)
+        .map(|n| numbered_name(base, n, is_file))
+        .find(|candidate| !is_taken(candidate, names.clone()))
+        .unwrap_or_else(|| base.to_string())
+}
+
+/// What is wrong with a name typed for a new or renamed item, if anything.
+pub fn name_problem<'a>(name: &str, taken: impl IntoIterator<Item = &'a str>) -> Option<&'static str> {
+    if name.trim().is_empty() {
+        return None;
+    }
+    if !is_valid_item_name(name) {
+        return Some("Names can be up to 255 characters and cannot contain / or \\");
+    }
+    is_taken(name, taken).then_some("An item with this name is already here")
+}
+
 /// The name to show when extensions are hidden; dotfiles keep their full name.
 pub fn display_name(name: &str, is_file: bool, hide_extensions: bool) -> &str {
     if !hide_extensions || !is_file {
@@ -152,6 +180,22 @@ pub fn is_safe_windows_name(name: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn free_names_count_up_past_clashes() {
+        let names = ["New folder", "new folder (2)", "Other"];
+        assert_eq!(super::first_free("New folder", names, false), "New folder (3)");
+        assert_eq!(super::first_free("Fresh", names, false), "Fresh");
+        assert_eq!(super::first_free("a.txt", ["A.TXT"], true), "a (2).txt");
+    }
+
+    #[test]
+    fn typed_names_are_checked() {
+        assert_eq!(super::name_problem("", ["x"]), None);
+        assert_eq!(super::name_problem("Other ", ["other"]), Some("An item with this name is already here"));
+        assert!(super::name_problem("a/b", []).is_some());
+        assert_eq!(super::name_problem("Fine", ["Other"]), None);
+    }
+
     use super::*;
 
     #[test]

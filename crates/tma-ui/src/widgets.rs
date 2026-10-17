@@ -44,12 +44,23 @@ fn sized(button: egui::Button<'_>) -> egui::Button<'_> {
 
 /// A dialog's title row with a round close button, above a hairline; true when closed.
 pub fn dialog_header(ui: &mut Ui, title: &str) -> bool {
+    dialog_header_with(ui, title, "")
+}
+
+/// A dialog's title, with a line under it saying where or what it acts on.
+pub fn dialog_header_with(ui: &mut Ui, title: &str, subtitle: &str) -> bool {
     let t = tokens(ui);
     let mut close = false;
     ui.horizontal(|ui| {
-        ui.add(
-            egui::Label::new(RichText::new(title).size(17.0).family(crate::theme::bold()).color(t.label)).truncate(),
-        );
+        ui.vertical(|ui| {
+            ui.set_max_width(ui.available_width() - 34.0);
+            ui.spacing_mut().item_spacing.y = 2.0;
+            let title = RichText::new(title).size(17.0).family(crate::theme::bold()).color(t.label);
+            ui.add(egui::Label::new(title).truncate());
+            if !subtitle.is_empty() {
+                ui.add(egui::Label::new(RichText::new(subtitle).size(12.0).color(t.label_tertiary)).truncate());
+            }
+        });
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             let (rect, response) = ui.allocate_exact_size(Vec2::splat(26.0), Sense::click());
             let fill = if response.hovered() { t.fill_secondary } else { t.fill_tertiary };
