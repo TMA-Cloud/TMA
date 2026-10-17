@@ -14,8 +14,8 @@ pub use permissions::Permission;
 
 /// Header every desktop build sends, so an instance can be limited to the app.
 pub const DESKTOP_HEADER_NAME: &str = "X-TMA-Desktop-Client";
-/// Value of [`DESKTOP_HEADER_NAME`]; unchanged from the Electron app so admin settings keep working.
-pub const DESKTOP_HEADER_VALUE: &str = "tma-electron-client-v1";
+/// Value of [`DESKTOP_HEADER_NAME`] that desktop-only mode lets through.
+pub const DESKTOP_HEADER_VALUE: &str = "tma-desktop";
 
 /// Product name shown in titles and the About page.
 pub const PRODUCT_NAME: &str = "TMA Cloud";
