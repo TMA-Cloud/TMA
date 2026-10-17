@@ -64,7 +64,22 @@ fn package() -> bool {
         return false;
     }
     println!("$ cargo packager --release -p tma-cloud -o {}", out.display());
-    packager.status().map(|s| s.success()).unwrap_or(false)
+    if !packager.status().map(|s| s.success()).unwrap_or(false) {
+        return false;
+    }
+    // GitHub rewrites spaces in asset names, and the updater asks for one fixed name.
+    for entry in std::fs::read_dir(&out).into_iter().flatten().flatten() {
+        if let Some(name) = release_name(&entry.file_name().to_string_lossy()) {
+            let _ = std::fs::rename(entry.path(), out.join(&name));
+            println!("renamed to {name}");
+        }
+    }
+    true
+}
+
+/// The release name of a packaged file whose name the packager takes from the product name.
+fn release_name(file: &str) -> Option<String> {
+    file.strip_prefix("TMA Cloud_").filter(|rest| rest.ends_with(".dmg")).map(|rest| format!("tma-cloud_{rest}"))
 }
 
 fn main() -> ExitCode {
@@ -86,4 +101,16 @@ fn main() -> ExitCode {
         }
     };
     if ok { ExitCode::SUCCESS } else { ExitCode::FAILURE }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::release_name;
+
+    #[test]
+    fn dmg_gets_the_release_name() {
+        assert_eq!(release_name("TMA Cloud_4.1.0_aarch64.dmg").as_deref(), Some("tma-cloud_4.1.0_aarch64.dmg"));
+        assert_eq!(release_name("tma-cloud_4.1.0_x64-setup.exe"), None);
+        assert_eq!(release_name("TMA Cloud.app"), None);
+    }
 }
