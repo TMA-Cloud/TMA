@@ -175,16 +175,31 @@ pub fn toggle_with_id(ui: &mut Ui, id: egui::Id, on: &mut bool) -> Response {
         *on = !*on;
         response.mark_changed();
     }
+    if response.hovered() {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+    }
     if ui.is_rect_visible(rect) {
-        let how_on = ui.ctx().animate_bool_responsive(response.id, *on);
+        let how_on = ease(ui, response.id, *on, SNAP);
+        let hover = ease(ui, response.id.with("hover"), response.hovered(), SNAP);
         let fill = crate::theme::mix(t.toggle_off, t.positive, how_on);
         ui.painter().rect_filled(rect, rect.height() / 2.0, fill);
-        let radius = rect.height() / 2.0 - 2.0;
+        // The knob swells a little under the pointer, so the switch reads as something to press.
+        let radius = rect.height() / 2.0 - 2.0 + hover * 0.75;
         let x = egui::lerp((rect.left() + radius + 2.0)..=(rect.right() - radius - 2.0), how_on);
         ui.painter().circle_filled(egui::pos2(x, rect.center().y + 0.5), radius, Color32::from_black_alpha(30));
         ui.painter().circle_filled(egui::pos2(x, rect.center().y), radius, t.on_accent);
     }
     response
+}
+
+/// How long the interface takes to answer a hover, a toggle or an expanding card:
+/// quick enough to feel immediate, long enough to see what moved.
+pub const SNAP: f32 = 0.14;
+
+/// `value` eased from 0 to 1 over `time` seconds with a cubic ease-out, which
+/// starts fast and settles, so motion feels snappy rather than slow.
+pub fn ease(ui: &Ui, id: egui::Id, value: bool, time: f32) -> f32 {
+    ui.ctx().animate_bool_with_time_and_easing(id, value, time, egui::emath::easing::cubic_out)
 }
 
 /// Add a text field with a hairline border, so it reads as a field on any surface.

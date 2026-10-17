@@ -193,10 +193,14 @@ pub fn config_card(
             ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
         }
         clicked = response.clicked() && status.is_some();
-        if open {
+        // The body opens and closes with an animated height instead of jumping into place.
+        let id = egui::Id::unique(("config-card-body", title));
+        let mut state = egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, open);
+        state.set_open(open);
+        state.show_body_unindented(ui, |ui| {
             ui.add_space(16.0);
             widgets::form(ui, body);
-        }
+        });
     });
     clicked
 }

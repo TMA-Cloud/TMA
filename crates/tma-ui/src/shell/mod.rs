@@ -33,21 +33,14 @@ const SIDEBAR_WIDTH: f32 = 208.0;
 fn nav_item(ui: &mut egui::Ui, icon: &str, label: &str, active: bool) -> bool {
     let t = widgets::tokens(ui);
     let (rect, response) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 36.0), Sense::click());
-    let fill = if active {
-        t.accent_fill
-    } else if response.hovered() {
-        t.fill_quaternary
-    } else {
-        Color32::TRANSPARENT
-    };
-    ui.painter().rect_filled(rect, CornerRadius::same(10), fill);
-    let (icon_color, text_color) = if active {
-        (t.accent, t.accent)
-    } else if response.hovered() {
-        (t.label_tertiary, t.label)
-    } else {
-        (t.label_tertiary, t.label_secondary)
-    };
+    // Tints fade in and out rather than switching, so moving along the list feels fluid.
+    let hover = widgets::ease(ui, response.id.with("hover"), response.hovered(), widgets::SNAP);
+    let picked = widgets::ease(ui, response.id.with("active"), active, widgets::SNAP);
+    let idle = theme::mix(Color32::TRANSPARENT, t.fill_quaternary, hover);
+    ui.painter().rect_filled(rect, CornerRadius::same(10), theme::mix(idle, t.accent_fill, picked));
+    let resting = theme::mix(t.label_secondary, t.label, hover);
+    let (icon_color, text_color) =
+        (theme::mix(t.label_tertiary, t.accent, picked), theme::mix(resting, t.accent, picked));
     ui.painter().text(
         rect.left_center() + Vec2::new(19.0, 0.0),
         Align2::CENTER_CENTER,

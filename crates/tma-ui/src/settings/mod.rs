@@ -265,9 +265,13 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
         });
         ui.add_space(12.0);
     }
+    let arrival = page_arrival(ui, main.settings.page);
     egui::ScrollArea::vertical().id_salt("settings-page").auto_shrink([false, false]).show(ui, |ui| {
         let margin = if menu_in_sidebar { Margin { left: 40, right: 32, top: 8, bottom: 40 } } else { Margin::same(0) };
         egui::Frame::new().inner_margin(margin).show(ui, |ui| {
+            // A new page fades in and rises a few points, so switching reads as a change of place.
+            ui.set_opacity(arrival);
+            ui.add_space((1.0 - arrival) * 8.0);
             ui.set_width(page_width(ui.available_width()));
             ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
             page_body(main, &mut *app.host, &app.tasks, ui);
@@ -278,6 +282,24 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
     {
         switch_to(main, page, &app.tasks);
     }
+}
+
+/// How far the page shown has come in since it was opened, from 0 to 1, eased out.
+fn page_arrival(ui: &egui::Ui, page: Page) -> f32 {
+    let key = egui::Id::unique("settings-page-arrival");
+    let now = ui.input(|i| i.time);
+    let since = match ui.data(|d| d.get_temp::<(Page, f64)>(key)) {
+        Some((shown, since)) if shown == page => since,
+        _ => {
+            ui.data_mut(|d| d.insert_temp(key, (page, now)));
+            now
+        }
+    };
+    let t = ((now - since) as f32 / (crate::widgets::SNAP + 0.04)).clamp(0.0, 1.0);
+    if t < 1.0 {
+        ui.ctx().request_repaint();
+    }
+    egui::emath::easing::cubic_out(t)
 }
 
 /// Settings read best in a column: it grows with the window up to this width.
