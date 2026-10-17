@@ -87,6 +87,8 @@ pub struct Browser {
     pub scroll: f32,
     /// An offset to scroll to on the next frame (top of a new place, or where Back left it).
     pub scroll_set: Option<f32>,
+    /// The folder just left, selected and scrolled to once a listing shows it.
+    reveal: Option<String>,
     request: u64,
 }
 
@@ -123,6 +125,7 @@ impl Default for Browser {
             cache: cache::ListingCache::default(),
             scroll: 0.0,
             scroll_set: None,
+            reveal: None,
             request: 0,
         }
     }
@@ -200,6 +203,7 @@ impl Browser {
     ) {
         let leaving = self.cache_key(prefs);
         self.cache.remember_scroll(&leaving, self.scroll);
+        self.reveal = left_child(&self.place, &self.path, &place, &path);
         self.place = place;
         self.path = path;
         self.scroll_to = None;
@@ -212,6 +216,7 @@ impl Browser {
                 self.cursor = seen.cursor;
                 self.loaded = true;
                 self.scroll_set = Some(if restore_scroll { seen.scroll } else { 0.0 });
+                self.reveal_left_child(restore_scroll);
             }
             None => {
                 self.items.clear();
@@ -221,6 +226,18 @@ impl Browser {
             }
         }
         self.load(tasks, client, generation, prefs);
+    }
+
+    /// Select the folder just left, as file managers do on the way up; scroll to
+    /// it unless a remembered offset already puts the view where it was.
+    fn reveal_left_child(&mut self, scrolled: bool) {
+        let Some(id) = self.reveal.clone() else { return };
+        let Some(index) = self.items.iter().position(|i| i.id == id) else { return };
+        self.reveal = None;
+        self.select_only(&id);
+        if !scrolled {
+            self.scroll_to = Some(index);
+        }
     }
 
     fn cache_key(&self, prefs: &Prefs) -> String {
@@ -314,6 +331,17 @@ impl Browser {
     }
 }
 
+/// The folder of `from` that leads down from `to`, when `to` is one of its ancestors.
+fn left_child(
+    from_place: &Place,
+    from: &[(String, String)],
+    to_place: &Place,
+    to: &[(String, String)],
+) -> Option<String> {
+    let up = *from_place == Place::Folder && *to_place == Place::Folder && from.starts_with(to);
+    if up { from.get(to.len()).map(|(id, _)| id.clone()) } else { None }
+}
+
 /// Shared, and the link has not expired.
 pub fn is_shared(item: &FileItem) -> bool {
     item.shared && item.expires_at.is_none_or(|at| at > chrono::Utc::now())
@@ -349,6 +377,9 @@ fn apply_page(
                 }
                 let ids: BTreeSet<String> = browser.items.iter().map(|i| i.id.clone()).collect();
                 browser.selected.retain(|id| ids.contains(id));
+                // One look at the first page; a later reload must not select it out of nowhere.
+                browser.reveal_left_child(false);
+                browser.reveal = None;
             }
             browser.cursor = page.next_cursor;
             browser.loaded = true;
@@ -360,5 +391,24 @@ fn apply_page(
             browser.loaded = true;
             app.fail(generation, &err);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Place, left_child};
+
+    fn path(ids: &[&str]) -> Vec<(String, String)> {
+        ids.iter().map(|id| (id.to_string(), id.to_uppercase())).collect()
+    }
+
+    #[test]
+    fn going_up_selects_the_folder_left() {
+        let deep = path(&["a", "b", "c"]);
+        assert_eq!(left_child(&Place::Folder, &deep, &Place::Folder, &path(&["a"])), Some("b".into()));
+        assert_eq!(left_child(&Place::Folder, &deep, &Place::Folder, &[]), Some("a".into()));
+        assert_eq!(left_child(&Place::Folder, &path(&["a"]), &Place::Folder, &path(&["a", "b"])), None);
+        assert_eq!(left_child(&Place::Folder, &deep, &Place::Folder, &path(&["x"])), None);
+        assert_eq!(left_child(&Place::Starred, &deep, &Place::Folder, &[]), None);
     }
 }
