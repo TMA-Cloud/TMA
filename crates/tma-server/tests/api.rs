@@ -221,7 +221,11 @@ async fn full_workflow() {
     assert!(archive.windows(8).any(|w| w == b"note.txt"));
     // A non-ASCII extension still gets an attachment header, and stored bytes run in a sandbox.
     let page = admin
-        .upload(&text_file("page.htmlé", "<script>alert(1)</script>", None), &UploadOptions::default(), Progress::new(0))
+        .upload(
+            &text_file("page.htmlé", "<script>alert(1)</script>", None),
+            &UploadOptions::default(),
+            Progress::new(0),
+        )
         .await
         .unwrap();
     let raw = http
