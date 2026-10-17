@@ -23,6 +23,6 @@ pub mod transfers;
 pub mod widgets;
 
 pub use app::{App, Prefs};
-pub use host::{Host, HostKind, SavedSession, WebHost};
+pub use host::{Host, HostKind, SavedSession, UpdateMode, WebHost};
 pub use tasks::{Apply, Tasks};
 pub use toast::Toasts;

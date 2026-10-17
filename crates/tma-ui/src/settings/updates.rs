@@ -7,6 +7,7 @@ use super::{attempt, fetch, section};
 use tma_core::api::Versions;
 
 use crate::app::Main;
+use crate::host::{Host, HostKind, UpdateMode};
 use crate::icons::ph;
 use crate::tasks::Tasks;
 use crate::theme::Weight;
@@ -79,7 +80,10 @@ fn row(ui: &mut egui::Ui, name: &str, current: Option<&str>, latest: Option<&str
     });
 }
 
-pub fn show(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks, app_version: &str, desktop: bool) {
+pub fn show(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks, host: &mut dyn Host) {
+    let desktop = host.kind() == HostKind::Desktop;
+    let mode = host.update_mode();
+    let app_version = host.app_version().to_string();
     widgets::heading(ui, ph::ARROWS_CLOCKWISE, "Updates", "Installed versions and available updates.");
     ui.add_space(4.0);
     if let Some(error) = &main.settings.version_error {
@@ -95,19 +99,33 @@ pub fn show(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks, app_version: &str
             row(ui, "Web app", current.frontend.as_deref(), latest.frontend.as_deref(), checking);
         }
         if desktop {
-            row(ui, "Desktop app", Some(app_version), latest.desktop.as_deref(), checking);
+            row(ui, "Desktop app", Some(&app_version), latest.desktop.as_deref(), checking);
+        }
+        let newer_app = version(latest.desktop.as_deref()).is_some_and(|l| tma_core::is_newer_version(l, &app_version));
+        if let (UpdateMode::Manual(url), true) = (&mode, newer_app) {
+            widgets::setting_row(ui, "Get the new version", "Download it from the releases page", |ui| {
+                if widgets::secondary(ui, format!("{}  Open releases", ph::DOWNLOAD_SIMPLE)).clicked() {
+                    host.open_url(url);
+                }
+            });
         }
     });
-    let note = if desktop {
-        "The desktop app installs updates automatically when no transfers are running. Server updates are installed by your administrator."
-    } else {
-        "Compares the installed versions with the latest releases. Nothing is installed from here."
+    let note = match mode {
+        UpdateMode::Automatic => {
+            "The desktop app installs updates automatically when no transfers are running. Server updates are installed by your administrator."
+        }
+        UpdateMode::Manual(_) => {
+            "New versions of the desktop app are downloaded from the releases page. Server updates are installed by your administrator."
+        }
+        UpdateMode::None => "Compares the installed versions with the latest releases. Nothing is installed from here.",
     };
     section(ui, "Update check", note, |ui| {
         widgets::setting_row(ui, "Check for updates", "Look up the latest published releases", |ui| {
             let label =
                 if checking { "Checking…".to_string() } else { format!("{}  Check now", ph::MAGNIFYING_GLASS) };
             if ui.add_enabled(!checking, egui::Button::new(label)).clicked() {
+                // The app's own check also downloads and installs what it finds.
+                host.check_for_update(&main.client, tasks);
                 attempt(
                     tasks,
                     main,

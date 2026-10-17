@@ -39,6 +39,16 @@ pub fn installer_url(version: &str) -> String {
     format!("https://github.com/{REPO}/releases/download/v{version}/tma-cloud_{version}_x64-setup.exe")
 }
 
+/// Where people on macOS and Linux download a new release by hand.
+pub fn releases_url() -> String {
+    format!("https://github.com/{REPO}/releases/latest")
+}
+
+/// Check the feed once now, for Check now in Settings > Updates.
+pub fn check_now(client: Client, notifier: Notifier) {
+    tma_client::rt::spawn(async move { check(&client, &notifier).await });
+}
+
 /// The feed's desktop version when it is newer than this app.
 pub fn newer_version(latest: Option<String>, current: &str) -> Option<String> {
     latest.filter(|v| valid_version(v) && tma_core::is_newer_version(v, current))
@@ -68,7 +78,7 @@ async fn check(client: &Client, notifier: &Notifier) {
     if !cfg!(windows) {
         let mut shown = NOTIFIED.lock().unwrap_or_else(|e| e.into_inner());
         if shown.as_deref() != Some(version.as_str()) {
-            notifier.info(format!("TMA Cloud {version} is available on the releases page."));
+            notifier.info(format!("TMA Cloud {version} is available. Settings > Updates has the download."));
             *shown = Some(version);
         }
         return;

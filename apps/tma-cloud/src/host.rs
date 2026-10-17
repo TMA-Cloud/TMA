@@ -131,6 +131,19 @@ impl Host for DesktopHost {
         Some("Desktop app")
     }
 
+    // Windows installs itself; macOS and Linux installs are replaced by hand (DMG, .deb, AppImage).
+    fn update_mode(&self) -> tma_ui::UpdateMode {
+        if cfg!(windows) {
+            tma_ui::UpdateMode::Automatic
+        } else {
+            tma_ui::UpdateMode::Manual(crate::update::releases_url())
+        }
+    }
+
+    fn check_for_update(&mut self, client: &Client, tasks: &Tasks) {
+        crate::update::check_now(client.clone(), Notifier::new(tasks));
+    }
+
     fn settings_ui(&mut self, ui: &mut egui::Ui, client: &Client, _tasks: &Tasks) {
         use tma_ui::widgets;
         widgets::heading(

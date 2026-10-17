@@ -358,7 +358,7 @@ fn page_body(main: &mut Main, host: &mut dyn Host, tasks: &Tasks, ui: &mut egui:
         Page::Storage => storage::show(main, ui, tasks),
         Page::SubUsers => subusers::show(main, ui, tasks),
         Page::Administration => admin::show(main, ui, tasks, desktop),
-        Page::Updates => updates::show(main, ui, tasks, host.app_version(), desktop),
+        Page::Updates => updates::show(main, ui, tasks, host),
         Page::Security => account::security(main, ui, tasks),
         Page::Host => {
             let client = main.client.clone();

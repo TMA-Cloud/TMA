@@ -16,6 +16,17 @@ pub enum HostKind {
     Desktop,
 }
 
+/// How the app in use gets a newer release of itself.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum UpdateMode {
+    /// Nothing to install here: the web app is the server's own build.
+    None,
+    /// The app downloads and installs new releases by itself.
+    Automatic,
+    /// New releases are downloaded by hand from this page.
+    Manual(String),
+}
+
 /// A remembered sign-in on desktop: the server and its session cookie.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct SavedSession {
@@ -30,6 +41,14 @@ pub trait Host {
     fn app_version(&self) -> &str {
         env!("CARGO_PKG_VERSION")
     }
+
+    /// How this app gets a newer release, for Settings > Updates.
+    fn update_mode(&self) -> UpdateMode {
+        UpdateMode::None
+    }
+
+    /// Look for a newer release of the app now (Check now in Settings > Updates).
+    fn check_for_update(&mut self, _client: &Client, _tasks: &Tasks) {}
 
     /// The last server and session (desktop only).
     fn saved_session(&self) -> Option<SavedSession> {
