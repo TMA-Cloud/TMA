@@ -81,13 +81,9 @@ async fn set_flag(
     Ok(())
 }
 
-/// `true` or `false`, also accepted as the strings older clients send.
+/// The JSON boolean `field` of `body`.
 fn true_or_false(body: &Value, field: &str, message: &str) -> Result<bool, ApiError> {
-    match body.get(field) {
-        Some(Value::Bool(b)) => Ok(*b),
-        Some(Value::String(s)) if s == "true" || s == "false" => Ok(s == "true"),
-        _ => Err(ApiError::validation(field, message)),
-    }
+    body.get(field).and_then(Value::as_bool).ok_or_else(|| ApiError::validation(field, message))
 }
 
 pub async fn toggle_signup(
