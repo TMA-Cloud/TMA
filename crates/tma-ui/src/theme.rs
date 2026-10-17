@@ -275,14 +275,14 @@ pub fn apply(ctx: &egui::Context, t: &Tokens) {
     });
 }
 
-/// Geist (OFL), drawn for interfaces: open shapes that stay clear at the 12 to 14
-/// point sizes most of the app uses. It covers Latin and Cyrillic; other scripts
-/// fall back to the system or egui font.
-const GEIST: [(&str, &[u8]); 4] = [
-    ("geist-regular", include_bytes!("../assets/fonts/Geist-Regular.ttf")),
-    ("geist-medium", include_bytes!("../assets/fonts/Geist-Medium.ttf")),
-    ("geist-semibold", include_bytes!("../assets/fonts/Geist-SemiBold.ttf")),
-    ("geist-bold", include_bytes!("../assets/fonts/Geist-Bold.ttf")),
+/// Figtree (OFL): a geometric sans with a warm, slightly rounded voice that stays
+/// clear at the 12 to 14 point sizes most of the app uses. It covers Latin; other
+/// scripts fall back to the system or egui font.
+const FIGTREE: [(&str, &[u8]); 4] = [
+    ("figtree-regular", include_bytes!("../assets/fonts/Figtree-Regular.ttf")),
+    ("figtree-medium", include_bytes!("../assets/fonts/Figtree-Medium.ttf")),
+    ("figtree-semibold", include_bytes!("../assets/fonts/Figtree-SemiBold.ttf")),
+    ("figtree-bold", include_bytes!("../assets/fonts/Figtree-Bold.ttf")),
 ];
 
 pub fn medium() -> FontFamily {
@@ -316,11 +316,11 @@ impl Weight for egui::RichText {
     }
 }
 
-/// Geist in four weights, the icon font in every family so icons mix into any
+/// Figtree in four weights, the icon font in every family so icons mix into any
 /// label, and the system UI font (desktop) then egui's faces as fallbacks.
 pub fn install_fonts(ctx: &egui::Context, system_font: Option<Vec<u8>>) {
     let mut fonts = egui::FontDefinitions::default();
-    for (name, bytes) in GEIST {
+    for (name, bytes) in FIGTREE {
         fonts.font_data.insert(name.into(), egui::FontData::from_static(bytes).into());
     }
     egui_phosphor::add_to_fonts(&mut fonts, egui_phosphor::Variant::Regular);
@@ -330,9 +330,9 @@ pub fn install_fonts(ctx: &egui::Context, system_font: Option<Vec<u8>>) {
         fallbacks.insert(0, "system-ui".into());
     }
     let with = |primary: &str| std::iter::once(primary.to_string()).chain(fallbacks.iter().cloned()).collect();
-    fonts.families.insert(FontFamily::Proportional, with("geist-regular"));
-    fonts.families.insert(medium(), with("geist-medium"));
-    fonts.families.insert(semibold(), with("geist-semibold"));
-    fonts.families.insert(bold(), with("geist-bold"));
+    fonts.families.insert(FontFamily::Proportional, with("figtree-regular"));
+    fonts.families.insert(medium(), with("figtree-medium"));
+    fonts.families.insert(semibold(), with("figtree-semibold"));
+    fonts.families.insert(bold(), with("figtree-bold"));
     ctx.set_fonts(fonts);
 }
