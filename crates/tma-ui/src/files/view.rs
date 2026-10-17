@@ -45,7 +45,10 @@ pub fn show(app: &mut App, ui: &mut Ui) {
             Place::Trash => (ph::TRASH, "Trash is empty", "Deleted items stay here for 15 days."),
             Place::Search(_) => (ph::MAGNIFYING_GLASS, "No results", "Try a different name."),
         };
+        let area = ui.available_rect_before_wrap();
         widgets::empty_state(ui, icon, title, body);
+        ui.interact(area, Id::unique("empty-listing"), Sense::click())
+            .context_menu(|ui| super::menu::background_menu(main, ui, &mut actions));
     } else if prefs.grid_view {
         super::grid::grid(main, ui, &t, desktop, &mut actions);
     } else {
@@ -298,6 +301,7 @@ fn list(main: &mut Main, ui: &mut Ui, t: &Tokens, desktop: bool, actions: &mut V
             );
         }
         super::marquee::update(main, ui, &background, origin, layout, t);
+        background.context_menu(|ui| super::menu::background_menu(main, ui, actions));
     });
     main.browser.scroll = output.state.clamped_offset().y;
 }

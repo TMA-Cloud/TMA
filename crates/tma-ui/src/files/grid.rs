@@ -129,6 +129,7 @@ pub(super) fn grid(main: &mut Main, ui: &mut Ui, t: &Tokens, desktop: bool, acti
             });
         }
         super::marquee::update(main, ui, &background, origin, layout, t);
+        background.context_menu(|ui| super::menu::background_menu(main, ui, actions));
     });
     main.browser.scroll = output.state.clamped_offset().y;
 }

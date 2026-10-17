@@ -45,6 +45,49 @@ fn row(ui: &mut Ui, icon: &str, label: &str, danger: bool) -> bool {
     response.clicked()
 }
 
+/// A menu row for one of several options, with a check on the chosen one.
+pub(super) fn choice(ui: &mut Ui, icon: &str, label: &str, chosen: bool) -> bool {
+    let t = widgets::tokens(ui);
+    let (rect, response) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 30.0), Sense::click());
+    if response.hovered() {
+        ui.painter().rect_filled(rect, CornerRadius::same(8), t.fill_quaternary);
+    }
+    let (icon_color, color) = if chosen { (t.accent, t.label) } else { (t.label_secondary, t.label_secondary) };
+    ui.painter().text(
+        rect.left_center() + Vec2::new(16.0, 0.0),
+        Align2::CENTER_CENTER,
+        icon,
+        FontId::proportional(15.0),
+        icon_color,
+    );
+    let font = if chosen { FontId::new(13.0, crate::theme::semibold()) } else { FontId::proportional(13.0) };
+    ui.painter().text(rect.left_center() + Vec2::new(32.0, 0.0), Align2::LEFT_CENTER, label, font, color);
+    if chosen {
+        ui.painter().text(
+            rect.right_center() - Vec2::new(14.0, 0.0),
+            Align2::CENTER_CENTER,
+            ph::CHECK,
+            FontId::proportional(14.0),
+            t.accent,
+        );
+    }
+    if response.hovered() {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+    }
+    response.clicked()
+}
+
+/// A small grey heading over a group of menu rows.
+pub(super) fn heading(ui: &mut Ui, text: &str) {
+    let t = widgets::tokens(ui);
+    ui.add_space(2.0);
+    ui.horizontal(|ui| {
+        ui.add_space(8.0);
+        ui.label(RichText::new(text).size(11.0).semibold().color(t.label_tertiary));
+    });
+    ui.add_space(2.0);
+}
+
 pub(super) fn context_menu(main: &Main, ui: &mut Ui, items: &[FileItem], desktop: bool, actions: &mut Vec<Action>) {
     let t = widgets::tokens(ui);
     ui.set_min_width(210.0);
@@ -121,5 +164,29 @@ pub(super) fn context_menu(main: &Main, ui: &mut Ui, items: &[FileItem], desktop
     }
     if user.can(Permission::Delete) && row(ui, ph::TRASH, "Delete", true) {
         actions.push(Action::Trash(items.to_vec()));
+    }
+}
+
+/// The right-click menu on empty space: what the open place itself can do.
+pub(super) fn background_menu(main: &Main, ui: &mut Ui, actions: &mut Vec<Action>) {
+    ui.set_min_width(210.0);
+    ui.set_max_width(230.0);
+    ui.spacing_mut().item_spacing.y = 1.0;
+    let b = &main.browser;
+    let folder = b.place == Place::Folder && main.user.can(Permission::Upload);
+    if folder {
+        if (b.clip.is_some() || b.system_clip) && row(ui, ph::CLIPBOARD_TEXT, "Paste", false) {
+            actions.push(Action::Paste);
+        }
+        if row(ui, ph::FOLDER_PLUS, "New folder", false) {
+            actions.push(Action::NewFolder);
+        }
+        if row(ui, ph::UPLOAD_SIMPLE, "Upload", false) {
+            actions.push(Action::OpenUpload);
+        }
+        ui.separator();
+    }
+    if row(ui, ph::ARROWS_CLOCKWISE, "Refresh", false) {
+        actions.push(Action::Refresh);
     }
 }
