@@ -13,6 +13,14 @@ use crate::tasks::Tasks;
 use crate::theme::Weight;
 use crate::widgets;
 
+/// The wiki the update guidance links into.
+const WIKI: &str = "https://tma-cloud.github.io/Wiki/docs";
+
+/// The release notes of `version` in the wiki's changelog.
+pub fn release_notes_url(version: &str) -> String {
+    format!("{WIKI}/changelog/overview?version={version}")
+}
+
 /// Read the running and latest versions once after sign-in, for the sidebar's
 /// notice; a feed that cannot be reached just leaves the notice out.
 pub fn check(main: &Main, tasks: &Tasks) {
@@ -109,14 +117,16 @@ pub fn show(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks, host: &mut dyn Ho
             });
         }
     });
+    let newer = available(&current, &latest, desktop);
+    guidance(ui, &newer, main.instance.is_first_user, &*host);
     let note = match mode {
         UpdateMode::Automatic => {
-            "The desktop app installs updates automatically when no transfers are running. Server updates are installed by your administrator."
+            "The app updates itself when nothing is uploading or downloading. Your admin takes care of server updates."
         }
         UpdateMode::Manual(_) => {
-            "New versions of the desktop app are downloaded from the releases page. Server updates are installed by your administrator."
+            "Get new versions of the app from the releases page. Your admin takes care of server updates."
         }
-        UpdateMode::None => "Compares the installed versions with the latest releases. Nothing is installed from here.",
+        UpdateMode::None => "See if a newer version of TMA Cloud is out.",
     };
     section(ui, "", "", |ui| {
         widgets::setting_row(ui, "Check for updates", note, |ui| {
@@ -153,6 +163,47 @@ pub fn show(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks, host: &mut dyn Ho
     });
 }
 
+/// The newest version among available updates, when it is a plain release number.
+fn newest<'a>(newer: &'a [(&str, String)]) -> Option<&'a str> {
+    newer
+        .iter()
+        .filter_map(|(_, v)| version(Some(v.as_str())))
+        .reduce(|a, b| if tma_core::is_newer_version(b, a) { b } else { a })
+}
+
+/// What to do about an available update: read what changed, and, for the
+/// administrator who installs server updates, how to install it. Both open the
+/// wiki in the browser; nothing interrupts the page to say so.
+fn guidance(ui: &mut egui::Ui, newer: &[(&str, String)], is_admin: bool, host: &dyn Host) {
+    let Some(newest) = newest(newer) else { return };
+    let server = newer.iter().any(|(name, _)| *name == "Server");
+    section(ui, &format!("Update to v{newest}"), "", |ui| {
+        // Whoever cannot install a server update is told who does.
+        let description = if server && !is_admin {
+            "See what is new and what got fixed. Your admin takes care of updating the server."
+        } else {
+            "See what is new and what got fixed."
+        };
+        widgets::setting_row(ui, &format!("What's new in v{newest}"), description, |ui| {
+            if widgets::secondary(ui, format!("{}  Release notes", ph::ARROW_SQUARE_OUT)).clicked() {
+                host.open_url(&release_notes_url(newest));
+            }
+        });
+        if server && is_admin {
+            widgets::setting_row(
+                ui,
+                "Update your server",
+                "The guide walks you through it. Your data is backed up before anything changes.",
+                |ui| {
+                    if widgets::secondary(ui, format!("{}  Update guide", ph::ARROW_SQUARE_OUT)).clicked() {
+                        host.open_url(&format!("{WIKI}/guides/operations/updating"));
+                    }
+                },
+            );
+        }
+    });
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -166,6 +217,17 @@ mod tests {
         assert_eq!(version(Some("4.0.1")), Some("4.0.1"));
         assert_eq!(version(Some("unknown")), None);
         assert_eq!(version(None), None);
+    }
+
+    #[test]
+    fn guidance_names_the_newest_release() {
+        let newer = vec![("Server", "4.0.1".to_string()), ("Desktop app", "4.1.0".to_string())];
+        assert_eq!(newest(&newer), Some("4.1.0"));
+        assert_eq!(newest(&[("Server", "unknown".to_string())]), None);
+        assert_eq!(
+            release_notes_url("4.0.1"),
+            "https://tma-cloud.github.io/Wiki/docs/changelog/overview?version=4.0.1"
+        );
     }
 
     #[test]
