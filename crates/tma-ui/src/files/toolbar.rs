@@ -293,8 +293,17 @@ fn selection_tools(main: &Main, ui: &mut Ui, selection: &[FileItem], actions: &m
                 actions.push(Action::Star(ids.clone(), !all));
             }
         }
-        if user.can(Permission::Share) && tool(ui, ph::SHARE_NETWORK, "Share", false, None).clicked() {
-            actions.push(Action::Share(selection.to_vec()));
+        if user.can(Permission::Share) {
+            // Lit like Star when every selected item already has a live link.
+            let all = selection.iter().all(super::is_shared);
+            let (icon, tip) = if all {
+                (egui_phosphor::fill::SHARE_NETWORK, "Shared: manage link")
+            } else {
+                (ph::SHARE_NETWORK, "Share")
+            };
+            if tool(ui, icon, tip, false, all.then_some(t.accent)).clicked() {
+                actions.push(Action::Share(selection.to_vec()));
+            }
         }
     }
     // The count gives way first when the bar is narrow, so the open folder keeps its name.
