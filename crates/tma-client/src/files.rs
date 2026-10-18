@@ -2,7 +2,7 @@
 
 use serde_json::{Value, json};
 use tma_core::api::{
-    FileInfo, FileItem, FileStats, JobStatus, QueuedResponse, ShareLinks, ShareRequest, SortBy, SortOrder,
+    FileInfo, FileItem, FileStats, JobStatus, LockResponse, QueuedResponse, ShareLinks, ShareRequest, SortBy, SortOrder,
 };
 
 use crate::error::ApiResult;
@@ -83,6 +83,15 @@ impl Client {
 
     pub async fn info(&self, id: &str) -> ApiResult<FileInfo> {
         self.get(&format!("/api/files/{}/info", enc(id))).await
+    }
+
+    /// Take or renew the edit lock on a file; `acquired` is false while someone else holds it.
+    pub async fn lock(&self, id: &str) -> ApiResult<LockResponse> {
+        self.post(&format!("/api/files/{}/lock", enc(id)), &json!({})).await
+    }
+
+    pub async fn unlock(&self, id: &str) -> ApiResult<Value> {
+        self.delete(&format!("/api/files/{}/lock", enc(id))).await
     }
 
     pub async fn create_folder(&self, name: &str, parent: Option<&str>) -> ApiResult<FileItem> {

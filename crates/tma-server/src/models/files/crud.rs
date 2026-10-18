@@ -321,6 +321,7 @@ pub async fn replace_data(
     upload: &StreamedUpload,
     modified: Option<DateTime<Utc>>,
     base: Option<i64>,
+    actor: &str,
 ) -> anyhow::Result<Option<(FileItem, Option<String>, Option<String>)>> {
     let mut tx = pool.begin().await?;
     let row: Option<Current> = sqlx::query_as(
@@ -335,6 +336,10 @@ pub async fn replace_data(
     };
     if base.is_some_and(|b| b != current) {
         return Err(DomainError::Conflict(STALE_SAVE.into()).into());
+    }
+    // While someone else has it open for editing, their copy is the one that counts.
+    if let Some(lock) = super::locks::holder(pool, id).await?.filter(|l| l.user_id != actor) {
+        return Err(DomainError::Conflict(format!("{} is editing this file", lock.name)).into());
     }
     check_quota(&mut tx, owner, upload.size - old_size.unwrap_or(0)).await?;
     let sql = format!(

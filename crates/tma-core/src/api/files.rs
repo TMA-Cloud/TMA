@@ -55,12 +55,34 @@ pub struct FileItem {
     /// (`baseVersion`) so a stale copy is refused rather than overwriting.
     #[serde(rename = "contentVersion", default)]
     pub content_version: i64,
+    /// Who is editing it in a desktop app right now, when someone is.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lock: Option<FileLock>,
     /// Who opened the file last; only Recent files reports it.
     #[serde(rename = "openedBy", default, skip_serializing_if = "Option::is_none")]
     pub opened_by: Option<Opener>,
     /// Echo of the uploader's per-file id in a bulk upload response.
     #[serde(rename = "clientId", default, skip_serializing_if = "Option::is_none")]
     pub client_id: Option<String>,
+}
+
+/// An edit lock: someone has the file open for editing in a desktop app. It is a
+/// lease the app renews, gone by `expiresAt` if the app stops renewing it.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct FileLock {
+    pub user_id: String,
+    /// The display name, or the email when the user has no name.
+    pub name: String,
+    pub since: DateTime<Utc>,
+    pub expires_at: DateTime<Utc>,
+}
+
+/// The answer to taking a lock: `acquired`, or who holds it instead.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct LockResponse {
+    pub acquired: bool,
+    pub lock: FileLock,
 }
 
 /// A signed-in identity that opened a file: the account itself or one of its sub-users.

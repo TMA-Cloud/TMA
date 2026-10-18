@@ -4,6 +4,7 @@
 mod download;
 mod events;
 mod list;
+mod locks;
 mod ops;
 mod progress;
 mod share;
@@ -38,6 +39,7 @@ pub fn routes() -> Router<AppState> {
         .route("/download/bulk", post(download::bulk))
         .route("/download/bulk/ticket", post(download::bulk_ticket))
         .route("/{id}/download", get(download::single))
+        .route("/{id}/lock", post(locks::take).delete(locks::give_up))
         .route("/folder", post(ops::add_folder))
         .route("/upload/check", post(upload::check))
         .route("/copy", post(ops::copy))

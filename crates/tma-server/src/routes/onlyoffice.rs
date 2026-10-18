@@ -100,6 +100,9 @@ async fn open(
         .flatten()
         .map(|u| u.name.filter(|n| !n.is_empty()).unwrap_or(u.email))
         .unwrap_or_else(|| "User".into());
+    // Someone editing it in a desktop app: the browser shows it, their save wins.
+    let locked = crate::models::files::locks::holder(&state.pool, &file.id).await.ok().flatten();
+    let locked = locked.is_some_and(|l| l.user_id != opener.user_id);
     let request_origin = origin(state, ctx);
     let session = oo::build_session(
         state,
@@ -110,7 +113,7 @@ async fn open(
             owner_id: &opener.owner_id,
             actor_id: &opener.user_id,
             actor_name: &actor_name,
-            can_write: opener.can_write,
+            can_write: opener.can_write && !locked,
             mobile: oo::is_mobile(ctx.user_agent.as_deref()),
             theme,
             request_origin: &request_origin,

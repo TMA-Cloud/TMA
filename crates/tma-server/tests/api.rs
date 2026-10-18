@@ -185,6 +185,33 @@ async fn assert_stale_saves_are_refused(client: &Client, id: &str, current: i64)
     assert_eq!(save("fourth", None).await.unwrap().content_version, current + 2);
 }
 
+/// While one person edits a file in a desktop app, others see who and cannot save over it.
+async fn assert_edit_locks(owner: &Client, base: &str, id: &str) {
+    let request = CreateSubUserRequest {
+        email: "casey@example.test".into(),
+        password: "sub-user-password".into(),
+        name: "Casey".into(),
+        permissions: vec!["files.download".into(), "files.edit".into()],
+    };
+    owner.create_sub_user(&request).await.unwrap();
+    let casey = Client::new(base).unwrap();
+    casey.login("casey@example.test", "sub-user-password", None).await.unwrap();
+    assert!(casey.lock(id).await.unwrap().acquired);
+    assert!(casey.lock(id).await.unwrap().acquired, "renewing your own lock keeps it");
+    let busy = owner.lock(id).await.unwrap();
+    assert!(!busy.acquired);
+    assert_eq!(busy.lock.name, "Casey");
+    let listed = owner.search("deep", 10).await.unwrap().into_iter().find(|f| f.id == id).unwrap();
+    assert_eq!(listed.lock.map(|l| l.name).as_deref(), Some("Casey"), "listings show who is editing");
+    let refused = owner.replace(id, &text_file("deep.txt", "over Casey", None), Progress::new(0)).await.unwrap_err();
+    assert!(refused.is_conflict(), "others cannot save over the editor: {refused:?}");
+    casey.replace(id, &text_file("deep.txt", "Casey edit", None), Progress::new(0)).await.unwrap();
+    casey.unlock(id).await.unwrap();
+    assert!(owner.lock(id).await.unwrap().acquired, "a released lock is free");
+    owner.unlock(id).await.unwrap();
+    owner.replace(id, &text_file("deep.txt", "after Casey", None), Progress::new(0)).await.unwrap();
+}
+
 /// Restoring from the trash and deleting forever are granted separately.
 async fn assert_trash_grants_are_separate(owner: &Client, base: &str, id: &str) {
     let request = CreateSubUserRequest {
@@ -303,6 +330,7 @@ async fn full_workflow() {
     assert_eq!(std::fs::read_to_string(&dest).unwrap(), "second");
     let _ = std::fs::remove_file(&dest);
     assert_stale_saves_are_refused(&admin, &deep.id, replaced.content_version).await;
+    assert_edit_locks(&admin, &base, &deep.id).await;
 
     // Search, stats, star.
     assert!(admin.search("note", 10).await.unwrap().iter().any(|f| f.id == item.id));

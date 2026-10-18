@@ -5,6 +5,7 @@ pub mod archive;
 pub mod crud;
 pub mod import;
 pub mod listing;
+pub mod locks;
 pub mod ops;
 pub mod orphans;
 pub mod trash;
@@ -13,14 +14,19 @@ use base64::Engine as _;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::{Postgres, QueryBuilder};
-use tma_core::api::{FileItem, ItemType, Opener, SortBy, SortOrder};
+use tma_core::api::{FileItem, FileLock, ItemType, Opener, SortBy, SortOrder};
 
 use crate::error::DomainError;
 
 /// The columns every listing selects, so one row type serves them all.
 pub const LIST_COLUMNS: &str = "f.id, f.name, f.type,
     CASE WHEN f.type = 'folder' THEN f.aggregate_size ELSE f.size END AS size,
-    f.modified, f.accessed_at, f.shared_at, f.mime_type, f.starred, f.shared, f.content_version";
+    f.modified, f.accessed_at, f.shared_at, f.mime_type, f.starred, f.shared, f.content_version,
+    (SELECT l.user_id FROM file_locks l WHERE l.file_id = f.id AND l.expires_at > NOW()) AS lock_user_id,
+    (SELECT COALESCE(NULLIF(u.name, ''), u.email) FROM file_locks l JOIN users u ON u.id = l.user_id
+      WHERE l.file_id = f.id AND l.expires_at > NOW()) AS lock_name,
+    (SELECT l.acquired_at FROM file_locks l WHERE l.file_id = f.id AND l.expires_at > NOW()) AS lock_since,
+    (SELECT l.expires_at FROM file_locks l WHERE l.file_id = f.id AND l.expires_at > NOW()) AS lock_expires";
 
 /// Share expiry of a shared item: NULL when unshared or shared without expiry.
 pub fn expiry_join(owner_param: &str) -> String {
@@ -58,6 +64,14 @@ pub struct ListRow {
     #[sqlx(default)]
     pub content_version: i64,
     #[sqlx(default)]
+    pub lock_user_id: Option<String>,
+    #[sqlx(default)]
+    pub lock_name: Option<String>,
+    #[sqlx(default)]
+    pub lock_since: Option<DateTime<Utc>>,
+    #[sqlx(default)]
+    pub lock_expires: Option<DateTime<Utc>>,
+    #[sqlx(default)]
     pub opened_by_id: Option<String>,
     #[sqlx(default)]
     pub opened_by_name: Option<String>,
@@ -80,6 +94,12 @@ impl From<ListRow> for FileItem {
             deleted_at: r.deleted_at,
             parent_id: r.parent_id,
             content_version: r.content_version,
+            lock: match (r.lock_user_id, r.lock_since, r.lock_expires) {
+                (Some(user_id), Some(since), Some(expires_at)) => {
+                    Some(FileLock { user_id, name: r.lock_name.unwrap_or_default(), since, expires_at })
+                }
+                _ => None,
+            },
             opened_by: r.opened_by_id.map(|id| Opener { id, name: r.opened_by_name.unwrap_or_default() }),
             client_id: None,
         }
@@ -272,6 +292,10 @@ mod tests {
             expires_at: None,
             deleted_at: None,
             content_version: 1,
+            lock_user_id: None,
+            lock_name: None,
+            lock_since: None,
+            lock_expires: None,
             opened_by_id: None,
             opened_by_name: None,
             parent_id: None,
