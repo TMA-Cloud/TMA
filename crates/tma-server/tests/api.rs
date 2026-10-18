@@ -210,6 +210,43 @@ async fn assert_edit_locks(owner: &Client, base: &str, id: &str) {
     assert!(owner.lock(id).await.unwrap().acquired, "a released lock is free");
     owner.unlock(id).await.unwrap();
     owner.replace(id, &text_file("deep.txt", "after Casey", None), Progress::new(0)).await.unwrap();
+    assert_locks_tell_computers_apart(owner, id).await;
+}
+
+/// One person signed in on two computers: the second is kept out like anyone else.
+async fn assert_locks_tell_computers_apart(owner: &Client, id: &str) {
+    let http = reqwest::Client::new();
+    let cookie = format!("token={}", owner.session_token().unwrap());
+    let send = |method: reqwest::Method, path: &str, device: &str| {
+        http.request(method, owner.url(path))
+            .header("cookie", &cookie)
+            .header("x-requested-with", "XMLHttpRequest")
+            .header(tma_core::DEVICE_HEADER_NAME, device)
+    };
+    let lock = |device: &'static str| {
+        let request = send(reqwest::Method::POST, &format!("/api/files/{id}/lock"), device)
+            .header("content-type", "application/json")
+            .body("{}");
+        async move { request.send().await.unwrap().json::<tma_core::api::LockResponse>().await.unwrap() }
+    };
+    let laptop = lock("laptop").await;
+    assert!(laptop.acquired);
+    assert_eq!(laptop.lock.device_id.as_deref(), Some("laptop"));
+    assert!(!lock("desktop").await.acquired, "the same person on another computer waits too");
+    let form = reqwest::multipart::Form::new()
+        .part("file", reqwest::multipart::Part::bytes(b"from the desktop".to_vec()).file_name("deep.txt"));
+    let refused = send(reqwest::Method::POST, &format!("/api/files/{id}/replace"), "desktop")
+        .multipart(form)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(refused.status().as_u16(), 409, "nor can it save over the laptop's edit");
+    let other = send(reqwest::Method::DELETE, &format!("/api/files/{id}/lock"), "desktop").send().await.unwrap();
+    assert!(other.status().is_success());
+    assert!(!lock("desktop").await.acquired, "another computer cannot release it");
+    send(reqwest::Method::DELETE, &format!("/api/files/{id}/lock"), "laptop").send().await.unwrap();
+    assert!(lock("desktop").await.acquired, "once released, either computer can take it");
+    send(reqwest::Method::DELETE, &format!("/api/files/{id}/lock"), "desktop").send().await.unwrap();
 }
 
 /// Restoring from the trash and deleting forever are granted separately.

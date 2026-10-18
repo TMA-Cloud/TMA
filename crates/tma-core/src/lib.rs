@@ -16,6 +16,8 @@ pub use permissions::Permission;
 pub const DESKTOP_HEADER_NAME: &str = "X-TMA-Desktop-Client";
 /// Value of [`DESKTOP_HEADER_NAME`] that desktop-only mode lets through.
 pub const DESKTOP_HEADER_VALUE: &str = "tma-desktop";
+/// Header carrying a desktop install's id, so one person's computers are told apart.
+pub const DEVICE_HEADER_NAME: &str = "X-TMA-Device";
 
 /// Product name shown in titles and the About page.
 pub const PRODUCT_NAME: &str = "TMA Cloud";

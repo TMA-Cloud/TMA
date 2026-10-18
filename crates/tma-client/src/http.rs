@@ -1,7 +1,7 @@
 //! The HTTP plumbing every endpoint builds on: base URL, headers, cookies and
 //! turning failed responses into `ApiError`.
 
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use reqwest::{Method, RequestBuilder, Response};
 use serde::Serialize;
@@ -15,6 +15,18 @@ struct Inner {
     http: reqwest::Client,
     #[cfg(not(target_arch = "wasm32"))]
     jar: Arc<reqwest::cookie::Jar>,
+}
+
+static DEVICE: OnceLock<String> = OnceLock::new();
+
+/// This desktop install's id, sent with every request from now on.
+pub fn set_device_id(id: &str) {
+    let _ = DEVICE.set(id.to_string());
+}
+
+/// This install's id, if it has one (the web app has none).
+pub fn device_id() -> Option<&'static str> {
+    DEVICE.get().map(String::as_str)
 }
 
 /// A handle to one server; cheap to clone.
@@ -102,7 +114,10 @@ impl Client {
     }
 
     pub(crate) fn request(&self, method: Method, path: &str) -> RequestBuilder {
-        let builder = self.inner.http.request(method, self.url(path));
+        let mut builder = self.inner.http.request(method, self.url(path));
+        if let Some(id) = device_id() {
+            builder = builder.header(tma_core::DEVICE_HEADER_NAME, id);
+        }
         #[cfg(target_arch = "wasm32")]
         let builder = builder.header("x-requested-with", "XMLHttpRequest").fetch_credentials_include();
         builder

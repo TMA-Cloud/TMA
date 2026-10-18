@@ -128,6 +128,8 @@ fn main() -> eframe::Result {
             let client_id = storage
                 .and_then(|s| eframe::get_value::<String>(s, CLIENT_ID_KEY))
                 .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+            // Locks taken from this computer keep the same person on another one out too.
+            tma_client::set_device_id(&client_id);
             let host = host::DesktopHost::new(server, client_id.clone());
             let app = tma_ui::App::new(&cc.egui_ctx, Box::new(host), prefs, fonts::system_ui_font());
             Ok(Box::new(Shell {

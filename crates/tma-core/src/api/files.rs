@@ -76,6 +76,9 @@ pub struct FileLock {
     pub name: String,
     pub since: DateTime<Utc>,
     pub expires_at: DateTime<Utc>,
+    /// The desktop install holding it, so the same person on another computer is kept out too.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub device_id: Option<String>,
 }
 
 /// The answer to taking a lock: `acquired`, or who holds it instead.

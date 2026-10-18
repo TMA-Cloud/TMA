@@ -102,7 +102,8 @@ async fn open(
         .unwrap_or_else(|| "User".into());
     // Someone editing it in a desktop app: the browser shows it, their save wins.
     let locked = crate::models::files::locks::holder(&state.pool, &file.id).await.ok().flatten();
-    let locked = locked.is_some_and(|l| l.user_id != opener.user_id);
+    // The browser has no install id, so even the editor's own browser only views it.
+    let locked = locked.is_some_and(|l| l.user_id != opener.user_id || l.device_id.is_some());
     let request_origin = origin(state, ctx);
     let session = oo::build_session(
         state,

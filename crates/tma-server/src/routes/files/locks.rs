@@ -10,7 +10,7 @@ use tma_core::api::LockResponse;
 use crate::auth::{self, AuthUser};
 use crate::error::{ApiError, ApiResult};
 use crate::middleware::ReqCtx;
-use crate::models::files::locks::{self, Taken};
+use crate::models::files::locks::{self, Actor, Taken};
 use crate::services::audit::Event;
 use crate::services::events::types;
 use crate::state::AppState;
@@ -20,6 +20,10 @@ async fn announce(state: &AppState, owner: &str, id: &str) {
     state.events.publish(owner, types::FILE_UPDATED, json!({ "id": id, "userId": owner, "lock": true })).await;
 }
 
+fn actor<'a>(auth: &'a AuthUser, ctx: &'a ReqCtx) -> Actor<'a> {
+    Actor { user: &auth.user_id, device: ctx.device.as_deref() }
+}
+
 pub async fn take(
     State(state): State<AppState>,
     ctx: ReqCtx,
@@ -27,7 +31,7 @@ pub async fn take(
     Path(id): Path<String>,
 ) -> ApiResult<Json<LockResponse>> {
     auth::require(&state, &auth, &ctx, Permission::Edit).await?;
-    let taken = locks::acquire(&state.pool, &id, &auth.owner_id, &auth.user_id)
+    let taken = locks::acquire(&state.pool, &id, &auth.owner_id, actor(&auth, &ctx))
         .await?
         .ok_or_else(|| ApiError::not_found("File not found"))?;
     Ok(Json(match taken {
@@ -48,7 +52,7 @@ pub async fn give_up(
     auth: AuthUser,
     Path(id): Path<String>,
 ) -> ApiResult<Json<Value>> {
-    if locks::release(&state.pool, &id, &auth.user_id).await? {
+    if locks::release(&state.pool, &id, actor(&auth, &ctx)).await? {
         state.audit.log(&ctx, Event::new("file.unlock").resource("file", Some(&id)));
         announce(&state, &auth.owner_id, &id).await;
     }

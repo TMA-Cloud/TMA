@@ -6,6 +6,7 @@ use std::path::Path;
 
 use chrono::{DateTime, Utc};
 use tma_client::{Client, ListQuery, Progress, Source, UploadFile, UploadOptions, View};
+use tma_core::api::FileLock;
 
 /// One entry of a folder listing.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -21,6 +22,9 @@ pub struct Entry {
     /// Who else has it open for editing (never the signed-in user).
     pub editor: Option<String>,
 }
+
+/// How the drive names the signed-in user editing on another computer.
+pub const OTHER_COMPUTER: &str = "you, on another computer";
 
 /// The error a replace returns when someone else saved after `base`: the server
 /// kept its copy, so the caller keeps the local one as a conflicted copy.
@@ -97,6 +101,19 @@ impl ClientBackend {
     }
 }
 
+/// Who else is editing, as the drive names them; `None` for no one or this install itself.
+fn editor(lock: &FileLock, me: Option<&str>) -> Option<String> {
+    // Unknown who is signed in: show no one, rather than our own lock as someone else's.
+    let me = me?;
+    if lock.user_id != me {
+        Some(lock.name.clone())
+    } else if lock.device_id.as_deref() != tma_client::device_id() {
+        Some(OTHER_COMPUTER.into())
+    } else {
+        None
+    }
+}
+
 fn upload_file(name: &str, src: &Path) -> BackendResult<UploadFile> {
     let meta = std::fs::metadata(src).map_err(|e| e.to_string())?;
     let modified_ms =
@@ -127,8 +144,7 @@ impl Backend for ClientBackend {
                 modified: f.modified,
                 accessed: f.accessed_at,
                 version: f.content_version,
-                // Unknown who is signed in: show no one, rather than our own lock as someone else's.
-                editor: f.lock.filter(|l| me.is_some_and(|me| me != l.user_id)).map(|l| l.name),
+                editor: f.lock.and_then(|l| editor(&l, me)),
             }));
             match page.next_cursor {
                 Some(cursor) => query.cursor = Some(cursor),
@@ -192,7 +208,11 @@ impl Backend for ClientBackend {
 
     fn lock(&self, id: &str) -> BackendResult<Lock> {
         let taken = tma_client::rt::block_on(self.client.lock(id)).map_err(|e| e.message)?;
-        Ok(if taken.acquired { Lock::Held } else { Lock::Busy(taken.lock.name) })
+        Ok(if taken.acquired {
+            Lock::Held
+        } else {
+            Lock::Busy(editor(&taken.lock, self.me()).unwrap_or(taken.lock.name))
+        })
     }
 
     fn unlock(&self, id: &str) -> BackendResult<()> {

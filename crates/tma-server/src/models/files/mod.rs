@@ -26,7 +26,8 @@ pub const LIST_COLUMNS: &str = "f.id, f.name, f.type,
     (SELECT COALESCE(NULLIF(u.name, ''), u.email) FROM file_locks l JOIN users u ON u.id = l.user_id
       WHERE l.file_id = f.id AND l.expires_at > NOW()) AS lock_name,
     (SELECT l.acquired_at FROM file_locks l WHERE l.file_id = f.id AND l.expires_at > NOW()) AS lock_since,
-    (SELECT l.expires_at FROM file_locks l WHERE l.file_id = f.id AND l.expires_at > NOW()) AS lock_expires";
+    (SELECT l.expires_at FROM file_locks l WHERE l.file_id = f.id AND l.expires_at > NOW()) AS lock_expires,
+    (SELECT l.device_id FROM file_locks l WHERE l.file_id = f.id AND l.expires_at > NOW()) AS lock_device";
 
 /// Share expiry of a shared item: NULL when unshared or shared without expiry.
 pub fn expiry_join(owner_param: &str) -> String {
@@ -72,6 +73,8 @@ pub struct ListRow {
     #[sqlx(default)]
     pub lock_expires: Option<DateTime<Utc>>,
     #[sqlx(default)]
+    pub lock_device: Option<String>,
+    #[sqlx(default)]
     pub opened_by_id: Option<String>,
     #[sqlx(default)]
     pub opened_by_name: Option<String>,
@@ -95,9 +98,13 @@ impl From<ListRow> for FileItem {
             parent_id: r.parent_id,
             content_version: r.content_version,
             lock: match (r.lock_user_id, r.lock_since, r.lock_expires) {
-                (Some(user_id), Some(since), Some(expires_at)) => {
-                    Some(FileLock { user_id, name: r.lock_name.unwrap_or_default(), since, expires_at })
-                }
+                (Some(user_id), Some(since), Some(expires_at)) => Some(FileLock {
+                    user_id,
+                    name: r.lock_name.unwrap_or_default(),
+                    since,
+                    expires_at,
+                    device_id: r.lock_device,
+                }),
                 _ => None,
             },
             opened_by: r.opened_by_id.map(|id| Opener { id, name: r.opened_by_name.unwrap_or_default() }),
@@ -296,6 +303,7 @@ mod tests {
             lock_name: None,
             lock_since: None,
             lock_expires: None,
+            lock_device: None,
             opened_by_id: None,
             opened_by_name: None,
             parent_id: None,

@@ -14,5 +14,5 @@ mod transfer;
 
 pub use error::{ApiError, ApiResult};
 pub use files::{ListQuery, Listing, View};
-pub use http::Client;
+pub use http::{Client, device_id, set_device_id};
 pub use transfer::{Progress, Source, UploadFile, UploadOptions};

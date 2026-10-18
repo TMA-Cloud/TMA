@@ -346,17 +346,34 @@ fn left_child(
     if up { from.get(to.len()).map(|(id, _)| id.clone()) } else { None }
 }
 
-/// Who has the file open in a desktop app while their edit lock lasts: `me` for the signed-in user.
-pub fn editor<'a>(item: &'a FileItem, me: &str) -> Option<Option<&'a str>> {
+/// Who has a file open in a desktop app, while their edit lock lasts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Editor<'a> {
+    /// The signed-in user, in this desktop app.
+    Here,
+    /// The signed-in user, in the desktop app on another computer (or, from the browser, any).
+    Elsewhere,
+    Someone(&'a str),
+}
+
+pub fn editor<'a>(item: &'a FileItem, me: &str) -> Option<Editor<'a>> {
     let lock = item.lock.as_ref().filter(|l| l.expires_at > chrono::Utc::now())?;
-    Some((lock.user_id != me).then_some(lock.name.as_str()))
+    Some(if lock.user_id != me {
+        Editor::Someone(&lock.name)
+    } else if lock.device_id.as_deref() == tma_client::device_id() {
+        Editor::Here
+    } else {
+        Editor::Elsewhere
+    })
 }
 
 /// The row's note for a file being edited.
 pub fn editing_note(item: &FileItem, me: &str) -> Option<String> {
     editor(item, me).map(|who| match who {
-        Some(name) => format!("{name} is editing"),
-        None => "You are editing".into(),
+        Editor::Someone(name) => format!("{name} is editing"),
+        Editor::Here => "You are editing".into(),
+        Editor::Elsewhere if tma_client::device_id().is_none() => "You are editing in the desktop app".into(),
+        Editor::Elsewhere => "You are editing on another computer".into(),
     })
 }
 

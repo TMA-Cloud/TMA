@@ -42,8 +42,14 @@ pub(super) fn file(app: &mut App, item: FileItem) {
     } else if app.host.kind() == HostKind::Desktop {
         // The desktop app hands every file to the computer, which opens it in its own app;
         // the host reports back once it has, which ends the opening animation.
-        if let Some(Some(name)) = super::editor(&item, &main.user.id) {
-            app.toasts.info(format!("{name} is editing {}, so it opens read-only", item.name));
+        match super::editor(&item, &main.user.id) {
+            Some(super::Editor::Someone(name)) => {
+                app.toasts.info(format!("{name} is editing {}, so it opens read-only", item.name));
+            }
+            Some(super::Editor::Elsewhere) => {
+                app.toasts.info(format!("You are editing {} on another computer, so it opens read-only", item.name));
+            }
+            _ => {}
         }
         super::opening::start(app.tasks.ctx(), &item.id);
         run(app, Action::EditInApp(item));

@@ -24,6 +24,8 @@ pub struct ReqCtx {
     pub request_id: String,
     pub ip: Option<String>,
     pub user_agent: Option<String>,
+    /// The desktop install that sent it (`X-TMA-Device`), if any.
+    pub device: Option<String>,
     pub method: String,
     pub path: String,
     pub host: Option<String>,
@@ -98,6 +100,8 @@ pub async fn context(State(state): State<AppState>, mut req: Request, next: Next
         request_id: request_id(headers),
         ip: client_ip(peer, headers, &state.trusted_proxies).map(|ip| ip.to_string()),
         user_agent: header(headers, "user-agent"),
+        device: header(headers, tma_core::DEVICE_HEADER_NAME)
+            .filter(|d| d.len() <= 64 && d.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-')),
         method: req.method().to_string(),
         path: req.uri().path().to_string(),
         host: if trusted { header(headers, "x-forwarded-host") } else { None }

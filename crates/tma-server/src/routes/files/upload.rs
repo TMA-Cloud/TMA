@@ -13,6 +13,7 @@ use crate::auth::{self, AuthUser};
 use crate::error::{ApiError, ApiResult, DomainError};
 use crate::middleware::ReqCtx;
 use crate::models::files::crud::{self, PlannedUpload};
+use crate::models::files::locks::Actor;
 use crate::models::users;
 use crate::routes::{JsonBody, parent_id};
 use crate::services::audit::Event;
@@ -264,21 +265,30 @@ pub async fn replace(
     let modified = client_mtime(outcome.field("lastModifiedTimes"));
     // The content version the client's copy came from; omitted, the save always lands.
     let base = outcome.field("baseVersion").and_then(|v| v.trim().parse::<i64>().ok());
-    let replaced =
-        match crud::replace_data(&state.pool, &id, &auth.owner_id, &upload, modified, base, &auth.user_id).await {
-            Err(err) if matches!(err.downcast_ref::<DomainError>(), Some(DomainError::Conflict(_))) => {
-                // Recorded, so a save someone believes lost can be traced; the client keeps it as a copy.
-                state.audit.log(
-                    &ctx,
-                    Event::new("file.update")
-                        .failure()
-                        .resource("file", Some(&id))
-                        .meta(json!({ "fileName": existing.name, "reason": "stale_version", "baseVersion": base })),
-                );
-                return Err(err.into());
-            }
-            other => other?,
-        };
+    let replaced = match crud::replace_data(
+        &state.pool,
+        &id,
+        &auth.owner_id,
+        &upload,
+        modified,
+        base,
+        Actor { user: &auth.user_id, device: ctx.device.as_deref() },
+    )
+    .await
+    {
+        Err(err) if matches!(err.downcast_ref::<DomainError>(), Some(DomainError::Conflict(_))) => {
+            // Recorded, so a save someone believes lost can be traced; the client keeps it as a copy.
+            state.audit.log(
+                &ctx,
+                Event::new("file.update")
+                    .failure()
+                    .resource("file", Some(&id))
+                    .meta(json!({ "fileName": existing.name, "reason": "stale_version", "baseVersion": base })),
+            );
+            return Err(err.into());
+        }
+        other => other?,
+    };
     let (updated, superseded, parent) = replaced.ok_or_else(|| ApiError::not_found("File not found"))?;
     outcome.keys.keep_all();
     if let Some(old) = superseded {
