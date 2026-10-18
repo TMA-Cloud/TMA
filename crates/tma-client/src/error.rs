@@ -47,6 +47,11 @@ impl ApiError {
         self.status == 401
     }
 
+    /// The server refused a change made from an outdated copy (a save after someone else's).
+    pub fn is_conflict(&self) -> bool {
+        self.status == 409
+    }
+
     pub fn needs_mfa(&self) -> bool {
         self.status == 400 && self.message == "MFA code required"
     }

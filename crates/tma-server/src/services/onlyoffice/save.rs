@@ -141,7 +141,7 @@ async fn swap(
     if limit.is_some_and(|limit| used + reserved - old_size.unwrap_or(0) + size > limit) {
         return Ok(Err(()));
     }
-    sqlx::query("UPDATE files SET path = $1, size = $2, modified = NOW(), dek_wrapped = $3, dek_kek_version = $4 WHERE id = $5 AND user_id = $6")
+    sqlx::query("UPDATE files SET path = $1, size = $2, modified = NOW(), dek_wrapped = $3, dek_kek_version = $4, content_version = content_version + 1 WHERE id = $5 AND user_id = $6")
         .bind(key)
         .bind(size)
         .bind(&dek.wrapped)

@@ -11,7 +11,8 @@ use super::{ListRow, allocate_name, assert_live_folders, clash_pattern};
 use crate::error::DomainError;
 use crate::util::generate_id;
 
-const RETURNING: &str = "RETURNING id, name, type, size, modified, accessed_at, shared_at, mime_type, starred, shared";
+const RETURNING: &str =
+    "RETURNING id, name, type, size, modified, accessed_at, shared_at, mime_type, starred, shared, content_version";
 
 /// A stored file as the download path needs it.
 #[derive(Debug, Clone, sqlx::FromRow)]
@@ -251,7 +252,7 @@ pub async fn insert_uploads(pool: &PgPool, entries: &[PlannedUpload], owner: &st
                 .push_bind(e.upload.dek_kek_version);
         });
         qb.push(
-            " RETURNING id, name, type, size, modified, accessed_at, shared_at, mime_type, starred, shared, parent_id",
+            " RETURNING id, name, type, size, modified, accessed_at, shared_at, mime_type, starred, shared, content_version, parent_id",
         );
         for row in qb.build_query_as::<ListRow>().fetch_all(&mut *tx).await? {
             let item: FileItem = row.into();
@@ -299,25 +300,47 @@ pub async fn rename(
 }
 
 /// Point a file at freshly streamed bytes; returns the row and the superseded key.
+/// The row a replace locks: where the old contents are, and which version they are.
+#[derive(sqlx::FromRow)]
+struct Current {
+    path: Option<String>,
+    parent_id: Option<String>,
+    size: Option<i64>,
+    content_version: i64,
+}
+
+/// What a save from an outdated copy is told; clients match the 409, not this text.
+pub const STALE_SAVE: &str = "Someone else saved this file after you opened it";
+
+/// Point a file at new contents. With `base`, the save is refused (a conflict)
+/// unless the file is still at that content version: someone else saved since.
 pub async fn replace_data(
     pool: &PgPool,
     id: &str,
     owner: &str,
     upload: &StreamedUpload,
     modified: Option<DateTime<Utc>>,
+    base: Option<i64>,
 ) -> anyhow::Result<Option<(FileItem, Option<String>, Option<String>)>> {
     let mut tx = pool.begin().await?;
-    let row: Option<(Option<String>, Option<String>, Option<i64>)> =
-        sqlx::query_as("SELECT path, parent_id, size FROM files WHERE id = $1 AND user_id = $2 FOR UPDATE")
-            .bind(id)
-            .bind(owner)
-            .fetch_optional(&mut *tx)
-            .await?;
-    let Some((old_path, parent, old_size)) = row else { return Ok(None) };
+    let row: Option<Current> = sqlx::query_as(
+        "SELECT path, parent_id, size, content_version FROM files WHERE id = $1 AND user_id = $2 FOR UPDATE",
+    )
+    .bind(id)
+    .bind(owner)
+    .fetch_optional(&mut *tx)
+    .await?;
+    let Some(Current { path: old_path, parent_id: parent, size: old_size, content_version: current }) = row else {
+        return Ok(None);
+    };
+    if base.is_some_and(|b| b != current) {
+        return Err(DomainError::Conflict(STALE_SAVE.into()).into());
+    }
     check_quota(&mut tx, owner, upload.size - old_size.unwrap_or(0)).await?;
     let sql = format!(
         "UPDATE files SET size = $1, mime_type = $2, path = $3, modified = COALESCE($4, NOW()), accessed_at = NOW(),
-                dek_wrapped = $5, dek_kek_version = $6 WHERE id = $7 AND user_id = $8 {RETURNING}"
+                dek_wrapped = $5, dek_kek_version = $6, content_version = content_version + 1
+          WHERE id = $7 AND user_id = $8 {RETURNING}"
     );
     let updated = sqlx::query_as::<_, ListRow>(sqlx::AssertSqlSafe(sql))
         .bind(upload.size)

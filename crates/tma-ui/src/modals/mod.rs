@@ -113,7 +113,8 @@ enum Outcome {
     /// A share link was copied.
     Copied,
     LoadImage(String),
-    Download(FileItem),
+    // Boxed: a whole FileItem would make every outcome as large as it.
+    Download(Box<FileItem>),
     /// Add files (`true`: a folder) to the upload dialog.
     Pick(bool),
     Upload,
@@ -357,7 +358,7 @@ fn apply(app: &mut App, outcome: Outcome) {
                 },
             );
         }
-        Outcome::Download(item) => crate::files::download(app, vec![item]),
+        Outcome::Download(item) => crate::files::download(app, vec![*item]),
         Outcome::Pick(folder) => {
             let pick = if folder { crate::files::Action::PickFolder } else { crate::files::Action::PickUpload };
             crate::files::run_action(app, pick);

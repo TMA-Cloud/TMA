@@ -10,7 +10,7 @@ use tma_core::Permission;
 use tma_core::api::{BulkUploadResponse, FileItem, UploadFailure};
 
 use crate::auth::{self, AuthUser};
-use crate::error::{ApiError, ApiResult};
+use crate::error::{ApiError, ApiResult, DomainError};
 use crate::middleware::ReqCtx;
 use crate::models::files::crud::{self, PlannedUpload};
 use crate::models::users;
@@ -262,9 +262,23 @@ pub async fn replace(
     let existing = owned_file(&state, &id, &auth.owner_id).await?;
     validate_name(&existing.name).map_err(|_| ApiError::bad_request("Invalid file name"))?;
     let modified = client_mtime(outcome.field("lastModifiedTimes"));
-    let (updated, superseded, parent) = crud::replace_data(&state.pool, &id, &auth.owner_id, &upload, modified)
-        .await?
-        .ok_or_else(|| ApiError::not_found("File not found"))?;
+    // The content version the client's copy came from; omitted, the save always lands.
+    let base = outcome.field("baseVersion").and_then(|v| v.trim().parse::<i64>().ok());
+    let replaced = match crud::replace_data(&state.pool, &id, &auth.owner_id, &upload, modified, base).await {
+        Err(err) if matches!(err.downcast_ref::<DomainError>(), Some(DomainError::Conflict(_))) => {
+            // Recorded, so a save someone believes lost can be traced; the client keeps it as a copy.
+            state.audit.log(
+                &ctx,
+                Event::new("file.update")
+                    .failure()
+                    .resource("file", Some(&id))
+                    .meta(json!({ "fileName": existing.name, "reason": "stale_version", "baseVersion": base })),
+            );
+            return Err(err.into());
+        }
+        other => other?,
+    };
+    let (updated, superseded, parent) = replaced.ok_or_else(|| ApiError::not_found("File not found"))?;
     outcome.keys.keep_all();
     if let Some(old) = superseded {
         cleanup::enqueue_object_cleanup(&state, vec![old], "replaced-file-object").await;

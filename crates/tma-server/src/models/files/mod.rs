@@ -20,7 +20,7 @@ use crate::error::DomainError;
 /// The columns every listing selects, so one row type serves them all.
 pub const LIST_COLUMNS: &str = "f.id, f.name, f.type,
     CASE WHEN f.type = 'folder' THEN f.aggregate_size ELSE f.size END AS size,
-    f.modified, f.accessed_at, f.shared_at, f.mime_type, f.starred, f.shared";
+    f.modified, f.accessed_at, f.shared_at, f.mime_type, f.starred, f.shared, f.content_version";
 
 /// Share expiry of a shared item: NULL when unshared or shared without expiry.
 pub fn expiry_join(owner_param: &str) -> String {
@@ -56,6 +56,8 @@ pub struct ListRow {
     #[sqlx(default)]
     pub parent_id: Option<String>,
     #[sqlx(default)]
+    pub content_version: i64,
+    #[sqlx(default)]
     pub opened_by_id: Option<String>,
     #[sqlx(default)]
     pub opened_by_name: Option<String>,
@@ -77,6 +79,7 @@ impl From<ListRow> for FileItem {
             expires_at: r.expires_at,
             deleted_at: r.deleted_at,
             parent_id: r.parent_id,
+            content_version: r.content_version,
             opened_by: r.opened_by_id.map(|id| Opener { id, name: r.opened_by_name.unwrap_or_default() }),
             client_id: None,
         }
@@ -268,6 +271,7 @@ mod tests {
             shared: None,
             expires_at: None,
             deleted_at: None,
+            content_version: 1,
             opened_by_id: None,
             opened_by_name: None,
             parent_id: None,

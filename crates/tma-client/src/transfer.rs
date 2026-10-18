@@ -148,9 +148,24 @@ impl Client {
 
     /// Replace a file's contents (desktop edits, and Replace when an upload's name is taken).
     pub async fn replace(&self, id: &str, file: &UploadFile, progress: Arc<Progress>) -> ApiResult<FileItem> {
+        self.replace_from(id, file, None, progress).await
+    }
+
+    /// Replace a file's contents only if it is still at content version `base`;
+    /// otherwise the server answers 409 (`ApiError::is_conflict`) and keeps its copy.
+    pub async fn replace_from(
+        &self,
+        id: &str,
+        file: &UploadFile,
+        base: Option<i64>,
+        progress: Arc<Progress>,
+    ) -> ApiResult<FileItem> {
         let mut form = reqwest::multipart::Form::new();
         if let Some(ms) = file.modified_ms {
             form = form.text("lastModifiedTimes", ms.to_string());
+        }
+        if let Some(base) = base {
+            form = form.text("baseVersion", base.to_string());
         }
         form = form.part("file", file_part(file, progress).await?);
         let path = format!("/api/files/{}/replace", crate::http::enc(id));

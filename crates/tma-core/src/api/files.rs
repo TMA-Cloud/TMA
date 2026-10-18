@@ -51,6 +51,10 @@ pub struct FileItem {
     pub deleted_at: Option<DateTime<Utc>>,
     #[serde(rename = "parentId", default, skip_serializing_if = "Option::is_none")]
     pub parent_id: Option<String>,
+    /// Raised by every content replace; a save names the one it started from
+    /// (`baseVersion`) so a stale copy is refused rather than overwriting.
+    #[serde(rename = "contentVersion", default)]
+    pub content_version: i64,
     /// Who opened the file last; only Recent files reports it.
     #[serde(rename = "openedBy", default, skip_serializing_if = "Option::is_none")]
     pub opened_by: Option<Opener>,

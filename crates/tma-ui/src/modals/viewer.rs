@@ -111,7 +111,7 @@ pub(super) fn viewer_overlay(
             *outcome = Some(Outcome::Close);
         }
         if round_button(ui, bar.right_center() - Vec2::new(72.0, 0.0), ph::DOWNLOAD_SIMPLE, "download") {
-            *outcome = Some(Outcome::Download(item.clone()));
+            *outcome = Some(Outcome::Download(Box::new(item.clone())));
         }
         if round_button(ui, bar.right_center() - Vec2::new(116.0, 0.0), ph::MAGNIFYING_GLASS_PLUS, "zoom-in") {
             (viewer.zoom, viewer.pan) = zoom_at(viewer.zoom, viewer.pan, 1.25, Vec2::ZERO);

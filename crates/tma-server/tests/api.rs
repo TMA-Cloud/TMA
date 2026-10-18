@@ -166,6 +166,25 @@ async fn assert_recent_names_opener(owner: &Client, sub: &Client, id: &str) {
     panic!("Recent files never named the sub-user who opened the file");
 }
 
+/// A save names the content version it started from; one from an outdated copy is
+/// refused, so it cannot overwrite a newer save (the lost save of 15 October).
+async fn assert_stale_saves_are_refused(client: &Client, id: &str, current: i64) {
+    let save = |text: &'static str, base: Option<i64>| {
+        let file = text_file("deep.txt", text, None);
+        async move { client.replace_from(id, &file, base, Progress::new(0)).await }
+    };
+    let landed = save("third", Some(current)).await.unwrap();
+    assert_eq!(landed.content_version, current + 1, "every save raises the version");
+    let refused = save("stale", Some(current)).await.unwrap_err();
+    assert!(refused.is_conflict(), "a save from the old version is refused: {refused:?}");
+    let dest = std::env::temp_dir().join(format!("tma-it-stale-{id}.txt"));
+    client.download_to(id, &dest, Progress::new(0)).await.unwrap();
+    assert_eq!(std::fs::read_to_string(&dest).unwrap(), "third", "the newer save is kept");
+    let _ = std::fs::remove_file(&dest);
+    // Without a base (the web app's deliberate Replace) a save always lands.
+    assert_eq!(save("fourth", None).await.unwrap().content_version, current + 2);
+}
+
 /// Restoring from the trash and deleting forever are granted separately.
 async fn assert_trash_grants_are_separate(owner: &Client, base: &str, id: &str) {
     let request = CreateSubUserRequest {
@@ -283,6 +302,7 @@ async fn full_workflow() {
     admin.download_to(&deep.id, &dest, Progress::new(0)).await.unwrap();
     assert_eq!(std::fs::read_to_string(&dest).unwrap(), "second");
     let _ = std::fs::remove_file(&dest);
+    assert_stale_saves_are_refused(&admin, &deep.id, replaced.content_version).await;
 
     // Search, stats, star.
     assert!(admin.search("note", 10).await.unwrap().iter().any(|f| f.id == item.id));
