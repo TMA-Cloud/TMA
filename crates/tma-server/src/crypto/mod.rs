@@ -10,7 +10,7 @@ pub use keys::{
     DEK_LENGTH, Keyring, WRAPPED_DEK_LENGTH, WrappedDek, format_keyring, generate_key, is_random_key,
     kek_check_matches, kek_check_value, parse_keyring, unwrap_dek, wrap_dek,
 };
-pub use secret::{GOOGLE_SECRET, STORAGE_SECRET, SecretPurpose, open_secret, reseal, seal_secret};
+pub use secret::{STORAGE_SECRET, SecretPurpose, open_secret, reseal, seal_secret};
 pub use stream::{
     CIPHERTEXT_SEGMENT_SIZE, Decryptor, Encryptor, HEADER_LENGTH, PLAINTEXT_FIRST_SEGMENT_MAX, PLAINTEXT_SEGMENT_MAX,
     RangePlan, TAG_LENGTH, ciphertext_size_to_plaintext_size, plaintext_size_to_ciphertext_size,

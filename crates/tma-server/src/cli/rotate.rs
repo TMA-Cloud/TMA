@@ -42,11 +42,11 @@ async fn file_key_versions(pool: &sqlx::PgPool) -> anyhow::Result<Vec<(i32, i64)
 async fn status(pool: &sqlx::PgPool, keyring: &Keyring) -> anyhow::Result<()> {
     let primary = keyring.primary_version();
     let files = file_key_versions(pool).await?;
-    let (storage, google): (Option<i32>, Option<i32>) =
-        sqlx::query_as("SELECT storage_secret_kek_version, google_client_secret_kek_version FROM app_settings WHERE id = 'app_settings'")
+    let storage: Option<i32> =
+        sqlx::query_scalar("SELECT storage_secret_kek_version FROM app_settings WHERE id = 'app_settings'")
             .fetch_optional(pool)
             .await?
-            .unwrap_or((None, None));
+            .flatten();
     let versions: Vec<String> = keyring.versions().iter().map(|v| v.to_string()).collect();
     println!("Master key versions: {}", versions.join(", "));
     println!("Newest (encrypts new files): {primary}");
@@ -55,9 +55,6 @@ async fn status(pool: &sqlx::PgPool, keyring: &Keyring) -> anyhow::Result<()> {
     }
     if let Some(v) = storage {
         println!("Bucket secret: version {v}");
-    }
-    if let Some(v) = google {
-        println!("Google client secret: version {v}");
     }
     let behind: i64 = files.iter().filter(|(v, _)| *v != primary).map(|(_, n)| n).sum();
     if behind > 0 {
@@ -68,7 +65,7 @@ async fn status(pool: &sqlx::PgPool, keyring: &Keyring) -> anyhow::Result<()> {
     let unused: Vec<String> = keyring
         .versions()
         .into_iter()
-        .filter(|v| *v != primary && !files.iter().any(|(f, _)| f == v) && Some(*v) != storage && Some(*v) != google)
+        .filter(|v| *v != primary && !files.iter().any(|(f, _)| f == v) && Some(*v) != storage)
         .map(|v| v.to_string())
         .collect();
     if !unused.is_empty() {
@@ -113,9 +110,6 @@ async fn rewrap(pool: &sqlx::PgPool, keyring: &Keyring) -> anyhow::Result<()> {
     let report = services::keys::rewrap_to_primary(pool, keyring).await?;
     if report.storage_secret {
         println!("Bucket secret rewrapped to version {}.", report.primary);
-    }
-    if report.google_secret {
-        println!("Google client secret rewrapped to version {}.", report.primary);
     }
     let files = file_key_versions(pool).await?;
     let current = files.iter().find(|(v, _)| *v == report.primary).map(|r| r.1).unwrap_or(0);

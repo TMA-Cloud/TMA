@@ -142,37 +142,6 @@ pub async fn create(state: &AppState, email: &str, hash: &str, name: Option<&str
     Ok(user)
 }
 
-pub async fn create_with_google(
-    state: &AppState,
-    google_id: &str,
-    email: &str,
-    name: Option<&str>,
-) -> anyhow::Result<NewUser> {
-    Ok(sqlx::query_as::<_, NewUser>(
-        "INSERT INTO users(id, email, name, google_id) VALUES($1,$2,$3,$4) RETURNING id, email, name, created_at, mfa_enabled",
-    )
-    .bind(generate_id())
-    .bind(email)
-    .bind(name)
-    .bind(google_id)
-    .fetch_one(&state.pool)
-    .await?)
-}
-
-pub async fn by_google_id(pool: &PgPool, google_id: &str) -> anyhow::Result<Option<(String, String)>> {
-    Ok(sqlx::query_as("SELECT id, email FROM users WHERE google_id = $1").bind(google_id).fetch_optional(pool).await?)
-}
-
-pub async fn set_google_id(state: &AppState, user_id: &str, google_id: &str) -> anyhow::Result<()> {
-    sqlx::query("UPDATE users SET google_id = $1 WHERE id = $2")
-        .bind(google_id)
-        .bind(user_id)
-        .execute(&state.pool)
-        .await?;
-    state.cache.invalidate(&[cache::keys::user_by_id(user_id)]).await;
-    Ok(())
-}
-
 pub async fn set_password(state: &AppState, user_id: &str, hash: &str) -> anyhow::Result<()> {
     sqlx::query("UPDATE users SET password = $1 WHERE id = $2").bind(hash).bind(user_id).execute(&state.pool).await?;
     state.cache.invalidate(&[cache::keys::user_by_id(user_id)]).await;

@@ -2,10 +2,10 @@
 
 use serde_json::{Value, json};
 use tma_core::api::{
-    ActiveClients, ActivitySettings, AdminUserPage, CloudDriveConfig, CreateSubUserRequest, GoogleAuthInput,
-    GoogleAuthSummary, KnownProxies, MaxUploadSize, MessageResponse, OnlyOfficeSettings, OrphanDeleteReport,
-    OrphanReport, SignupStatus, StorageSettingsInput, StorageSettingsSummary, StorageStatus, StorageTestResult,
-    StorageUsage, SubUserEnvelope, SubUserList, UpdateSubUserRequest, UrlSetting, Versions,
+    ActiveClients, ActivitySettings, AdminUserPage, CloudDriveConfig, CreateSubUserRequest, KnownProxies,
+    MaxUploadSize, MessageResponse, OnlyOfficeSettings, OrphanDeleteReport, OrphanReport, SignupStatus,
+    StorageSettingsInput, StorageSettingsSummary, StorageStatus, StorageTestResult, StorageUsage, SubUserEnvelope,
+    SubUserList, UpdateSubUserRequest, UrlSetting, Versions,
 };
 
 use crate::error::{ApiError, ApiResult};
@@ -137,22 +137,6 @@ impl Client {
 
     pub async fn save_storage_config(&self, input: &StorageSettingsInput) -> ApiResult<StorageSettingsSummary> {
         self.put("/api/user/storage-config", input).await
-    }
-
-    pub async fn google_config(&self) -> ApiResult<GoogleAuthSummary> {
-        self.get("/api/user/google-auth-config").await
-    }
-
-    pub async fn save_google_config(&self, input: &GoogleAuthInput) -> ApiResult<GoogleAuthSummary> {
-        self.put("/api/user/google-auth-config", input).await
-    }
-
-    pub async fn clear_google_config(&self, expected_version: Option<i32>) -> ApiResult<GoogleAuthSummary> {
-        self.json(
-            self.request(reqwest::Method::DELETE, "/api/user/google-auth-config")
-                .json(&json!({ "expectedVersion": expected_version })),
-        )
-        .await
     }
 
     pub async fn users(&self, cursor: Option<&str>) -> ApiResult<AdminUserPage> {

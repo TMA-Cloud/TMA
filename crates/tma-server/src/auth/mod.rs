@@ -2,7 +2,6 @@
 //! session, resolves the account the identity acts under, and slides the
 //! session forward by re-issuing the cookie while the user is active.
 
-pub mod google;
 pub mod jwt;
 pub mod password;
 pub mod totp;

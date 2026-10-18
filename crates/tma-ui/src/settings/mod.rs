@@ -60,8 +60,6 @@ pub struct Forms {
     pub access_enabled: bool,
     pub bucket: bucket_form::BucketForm,
     pub bucket_result: Option<bucket_form::CheckResult>,
-    pub google: GoogleAuthInput,
-    pub google_secret: String,
 }
 
 /// A storage limit being edited in the user list.
@@ -105,7 +103,6 @@ pub struct SettingsState {
     pub activity: Option<ActivitySettings>,
     pub cloud_drive: Option<CloudDriveConfig>,
     pub storage: Option<StorageSettingsSummary>,
-    pub google: Option<GoogleAuthSummary>,
     pub versions: Option<Versions>,
     pub latest: Option<Versions>,
     pub version_error: Option<String>,

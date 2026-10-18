@@ -101,11 +101,6 @@ pub fn parse_proxies(text: &str) -> Vec<String> {
     text.split([',', '\n']).map(str::trim).filter(|e| !e.is_empty()).map(String::from).collect()
 }
 
-/// The redirect URI Google must be told, for a site address.
-pub fn redirect_uri_for(origin: &str) -> String {
-    format!("{}/api/google/callback", origin.trim_end_matches('/'))
-}
-
 /// "Full access", "Browse only", or the first labels and a count of the rest.
 pub fn permission_summary(granted: &[String], available: &[PermissionInfo]) -> String {
     if !available.is_empty() && available.iter().all(|p| granted.contains(&p.key)) {
@@ -297,7 +292,6 @@ mod tests {
             parse_proxies("10.0.0.1, 172.18.0.0/16\n proxy.local ,,"),
             ["10.0.0.1", "172.18.0.0/16", "proxy.local"]
         );
-        assert_eq!(redirect_uri_for("https://cloud.example.com/"), "https://cloud.example.com/api/google/callback");
     }
 
     #[test]

@@ -210,30 +210,6 @@ pub struct StorageTestResult {
     pub checks: Vec<String>,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct GoogleAuthSummary {
-    pub configured: bool,
-    pub version: i32,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub client_id: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub redirect_uri: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub updated_at: Option<DateTime<Utc>>,
-}
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct GoogleAuthInput {
-    pub client_id: String,
-    #[serde(default)]
-    pub client_secret: Option<String>,
-    pub redirect_uri: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub expected_version: Option<i32>,
-}
-
 /// A desktop app seen in the last few minutes.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]

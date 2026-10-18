@@ -40,7 +40,7 @@ http-body-util = "0.1"
 image = { version = "0.25", default-features = false, features = ["png"] }
 infer = "0.22"
 ipnet = "2"
-jsonwebtoken = { version = "11", default-features = false, features = ["aws_lc_rs", "use_pem"] }
+jsonwebtoken = { version = "11", default-features = false, features = ["aws_lc_rs"] }
 mime_guess = { workspace = true }
 percent-encoding = { workspace = true }
 prometheus = { version = "0.14", default-features = false, features = ["process"] }

@@ -1,14 +1,12 @@
-//! The storage bucket and the Google sign-in client: both are verified against
-//! the live service before saving, and both secrets are sealed at rest.
+//! The storage bucket: verified against the live service before saving, with
+//! its secret sealed at rest.
 
 use axum::Json;
 use axum::extract::State;
 use serde_json::json;
-use tma_core::api::{
-    GoogleAuthInput, GoogleAuthSummary, StorageSettingsInput, StorageSettingsSummary, StorageStatus, StorageTestResult,
-};
+use tma_core::api::{StorageSettingsInput, StorageSettingsSummary, StorageStatus, StorageTestResult};
 
-use crate::auth::{AuthUser, google, require_first_user};
+use crate::auth::{AuthUser, require_first_user};
 use crate::error::{ApiError, ApiResult};
 use crate::middleware::ReqCtx;
 use crate::routes::JsonBody;
@@ -106,85 +104,4 @@ pub async fn save_storage_config(
         })),
     );
     Ok(Json(storage_config::summary(&state.pool).await?))
-}
-
-pub async fn google_config(
-    State(state): State<AppState>,
-    ctx: ReqCtx,
-    auth: AuthUser,
-) -> ApiResult<Json<GoogleAuthSummary>> {
-    require_first_user(&state, &auth, &ctx, "read_google_auth_config", "Only the first user can view Google sign-in")
-        .await?;
-    Ok(Json(google::summary(&state.pool).await?))
-}
-
-/// Google sign-in is configured by the first user only.
-async fn require_google_admin(state: &AppState, auth: &AuthUser, ctx: &ReqCtx) -> ApiResult<()> {
-    require_first_user(
-        state,
-        auth,
-        ctx,
-        "update_google_auth_config",
-        "Only the first user can configure Google sign-in",
-    )
-    .await
-}
-
-pub async fn save_google_config(
-    State(state): State<AppState>,
-    ctx: ReqCtx,
-    auth: AuthUser,
-    JsonBody(input): JsonBody<GoogleAuthInput>,
-) -> ApiResult<Json<GoogleAuthSummary>> {
-    state.limits.check(limits::GOOGLE_CONFIG, &format!("google-auth-config:{}", auth.user_id))?;
-    require_google_admin(&state, &auth, &ctx).await?;
-    let current = google::load(&state.pool, &state.keyring).await.unwrap_or(None);
-    let config = google::normalize(&input, current.as_ref())?;
-    if let Err((status, message)) = google::probe(&state.http, &config).await {
-        state.audit.log(
-            &ctx,
-            Event::new("admin.settings.update")
-                .failure()
-                .resource("settings", None)
-                .error(&message)
-                .meta(json!({ "action": "update_google_auth_config" })),
-        );
-        return Err(ApiError::new(
-            axum::http::StatusCode::from_u16(status).unwrap_or(axum::http::StatusCode::BAD_GATEWAY),
-            message,
-        ));
-    }
-    let version =
-        google::save(&state.pool, &state.keyring, Some(&config), &auth.user_id, input.expected_version).await?;
-    state.google.invalidate().await;
-    state.settings_changed().await;
-    state.audit.log(
-        &ctx,
-        Event::new("admin.settings.update").resource("settings", None).meta(json!({
-            "setting": "google_auth_config", "clientId": config.client_id, "redirectUri": config.redirect_uri,
-            "secretChanged": current.map(|c| c.client_secret != config.client_secret).unwrap_or(true), "version": version,
-        })),
-    );
-    Ok(Json(google::summary(&state.pool).await?))
-}
-
-pub async fn clear_google_config(
-    State(state): State<AppState>,
-    ctx: ReqCtx,
-    auth: AuthUser,
-    JsonBody(body): JsonBody<serde_json::Value>,
-) -> ApiResult<Json<GoogleAuthSummary>> {
-    require_google_admin(&state, &auth, &ctx).await?;
-    let expected = body.get("expectedVersion").and_then(|v| v.as_i64()).map(|v| v as i32);
-    // Accounts keep their Google link, so turning sign-in back on restores it.
-    let version = google::save(&state.pool, &state.keyring, None, &auth.user_id, expected).await?;
-    state.google.invalidate().await;
-    state.settings_changed().await;
-    state.audit.log(
-        &ctx,
-        Event::new("admin.settings.update")
-            .resource("settings", None)
-            .meta(json!({ "setting": "google_auth_config", "cleared": true, "version": version })),
-    );
-    Ok(Json(google::summary(&state.pool).await?))
 }

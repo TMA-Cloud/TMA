@@ -1,11 +1,8 @@
-//! Integrations (first user only), each a collapsible card: Google sign-in,
-//! OnlyOffice and the share link address.
-
-use egui::RichText;
-use tma_core::api::GoogleAuthInput;
+//! Integrations (first user only), each a collapsible card: OnlyOffice and
+//! the share link address.
 
 use super::parts::{self, FormAction, Tone};
-use super::{fetch, forms, save};
+use super::{fetch, save};
 use crate::app::Main;
 use crate::icons::ph;
 use crate::tasks::Tasks;
@@ -14,129 +11,11 @@ use crate::widgets;
 pub fn load(main: &mut Main, tasks: &Tasks) {
     fetch(tasks, main, |c| async move { c.onlyoffice_config().await }, |s, v| s.onlyoffice = Some(v));
     fetch(tasks, main, |c| async move { c.share_base_url().await }, |s, v| s.share_url = Some(v));
-    fetch(tasks, main, |c| async move { c.google_config().await }, |s, v| s.google = Some(v));
 }
 
 pub fn show(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
-    google(main, ui, tasks);
     onlyoffice(main, ui, tasks);
     share_url(main, ui, tasks);
-}
-
-fn google(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
-    let summary = main.settings.google.clone();
-    let configured = summary.as_ref().is_some_and(|g| g.configured);
-    let status =
-        summary.as_ref().map(|_| if configured { (Tone::Success, "On".into()) } else { (Tone::Info, "Off".into()) });
-    let open = main.settings.open.contains("google");
-    let busy = main.settings.busy == Some("google");
-    let mut action = None;
-    let mut turn_off = false;
-    let clicked = parts::config_card(
-        ui,
-        ph::SIGN_IN,
-        "Google sign-in",
-        "Allow users to sign in with a Google account",
-        status,
-        open,
-        |ui| {
-            let f = &mut main.settings.forms;
-            widgets::field(ui, "Authorized redirect URI", &mut f.google.redirect_uri, false, "");
-            parts::hint(
-                ui,
-                "In Google Cloud, create an OAuth client of type Web application and add this exact URI under Authorized redirect URIs. Google allows plain http only for localhost.",
-            );
-            widgets::field(
-                ui,
-                "Client ID",
-                &mut f.google.client_id,
-                false,
-                "123456789-abc123.apps.googleusercontent.com",
-            );
-            parts::hint(ui, "Ends in .apps.googleusercontent.com");
-            parts::secret_field(
-                ui,
-                "Client secret",
-                &mut f.google_secret,
-                if configured { "Saved" } else { "GOCSPX-…" },
-            );
-            parts::hint(
-                ui,
-                if configured {
-                    "Leave empty to keep the saved secret. It is stored encrypted and never shown again."
-                } else {
-                    "Stored encrypted and never shown again."
-                },
-            );
-            if let Some(at) = summary.as_ref().filter(|_| configured).and_then(|g| g.updated_at) {
-                parts::readonly(ui, "Last changed", &tma_core::format::full_date(at), "");
-            }
-            ui.label(widgets::muted(ui, "The client ID and secret are verified with Google before saving. New accounts are created through Google sign-in only while sign-up is allowed.").size(12.0));
-            ui.horizontal(|ui| {
-                if configured {
-                    let t = widgets::tokens(ui);
-                    let label = if busy { "Turning off…" } else { "Turn off Google sign-in" };
-                    turn_off = ui
-                        .add_enabled(!busy, egui::Button::new(RichText::new(label).color(t.destructive_text)))
-                        .clicked();
-                }
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    action = parts::form_actions(ui, busy, "Check and save", "Checking…");
-                });
-            });
-        },
-    );
-    if clicked && main.settings.toggle_card("google") {
-        let g = summary.clone().unwrap_or_default();
-        main.settings.forms.google = GoogleAuthInput {
-            client_id: g.client_id.unwrap_or_default(),
-            client_secret: None,
-            redirect_uri: g.redirect_uri.unwrap_or_else(|| forms::redirect_uri_for(main.client.base_url())),
-            expected_version: Some(g.version),
-        };
-        main.settings.forms.google_secret.clear();
-    }
-    if turn_off {
-        let version = summary.as_ref().map(|g| g.version);
-        save(
-            tasks,
-            main,
-            "google",
-            move |c| async move { c.clear_google_config(version).await },
-            |main, toasts, v| {
-                main.settings.google = Some(v);
-                main.settings.open.remove("google");
-                toasts.success("Google sign-in is off");
-            },
-        );
-    }
-    match action {
-        Some(FormAction::Cancel) => {
-            main.settings.open.remove("google");
-        }
-        Some(FormAction::Save) => {
-            let f = &main.settings.forms;
-            let input = GoogleAuthInput {
-                client_id: f.google.client_id.trim().to_string(),
-                client_secret: Some(f.google_secret.trim().to_string()).filter(|s| !s.is_empty()),
-                redirect_uri: f.google.redirect_uri.trim().to_string(),
-                expected_version: summary.as_ref().map(|g| g.version),
-            };
-            save(
-                tasks,
-                main,
-                "google",
-                move |c| async move { c.save_google_config(&input).await },
-                |main, toasts, v| {
-                    main.settings.google = Some(v);
-                    main.settings.forms.google_secret.clear();
-                    main.settings.open.remove("google");
-                    toasts.success("Google sign-in is on");
-                },
-            );
-        }
-        None => {}
-    }
 }
 
 fn onlyoffice(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {

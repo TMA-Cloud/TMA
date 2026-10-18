@@ -73,7 +73,7 @@ pub async fn build_state_with_keyring(config: Config, keyring: Keyring, role: Ro
     if role != Role::Worker && config.web_dist_dir.is_none() {
         tracing::warn!("Web app not built (no dist directory). Non-API routes will return a graceful 404.");
     }
-    // Defaults so no outbound call (Google sign-in, version check) can hang a request; calls may set shorter ones.
+    // Defaults so no outbound call (storage checks, version check) can hang a request; calls may set shorter ones.
     let http = reqwest::Client::builder()
         .user_agent(concat!("tma-cloud/", env!("CARGO_PKG_VERSION")))
         .connect_timeout(std::time::Duration::from_secs(10))
@@ -86,7 +86,6 @@ pub async fn build_state_with_keyring(config: Config, keyring: Keyring, role: Ro
         events: EventHub::new(cache.clone()),
         access: AccessTracker::new(pool.clone(), settings.clone()),
         limits: RateLimits::default(),
-        google: Default::default(),
         config,
         pool,
         cache,
@@ -110,7 +109,6 @@ fn spawn_background(state: &AppState) {
             if what == "storage" {
                 state.storage.invalidate().await;
             }
-            state.google.invalidate().await;
         });
     });
     state.access.spawn_flusher();
@@ -152,7 +150,7 @@ fn spawn_rewrap(state: &AppState) {
     tokio::spawn(async move {
         match services::keys::rewrap_to_primary(&state.pool, &state.keyring).await {
             Ok(r) => {
-                if r.rewrapped > 0 || r.storage_secret || r.google_secret {
+                if r.rewrapped > 0 || r.storage_secret {
                     tracing::info!(primary = r.primary, rewrapped = r.rewrapped, "[KeyRewrap] Rewrapped keys");
                 }
                 if !r.failures.is_empty() {

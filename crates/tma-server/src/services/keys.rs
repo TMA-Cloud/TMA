@@ -4,16 +4,13 @@
 use anyhow::{Result, bail};
 use sqlx::PgPool;
 
-use crate::crypto::{
-    GOOGLE_SECRET, Keyring, STORAGE_SECRET, kek_check_matches, kek_check_value, open_secret, unwrap_dek,
-};
+use crate::crypto::{Keyring, STORAGE_SECRET, kek_check_matches, kek_check_value, open_secret, unwrap_dek};
 
 /// Every version that file keys or settings secrets are wrapped under.
 async fn versions_in_use(pool: &PgPool) -> Result<Vec<i32>> {
     let rows: Vec<Option<i32>> = sqlx::query_scalar(
         "SELECT DISTINCT dek_kek_version FROM files WHERE dek_wrapped IS NOT NULL
-         UNION SELECT storage_secret_kek_version FROM app_settings WHERE id = 'app_settings' AND storage_secret_encrypted IS NOT NULL
-         UNION SELECT google_client_secret_kek_version FROM app_settings WHERE id = 'app_settings' AND google_client_secret_encrypted IS NOT NULL",
+         UNION SELECT storage_secret_kek_version FROM app_settings WHERE id = 'app_settings' AND storage_secret_encrypted IS NOT NULL",
     )
     .fetch_all(pool)
     .await?;
@@ -41,17 +38,6 @@ async fn opens_existing_data(pool: &PgPool, version: i32, kek: &[u8; 32]) -> Res
     .await?;
     if let Some((sealed, akid)) = storage
         && open_secret(&sealed, &STORAGE_SECRET, &akid, kek).is_err()
-    {
-        return Ok(false);
-    }
-    let google: Option<(Vec<u8>, String)> = sqlx::query_as(
-        "SELECT google_client_secret_encrypted, google_client_id FROM app_settings WHERE id = 'app_settings' AND google_client_secret_kek_version = $1",
-    )
-    .bind(version)
-    .fetch_optional(pool)
-    .await?;
-    if let Some((sealed, id)) = google
-        && open_secret(&sealed, &GOOGLE_SECRET, &id, kek).is_err()
     {
         return Ok(false);
     }
@@ -111,7 +97,6 @@ pub async fn verify(pool: &PgPool, keyring: &Keyring) -> Result<()> {
 pub struct RewrapReport {
     pub primary: i32,
     pub storage_secret: bool,
-    pub google_secret: bool,
     pub rewrapped: u64,
     pub failures: Vec<(String, i32, String)>,
 }
@@ -123,7 +108,6 @@ pub async fn rewrap_to_primary(pool: &PgPool, keyring: &Keyring) -> Result<Rewra
     let mut report = RewrapReport {
         primary,
         storage_secret: crate::storage::config::rewrap_secret(pool, keyring).await?,
-        google_secret: crate::auth::google::rewrap_secret(pool, keyring).await?,
         ..Default::default()
     };
     // The cursor passes failing rows too, so one bad row cannot stall the run.

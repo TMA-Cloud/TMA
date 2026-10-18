@@ -205,17 +205,6 @@ pub fn config_card(
     clicked
 }
 
-/// A label and a value that is shown, not edited.
-pub fn readonly(ui: &mut egui::Ui, label: &str, value: &str, empty: &str) {
-    let t = widgets::tokens(ui);
-    let text = if value.is_empty() {
-        RichText::new(empty).italics().color(t.label_tertiary)
-    } else {
-        RichText::new(value).color(t.label)
-    };
-    widgets::labelled(ui, label, |ui| ui.add(egui::Label::new(text).wrap()));
-}
-
 /// A field's small print under it.
 pub fn hint(ui: &mut egui::Ui, text: &str) {
     let t = widgets::tokens(ui);

@@ -35,7 +35,6 @@ pub struct Inner {
     pub trusted_proxies: Vec<ipnet::IpNet>,
     /// CSP hashes of the inline scripts in the web app's index.html.
     pub spa_script_hashes: crate::middleware::SpaHashes,
-    pub google: crate::auth::google::GoogleConfigCache,
 }
 
 #[derive(Clone)]

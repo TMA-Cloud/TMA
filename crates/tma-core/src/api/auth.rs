@@ -134,12 +134,6 @@ pub struct ChangePasswordRequest {
     pub mfa_code: Option<String>,
 }
 
-/// `{ enabled }` from `/api/google/enabled`.
-#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
-pub struct EnabledFlag {
-    pub enabled: bool,
-}
-
 /// `{ signupEnabled }` from the public signup status.
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]

@@ -43,7 +43,6 @@ pub struct AppSettings {
     pub access_time_flush_seconds: i32,
     pub cloud_drive_save_only: bool,
     pub storage_config_version: i32,
-    pub google_config_version: i32,
 }
 
 impl Default for AppSettings {
@@ -66,7 +65,6 @@ impl Default for AppSettings {
             access_time_flush_seconds: a.access_time_flush_seconds,
             cloud_drive_save_only: true,
             storage_config_version: 0,
-            google_config_version: 0,
         }
     }
 }
@@ -131,8 +129,7 @@ const SELECT_SETTINGS: &str =
     "SELECT signup_enabled, first_user_id, onlyoffice_jwt_secret, onlyoffice_url, share_base_url,
         max_upload_size_bytes, hide_file_extensions, desktop_only, allow_password_change,
         COALESCE(known_proxies, ARRAY[]::text[]) AS known_proxies, session_idle_days, access_time_tracking,
-        access_time_window_minutes, access_time_flush_seconds, cloud_drive_save_only, storage_config_version,
-        google_config_version
+        access_time_window_minutes, access_time_flush_seconds, cloud_drive_save_only, storage_config_version
    FROM app_settings WHERE id = 'app_settings'";
 
 /// A shared, self-refreshing snapshot of `app_settings`.

@@ -1,5 +1,4 @@
-//! Sign-in, sign-up, sign-out, the profile and password change; Google sign-in
-//! is in `google_flow`.
+//! Sign-in, sign-up, sign-out, the profile and password change.
 
 use axum::extract::State;
 use axum::http::HeaderMap;
@@ -20,17 +19,8 @@ use crate::services::limits;
 use crate::state::AppState;
 use crate::util::{is_email, normalize_email};
 
-mod google_flow;
-
 pub fn public_routes() -> Router<AppState> {
-    Router::new()
-        .route("/signup", post(signup))
-        .route("/login", post(login))
-        .route("/logout", post(logout))
-        .route("/google/enabled", get(google_flow::google_enabled))
-        .route("/google/login", get(google_flow::google_login))
-        .route("/google/callback", get(google_flow::google_callback))
-        .route("/google/mfa-verify", post(google_flow::google_mfa_verify))
+    Router::new().route("/signup", post(signup)).route("/login", post(login)).route("/logout", post(logout))
 }
 
 pub fn authed_routes() -> Router<AppState> {

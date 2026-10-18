@@ -48,7 +48,7 @@ pub fn verify(secret: &str, token: &str) -> Option<Claims> {
         .map(|d| d.claims)
 }
 
-/// Sign any claims with HS256 (OnlyOffice tokens, MFA-pending and viewer tickets).
+/// Sign any claims with HS256 (OnlyOffice tokens, viewer and download tickets).
 pub fn sign_value<T: Serialize>(secret: &str, claims: &T) -> anyhow::Result<String> {
     Ok(jsonwebtoken::encode(&Header::new(Algorithm::HS256), claims, &EncodingKey::from_secret(secret.as_bytes()))?)
 }

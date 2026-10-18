@@ -18,12 +18,6 @@ pub fn routes() -> Router<AppState> {
         .route("/storage-status", get(integrations::storage_status))
         .route("/storage-config", get(integrations::storage_config).put(integrations::save_storage_config))
         .route("/storage-config/test", post(integrations::test_storage_config))
-        .route(
-            "/google-auth-config",
-            get(integrations::google_config)
-                .put(integrations::save_google_config)
-                .delete(integrations::clear_google_config),
-        )
         .route("/onlyoffice-configured", get(config::onlyoffice_configured))
         .route("/onlyoffice-config", get(config::onlyoffice_config).put(config::save_onlyoffice_config))
         .route("/share-base-url-config", get(config::share_base_url).put(config::save_share_base_url))

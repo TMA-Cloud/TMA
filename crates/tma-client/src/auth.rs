@@ -2,8 +2,8 @@
 
 use serde_json::{Value, json};
 use tma_core::api::{
-    BackupCodes, ChangePasswordRequest, CountResponse, EnabledFlag, LoginRequest, MessageResponse, MfaEnabled,
-    MfaSetup, MfaStatus, PublicSignupStatus, RevokeOthersResponse, SessionList, SignupRequest, User, UserEnvelope,
+    BackupCodes, ChangePasswordRequest, CountResponse, LoginRequest, MessageResponse, MfaEnabled, MfaSetup, MfaStatus,
+    PublicSignupStatus, RevokeOthersResponse, SessionList, SignupRequest, User, UserEnvelope,
 };
 
 use crate::error::ApiResult;
@@ -44,14 +44,6 @@ impl Client {
 
     pub async fn public_signup_status(&self) -> ApiResult<PublicSignupStatus> {
         self.get("/api/signup-status").await
-    }
-
-    pub async fn google_enabled(&self) -> ApiResult<bool> {
-        Ok(self.get::<EnabledFlag>("/api/google/enabled").await?.enabled)
-    }
-
-    pub fn google_login_url(&self) -> String {
-        self.url("/api/google/login")
     }
 
     pub async fn sessions(&self, refresh_ip: bool) -> ApiResult<SessionList> {

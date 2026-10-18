@@ -29,8 +29,7 @@ pub struct AuthState {
     busy: bool,
     error: Option<String>,
     signup_enabled: Option<bool>,
-    google: bool,
-    /// The server the signup and Google flags were read from.
+    /// The server the signup flag was read from.
     probed: Option<String>,
 }
 
@@ -48,7 +47,6 @@ impl AuthState {
             busy: false,
             error: None,
             signup_enabled: None,
-            google: false,
             probed: None,
         }
     }
@@ -66,7 +64,7 @@ fn client_for(app: &App, server: &str) -> ApiResult<Client> {
     }
 }
 
-/// Read whether this server allows signup and Google sign-in.
+/// Read whether this server allows signup.
 fn probe(app: &mut App) {
     let Some(server) = auth_state(app).map(|s| s.server.clone()) else { return };
     if auth_state(app).and_then(|s| s.probed.clone()).as_deref() == Some(server.as_str()) {
@@ -77,15 +75,10 @@ fn probe(app: &mut App) {
         state.probed = Some(server.clone());
     }
     app.tasks.run(
-        async move {
-            let signup = client.public_signup_status().await.map(|s| s.signup_enabled).ok();
-            let google = client.google_enabled().await.unwrap_or(false);
-            (signup, google)
-        },
-        move |app, (signup, google)| {
+        async move { client.public_signup_status().await.map(|s| s.signup_enabled).ok() },
+        move |app, signup| {
             if let Some(state) = auth_state(app).filter(|s| s.probed.as_deref() == Some(server.as_str())) {
                 state.signup_enabled = signup;
-                state.google = google;
             }
         },
     );
@@ -243,7 +236,6 @@ pub fn show(app: &mut App, root: &mut egui::Ui) {
     }
     let mut do_submit = false;
     let mut do_probe = false;
-    let mut google = false;
     let mut flip_theme = false;
     egui::CentralPanel::default().frame(egui::Frame::new().fill(t.canvas)).show(root, |ui| {
         let Some(state) = (match &mut app.screen {
@@ -319,9 +311,6 @@ pub fn show(app: &mut App, root: &mut egui::Ui) {
                     if (wide_button(ui, label, true, !state.busy).clicked() || enter) && ok {
                         do_submit = true;
                     }
-                    if !desktop && wide_button(ui, "Continue with Google", false, state.google).clicked() {
-                        google = true;
-                    }
                 });
             ui.add_space(14.0);
             match (state.mode, state.signup_enabled) {
@@ -350,9 +339,5 @@ pub fn show(app: &mut App, root: &mut egui::Ui) {
     }
     if do_submit {
         submit(app);
-    }
-    if google {
-        let url = client_for(app, "").map(|c| c.google_login_url()).unwrap_or_default();
-        crate::platform::navigate(&url);
     }
 }

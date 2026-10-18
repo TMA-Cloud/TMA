@@ -56,12 +56,6 @@ pub const STORAGE_CONFIG: LimitSpec = LimitSpec {
     message: "Too many storage connection attempts, please try again later",
     failures_only: false,
 };
-pub const GOOGLE_CONFIG: LimitSpec = LimitSpec {
-    window: Duration::from_secs(900),
-    max: 20,
-    message: "Too many Google sign-in setting changes, please try again later",
-    failures_only: false,
-};
 pub const API: LimitSpec = LimitSpec {
     window: Duration::from_secs(900),
     max: 10_000,

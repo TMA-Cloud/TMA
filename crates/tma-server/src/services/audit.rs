@@ -114,7 +114,6 @@ const SENSITIVE: &[&str] = &[
     "connectionstring",
     "db_password",
     "jwt_secret",
-    "google_client_secret",
     "onlyoffice_jwt_secret",
 ];
 

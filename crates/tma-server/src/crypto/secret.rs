@@ -1,6 +1,5 @@
-//! AES-256-GCM sealing for secrets kept in `app_settings` (the bucket secret,
-//! the Google client secret). Each purpose gets its own HKDF subkey of the
-//! master key, and the AAD binds a secret to the identifier stored beside it.
+//! AES-256-GCM sealing for secrets kept in `app_settings` (the bucket secret).
+//! Each purpose gets its own HKDF subkey of the master key, and the AAD binds a secret to the identifier stored beside it.
 //! Layout: `format(1) || iv(12) || ciphertext || tag(16)`.
 
 use anyhow::{Result, anyhow, bail};
@@ -20,13 +19,6 @@ pub const STORAGE_SECRET: SecretPurpose = SecretPurpose {
     key_info: "tma-cloud/storage-credentials/v1",
     aad_prefix: "tma-cloud:storage-secret",
     label: "storage secret",
-};
-
-/// The client ID is the binding, so a secret cannot move onto another client's row.
-pub const GOOGLE_SECRET: SecretPurpose = SecretPurpose {
-    key_info: "tma-cloud/google-oauth/v1",
-    aad_prefix: "tma-cloud:google-client-secret",
-    label: "Google client secret",
 };
 
 fn subkey(kek: &[u8; 32], purpose: &SecretPurpose) -> Result<LessSafeKey> {
@@ -90,6 +82,8 @@ mod tests {
         let sealed = seal_secret("s3cr3t", &STORAGE_SECRET, "AKID", &kek).unwrap_or_default();
         assert_eq!(open_secret(&sealed, &STORAGE_SECRET, "AKID", &kek).ok().as_deref(), Some("s3cr3t"));
         assert!(open_secret(&sealed, &STORAGE_SECRET, "OTHER", &kek).is_err());
-        assert!(open_secret(&sealed, &GOOGLE_SECRET, "AKID", &kek).is_err());
+        // Another purpose derives another subkey, so it cannot open the secret either.
+        let other = SecretPurpose { key_info: "tma-cloud/other/v1", aad_prefix: "tma-cloud:other", label: "other" };
+        assert!(open_secret(&sealed, &other, "AKID", &kek).is_err());
     }
 }
