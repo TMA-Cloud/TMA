@@ -33,6 +33,11 @@ impl Notifier {
         self.ctx.send_viewport_cmd(egui::ViewportCommand::Close);
     }
 
+    /// A file handed to its app is open (or failed to open): end its opening animation.
+    pub fn opened(&self, id: &str) {
+        tma_ui::opening::finish(&self.ctx, id);
+    }
+
     pub fn info(&self, text: impl Into<String>) {
         let text = text.into();
         self.send(move |app| app.toasts.info(text));

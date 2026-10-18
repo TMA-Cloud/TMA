@@ -182,7 +182,10 @@ fn recent(main: &crate::app::Main, ui: &mut Ui, t: &crate::theme::Tokens, action
                 if response.hovered() {
                     ui.painter().rect_filled(rect, 12.0, t.fill_quaternary);
                 }
+                let opening = crate::files::opening::look(ui.ctx(), &item.id);
                 let icon = egui::Rect::from_center_size(rect.left_center() + Vec2::new(21.0, 0.0), Vec2::splat(26.0));
+                crate::files::opening::paint(ui.painter(), rect, 12, icon, opening, t);
+                let icon = crate::files::opening::icon_rect(icon, opening);
                 icons::file(ui.painter(), icon, t, &item.name, item.mime_type.as_deref());
                 ui.painter().text(
                     rect.left_center() + Vec2::new(44.0, -9.0),

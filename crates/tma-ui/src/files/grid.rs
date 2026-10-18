@@ -62,7 +62,10 @@ pub(super) fn grid(main: &mut Main, ui: &mut Ui, t: &Tokens, desktop: bool, acti
                         egui::StrokeKind::Inside,
                     );
                     paint_item_fill(ui, main, &item, rect, response.hovered(), 16, t);
+                    let opening = super::opening::look(ui.ctx(), &item.id);
                     let icon_rect = Rect::from_center_size(rect.center_top() + Vec2::new(0.0, 34.0), Vec2::splat(44.0));
+                    super::opening::paint(ui.painter(), rect, 16, icon_rect, opening, t);
+                    let icon_rect = super::opening::icon_rect(icon_rect, opening);
                     let thumb = super::thumbs::wants_thumbnail(&item).then(|| main.browser.thumbs.get(&item)).flatten();
                     if let Some(texture) = thumb {
                         let area = Rect::from_center_size(

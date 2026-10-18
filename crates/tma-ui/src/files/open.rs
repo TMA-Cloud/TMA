@@ -40,11 +40,17 @@ pub(super) fn file(app: &mut App, item: FileItem) {
         // Every way of opening reads the file, which the server allows only with Download.
         app.toasts.error("You don't have permission to open files. Ask the account owner.");
     } else if app.host.kind() == HostKind::Desktop {
-        // The desktop app hands every file to the computer, which opens it in its own app.
+        // The desktop app hands every file to the computer, which opens it in its own app;
+        // the host reports back once it has, which ends the opening animation.
+        super::opening::start(app.tasks.ctx(), &item.id);
         run(app, Action::EditInApp(item));
     } else if is_image(&item) {
+        // The viewer shows at once, so the icon only pops.
+        super::opening::start(app.tasks.ctx(), &item.id);
+        super::opening::finish(app.tasks.ctx(), &item.id);
         run(app, Action::Preview(item));
     } else if is_document(&item.name) && main.instance.onlyoffice {
+        super::opening::start(app.tasks.ctx(), &item.id);
         run(app, Action::OpenDocument(item));
     } else {
         // Opening must not start a download nobody asked for; Download is one click away.
@@ -60,7 +66,10 @@ pub(super) fn document(app: &mut App, item: FileItem) {
     let tab = client.url(&format!("/api/onlyoffice/viewer/{}?theme={theme}", item.id));
     match app.host.kind() {
         // On a phone the editor gets the whole tab, as before.
-        HostKind::Web if crate::widgets::mobile(app.tasks.ctx()) => app.host.open_url(&tab),
+        HostKind::Web if crate::widgets::mobile(app.tasks.ctx()) => {
+            super::opening::finish(app.tasks.ctx(), &item.id);
+            app.host.open_url(&tab);
+        }
         HostKind::Web => {
             let css = |c: egui::Color32| format!("rgb({},{},{})", c.r(), c.g(), c.b());
             let t = app.t;
@@ -71,12 +80,14 @@ pub(super) fn document(app: &mut App, item: FileItem) {
                 separator: css(t.separator),
             };
             let theme = theme.to_string();
+            let id = item.id.clone();
             app.tasks.run(
                 async move {
                     let reply = client.document_editor(&item.id, &theme).await.map_err(|e| e.message)?;
                     crate::document::open(&item.name, reply, &look, &tab).await
                 },
-                |app, result: Result<(), String>| {
+                move |app, result: Result<(), String>| {
+                    super::opening::finish(app.tasks.ctx(), &id);
                     if let Err(err) = result {
                         app.toasts.error(err);
                     }
@@ -85,7 +96,9 @@ pub(super) fn document(app: &mut App, item: FileItem) {
         }
         HostKind::Desktop => {
             let theme = theme.to_string();
+            let id = item.id.clone();
             app.tasks.run(async move { client.onlyoffice_ticket(&item.id, &theme).await }, move |app, result| {
+                super::opening::finish(app.tasks.ctx(), &id);
                 match result {
                     Ok(url) => app.host.open_url(&url),
                     Err(err) => app.fail(generation, &err),

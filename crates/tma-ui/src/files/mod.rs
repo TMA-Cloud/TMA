@@ -11,6 +11,7 @@ mod keys;
 mod marquee;
 mod menu;
 mod open;
+pub mod opening;
 mod paste;
 mod sharing;
 mod thumbs;

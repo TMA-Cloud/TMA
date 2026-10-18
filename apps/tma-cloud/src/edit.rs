@@ -22,6 +22,7 @@ const BLOCKED_EXTS: &[&str] = &[
 pub fn open(paths: Paths, client: Client, file: FileItem, notifier: Notifier) {
     let ext = tma_core::names::extension_of(&file.name);
     if BLOCKED_EXTS.contains(&ext.as_str()) {
+        notifier.opened(&file.id);
         notifier.error("Programs and scripts can't be opened from the cloud. Download the file to run it.");
         return;
     }
@@ -29,11 +30,13 @@ pub fn open(paths: Paths, client: Client, file: FileItem, notifier: Notifier) {
         let info = match client.info(&file.id).await {
             Ok(info) => info,
             Err(err) => {
+                notifier.opened(&file.id);
                 notifier.error(format!("Cannot open {}: {}", file.name, err.message));
                 return;
             }
         };
         let Some(path) = paths.local_path(&info.location_path, &info.name, EDIT_WINDOW) else {
+            notifier.opened(&file.id);
             notifier.error(format!(
                 "Cannot open {} in a desktop app because Cloud Drive is not connected. See Settings → Desktop app.",
                 file.name
@@ -41,8 +44,10 @@ pub fn open(paths: Paths, client: Client, file: FileItem, notifier: Notifier) {
             return;
         };
         // Opening by path can block while Windows downloads the file; keep it off the async workers.
-        let _ =
-            std::thread::Builder::new().name("open-in-app".into()).spawn(move || launch(&path, &file.name, &notifier));
+        let _ = std::thread::Builder::new().name("open-in-app".into()).spawn(move || {
+            launch(&path, &file.name, &notifier);
+            notifier.opened(&file.id);
+        });
     });
 }
 

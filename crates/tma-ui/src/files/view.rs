@@ -264,7 +264,10 @@ fn list(main: &mut Main, ui: &mut Ui, t: &Tokens, desktop: bool, actions: &mut V
             let grab = Rect::from_min_max(rect.min, egui::pos2(text_left + name_width + 8.0, rect.max.y));
             let response = interact(main, ui, rect, grab, &item, desktop, actions);
             paint_item_fill(ui, main, &item, rect, response.hovered(), 12, t);
+            let opening = super::opening::look(ui.ctx(), &item.id);
             let icon_rect = Rect::from_center_size(rect.left_center() + Vec2::new(25.0, 0.0), Vec2::splat(29.0));
+            super::opening::paint(ui.painter(), rect, 12, icon_rect, opening, t);
+            let icon_rect = super::opening::icon_rect(icon_rect, opening);
             if item.is_folder() {
                 icons::folder(ui.painter(), icon_rect, t, false);
             } else {
