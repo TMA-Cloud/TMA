@@ -94,9 +94,9 @@ pub enum ProgressLine {
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Versions {
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub frontend: Option<String>,
+    pub server: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub backend: Option<String>,
+    pub web: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub desktop: Option<String>,
 }

@@ -36,7 +36,7 @@ pub fn available(current: &Versions, latest: &Versions, desktop: bool) -> Vec<(&
         (Some(c), Some(l)) if tma_core::is_newer_version(l, c) => Some(l.clone()),
         _ => None,
     };
-    if let Some(v) = newer(&current.backend, &latest.backend) {
+    if let Some(v) = newer(&current.server, &latest.server) {
         out.push(("Server", v));
     }
     let app = Some(env!("CARGO_PKG_VERSION").to_string());
@@ -93,9 +93,9 @@ pub fn show(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks, host: &mut dyn Ho
     let latest = main.settings.latest.clone().unwrap_or_default();
     let checking = main.settings.busy == Some("latest");
     section(ui, "Versions", "", |ui| {
-        row(ui, "Server", current.backend.as_deref(), latest.backend.as_deref(), checking);
-        if current.frontend.is_some() {
-            row(ui, "Web app", current.frontend.as_deref(), latest.frontend.as_deref(), checking);
+        row(ui, "Server", current.server.as_deref(), latest.server.as_deref(), checking);
+        if current.web.is_some() {
+            row(ui, "Web app", current.web.as_deref(), latest.web.as_deref(), checking);
         }
         if desktop {
             row(ui, "Desktop app", Some(&app_version), latest.desktop.as_deref(), checking);
@@ -157,8 +157,8 @@ pub fn show(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks, host: &mut dyn Ho
 mod tests {
     use super::*;
 
-    fn versions(backend: &str, desktop: &str) -> Versions {
-        Versions { backend: Some(backend.into()), desktop: Some(desktop.into()), ..Default::default() }
+    fn versions(server: &str, desktop: &str) -> Versions {
+        Versions { server: Some(server.into()), desktop: Some(desktop.into()), ..Default::default() }
     }
 
     #[test]
