@@ -24,7 +24,8 @@ mod web {
     }
 
     pub fn start() {
-        eframe::WebLogger::init(log::LevelFilter::Info).ok();
+        // Warnings and errors only: eframe logs its own start-up at info level.
+        eframe::WebLogger::init(log::LevelFilter::Warn).ok();
         wasm_bindgen_futures::spawn_local(async {
             let Some(document) = web_sys::window().and_then(|w| w.document()) else { return };
             let Some(canvas) =
@@ -47,6 +48,7 @@ mod web {
                     }),
                 )
                 .await;
+            super::name_text_agent(&document);
             if let Some(el) = document.get_element_by_id(LOADING_ID) {
                 match result {
                     Ok(()) => el.remove(),
@@ -56,6 +58,16 @@ mod web {
                 }
             }
         });
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+/// eframe's hidden input for typing and IME has no id, which browsers report as
+/// a form-field issue; name it, and keep autofill off it.
+fn name_text_agent(document: &web_sys::Document) {
+    if let Ok(Some(input)) = document.query_selector("body > input:not([id])") {
+        let _ = input.set_attribute("id", "tma-text-agent");
+        let _ = input.set_attribute("autocomplete", "off");
     }
 }
 
