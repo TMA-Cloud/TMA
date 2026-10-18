@@ -4,7 +4,7 @@
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 // Pure and tested on every system; only the Windows clipboard calls it so far.
-#[cfg_attr(not(windows), allow(dead_code))]
+#[cfg_attr(not(windows), expect(dead_code, reason = "only the Windows clipboard calls it so far"))]
 mod clip_plan;
 mod clipboard;
 #[cfg(windows)]
