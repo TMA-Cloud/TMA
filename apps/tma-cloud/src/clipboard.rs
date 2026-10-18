@@ -63,6 +63,16 @@ pub fn copied(paths: Paths, client: Client, items: Vec<FileItem>, cut: bool, not
                 }
             }
         }
+        let reveal = paths.clone();
+        let Ok(local) = tma_client::rt::handle()
+            .spawn_blocking(move || {
+                local.iter().for_each(|path| reveal.reveal(path));
+                local
+            })
+            .await
+        else {
+            return;
+        };
         if GENERATION.load(Ordering::SeqCst) != generation {
             return;
         }

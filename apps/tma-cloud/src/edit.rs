@@ -45,6 +45,7 @@ pub fn open(paths: Paths, client: Client, file: FileItem, notifier: Notifier) {
         };
         // Opening by path can block while Windows downloads the file; keep it off the async workers.
         let _ = std::thread::Builder::new().name("open-in-app".into()).spawn(move || {
+            paths.reveal(&path);
             #[cfg(windows)]
             let program = launch(&path, &file.name, &notifier);
             #[cfg(not(windows))]

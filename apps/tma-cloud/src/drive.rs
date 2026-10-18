@@ -108,6 +108,22 @@ impl Paths {
         path.extend(rel.split('\\').filter(|p| !p.is_empty()));
         Some(path)
     }
+
+    /// Make sure `path` is there for other programs. Windows makes a Cloud Drive
+    /// folder's placeholders only when the folder is listed, so a file in a folder
+    /// never browsed cannot be opened or copied yet: list each folder on the way.
+    /// Blocking; the drive answers these listings from the server.
+    pub fn reveal(&self, path: &std::path::Path) {
+        let Status::Mounted(point) = self.status.lock().unwrap_or_else(|e| e.into_inner()).clone() else { return };
+        let Ok(rest) = path.strip_prefix(crate::host::drive_root(&point)) else { return };
+        let mut dir = std::path::PathBuf::from(crate::host::drive_root(&point));
+        for part in rest.parent().into_iter().flat_map(|p| p.components()) {
+            dir.push(part);
+            if let Ok(items) = std::fs::read_dir(&dir) {
+                items.for_each(drop);
+            }
+        }
+    }
 }
 
 /// `tma-cloud --forget-drive`, run by the uninstaller: unregister the Cloud Files
