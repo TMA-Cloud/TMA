@@ -274,6 +274,17 @@ pub fn form_heading(ui: &mut egui::Ui, title: &str, note: &str) {
 }
 
 /// Usage against the quota: amber once nearly full, red once it effectively is.
+/// A usage bar's colour: amber from 80% of the limit, red from 95%.
+pub fn usage_color(t: &crate::theme::Tokens, percent: f64) -> egui::Color32 {
+    if percent >= 95.0 {
+        t.destructive
+    } else if percent >= 80.0 {
+        t.warning
+    } else {
+        t.accent
+    }
+}
+
 pub fn meter(ui: &mut egui::Ui, usage: Option<StorageUsage>) {
     let t = widgets::tokens(ui);
     widgets::card(ui, |ui| {
@@ -296,13 +307,7 @@ pub fn meter(ui: &mut egui::Ui, usage: Option<StorageUsage>) {
             return;
         };
         let raw = usage.used as f64 * 100.0 / total as f64;
-        let color = if raw >= 95.0 {
-            t.destructive
-        } else if raw >= 80.0 {
-            t.warning
-        } else {
-            t.accent
-        };
+        let color = usage_color(&t, raw);
         ui.add_space(6.0);
         let (rect, _) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 8.0), Sense::hover());
         ui.painter().rect_filled(rect, 4.0, t.fill_secondary);

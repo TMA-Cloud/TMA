@@ -141,10 +141,14 @@ pub fn logo(painter: &Painter, rect: Rect, t: &Tokens) {
 /// A small filled circle with initials, for the user menu.
 pub fn avatar(painter: &Painter, center: Pos2, radius: f32, name: &str, t: &Tokens) {
     painter.circle_filled(center, radius, t.accent);
+    painter.text(center, Align2::CENTER_CENTER, initials(name), FontId::proportional(radius * 0.85), t.on_accent);
+}
+
+/// Up to two initials from a name, or "?" when it has none.
+pub fn initials(name: &str) -> String {
     let initials: String =
         name.split_whitespace().filter_map(|w| w.chars().next()).take(2).collect::<String>().to_uppercase();
-    let initials = if initials.is_empty() { "?".to_string() } else { initials };
-    painter.text(center, Align2::CENTER_CENTER, initials, FontId::proportional(radius * 0.85), t.on_accent);
+    if initials.is_empty() { "?".to_string() } else { initials }
 }
 
 pub fn point(x: f32, y: f32) -> Pos2 {

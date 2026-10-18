@@ -80,6 +80,11 @@ pub fn relative_date(date: DateTime<Utc>, now: DateTime<Utc>) -> String {
     local.format("%b %-d, %Y").to_string()
 }
 
+/// The calendar day alone: "Jan 5, 2026".
+pub fn day(date: DateTime<Utc>) -> String {
+    date.with_timezone(&Local).format("%b %-d, %Y").to_string()
+}
+
 /// Full timestamp for Get Info: "Jan 5, 2026 at 2:30 PM".
 pub fn full_date(date: DateTime<Utc>) -> String {
     date.with_timezone(&Local).format("%b %-d, %Y at %-I:%M %p").to_string()

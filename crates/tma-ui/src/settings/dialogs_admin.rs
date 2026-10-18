@@ -2,10 +2,11 @@
 //! desktop clients online now.
 
 use egui::{Key, RichText};
-use tma_core::api::AdminUser;
+use tma_core::api::{AdminUser, AdminUserPage};
 
 use super::forms::{self, Unit};
 use super::parts::{self, Tone};
+use super::users_table::{self, Col};
 use super::{LimitEdit, fetch, save};
 use crate::app::Main;
 use crate::icons::ph;
@@ -71,64 +72,61 @@ fn set_limit(main: &mut Main, tasks: &Tasks, user_id: String, limit: Option<i64>
     );
 }
 
-fn mfa_label(ui: &mut egui::Ui, on: bool) {
+/// The limit cell: the value, which opens the editor below the row.
+fn limit_cell(ui: &mut egui::Ui, main: &mut Main, user: &AdminUser) {
     let t = widgets::tokens(ui);
-    let (icon, text, color) =
-        if on { (ph::SHIELD_CHECK, "Enabled", t.positive_text) } else { (ph::SHIELD, "Disabled", t.label_tertiary) };
-    ui.label(RichText::new(format!("{icon} {text}")).size(12.0).color(color));
+    let busy = main.settings.busy == Some("limit");
+    let value = user.storage_limit.filter(|l| *l > 0).map(tma_core::format::file_size);
+    let color = if value.is_some() { t.label } else { t.label_secondary };
+    let text = RichText::new(format!("{}  {}", value.unwrap_or_else(|| "Default".into()), ph::PENCIL_SIMPLE))
+        .size(13.0)
+        .color(color);
+    if ui.add_enabled(!busy, egui::Button::new(text).frame(false)).on_hover_text("Edit storage limit").clicked() {
+        let (value, unit) = forms::split_size(user.storage_limit, Unit::Tb);
+        main.settings.limit_edit = Some(LimitEdit { user_id: user.id.clone(), value, unit });
+        main.settings.limit_error = None;
+    }
 }
 
-/// The limit cell: the value with an edit button, or the editor.
-fn limit_cell(ui: &mut egui::Ui, main: &mut Main, tasks: &Tasks, user: &AdminUser) {
+/// The storage limit editor, in a strip under the account it edits.
+fn limit_editor(ui: &mut egui::Ui, main: &mut Main, tasks: &Tasks, user: &AdminUser) {
+    let t = widgets::tokens(ui);
     let busy = main.settings.busy == Some("limit");
-    let editing = main.settings.limit_edit.as_ref().is_some_and(|e| e.user_id == user.id);
-    if !editing {
-        ui.horizontal(|ui| {
-            let value = user.storage_limit.filter(|l| *l > 0).map(tma_core::format::file_size);
-            ui.label(RichText::new(value.unwrap_or_else(|| "Default".into())).size(12.0));
-            if ui
-                .add_enabled(!busy, egui::Button::new(ph::PENCIL_SIMPLE).frame(false))
-                .on_hover_text("Edit storage limit")
-                .clicked()
-            {
-                let (value, unit) = forms::split_size(user.storage_limit, Unit::Tb);
-                main.settings.limit_edit = Some(LimitEdit { user_id: user.id.clone(), value, unit });
-                main.settings.limit_error = None;
-            }
-        });
-        return;
-    }
     let Some(edit) = &mut main.settings.limit_edit else { return };
     let mut action = None;
-    ui.horizontal(|ui| {
-        let r = ui.add_enabled(!busy, egui::TextEdit::singleline(&mut edit.value).desired_width(64.0).hint_text("0"));
-        if r.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter)) {
-            action = Some("save");
-        }
-        if ui.input(|i| i.key_pressed(Key::Escape)) {
-            action = Some("cancel");
-        }
-        egui::ComboBox::from_id_salt(("unit", &user.id)).selected_text(edit.unit.label()).width(54.0).show_ui(
-            ui,
-            |ui| {
-                for unit in Unit::ALL {
-                    ui.selectable_value(&mut edit.unit, unit, unit.label());
-                }
-            },
-        );
-        if ui.add_enabled(!busy, egui::Button::new(ph::CHECK).frame(false)).on_hover_text("Save").clicked() {
-            action = Some("save");
-        }
-        if ui
-            .add_enabled(!busy, egui::Button::new(ph::ARROW_COUNTER_CLOCKWISE).frame(false))
-            .on_hover_text("Reset to default")
-            .clicked()
-        {
-            action = Some("reset");
-        }
-        if ui.add_enabled(!busy, egui::Button::new(ph::X).frame(false)).on_hover_text("Cancel").clicked() {
-            action = Some("cancel");
-        }
+    egui::Frame::new().inner_margin(egui::Margin { left: 54, right: 14, top: 2, bottom: 12 }).show(ui, |ui| {
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 8.0;
+            ui.label(RichText::new("Storage limit").size(13.0).color(t.label_secondary));
+            let field = egui::TextEdit::singleline(&mut edit.value)
+                .desired_width(72.0)
+                .hint_text("Default")
+                .margin(egui::Margin::symmetric(8, 6));
+            let r = ui.add_enabled_ui(!busy, |ui| widgets::bordered_field(ui, field)).inner;
+            if r.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter)) {
+                action = Some("save");
+            }
+            if ui.input(|i| i.key_pressed(Key::Escape)) {
+                action = Some("cancel");
+            }
+            egui::ComboBox::from_id_salt(("unit", &user.id)).selected_text(edit.unit.label()).width(56.0).show_ui(
+                ui,
+                |ui| {
+                    for unit in Unit::ALL {
+                        ui.selectable_value(&mut edit.unit, unit, unit.label());
+                    }
+                },
+            );
+            if widgets::primary_enabled(ui, !busy, "Save").clicked() {
+                action = Some("save");
+            }
+            if ui.add_enabled(!busy, egui::Button::new("Use default")).clicked() {
+                action = Some("reset");
+            }
+            if ui.add_enabled(!busy, egui::Button::new("Cancel").frame(false)).clicked() {
+                action = Some("cancel");
+            }
+        });
     });
     let (value, unit) = (edit.value.clone(), edit.unit);
     match action {
@@ -150,7 +148,6 @@ fn limit_cell(ui: &mut egui::Ui, main: &mut Main, tasks: &Tasks, user: &AdminUse
 }
 
 pub fn users(ui: &mut egui::Ui, main: &mut Main, tasks: &Tasks, keep: &mut bool) {
-    let t = widgets::tokens(ui);
     let page = main.settings.users.clone();
     let rows = page.as_ref().map(|p| forms::account_rows(&p.users)).unwrap_or_default();
     let count = match &page {
@@ -174,111 +171,72 @@ pub fn users(ui: &mut egui::Ui, main: &mut Main, tasks: &Tasks, keep: &mut bool)
         ui.vertical_centered(|ui| ui.spinner());
         return;
     };
-    if !page.users.is_empty() {
-        let (on, off, percent) = forms::mfa_adoption(&page.users);
-        ui.add_space(6.0);
-        widgets::card(ui, |ui| {
-            ui.set_width(ui.available_width());
-            ui.label(RichText::new(format!("{}  Two-factor authentication", ph::SHIELD)).semibold());
-            ui.columns(3, |cols| {
-                for (col, (label, value)) in cols.iter_mut().zip([
-                    ("Enabled", on.to_string()),
-                    ("Disabled", off.to_string()),
-                    ("Adoption", format!("{percent}%")),
-                ]) {
-                    col.label(RichText::new(label).size(12.0).color(t.label_secondary));
-                    col.label(RichText::new(value).size(16.0).bold());
-                }
-            });
-        });
-    }
-    if let Some(error) = main.settings.limit_error.clone() {
-        widgets::error_text(ui, &error);
-    }
-    ui.add_space(6.0);
-    let mut reached_end = false;
-    egui::ScrollArea::both().max_height(ui.ctx().content_rect().height() * 0.5).show(ui, |ui| {
-        egui::Grid::new("users").num_columns(6).striped(true).spacing([20.0, 12.0]).show(ui, |ui| {
-            for h in ["Name", "Email", "Storage", "Limit", "Two-factor", "Joined"] {
-                ui.label(RichText::new(h).size(12.0).semibold().color(t.label_tertiary));
-            }
-            ui.end_row();
-            for &(index, owner) in &rows {
-                let user = &page.users[index];
-                let owner = owner.map(|o| &page.users[o]);
-                let name = user.name.clone().filter(|n| !n.is_empty()).unwrap_or_else(|| "Unnamed".into());
-                ui.horizontal(|ui| {
-                    if owner.is_some() {
-                        ui.add_space(10.0);
-                        ui.label(RichText::new(ph::ARROW_ELBOW_DOWN_RIGHT).color(t.label_tertiary));
-                    }
-                    ui.label(name);
-                    if owner.is_some() {
-                        parts::chip(ui, Tone::Neutral, "Sub-user");
-                    }
-                });
-                ui.label(&user.email);
-                match owner {
-                    Some(o) => {
-                        let label = o.name.clone().filter(|n| !n.is_empty()).unwrap_or_else(|| o.email.clone());
-                        ui.label(RichText::new(format!("Shares {label}")).size(12.0).color(t.label_tertiary));
-                    }
-                    None => {
-                        let used = RichText::new(tma_core::format::file_size(user.storage_used));
-                        // A second line only with a limit; alone, the size stays level with the row.
-                        match user.storage_total.filter(|t| *t > 0) {
-                            Some(total) => {
-                                ui.vertical(|ui| {
-                                    ui.spacing_mut().item_spacing.y = 2.0;
-                                    ui.add(egui::Label::new(used).extend());
-                                    let percent = (user.storage_used as f64 * 100.0 / total as f64).round();
-                                    let text = format!("{percent}% of {}", tma_core::format::file_size(total));
-                                    ui.add(
-                                        egui::Label::new(RichText::new(text).size(12.0).color(t.label_tertiary))
-                                            .extend(),
-                                    );
-                                });
-                            }
-                            None => {
-                                ui.add(egui::Label::new(used).extend());
-                            }
-                        }
-                    }
-                }
-                if owner.is_some() {
-                    ui.label(RichText::new("Inherited").size(12.0).color(t.label_tertiary));
-                } else {
-                    limit_cell(ui, main, tasks, user);
-                }
-                mfa_label(ui, user.mfa_enabled);
-                ui.label(
-                    RichText::new(tma_core::format::full_date(user.created_at)).size(12.0).color(t.label_secondary),
-                );
-                ui.end_row();
-            }
-        });
-        if page.next_cursor.is_some() {
-            let r = ui.horizontal(|ui| {
-                if main.settings.users_more {
-                    ui.spinner();
-                } else if ui.button("Load more").clicked() {
-                    reached_end = true;
-                }
-            });
-            reached_end |= ui.is_rect_visible(r.response.rect);
-        }
-    });
     if page.users.is_empty() {
+        ui.add_space(8.0);
         ui.label(widgets::muted(ui, "Accounts appear here once people sign up."));
-    }
-    if reached_end {
-        load_more(main, tasks);
+    } else {
+        ui.add_space(10.0);
+        users_table::adoption(ui, &page.users);
+        ui.add_space(12.0);
+        if let Some(error) = main.settings.limit_error.clone() {
+            widgets::error_text(ui, &error);
+            ui.add_space(6.0);
+        }
+        if users_list(ui, main, tasks, &page, &rows) {
+            load_more(main, tasks);
+        }
     }
     widgets::dialog_footer(ui, |ui| {
         if widgets::primary(ui, "Done").clicked() {
             *keep = false;
         }
     });
+}
+
+/// The table of accounts; true when its end has scrolled into view and more can load.
+fn users_list(
+    ui: &mut egui::Ui,
+    main: &mut Main,
+    tasks: &Tasks,
+    page: &AdminUserPage,
+    rows: &[(usize, Option<usize>)],
+) -> bool {
+    let mut reached_end = false;
+    users_table::card(ui, |ui| {
+        let cols = users_table::layout(ui.available_width() - 28.0);
+        users_table::header(ui, &cols);
+        egui::ScrollArea::vertical().max_height(ui.ctx().content_rect().height() * 0.5).show(ui, |ui| {
+            for &(index, owner) in rows {
+                let user = &page.users[index];
+                let sub = owner.is_some();
+                users_table::row(ui, &cols, if sub { 48.0 } else { 56.0 }, |ui, col| match col {
+                    Col::User => users_table::identity(ui, user, sub),
+                    Col::Storage => users_table::storage(ui, user, sub),
+                    Col::Limit if sub => {
+                        ui.label(widgets::muted(ui, "Inherited"));
+                    }
+                    Col::Limit => limit_cell(ui, main, user),
+                    Col::Mfa => users_table::mfa(ui, user.mfa_enabled),
+                    Col::Joined => users_table::joined(ui, user),
+                });
+                if main.settings.limit_edit.as_ref().is_some_and(|e| e.user_id == user.id) {
+                    limit_editor(ui, main, tasks, user);
+                }
+            }
+            if page.next_cursor.is_some() {
+                ui.add_space(8.0);
+                let r = ui.horizontal(|ui| {
+                    if main.settings.users_more {
+                        ui.spinner();
+                    } else if ui.button("Load more").clicked() {
+                        reached_end = true;
+                    }
+                });
+                reached_end |= ui.is_rect_visible(r.response.rect);
+            }
+        });
+    });
+    reached_end
 }
 
 pub fn clients(ui: &mut egui::Ui, main: &mut Main, tasks: &Tasks, keep: &mut bool) {

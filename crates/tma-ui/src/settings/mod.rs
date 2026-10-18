@@ -15,6 +15,7 @@ mod parts;
 mod storage;
 mod subusers;
 pub(crate) mod updates;
+mod users_table;
 
 pub use dialogs::show as modals;
 
