@@ -53,6 +53,9 @@ pub struct Share {
     pub links: BTreeMap<String, String>,
     pub expiry: &'static str,
     pub busy: bool,
+    /// Whether the links of items already shared have arrived; until then the
+    /// dialog waits instead of offering to share them again.
+    pub loaded: bool,
 }
 
 pub enum Modal {
@@ -92,7 +95,8 @@ impl Modal {
     }
 
     pub fn share(items: Vec<FileItem>) -> Self {
-        Self::Share(Share { items, links: BTreeMap::new(), expiry: "7d", busy: false })
+        let loaded = !items.iter().any(|i| i.shared);
+        Self::Share(Share { items, links: BTreeMap::new(), expiry: "7d", busy: false, loaded })
     }
 
     pub fn viewer(items: Vec<FileItem>, index: usize) -> Self {
@@ -106,6 +110,8 @@ enum Outcome {
     Rename(String, String),
     Confirmed(ConfirmAction),
     ShareSet(Vec<String>, bool, &'static str),
+    /// A share link was copied.
+    Copied,
     LoadImage(String),
     Download(FileItem),
     /// Add files (`true`: a folder) to the upload dialog.
@@ -183,7 +189,12 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
             }
         }
         Modal::Share(share) => {
-            let close = dialog(ctx, "share", 380.0, "Share Options", |ui| share::share_body(ui, share, &mut outcome));
+            let subtitle = match share.items.as_slice() {
+                [one] => one.name.clone(),
+                many => crate::files::items_label(many.len()),
+            };
+            let close =
+                dialog_with(ctx, "share", 440.0, "Share", &subtitle, |ui| share::share_body(ui, share, &mut outcome));
             if close && outcome.is_none() {
                 outcome = Some(Outcome::Close);
             }
@@ -249,6 +260,7 @@ fn apply(app: &mut App, outcome: Outcome) {
     let (client, generation) = (main.client.clone(), main.generation);
     match outcome {
         Outcome::Close => main.modal = None,
+        Outcome::Copied => app.toasts.success("Link copied"),
         Outcome::CreateFolder(name, parent) => {
             main.modal = None;
             app.tasks.run(async move { client.create_folder(&name, parent.as_deref()).await }, move |app, result| {
@@ -312,6 +324,7 @@ fn apply(app: &mut App, outcome: Outcome) {
                         if let Some(Modal::Share(share)) = &mut main.modal {
                             share.links = links.links;
                             share.busy = false;
+                            share.loaded = true;
                         }
                     } else {
                         main.modal = None;

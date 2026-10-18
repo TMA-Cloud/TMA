@@ -32,6 +32,7 @@ pub(super) fn share(app: &mut App, items: Vec<FileItem>) {
         app.finish(generation, result, |main, _, links| {
             if let Some(Modal::Share(share)) = &mut main.modal {
                 share.links = links.links;
+                share.loaded = true;
             }
         });
     });
