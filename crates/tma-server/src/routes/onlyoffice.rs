@@ -100,28 +100,28 @@ async fn open(
         .flatten()
         .map(|u| u.name.filter(|n| !n.is_empty()).unwrap_or(u.email))
         .unwrap_or_else(|| "User".into());
-    // Someone editing it in a desktop app: the browser shows it, their save wins.
-    let locked = crate::models::files::locks::holder(&state.pool, &file.id).await.ok().flatten();
-    // The browser has no install id, so even the editor's own browser only views it.
-    let locked = locked.is_some_and(|l| l.user_id != opener.user_id || l.device_id.is_some());
+    // Someone is editing it, in a desktop app or another browser session: this one only views it.
+    let locked = crate::models::files::locks::holder(&state.pool, &file.id).await.ok().flatten().is_some();
     let request_origin = origin(state, ctx);
-    let session = oo::build_session(
-        state,
-        &url,
-        &secret,
-        &SessionRequest {
-            file: &file,
-            owner_id: &opener.owner_id,
-            actor_id: &opener.user_id,
-            actor_name: &actor_name,
-            can_write: opener.can_write && !locked,
-            mobile: oo::is_mobile(ctx.user_agent.as_deref()),
-            theme,
-            request_origin: &request_origin,
-        },
-    )
-    .map_err(internal)?;
-    let key = session.config["document"]["key"].as_str().unwrap_or_default().to_string();
+    let mut request = SessionRequest {
+        file: &file,
+        owner_id: &opener.owner_id,
+        actor_id: &opener.user_id,
+        actor_name: &actor_name,
+        can_write: opener.can_write && !locked,
+        mobile: oo::is_mobile(ctx.user_agent.as_deref()),
+        theme,
+        request_origin: &request_origin,
+    };
+    let mut session = oo::build_session(state, &url, &secret, &request).map_err(internal)?;
+    let mut key = session.config["document"]["key"].as_str().unwrap_or_default().to_string();
+    let editing = session.config["editorConfig"]["mode"] == "edit";
+    if editing && !oo::editing::hold(state, &key, &file.id, &opener.owner_id, &opener.user_id).await {
+        // Someone took it a moment ago.
+        request.can_write = false;
+        session = oo::build_session(state, &url, &secret, &request).map_err(internal)?;
+        key = session.config["document"]["key"].as_str().unwrap_or_default().to_string();
+    }
     oo::register_open_document(state, &key, &file.id, &opener.owner_id).await;
     // Opening is the read; the document server's own fetches are not counted again.
     state.access.record_one(&file.id, &opener.owner_id, Some(&opener.user_id));
@@ -365,8 +365,14 @@ pub async fn callback(
     };
     let status = payload.get("status").and_then(Value::as_i64).unwrap_or(-1);
     let key = payload.get("key").and_then(Value::as_str).unwrap_or_default().to_string();
-    if matches!(status, 2 | 4) {
-        oo::unregister_open_document(&state, &key).await;
+    match status {
+        2 | 4 => {
+            oo::unregister_open_document(&state, &key).await;
+            oo::editing::end(&state, &key).await;
+        }
+        // Someone joined or left: the session is still open.
+        1 => oo::editing::renew(&state, &key).await,
+        _ => {}
     }
     if status == 3 {
         tracing::error!(key, "[ONLYOFFICE] Document saving error");

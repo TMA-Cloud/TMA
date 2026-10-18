@@ -25,6 +25,8 @@ pub struct Entry {
 
 /// How the drive names the signed-in user editing on another computer.
 pub const OTHER_COMPUTER: &str = "you, on another computer";
+/// How the drive names the signed-in user editing in the browser.
+pub const IN_BROWSER: &str = "you, in the browser";
 
 /// The error a replace returns when someone else saved after `base`: the server
 /// kept its copy, so the caller keeps the local one as a conflicted copy.
@@ -107,6 +109,8 @@ fn editor(lock: &FileLock, me: Option<&str>) -> Option<String> {
     let me = me?;
     if lock.user_id != me {
         Some(lock.name.clone())
+    } else if lock.in_browser() {
+        Some(IN_BROWSER.into())
     } else if lock.device_id.as_deref() != tma_client::device_id() {
         Some(OTHER_COMPUTER.into())
     } else {

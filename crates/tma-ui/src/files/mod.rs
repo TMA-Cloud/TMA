@@ -353,6 +353,8 @@ pub enum Editor<'a> {
     Here,
     /// The signed-in user, in the desktop app on another computer (or, from the browser, any).
     Elsewhere,
+    /// The signed-in user, in a document editor in the browser.
+    Browser,
     Someone(&'a str),
 }
 
@@ -360,6 +362,8 @@ pub fn editor<'a>(item: &'a FileItem, me: &str) -> Option<Editor<'a>> {
     let lock = item.lock.as_ref().filter(|l| l.expires_at > chrono::Utc::now())?;
     Some(if lock.user_id != me {
         Editor::Someone(&lock.name)
+    } else if lock.in_browser() {
+        Editor::Browser
     } else if lock.device_id.as_deref() == tma_client::device_id() {
         Editor::Here
     } else {
@@ -374,7 +378,22 @@ pub fn editing_note(item: &FileItem, me: &str) -> Option<String> {
         Editor::Here => "You are editing".into(),
         Editor::Elsewhere if tma_client::device_id().is_none() => "You are editing in the desktop app".into(),
         Editor::Elsewhere => "You are editing on another computer".into(),
+        Editor::Browser => "You are editing in the browser".into(),
     })
+}
+
+/// Why opening `item` gives a read-only copy, when someone (or you, elsewhere) is editing it.
+pub fn read_only_notice(item: &FileItem, me: &str) -> Option<String> {
+    let desktop = tma_client::device_id().is_some();
+    let place = match editor(item, me)? {
+        Editor::Here => return None,
+        Editor::Someone(name) => return Some(format!("{name} is editing {}, so it opens read-only", item.name)),
+        Editor::Elsewhere if desktop => "on another computer",
+        Editor::Elsewhere => "in the desktop app",
+        Editor::Browser if desktop => "in the browser",
+        Editor::Browser => "in another window",
+    };
+    Some(format!("You are editing {} {place}, so it opens read-only", item.name))
 }
 
 /// Shared, and the link has not expired.

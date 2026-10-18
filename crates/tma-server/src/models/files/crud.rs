@@ -339,7 +339,9 @@ pub async fn replace_data(
     }
     // While someone else has it open for editing, their copy is the one that counts.
     if let Some(lock) = super::locks::holder(pool, id).await?.filter(|l| !actor.holds(l)) {
-        let message = if lock.user_id == actor.user {
+        let message = if lock.user_id == actor.user && lock.in_browser() {
+            "You are editing this file in the browser".to_string()
+        } else if lock.user_id == actor.user {
             "You are editing this file on another computer".to_string()
         } else {
             format!("{} is editing this file", lock.name)

@@ -64,8 +64,14 @@ pub async fn holder(pool: &PgPool, file_id: &str) -> anyhow::Result<Option<FileL
     Ok(sqlx::query_as::<_, Row>(HOLDER_SQL).bind(file_id).fetch_optional(pool).await?.map(Into::into))
 }
 
-/// Take or renew the lock on `file_id` (a file of `owner`'s) for `actor`.
-pub async fn acquire(pool: &PgPool, file_id: &str, owner: &str, actor: Actor<'_>) -> anyhow::Result<Option<Taken>> {
+/// Take or renew the lock on `file_id` (a file of `owner`'s) for `actor`, for `lease`.
+pub async fn acquire(
+    pool: &PgPool,
+    file_id: &str,
+    owner: &str,
+    actor: Actor<'_>,
+    lease: Duration,
+) -> anyhow::Result<Option<Taken>> {
     let exists: Option<String> = sqlx::query_scalar(
         "SELECT id FROM files WHERE id = $1 AND user_id = $2 AND type = 'file' AND deleted_at IS NULL",
     )
@@ -97,7 +103,7 @@ pub async fn acquire(pool: &PgPool, file_id: &str, owner: &str, actor: Actor<'_>
     .bind(file_id)
     .bind(actor.user)
     .bind(owner)
-    .bind(LEASE.as_secs_f64())
+    .bind(lease.as_secs_f64())
     .bind(actor.device)
     .fetch_optional(pool)
     .await?;
@@ -110,6 +116,30 @@ pub async fn acquire(pool: &PgPool, file_id: &str, owner: &str, actor: Actor<'_>
         (_, Some(lock)) => Taken::Busy(lock),
         (_, None) => anyhow::bail!("the lock vanished as it was taken"),
     }))
+}
+
+/// Extend the live lock `device` holds on a file, whoever took it there.
+pub async fn renew_device(pool: &PgPool, file_id: &str, device: &str, lease: Duration) -> anyhow::Result<()> {
+    sqlx::query(
+        "UPDATE file_locks SET expires_at = NOW() + make_interval(secs => $3)
+          WHERE file_id = $1 AND device_id = $2 AND expires_at > NOW()",
+    )
+    .bind(file_id)
+    .bind(device)
+    .bind(lease.as_secs_f64())
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+/// Drop the lock `device` holds on a file; true when there was a live one.
+pub async fn release_device(pool: &PgPool, file_id: &str, device: &str) -> anyhow::Result<bool> {
+    let done = sqlx::query("DELETE FROM file_locks WHERE file_id = $1 AND device_id = $2 AND expires_at > NOW()")
+        .bind(file_id)
+        .bind(device)
+        .execute(pool)
+        .await?;
+    Ok(done.rows_affected() > 0)
 }
 
 /// Give up `actor`'s lock on a file; true when there was one to give up.

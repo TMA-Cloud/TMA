@@ -213,6 +213,33 @@ async fn assert_edit_locks(owner: &Client, base: &str, id: &str) {
     assert_locks_tell_computers_apart(owner, id).await;
 }
 
+/// An editing session in the browser holds the lock like a desktop app, and only
+/// that session renews or ends it.
+async fn assert_browser_sessions_lock(owner: &Client, database: &str, id: &str) {
+    use std::time::Duration;
+    use tma_server::models::files::locks::{self, Actor, Taken};
+    let pool = sqlx::PgPool::connect(database).await.unwrap();
+    let me = owner.profile().await.unwrap().id;
+    let session = format!("{}key-1", tma_core::api::BROWSER_DEVICE_PREFIX);
+    let browser = Actor { user: &me, device: Some(&session) };
+    let taken = locks::acquire(&pool, id, &me, browser, Duration::from_secs(600)).await.unwrap();
+    assert!(matches!(taken, Some(Taken::Held { .. })));
+    let listed = owner.search("deep", 10).await.unwrap().into_iter().find(|f| f.id == id).unwrap();
+    assert!(listed.lock.as_ref().is_some_and(tma_core::api::FileLock::in_browser), "listings say it is the browser");
+    let refused =
+        owner.replace(id, &text_file("deep.txt", "over the browser", None), Progress::new(0)).await.unwrap_err();
+    assert!(refused.message.contains("in the browser"), "{refused:?}");
+    let other = format!("{}key-2", tma_core::api::BROWSER_DEVICE_PREFIX);
+    let second = Actor { user: &me, device: Some(&other) };
+    let busy = locks::acquire(&pool, id, &me, second, Duration::from_secs(600)).await.unwrap();
+    assert!(matches!(busy, Some(Taken::Busy(_))), "a second browser session only views it");
+    assert!(!locks::release_device(&pool, id, &other).await.unwrap(), "only the holding session ends it");
+    locks::renew_device(&pool, id, &session, Duration::from_secs(600)).await.unwrap();
+    assert!(locks::release_device(&pool, id, &session).await.unwrap());
+    assert!(locks::holder(&pool, id).await.unwrap().is_none());
+    pool.close().await;
+}
+
 /// One person signed in on two computers: the second is kept out like anyone else.
 async fn assert_locks_tell_computers_apart(owner: &Client, id: &str) {
     let http = reqwest::Client::new();
@@ -368,6 +395,7 @@ async fn full_workflow() {
     let _ = std::fs::remove_file(&dest);
     assert_stale_saves_are_refused(&admin, &deep.id, replaced.content_version).await;
     assert_edit_locks(&admin, &base, &deep.id).await;
+    assert_browser_sessions_lock(&admin, &env.database, &deep.id).await;
 
     // Search, stats, star.
     assert!(admin.search("note", 10).await.unwrap().iter().any(|f| f.id == item.id));

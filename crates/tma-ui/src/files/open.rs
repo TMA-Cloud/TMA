@@ -42,14 +42,8 @@ pub(super) fn file(app: &mut App, item: FileItem) {
     } else if app.host.kind() == HostKind::Desktop {
         // The desktop app hands every file to the computer, which opens it in its own app;
         // the host reports back once it has, which ends the opening animation.
-        match super::editor(&item, &main.user.id) {
-            Some(super::Editor::Someone(name)) => {
-                app.toasts.info(format!("{name} is editing {}, so it opens read-only", item.name));
-            }
-            Some(super::Editor::Elsewhere) => {
-                app.toasts.info(format!("You are editing {} on another computer, so it opens read-only", item.name));
-            }
-            _ => {}
+        if let Some(notice) = super::read_only_notice(&item, &main.user.id) {
+            app.toasts.info(notice);
         }
         super::opening::start(app.tasks.ctx(), &item.id);
         run(app, Action::EditInApp(item));
@@ -59,6 +53,9 @@ pub(super) fn file(app: &mut App, item: FileItem) {
         super::opening::finish(app.tasks.ctx(), &item.id);
         run(app, Action::Preview(item));
     } else if is_document(&item.name) && main.instance.onlyoffice {
+        if let Some(notice) = super::read_only_notice(&item, &main.user.id) {
+            app.toasts.info(notice);
+        }
         super::opening::start(app.tasks.ctx(), &item.id);
         run(app, Action::OpenDocument(item));
     } else {

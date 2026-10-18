@@ -81,6 +81,16 @@ pub struct FileLock {
     pub device_id: Option<String>,
 }
 
+/// The start of a lock's `deviceId` when an ONLYOFFICE session in the browser holds it.
+pub const BROWSER_DEVICE_PREFIX: &str = "onlyoffice:";
+
+impl FileLock {
+    /// Held by an editing session in the browser rather than a desktop app.
+    pub fn in_browser(&self) -> bool {
+        self.device_id.as_deref().is_some_and(|d| d.starts_with(BROWSER_DEVICE_PREFIX))
+    }
+}
+
 /// The answer to taking a lock: `acquired`, or who holds it instead.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct LockResponse {

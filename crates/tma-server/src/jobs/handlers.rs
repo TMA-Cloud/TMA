@@ -138,8 +138,12 @@ async fn force_save(state: &AppState, data: &Value) -> anyhow::Result<Value> {
         ForceSave::NoChanges => "unchanged",
         ForceSave::Closed => {
             oo::unregister_open_document(state, key).await;
+            oo::editing::end(state, key).await;
             "closed"
         }
     };
+    if outcome != "closed" {
+        oo::editing::renew(state, key).await;
+    }
     Ok(json!({ "outcome": outcome }))
 }

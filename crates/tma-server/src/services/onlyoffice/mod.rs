@@ -1,6 +1,7 @@
 //! ONLYOFFICE Document Server integration: the signed editor config, the token
 //! the document server presents to fetch a file, MIME checks, and force-save.
 
+pub mod editing;
 mod save;
 
 pub use save::{SaveOutcome, is_allowed_download_url, save_document};

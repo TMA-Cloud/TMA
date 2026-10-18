@@ -89,6 +89,11 @@ impl EventHub {
         self.send(user_id, message).await;
     }
 
+    /// A file started or stopped being edited: lists and drives refresh (not on every renewal).
+    pub async fn lock_changed(&self, owner: &str, file_id: &str) {
+        self.publish(owner, types::FILE_UPDATED, json!({ "id": file_id, "userId": owner, "lock": true })).await;
+    }
+
     /// Publish many events as one `file.batch` envelope per account; the client
     /// coalesces a burst into one refresh anyway.
     pub async fn publish_batch(&self, user_id: &str, events: Vec<(&str, Value)>) {
