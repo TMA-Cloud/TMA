@@ -276,6 +276,68 @@ async fn assert_locks_tell_computers_apart(owner: &Client, id: &str) {
     send(reqwest::Method::DELETE, &format!("/api/files/{id}/lock"), "desktop").send().await.unwrap();
 }
 
+/// Folder totals and account storage stay exact through a batch upload that
+/// builds a tree, a replace, a copy, a move, and trash and permanent delete.
+async fn assert_counters_stay_exact(owner: &Client, database: &str) {
+    let mut form = reqwest::multipart::Form::new();
+    let paths = ["Tree/a.txt", "Tree/Sub/b.txt", "Tree/Sub/c.txt", "Tree/Sub/Deep/d.txt", "Tree/Sub/Deep/e.txt"];
+    for (i, path) in paths.iter().enumerate() {
+        let name = path.rsplit('/').next().unwrap().to_string();
+        let body = "x".repeat(10 * (i + 1)).into_bytes();
+        form = form
+            .text("relativePaths", path.to_string())
+            .text("clientIds", i.to_string())
+            .part("files", reqwest::multipart::Part::bytes(body).file_name(name));
+    }
+    let uploaded = reqwest::Client::new()
+        .post(owner.url("/api/files/upload/bulk"))
+        .header("cookie", format!("token={}", owner.session_token().unwrap()))
+        .header("x-requested-with", "XMLHttpRequest")
+        .multipart(form)
+        .send()
+        .await
+        .unwrap();
+    assert!(uploaded.status().is_success(), "{}", uploaded.text().await.unwrap());
+    let tree = root(owner).await.into_iter().find(|f| f.name == "Tree").unwrap();
+    let info = owner.info(&tree.id).await.unwrap().folder_info.unwrap();
+    assert_eq!((info.file_count, info.folder_count, info.total_size), (5, 2, 150));
+    let inside = owner.list(&View::Folder(Some(tree.id.clone())), &ListQuery::default()).await.unwrap().files;
+    let a = inside.iter().find(|f| f.name == "a.txt").unwrap();
+    owner.replace(&a.id, &text_file("a.txt", &"y".repeat(35), None), Progress::new(0)).await.unwrap();
+    let copied = owner.copy_items(std::slice::from_ref(&tree.id), None).await.unwrap();
+    owner.wait_for_job(&copied.job_id.unwrap()).await.unwrap();
+    let sub = inside.iter().find(|f| f.name == "Sub").unwrap();
+    owner.move_items(std::slice::from_ref(&sub.id), None).await.unwrap();
+    let copy = root(owner).await.into_iter().find(|f| f.name != "Tree" && f.name.starts_with("Tree")).unwrap();
+    let trashed = owner.trash(std::slice::from_ref(&copy.id)).await.unwrap();
+    owner.settle(&trashed).await.unwrap();
+    let gone = owner.delete_forever(std::slice::from_ref(&copy.id)).await.unwrap();
+    owner.wait_for_job(&gone.job_id.unwrap()).await.unwrap();
+    let info = owner.info(&tree.id).await.unwrap().folder_info.unwrap();
+    assert_eq!((info.file_count, info.folder_count, info.total_size), (1, 0, 35), "Sub moved out, a.txt replaced");
+
+    // Recomputing from scratch finds nothing to repair, and usage is the sum of every file.
+    let pool = sqlx::PgPool::connect(database).await.unwrap();
+    let accounts: Vec<String> =
+        sqlx::query_scalar("SELECT id FROM users WHERE parent_user_id IS NULL").fetch_all(&pool).await.unwrap();
+    for account in &accounts {
+        let drift: i32 =
+            sqlx::query_scalar("SELECT reconcile_folder_aggregates($1)").bind(account).fetch_one(&pool).await.unwrap();
+        assert_eq!(drift, 0, "folder totals drifted for {account}");
+    }
+    let wrong: Vec<(String, i64, i64)> = sqlx::query_as(
+        "SELECT u.id, u.storage_used, COALESCE(SUM(f.size) FILTER (WHERE f.type = 'file'), 0)::bigint
+           FROM users u LEFT JOIN files f ON f.user_id = u.id
+          WHERE u.parent_user_id IS NULL GROUP BY u.id, u.storage_used
+         HAVING u.storage_used <> COALESCE(SUM(f.size) FILTER (WHERE f.type = 'file'), 0)",
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert!(wrong.is_empty(), "storage usage drifted: {wrong:?}");
+    pool.close().await;
+}
+
 /// Restoring from the trash and deleting forever are granted separately.
 async fn assert_trash_grants_are_separate(owner: &Client, base: &str, id: &str) {
     let request = CreateSubUserRequest {
@@ -470,6 +532,8 @@ async fn full_workflow() {
     assert_eq!(refused.status, 403);
     assert_recent_names_opener(&admin, &sam, &item.id).await;
     assert_trash_grants_are_separate(&admin, &base, &item.id).await;
+
+    assert_counters_stay_exact(&admin, &env.database).await;
 
     // Sessions: signing out everywhere ends this client's session too.
     assert!(!admin.sessions(false).await.unwrap().sessions.is_empty());
