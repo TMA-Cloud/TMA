@@ -41,6 +41,25 @@ pub fn has_owner_files(name: &str) -> bool {
     EXTS.contains(&tma_core::names::extension_of(name).as_str())
 }
 
+/// Whether a window title names the file `name`: in full, or by its name without
+/// the extension as a whole word, as some programs show it.
+pub fn window_shows(title: &str, name: &str) -> bool {
+    let (title, name) = (title.to_lowercase(), name.to_lowercase());
+    if title.contains(&name) {
+        return true;
+    }
+    let stem = name.rsplit_once('.').map_or(name.as_str(), |(stem, _)| stem);
+    // A short stem ("a", "doc") turns up in unrelated titles.
+    if stem.chars().count() < 4 {
+        return false;
+    }
+    title.match_indices(stem).any(|(at, _)| {
+        let before = title[..at].chars().next_back();
+        let after = title[at + stem.len()..].chars().next();
+        !before.is_some_and(char::is_alphanumeric) && !after.is_some_and(char::is_alphanumeric)
+    })
+}
+
 /// The names in a folder that an owner file in the same folder marks as open.
 pub fn edited(names: &[String]) -> Vec<String> {
     let owners: Vec<Owner> = names.iter().filter_map(|n| owner(n)).collect();
@@ -65,6 +84,17 @@ mod tests {
         assert_eq!(open(&["Quarterly Report.docx", "~$arterly Report.docx"]), ["Quarterly Report.docx"]);
         assert_eq!(open(&["Minutes.docx", "~$inutes.docx"]), ["Minutes.docx"]);
         assert_eq!(open(&["Notes.DOCX", "~$notes.docx"]), ["Notes.DOCX"]);
+    }
+
+    #[test]
+    fn window_titles_name_the_file_in_full_or_by_stem() {
+        assert!(window_shows("Checklist.txt - Notepad", "Checklist.txt"));
+        assert!(window_shows("*checklist.txt - Notepad", "Checklist.txt"));
+        assert!(window_shows("Moodboard.jpg", "Moodboard.jpg"));
+        assert!(window_shows("Quarterly Report - Paint", "Quarterly Report.png"));
+        assert!(!window_shows("Quarterly Reports - Paint", "Quarterly Report.png"), "a longer word is another name");
+        assert!(!window_shows("Notepad", "a.txt"));
+        assert!(!window_shows("Docs - Google Chrome", "doc.txt"), "short stems never match alone");
     }
 
     #[test]

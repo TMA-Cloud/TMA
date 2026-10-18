@@ -4,6 +4,8 @@
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 // Pure and tested on every system; only the Windows clipboard calls it so far.
+#[cfg(windows)]
+mod app_windows;
 #[cfg_attr(not(windows), expect(dead_code, reason = "only the Windows clipboard calls it so far"))]
 mod clip_plan;
 mod clipboard;
@@ -18,8 +20,6 @@ mod edit;
 mod fonts;
 mod host;
 mod notify_ui;
-#[cfg(windows)]
-mod shell_open;
 mod shortcuts;
 #[cfg(windows)]
 mod single;

@@ -46,23 +46,31 @@ pub fn open(paths: Paths, client: Client, file: FileItem, notifier: Notifier) {
         // Opening by path can block while Windows downloads the file; keep it off the async workers.
         let _ = std::thread::Builder::new().name("open-in-app".into()).spawn(move || {
             paths.reveal(&path);
-            #[cfg(windows)]
-            let program = launch(&path, &file.name, &notifier);
-            #[cfg(not(windows))]
-            launch(&path, &file.name, &notifier);
+            let opened = launch(&path, &file.name, &notifier);
             notifier.opened(&file.id);
             #[cfg(windows)]
-            if let Some(program) = program {
-                hold_while_running(&paths, &file, &program);
+            if opened {
+                hold_while_shown(&paths, &file);
             }
+            #[cfg(not(windows))]
+            let _ = opened;
         });
     });
 }
 
-/// Keep the file's edit lock while the program opened for it runs, so others get
-/// it read-only meanwhile. Office and LibreOffice track each document themselves.
+/// How long a program gets to show the file in a window title before it counts as not open.
 #[cfg(windows)]
-fn hold_while_running(paths: &Paths, file: &FileItem, program: &crate::shell_open::Program) {
+const APPEAR: Duration = Duration::from_secs(30);
+/// How long the title may stop naming the file (a dialog, another tab) before the file counts as closed.
+#[cfg(windows)]
+const GONE: Duration = Duration::from_secs(15);
+
+/// Keep the file's edit lock while a window names it, so others get it read-only
+/// meanwhile. Programs are often already running or start through a launcher, so
+/// their process says nothing; their title does. Office and LibreOffice track each
+/// document themselves.
+#[cfg(windows)]
+fn hold_while_shown(paths: &Paths, file: &FileItem) {
     if tma_drive::editing::has_owner_files(&file.name) {
         return;
     }
@@ -71,27 +79,31 @@ fn hold_while_running(paths: &Paths, file: &FileItem, program: &crate::shell_ope
     if core.leases().hold(&file.id).is_some() {
         return;
     }
-    program.wait();
+    let started = std::time::Instant::now();
+    let mut seen: Option<std::time::Instant> = None;
+    loop {
+        std::thread::sleep(Duration::from_secs(1));
+        if crate::app_windows::titles().iter().any(|t| tma_drive::editing::window_shows(t, &file.name)) {
+            seen = Some(std::time::Instant::now());
+        }
+        match seen {
+            None if started.elapsed() > APPEAR => break,
+            Some(at) if at.elapsed() > GONE => break,
+            _ => {}
+        }
+    }
     core.leases().let_go(&file.id);
 }
 
 /// Open a file in its app; Windows asks which app when none is set for the type.
-#[cfg(windows)]
-fn launch(path: &std::path::Path, name: &str, notifier: &Notifier) -> Option<crate::shell_open::Program> {
-    match crate::shell_open::open(path) {
-        Ok(program) => return program,
-        Err(err) => log::debug!("open {}: {err}", path.display()),
+fn launch(path: &std::path::Path, name: &str, notifier: &Notifier) -> bool {
+    if open::that_detached(path).is_ok() {
+        return true;
     }
-    if std::process::Command::new("rundll32.exe").arg("shell32.dll,OpenAs_RunDLL").arg(path).spawn().is_err() {
-        notifier.error(format!("No app opens {name}"));
+    #[cfg(windows)]
+    if std::process::Command::new("rundll32.exe").arg("shell32.dll,OpenAs_RunDLL").arg(path).spawn().is_ok() {
+        return true;
     }
-    None
-}
-
-/// Open a file in its app.
-#[cfg(not(windows))]
-fn launch(path: &std::path::Path, name: &str, notifier: &Notifier) {
-    if open::that_detached(path).is_err() {
-        notifier.error(format!("No app opens {name}"));
-    }
+    notifier.error(format!("No app opens {name}"));
+    false
 }

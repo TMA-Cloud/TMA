@@ -89,7 +89,7 @@ pub struct Paths {
 
 impl Paths {
     /// The mounted drive's core, while there is one.
-    #[cfg_attr(not(windows), expect(dead_code, reason = "only Windows watches the program a file opened in"))]
+    #[cfg_attr(not(windows), expect(dead_code, reason = "only Windows watches for the file's window"))]
     pub fn core(&self) -> Option<Arc<tma_drive::Core>> {
         self.core.lock().unwrap_or_else(|e| e.into_inner()).clone()
     }
