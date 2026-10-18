@@ -15,7 +15,6 @@ pub enum Kind {
     Name,
     Email,
     Password,
-    Confirm,
     Code,
 }
 
@@ -27,7 +26,6 @@ impl Kind {
             Kind::Email => "username",
             Kind::Password if signing_up => "new-password",
             Kind::Password => "current-password",
-            Kind::Confirm => "new-password",
             Kind::Code => "one-time-code",
         }
     }
@@ -36,7 +34,7 @@ impl Kind {
     pub fn input_type(self, shown: bool) -> &'static str {
         match self {
             Kind::Email => "email",
-            Kind::Password | Kind::Confirm if !shown => "password",
+            Kind::Password if !shown => "password",
             _ => "text",
         }
     }
@@ -47,7 +45,6 @@ impl Kind {
             Kind::Name => "name",
             Kind::Email => "email",
             Kind::Password => "password",
-            Kind::Confirm => "confirm-password",
             Kind::Code => "code",
         }
     }
@@ -116,8 +113,8 @@ mod tests {
         assert_eq!(Kind::Password.autocomplete(false), "current-password");
         assert_eq!(Kind::Password.autocomplete(true), "new-password");
         assert_eq!(Kind::Email.autocomplete(true), "username");
-        assert_eq!(Kind::Confirm.input_type(false), "password");
-        assert_eq!(Kind::Confirm.input_type(true), "text");
+        assert_eq!(Kind::Password.input_type(false), "password");
+        assert_eq!(Kind::Password.input_type(true), "text");
         assert_eq!(Kind::Email.input_type(false), "email");
     }
 }
