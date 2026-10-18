@@ -11,6 +11,7 @@ use std::path::PathBuf;
 
 use chrono::{DateTime, Utc};
 
+use super::save::Saved;
 use super::{Core, FsError, FsResult, Node, lock};
 use crate::{paths, sync_plan};
 
@@ -77,6 +78,7 @@ impl Core {
                 modified: s.modified,
                 accessed: None,
                 path: s.path.clone(),
+                version: 0,
             })
             .collect()
     }
@@ -187,9 +189,16 @@ impl Core {
             None => self.find_child(parent.id.as_deref(), &name, false).map_err(|e| e.to_string())?.map(|e| e.id),
         };
         let id = match target {
+            // Checked against the version the app opened the document at.
             Some(id) => {
-                self.backend.replace(&id, &server_name, staging)?;
-                id
+                match self.save_over(to, &id, parent.id.as_deref(), &server_name, staging, self.opened_version(to))? {
+                    Saved::Replaced(_) => id,
+                    Saved::Copy(_) => {
+                        self.untrack_empty(to);
+                        self.invalidate(&parent.path);
+                        return Ok(());
+                    }
+                }
             }
             None => self.backend.upload(parent.id.as_deref(), &server_name, staging)?,
         };

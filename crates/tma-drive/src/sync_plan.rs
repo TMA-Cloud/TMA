@@ -20,7 +20,7 @@ pub struct Local {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Stamp {
     pub id: String,
-    /// The server's modified time (ms) when this copy was synced.
+    /// The server's content version when this copy was synced.
     pub version: i64,
 }
 
@@ -30,7 +30,7 @@ impl Stamp {
 ";
 
     pub fn of(entry: &Entry) -> Self {
-        Self { id: entry.id.clone(), version: entry.modified.timestamp_millis() }
+        Self { id: entry.id.clone(), version: entry.version }
     }
 
     /// Stored as the placeholder's blob: "id\nversion".
@@ -63,8 +63,23 @@ pub enum Upload {
     File { name: String, replace: Option<String> },
     /// A folder made here; `existing` is a server folder of the same name to adopt.
     Folder { name: String, existing: Option<String> },
-    /// A placeholder edited here.
-    Changed { name: String, id: String },
+    /// A placeholder edited here, from the server copy at content version `base`.
+    Changed { name: String, id: String, base: i64 },
+}
+
+/// The version to send with a save; 0 means the copy predates versions, so the save is not checked.
+pub fn base(version: i64) -> Option<i64> {
+    (version > 0).then_some(version)
+}
+
+/// The name a refused save is kept under, beside the file: "Report (conflicted copy
+/// 2026-10-15 1946).xlsx", as OneDrive and Dropbox name theirs.
+pub fn conflict_name(name: &str, when: &str) -> String {
+    let (stem, ext) = match name.rfind('.') {
+        Some(dot) if dot > 0 => (&name[..dot], &name[dot..]),
+        _ => (name, ""),
+    };
+    format!("{stem} (conflicted copy {when}){ext}")
 }
 
 /// Lock and scratch files apps keep beside a document; never uploaded.
@@ -118,7 +133,7 @@ pub fn reconcile(local: &[Local], server: &[Entry]) -> Vec<Fix> {
                     if free {
                         fixes.push(Fix::Rename { from: item.name.clone(), entry: (*entry).clone() });
                     }
-                } else if !item.is_dir && item.in_sync && stamp.version != entry.modified.timestamp_millis() {
+                } else if !item.is_dir && item.in_sync && stamp.version != entry.version {
                     fixes.push(Fix::Update { name: item.name.clone(), entry: (*entry).clone() });
                 }
             }
@@ -149,7 +164,7 @@ pub fn uploads(local: &[Local], server: &[Entry]) -> Vec<Upload> {
             None if item.is_dir => Some(Upload::Folder { name: item.name.clone(), existing: find(&item.name, true) }),
             None => Some(Upload::File { name: item.name.clone(), replace: find(&item.name, false) }),
             Some(stamp) if !item.is_dir && !item.in_sync => {
-                Some(Upload::Changed { name: item.name.clone(), id: stamp.id.clone() })
+                Some(Upload::Changed { name: item.name.clone(), id: stamp.id.clone(), base: stamp.version })
             }
             Some(_) => None,
         })
@@ -169,6 +184,7 @@ mod tests {
             size: 3,
             modified: Utc.timestamp_millis_opt(ms).single().unwrap(),
             accessed: None,
+            version: ms,
         }
     }
 
@@ -270,8 +286,16 @@ mod tests {
                 Upload::File { name: "new.txt".into(), replace: None },
                 Upload::File { name: "Report.docx".into(), replace: Some("3".into()) },
                 Upload::Folder { name: "Folder".into(), existing: Some("4".into()) },
-                Upload::Changed { name: "edited.txt".into(), id: "7".into() },
+                Upload::Changed { name: "edited.txt".into(), id: "7".into(), base: 5 },
             ]
         );
+    }
+
+    #[test]
+    fn conflicted_copies_keep_the_extension() {
+        assert_eq!(conflict_name("Report.xlsx", "2026-10-15 1946"), "Report (conflicted copy 2026-10-15 1946).xlsx");
+        assert_eq!(conflict_name("Makefile", "d"), "Makefile (conflicted copy d)");
+        assert_eq!(conflict_name(".env", "d"), ".env (conflicted copy d)");
+        assert_eq!((base(0), base(3)), (None, Some(3)));
     }
 }

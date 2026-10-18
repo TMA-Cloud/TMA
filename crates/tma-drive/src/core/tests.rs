@@ -6,7 +6,7 @@ use std::sync::{Arc, Mutex};
 use chrono::Utc;
 
 use super::*;
-use crate::backend::{Backend, BackendResult, Entry, Space};
+use crate::backend::{Backend, BackendResult, CONFLICT, Entry, Space};
 
 /// parent, name, is_folder, bytes
 type Item = (Option<String>, String, bool, Vec<u8>);
@@ -16,6 +16,8 @@ struct Mock {
     items: Mutex<HashMap<String, Item>>,
     next: Mutex<u32>,
     uploads: Mutex<u32>,
+    /// Content versions, raised by every replace (1 when absent), as the server keeps them.
+    versions: Mutex<HashMap<String, i64>>,
     /// An item the next listing leaves out, as a listing taken just before it was made would.
     hide_once: Mutex<Option<String>>,
 }
@@ -29,6 +31,10 @@ impl Mock {
 
     fn find(&self, parent: Option<&str>, name: &str) -> Option<String> {
         self.items.lock().unwrap().iter().find(|(_, v)| v.0.as_deref() == parent && v.1 == name).map(|(k, _)| k.clone())
+    }
+
+    fn version(&self, id: &str) -> i64 {
+        self.versions.lock().unwrap().get(id).copied().unwrap_or(1)
     }
 
     fn bytes(&self, id: &str) -> Vec<u8> {
@@ -52,6 +58,7 @@ impl Backend for Mock {
                 size: v.3.len() as u64,
                 modified: Utc::now(),
                 accessed: None,
+                version: self.version(k),
             })
             .collect())
     }
@@ -68,10 +75,15 @@ impl Backend for Mock {
         self.items.lock().unwrap().insert(id.clone(), (parent.map(String::from), name.into(), false, data));
         Ok(id)
     }
-    fn replace(&self, id: &str, _name: &str, src: &Path) -> BackendResult<()> {
+    fn replace(&self, id: &str, _name: &str, src: &Path, base: Option<i64>) -> BackendResult<i64> {
+        if base.is_some_and(|b| b != self.version(id)) {
+            return Err(CONFLICT.into());
+        }
         let data = std::fs::read(src).map_err(|e| e.to_string())?;
         self.items.lock().unwrap().get_mut(id).ok_or("missing")?.3 = data;
-        Ok(())
+        let next = self.version(id) + 1;
+        self.versions.lock().unwrap().insert(id.to_string(), next);
+        Ok(next)
     }
     fn mkdir(&self, parent: Option<&str>, name: &str) -> BackendResult<String> {
         // As the server: a live sibling's name, in any case, is refused.
@@ -359,4 +371,67 @@ fn mkdir_after_a_stale_lookup_uses_the_existing_folder() {
     *mock.hide_once.lock().unwrap() = Some("docs".into());
     core.create("\\Docs", true).unwrap();
     assert_eq!(folders_named(&mock, "docs"), 1);
+}
+
+/// Another person's save, straight to the server.
+fn someone_else_saves(mock: &Mock, id: &str, data: &[u8]) {
+    let tmp = std::env::temp_dir().join(format!("tma-other-{}", uuid::Uuid::new_v4().simple()));
+    std::fs::write(&tmp, data).unwrap();
+    mock.replace(id, "other", &tmp, None).unwrap();
+    let _ = std::fs::remove_file(&tmp);
+}
+
+fn conflicted_copy(mock: &Mock) -> Option<Vec<u8>> {
+    let name = names(mock).into_iter().find(|n| n.contains("(conflicted copy "))?;
+    Some(mock.bytes(&mock.find(None, &name)?))
+}
+
+#[test]
+fn a_save_from_an_outdated_copy_is_kept_beside_the_newer_one() {
+    // 15 October: one person saved twice, someone else saved in between from their
+    // own copy, and the first person's second save vanished. Now neither is lost.
+    let (mock, core, _d) = setup();
+    save(&core, "\\sheet.xlsx", b"v1");
+    let id = mock.find(None, "sheet.xlsx").unwrap();
+    core.invalidate_all();
+    let mine = core.open("\\sheet.xlsx").unwrap();
+    core.write(&mine, 0, b"mine 1", false, false).unwrap();
+    core.cleanup(&mine, false);
+    assert_eq!(mock.bytes(&id), b"mine 1", "a save from the current copy lands");
+    someone_else_saves(&mock, &id, b"theirs");
+    core.write(&mine, 0, b"mine 2", false, false).unwrap();
+    core.cleanup(&mine, false);
+    core.close(&mine);
+    assert_eq!(mock.bytes(&id), b"theirs", "the newer save is not overwritten");
+    assert_eq!(conflicted_copy(&mock).as_deref(), Some(&b"mine 2"[..]));
+}
+
+#[test]
+fn saving_again_from_one_open_file_never_conflicts_with_itself() {
+    let (mock, core, _d) = setup();
+    save(&core, "\\sheet.xlsx", b"v1");
+    let id = mock.find(None, "sheet.xlsx").unwrap();
+    core.invalidate_all();
+    let mine = core.open("\\sheet.xlsx").unwrap();
+    for data in [b"save 1", b"save 2", b"save 3"] {
+        core.write(&mine, 0, data, false, false).unwrap();
+        core.cleanup(&mine, false);
+    }
+    core.close(&mine);
+    assert_eq!(mock.bytes(&id), b"save 3");
+    assert_eq!(conflicted_copy(&mock), None);
+}
+
+#[test]
+fn an_office_save_over_a_newer_server_copy_becomes_a_conflicted_copy() {
+    let (mock, core, _d) = setup();
+    save(&core, "\\Roadmap.docx", b"v1");
+    let id = mock.find(None, "Roadmap.docx").unwrap();
+    core.invalidate_all();
+    // Word opens the document, someone else saves, then Word saves its way.
+    core.close(&core.open("\\Roadmap.docx").unwrap());
+    someone_else_saves(&mock, &id, b"theirs");
+    office_save(&core, "\\Roadmap.docx", "\\~WRL0001.tmp", "\\~WRD0000.tmp", b"mine");
+    assert_eq!(mock.bytes(&id), b"theirs");
+    assert_eq!(conflicted_copy(&mock).as_deref(), Some(&b"mine"[..]));
 }

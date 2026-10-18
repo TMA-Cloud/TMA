@@ -30,6 +30,7 @@ pub fn entry(node: &Node) -> Option<Entry> {
         size: node.size,
         modified: node.modified,
         accessed: node.accessed,
+        version: node.version,
     })
 }
 
@@ -120,6 +121,18 @@ pub fn refresh(path: &Path, entry: &Entry) -> std::io::Result<()> {
         .open(path)
         .and_then(|mut p| p.update(options, None).map(|_| ()))
         .map_err(std::io::Error::other)
+}
+
+/// Throw away a local edit already kept elsewhere (a conflicted copy): the
+/// placeholder points at the server copy again, in sync, contents dropped.
+pub fn revert(path: &Path, entry: &Entry) -> std::io::Result<()> {
+    let blob = Stamp::of(entry).encode();
+    let mut placeholder =
+        Placeholder::options().write_access().exclusive().open(path).map_err(std::io::Error::other)?;
+    // An app that saved by writing a new file left a plain file: make it a placeholder again.
+    let _ = placeholder.convert_to_placeholder(ConvertOptions::default().blob(blob.clone()), None);
+    let options = UpdateOptions::default().metadata(metadata(entry)).blob(&blob).mark_in_sync().dehydrate();
+    placeholder.update(options, None).map(|_| ()).map_err(std::io::Error::other)
 }
 
 /// Remove what the server no longer has, keeping anything changed or made here.

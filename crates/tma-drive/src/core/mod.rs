@@ -4,6 +4,7 @@
 //! (create-empty-then-write, write-temp-then-rename).
 
 mod handle;
+mod save;
 mod scratch;
 
 pub use handle::Handle;
@@ -54,6 +55,8 @@ pub struct Node {
     pub modified: DateTime<Utc>,
     pub accessed: Option<DateTime<Utc>>,
     pub path: String,
+    /// The server's content version (0 for something only local).
+    pub version: i64,
 }
 
 impl Node {
@@ -66,6 +69,7 @@ impl Node {
             modified: Utc::now(),
             accessed: None,
             path: ROOT.into(),
+            version: 0,
         }
     }
 }
@@ -87,6 +91,8 @@ pub struct Core {
     local_empty: Mutex<HashSet<String>>,
     /// Scratch files apps keep while saving, by path; never uploaded.
     scratch: Mutex<HashMap<String, scratch::Scratch>>,
+    /// The content version each file was at when an app opened it, by path key.
+    opened: Mutex<HashMap<String, i64>>,
     /// Server files an app renamed to a backup name, by path: (id, path).
     hidden: Mutex<HashMap<String, (String, String)>>,
     path_locks: Vec<Mutex<()>>,
@@ -114,6 +120,7 @@ impl Core {
             created: Mutex::new(HashMap::new()),
             local_empty: Mutex::new(HashSet::new()),
             scratch: Mutex::new(HashMap::new()),
+            opened: Mutex::new(HashMap::new()),
             hidden: Mutex::new(HashMap::new()),
             path_locks: (0..64).map(|_| Mutex::new(())).collect(),
             deny_read: AtomicBool::new(false),
@@ -184,6 +191,7 @@ impl Core {
             size: entry.size,
             modified: entry.modified,
             accessed: entry.accessed,
+            version: entry.version,
         })
     }
 
@@ -230,6 +238,7 @@ impl Core {
                 modified: Utc::now(),
                 accessed: None,
                 path,
+                version: 0,
             });
         }
         Ok(children)

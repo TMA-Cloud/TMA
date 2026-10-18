@@ -14,15 +14,15 @@ use crate::paths;
 #[derive(Debug)]
 pub struct State {
     pub node: Node,
-    local: Option<PathBuf>,
+    pub(super) local: Option<PathBuf>,
     file: Option<File>,
     dirty: bool,
     /// Created here and not yet on the server.
-    is_new: bool,
+    pub(super) is_new: bool,
     /// Received at least one write (a bare create is only a placeholder).
     written: bool,
     deleted: bool,
-    parent: Option<Node>,
+    pub(super) parent: Option<Node>,
     /// A scratch file (see `scratch.rs`): its contents stay here and never upload.
     scratch: bool,
 }
@@ -87,6 +87,9 @@ impl Core {
             let parent = paths::parent(&node.path).and_then(|p| self.resolve(&p).ok().flatten());
             return Ok(Handle::new(node, parent, true));
         }
+        if !node.is_folder {
+            self.remember_opened(&node.path, node.version);
+        }
         Ok(Handle::new(node, None, false))
     }
 
@@ -103,13 +106,22 @@ impl Core {
             let id = self.folder_for(&path, parent.id.as_deref(), &name)?;
             self.track_created(&path, &id);
             self.invalidate(&parent_path);
-            let node =
-                Node { id: Some(id), name, is_folder: true, size: 0, modified: Utc::now(), accessed: None, path };
+            let node = Node {
+                id: Some(id),
+                name,
+                is_folder: true,
+                size: 0,
+                modified: Utc::now(),
+                accessed: None,
+                path,
+                version: 0,
+            };
             return Ok(Handle::new(node, None, false));
         }
         let local = self.new_staging_file();
         let file = OpenOptions::new().read(true).write(true).create_new(true).open(&local).map_err(io)?;
-        let node = Node { id: None, name, is_folder: false, size: 0, modified: Utc::now(), accessed: None, path };
+        let node =
+            Node { id: None, name, is_folder: false, size: 0, modified: Utc::now(), accessed: None, path, version: 0 };
         let scratch = scratch::is_scratch_name(&node.path);
         if scratch {
             self.add_scratch(&node.path, local.clone());
@@ -308,53 +320,6 @@ impl Core {
         if let Some(local) = state.local.take() {
             let _ = std::fs::remove_file(local);
         }
-    }
-
-    fn upload_back(&self, state: &mut State) -> Result<(), String> {
-        let Some(src) = state.local.clone() else { return Ok(()) };
-        let size = std::fs::metadata(&src).map(|m| m.len()).unwrap_or(0);
-        let name = state.node.name.clone();
-        let server_name = self.to_server_name(&name);
-        if let (false, Some(id)) = (state.is_new, state.node.id.clone()) {
-            self.backend.replace(&id, &server_name, &src)?;
-            self.invalidate(&paths::parent(&state.node.path).unwrap_or_else(|| paths::ROOT.into()));
-            return Ok(());
-        }
-        let path = state.node.path.clone();
-        let parent_id = state.parent.as_ref().and_then(|p| p.id.clone());
-        let _guard = self.path_lock(&path);
-        // Replace a file of the same name rather than making a "name (2)" copy.
-        let target = match self.created_id(&path) {
-            Some(id) => Some((id, true)),
-            None => self
-                .find_child(parent_id.as_deref(), &name, false)
-                .map_err(|e| e.to_string())?
-                .map(|e| (e.id, e.size > 0)),
-        };
-        if let Some((id, has_content)) = target {
-            // An empty save never clobbers a file that has content.
-            if size == 0 && has_content {
-                state.node.id = Some(id);
-                state.is_new = false;
-                return Ok(());
-            }
-            match self.backend.replace(&id, &server_name, &src) {
-                Ok(()) => {
-                    state.node.id = Some(id.clone());
-                    state.is_new = false;
-                    self.track_created(&path, &id);
-                    self.invalidate(&paths::parent(&path).unwrap_or_else(|| paths::ROOT.into()));
-                    return Ok(());
-                }
-                Err(err) => log::warn!("replace failed, uploading as new: {err}"),
-            }
-        }
-        let id = self.backend.upload(parent_id.as_deref(), &server_name, &src)?;
-        state.node.id = Some(id.clone());
-        state.is_new = false;
-        self.track_created(&path, &id);
-        self.invalidate(&paths::parent(&path).unwrap_or_else(|| paths::ROOT.into()));
-        Ok(())
     }
 
     /// Rename or move; an item already at the destination is replaced (moved to the trash).

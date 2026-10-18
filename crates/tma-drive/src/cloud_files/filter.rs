@@ -141,7 +141,7 @@ impl SyncFilter for Filter {
             // A save's backup goes once the new copy is written; the server file is that copy.
             let backup = self.shared.rel(&request.path()).and_then(|rel| self.backup_of(&rel, request.file_blob()));
             if backup.is_none() {
-                self.shared.queue_delete(stamp.id, request.path());
+                self.shared.queue_delete(stamp.id, stamp.version, request.path());
             }
         }
         Ok(())
@@ -157,7 +157,7 @@ impl SyncFilter for Filter {
             // Moved out of the drive: it leaves the cloud, as with any synced folder.
             ticket.pass().map_err(|e| unsuccessful("rename", e))?;
             if let Some(stamp) = Stamp::decode(request.file_blob()) {
-                self.shared.queue_delete(stamp.id, from);
+                self.shared.queue_delete(stamp.id, stamp.version, from);
             }
             return Ok(());
         }

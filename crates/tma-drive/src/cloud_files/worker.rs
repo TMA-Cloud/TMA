@@ -8,7 +8,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
-use crate::backend::Entry;
+use crate::backend::{CONFLICT, Entry};
 use crate::cloud_files::local;
 use crate::core::{Core, Node};
 use crate::paths;
@@ -21,6 +21,13 @@ const DELETE_GRACE: Duration = Duration::from_secs(4);
 /// A full resync runs at least this often, in case a change event was missed.
 const RESYNC_EVERY: Duration = Duration::from_secs(120);
 
+/// How a local file's save went.
+enum Saved {
+    Replaced,
+    /// Someone else saved first; the local edit went up as a conflicted copy.
+    Conflicted,
+}
+
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|e| e.into_inner())
 }
@@ -30,8 +37,15 @@ pub struct Shared {
     pub root: PathBuf,
     /// Folders with local changes, by when they last changed.
     dirty: Mutex<HashMap<PathBuf, Instant>>,
-    /// Server deletes waiting out the grace period: path key → (id, path, when).
-    deletes: Mutex<HashMap<String, (String, PathBuf, Instant)>>,
+    /// The server file and version each synced path last held, by path key. Apps
+    /// save by writing a new file over the placeholder, which loses its stamp; the
+    /// new file still saves against the version it replaced.
+    synced: Mutex<HashMap<String, (String, i64)>>,
+    /// Files already kept as a conflicted copy, by path key, as they were then:
+    /// not sent again until they change, so a failed revert cannot repeat the copy.
+    kept: Mutex<HashMap<String, local::Snapshot>>,
+    /// Server deletes waiting out the grace period: path key → (id, version, path, when).
+    deletes: Mutex<HashMap<String, (String, i64, PathBuf, Instant)>>,
     wake: Condvar,
     stop: AtomicBool,
 }
@@ -42,6 +56,8 @@ impl Shared {
             core,
             root,
             dirty: Mutex::new(HashMap::new()),
+            synced: Mutex::new(HashMap::new()),
+            kept: Mutex::new(HashMap::new()),
             deletes: Mutex::new(HashMap::new()),
             wake: Condvar::new(),
             stop: AtomicBool::new(false),
@@ -71,15 +87,53 @@ impl Shared {
         self.wake.notify_one();
     }
 
-    pub fn queue_delete(&self, id: String, path: PathBuf) {
+    pub fn queue_delete(&self, id: String, version: i64, path: PathBuf) {
         let key = paths::key(&path.to_string_lossy());
-        lock(&self.deletes).insert(key, (id, path, Instant::now()));
+        lock(&self.deletes).insert(key, (id, version, path, Instant::now()));
         self.wake.notify_one();
     }
 
-    /// A file deleted moments ago and now written again at the same path keeps its server id.
-    fn take_delete(&self, path: &Path) -> Option<String> {
-        lock(&self.deletes).remove(&paths::key(&path.to_string_lossy())).map(|(id, _, _)| id)
+    fn note_synced(&self, path: &Path, stamp: &Stamp) {
+        lock(&self.synced).insert(paths::key(&path.to_string_lossy()), (stamp.id.clone(), stamp.version));
+    }
+
+    /// The version a file written over the synced copy of `id` at `path` started from.
+    fn synced_version(&self, path: &Path, id: &str) -> Option<i64> {
+        lock(&self.synced).get(&paths::key(&path.to_string_lossy())).filter(|(sid, _)| sid == id).map(|(_, v)| *v)
+    }
+
+    /// A file deleted moments ago and now written again at the same path keeps its
+    /// server id, and the version it was synced at (a save that deletes and rewrites).
+    fn take_delete(&self, path: &Path) -> Option<(String, i64)> {
+        lock(&self.deletes).remove(&paths::key(&path.to_string_lossy())).map(|(id, version, _, _)| (id, version))
+    }
+
+    /// Replace a server file with the local one. If someone else saved after this
+    /// copy was synced, the server refuses; the local edit is then uploaded beside
+    /// it as a conflicted copy, so neither save is lost.
+    fn save(
+        &self,
+        folder: &Node,
+        id: &str,
+        server_name: &str,
+        path: &Path,
+        base: Option<i64>,
+    ) -> Result<Saved, String> {
+        let backend = self.core.backend();
+        match backend.replace(id, server_name, path, base) {
+            Ok(_) => Ok(Saved::Replaced),
+            Err(err) if err == CONFLICT => {
+                let when = chrono::Local::now().format("%Y-%m-%d %H%M").to_string();
+                let copy = sync_plan::conflict_name(server_name, &when);
+                backend.upload(folder.id.as_deref(), &copy, path)?;
+                log::warn!(
+                    "[drive] {} changed on the server since it was opened; kept this edit as {copy}",
+                    path.display()
+                );
+                Ok(Saved::Conflicted)
+            }
+            Err(err) => Err(err),
+        }
     }
 
     pub fn stop(&self) {
@@ -115,6 +169,7 @@ impl Shared {
         let Some(server) = self.server(&node) else { return false };
         let mut done = true;
         let mut uploaded: Vec<(PathBuf, String, local::Snapshot)> = Vec::new();
+        let mut conflicted: Vec<(PathBuf, String, local::Snapshot)> = Vec::new();
         for step in sync_plan::uploads(&folder.items, &server) {
             log::debug!("[drive] upload in {}: {step:?}", dir.display());
             let name = match &step {
@@ -127,13 +182,41 @@ impl Shared {
             let path = dir.join(&name);
             let server_name = self.core.to_server_name(&name);
             let before = local::snapshot(&path);
+            if lock(&self.kept).get(&paths::key(&path.to_string_lossy())) == Some(&before) {
+                continue;
+            }
             let backend = self.core.backend();
+            // A new file over a same-named server one replaces it as asked; a rewrite keeps its version check.
+            let target = match &step {
+                Upload::File { replace, .. } => {
+                    let deleted = self.take_delete(&path).map(|(id, v)| (id, sync_plan::base(v)));
+                    // Over a server file of the same name: checked if it replaced that file's synced copy.
+                    deleted.or_else(|| {
+                        replace.clone().map(|id| {
+                            let base = self.synced_version(&path, &id).and_then(sync_plan::base);
+                            (id, base)
+                        })
+                    })
+                }
+                Upload::Changed { id, base, .. } => Some((id.clone(), sync_plan::base(*base))),
+                Upload::Folder { .. } => None,
+            };
+            if let Some((id, base)) = target {
+                match self.save(&node, &id, &server_name, &path, base) {
+                    Ok(Saved::Replaced) => uploaded.push((path, id, before)),
+                    Ok(Saved::Conflicted) => {
+                        lock(&self.kept).insert(paths::key(&path.to_string_lossy()), before);
+                        conflicted.push((path, id, before));
+                    }
+                    Err(err) => {
+                        log::warn!("[drive] upload of {} failed: {err}", path.display());
+                        done = false;
+                    }
+                }
+                continue;
+            }
             let result = match step {
-                Upload::File { replace, .. } => match replace.or_else(|| self.take_delete(&path)) {
-                    Some(id) => backend.replace(&id, &server_name, &path).map(|_| id),
-                    None => backend.upload(node.id.as_deref(), &server_name, &path),
-                },
-                Upload::Changed { id, .. } => backend.replace(&id, &server_name, &path).map(|_| id),
+                Upload::File { .. } | Upload::Changed { .. } => backend.upload(node.id.as_deref(), &server_name, &path),
                 Upload::Folder { existing, .. } => {
                     let made = existing.map(Ok).unwrap_or_else(|| backend.mkdir(node.id.as_deref(), &server_name));
                     match made.and_then(|id| local::adopt(&path, &Stamp { id, version: 0 }).map_err(|e| e.to_string()))
@@ -156,9 +239,16 @@ impl Shared {
                 }
             }
         }
-        if !uploaded.is_empty() {
+        if !uploaded.is_empty() || !conflicted.is_empty() {
             self.core.invalidate(&node.path);
             let server = self.server(&node).unwrap_or_default();
+            // The edit is safe in its copy: the original goes back to the server's version.
+            for (path, id, before) in conflicted {
+                let current = server.iter().find(|e| e.id == id);
+                let reverted =
+                    local::snapshot(&path) == before && current.is_some_and(|e| local::revert(&path, e).is_ok());
+                done &= reverted;
+            }
             for (path, id, before) in uploaded {
                 // Edited again while uploading: leave it unsynced so the next pass sends it.
                 if local::snapshot(&path) != before {
@@ -166,6 +256,7 @@ impl Shared {
                     continue;
                 }
                 let stamp = server.iter().find(|e| e.id == id).map(Stamp::of).unwrap_or(Stamp { id, version: 0 });
+                self.note_synced(&path, &stamp);
                 if let Err(err) = local::adopt(&path, &stamp) {
                     log::warn!("[drive] could not mark {} synced: {err}", path.display());
                     done = false;
@@ -179,6 +270,11 @@ impl Shared {
     pub fn resync_folder(&self, dir: &Path) -> Vec<PathBuf> {
         let Some(node) = self.folder(dir) else { return Vec::new() };
         let (Some(server), Ok(folder)) = (self.server(&node), local::read(dir)) else { return Vec::new() };
+        for item in folder.items.iter().filter(|i| !i.is_dir && i.in_sync) {
+            if let Some(stamp) = &item.stamp {
+                self.note_synced(&dir.join(&item.name), stamp);
+            }
+        }
         for fix in sync_plan::reconcile(&folder.items, &server) {
             log::debug!("[drive] resync {}: {fix:?}", dir.display());
             let touched = match &fix {
@@ -202,8 +298,12 @@ impl Shared {
                     Ok(())
                 }
             };
-            if let Err(err) = outcome {
-                log::debug!("[drive] {fix:?} in {}: {err}", dir.display());
+            match (&outcome, &fix) {
+                (Err(err), _) => log::debug!("[drive] {fix:?} in {}: {err}", dir.display()),
+                (Ok(()), Fix::Create(entry) | Fix::Update { entry, .. }) if !entry.is_folder => {
+                    self.note_synced(&dir.join(&entry.name), &Stamp::of(entry));
+                }
+                _ => {}
             }
         }
         folder.populated
@@ -234,9 +334,12 @@ impl Shared {
     fn run_deletes(&self) {
         let due: Vec<(String, PathBuf)> = {
             let mut deletes = lock(&self.deletes);
-            let keys: Vec<String> =
-                deletes.iter().filter(|(_, (_, _, at))| at.elapsed() >= DELETE_GRACE).map(|(k, _)| k.clone()).collect();
-            keys.iter().filter_map(|k| deletes.remove(k)).map(|(id, path, _)| (id, path)).collect()
+            let keys: Vec<String> = deletes
+                .iter()
+                .filter(|(_, (_, _, _, at))| at.elapsed() >= DELETE_GRACE)
+                .map(|(k, _)| k.clone())
+                .collect();
+            keys.iter().filter_map(|k| deletes.remove(k)).map(|(id, _, path, _)| (id, path)).collect()
         };
         for (id, path) in due {
             // The delete was cancelled (the file is still there): keep the server copy.

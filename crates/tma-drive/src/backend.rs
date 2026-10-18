@@ -16,7 +16,13 @@ pub struct Entry {
     pub size: u64,
     pub modified: DateTime<Utc>,
     pub accessed: Option<DateTime<Utc>>,
+    /// The server's content version, raised by every save (0 from a server without it).
+    pub version: i64,
 }
+
+/// The error a replace returns when someone else saved after `base`: the server
+/// kept its copy, so the caller keeps the local one as a conflicted copy.
+pub const CONFLICT: &str = "conflict: the file was saved by someone else";
 
 /// Space figures; `total` is `None` for an unlimited account.
 #[derive(Debug, Clone, Copy, Default)]
@@ -35,7 +41,9 @@ pub trait Backend: Send + Sync {
     /// Upload a new file and return its id.
     fn upload(&self, parent: Option<&str>, name: &str, src: &Path) -> BackendResult<String>;
     /// Replace a file's contents; `name` is its current name (the type is read from it).
-    fn replace(&self, id: &str, name: &str, src: &Path) -> BackendResult<()>;
+    /// With `base`, only while the server is still at that content version, else `CONFLICT`.
+    /// Returns the new content version.
+    fn replace(&self, id: &str, name: &str, src: &Path, base: Option<i64>) -> BackendResult<i64>;
     fn mkdir(&self, parent: Option<&str>, name: &str) -> BackendResult<String>;
     fn rename(&self, id: &str, name: &str) -> BackendResult<()>;
     fn move_to(&self, id: &str, parent: Option<&str>) -> BackendResult<()>;
@@ -89,6 +97,7 @@ impl Backend for ClientBackend {
                 name: f.name,
                 modified: f.modified,
                 accessed: f.accessed_at,
+                version: f.content_version,
             }));
             match page.next_cursor {
                 Some(cursor) => query.cursor = Some(cursor),
@@ -114,11 +123,11 @@ impl Backend for ClientBackend {
             .map_err(|e| e.message)
     }
 
-    fn replace(&self, id: &str, name: &str, src: &Path) -> BackendResult<()> {
+    fn replace(&self, id: &str, name: &str, src: &Path, base: Option<i64>) -> BackendResult<i64> {
         let file = upload_file(name, src)?;
-        tma_client::rt::block_on(self.client.replace(id, &file, Progress::new(file.size)))
-            .map(|_| ())
-            .map_err(|e| e.message)
+        tma_client::rt::block_on(self.client.replace_from(id, &file, base, Progress::new(file.size)))
+            .map(|f| f.content_version)
+            .map_err(|e| if e.is_conflict() { CONFLICT.to_string() } else { e.message })
     }
 
     fn mkdir(&self, parent: Option<&str>, name: &str) -> BackendResult<String> {
