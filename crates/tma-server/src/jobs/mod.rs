@@ -140,9 +140,12 @@ impl JobQueue {
         let p = policy(queue);
         let id = Uuid::new_v4();
         sqlx::query(
-            "INSERT INTO job_queue (id, queue, data, singleton_key, retry_limit, retry_delay_seconds, retry_backoff,
-               retry_delay_max_seconds, expire_seconds, keep_seconds, start_after)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW() + make_interval(secs => $11))",
+            "WITH queued AS (
+               INSERT INTO job_queue (id, queue, data, singleton_key, retry_limit, retry_delay_seconds, retry_backoff,
+                 retry_delay_max_seconds, expire_seconds, keep_seconds, start_after)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW() + make_interval(secs => $11))
+               RETURNING queue
+             ) SELECT pg_notify($12, queue) FROM queued",
         )
         .bind(id)
         .bind(queue)
@@ -155,9 +158,9 @@ impl JobQueue {
         .bind(p.expire_seconds)
         .bind(p.keep_seconds)
         .bind(delay_secs as f64)
+        .bind(NOTIFY_CHANNEL)
         .execute(&self.pool)
         .await?;
-        let _ = sqlx::query("SELECT pg_notify($1, $2)").bind(NOTIFY_CHANNEL).bind(queue).execute(&self.pool).await;
         Ok(id)
     }
 
@@ -213,10 +216,14 @@ impl JobQueue {
 
     pub async fn complete(&self, id: Uuid, output: Option<Value>) -> anyhow::Result<()> {
         sqlx::query(
-            "UPDATE job_queue SET state = 'completed', completed_at = NOW(), output = $2, error = NULL WHERE id = $1",
+            "WITH done AS (
+               UPDATE job_queue SET state = 'completed', completed_at = NOW(), output = $2, error = NULL WHERE id = $1
+               RETURNING queue, singleton_key
+             ) SELECT pg_notify($3, queue) FROM done WHERE singleton_key IS NOT NULL",
         )
         .bind(id)
         .bind(output)
+        .bind(NOTIFY_CHANNEL)
         .execute(&self.pool)
         .await?;
         Ok(())
@@ -225,21 +232,35 @@ impl JobQueue {
     /// Retry with (exponential) backoff, or mark the job failed once retries run out.
     pub async fn fail(&self, id: Uuid, error: &str) -> anyhow::Result<()> {
         sqlx::query(
-            "UPDATE job_queue SET
-               state = CASE WHEN retry_count < retry_limit THEN 'created' ELSE 'failed' END,
-               completed_at = CASE WHEN retry_count < retry_limit THEN NULL ELSE NOW() END,
-               start_after = NOW() + make_interval(secs => LEAST(retry_delay_max_seconds,
-                 CASE WHEN retry_backoff THEN retry_delay_seconds * POWER(2, retry_count) ELSE retry_delay_seconds END)),
-               retry_count = retry_count + 1,
-               started_at = NULL,
-               error = $2
-             WHERE id = $1",
+            "WITH done AS (
+               UPDATE job_queue SET
+                 state = CASE WHEN retry_count < retry_limit THEN 'created' ELSE 'failed' END,
+                 completed_at = CASE WHEN retry_count < retry_limit THEN NULL ELSE NOW() END,
+                 start_after = NOW() + make_interval(secs => LEAST(retry_delay_max_seconds,
+                   CASE WHEN retry_backoff THEN retry_delay_seconds * POWER(2, retry_count) ELSE retry_delay_seconds END)),
+                 retry_count = retry_count + 1,
+                 started_at = NULL,
+                 error = $2
+               WHERE id = $1
+               RETURNING queue, singleton_key
+             ) SELECT pg_notify($3, queue) FROM done WHERE singleton_key IS NOT NULL",
         )
         .bind(id)
         .bind(error)
+        .bind(NOTIFY_CHANNEL)
         .execute(&self.pool)
         .await?;
         Ok(())
+    }
+
+    /// When the next delayed job of `queue` comes due; new and unblocked jobs announce themselves.
+    pub async fn next_due(&self, queue: &str) -> anyhow::Result<Option<chrono::DateTime<chrono::Utc>>> {
+        Ok(sqlx::query_scalar(
+            "SELECT MIN(start_after) FROM job_queue WHERE queue = $1 AND state = 'created' AND start_after > NOW()",
+        )
+        .bind(queue)
+        .fetch_one(&self.pool)
+        .await?)
     }
 
     /// Jobs left active past their expiry (a worker died) go back to waiting.

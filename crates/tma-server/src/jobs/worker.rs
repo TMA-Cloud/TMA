@@ -13,6 +13,9 @@ use super::{JobQueue, NOTIFY_CHANNEL, handlers, policy, queues, schedule};
 use crate::state::AppState;
 
 const POLL: Duration = Duration::from_secs(2);
+/// The longest an idle queue sleeps: NOTIFY wakes it for new work, so this only
+/// covers a notification lost while the listener reconnected.
+const IDLE_POLL: Duration = Duration::from_secs(30);
 const HOUSEKEEPING: Duration = Duration::from_secs(20);
 const PURGE_EVERY: u32 = 30;
 const DRAIN_TIMEOUT: Duration = Duration::from_secs(30);
@@ -99,10 +102,24 @@ async fn claim_loop(
         if got_work && semaphore.available_permits() > 0 {
             continue;
         }
+        // Busy: check back soon. Idle: sleep until the next delayed job instead of polling.
+        let wait = if got_work || free == 0 { POLL } else { idle_wait(&state, queue).await };
         tokio::select! {
             _ = waker.notified() => {}
-            _ = tokio::time::sleep(POLL) => {}
+            _ = tokio::time::sleep(wait) => {}
             _ = shutdown.changed() => {}
+        }
+    }
+}
+
+/// How long an idle queue can sleep: until its next delayed job, at most `IDLE_POLL`.
+async fn idle_wait(state: &AppState, queue: &str) -> Duration {
+    match state.jobs.next_due(queue).await {
+        Ok(Some(due)) => (due - chrono::Utc::now()).to_std().unwrap_or(Duration::ZERO).min(IDLE_POLL),
+        Ok(None) => IDLE_POLL,
+        Err(err) => {
+            tracing::warn!(queue, error = %err, "Failed to read the next job time");
+            POLL
         }
     }
 }
