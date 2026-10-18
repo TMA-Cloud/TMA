@@ -60,8 +60,8 @@ pub enum Taken {
     Busy(FileLock),
 }
 
-pub async fn holder(pool: &PgPool, file_id: &str) -> anyhow::Result<Option<FileLock>> {
-    Ok(sqlx::query_as::<_, Row>(HOLDER_SQL).bind(file_id).fetch_optional(pool).await?.map(Into::into))
+pub async fn holder<'e, E: sqlx::PgExecutor<'e>>(db: E, file_id: &str) -> anyhow::Result<Option<FileLock>> {
+    Ok(sqlx::query_as::<_, Row>(HOLDER_SQL).bind(file_id).fetch_optional(db).await?.map(Into::into))
 }
 
 /// Take or renew the lock on `file_id` (a file of `owner`'s) for `actor`, for `lease`.

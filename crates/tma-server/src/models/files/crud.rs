@@ -338,7 +338,7 @@ pub async fn replace_data(
         return Err(DomainError::Conflict(STALE_SAVE.into()).into());
     }
     // While someone else has it open for editing, their copy is the one that counts.
-    if let Some(lock) = super::locks::holder(pool, id).await?.filter(|l| !actor.holds(l)) {
+    if let Some(lock) = super::locks::holder(&mut *tx, id).await?.filter(|l| !actor.holds(l)) {
         let message = if lock.user_id == actor.user && lock.in_browser() {
             "You are editing this file in the browser".to_string()
         } else if lock.user_id == actor.user {
@@ -371,11 +371,13 @@ pub async fn replace_data(
 }
 
 pub async fn set_starred(pool: &PgPool, ids: &[String], starred: bool, owner: &str) -> anyhow::Result<()> {
-    sqlx::query("UPDATE files SET starred = $1 WHERE id = ANY($2::text[]) AND user_id = $3")
-        .bind(starred)
-        .bind(ids)
-        .bind(owner)
-        .execute(pool)
-        .await?;
+    sqlx::query(
+        "UPDATE files SET starred = $1 WHERE id = ANY($2::text[]) AND user_id = $3 AND starred IS DISTINCT FROM $1",
+    )
+    .bind(starred)
+    .bind(ids)
+    .bind(owner)
+    .execute(pool)
+    .await?;
     Ok(())
 }

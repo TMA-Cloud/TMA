@@ -120,14 +120,13 @@ pub async fn replace_backup_codes(pool: &PgPool, user_id: &str, count: usize) ->
     let hashes = hash_codes(&codes).await?;
     let mut tx = pool.begin().await?;
     sqlx::query("DELETE FROM mfa_backup_codes WHERE user_id = $1").bind(user_id).execute(&mut *tx).await?;
-    for hash in hashes {
-        sqlx::query("INSERT INTO mfa_backup_codes(id, user_id, code_hash) VALUES($1, $2, $3)")
-            .bind(generate_id())
-            .bind(user_id)
-            .bind(hash)
-            .execute(&mut *tx)
-            .await?;
-    }
+    let ids: Vec<String> = hashes.iter().map(|_| generate_id()).collect();
+    sqlx::query("INSERT INTO mfa_backup_codes(id, user_id, code_hash) SELECT id, $2, hash FROM unnest($1::text[], $3::text[]) AS c(id, hash)")
+        .bind(&ids)
+        .bind(user_id)
+        .bind(&hashes)
+        .execute(&mut *tx)
+        .await?;
     tx.commit().await?;
     Ok(codes)
 }

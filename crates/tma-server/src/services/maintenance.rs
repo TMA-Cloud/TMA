@@ -79,7 +79,8 @@ pub async fn cleanup_reservations(pool: &PgPool) -> anyhow::Result<u64> {
 /// Recompute folder aggregates per account and report drift (it should be zero).
 pub async fn reconcile_folder_aggregates(pool: &PgPool) -> anyhow::Result<(usize, i64)> {
     let started = std::time::Instant::now();
-    let accounts: Vec<String> = sqlx::query_scalar("SELECT id FROM users ORDER BY id").fetch_all(pool).await?;
+    let accounts: Vec<String> =
+        sqlx::query_scalar("SELECT id FROM users WHERE parent_user_id IS NULL ORDER BY id").fetch_all(pool).await?;
     let (mut scanned, mut repaired) = (0, 0i64);
     for id in &accounts {
         if started.elapsed() > std::time::Duration::from_secs(20 * 60) {

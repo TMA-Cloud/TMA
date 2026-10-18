@@ -22,12 +22,16 @@ use crate::error::DomainError;
 pub const LIST_COLUMNS: &str = "f.id, f.name, f.type,
     CASE WHEN f.type = 'folder' THEN f.aggregate_size ELSE f.size END AS size,
     f.modified, f.accessed_at, f.shared_at, f.mime_type, f.starred, f.shared, f.content_version,
-    (SELECT l.user_id FROM file_locks l WHERE l.file_id = f.id AND l.expires_at > NOW()) AS lock_user_id,
-    (SELECT COALESCE(NULLIF(u.name, ''), u.email) FROM file_locks l JOIN users u ON u.id = l.user_id
-      WHERE l.file_id = f.id AND l.expires_at > NOW()) AS lock_name,
-    (SELECT l.acquired_at FROM file_locks l WHERE l.file_id = f.id AND l.expires_at > NOW()) AS lock_since,
-    (SELECT l.expires_at FROM file_locks l WHERE l.file_id = f.id AND l.expires_at > NOW()) AS lock_expires,
-    (SELECT l.device_id FROM file_locks l WHERE l.file_id = f.id AND l.expires_at > NOW()) AS lock_device";
+    lock.user_id AS lock_user_id, lock.name AS lock_name, lock.acquired_at AS lock_since,
+    lock.expires_at AS lock_expires, lock.device_id AS lock_device";
+
+/// Joined after `FROM files f` wherever `LIST_COLUMNS` is selected: the live edit
+/// lock, found once per row by its primary key.
+pub const LOCK_JOIN: &str = "LEFT JOIN LATERAL (
+       SELECT l.user_id, COALESCE(NULLIF(u.name, ''), u.email) AS name, l.acquired_at, l.expires_at, l.device_id
+         FROM file_locks l JOIN users u ON u.id = l.user_id
+        WHERE l.file_id = f.id AND l.expires_at > NOW()
+     ) lock ON TRUE";
 
 /// Share expiry of a shared item: NULL when unshared or shared without expiry.
 pub fn expiry_join(owner_param: &str) -> String {

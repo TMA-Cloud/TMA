@@ -5,7 +5,7 @@ use chrono::{DateTime, Utc};
 use sqlx::{PgPool, QueryBuilder};
 use tma_core::api::{FileInfo, FileItem, FileStats, FolderInfo, ItemType};
 
-use super::{EXPIRY_COLUMN, Keyset, LIST_COLUMNS, ListRow, Page, expiry_join};
+use super::{EXPIRY_COLUMN, Keyset, LIST_COLUMNS, LOCK_JOIN, ListRow, Page, expiry_join};
 use crate::error::DomainError;
 
 /// Which view a listing serves.
@@ -20,6 +20,7 @@ pub async fn list(pool: &PgPool, owner: &str, view: View<'_>, keyset: &Keyset) -
     match view {
         View::Shared => {
             qb.push("CASE WHEN share_info.has_perpetual THEN NULL ELSE share_info.expires_at END AS expires_at FROM files f ");
+            qb.push(LOCK_JOIN);
             qb.push("LEFT JOIN files parent ON f.parent_id = parent.id AND parent.user_id = ")
                 .push_bind(owner.to_string());
             qb.push(
@@ -32,7 +33,7 @@ pub async fn list(pool: &PgPool, owner: &str, view: View<'_>, keyset: &Keyset) -
             qb.push(" AND f.shared = TRUE AND f.deleted_at IS NULL AND (f.parent_id IS NULL OR parent.shared = FALSE OR parent.shared IS NULL)");
         }
         View::Folder(parent) => {
-            qb.push(format!("{EXPIRY_COLUMN} FROM files f {}", expiry_join("f.user_id")));
+            qb.push(format!("{EXPIRY_COLUMN} FROM files f {LOCK_JOIN} {}", expiry_join("f.user_id")));
             qb.push(" WHERE f.user_id = ").push_bind(owner.to_string()).push(" AND f.deleted_at IS NULL");
             match parent {
                 Some(p) => {
@@ -44,7 +45,7 @@ pub async fn list(pool: &PgPool, owner: &str, view: View<'_>, keyset: &Keyset) -
             }
         }
         View::Starred => {
-            qb.push(format!("{EXPIRY_COLUMN} FROM files f {}", expiry_join("f.user_id")));
+            qb.push(format!("{EXPIRY_COLUMN} FROM files f {LOCK_JOIN} {}", expiry_join("f.user_id")));
             qb.push(" WHERE f.user_id = ")
                 .push_bind(owner.to_string())
                 .push(" AND f.starred = TRUE AND f.deleted_at IS NULL");
@@ -59,7 +60,7 @@ pub async fn list(pool: &PgPool, owner: &str, view: View<'_>, keyset: &Keyset) -
 /// Top-level trash items: a trashed folder stands for its trashed children.
 pub async fn list_trash(pool: &PgPool, owner: &str, keyset: &Keyset) -> anyhow::Result<Page> {
     let mut qb = QueryBuilder::new(format!(
-        "SELECT {LIST_COLUMNS}, NULL::timestamptz AS expires_at, f.deleted_at, f.parent_id FROM files f WHERE f.user_id = "
+        "SELECT {LIST_COLUMNS}, NULL::timestamptz AS expires_at, f.deleted_at, f.parent_id FROM files f {LOCK_JOIN} WHERE f.user_id = "
     ));
     qb.push_bind(owner.to_string());
     qb.push(" AND f.deleted_at IS NOT NULL AND (f.parent_id IS NULL OR NOT EXISTS (SELECT 1 FROM files p WHERE p.id = f.parent_id AND p.user_id = f.user_id AND p.deleted_at IS NOT NULL))");
@@ -74,7 +75,7 @@ pub async fn recent(pool: &PgPool, owner: &str, limit: i64) -> anyhow::Result<Ve
     let sql = format!(
         "SELECT {LIST_COLUMNS}, {EXPIRY_COLUMN}, u.id AS opened_by_id,
                 COALESCE(NULLIF(u.name, ''), u.email) AS opened_by_name
-           FROM files f {} LEFT JOIN users u ON u.id = f.accessed_by
+           FROM files f {LOCK_JOIN} {} LEFT JOIN users u ON u.id = f.accessed_by
           WHERE f.user_id = $1 AND f.deleted_at IS NULL AND f.type = 'file'
           ORDER BY f.accessed_at DESC LIMIT $2",
         expiry_join("$1")
@@ -109,7 +110,7 @@ pub async fn search(pool: &PgPool, owner: &str, query: &str, limit: i64) -> anyh
         )
     };
     let sql = format!(
-        "SELECT {LIST_COLUMNS}, {EXPIRY_COLUMN}, f.parent_id FROM files f {}
+        "SELECT {LIST_COLUMNS}, {EXPIRY_COLUMN}, f.parent_id FROM files f {LOCK_JOIN} {}
           WHERE f.user_id = $1 AND f.deleted_at IS NULL AND {filter}
           ORDER BY {order} LIMIT $3",
         expiry_join("$1")
@@ -132,7 +133,7 @@ pub async fn stats(pool: &PgPool, owner: &str) -> anyhow::Result<FileStats> {
                                    AND (f.parent_id IS NULL OR parent.shared = FALSE OR parent.shared IS NULL)),
                 COUNT(*) FILTER (WHERE f.starred = TRUE AND f.deleted_at IS NULL)
            FROM files f LEFT JOIN files parent ON f.parent_id = parent.id AND parent.user_id = $1
-          WHERE f.user_id = $1",
+          WHERE f.user_id = $1 AND f.deleted_at IS NULL",
     )
     .bind(owner)
     .fetch_one(pool)
