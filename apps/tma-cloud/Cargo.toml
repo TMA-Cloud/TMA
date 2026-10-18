@@ -27,7 +27,6 @@ image = { workspace = true }
 log = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-tokio = { workspace = true }
 reqwest = { workspace = true }
 uuid = { workspace = true }
 open = "5"

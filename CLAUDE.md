@@ -27,10 +27,20 @@ into one image; `make build` tags it with the workspace version.
   comments and the `#[cfg(test)]` module don't count. Split by concern before you
   get there; never raise either limit. `cargo xtask house` and Clippy's
   `too_many_lines` enforce them; `cargo xtask house --sizes` lists the largest files.
-- **No copied code.** A run of 10 or more identical code lines in two places
-  fails `cargo xtask house`; share one function instead. After a refactor, run
-  `cargo xtask house --near` to find copies that differ only in strings or numbers
-  (it also flags data tables, so CI does not run it).
+- **No copied code.** A run of 10 or more identical code lines in two places, or
+  two functions with the same body of 3 or more lines, fails `cargo xtask house`;
+  share one function instead. After a refactor, run `cargo xtask house --near` to
+  find copies that differ only in strings or numbers (it also flags data tables, so
+  CI does not run it).
+- **No deprecated or unused code.** The workspace lints deny `deprecated` and the
+  whole `unused` group, so `cargo check` itself fails on a deprecated call or an
+  unused import, variable, function, field or result. Delete dead code; don't hide
+  it. A lint may be silenced only with `#[expect(lint, reason = "...")]` (Clippy
+  rejects `#[allow]` and missing reasons), and an `expect` fails once nothing
+  triggers it. Platform-only code uses `#[cfg_attr(target_arch = "wasm32", expect(...))]`.
+- **No unused dependencies.** `cargo xtask house` fails on a dependency a crate's
+  code never names. One needed only for a feature or for linking goes under
+  `[package.metadata.cargo-machete] ignored` with a comment saying why.
 - **Refactors keep public shapes stable.** Public names, module paths and the
   REST wire format stay the same, so no consumer (or deployed client) has to change.
 - **Split by concern and keep the re-exports.** An oversized `foo.rs` becomes

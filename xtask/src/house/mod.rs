@@ -3,10 +3,14 @@
 //!
 //! - No source file over `MAX_LINES` lines of code (tests, comments and blanks
 //!   do not count). Split by concern instead.
-//! - No block of `dupes::WINDOW` or more code lines copied between places.
+//! - No block of `dupes::WINDOW` or more code lines copied between places, and
+//!   no two functions with the same body (`functions::MIN_BODY` lines or more).
+//! - No dependency a crate never names (`deps`).
 //! - Interface colours only from `theme::Tokens`; no curly apostrophes.
 
+mod deps;
 mod dupes;
+mod functions;
 mod lines;
 mod text;
 
@@ -85,6 +89,34 @@ pub fn findings(root: &Path, ignore_literals: bool) -> Vec<String> {
             copy.other_file.display(),
             copy.other_line
         ));
+    }
+    for twin in functions::find(&files) {
+        out.push(format!(
+            "{}:{}: fn {} has the same body as fn {} at {}:{}; call one from the other",
+            twin.file.display(),
+            twin.line,
+            twin.name,
+            twin.other_name,
+            twin.other_file.display(),
+            twin.other_line
+        ));
+    }
+    for (manifest, name) in members(root).iter().flat_map(|m| deps::unused(m)) {
+        let rel = manifest.strip_prefix(root).unwrap_or(&manifest).display().to_string();
+        out.push(format!("{rel}:1: dependency {name} is never used; remove it, or list it under [package.metadata.cargo-machete] ignored"));
+    }
+    out
+}
+
+/// Every workspace member: each crate under `crates/` and `apps/`, and xtask.
+fn members(root: &Path) -> Vec<PathBuf> {
+    let mut out = vec![root.join("xtask")];
+    for dir in ["crates", "apps"] {
+        let Ok(entries) = std::fs::read_dir(root.join(dir)) else { continue };
+        let mut found: Vec<PathBuf> =
+            entries.flatten().map(|e| e.path()).filter(|p| p.join("Cargo.toml").is_file()).collect();
+        found.sort();
+        out.extend(found);
     }
     out
 }

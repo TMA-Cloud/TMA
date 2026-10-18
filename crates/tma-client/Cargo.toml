@@ -14,7 +14,6 @@ workspace = true
 tma-core = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-chrono = { workspace = true }
 futures = { workspace = true }
 bytes = { workspace = true }
 url = { workspace = true }
@@ -30,6 +29,5 @@ tokio = { workspace = true }
 reqwest = { version = "0.13", default-features = false, features = ["json", "multipart", "stream", "query", "form"] }
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
-js-sys = "0.3"
 web-sys = { version = "0.3", features = ["Window", "Location", "EventSource", "EventSourceInit", "MessageEvent", "Event"] }
 gloo-timers = { version = "0.4", features = ["futures"] }

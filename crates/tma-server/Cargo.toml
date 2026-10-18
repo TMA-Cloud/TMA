@@ -22,7 +22,6 @@ anyhow = { workspace = true }
 async-stream = "0.3"
 aws-credential-types = "1"
 aws-sdk-s3 = { version = "1", default-features = false, features = ["rt-tokio", "behavior-version-latest", "default-https-client"] }
-aws-smithy-types = { version = "1", features = ["byte-stream-poll-next"] }
 axum = { version = "0.8", features = ["multipart", "macros"] }
 base64 = { workspace = true }
 bcrypt = "0.19"
@@ -36,7 +35,6 @@ data-encoding = "2"
 dotenvy = "0.15"
 flate2 = "1"
 futures = { workspace = true }
-http-body-util = "0.1"
 image = { version = "0.25", default-features = false, features = ["png"] }
 infer = "0.22"
 ipnet = "2"
@@ -47,7 +45,6 @@ prometheus = { version = "0.14", default-features = false, features = ["process"
 qrcode = { version = "0.14", default-features = false, features = ["image"] }
 rand = "0.10"
 redis = { version = "1", features = ["tokio-comp", "aio", "connection-manager", "tokio-rustls-comp"] }
-regex = { workspace = true }
 reqwest = { workspace = true }
 ring = "0.17"
 serde = { workspace = true }

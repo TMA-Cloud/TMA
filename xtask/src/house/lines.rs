@@ -66,6 +66,19 @@ fn strip_comments(line: &str, in_block: &mut bool) -> String {
     out
 }
 
+/// The whole file with comments removed, test module included (for name lookups).
+pub fn without_comments(source: &str) -> String {
+    let mut in_block = false;
+    source
+        .lines()
+        .map(|line| {
+            strip_comments(line, &mut in_block)
+                + "
+"
+        })
+        .collect()
+}
+
 /// Lines the size limit counts.
 pub fn real_lines(source: &str) -> usize {
     code_lines(source).len()
