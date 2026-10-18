@@ -45,20 +45,52 @@ pub fn open(paths: Paths, client: Client, file: FileItem, notifier: Notifier) {
         };
         // Opening by path can block while Windows downloads the file; keep it off the async workers.
         let _ = std::thread::Builder::new().name("open-in-app".into()).spawn(move || {
+            #[cfg(windows)]
+            let program = launch(&path, &file.name, &notifier);
+            #[cfg(not(windows))]
             launch(&path, &file.name, &notifier);
             notifier.opened(&file.id);
+            #[cfg(windows)]
+            if let Some(program) = program {
+                hold_while_running(&paths, &file, &program);
+            }
         });
     });
 }
 
+/// Keep the file's edit lock while the program opened for it runs, so others get
+/// it read-only meanwhile. Office and LibreOffice track each document themselves.
+#[cfg(windows)]
+fn hold_while_running(paths: &Paths, file: &FileItem, program: &crate::shell_open::Program) {
+    if tma_drive::editing::has_owner_files(&file.name) {
+        return;
+    }
+    let Some(core) = paths.core() else { return };
+    // Someone else is editing: the drive already made it read-only and the app said so.
+    if core.leases().hold(&file.id).is_some() {
+        return;
+    }
+    program.wait();
+    core.leases().let_go(&file.id);
+}
+
 /// Open a file in its app; Windows asks which app when none is set for the type.
+#[cfg(windows)]
+fn launch(path: &std::path::Path, name: &str, notifier: &Notifier) -> Option<crate::shell_open::Program> {
+    match crate::shell_open::open(path) {
+        Ok(program) => return program,
+        Err(err) => log::debug!("open {}: {err}", path.display()),
+    }
+    if std::process::Command::new("rundll32.exe").arg("shell32.dll,OpenAs_RunDLL").arg(path).spawn().is_err() {
+        notifier.error(format!("No app opens {name}"));
+    }
+    None
+}
+
+/// Open a file in its app.
+#[cfg(not(windows))]
 fn launch(path: &std::path::Path, name: &str, notifier: &Notifier) {
-    if open::that_detached(path).is_ok() {
-        return;
+    if open::that_detached(path).is_err() {
+        notifier.error(format!("No app opens {name}"));
     }
-    #[cfg(windows)]
-    if std::process::Command::new("rundll32.exe").arg("shell32.dll,OpenAs_RunDLL").arg(path).spawn().is_ok() {
-        return;
-    }
-    notifier.error(format!("No app opens {name}"));
 }

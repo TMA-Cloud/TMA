@@ -18,6 +18,8 @@ mod edit;
 mod fonts;
 mod host;
 mod notify_ui;
+#[cfg(windows)]
+mod shell_open;
 mod shortcuts;
 #[cfg(windows)]
 mod single;

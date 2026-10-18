@@ -88,6 +88,12 @@ pub struct Paths {
 }
 
 impl Paths {
+    /// The mounted drive's core, while there is one.
+    #[cfg_attr(not(windows), expect(dead_code, reason = "only Windows watches the program a file opened in"))]
+    pub fn core(&self) -> Option<Arc<tma_drive::Core>> {
+        self.core.lock().unwrap_or_else(|e| e.into_inner()).clone()
+    }
+
     /// An item's path in the mounted drive, from its server folder names and name.
     /// Other apps may read it for `time` even in save-only mode: the user opened or
     /// copied it from TMA Cloud on purpose.

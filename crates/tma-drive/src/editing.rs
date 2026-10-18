@@ -31,6 +31,16 @@ impl Owner {
     }
 }
 
+/// Office and LibreOffice formats: those programs leave an owner file per open
+/// document, which says more than whether the program is running.
+pub fn has_owner_files(name: &str) -> bool {
+    const EXTS: &[&str] = &[
+        "doc", "docx", "docm", "dot", "dotx", "dotm", "xls", "xlsx", "xlsm", "xlsb", "xlt", "xltx", "xltm", "ppt",
+        "pptx", "pptm", "pps", "ppsx", "pot", "potx", "odt", "ods", "odp", "odg", "ott", "ots", "otp",
+    ];
+    EXTS.contains(&tma_core::names::extension_of(name).as_str())
+}
+
 /// The names in a folder that an owner file in the same folder marks as open.
 pub fn edited(names: &[String]) -> Vec<String> {
     let owners: Vec<Owner> = names.iter().filter_map(|n| owner(n)).collect();

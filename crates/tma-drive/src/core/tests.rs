@@ -482,3 +482,36 @@ fn an_open_office_document_is_locked_until_it_closes() {
     core.close(&owner);
     assert!(mock.locks.lock().unwrap().is_empty(), "closing the document frees it");
 }
+
+#[test]
+fn a_file_held_for_a_running_program_stays_locked_until_every_program_exits() {
+    let (mock, core, _d) = setup();
+    save(&core, "\\notes.txt", b"v1");
+    let id = mock.find(None, "notes.txt").unwrap();
+    core.invalidate_all();
+    let locked = || mock.locks.lock().unwrap().get(&id).cloned();
+    assert_eq!(core.leases().hold(&id), None);
+    assert_eq!(core.leases().hold(&id), None, "opened twice");
+    assert_eq!(locked().as_deref(), Some("me"));
+    // An owner file coming and going in the folder does not end the program's hold.
+    core.close(&core.create("\\~$other.docx", false).unwrap());
+    let owner = core.open("\\~$other.docx").unwrap();
+    core.cleanup(&owner, true);
+    core.close(&owner);
+    assert_eq!(locked().as_deref(), Some("me"));
+    core.leases().let_go(&id);
+    assert_eq!(locked().as_deref(), Some("me"), "the second program still has it");
+    core.leases().let_go(&id);
+    assert_eq!(locked(), None);
+}
+
+#[test]
+fn a_file_someone_else_is_editing_is_not_held() {
+    let (mock, core, _d) = setup();
+    save(&core, "\\notes.txt", b"v1");
+    let id = mock.find(None, "notes.txt").unwrap();
+    mock.locks.lock().unwrap().insert(id.clone(), "Sam".into());
+    assert_eq!(core.leases().hold(&id).as_deref(), Some("Sam"));
+    core.leases().let_go(&id);
+    assert_eq!(mock.locks.lock().unwrap().get(&id).map(String::as_str), Some("Sam"));
+}
