@@ -13,7 +13,7 @@ use base64::Engine as _;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::{Postgres, QueryBuilder};
-use tma_core::api::{FileItem, ItemType, SortBy, SortOrder};
+use tma_core::api::{FileItem, ItemType, Opener, SortBy, SortOrder};
 
 use crate::error::DomainError;
 
@@ -55,6 +55,10 @@ pub struct ListRow {
     pub deleted_at: Option<DateTime<Utc>>,
     #[sqlx(default)]
     pub parent_id: Option<String>,
+    #[sqlx(default)]
+    pub opened_by_id: Option<String>,
+    #[sqlx(default)]
+    pub opened_by_name: Option<String>,
 }
 
 impl From<ListRow> for FileItem {
@@ -73,6 +77,7 @@ impl From<ListRow> for FileItem {
             expires_at: r.expires_at,
             deleted_at: r.deleted_at,
             parent_id: r.parent_id,
+            opened_by: r.opened_by_id.map(|id| Opener { id, name: r.opened_by_name.unwrap_or_default() }),
             client_id: None,
         }
     }
@@ -263,6 +268,8 @@ mod tests {
             shared: None,
             expires_at: None,
             deleted_at: None,
+            opened_by_id: None,
+            opened_by_name: None,
             parent_id: None,
         };
         let page = ks.finish(vec![row("a"), row("b")]);

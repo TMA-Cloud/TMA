@@ -120,7 +120,7 @@ async fn open(
     let key = session.config["document"]["key"].as_str().unwrap_or_default().to_string();
     oo::register_open_document(state, &key, &file.id, &opener.owner_id).await;
     // Opening is the read; the document server's own fetches are not counted again.
-    state.access.record_one(&file.id, &opener.owner_id);
+    state.access.record_one(&file.id, &opener.owner_id, Some(&opener.user_id));
     Ok((file, session))
 }
 

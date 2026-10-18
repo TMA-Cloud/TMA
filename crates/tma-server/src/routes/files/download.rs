@@ -41,17 +41,19 @@ pub async fn single(
             auth.owner_id.clone(),
             state.config.held_cursor_limit,
         );
-        let (access, owner) = (state.access.clone(), auth.owner_id.clone());
+        let (access, owner, reader) = (state.access.clone(), auth.owner_id.clone(), auth.user_id.clone());
         state.audit.log(
             &ctx,
             Event::new("folder.download").resource("folder", Some(&id)).meta(json!({ "folderName": file.name })),
         );
-        return zip::response(&state, &file.name, entries, move |entry| access.record_one(&entry.id, &owner));
+        return zip::response(&state, &file.name, entries, move |entry| {
+            access.record_one(&entry.id, &owner, Some(&reader))
+        });
     }
     state
         .audit
         .log(&ctx, Event::new("file.download").resource("file", Some(&id)).meta(json!({ "fileName": file.name })));
-    state.access.record_one(&id, &auth.owner_id);
+    state.access.record_one(&id, &auth.owner_id, Some(&auth.user_id));
     // Inline only for images that cannot run script; everything else is an attachment.
     let image = file.mime_type.as_deref().is_some_and(|m| m.starts_with("image/"));
     let inline = q.inline.as_deref() == Some("1") && image && !download::requires_download(&file.name);
@@ -148,6 +150,6 @@ async fn stream_selection(
     );
     let entries =
         archive::owner_entries(state.pool.clone(), roots, auth.owner_id.clone(), state.config.held_cursor_limit);
-    let (access, owner) = (state.access.clone(), auth.owner_id.clone());
-    zip::response(state, &name, entries, move |entry| access.record_one(&entry.id, &owner))
+    let (access, owner, reader) = (state.access.clone(), auth.owner_id.clone(), auth.user_id.clone());
+    zip::response(state, &name, entries, move |entry| access.record_one(&entry.id, &owner, Some(&reader)))
 }

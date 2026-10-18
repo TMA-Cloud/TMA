@@ -108,7 +108,7 @@ pub async fn root(
     };
     state.audit.log(&ctx, Event::new("share.access").resource("share", Some(&token)));
     // A visitor is still a reader, so the owner's item counts as accessed.
-    state.access.record_one(&root.id, &root.user_id);
+    state.access.record_one(&root.id, &root.user_id, None);
     tracing::info!(share_token = %token, file_id = %root.id, "Share link accessed");
     if root.item_type == "folder" {
         let trail = [(root.id.clone(), root.name.clone())];
@@ -142,7 +142,7 @@ pub async fn folder(
         return not_found();
     }
     state.audit.log(&ctx, Event::new("share.access").resource("share", Some(&token)));
-    state.access.record_one(&id, &root.user_id);
+    state.access.record_one(&id, &root.user_id, None);
     let crumbs: Vec<(String, String)> = trail.into_iter().map(|(id, name, _)| (id, name)).collect();
     listing(&state, &token, &id, &q, &headers, (&name, &crumbs, &format!("/s/{token}/file/{id}"))).await
 }
@@ -155,7 +155,7 @@ fn zip_folder(state: &AppState, token: &str, folder_id: &str, name: &str, owner:
         state.config.held_cursor_limit,
     );
     let (access, owner) = (state.access.clone(), owner.to_string());
-    match zip::response(state, name, entries, move |entry| access.record_one(&entry.id, &owner)) {
+    match zip::response(state, name, entries, move |entry| access.record_one(&entry.id, &owner, None)) {
         Ok(response) => response,
         Err(err) => err.into_response(),
     }
@@ -206,7 +206,7 @@ pub async fn item(
     if file.is_folder() {
         return zip_folder(&state, &token, &id, &file.name, &root.user_id);
     }
-    state.access.record_one(&file.id, &root.user_id);
+    state.access.record_one(&file.id, &root.user_id, None);
     let range = headers.get(header::RANGE).and_then(|v| v.to_str().ok());
     match download::serve(&state, &file, range, false).await {
         Ok(response) => response,

@@ -54,7 +54,7 @@ pub async fn folder(State(state): State<AppState>, auth: AuthUser, Query(q): Que
         .await?;
     // The directory counts as accessed, not its children (the root is not a row).
     if let Some(p) = &parent {
-        state.access.record_one(p, &auth.owner_id);
+        state.access.record_one(p, &auth.owner_id, Some(&auth.user_id));
     }
     Ok(page_response(page))
 }

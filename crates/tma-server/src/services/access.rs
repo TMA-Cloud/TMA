@@ -17,10 +17,16 @@ const MAX_PENDING: usize = 2000;
 const CHUNK: usize = 500;
 const MAX_SUPPRESSED: usize = 50_000;
 
+/// An item on an account: (owner, item id).
+type Item = (String, String);
+/// When an item was read, and by which signed-in user (None for share links).
+type Read = (DateTime<Utc>, Option<String>);
+
 #[derive(Default)]
 struct Buffers {
-    pending: HashMap<(String, String), DateTime<Utc>>,
-    suppressed: HashMap<(String, String), Instant>,
+    pending: HashMap<Item, Read>,
+    /// Each reader has a window of its own, so a sub-user's open after the owner's still counts.
+    suppressed: HashMap<(Item, Option<String>), Instant>,
 }
 
 #[derive(Clone)]
@@ -36,14 +42,16 @@ impl AccessTracker {
         Self { pool, settings, buffers: Arc::default(), flushing: Arc::default() }
     }
 
-    /// Note that items were read on `owner_id`'s account.
-    pub fn record<I: IntoIterator<Item = S>, S: AsRef<str>>(&self, ids: I, owner_id: &str) {
+    /// Note that items were read on `owner_id`'s account by `reader`, the signed-in
+    /// user (an owner or a sub-user), or by a share-link visitor when None.
+    pub fn record<I: IntoIterator<Item = S>, S: AsRef<str>>(&self, ids: I, owner_id: &str, reader: Option<&str>) {
         let ids: Vec<String> = ids.into_iter().map(|s| s.as_ref().to_string()).filter(|s| !s.is_empty()).collect();
         if ids.is_empty() || owner_id.is_empty() {
             return;
         }
         let this = self.clone();
         let owner = owner_id.to_string();
+        let reader = reader.map(str::to_string);
         tokio::spawn(async move {
             let settings = this.settings.get().await.activity();
             if !settings.access_time_tracking {
@@ -55,11 +63,12 @@ impl AccessTracker {
                 let mut b = this.buffers.lock().await;
                 for id in ids {
                     let key = (owner.clone(), id);
-                    if b.suppressed.get(&key).is_some_and(|until| *until > now) {
+                    let window_key = (key.clone(), reader.clone());
+                    if b.suppressed.get(&window_key).is_some_and(|until| *until > now) {
                         continue;
                     }
-                    b.suppressed.insert(key.clone(), now + window);
-                    b.pending.insert(key, Utc::now());
+                    b.suppressed.insert(window_key, now + window);
+                    b.pending.insert(key, (Utc::now(), reader.clone()));
                 }
                 if b.suppressed.len() > MAX_SUPPRESSED {
                     b.suppressed.retain(|_, until| *until > now);
@@ -75,14 +84,14 @@ impl AccessTracker {
         });
     }
 
-    pub fn record_one(&self, id: &str, owner_id: &str) {
-        self.record([id], owner_id);
+    pub fn record_one(&self, id: &str, owner_id: &str, reader: Option<&str>) {
+        self.record([id], owner_id, reader);
     }
 
     /// Write everything buffered; returns the rows actually updated.
     pub async fn flush(&self) -> u64 {
         let Ok(_guard) = self.flushing.try_lock() else { return 0 };
-        let mut batch: Vec<((String, String), DateTime<Utc>)> = {
+        let mut batch: Vec<(Item, Read)> = {
             let mut b = self.buffers.lock().await;
             b.pending.drain().collect()
         };
@@ -95,15 +104,18 @@ impl AccessTracker {
         for chunk in batch.chunks(CHUNK) {
             let ids: Vec<&str> = chunk.iter().map(|((_, id), _)| id.as_str()).collect();
             let owners: Vec<&str> = chunk.iter().map(|((o, _), _)| o.as_str()).collect();
-            let times: Vec<DateTime<Utc>> = chunk.iter().map(|(_, t)| *t).collect();
+            let times: Vec<DateTime<Utc>> = chunk.iter().map(|(_, (t, _))| *t).collect();
+            let readers: Vec<Option<&str>> = chunk.iter().map(|(_, (_, r))| r.as_deref()).collect();
             let result = sqlx::query(
-                "UPDATE files AS f SET accessed_at = v.accessed_at
-                   FROM unnest($1::text[], $2::text[], $3::timestamptz[]) AS v(id, user_id, accessed_at)
+                "UPDATE files AS f SET accessed_at = v.accessed_at, accessed_by = v.accessed_by
+                   FROM unnest($1::text[], $2::text[], $3::timestamptz[], $4::text[])
+                        AS v(id, user_id, accessed_at, accessed_by)
                   WHERE f.id = v.id AND f.user_id = v.user_id AND f.deleted_at IS NULL AND f.accessed_at < v.accessed_at",
             )
             .bind(&ids)
             .bind(&owners)
             .bind(&times)
+            .bind(&readers)
             .execute(&self.pool)
             .await;
             match result {
@@ -112,8 +124,8 @@ impl AccessTracker {
                     // Nothing stored: forget the windows so the next read retries.
                     tracing::warn!(error = %err, count = chunk.len(), "[AccessTime] Failed to flush access times");
                     let mut b = self.buffers.lock().await;
-                    for (key, _) in chunk {
-                        b.suppressed.remove(key);
+                    for (key, (_, reader)) in chunk {
+                        b.suppressed.remove(&(key.clone(), reader.clone()));
                     }
                 }
             }

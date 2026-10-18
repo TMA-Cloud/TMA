@@ -191,10 +191,7 @@ fn recent(main: &crate::app::Main, ui: &mut Ui, t: &crate::theme::Tokens, action
                     FontId::new(14.0, theme::semibold()),
                     t.label,
                 );
-                let opened = item
-                    .accessed_at
-                    .map(|a| format!("Opened {}", tma_core::format::relative_date(a, now)))
-                    .unwrap_or_default();
+                let opened = opened_line(item, now, &main.user.id);
                 let meta = format!("{}  ·  {opened}", item.size.map(tma_core::format::file_size).unwrap_or_default());
                 ui.painter().text(
                     rect.left_center() + Vec2::new(44.0, 10.0),
@@ -223,4 +220,35 @@ fn recent(main: &crate::app::Main, ui: &mut Ui, t: &crate::theme::Tokens, action
                 });
             }
         });
+}
+
+/// "Opened 2:18 AM by Sam Rivera": when, and which of the account's people
+/// (the owner or a sub-user) opened it; "by you" for the one signed in.
+fn opened_line(item: &FileItem, now: chrono::DateTime<chrono::Utc>, me: &str) -> String {
+    let Some(at) = item.accessed_at else { return String::new() };
+    let when = format!("Opened {}", tma_core::format::relative_date(at, now));
+    match &item.opened_by {
+        Some(o) if o.id == me => format!("{when} by you"),
+        Some(o) if !o.name.is_empty() => format!("{when} by {}", o.name),
+        _ => when,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tma_core::api::Opener;
+
+    #[test]
+    fn recent_files_say_who_opened_them() {
+        let now = chrono::Utc::now();
+        let mut item = FileItem { accessed_at: Some(now - chrono::Duration::days(30)), ..FileItem::default() };
+        let when = format!("Opened {}", tma_core::format::relative_date(now - chrono::Duration::days(30), now));
+        assert_eq!(opened_line(&item, now, "me"), when);
+        item.opened_by = Some(Opener { id: "sub".into(), name: "Sam Rivera".into() });
+        assert_eq!(opened_line(&item, now, "me"), format!("{when} by Sam Rivera"));
+        assert_eq!(opened_line(&item, now, "sub"), format!("{when} by you"));
+        item.accessed_at = None;
+        assert_eq!(opened_line(&item, now, "me"), "");
+    }
 }

@@ -72,7 +72,9 @@ pub async fn list_trash(pool: &PgPool, owner: &str, keyset: &Keyset) -> anyhow::
 /// Recently opened files, newest first (a top-N walk of idx_files_user_accessed_at).
 pub async fn recent(pool: &PgPool, owner: &str, limit: i64) -> anyhow::Result<Vec<FileItem>> {
     let sql = format!(
-        "SELECT {LIST_COLUMNS}, {EXPIRY_COLUMN} FROM files f {}
+        "SELECT {LIST_COLUMNS}, {EXPIRY_COLUMN}, u.id AS opened_by_id,
+                COALESCE(NULLIF(u.name, ''), u.email) AS opened_by_name
+           FROM files f {} LEFT JOIN users u ON u.id = f.accessed_by
           WHERE f.user_id = $1 AND f.deleted_at IS NULL AND f.type = 'file'
           ORDER BY f.accessed_at DESC LIMIT $2",
         expiry_join("$1")

@@ -63,6 +63,8 @@ async fn start(env: &Env) -> String {
     };
     let keyring = Keyring::from_text(&format!("1:{}", generate_key()), true).unwrap();
     let state = build_state_with_keyring(config, keyring, Role::Both).await.unwrap();
+    // As `serve` does: opens are written behind by this flusher.
+    state.access.spawn_flusher();
     let (_tx, rx) = tokio::sync::watch::channel(false);
     let worker_state = state.clone();
     tokio::spawn(async move {
@@ -144,6 +146,24 @@ async fn assert_names_are_unique(client: &Client) {
     // The same name is free inside another folder.
     let docs = root(client).await.into_iter().find(|f| f.name == "Documents").unwrap();
     client.create_folder("Alpha", Some(&docs.id)).await.unwrap();
+}
+
+/// Recent files say which of the account's people opened a file: here a sub-user.
+async fn assert_recent_names_opener(owner: &Client, sub: &Client, id: &str) {
+    owner.save_access_time(true, 0, 1).await.unwrap();
+    let dest = std::env::temp_dir().join(format!("tma-it-sub-{id}.txt"));
+    sub.download_to(id, &dest, Progress::new(0)).await.unwrap();
+    let _ = std::fs::remove_file(&dest);
+    // Opens are written behind in batches; the first flush waits out the default interval.
+    for _ in 0..40 {
+        let recent = owner.recent(10).await.unwrap();
+        let opener = recent.iter().find(|f| f.id == id).and_then(|f| f.opened_by.clone());
+        if opener.as_ref().is_some_and(|o| o.name == "Sam") {
+            return;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    }
+    panic!("Recent files never named the sub-user who opened the file");
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
@@ -315,6 +335,7 @@ async fn full_workflow() {
     let refused =
         sam.upload(&text_file("nope.txt", "x", None), &UploadOptions::default(), Progress::new(0)).await.unwrap_err();
     assert_eq!(refused.status, 403);
+    assert_recent_names_opener(&admin, &sam, &item.id).await;
 
     // Sessions: signing out everywhere ends this client's session too.
     assert!(!admin.sessions(false).await.unwrap().sessions.is_empty());

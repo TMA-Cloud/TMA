@@ -51,9 +51,20 @@ pub struct FileItem {
     pub deleted_at: Option<DateTime<Utc>>,
     #[serde(rename = "parentId", default, skip_serializing_if = "Option::is_none")]
     pub parent_id: Option<String>,
+    /// Who opened the file last; only Recent files reports it.
+    #[serde(rename = "openedBy", default, skip_serializing_if = "Option::is_none")]
+    pub opened_by: Option<Opener>,
     /// Echo of the uploader's per-file id in a bulk upload response.
     #[serde(rename = "clientId", default, skip_serializing_if = "Option::is_none")]
     pub client_id: Option<String>,
+}
+
+/// A signed-in identity that opened a file: the account itself or one of its sub-users.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct Opener {
+    pub id: String,
+    /// The display name, or the email when the user has no name.
+    pub name: String,
 }
 
 impl FileItem {
