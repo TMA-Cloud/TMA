@@ -190,8 +190,13 @@ impl App {
         }
         let sender = self.tasks.sender();
         let ctx = self.tasks.ctx().clone();
-        // The web build is single-threaded, so a non-Send sink is fine there.
-        #[allow(clippy::arc_with_non_send_sync)]
+        #[cfg_attr(
+            target_arch = "wasm32",
+            expect(
+                clippy::arc_with_non_send_sync,
+                reason = "the web build is single-threaded, so a non-Send sink is fine"
+            )
+        )]
         let sink: tma_client::events::Sink = std::sync::Arc::new(move |event: tma_core::api::FileEvent| {
             if !event.is_change() {
                 return;

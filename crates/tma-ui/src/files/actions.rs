@@ -41,7 +41,6 @@ pub enum Action {
     /// Add items to the share of the folder they are in (no new link).
     LinkToFolderShare(Vec<String>),
     PickUpload,
-    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     PickFolder,
     Refresh,
     LoadMore,

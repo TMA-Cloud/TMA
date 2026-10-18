@@ -5,7 +5,7 @@
 //! database is wiped first, so its name must contain "test". Uploads need
 //! `TMA_TEST_S3_ENDPOINT`, `TMA_TEST_S3_ACCESS_KEY`, `TMA_TEST_S3_SECRET_KEY`
 //! and `TMA_TEST_S3_BUCKET` (CI runs RustFS; the bucket is created if missing).
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![expect(clippy::unwrap_used, clippy::expect_used, reason = "tests fail loudly on purpose")]
 
 use std::net::SocketAddr;
 

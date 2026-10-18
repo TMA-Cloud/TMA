@@ -235,7 +235,7 @@ fn mount(core: std::sync::Arc<tma_drive::Core>) -> Result<Mounted, String> {
         let m = tma_drive::cloud_files::mount(core, "TMA Cloud Test", at.to_str())?;
         return Ok(Mounted { mount_point: m.mount_point.clone(), _guard: Box::new(Forget(Some(m))) });
     }
-    #[allow(unreachable_code)]
+    #[cfg_attr(windows, expect(unreachable_code, reason = "Windows mounts with Cloud Files above"))]
     {
         let m = tma_drive::mount(core, "TMA Cloud Test", None)?;
         Ok(Mounted { mount_point: m.mount_point.clone(), _guard: Box::new(m) })

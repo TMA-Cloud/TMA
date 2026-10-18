@@ -1,7 +1,7 @@
 //! Files on the clipboard that exist only inside another app: Outlook
 //! attachments and messages, files inside a zip opened in Explorer. Windows
 //! hands them out through OLE as memory, a stream or a structured storage.
-#![allow(unsafe_code)]
+#![expect(unsafe_code, reason = "OLE clipboard data comes through COM pointers")]
 
 use std::path::PathBuf;
 

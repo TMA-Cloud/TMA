@@ -1,6 +1,6 @@
 //! Pointers on Windows: Win32 cursors from the artwork, shown by handling
 //! WM_SETCURSOR for the app window.
-#![allow(unsafe_code)]
+#![expect(unsafe_code, reason = "Win32 cursors and a window procedure hook")]
 
 use std::sync::atomic::{AtomicIsize, Ordering};
 

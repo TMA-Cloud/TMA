@@ -191,7 +191,10 @@ impl Browser {
     }
 
     /// Switch to a place: its last listing at once if seen before, then a fresh one.
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the place, its path and the session it loads in, all needed together"
+    )]
     fn show(
         &mut self,
         place: Place,

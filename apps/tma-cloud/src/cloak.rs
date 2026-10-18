@@ -1,7 +1,7 @@
 //! Keeping the window off the screen while it opens (DWM cloaking): unlike
 //! hiding it, a cloaked window is still shown, maximized and drawn, so it
 //! appears in one step once it is ready. See `window::Reveal`.
-#![allow(unsafe_code)]
+#![expect(unsafe_code, reason = "DWM cloaking is a Win32 call on the raw window handle")]
 
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use windows::Win32::Foundation::HWND;

@@ -2,7 +2,7 @@
 //! Cloud Files syncs it on Windows, FUSE mounts it on
 //! Linux and a local NFS server on macOS.
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
-#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
+#![cfg_attr(test, expect(clippy::unwrap_used, reason = "tests fail loudly on purpose"))]
 
 pub mod backend;
 pub mod core;

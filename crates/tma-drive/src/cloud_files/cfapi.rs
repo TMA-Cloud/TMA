@@ -1,7 +1,7 @@
 //! Reading a placeholder's state straight from cldapi: cloud-filter 0.0.6
 //! slices the stored identity from the wrong offset (and panics on an empty one),
 //! and has no way to ask whether a folder has been listed yet.
-#![allow(unsafe_code)]
+#![expect(unsafe_code, reason = "reads placeholder state through the cldapi C API")]
 
 use std::mem::{offset_of, size_of};
 use std::os::windows::fs::OpenOptionsExt;

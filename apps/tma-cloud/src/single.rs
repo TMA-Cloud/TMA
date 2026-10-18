@@ -1,6 +1,6 @@
 //! One app at a time on Windows: a second launch brings the running window
 //! forward and exits, so two copies never fight over Cloud Drive.
-#![allow(unsafe_code)]
+#![expect(unsafe_code, reason = "a named mutex and window calls through Win32")]
 
 use windows::Win32::Foundation::{ERROR_ALREADY_EXISTS, GetLastError, HANDLE};
 use windows::Win32::System::Threading::CreateMutexW;
@@ -8,7 +8,7 @@ use windows::Win32::UI::WindowsAndMessaging::{FindWindowW, IsIconic, SW_RESTORE,
 use windows::core::w;
 
 /// Held for the life of the process; Windows frees it when the process ends.
-pub struct Guard(#[allow(dead_code)] HANDLE);
+pub struct Guard(#[expect(dead_code, reason = "held only so Windows keeps the mutex until the process ends")] HANDLE);
 
 /// `None` when another copy is running (its window has been brought forward).
 /// If the check itself fails, this copy runs.

@@ -3,7 +3,7 @@
 //! editor is mounted from its config with the document server's API script.
 
 /// Colours for the overlay's bar, from the app's palette.
-#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+#[cfg_attr(not(target_arch = "wasm32"), expect(dead_code, reason = "only the web app mounts the editor overlay"))]
 pub struct Look {
     pub background: String,
     pub surface: String,

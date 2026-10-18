@@ -1,6 +1,6 @@
 //! The Redis cache against a real server: invalidation must win over a fill
 //! that read the database before the change. Skipped unless `TMA_TEST_REDIS_URL` is set.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![expect(clippy::unwrap_used, reason = "tests fail loudly on purpose")]
 
 use tma_server::cache::Cache;
 

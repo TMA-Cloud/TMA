@@ -14,12 +14,20 @@ repository = "https://github.com/TMA-Cloud/TMA"
 
 [workspace.lints.rust]
 unsafe_code = "deny"
+# Every build fails on deprecated APIs and on anything unused (imports, variables,
+# functions, fields, results); `cargo check` catches them, not only CI.
+deprecated = "deny"
+unused = { level = "deny", priority = -1 }
 unexpected_cfgs = { level = "warn", check-cfg = ["cfg(tma_integration)"] }
 
 [workspace.lints.clippy]
-dbg_macro = "warn"
+# A lint is silenced only with #[expect(.., reason = "..")], which fails once the
+# code it excused is gone, so a stale suppression cannot hide unused code.
+allow_attributes = "deny"
+allow_attributes_without_reason = "deny"
+dbg_macro = "deny"
 too_many_lines = "warn"
-todo = "warn"
+todo = "deny"
 unwrap_used = "warn"
 expect_used = "warn"
 

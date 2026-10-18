@@ -3,8 +3,13 @@
 //! native input laid over its drawn frame, with the autocomplete hint password
 //! managers key on, inside a form that is submitted with the sign-in. The
 //! desktop app has no browser around it and keeps egui's own fields.
-// Only the web build lays inputs over the canvas; the desktop one compiles the shapes alone.
-#![cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+#![cfg_attr(
+    not(target_arch = "wasm32"),
+    expect(
+        dead_code,
+        reason = "only the web build lays inputs over the canvas; the desktop one compiles the shapes alone"
+    )
+)]
 
 #[cfg(target_arch = "wasm32")]
 mod web;
@@ -78,7 +83,7 @@ pub fn begin() {
 }
 
 /// Lay the input for `field` over the canvas and sync its text both ways.
-#[cfg_attr(not(target_arch = "wasm32"), allow(unused_variables))]
+#[cfg_attr(not(target_arch = "wasm32"), expect(unused_variables, reason = "the desktop app has no inputs to lay"))]
 pub fn field(ctx: &egui::Context, field: Field<'_>, t: &crate::theme::Tokens) -> Seen {
     #[cfg(target_arch = "wasm32")]
     return web::field(ctx, field, t);
