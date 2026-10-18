@@ -6,6 +6,7 @@
 
 pub mod backend;
 pub mod core;
+pub mod editing;
 pub mod ids;
 pub mod paths;
 pub mod sync_plan;

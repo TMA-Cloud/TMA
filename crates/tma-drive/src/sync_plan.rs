@@ -185,6 +185,7 @@ mod tests {
             modified: Utc.timestamp_millis_opt(ms).single().unwrap(),
             accessed: None,
             version: ms,
+            editor: None,
         }
     }
 

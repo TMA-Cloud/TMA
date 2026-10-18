@@ -31,12 +31,21 @@ pub fn entry(node: &Node) -> Option<Entry> {
         modified: node.modified,
         accessed: node.accessed,
         version: node.version,
+        editor: node.editor.clone(),
     })
 }
 
+/// `FILE_ATTRIBUTE_READONLY`: Office then opens the document read-only.
+const READ_ONLY: u32 = 0x1;
+
 fn metadata(entry: &Entry) -> Metadata {
     let at = file_time(entry.modified);
-    let base = if entry.is_folder { Metadata::directory() } else { Metadata::file().size(entry.size) };
+    let base = match (entry.is_folder, &entry.editor) {
+        (true, _) => Metadata::directory(),
+        (false, None) => Metadata::file().size(entry.size),
+        // Someone else is editing it.
+        (false, Some(_)) => Metadata::file().size(entry.size).attributes(READ_ONLY),
+    };
     base.created(at).written(at).changed(at).accessed(entry.accessed.map(file_time).unwrap_or(at))
 }
 
@@ -121,6 +130,14 @@ pub fn refresh(path: &Path, entry: &Entry) -> std::io::Result<()> {
         .open(path)
         .and_then(|mut p| p.update(options, None).map(|_| ()))
         .map_err(std::io::Error::other)
+}
+
+/// Make a synced file read-only while someone else edits it, or writable again.
+/// Only the attribute changes, which keeps it in sync; updating placeholder metadata would download it.
+pub fn mark_editor(path: &Path, entry: &Entry) -> std::io::Result<()> {
+    let mut permissions = std::fs::metadata(path)?.permissions();
+    permissions.set_readonly(entry.editor.is_some());
+    std::fs::set_permissions(path, permissions)
 }
 
 /// Throw away a local edit already kept elsewhere (a conflicted copy): the

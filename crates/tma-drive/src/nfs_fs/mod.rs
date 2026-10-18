@@ -66,7 +66,13 @@ impl Inner {
         let size = if node.is_folder { 0 } else { size };
         fattr3 {
             ftype: if node.is_folder { ftype3::NF3DIR } else { ftype3::NF3REG },
-            mode: if node.is_folder { 0o755 } else { 0o644 },
+            mode: if node.is_folder {
+                0o755
+            } else if node.editor.is_some() {
+                0o444
+            } else {
+                0o644
+            },
             nlink: 1,
             uid: self.uid,
             gid: self.gid,

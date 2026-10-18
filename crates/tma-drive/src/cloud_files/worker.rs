@@ -141,12 +141,12 @@ impl Shared {
         self.wake.notify_one();
     }
 
-    fn folder(&self, dir: &Path) -> Option<Node> {
+    pub(super) fn folder(&self, dir: &Path) -> Option<Node> {
         let rel = self.rel(dir)?;
         self.core.resolve(&rel).ok().flatten().filter(|n| n.is_folder && (n.id.is_some() || rel == paths::ROOT))
     }
 
-    fn server(&self, node: &Node) -> Option<Vec<Entry>> {
+    pub(super) fn server(&self, node: &Node) -> Option<Vec<Entry>> {
         match self.core.children(node) {
             Ok(children) => Some(children.iter().filter_map(local::entry).collect()),
             Err(err) => {
@@ -306,6 +306,7 @@ impl Shared {
                 _ => {}
             }
         }
+        self.mark_editors(dir, &folder.items, &server);
         folder.populated
     }
 
@@ -382,7 +383,10 @@ impl Shared {
             }
             self.run_deletes();
             for dir in self.take_quiet() {
-                if !self.upload_folder(&dir) {
+                let done = self.upload_folder(&dir);
+                // A document closed with its last save not yet up keeps its lock until it is.
+                self.settle_edits(&dir, done);
+                if !done {
                     // Retry after another quiet period (an app still has the file, or the server failed).
                     self.changed(dir);
                 }

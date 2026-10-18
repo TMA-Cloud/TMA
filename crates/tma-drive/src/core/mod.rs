@@ -4,10 +4,12 @@
 //! (create-empty-then-write, write-temp-then-rename).
 
 mod handle;
+mod leases;
 mod save;
 mod scratch;
 
 pub use handle::Handle;
+pub use leases::Leases;
 
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -57,6 +59,8 @@ pub struct Node {
     pub path: String,
     /// The server's content version (0 for something only local).
     pub version: i64,
+    /// Who else has it open for editing; it is read-only here meanwhile.
+    pub editor: Option<String>,
 }
 
 impl Node {
@@ -70,6 +74,7 @@ impl Node {
             accessed: None,
             path: ROOT.into(),
             version: 0,
+            editor: None,
         }
     }
 }
@@ -96,6 +101,7 @@ pub struct Core {
     /// Server files an app renamed to a backup name, by path: (id, path).
     hidden: Mutex<HashMap<String, (String, String)>>,
     path_locks: Vec<Mutex<()>>,
+    leases: Arc<Leases>,
     pub deny_read: AtomicBool,
     /// Paths TMA Cloud itself opened or copied, readable in save-only mode until they expire.
     readable: Mutex<Vec<(String, Instant)>>,
@@ -112,6 +118,7 @@ fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
 impl Core {
     pub fn new(backend: Arc<dyn Backend>, staging: PathBuf, windows_names: bool) -> std::io::Result<Self> {
         std::fs::create_dir_all(&staging)?;
+        let leases = Leases::new(Arc::clone(&backend));
         let core = Self {
             backend,
             staging,
@@ -123,6 +130,7 @@ impl Core {
             opened: Mutex::new(HashMap::new()),
             hidden: Mutex::new(HashMap::new()),
             path_locks: (0..64).map(|_| Mutex::new(())).collect(),
+            leases,
             deny_read: AtomicBool::new(false),
             readable: Mutex::new(Vec::new()),
             generation: AtomicU64::new(0),
@@ -135,6 +143,10 @@ impl Core {
 
     pub fn backend(&self) -> &dyn Backend {
         self.backend.as_ref()
+    }
+
+    pub fn leases(&self) -> &Leases {
+        &self.leases
     }
 
     /// Serializes creates and uploads per path, so two handles cannot both create one file.
@@ -192,6 +204,7 @@ impl Core {
             modified: entry.modified,
             accessed: entry.accessed,
             version: entry.version,
+            editor: entry.editor,
         })
     }
 
@@ -239,6 +252,7 @@ impl Core {
                 accessed: None,
                 path,
                 version: 0,
+                editor: None,
             });
         }
         Ok(children)

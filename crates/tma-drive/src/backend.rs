@@ -18,11 +18,21 @@ pub struct Entry {
     pub accessed: Option<DateTime<Utc>>,
     /// The server's content version, raised by every save (0 from a server without it).
     pub version: i64,
+    /// Who else has it open for editing (never the signed-in user).
+    pub editor: Option<String>,
 }
 
 /// The error a replace returns when someone else saved after `base`: the server
 /// kept its copy, so the caller keeps the local one as a conflicted copy.
 pub const CONFLICT: &str = "conflict: the file was saved by someone else";
+
+/// What asking for a file's edit lock came to.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Lock {
+    Held,
+    /// Someone else is editing it: their name.
+    Busy(String),
+}
 
 /// Space figures; `total` is `None` for an unlimited account.
 #[derive(Debug, Clone, Copy, Default)]
@@ -56,16 +66,34 @@ pub trait Backend: Send + Sync {
     fn account(&self) -> BackendResult<String> {
         Ok(String::new())
     }
+    /// Take or renew the edit lock on a file while an app here edits it.
+    fn lock(&self, _id: &str) -> BackendResult<Lock> {
+        Ok(Lock::Held)
+    }
+    fn unlock(&self, _id: &str) -> BackendResult<()> {
+        Ok(())
+    }
 }
 
 /// The API client, driven from the shared async runtime.
 pub struct ClientBackend {
     client: Client,
+    /// The signed-in user, so their own locks never read as someone else's.
+    me: std::sync::OnceLock<String>,
 }
 
 impl ClientBackend {
     pub fn new(client: Client) -> Self {
-        Self { client }
+        Self { client, me: std::sync::OnceLock::new() }
+    }
+
+    fn me(&self) -> Option<&str> {
+        if self.me.get().is_none()
+            && let Ok(id) = self.account()
+        {
+            let _ = self.me.set(id);
+        }
+        self.me.get().map(String::as_str)
     }
 }
 
@@ -86,6 +114,7 @@ impl Backend for ClientBackend {
     fn list(&self, parent: Option<&str>) -> BackendResult<Vec<Entry>> {
         let view = View::Folder(parent.map(String::from));
         let mut entries = Vec::new();
+        let me = self.me();
         let mut query = ListQuery { limit: Some(500), ..Default::default() };
         // A folder can hold more than one page; the drive needs all of it.
         for _ in 0..200 {
@@ -98,6 +127,8 @@ impl Backend for ClientBackend {
                 modified: f.modified,
                 accessed: f.accessed_at,
                 version: f.content_version,
+                // Unknown who is signed in: show no one, rather than our own lock as someone else's.
+                editor: f.lock.filter(|l| me.is_some_and(|me| me != l.user_id)).map(|l| l.name),
             }));
             match page.next_cursor {
                 Some(cursor) => query.cursor = Some(cursor),
@@ -157,5 +188,14 @@ impl Backend for ClientBackend {
 
     fn account(&self) -> BackendResult<String> {
         tma_client::rt::block_on(self.client.profile()).map(|u| u.id).map_err(|e| e.message)
+    }
+
+    fn lock(&self, id: &str) -> BackendResult<Lock> {
+        let taken = tma_client::rt::block_on(self.client.lock(id)).map_err(|e| e.message)?;
+        Ok(if taken.acquired { Lock::Held } else { Lock::Busy(taken.lock.name) })
+    }
+
+    fn unlock(&self, id: &str) -> BackendResult<()> {
+        tma_client::rt::block_on(self.client.unlock(id)).map(|_| ()).map_err(|e| e.message)
     }
 }

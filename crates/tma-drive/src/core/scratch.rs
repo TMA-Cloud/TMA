@@ -49,6 +49,7 @@ impl Core {
             let _ = std::fs::remove_file(old);
         }
         self.invalidate(&parent_of(path));
+        self.settle_edits(&parent_of(path));
     }
 
     /// Where a scratch file's contents now live (after a first read or write).
@@ -78,6 +79,7 @@ impl Core {
                 modified: s.modified,
                 accessed: None,
                 path: s.path.clone(),
+                editor: None,
                 version: 0,
             })
             .collect()
@@ -115,6 +117,7 @@ impl Core {
         if let Some(staging) = &s.staging {
             let _ = std::fs::remove_file(staging);
         }
+        self.settle_edits(&parent_of(path));
         if let Some(id) = &s.backup_of
             && let Some(original) = self.hidden_original(id)
         {

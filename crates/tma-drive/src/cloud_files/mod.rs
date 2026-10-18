@@ -3,6 +3,7 @@
 //! of placeholders that download when opened and upload when changed.
 
 mod cfapi;
+mod editing;
 mod filter;
 mod local;
 mod worker;

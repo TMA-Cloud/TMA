@@ -6,7 +6,7 @@ use std::sync::{Arc, Mutex};
 use chrono::Utc;
 
 use super::*;
-use crate::backend::{Backend, BackendResult, CONFLICT, Entry, Space};
+use crate::backend::{Backend, BackendResult, CONFLICT, Entry, Lock, Space};
 
 /// parent, name, is_folder, bytes
 type Item = (Option<String>, String, bool, Vec<u8>);
@@ -20,6 +20,8 @@ struct Mock {
     versions: Mutex<HashMap<String, i64>>,
     /// An item the next listing leaves out, as a listing taken just before it was made would.
     hide_once: Mutex<Option<String>>,
+    /// Edit locks by id: who holds each ("me" for this drive).
+    locks: Mutex<HashMap<String, String>>,
 }
 
 impl Mock {
@@ -59,6 +61,7 @@ impl Backend for Mock {
                 modified: Utc::now(),
                 accessed: None,
                 version: self.version(k),
+                editor: self.locks.lock().unwrap().get(k).filter(|h| *h != "me").cloned(),
             })
             .collect())
     }
@@ -117,6 +120,20 @@ impl Backend for Mock {
     }
     fn save_only(&self) -> BackendResult<bool> {
         Ok(false)
+    }
+    fn lock(&self, id: &str) -> BackendResult<Lock> {
+        let mut locks = self.locks.lock().unwrap();
+        match locks.get(id) {
+            Some(holder) if holder != "me" => Ok(Lock::Busy(holder.clone())),
+            _ => {
+                locks.insert(id.to_string(), "me".into());
+                Ok(Lock::Held)
+            }
+        }
+    }
+    fn unlock(&self, id: &str) -> BackendResult<()> {
+        self.locks.lock().unwrap().retain(|k, h| k != id || h != "me");
+        Ok(())
     }
 }
 
@@ -434,4 +451,34 @@ fn an_office_save_over_a_newer_server_copy_becomes_a_conflicted_copy() {
     office_save(&core, "\\Roadmap.docx", "\\~WRL0001.tmp", "\\~WRD0000.tmp", b"mine");
     assert_eq!(mock.bytes(&id), b"theirs");
     assert_eq!(conflicted_copy(&mock).as_deref(), Some(&b"mine"[..]));
+}
+
+#[test]
+fn a_document_someone_else_is_editing_is_read_only() {
+    let (mock, core, _d) = setup();
+    save(&core, "\\Budget.xlsx", b"v1");
+    let id = mock.find(None, "Budget.xlsx").unwrap();
+    mock.locks.lock().unwrap().insert(id.clone(), "Sam".into());
+    core.invalidate_all();
+    let handle = core.open("\\Budget.xlsx").unwrap();
+    assert_eq!(handle.node().editor.as_deref(), Some("Sam"));
+    assert_eq!(core.write(&handle, 0, b"mine", false, false), Err(FsError::AccessDenied));
+    core.close(&handle);
+    assert_eq!(mock.bytes(&id), b"v1");
+}
+
+#[test]
+fn an_open_office_document_is_locked_until_it_closes() {
+    let (mock, core, _d) = setup();
+    save(&core, "\\Budget.xlsx", b"v1");
+    let id = mock.find(None, "Budget.xlsx").unwrap();
+    core.invalidate_all();
+    // Excel opens the document and leaves its owner file beside it.
+    let owner = core.create("\\~$Budget.xlsx", false).unwrap();
+    core.close(&owner);
+    assert_eq!(mock.locks.lock().unwrap().get(&id).map(String::as_str), Some("me"));
+    let owner = core.open("\\~$Budget.xlsx").unwrap();
+    core.cleanup(&owner, true);
+    core.close(&owner);
+    assert!(mock.locks.lock().unwrap().is_empty(), "closing the document frees it");
 }

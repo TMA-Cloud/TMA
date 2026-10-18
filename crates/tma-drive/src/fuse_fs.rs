@@ -64,7 +64,13 @@ impl CloudFuse {
             ctime: modified,
             crtime: modified,
             kind: if node.is_folder { FileType::Directory } else { FileType::RegularFile },
-            perm: if node.is_folder { 0o755 } else { 0o644 },
+            perm: if node.is_folder {
+                0o755
+            } else if node.editor.is_some() {
+                0o444
+            } else {
+                0o644
+            },
             nlink: 1,
             uid: self.uid,
             gid: self.gid,

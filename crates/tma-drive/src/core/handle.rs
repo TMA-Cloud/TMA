@@ -115,13 +115,23 @@ impl Core {
                 accessed: None,
                 path,
                 version: 0,
+                editor: None,
             };
             return Ok(Handle::new(node, None, false));
         }
         let local = self.new_staging_file();
         let file = OpenOptions::new().read(true).write(true).create_new(true).open(&local).map_err(io)?;
-        let node =
-            Node { id: None, name, is_folder: false, size: 0, modified: Utc::now(), accessed: None, path, version: 0 };
+        let node = Node {
+            id: None,
+            name,
+            is_folder: false,
+            size: 0,
+            modified: Utc::now(),
+            accessed: None,
+            path,
+            version: 0,
+            editor: None,
+        };
         let scratch = scratch::is_scratch_name(&node.path);
         if scratch {
             self.add_scratch(&node.path, local.clone());
@@ -226,6 +236,10 @@ impl Core {
     /// Write at `offset` (or the end); `constrained` writes never grow the file.
     pub fn write(&self, handle: &Handle, offset: u64, data: &[u8], to_end: bool, constrained: bool) -> FsResult<usize> {
         let mut state = lock(&handle.state);
+        // Someone else is editing it: read-only here until they close it.
+        if state.node.editor.is_some() && !state.is_new {
+            return Err(FsError::AccessDenied);
+        }
         self.ensure_file(&mut state).map_err(|_| FsError::AccessDenied)?;
         let Some(file) = state.file.as_mut() else { return Err(FsError::Io("no staging file".into())) };
         let size = file.metadata().map_err(io)?.len();
