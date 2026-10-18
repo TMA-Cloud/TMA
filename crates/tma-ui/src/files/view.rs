@@ -221,9 +221,13 @@ pub(super) fn meta_line(main: &Main, item: &FileItem, now: chrono::DateTime<chro
     let date =
         if main.browser.place == Place::Trash { item.deleted_at.unwrap_or(item.modified) } else { item.modified };
     let date = tma_core::format::relative_date(date, now);
-    match item.size.filter(|_| !item.is_folder()) {
+    let line = match item.size.filter(|_| !item.is_folder()) {
         Some(size) => format!("{}  ·  {date}", tma_core::format::file_size(size)),
         None => date,
+    };
+    match super::editing_note(item, &main.user.id) {
+        Some(note) => format!("{line}  ·  {note}"),
+        None => line,
     }
 }
 
@@ -278,9 +282,11 @@ fn list(main: &mut Main, ui: &mut Ui, t: &Tokens, desktop: bool, actions: &mut V
             let painter = ui.painter().with_clip_rect(name_rect);
             painter.galley(egui::pos2(text_left, rect.center().y - 18.0), galley, t.label);
             let mut x = text_left + name_width + 6.0;
-            for (show, icon, color) in
-                [(item.starred, egui_phosphor::fill::STAR, t.warning), (super::is_shared(&item), ph::LINK, t.accent)]
-            {
+            for (show, icon, color) in [
+                (item.starred, egui_phosphor::fill::STAR, t.warning),
+                (super::is_shared(&item), ph::LINK, t.accent),
+                (super::editor(&item, &main.user.id).is_some(), ph::PENCIL_SIMPLE, t.warning),
+            ] {
                 if show {
                     let badge = painter.text(
                         egui::pos2(x, rect.center().y - 9.0),

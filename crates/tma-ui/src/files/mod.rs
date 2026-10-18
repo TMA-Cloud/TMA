@@ -346,6 +346,20 @@ fn left_child(
     if up { from.get(to.len()).map(|(id, _)| id.clone()) } else { None }
 }
 
+/// Who has the file open in a desktop app while their edit lock lasts: `me` for the signed-in user.
+pub fn editor<'a>(item: &'a FileItem, me: &str) -> Option<Option<&'a str>> {
+    let lock = item.lock.as_ref().filter(|l| l.expires_at > chrono::Utc::now())?;
+    Some((lock.user_id != me).then_some(lock.name.as_str()))
+}
+
+/// The row's note for a file being edited.
+pub fn editing_note(item: &FileItem, me: &str) -> Option<String> {
+    editor(item, me).map(|who| match who {
+        Some(name) => format!("{name} is editing"),
+        None => "You are editing".into(),
+    })
+}
+
 /// Shared, and the link has not expired.
 pub fn is_shared(item: &FileItem) -> bool {
     item.shared && item.expires_at.is_none_or(|at| at > chrono::Utc::now())
