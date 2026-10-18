@@ -27,6 +27,7 @@ pub struct Toasts {
 
 const LIFETIME: f64 = 4.0;
 const FADE_IN: f64 = 0.18;
+const FADE_OUT: f64 = 0.28;
 const MAX_WIDTH: f32 = 300.0;
 
 impl Toasts {
@@ -70,10 +71,9 @@ impl Toasts {
                 ui.set_max_width(MAX_WIDTH);
                 for toast in &self.items {
                     let age = now - toast.shown_at;
-                    // In over FADE_IN, out over the last 0.3 s.
-                    let alpha =
-                        (age.min(FADE_IN) / FADE_IN).min((LIFETIME - age).min(0.3) / 0.3).clamp(0.0, 1.0) as f32;
-                    if age < FADE_IN {
+                    let (alpha, rise) = presence(age);
+                    // Every frame of a fade is drawn; the idle repaint below is too coarse for it.
+                    if age < FADE_IN || age > LIFETIME - FADE_OUT {
                         ctx.request_repaint();
                     }
                     let (icon, color) = match toast.level {
@@ -81,29 +81,56 @@ impl Toasts {
                         Level::Success => (ph::CHECK_CIRCLE, t.positive),
                         Level::Error => (ph::WARNING_CIRCLE, t.destructive),
                     };
-                    ui.set_opacity(alpha);
-                    Frame::new()
-                        .fill(t.surface_raised)
-                        .stroke(Stroke::new(1.0, t.separator))
-                        .corner_radius(CornerRadius::same(12))
-                        .inner_margin(Margin::symmetric(11, 8))
-                        .shadow(egui::epaint::Shadow {
-                            offset: [0, 4],
-                            blur: 16,
-                            spread: 0,
-                            color: Color32::from_black_alpha(40),
-                        })
-                        .show(ui, |ui| {
-                            ui.set_max_width(MAX_WIDTH - 24.0);
-                            ui.horizontal_top(|ui| {
-                                ui.spacing_mut().item_spacing.x = 8.0;
-                                ui.label(RichText::new(icon).size(15.0).color(color));
-                                ui.add(egui::Label::new(RichText::new(&toast.text).size(13.0)).wrap());
+                    // Scoped, since opacity multiplies: a toast must not inherit the fade of the one above.
+                    ui.scope(|ui| {
+                        ui.set_opacity(alpha);
+                        ui.add_space(rise);
+                        Frame::new()
+                            .fill(t.surface_raised)
+                            .stroke(Stroke::new(1.0, t.separator))
+                            .corner_radius(CornerRadius::same(12))
+                            .inner_margin(Margin::symmetric(11, 8))
+                            .shadow(egui::epaint::Shadow {
+                                offset: [0, 4],
+                                blur: 16,
+                                spread: 0,
+                                color: Color32::from_black_alpha(40),
+                            })
+                            .show(ui, |ui| {
+                                ui.set_max_width(MAX_WIDTH - 24.0);
+                                ui.horizontal_top(|ui| {
+                                    ui.spacing_mut().item_spacing.x = 8.0;
+                                    ui.label(RichText::new(icon).size(15.0).color(color));
+                                    ui.add(egui::Label::new(RichText::new(&toast.text).size(13.0)).wrap());
+                                });
                             });
-                        });
+                    });
                     ui.add_space(6.0);
                 }
             });
         ctx.request_repaint_after(std::time::Duration::from_millis(250));
+    }
+}
+
+/// How visible a toast of this age is (0 to 1), and how far it sits below its
+/// place, in points: it rises in and sinks out with an ease-out.
+fn presence(age: f64) -> (f32, f32) {
+    let fade_in = (age / FADE_IN).clamp(0.0, 1.0) as f32;
+    let fade_out = ((LIFETIME - age) / FADE_OUT).clamp(0.0, 1.0) as f32;
+    let shown = egui::emath::easing::cubic_out(fade_in.min(fade_out));
+    (shown, (1.0 - shown) * 6.0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn toasts_fade_in_hold_and_fade_out() {
+        assert_eq!(presence(0.0), (0.0, 6.0));
+        assert_eq!(presence(LIFETIME / 2.0), (1.0, 0.0));
+        let late = presence(LIFETIME - FADE_OUT / 2.0).0;
+        assert!(late > 0.0 && late < 1.0);
+        assert_eq!(presence(LIFETIME).0, 0.0);
     }
 }
