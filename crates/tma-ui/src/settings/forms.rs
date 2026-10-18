@@ -304,7 +304,7 @@ mod tests {
     fn permission_summaries() {
         let all = tma_core::permissions::catalog();
         let keys = |n: usize| all.iter().take(n).map(|p| p.key.clone()).collect::<Vec<_>>();
-        assert_eq!(permission_summary(&keys(6), &all), "Full access");
+        assert_eq!(permission_summary(&keys(all.len()), &all), "Full access");
         assert_eq!(permission_summary(&[], &all), "Browse only");
         assert_eq!(permission_summary(&keys(2), &all), "Download, Upload & create");
         assert_eq!(permission_summary(&keys(4), &all), "Download, Upload & create +2");

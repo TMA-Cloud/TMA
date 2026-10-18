@@ -166,6 +166,26 @@ async fn assert_recent_names_opener(owner: &Client, sub: &Client, id: &str) {
     panic!("Recent files never named the sub-user who opened the file");
 }
 
+/// Restoring from the trash and deleting forever are granted separately.
+async fn assert_trash_grants_are_separate(owner: &Client, base: &str, id: &str) {
+    let request = CreateSubUserRequest {
+        email: "riley@example.test".into(),
+        password: "sub-user-password".into(),
+        name: "Riley".into(),
+        permissions: vec!["files.delete".into(), "files.restore".into()],
+    };
+    owner.create_sub_user(&request).await.unwrap();
+    let riley = Client::new(base).unwrap();
+    riley.login("riley@example.test", "sub-user-password", None).await.unwrap();
+    let ids = [id.to_string()];
+    riley.trash(&ids).await.unwrap();
+    riley.restore(&ids).await.unwrap();
+    riley.trash(&ids).await.unwrap();
+    assert_eq!(riley.delete_forever(&ids).await.unwrap_err().status, 403);
+    assert_eq!(riley.empty_trash().await.unwrap_err().status, 403);
+    riley.restore(&ids).await.unwrap();
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn full_workflow() {
     let Some(env) = env() else {
@@ -336,6 +356,7 @@ async fn full_workflow() {
         sam.upload(&text_file("nope.txt", "x", None), &UploadOptions::default(), Progress::new(0)).await.unwrap_err();
     assert_eq!(refused.status, 403);
     assert_recent_names_opener(&admin, &sam, &item.id).await;
+    assert_trash_grants_are_separate(&admin, &base, &item.id).await;
 
     // Sessions: signing out everywhere ends this client's session too.
     assert!(!admin.sessions(false).await.unwrap().sessions.is_empty());

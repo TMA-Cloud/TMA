@@ -264,13 +264,13 @@ fn selection_tools(main: &Main, ui: &mut Ui, selection: &[FileItem], actions: &m
     let user = &main.user;
     let ids: Vec<String> = selection.iter().map(|i| i.id.clone()).collect();
     if main.browser.place == Place::Trash {
-        if user.can(Permission::Trash) {
-            if tool(ui, ph::TRASH, "Delete forever", false, Some(t.destructive_text)).clicked() {
-                actions.push(Action::DeleteForever(ids.clone()));
-            }
-            if tool(ui, ph::ARROW_COUNTER_CLOCKWISE, "Restore", false, None).clicked() {
-                actions.push(Action::Restore(ids));
-            }
+        if user.can(Permission::Purge)
+            && tool(ui, ph::TRASH, "Delete forever", false, Some(t.destructive_text)).clicked()
+        {
+            actions.push(Action::DeleteForever(ids.clone()));
+        }
+        if user.can(Permission::Restore) && tool(ui, ph::ARROW_COUNTER_CLOCKWISE, "Restore", false, None).clicked() {
+            actions.push(Action::Restore(ids));
         }
     } else {
         // Laid out right to left, so the first button added sits at the far right.
@@ -326,7 +326,7 @@ fn view_tools(main: &Main, ui: &mut Ui, prefs: &Prefs, actions: &mut Vec<Action>
                 actions.push(Action::NewFolder);
             }
         }
-        Place::Trash if main.user.can(Permission::Trash) && !main.browser.items.is_empty() => {
+        Place::Trash if main.user.can(Permission::Purge) && !main.browser.items.is_empty() => {
             let t = widgets::tokens(ui);
             if tool(ui, ph::BROOM, "Empty trash", false, Some(t.destructive_text)).clicked() {
                 actions.push(Action::EmptyTrash);

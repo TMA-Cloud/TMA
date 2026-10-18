@@ -109,11 +109,11 @@ pub(super) fn context_menu(main: &Main, ui: &mut Ui, items: &[FileItem], desktop
         }
     };
     if main.browser.place == Place::Trash {
-        if user.can(Permission::Trash) {
+        if user.can(Permission::Restore) {
             item(ui, ph::ARROW_COUNTER_CLOCKWISE, "Restore", Action::Restore(ids.clone()));
-            if row(ui, ph::TRASH, "Delete forever", true) {
-                actions.push(Action::DeleteForever(ids));
-            }
+        }
+        if user.can(Permission::Purge) && row(ui, ph::TRASH, "Delete forever", true) {
+            actions.push(Action::DeleteForever(ids));
         }
         return;
     }

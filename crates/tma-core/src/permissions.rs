@@ -1,6 +1,6 @@
 //! Sub-user permissions: an explicit set of capabilities rather than a coarse
 //! role. Browsing is not a permission; every capability beyond looking is
-//! opt-in. The keys are mirrored by a CHECK constraint in migration 033.
+//! opt-in. The keys are mirrored by a CHECK constraint (migration 059).
 
 use serde::{Deserialize, Serialize};
 
@@ -14,8 +14,10 @@ pub enum Permission {
     Edit,
     #[serde(rename = "files.delete")]
     Delete,
-    #[serde(rename = "files.trash")]
-    Trash,
+    #[serde(rename = "files.restore")]
+    Restore,
+    #[serde(rename = "files.purge")]
+    Purge,
     #[serde(rename = "files.share")]
     Share,
 }
@@ -29,13 +31,14 @@ pub struct PermissionInfo {
 }
 
 /// Least to most destructive, so the checklist reads like Windows' permission list.
-pub const ALL: [Permission; 6] = [
+pub const ALL: [Permission; 7] = [
     Permission::Download,
     Permission::Upload,
     Permission::Edit,
     Permission::Share,
     Permission::Delete,
-    Permission::Trash,
+    Permission::Restore,
+    Permission::Purge,
 ];
 
 impl Permission {
@@ -45,7 +48,8 @@ impl Permission {
             Self::Upload => "files.upload",
             Self::Edit => "files.edit",
             Self::Delete => "files.delete",
-            Self::Trash => "files.trash",
+            Self::Restore => "files.restore",
+            Self::Purge => "files.purge",
             Self::Share => "files.share",
         }
     }
@@ -61,7 +65,8 @@ impl Permission {
             Self::Edit => "Modify",
             Self::Share => "Share",
             Self::Delete => "Move to trash",
-            Self::Trash => "Manage trash",
+            Self::Restore => "Restore from trash",
+            Self::Purge => "Delete permanently",
         }
     }
 
@@ -72,7 +77,8 @@ impl Permission {
             Self::Edit => "Rename, move, star, and edit document contents",
             Self::Share => "Create and revoke public share links",
             Self::Delete => "Send files and folders to the trash",
-            Self::Trash => "Restore items from the trash and delete them permanently",
+            Self::Restore => "Put items in the trash back where they were",
+            Self::Purge => "Delete items in the trash for good, and empty the trash",
         }
     }
 }
@@ -105,8 +111,8 @@ mod tests {
 
     #[test]
     fn normalizes_in_catalog_order() {
-        let input = vec!["files.trash".to_string(), "bogus".into(), "files.download".into(), "files.trash".into()];
-        assert_eq!(normalize(&input), vec!["files.download", "files.trash"]);
+        let input = vec!["files.purge".to_string(), "bogus".into(), "files.download".into(), "files.purge".into()];
+        assert_eq!(normalize(&input), vec!["files.download", "files.purge"]);
         assert!(!all_valid(&input));
     }
 }

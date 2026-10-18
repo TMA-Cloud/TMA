@@ -286,7 +286,7 @@ pub async fn restore(
     headers: HeaderMap,
     JsonBody(body): JsonBody<IdsBody>,
 ) -> ApiResult<Response> {
-    auth::require(&state, &auth, &ctx, Permission::Trash).await?;
+    auth::require(&state, &auth, &ctx, Permission::Restore).await?;
     let ids = require_ids(&body.ids)?;
     let items = listing::briefs(&state.pool, &ids, &auth.owner_id, true).await?;
     if items.is_empty() {
@@ -336,7 +336,7 @@ pub async fn delete_forever(
     auth: AuthUser,
     JsonBody(body): JsonBody<IdsBody>,
 ) -> ApiResult<Response> {
-    auth::require(&state, &auth, &ctx, Permission::Trash).await?;
+    auth::require(&state, &auth, &ctx, Permission::Purge).await?;
     let ids = require_ids(&body.ids)?;
     let items = listing::briefs(&state.pool, &ids, &auth.owner_id, true).await?;
     let tree = trash_model::count_tree(&state.pool, &ids, &auth.owner_id, true, false).await?;
@@ -355,7 +355,7 @@ pub async fn delete_forever(
 }
 
 pub async fn empty_trash(State(state): State<AppState>, ctx: ReqCtx, auth: AuthUser) -> ApiResult<Response> {
-    auth::require(&state, &auth, &ctx, Permission::Trash).await?;
+    auth::require(&state, &auth, &ctx, Permission::Purge).await?;
     let count = trash_model::count_tree(&state.pool, &[], &auth.owner_id, true, true).await?;
     if count == 0 {
         return Ok(message("Trash is already empty").into_response());
