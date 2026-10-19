@@ -9,17 +9,10 @@ use tma_core::api::Versions;
 use crate::app::Main;
 use crate::host::{Host, HostKind, UpdateMode};
 use crate::icons::ph;
+use crate::links;
 use crate::tasks::Tasks;
 use crate::theme::Weight;
 use crate::widgets;
-
-/// The wiki the update guidance links into.
-const WIKI: &str = "https://tma-cloud.github.io/Wiki/docs";
-
-/// The release notes of `version` in the wiki's changelog.
-pub fn release_notes_url(version: &str) -> String {
-    format!("{WIKI}/changelog/overview?version={version}")
-}
 
 /// Read the running and latest versions once after sign-in, for the sidebar's
 /// notice; a feed that cannot be reached just leaves the notice out.
@@ -186,7 +179,7 @@ fn guidance(ui: &mut egui::Ui, newer: &[(&str, String)], is_admin: bool, host: &
         };
         widgets::setting_row(ui, &format!("What's new in v{newest}"), description, |ui| {
             if widgets::secondary(ui, format!("{}  Release notes", ph::ARROW_SQUARE_OUT)).clicked() {
-                host.open_url(&release_notes_url(newest));
+                host.open_url(&links::release_notes(newest));
             }
         });
         if server && is_admin {
@@ -196,7 +189,7 @@ fn guidance(ui: &mut egui::Ui, newer: &[(&str, String)], is_admin: bool, host: &
                 "The guide walks you through it. Your data is backed up before anything changes.",
                 |ui| {
                     if widgets::secondary(ui, format!("{}  Update guide", ph::ARROW_SQUARE_OUT)).clicked() {
-                        host.open_url(&format!("{WIKI}/guides/operations/updating"));
+                        host.open_url(&links::update_guide());
                     }
                 },
             );
@@ -225,7 +218,7 @@ mod tests {
         assert_eq!(newest(&newer), Some("4.1.0"));
         assert_eq!(newest(&[("Server", "unknown".to_string())]), None);
         assert_eq!(
-            release_notes_url("4.0.1"),
+            links::release_notes("4.0.1"),
             "https://tma-cloud.github.io/Wiki/docs/changelog/overview?version=4.0.1"
         );
     }

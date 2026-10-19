@@ -10,6 +10,7 @@ mod document;
 mod files;
 mod host;
 pub mod icons;
+mod links;
 mod login_form;
 mod modals;
 pub mod platform;
