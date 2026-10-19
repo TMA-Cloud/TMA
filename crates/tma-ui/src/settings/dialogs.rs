@@ -217,7 +217,7 @@ fn sessions(ui: &mut egui::Ui, main: &mut Main, tasks: &Tasks, keep: &mut bool) 
                     });
                     if !s.is_current {
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
-                            let button = egui::Button::new(RichText::new("Revoke").color(t.destructive_text));
+                            let button = egui::Button::new(RichText::new("Sign out").color(t.destructive_text));
                             if ui.add_enabled(!revoking, button).clicked() {
                                 let id = s.id.clone();
                                 save(
@@ -230,7 +230,7 @@ fn sessions(ui: &mut egui::Ui, main: &mut Main, tasks: &Tasks, keep: &mut bool) 
                                     },
                                     |main, toasts, v| {
                                         main.settings.sessions = Some(v.sessions);
-                                        toasts.success("Session revoked");
+                                        toasts.success("Device signed out");
                                     },
                                 );
                             }

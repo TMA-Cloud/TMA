@@ -19,7 +19,7 @@ pub(super) fn session_card(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
         ui,
         ph::CLOCK,
         "Session timeout",
-        "Sign users out after a period of inactivity",
+        "Sign people out after they've been inactive for a while",
         status,
         open,
         |ui| {
@@ -75,8 +75,8 @@ pub(super) fn access_card(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
     let clicked = parts::config_card(
         ui,
         ph::CLOCK_COUNTER_CLOCKWISE,
-        "Last opened tracking",
-        "Record when files and folders are opened",
+        "Recently opened",
+        "Keep track of when files and folders are opened",
         status,
         open,
         |ui| {
@@ -86,10 +86,10 @@ pub(super) fn access_card(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
             let (wmin, wmax) = ActivitySettings::WINDOW_MINUTES;
             let (fmin, fmax) = ActivitySettings::FLUSH_SECONDS;
             ui.add_enabled_ui(f.access_enabled, |ui| {
-            widgets::field(ui, "Update window (minutes)", &mut f.access_window, false, "60");
-            parts::hint(ui, &format!("{wmin} to {wmax}. Repeat opens within this window are not recorded again, which reduces database writes. Use 0 to record every open."));
-            widgets::field(ui, "Write interval (seconds)", &mut f.access_flush, false, "10");
-            parts::hint(ui, &format!("{fmin} to {fmax}. How often recorded opens are written to the database."));
+            widgets::field(ui, "Minutes between records of the same item", &mut f.access_window, false, "60");
+            parts::hint(ui, &format!("{wmin} to {wmax}. Opening the same item again within this time isn't recorded, which saves database writes. Use 0 to record every open."));
+            widgets::field(ui, "Seconds between database writes", &mut f.access_flush, false, "10");
+            parts::hint(ui, &format!("{fmin} to {fmax}. How often recorded opens are saved to the database."));
         });
             action = parts::form_actions(ui, busy, "Save", "Saving…");
         },
@@ -125,7 +125,7 @@ pub(super) fn access_card(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
                     |main, toasts, v| {
                         main.settings.activity = Some(v);
                         main.settings.open.remove("access");
-                        toasts.success("Access time settings saved");
+                        toasts.success("Recently opened settings saved");
                     },
                 ),
             }

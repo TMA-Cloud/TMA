@@ -158,12 +158,12 @@ pub fn show(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks, desktop: bool) {
         ui,
         ph::GEAR_SIX,
         "Administration",
-        "Users, policies, integrations and maintenance for this server.",
+        "Users, policies, integrations and maintenance for this server",
     );
     ui.add_space(8.0);
     stats(main, ui);
     let s = main.settings.signup.clone().unwrap_or_default();
-    section(ui, "Policies", "These apply to every user on this server.", |ui| {
+    section(ui, "Policies", "These apply to everyone on this server", |ui| {
         policy(
             main,
             ui,
@@ -191,15 +191,15 @@ pub fn show(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks, desktop: bool) {
             "Only the desktop app can sign in. Turn this on from the desktop app."
         };
         policy(main, ui, tasks, Policy::DesktopOnly, "Desktop app only", note, desktop_only);
-        let ext = "Display file names without their extensions";
+        let ext = "Show file names without extensions such as .pdf or .docx";
         policy(main, ui, tasks, Policy::Extensions, "Hide file extensions", ext, s.can_toggle_hide_file_extensions);
-        let drive = "Other apps can save to Cloud Drive but cannot open or copy files from it";
+        let drive = "Other apps can save to Cloud Drive but can't open or copy files from it";
         let can = main.settings.cloud_drive.is_some_and(|d| d.can_configure);
         policy(main, ui, tasks, Policy::SaveOnly, "Cloud Drive save-only", drive, can);
     });
     let mut open = None;
     section(ui, "Users and devices", "", |ui| {
-        widgets::setting_row(ui, "Registered users", "All accounts with their storage use and limits", |ui| {
+        widgets::setting_row(ui, "Registered users", "Every account with its storage use and limit", |ui| {
             if widgets::secondary(ui, format!("{}  Show all users", ph::USERS_THREE)).clicked() {
                 open = Some(Dialog::Users);
             }
@@ -232,7 +232,7 @@ pub fn show(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks, desktop: bool) {
     parts::danger_group(
         ui,
         "Maintenance",
-        "These actions permanently delete data. Review the results carefully before you confirm.",
+        "These actions delete data for good. Check the results carefully before you confirm.",
         |ui| {
             let description = "Find stored data without a file record, and file records without stored data";
             widgets::setting_row(ui, "Orphaned files", description, |ui| {

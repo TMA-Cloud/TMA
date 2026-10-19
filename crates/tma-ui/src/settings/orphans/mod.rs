@@ -345,7 +345,7 @@ fn footer(
     let busy = main.settings.busy.is_some_and(|b| b.starts_with("orphans"));
     ui.horizontal(|ui| {
         let message = if state.confirming {
-            "This cannot be undone. Click again to confirm.".to_string()
+            "This can't be undone. Select again to confirm.".to_string()
         } else if selected == 0 {
             "Select the entries you want to remove".into()
         } else {

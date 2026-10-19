@@ -34,13 +34,13 @@ pub fn load(main: &mut Main, tasks: &Tasks) {
 }
 
 pub fn show(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
-    widgets::heading(ui, ph::HARD_DRIVES, "Storage", "Storage use, the storage bucket and upload limits.");
+    widgets::heading(ui, ph::HARD_DRIVES, "Storage", "Storage use, where files are kept and upload limits");
     let admin = main.instance.is_first_user;
     // What you use comes first; what the server is set up with follows, for those who set it.
     let usage = main.instance.usage;
     section(ui, "", "", |ui| parts::meter(ui, usage));
     if admin {
-        section(ui, "Server settings", "These apply to every user on this server.", |ui| {
+        section(ui, "Server settings", "These apply to everyone on this server", |ui| {
             bucket_card(main, ui, tasks);
             upload_card(main, ui, tasks);
         });
@@ -51,10 +51,10 @@ pub fn show(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
         parts::note(
             ui,
             Tone::Warning,
-            "Storage is not set up yet, so files cannot be uploaded or opened. Contact your administrator.",
+            "Storage isn't set up yet, so files can't be uploaded or opened. Ask your admin to set it up.",
         );
     }
-    parts::note(ui, Tone::Neutral, "Storage limits and the maximum upload size are managed by your administrator.");
+    parts::note(ui, Tone::Neutral, "Your admin manages storage limits and the maximum upload size.");
 }
 
 fn upload_card(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
@@ -65,8 +65,8 @@ fn upload_card(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
     let clicked = parts::config_card(
         ui,
         ph::UPLOAD_SIMPLE,
-        "Max upload size",
-        "Maximum size of a single uploaded file",
+        "Maximum upload size",
+        "The largest file anyone can upload",
         status,
         open,
         |ui| {
@@ -87,7 +87,7 @@ fn upload_card(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
                     f.max_upload = forms::convert_size(&f.max_upload, before, f.max_upload_unit);
                 }
             });
-            parts::hint(ui, "Allowed range: 1 MB to 100 GB per file");
+            parts::hint(ui, "From 1 MB to 100 GB");
             action = parts::form_actions(ui, busy, "Save", "Saving…");
         },
     );
@@ -117,7 +117,7 @@ fn upload_card(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
                         main.instance.max_upload = v.max_bytes;
                         main.settings.max_upload = Some(v);
                         main.settings.open.remove("upload");
-                        toasts.success("Max upload size saved");
+                        toasts.success("Maximum upload size saved");
                     },
                 ),
             }
@@ -182,7 +182,7 @@ fn bucket_card(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
             parts::note(
                 ui,
                 Tone::Warning,
-                "No storage bucket is connected, so files cannot be uploaded or opened. Create a private bucket and an access key restricted to it, then enter the details below.",
+                "No storage bucket is connected, so files can't be uploaded or opened. Create a private bucket and an access key restricted to it, then enter the details below.",
             );
             ui.add_space(4.0);
         }
@@ -313,7 +313,7 @@ fn test_or_save(main: &mut Main, tasks: &Tasks, test: bool, configured: bool, ve
                 main.settings.forms.bucket_result = Some(match result {
                     Ok(r) => CheckResult {
                         ok: true,
-                        message: "Connection successful. Save to start using this bucket.".into(),
+                        message: "Connected. Save to start using this bucket.".into(),
                         step: None,
                         checks: r.checks,
                     },

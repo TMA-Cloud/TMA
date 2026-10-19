@@ -23,7 +23,7 @@ fn onlyoffice(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
     let configured = summary.as_ref().is_some_and(|o| o.url.is_some() && o.jwt_secret_set);
     let status = summary
         .as_ref()
-        .map(|_| if configured { (Tone::Success, "Configured".into()) } else { (Tone::Info, "Not set up".into()) });
+        .map(|_| if configured { (Tone::Success, "Set up".into()) } else { (Tone::Info, "Not set up".into()) });
     let open = main.settings.open.contains("onlyoffice");
     let busy = main.settings.busy == Some("onlyoffice");
     let mut action = None;
@@ -39,9 +39,9 @@ fn onlyoffice(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
         }
         let f = &mut main.settings.forms;
         widgets::field(ui, "Document Server URL", &mut f.onlyoffice_url, false, "https://documentserver.example.com");
-        parts::hint(ui, "Base URL of your OnlyOffice Document Server");
+        parts::hint(ui, "The address of your OnlyOffice Document Server");
         parts::secret_field(ui, "JWT secret", &mut f.onlyoffice_secret, "Enter JWT secret");
-        parts::hint(ui, "Secret key for signing OnlyOffice requests");
+        parts::hint(ui, "The secret OnlyOffice uses to sign its requests");
         action = parts::form_actions(ui, busy, "Save", "Saving…");
     });
     if clicked && main.settings.toggle_card("onlyoffice") {
@@ -79,7 +79,7 @@ fn share_url(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
     let saved = main.settings.share_url.clone();
     let url = saved.as_ref().and_then(|s| s.url.clone()).filter(|u| !u.is_empty());
     let status = saved.as_ref().map(|_| match &url {
-        Some(_) => (Tone::Success, "Configured".to_string()),
+        Some(_) => (Tone::Success, "Set up".to_string()),
         None => (Tone::Info, "Server address".to_string()),
     });
     let open = main.settings.open.contains("share");

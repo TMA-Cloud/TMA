@@ -149,7 +149,7 @@ impl Host for DesktopHost {
             ui,
             tma_ui::icons::ph::DESKTOP,
             "Desktop app",
-            "Settings for the desktop app on this computer.",
+            "Settings for the desktop app on this computer",
         );
         widgets::section(ui, "This computer", "", |ui| {
             tma_ui::widgets::setting_row(ui, "Server", "", |ui| {
@@ -159,7 +159,7 @@ impl Host for DesktopHost {
                 ui.label(format!("v{}", env!("CARGO_PKG_VERSION")));
             });
         });
-        let note = "Your files in File Explorer and in every app's Open and Save dialogs.";
+        let note = "Your files in File Explorer and in every app's Open and Save dialogs";
         widgets::section(ui, "Cloud Drive", note, |ui| {
             let status = self.drive.status();
             let mut restart = false;
@@ -210,7 +210,7 @@ impl Host for DesktopHost {
                 .color(t.positive_text);
             if ui
                 .add(egui::Button::new(text).frame(false))
-                .on_hover_text("Cloud Drive is connected. Click to open it.")
+                .on_hover_text("Cloud Drive is connected. Select to open it.")
                 .clicked()
             {
                 let _ = open::that_detached(drive_root(&point));

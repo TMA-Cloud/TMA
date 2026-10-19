@@ -65,7 +65,7 @@ fn identity_card(ui: &mut egui::Ui, main: &Main) {
 }
 
 pub fn profile(main: &mut Main, ui: &mut egui::Ui) {
-    widgets::heading(ui, ph::USER, "Profile", "Your account information.");
+    widgets::heading(ui, ph::USER, "Profile", "Your name, email and account type");
     identity_card(ui, main);
     let user = main.user.clone();
     // The card already shows the address; two-factor authentication lives on the Security page.
@@ -73,19 +73,19 @@ pub fn profile(main: &mut Main, ui: &mut egui::Ui) {
         let since = user.created_at.map(|c| c.format("%B %-d, %Y").to_string()).unwrap_or_else(|| "Unknown".into());
         row(ui, "Member since", "", &since);
         let description = if user.is_sub_user {
-            "You work in the account owner's files and storage, with the permissions they assigned"
+            "You work in the account owner's files and storage, with the permissions they gave you"
         } else {
-            "You own this storage and can add sub-users to it"
+            "You own this storage and can add sub-users"
         };
         row(ui, "Account type", description, account_kind(main));
         if main.instance.is_first_user {
-            row(ui, "Role", "Manages users and settings for this server", "Administrator");
+            row(ui, "Role", "You manage users and settings for this server", "Administrator");
         }
     });
 }
 
 pub fn security(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
-    widgets::heading(ui, ph::SHIELD, "Security", "Sign-in protection and active sessions.");
+    widgets::heading(ui, ph::SHIELD, "Security", "Sign-in protection and the devices signed in to your account");
     let allowed = main.settings.signup.as_ref().map(|s| s.allow_password_change);
     let mfa = main.settings.mfa.unwrap_or(main.user.mfa_enabled);
     let mut open = None;
@@ -95,15 +95,15 @@ pub fn security(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
             (true, Some(n)) => {
                 format!("On, with {} left", tma_core::format::count(n as usize, "backup code", "backup codes"))
             }
-            (true, None) => "On: a verification code is required at sign-in".into(),
-            (false, _) => "Require a code from an authenticator app at sign-in".into(),
+            (true, None) => "On, sign-in asks for a code from your app".into(),
+            (false, _) => "Ask for a code from an authenticator app when you sign in".into(),
         };
         widgets::setting_row(ui, "Two-factor authentication", &description, |ui| {
             if widgets::secondary(ui, format!("{}  Manage", ph::KEY)).clicked() {
                 open = Some(Dialog::Mfa(Default::default()));
             }
             if mfa {
-                parts::chip(ui, Tone::Success, "Enabled");
+                parts::chip(ui, Tone::Success, "On");
             }
         });
         match allowed {
@@ -112,9 +112,7 @@ pub fn security(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
                     open = Some(Dialog::Password(PasswordForm::default()));
                 }
             }),
-            Some(false) => {
-                widgets::setting_row(ui, "Password", "Your administrator has turned off password changes", |_| {})
-            }
+            Some(false) => widgets::setting_row(ui, "Password", "Your admin has turned off password changes", |_| {}),
             None => {
                 ui.spinner();
             }
@@ -135,7 +133,7 @@ pub fn security(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
             }
         });
         let busy = main.settings.busy == Some("logout-all");
-        let note = "Ends every session, this one too; you will need to sign in again";
+        let note = "Signs out every device, including this one";
         widgets::setting_row(ui, "Sign out everywhere", note, |ui| {
             let label = if busy { "Signing out…" } else { "Sign out everywhere" };
             sign_out_all = ui.add_enabled_ui(!busy, |ui| widgets::danger(ui, label)).inner.clicked();

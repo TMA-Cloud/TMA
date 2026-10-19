@@ -85,7 +85,7 @@ pub fn show(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks, host: &mut dyn Ho
     let desktop = host.kind() == HostKind::Desktop;
     let mode = host.update_mode();
     let app_version = host.app_version().to_string();
-    widgets::heading(ui, ph::ARROWS_CLOCKWISE, "Updates", "Installed versions and available updates.");
+    widgets::heading(ui, ph::ARROWS_CLOCKWISE, "Updates", "Installed versions and available updates");
     if let Some(error) = &main.settings.version_error {
         ui.add_space(6.0);
         parts::note(ui, Tone::Warning, error);
@@ -119,7 +119,7 @@ pub fn show(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks, host: &mut dyn Ho
         UpdateMode::Manual(_) => {
             "Get new versions of the app from the releases page. Your admin takes care of server updates."
         }
-        UpdateMode::None => "See if a newer version of TMA Cloud is out.",
+        UpdateMode::None => "See if a newer version of TMA Cloud is out",
     };
     section(ui, "", "", |ui| {
         widgets::setting_row(ui, "Check for updates", note, |ui| {
@@ -146,8 +146,8 @@ pub fn show(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks, host: &mut dyn Ho
                             main.settings.latest = Some(latest);
                         }
                         Err(_) => {
-                            main.settings.version_error = Some("Unable to check for updates right now".into());
-                            toasts.error("Failed to check for updates");
+                            main.settings.version_error = Some("Couldn't check for updates. Try again later.".into());
+                            toasts.error("Couldn't check for updates");
                         }
                     },
                 );
@@ -173,9 +173,9 @@ fn guidance(ui: &mut egui::Ui, newer: &[(&str, String)], is_admin: bool, host: &
     section(ui, &format!("Update to v{newest}"), "", |ui| {
         // Whoever cannot install a server update is told who does.
         let description = if server && !is_admin {
-            "See what is new and what got fixed. Your admin takes care of updating the server."
+            "See what's new and what's fixed. Your admin takes care of updating the server."
         } else {
-            "See what is new and what got fixed."
+            "See what's new and what's fixed"
         };
         widgets::setting_row(ui, &format!("What's new in v{newest}"), description, |ui| {
             if widgets::secondary(ui, format!("{}  Release notes", ph::ARROW_SQUARE_OUT)).clicked() {

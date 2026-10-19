@@ -134,7 +134,7 @@ fn limit_editor(ui: &mut egui::Ui, main: &mut Main, tasks: &Tasks, user: &AdminU
         Some("reset") => set_limit(main, tasks, user.id.clone(), None),
         Some(_) if value.trim().is_empty() => set_limit(main, tasks, user.id.clone(), None),
         Some(_) => match forms::size_bytes(&value, unit) {
-            None => main.settings.limit_error = Some("Enter a positive number".into()),
+            None => main.settings.limit_error = Some("Enter a number greater than 0".into()),
             Some(bytes) if bytes < user.storage_used => {
                 main.settings.limit_error = Some(format!(
                     "The limit can't be below the {} already stored",
@@ -152,7 +152,7 @@ pub fn users(ui: &mut egui::Ui, main: &mut Main, tasks: &Tasks, keep: &mut bool)
     let rows = page.as_ref().map(|p| forms::account_rows(&p.users)).unwrap_or_default();
     let count = match &page {
         None => "Loading users…".to_string(),
-        Some(p) if p.users.is_empty() => "No users to display yet".into(),
+        Some(p) if p.users.is_empty() => "No users yet".into(),
         Some(p) => {
             let accounts = rows.iter().filter(|(_, owner)| owner.is_none()).count();
             let subs = p.users.len() - accounts;

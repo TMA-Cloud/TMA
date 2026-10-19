@@ -26,7 +26,7 @@ pub fn show(main: &mut Main, ui: &mut Ui, tasks: &Tasks, host: &mut dyn Host) {
     let version = host.app_version().to_string();
     let platform = platform(host.kind());
     let server = main.settings.versions.as_ref().and_then(|v| v.server.clone());
-    widgets::heading(ui, ph::INFO, "About", "Version, support and legal information.");
+    widgets::heading(ui, ph::INFO, "About", "Version, support and legal information");
     ui.add_space(16.0);
     banner(ui, &version);
 
@@ -38,7 +38,7 @@ pub fn show(main: &mut Main, ui: &mut Ui, tasks: &Tasks, host: &mut dyn Host) {
         widgets::setting_row(
             ui,
             "Troubleshooting info",
-            "Copy your versions and platform to include in a bug report.",
+            "Copy your versions and platform to include in a bug report",
             |ui| {
                 if widgets::secondary(ui, format!("{}  Copy details", ph::COPY)).clicked() {
                     ui.ctx().copy_text(details(&version, &platform, server.as_deref()));
@@ -49,19 +49,19 @@ pub fn show(main: &mut Main, ui: &mut Ui, tasks: &Tasks, host: &mut dyn Host) {
     });
 
     section(ui, "Learn more", "", |ui| {
-        link_row(ui, host, ("Documentation", "Guides for using and running TMA Cloud."), "Open wiki", links::WIKI);
+        link_row(ui, host, ("Documentation", "Guides for using and running TMA Cloud"), "Open wiki", links::WIKI);
         let notes = links::release_notes(&version);
-        link_row(ui, host, ("What's new", "See what changed in this version."), "Release notes", &notes);
-        link_row(ui, host, ("TMA Cloud on GitHub", "Source code and releases."), "GitHub", links::ORG);
+        link_row(ui, host, ("What's new", "See what changed in this version"), "Release notes", &notes);
+        link_row(ui, host, ("TMA Cloud on GitHub", "Source code and releases"), "GitHub", links::ORG);
         link_row(ui, host, ("Report a problem", "Found a bug? Let us know on GitHub."), "Report issue", links::ISSUES);
     });
 
     section(ui, "Legal", "", |ui| {
         let privacy = links::privacy_policy();
-        link_row(ui, host, ("Privacy Policy", "How your data is handled."), "Read", &privacy);
+        link_row(ui, host, ("Privacy Policy", "How your data is handled"), "Read", &privacy);
         let terms = links::terms_of_use();
-        link_row(ui, host, ("Terms of Use", "The rules for using TMA Cloud."), "Read", &terms);
-        link_row(ui, host, ("License", "Free and open source under the MIT License."), "View", links::LICENSE);
+        link_row(ui, host, ("Terms of Use", "The rules for using TMA Cloud"), "Read", &terms);
+        link_row(ui, host, ("License", "Free and open source under the MIT License"), "View", links::LICENSE);
     });
 
     ui.add_space(20.0);
@@ -91,7 +91,7 @@ fn banner(ui: &mut Ui, version: &str) {
                 ui.add_space(2.0);
                 ui.label(RichText::new("TMA Cloud").size(26.0).semibold().color(t.label));
                 ui.label(
-                    RichText::new("Open-source cloud storage you host yourself.").size(14.0).color(t.label_secondary),
+                    RichText::new("Open-source cloud storage you host yourself").size(14.0).color(t.label_secondary),
                 );
                 ui.add_space(4.0);
                 parts::chip(ui, Tone::Neutral, &format!("Version {version}"));

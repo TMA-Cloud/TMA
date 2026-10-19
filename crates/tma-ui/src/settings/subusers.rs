@@ -202,10 +202,7 @@ fn row(ui: &mut egui::Ui, main: &mut Main, tasks: &Tasks, sub: &SubUser, availab
                         main.settings.sub_user_removing = None;
                     }
                     if ui
-                        .add_enabled(
-                            !busy,
-                            egui::Button::new(RichText::new("Confirm remove").color(t.destructive_text)),
-                        )
+                        .add_enabled(!busy, egui::Button::new(RichText::new("Yes, remove").color(t.destructive_text)))
                         .clicked()
                     {
                         let id = sub.id.clone();
@@ -265,7 +262,7 @@ fn row(ui: &mut egui::Ui, main: &mut Main, tasks: &Tasks, sub: &SubUser, availab
 }
 
 pub fn show(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
-    widgets::heading(ui, ph::USERS, "Sub-users", "Additional sign-ins that share your files and storage.");
+    widgets::heading(ui, ph::USERS, "Sub-users", "People who share your files and storage");
     if main.user.is_sub_user {
         ui.label(widgets::muted(ui, "Only the account owner can manage sub-users."));
         return;
@@ -273,7 +270,7 @@ pub fn show(main: &mut Main, ui: &mut egui::Ui, tasks: &Tasks) {
     let list = main.settings.sub_users.clone();
     let available = catalog(main);
     // The count lives in the list's own header; one line of context says what a sub-user is.
-    let about = "Each signs in with their own email and password and can do only what you allow. The audit log names who did what.";
+    let about = "Each signs in with their own email and password and can only do what you allow. The audit log shows who did what.";
     section(ui, "Your sub-users", about, |ui| {
         // The list and its controls form one padded row of the section card.
         widgets::row_frame(ui).show(ui, |ui| {
