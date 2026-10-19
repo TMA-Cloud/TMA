@@ -41,6 +41,8 @@ ipnet = "2"
 jsonwebtoken = { version = "11", default-features = false, features = ["aws_lc_rs"] }
 mime_guess = { workspace = true }
 percent-encoding = { workspace = true }
+# Its own socket options: a listener that takes IPv4 and IPv6 alike on every system.
+socket2 = "0.6"
 prometheus = { version = "0.14", default-features = false, features = ["process"] }
 qrcode = { version = "0.14", default-features = false, features = ["image"] }
 rand = "0.10"

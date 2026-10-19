@@ -21,6 +21,39 @@ use crate::{cache, db, jobs, routes, services};
 /// How long in-flight requests get after SIGTERM before their connections are closed.
 const DRAIN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(8);
 
+/// Listen on every address, IPv6 and IPv4 alike. A client that tries IPv6 first
+/// (Windows does for localhost, anyone does for a name with an IPv6 address)
+/// otherwise waits 300 ms to 2 s per connection before falling back. Windows
+/// makes IPv6 sockets IPv6-only unless told otherwise, hence socket2. A host
+/// whose kernel has no IPv6 at all gets IPv4 only.
+fn listen(port: u16) -> std::io::Result<tokio::net::TcpListener> {
+    use socket2::{Domain, Socket, Type};
+    let open = |domain: Domain, addr: SocketAddr| -> std::io::Result<Socket> {
+        let socket = Socket::new(domain, Type::STREAM, None)?;
+        if domain == Domain::IPV6 {
+            socket.set_only_v6(false)?;
+        }
+        // As tokio's own bind does, so a restarted server can take the port at once.
+        #[cfg(unix)]
+        socket.set_reuse_address(true)?;
+        socket.set_nonblocking(true)?;
+        socket.bind(&addr.into())?;
+        socket.listen(1024)?;
+        Ok(socket)
+    };
+    let socket = match open(Domain::IPV6, SocketAddr::from((std::net::Ipv6Addr::UNSPECIFIED, port))) {
+        Ok(socket) => {
+            tracing::info!(port, "Server listening on IPv6 and IPv4");
+            socket
+        }
+        Err(err) => {
+            tracing::info!(port, reason = %err, "Server listening on IPv4 only");
+            open(Domain::IPV4, SocketAddr::from(([0, 0, 0, 0], port)))?
+        }
+    };
+    tokio::net::TcpListener::from_std(socket.into())
+}
+
 /// What this process runs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Role {
@@ -183,10 +216,7 @@ pub async fn run(config: Config, role: Role) -> anyhow::Result<()> {
     if role != Role::Worker {
         jobs::worker::spawn_depth_updater(state.jobs.clone(), state.metrics.clone());
         let app = routes::router(state.clone());
-        let addr = SocketAddr::from(([0, 0, 0, 0], port));
-        let listener =
-            tokio::net::TcpListener::bind(addr).await.with_context(|| format!("Cannot listen on port {port}"))?;
-        tracing::info!(port, "Server listening");
+        let listener = listen(port).with_context(|| format!("Cannot listen on port {port}"))?;
         let mut stop = rx.clone();
         let serve = axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>())
             .with_graceful_shutdown(async move {

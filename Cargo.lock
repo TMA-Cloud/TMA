@@ -6344,6 +6344,7 @@ dependencies = [
  "ring",
  "serde",
  "serde_json",
+ "socket2",
  "sqlx",
  "subtle",
  "thiserror 2.0.21",

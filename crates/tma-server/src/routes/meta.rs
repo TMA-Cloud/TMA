@@ -35,8 +35,20 @@ pub async fn health() -> Json<Value> {
     )
 }
 
+/// Whether `ip` is on the metrics allow-list, comparing addresses rather than text.
+/// Loopback matches loopback in either family: the server answers on IPv6 too, so
+/// a local scrape of localhost may arrive as ::1 where the list says 127.0.0.1.
+fn metrics_allowed(ip: &str, allowed: &[String]) -> bool {
+    let Ok(ip) = ip.parse::<std::net::IpAddr>().map(|ip| ip.to_canonical()) else { return false };
+    allowed
+        .iter()
+        .filter_map(|a| a.parse::<std::net::IpAddr>().ok())
+        .map(|a| a.to_canonical())
+        .any(|a| a == ip || (a.is_loopback() && ip.is_loopback()))
+}
+
 pub async fn metrics(State(state): State<AppState>, ctx: ReqCtx) -> Response {
-    let allowed = ctx.ip.as_ref().is_some_and(|ip| state.config.metrics_allowed_ips.iter().any(|a| a == ip));
+    let allowed = ctx.ip.as_deref().is_some_and(|ip| metrics_allowed(ip, &state.config.metrics_allowed_ips));
     if !allowed {
         tracing::warn!(ip = ?ctx.ip, "Unauthorized metrics access attempt");
         return (StatusCode::FORBIDDEN, "Forbidden").into_response();
@@ -89,4 +101,20 @@ async fn latest(State(state): State<AppState>) -> ApiResult<Json<Value>> {
     let body = json!({ "server": pick("server"), "web": pick("web"), "desktop": pick("desktop") });
     *cached = Some((Instant::now(), body.clone()));
     Ok(Json(body))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn metrics_allow_list_compares_addresses() {
+        let list = vec!["127.0.0.1".to_string(), "10.0.0.5".to_string()];
+        assert!(metrics_allowed("127.0.0.1", &list));
+        assert!(metrics_allowed("::1", &list), "a localhost scrape over IPv6");
+        assert!(metrics_allowed("::ffff:10.0.0.5", &list), "an IPv4 client on the dual-stack socket");
+        assert!(!metrics_allowed("10.0.0.6", &list));
+        assert!(!metrics_allowed("not an address", &list));
+        assert!(metrics_allowed("::1", &["::1".to_string()]));
+    }
 }
