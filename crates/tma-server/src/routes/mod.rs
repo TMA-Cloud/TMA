@@ -65,12 +65,28 @@ pub fn router(state: AppState) -> Router {
 }
 
 /// The general API budget: per user when signed in, per address otherwise.
+/// The event stream is left out: it is one long request with its own cap per
+/// user, and cutting it would leave apps blind to changes.
 async fn api_limit(State(state): State<AppState>, req: Request, next: Next) -> Response {
-    let key = match req.extensions().get::<AuthUser>() {
-        Some(auth) => format!("api:user:{}", auth.user_id),
-        None => format!("api:{}", req.extensions().get::<ReqCtx>().and_then(|c| c.ip.clone()).unwrap_or_default()),
+    if req.uri().path().ends_with("/files/events") {
+        return next.run(req).await;
+    }
+    let (spec, key) = match req.extensions().get::<AuthUser>() {
+        Some(auth) => (limits::API_USER, format!("api:user:{}", auth.user_id)),
+        None => (
+            limits::API,
+            format!("api:{}", req.extensions().get::<ReqCtx>().and_then(|c| c.ip.clone()).unwrap_or_default()),
+        ),
     };
-    if let Err(limited) = state.limits.check(limits::API, &key) {
+    if let Err(limited) = state.limits.check(spec, &key) {
+        // Read the body first (an upload's, mostly), so the client gets this answer
+        // rather than a connection dropped while it was still sending.
+        let body = req.into_body();
+        let _ = tokio::time::timeout(
+            crate::transfer::upload::DRAIN_TIME,
+            axum::body::to_bytes(body, crate::transfer::upload::DRAIN_LIMIT),
+        )
+        .await;
         return axum::response::IntoResponse::into_response(limited);
     }
     next.run(req).await

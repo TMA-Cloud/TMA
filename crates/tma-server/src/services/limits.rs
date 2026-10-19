@@ -62,6 +62,14 @@ pub const API: LimitSpec = LimitSpec {
     message: "Too many requests, please try again later",
     failures_only: false,
 };
+/// A signed-in user's budget: a desktop app keeping a large drive in sync, or
+/// copying a folder of thousands of files into it, legitimately makes many requests.
+pub const API_USER: LimitSpec = LimitSpec {
+    window: Duration::from_secs(900),
+    max: 30_000,
+    message: "Too many requests, please try again later",
+    failures_only: false,
+};
 pub const UPLOAD: LimitSpec = LimitSpec {
     window: Duration::from_secs(1800),
     max: 20_000,
