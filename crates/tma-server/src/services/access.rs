@@ -106,20 +106,35 @@ impl AccessTracker {
             let owners: Vec<&str> = chunk.iter().map(|((o, _), _)| o.as_str()).collect();
             let times: Vec<DateTime<Utc>> = chunk.iter().map(|(_, (t, _))| *t).collect();
             let readers: Vec<Option<&str>> = chunk.iter().map(|(_, (_, r))| r.as_deref()).collect();
-            let result = sqlx::query(
-                "UPDATE files AS f SET accessed_at = v.accessed_at, accessed_by = v.accessed_by
-                   FROM unnest($1::text[], $2::text[], $3::timestamptz[], $4::text[])
-                        AS v(id, user_id, accessed_at, accessed_by)
-                  WHERE f.id = v.id AND f.user_id = v.user_id AND f.deleted_at IS NULL AND f.accessed_at < v.accessed_at",
+            // Rows a save or upload holds right now are skipped, never waited for: those
+            // writers lock folders in ancestor order, and waiting on them from a batch
+            // in another order deadlocked under load. A skipped item is recorded again
+            // on its next read.
+            let result: Result<Vec<(String,)>, _> = sqlx::query_as(
+                "WITH v AS (SELECT * FROM unnest($1::text[], $2::text[], $3::timestamptz[], $4::text[])
+                              AS v(id, user_id, accessed_at, accessed_by)),
+                      due AS MATERIALIZED (SELECT f.id, v.accessed_at, v.accessed_by FROM files f
+                                JOIN v ON f.id = v.id AND f.user_id = v.user_id
+                               WHERE f.deleted_at IS NULL AND f.accessed_at < v.accessed_at
+                               ORDER BY f.id FOR UPDATE OF f SKIP LOCKED)
+                 UPDATE files AS f SET accessed_at = due.accessed_at, accessed_by = due.accessed_by
+                   FROM due WHERE f.id = due.id RETURNING f.id",
             )
             .bind(&ids)
             .bind(&owners)
             .bind(&times)
             .bind(&readers)
-            .execute(&self.pool)
+            .fetch_all(&self.pool)
             .await;
             match result {
-                Ok(r) => written += r.rows_affected(),
+                Ok(rows) => {
+                    written += rows.len() as u64;
+                    let done: std::collections::HashSet<&str> = rows.iter().map(|(id,)| id.as_str()).collect();
+                    let mut b = self.buffers.lock().await;
+                    for (key, (_, reader)) in chunk.iter().filter(|((_, id), _)| !done.contains(id.as_str())) {
+                        b.suppressed.remove(&(key.clone(), reader.clone()));
+                    }
+                }
                 Err(err) => {
                     // Nothing stored: forget the windows so the next read retries.
                     tracing::warn!(error = %err, count = chunk.len(), "[AccessTime] Failed to flush access times");
