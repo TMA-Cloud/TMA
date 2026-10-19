@@ -338,6 +338,33 @@ async fn assert_counters_stay_exact(owner: &Client, database: &str) {
     pool.close().await;
 }
 
+/// The change feed names each folder whose listing changed: where a folder was
+/// made, both ends of a move, a file's folder when someone starts editing it.
+/// A cursor from before pruned history starts over.
+async fn assert_change_feed(owner: &Client, database: &str, folder: &str, file: &str) {
+    let has = |changes: &tma_core::api::Changes, id: Option<&str>| changes.folders.contains(&id.map(String::from));
+    let start = owner.changes(None).await.unwrap();
+    assert!(start.reset && start.folders.is_empty(), "no cursor yet: list everything");
+    let made = owner.create_folder("Feed", Some(folder)).await.unwrap();
+    let after = owner.changes(Some(&start.cursor)).await.unwrap();
+    assert!(!after.reset && has(&after, Some(folder)), "{after:?}");
+    assert!(!has(&after, None), "the root did not change");
+    owner.move_items(std::slice::from_ref(&made.id), None).await.unwrap();
+    let moved = owner.changes(Some(&after.cursor)).await.unwrap();
+    assert!(has(&moved, Some(folder)) && has(&moved, None), "a move changes both folders: {moved:?}");
+    owner.lock(file).await.unwrap();
+    let locked = owner.changes(Some(&moved.cursor)).await.unwrap();
+    assert!(has(&locked, Some(folder)), "who is editing shows in the folder: {locked:?}");
+    owner.unlock(file).await.unwrap();
+
+    let pool = sqlx::PgPool::connect(database).await.unwrap();
+    sqlx::query("UPDATE file_change_floor SET xid = pg_current_xact_id()").execute(&pool).await.unwrap();
+    pool.close().await;
+    assert!(owner.changes(Some(&locked.cursor)).await.unwrap().reset, "pruned past the cursor: start over");
+    let fresh = owner.changes(None).await.unwrap();
+    assert!(!owner.changes(Some(&fresh.cursor)).await.unwrap().reset);
+}
+
 /// Restoring from the trash and deleting forever are granted separately.
 /// Share links: the public page lists the file and the Shared view shows it;
 /// unsharing removes both. Every listing view builds its own SQL, so each is read.
@@ -475,6 +502,7 @@ async fn full_workflow() {
     assert_stale_saves_are_refused(&admin, &deep.id, replaced.content_version).await;
     assert_edit_locks(&admin, &base, &deep.id).await;
     assert_browser_sessions_lock(&admin, &env.database, &deep.id).await;
+    assert_change_feed(&admin, &env.database, &docs.id, &item.id).await;
 
     // Search, stats, star.
     assert!(admin.search("note", 10).await.unwrap().iter().any(|f| f.id == item.id));

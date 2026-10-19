@@ -98,6 +98,17 @@ pub struct LockResponse {
     pub lock: FileLock,
 }
 
+/// Folders whose listing changed since a cursor (`GET /api/files/changes`).
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct Changes {
+    /// Ask with this next time. A string: it can pass the 2^53 a JSON number holds exactly.
+    pub cursor: String,
+    /// The folders to list again; `None` is the root. A folder may repeat on the next answer.
+    pub folders: Vec<Option<String>>,
+    /// No usable cursor (none, pruned, or too much changed): list everything again.
+    pub reset: bool,
+}
+
 /// A signed-in identity that opened a file: the account itself or one of its sub-users.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Opener {

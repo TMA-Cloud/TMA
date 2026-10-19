@@ -28,6 +28,7 @@ pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/events", get(events::stream))
         .route("/", get(list::folder))
+        .route("/changes", get(list::changes))
         .route("/stats", get(list::stats))
         .route("/{id}/info", get(list::info))
         .route("/search", get(list::search))

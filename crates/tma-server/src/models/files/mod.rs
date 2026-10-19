@@ -2,6 +2,7 @@
 //! aggregates (size and counts), and every query is scoped to the owning account.
 
 pub mod archive;
+pub mod changes;
 pub mod crud;
 pub mod import;
 pub mod listing;

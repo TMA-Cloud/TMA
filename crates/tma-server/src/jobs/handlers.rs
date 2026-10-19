@@ -99,6 +99,7 @@ async fn maintenance_task(state: &AppState, data: &Value) -> anyhow::Result<Valu
         "cleanup-audit-log" => json!({ "deleted": maintenance::cleanup_audit_log(pool).await? }),
         "cleanup-old-sessions" => json!({ "deleted": sessions::cleanup_old(pool).await? }),
         "cleanup-file-operation-results" => json!({ "deleted": maintenance::cleanup_operation_results(pool).await? }),
+        "cleanup-file-changes" => json!({ "deleted": crate::models::files::changes::prune(pool).await? }),
         "cleanup-bulk-import-manifests" => json!({ "deleted": maintenance::cleanup_import_manifests(pool).await? }),
         "reconcile-folder-aggregates" => {
             let (folders, corrected) = maintenance::reconcile_folder_aggregates(pool).await?;

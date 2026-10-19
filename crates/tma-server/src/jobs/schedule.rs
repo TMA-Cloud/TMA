@@ -10,12 +10,13 @@ use sqlx::PgPool;
 use super::{JobQueue, queues};
 
 /// Maintenance tasks and their (UTC) crontab lines, spread so they never pile up.
-pub const MAINTENANCE: [(&str, &str); 9] = [
+pub const MAINTENANCE: [(&str, &str); 10] = [
     ("cleanup-expired-trash", "0 2 * * *"),
     ("cleanup-audit-log", "40 3 * * *"),
     ("cleanup-old-sessions", "20 4 * * *"),
     ("cleanup-file-operation-results", "50 4 * * *"),
     ("cleanup-bulk-import-manifests", "25 5 * * *"),
+    ("cleanup-file-changes", "35 5 * * *"),
     ("reconcile-folder-aggregates", "15 1 * * Sun"),
     ("cleanup-expired-share-links", "10 6 * * Sun"),
     ("cleanup-client-heartbeats", "7 * * * *"),

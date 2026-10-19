@@ -6,11 +6,12 @@ use axum::http::{HeaderMap, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
 use serde::Deserialize;
 use serde_json::json;
-use tma_core::api::{FileInfo, FileItem, FileStats, SortBy, SortOrder};
+use tma_core::api::{Changes, FileInfo, FileItem, FileStats, SortBy, SortOrder};
 
 use crate::auth::AuthUser;
 use crate::error::{ApiError, ApiResult};
 use crate::jobs::queues;
+use crate::models::files::changes;
 use crate::models::files::listing::{self, View};
 use crate::models::files::{Keyset, Page};
 use crate::state::AppState;
@@ -69,6 +70,20 @@ pub async fn shared(State(state): State<AppState>, auth: AuthUser, Query(q): Que
 
 pub async fn trash(State(state): State<AppState>, auth: AuthUser, Query(q): Query<ListQuery>) -> ApiResult<Response> {
     Ok(page_response(listing::list_trash(&state.pool, &auth.owner_id, &q.keyset(SortBy::DeletedAt)).await?))
+}
+
+#[derive(Deserialize)]
+pub struct ChangesQuery {
+    since: Option<String>,
+}
+
+/// Folders whose listing changed since `since`, for apps that keep folders in sync.
+pub async fn changes(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Query(q): Query<ChangesQuery>,
+) -> ApiResult<Json<Changes>> {
+    Ok(Json(changes::since(&state.pool, &auth.owner_id, q.since.as_deref()).await?))
 }
 
 pub async fn stats(State(state): State<AppState>, auth: AuthUser) -> ApiResult<Json<FileStats>> {

@@ -2,7 +2,8 @@
 
 use serde_json::{Value, json};
 use tma_core::api::{
-    FileInfo, FileItem, FileStats, JobStatus, LockResponse, QueuedResponse, ShareLinks, ShareRequest, SortBy, SortOrder,
+    Changes, FileInfo, FileItem, FileStats, JobStatus, LockResponse, QueuedResponse, ShareLinks, ShareRequest, SortBy,
+    SortOrder,
 };
 
 use crate::error::ApiResult;
@@ -75,6 +76,14 @@ impl Client {
 
     pub async fn recent(&self, limit: u32) -> ApiResult<Vec<FileItem>> {
         self.get(&format!("/api/files/recent?limit={limit}")).await
+    }
+
+    /// Folders whose listing changed since `cursor` (none: a fresh cursor and a reset).
+    pub async fn changes(&self, cursor: Option<&str>) -> ApiResult<Changes> {
+        match cursor {
+            Some(c) => self.get(&format!("/api/files/changes?since={}", enc(c))).await,
+            None => self.get("/api/files/changes").await,
+        }
     }
 
     pub async fn stats(&self) -> ApiResult<FileStats> {
