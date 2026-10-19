@@ -158,7 +158,7 @@ pub async fn delete_forever(
         let mut total = 0i64;
         loop {
             let batch: Vec<(String, Option<String>, String)> =
-                sqlx::query_as("SELECT id, path, type FROM delete_stage ORDER BY depth DESC, id LIMIT 500")
+                sqlx::query_as("SELECT id, path, type FROM delete_stage ORDER BY depth DESC, id LIMIT 4000")
                     .fetch_all(&mut *conn)
                     .await?;
             if batch.is_empty() {

@@ -325,10 +325,15 @@ async fn copy_object(storage: &Storage, f: &StageFile) -> anyhow::Result<()> {
     storage.copy(source, dest, Some(size)).await
 }
 
+/// Server-side copies at once. No bytes pass through this server, and object
+/// stores take far more in parallel; 4 at a time made a 9,000-file copy take minutes.
+const PARALLEL_COPIES: usize = 24;
+
 async fn copy_objects(storage: &Storage, files: &[StageFile]) -> anyhow::Result<()> {
     use futures::StreamExt;
     // Futures are built up front: a closure returning an async block here makes the job future lose `Send`.
     let tasks: Vec<_> = files.iter().map(|f| copy_object(storage, f)).collect();
-    let results: Vec<anyhow::Result<()>> = futures::stream::iter(tasks).buffer_unordered(4).collect().await;
+    let results: Vec<anyhow::Result<()>> =
+        futures::stream::iter(tasks).buffer_unordered(PARALLEL_COPIES).collect().await;
     results.into_iter().collect()
 }

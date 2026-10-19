@@ -31,6 +31,25 @@ use crate::crypto::Keyring;
 use crate::error::DomainError;
 
 const CONFIG_TTL: Duration = Duration::from_secs(15);
+/// DeleteObjects requests sent at once.
+const PARALLEL_DELETES: usize = 8;
+
+/// One DeleteObjects request (up to 1,000 keys); returns the keys that failed.
+async fn delete_batch(a: &Active, keys: &[String]) -> Result<Vec<(String, String)>> {
+    let objects = keys
+        .iter()
+        .map(|k| ObjectIdentifier::builder().key(k).build())
+        .collect::<Result<Vec<_>, _>>()
+        .context("invalid object key")?;
+    let delete = Delete::builder().set_objects(Some(objects)).quiet(true).build().context("invalid delete request")?;
+    let out =
+        a.client.delete_objects().bucket(&a.bucket).delete(delete).send().await.context("DeleteObjects failed")?;
+    Ok(out
+        .errors()
+        .iter()
+        .map(|e| (e.key().unwrap_or_default().to_string(), e.message().unwrap_or("Deletion failed").to_string()))
+        .collect())
+}
 
 /// A stream of object bytes.
 pub type ByteStreamBox = Pin<Box<dyn Stream<Item = Result<Bytes>> + Send>>;
@@ -227,30 +246,16 @@ impl Storage {
         if unique.is_empty() {
             return Ok(Vec::new());
         }
+        use futures::StreamExt;
         let a = self.active().await?;
+        // Several requests at once: each can take a second for 1,000 keys, and a large
+        // permanent delete sends dozens.
+        let requests: Vec<_> = unique.chunks(1000).map(|chunk| delete_batch(&a, chunk)).collect();
+        let answers: Vec<Result<Vec<(String, String)>>> =
+            futures::stream::iter(requests).buffer_unordered(PARALLEL_DELETES).collect().await;
         let mut errors = Vec::new();
-        for chunk in unique.chunks(1000) {
-            let objects = chunk
-                .iter()
-                .map(|k| ObjectIdentifier::builder().key(k).build())
-                .collect::<Result<Vec<_>, _>>()
-                .context("invalid object key")?;
-            let delete =
-                Delete::builder().set_objects(Some(objects)).quiet(true).build().context("invalid delete request")?;
-            let out = a
-                .client
-                .delete_objects()
-                .bucket(&a.bucket)
-                .delete(delete)
-                .send()
-                .await
-                .context("DeleteObjects failed")?;
-            for e in out.errors() {
-                errors.push((
-                    e.key().unwrap_or_default().to_string(),
-                    e.message().unwrap_or("Deletion failed").to_string(),
-                ));
-            }
+        for answer in answers {
+            errors.extend(answer?);
         }
         Ok(errors)
     }
