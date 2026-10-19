@@ -117,10 +117,27 @@ Layers: `routes → services / models → storage / crypto / util / config`.
 - `nfs_fs/` (macOS) is a localhost NFSv3 server; it builds on Linux too, so
   test it there with `TMA_ADAPTER=nfs cargo run -p tma-drive --example mount_test`.
 
+## Docs (the Wiki)
+
+The wiki is a separate repo (TMA-Cloud/Wiki), checked out next to this one. Its
+`WRITING.md` holds the rules; these are the ones that matter from this side:
+
+- **A user-facing change updates the wiki in the same session**: a route, field,
+  status or error code, audit event, migration, setting, limit, default, schedule,
+  UI label or behaviour. Remove what you remove from the app from every wiki page too.
+- **Every fact in the wiki comes from this code.** Look it up; never write from memory
+  or copy from another wiki page. Copy UI labels and numbers exactly.
+- **Plain words.** No filler ("simply", "seamless", "ensures that"), no "Best
+  Practices" lists; say what happens. The administrator is "the first user".
+- `npm run check:code` in the wiki compares it with this checkout (routes, error
+  codes, audit events, schema, env vars, rate limits, version, menu labels).
+  `pre-push` runs it when server, UI or app code changed.
+
 ## Before you finish
 
 | What               | Command                                                                                      |
 | ------------------ | -------------------------------------------------------------------------------------------- |
+| Wiki matches code  | `npm run check:code` and `npm run lint` in the wiki                                          |
 | Format, lint, test | `cargo xtask ci` (rustfmt and Prettier, house rules, clippy `-D warnings`, tests, wasm lint) |
 | Format everything  | `cargo xtask fmt` (Prettier 3.9.9 through npx for Markdown, YAML, JSON, HTML, CSS)           |
 | Server end to end  | `cargo test -p tma-server --test api` with the `TMA_TEST_*` vars                             |

@@ -58,5 +58,32 @@ if rust_changed; then
   fi
 fi
 
+# The wiki documents routes, codes, events, schema, settings and labels; check it still
+# matches when they may have changed. Needs the wiki checkout: $TMA_WIKI, or the folder
+# next to this repo that holds scripts/check-against-code.mjs.
+wiki=${TMA_WIKI:-}
+if [ -z "$wiki" ]; then
+  for dir in ../*/; do
+    if [ -f "${dir}scripts/check-against-code.mjs" ]; then
+      wiki=${dir%/}
+      break
+    fi
+  done
+fi
+docs_changed() {
+  [ "$check_all" -eq 1 ] || printf '%s\n' "$changed" | grep -qE '^(crates/tma-server|crates/tma-ui|apps)/|^\.env\.example$|^Cargo\.toml$'
+}
+if docs_changed; then
+  if [ -f "$wiki/scripts/check-against-code.mjs" ] && command -v node >/dev/null 2>&1; then
+    step "wiki: check-against-code"
+    if ! node "$wiki/scripts/check-against-code.mjs" "$(pwd)" </dev/null; then
+      fail "the wiki no longer matches the code: update $wiki (see WRITING.md there)"
+      status=1
+    fi
+  else
+    warn "wiki checkout or node not found, skipping the docs comparison"
+  fi
+fi
+
 [ "$status" -eq 0 ] || fail "pre-push failed (bypass with --no-verify only if you must)"
 exit "$status"
