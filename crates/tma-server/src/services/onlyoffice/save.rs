@@ -122,7 +122,7 @@ async fn swap(
     dek: &crate::crypto::WrappedDek,
 ) -> anyhow::Result<Result<Option<String>, ()>> {
     let mut tx = state.pool.begin().await?;
-    let row = sqlx::query_as::<_, QuotaRow>(sqlx::AssertSqlSafe(format!("{QUOTA_SQL} FOR UPDATE OF f, u")))
+    let row = sqlx::query_as::<_, QuotaRow>(sqlx::AssertSqlSafe(format!("{QUOTA_SQL} FOR NO KEY UPDATE OF f, u")))
         .bind(file_id)
         .bind(owner)
         .fetch_optional(&mut *tx)

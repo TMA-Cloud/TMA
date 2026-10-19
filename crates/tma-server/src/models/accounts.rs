@@ -118,11 +118,12 @@ pub async fn set_storage_limit(pool: &PgPool, admin_id: &str, target: &str, limi
     }
     let mut tx = pool.begin().await?;
     crate::settings::verify_first_user(&mut tx, admin_id, "set storage limits").await?;
-    let row: Option<(Option<String>, i64, i64)> =
-        sqlx::query_as("SELECT parent_user_id, storage_used, storage_reserved FROM users WHERE id = $1 FOR UPDATE")
-            .bind(target)
-            .fetch_optional(&mut *tx)
-            .await?;
+    let row: Option<(Option<String>, i64, i64)> = sqlx::query_as(
+        "SELECT parent_user_id, storage_used, storage_reserved FROM users WHERE id = $1 FOR NO KEY UPDATE",
+    )
+    .bind(target)
+    .fetch_optional(&mut *tx)
+    .await?;
     let Some((parent, used, reserved)) = row else {
         return Err(DomainError::BadRequest("User not found".into()).into());
     };
@@ -212,7 +213,7 @@ pub async fn create_sub_user(
     let grants = tma_core::permissions::normalize(permissions);
     let mut tx = pool.begin().await?;
     let parent: Option<Option<String>> =
-        sqlx::query_scalar("SELECT parent_user_id FROM users WHERE id = $1 FOR UPDATE")
+        sqlx::query_scalar("SELECT parent_user_id FROM users WHERE id = $1 FOR NO KEY UPDATE")
             .bind(owner)
             .fetch_optional(&mut *tx)
             .await?;

@@ -61,9 +61,10 @@ async fn allocate_target_names(
 pub async fn move_items(pool: &PgPool, ids: &[String], parent: Option<&str>, owner: &str) -> anyhow::Result<()> {
     let mut tx = pool.begin().await?;
     sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))").bind(owner).execute(&mut *tx).await?;
+    super::crud::lock_account(&mut tx, owner).await?;
     let rows: Vec<(String, Option<String>, String, String)> = sqlx::query_as(
         "SELECT id, parent_id, type, name FROM files WHERE id = ANY($1::text[]) AND user_id = $2 AND deleted_at IS NULL
-          ORDER BY array_position($1::text[], id) FOR UPDATE",
+          ORDER BY array_position($1::text[], id) FOR NO KEY UPDATE",
     )
     .bind(ids)
     .bind(owner)
@@ -75,7 +76,7 @@ pub async fn move_items(pool: &PgPool, ids: &[String], parent: Option<&str>, own
     }
     if let Some(target) = parent {
         let found: Option<String> = sqlx::query_scalar(
-            "SELECT id FROM files WHERE id = $1 AND user_id = $2 AND type = 'folder' AND deleted_at IS NULL FOR UPDATE",
+            "SELECT id FROM files WHERE id = $1 AND user_id = $2 AND type = 'folder' AND deleted_at IS NULL FOR NO KEY UPDATE",
         )
         .bind(target)
         .bind(owner)
@@ -275,6 +276,7 @@ async fn copy_staged(
 
     let mut tx = sqlx::Connection::begin(&mut *conn).await?;
     let insert = async {
+        super::crud::lock_account(&mut tx, owner).await?;
         // The target may have been trashed while the job waited in the queue.
         assert_live_folders(&mut *tx, &[parent.map(String::from)], owner).await?;
         sqlx::query(

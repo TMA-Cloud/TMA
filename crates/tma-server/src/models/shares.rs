@@ -23,7 +23,7 @@ pub async fn upsert_roots(
 ) -> anyhow::Result<(BTreeMap<String, String>, BTreeMap<String, i64>, Vec<String>)> {
     let mut tx = pool.begin().await?;
     // Serialises share creation for the account: the schema allows several links per root.
-    sqlx::query("SELECT id FROM users WHERE id = $1 FOR UPDATE").bind(owner).execute(&mut *tx).await?;
+    sqlx::query("SELECT id FROM users WHERE id = $1 FOR NO KEY UPDATE").bind(owner).execute(&mut *tx).await?;
     let existing: Vec<(String, String)> = sqlx::query_as(
         "SELECT DISTINCT ON (file_id) file_id, id FROM share_links WHERE user_id = $1 AND file_id = ANY($2::text[]) ORDER BY file_id, created_at, id",
     )

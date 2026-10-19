@@ -68,6 +68,7 @@ pub async fn count_tree(
 /// renaming any item whose name is now taken.
 pub async fn restore(pool: &PgPool, ids: &[String], owner: &str) -> anyhow::Result<i64> {
     let mut tx = pool.begin().await?;
+    super::crud::lock_account(&mut tx, owner).await?;
     sqlx::query(
         "CREATE TEMP TABLE restore_stage ON COMMIT DROP AS
          WITH RECURSIVE sub(id, name, parent_id, depth, visited) AS (

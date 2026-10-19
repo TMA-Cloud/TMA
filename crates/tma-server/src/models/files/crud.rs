@@ -115,6 +115,7 @@ async fn refuse_taken(
 pub async fn create_folder(pool: &PgPool, name: &str, parent: Option<&str>, owner: &str) -> anyhow::Result<FileItem> {
     let mut tx = pool.begin().await?;
     lock_name(&mut tx, owner, parent, name).await?;
+    lock_account(&mut tx, owner).await?;
     assert_live_folders(&mut *tx, &[parent.map(String::from)], owner).await?;
     refuse_taken(&mut tx, owner, parent, name, None).await?;
     let row = insert_folder(&mut tx, name, parent, owner).await?;
@@ -132,6 +133,7 @@ pub async fn find_or_create_folder(
 ) -> anyhow::Result<(FileItem, bool)> {
     let mut tx = pool.begin().await?;
     lock_name(&mut tx, owner, parent, name).await?;
+    lock_account(&mut tx, owner).await?;
     assert_live_folders(&mut *tx, &[parent.map(String::from)], owner).await?;
     let existing = sqlx::query_as::<_, ListRow>(
         "SELECT id, name, type, size, modified, accessed_at, shared_at, mime_type, starred, shared FROM files
@@ -173,13 +175,22 @@ pub struct PlannedUpload {
     pub client_id: Option<String>,
 }
 
+/// Lock the account row before any file or folder row. Every write locks it
+/// (migration 066 makes the triggers do it first), so a transaction that locked
+/// folders before it could deadlock with one that holds it and wants them.
+pub async fn lock_account(tx: &mut Transaction<'_, Postgres>, owner: &str) -> anyhow::Result<()> {
+    sqlx::query("SELECT 1 FROM users WHERE id = $1 FOR NO KEY UPDATE").bind(owner).execute(&mut **tx).await?;
+    Ok(())
+}
+
 /// Lock the account row and refuse when `added` bytes would cross its limit.
 pub async fn check_quota(tx: &mut Transaction<'_, Postgres>, owner: &str, added: i64) -> anyhow::Result<()> {
-    let row: Option<(i64, i64, Option<i64>)> =
-        sqlx::query_as("SELECT storage_used, storage_reserved, storage_limit FROM users WHERE id = $1 FOR UPDATE")
-            .bind(owner)
-            .fetch_optional(&mut **tx)
-            .await?;
+    let row: Option<(i64, i64, Option<i64>)> = sqlx::query_as(
+        "SELECT storage_used, storage_reserved, storage_limit FROM users WHERE id = $1 FOR NO KEY UPDATE",
+    )
+    .bind(owner)
+    .fetch_optional(&mut **tx)
+    .await?;
     let Some((used, reserved, limit)) = row else { anyhow::bail!("Storage account not found") };
     if limit.is_some_and(|limit| used + reserved + added > limit) {
         return Err(DomainError::StorageLimit.into());
@@ -324,8 +335,9 @@ pub async fn replace_data(
     actor: super::locks::Actor<'_>,
 ) -> anyhow::Result<Option<(FileItem, Option<String>, Option<String>)>> {
     let mut tx = pool.begin().await?;
+    lock_account(&mut tx, owner).await?;
     let row: Option<Current> = sqlx::query_as(
-        "SELECT path, parent_id, size, content_version FROM files WHERE id = $1 AND user_id = $2 FOR UPDATE",
+        "SELECT path, parent_id, size, content_version FROM files WHERE id = $1 AND user_id = $2 FOR NO KEY UPDATE",
     )
     .bind(id)
     .bind(owner)
