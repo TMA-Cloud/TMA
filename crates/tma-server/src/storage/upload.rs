@@ -1,22 +1,54 @@
 //! Streaming an unknown-length body into the bucket: one PutObject when it fits
-//! in a part, otherwise a multipart upload with a few parts in flight, so the
-//! server never holds more than a handful of parts in memory.
+//! in a part, otherwise a multipart upload with a few parts in flight.
+//!
+//! Parts are buffered in memory, so many large uploads at once could exhaust
+//! it (30 parallel ones held 1.5 GB). Buffers past the first MiB come out of a
+//! server-wide budget, reserved a whole part at a time: an upload waits for a
+//! reservation only while holding none, so holders always finish and free it,
+//! and a waiting upload stops reading its body, which slows its sender.
 
 use anyhow::{Context, Result, bail};
 use aws_sdk_s3::primitives::ByteStream;
 use aws_sdk_s3::types::{CompletedMultipartUpload, CompletedPart};
 use bytes::{Bytes, BytesMut};
+use std::sync::{Arc, LazyLock};
+
+use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use tokio::task::JoinSet;
 
 use super::Active;
 
 const MAX_IN_FLIGHT: usize = 3;
+/// Bytes an upload may buffer before it needs a reservation: most files are smaller.
+const UNRESERVED: usize = 1024 * 1024;
+/// The budget counts KiB.
+const UNIT: usize = 1024;
+
+/// Memory for upload buffers across the server, in KiB (UPLOAD_MEMORY_MB, default 512).
+static BUDGET: LazyLock<(Arc<Semaphore>, usize)> = LazyLock::new(|| {
+    let mb = std::env::var("UPLOAD_MEMORY_MB")
+        .ok()
+        .and_then(|v| v.parse::<usize>().ok())
+        .filter(|v| *v >= 64)
+        .unwrap_or(512);
+    let units = mb * 1024 * 1024 / UNIT;
+    (Arc::new(Semaphore::new(units)), units)
+});
+
+/// Reserve memory for one part, waiting while the budget is spent.
+async fn reserve(bytes: usize) -> Result<OwnedSemaphorePermit> {
+    let (budget, total) = &*BUDGET;
+    let units = bytes.div_ceil(UNIT).min(*total) as u32;
+    budget.clone().acquire_many_owned(units).await.context("upload memory budget closed")
+}
 
 pub struct UploadSink {
     active: Active,
     key: String,
     part_size: usize,
     buf: BytesMut,
+    /// The budget held for what `buf` will grow to (one part), if any yet.
+    reserved: Option<OwnedSemaphorePermit>,
     upload_id: Option<String>,
     next_part: i32,
     in_flight: JoinSet<Result<CompletedPart>>,
@@ -31,7 +63,8 @@ impl UploadSink {
             active,
             key,
             part_size,
-            buf: BytesMut::with_capacity(part_size.min(8 * 1024 * 1024)),
+            buf: BytesMut::with_capacity(part_size.min(UNRESERVED)),
+            reserved: None,
             upload_id: None,
             next_part: 1,
             in_flight: JoinSet::new(),
@@ -47,11 +80,15 @@ impl UploadSink {
     }
 
     pub async fn write(&mut self, data: &[u8]) -> Result<()> {
+        if self.reserved.is_none() && self.buf.len() + data.len() > UNRESERVED {
+            self.reserved = Some(reserve(self.part_size).await?);
+        }
         self.written += data.len() as u64;
         self.buf.extend_from_slice(data);
         while self.buf.len() >= self.part_size {
             let part = self.buf.split_to(self.part_size).freeze();
-            self.send_part(part).await?;
+            let held = self.reserved.take();
+            self.send_part(part, held).await?;
         }
         Ok(())
     }
@@ -67,7 +104,8 @@ impl UploadSink {
         Ok(id)
     }
 
-    async fn send_part(&mut self, part: Bytes) -> Result<()> {
+    /// Send one part; `held` is its share of the budget, freed once it is stored.
+    async fn send_part(&mut self, part: Bytes, held: Option<OwnedSemaphorePermit>) -> Result<()> {
         let upload_id = self.ensure_multipart().await?;
         while self.in_flight.len() >= MAX_IN_FLIGHT {
             self.collect_one().await?;
@@ -76,6 +114,7 @@ impl UploadSink {
         self.next_part += 1;
         let (client, bucket, key) = (self.active.client.clone(), self.active.bucket.clone(), self.key.clone());
         self.in_flight.spawn(async move {
+            let _held = held;
             let len = part.len() as i64;
             let out = client
                 .upload_part()
@@ -128,7 +167,8 @@ impl UploadSink {
             return Ok(self.written);
         }
         if !tail.is_empty() {
-            self.send_part(tail).await?;
+            let held = self.reserved.take();
+            self.send_part(tail, held).await?;
         }
         while !self.in_flight.is_empty() {
             self.collect_one().await?;
