@@ -6,13 +6,21 @@ on:
   pull_request:
   workflow_dispatch:
 
+# A newer push to a pull request replaces its run still going. Runs on main
+# always finish, so every commit there is tested and its cache saved.
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: -D warnings
+  # Debug info makes CI builds slower to link and caches bigger, and is never read.
+  CARGO_PROFILE_DEV_DEBUG: 0
 
 jobs:
-  rust:
-    name: Format, lint and test
+  lint:
+    name: Format and lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -24,7 +32,13 @@ jobs:
           rustup component add rustfmt clippy
           rustup target add wasm32-unknown-unknown
 
-      # The desktop app's Linux build links against D-Bus (keyring) at test time.
+      # Dependencies built by the last run on main. Only main saves: pull
+      # requests read its cache, and theirs would crowd it out of the 10 GB.
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      # The desktop app's Linux build links against D-Bus (keyring).
       - name: System libraries
         run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
 
@@ -39,18 +53,17 @@ jobs:
       - name: Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
 
-      - name: Tests
-        run: cargo test --workspace
-
       - name: Web build (wasm)
         run: cargo clippy -p tma-cloud-web -p tma-ui -p tma-client --target wasm32-unknown-unknown -- -D warnings
 
-  integration:
-    name: Server integration
+  # Apart from lint, which only checks code the tests build, so the two run side
+  # by side. Covers the Linux desktop app and Cloud Drive, which are workspace members.
+  test:
+    name: Tests
     runs-on: ubuntu-latest
 
-    # The suite talks to a real database, cache and bucket; here they are
-    # throwaway containers.
+    # The server suite talks to a real database, cache and bucket; here they
+    # are throwaway containers.
     services:
       postgres:
         image: postgres:18-alpine
@@ -73,14 +86,6 @@ jobs:
           --health-timeout 5s
           --health-retries 5
 
-    env:
-      TMA_TEST_DATABASE_URL: postgresql://tma:tma@localhost:5432/tma_cloud_test
-      TMA_TEST_REDIS_URL: redis://localhost:6379/15
-      TMA_TEST_S3_ENDPOINT: http://localhost:9000
-      TMA_TEST_S3_ACCESS_KEY: tmatestkey
-      TMA_TEST_S3_SECRET_KEY: tmatestsecret123
-      TMA_TEST_S3_BUCKET: tma-test
-
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -95,12 +100,36 @@ jobs:
       - name: Toolchain
         run: rustup update stable --no-self-update && rustup default stable
 
-      - name: Integration tests
-        run: cargo test -p tma-server --test api --test cache -- --test-threads=1
+      # Dependencies built by the last run on main. Only main saves: pull
+      # requests read its cache, and theirs would crowd it out of the 10 GB.
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      # The desktop app's Linux build links against D-Bus (keyring) at test time.
+      - name: System libraries
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
+
+      # The server suites skip themselves here, without the TMA_TEST_* settings.
+      - name: Unit tests
+        run: cargo test --workspace
+
+      # Selected with --workspace so Cargo resolves the same features and reuses
+      # the binaries the step above built. One thread: the suites share a database.
+      - name: Server integration tests
+        env:
+          TMA_TEST_DATABASE_URL: postgresql://tma:tma@localhost:5432/tma_cloud_test
+          TMA_TEST_REDIS_URL: redis://localhost:6379/15
+          TMA_TEST_S3_ENDPOINT: http://localhost:9000
+          TMA_TEST_S3_ACCESS_KEY: tmatestkey
+          TMA_TEST_S3_SECRET_KEY: tmatestsecret123
+          TMA_TEST_S3_BUCKET: tma-test
+        run: cargo test --workspace --test api --test cache -- --test-threads=1
 
   desktop:
     name: Desktop app (${{ matrix.name }})
-    # Each system has its own Cloud Drive adapter and app glue, built only there.
+    # Each system has its own Cloud Drive adapter and app glue, built only
+    # there; Linux is covered by the jobs above.
     strategy:
       fail-fast: false
       matrix:
@@ -109,20 +138,23 @@ jobs:
             os: windows-latest
           - name: macOS
             os: macos-latest
-          - name: Linux
-            os: ubuntu-latest
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Linux libraries
-        if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
+      - name: Toolchain
+        shell: bash
+        run: rustup update stable --no-self-update && rustup default stable
 
-      - name: Build and test
+      # Dependencies built by the last run on main. Only main saves: pull
+      # requests read its cache, and theirs would crowd it out of the 10 GB.
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Lint and test
         shell: bash
         run: |
-          rustup update stable --no-self-update && rustup default stable
           cargo clippy -p tma-cloud -p tma-drive --all-targets -- -D warnings
           cargo test -p tma-drive -p tma-cloud
 
