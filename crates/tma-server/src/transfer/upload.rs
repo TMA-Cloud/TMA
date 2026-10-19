@@ -15,6 +15,30 @@ use crate::services::cleanup;
 use crate::state::AppState;
 use crate::util::generate_id;
 
+/// How much of a refused upload is read before answering, and for how long.
+pub const DRAIN_LIMIT: usize = 32 * 1024 * 1024;
+pub const DRAIN_TIME: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// Read and drop what is left of a refused upload, then hand back the refusal.
+/// A client sends the whole body before it reads the reply, so answering
+/// mid-body drops the connection and it reports the server unreachable instead
+/// of the reason. Past the limit the connection is cut as before.
+pub async fn refuse(mut form: Multipart, err: ApiError) -> ApiError {
+    let drain = async move {
+        let mut read = 0usize;
+        while let Ok(Some(mut field)) = form.next_field().await {
+            while let Ok(Some(chunk)) = field.chunk().await {
+                read += chunk.len();
+                if read > DRAIN_LIMIT {
+                    return;
+                }
+            }
+        }
+    };
+    let _ = tokio::time::timeout(DRAIN_TIME, drain).await;
+    err
+}
+
 const SNIFF_BYTES: usize = 4100;
 
 /// A file the server refused, with the ordinal of its part.
@@ -94,8 +118,10 @@ fn failure_status(reason: &str) -> axum::http::StatusCode {
 pub async fn receive(state: &AppState, mut form: Multipart, single: bool) -> Result<UploadOutcome, ApiError> {
     let settings = state.settings.get().await;
     let max_bytes = settings.max_upload_bytes() as u64;
-    // Refuse before reading the body when no bucket is connected.
-    state.storage.active().await?;
+    // Refuse before storing anything when no bucket is connected.
+    if let Err(err) = state.storage.active().await {
+        return Err(refuse(form, err.into()).await);
+    }
     let mut out = UploadOutcome {
         fields: HashMap::new(),
         uploads: Vec::new(),
@@ -129,7 +155,7 @@ pub async fn receive(state: &AppState, mut form: Multipart, single: bool) -> Res
             Err(reason) => {
                 tracing::warn!(file = %file_name, %reason, "[StreamUpload] File refused");
                 if single {
-                    return Err(ApiError::new(failure_status(&reason), reason));
+                    return Err(refuse(form, ApiError::new(failure_status(&reason), reason)).await);
                 }
                 out.failures.push(PartFailure { index: this_index, file_name, error: reason });
             }

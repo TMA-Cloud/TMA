@@ -365,6 +365,24 @@ async fn assert_change_feed(owner: &Client, database: &str, folder: &str, file: 
     assert!(!owner.changes(Some(&fresh.cursor)).await.unwrap().reset);
 }
 
+/// An upload refused before its body is read still gets its answer: the client
+/// sends the whole body before reading, so a reply mid-body used to reach it
+/// as a dropped connection ("cannot reach the server").
+async fn assert_refusals_are_heard(owner: &Client, base: &str) {
+    let request = CreateSubUserRequest {
+        email: "viewer@example.test".into(),
+        password: "sub-user-password".into(),
+        name: "Viewer".into(),
+        permissions: Vec::new(),
+    };
+    owner.create_sub_user(&request).await.unwrap();
+    let viewer = Client::new(base).unwrap();
+    viewer.login("viewer@example.test", "sub-user-password", None).await.unwrap();
+    let body = "x".repeat(5 * 1024 * 1024);
+    let refused = viewer.upload(&text_file("big.bin", &body, None), &UploadOptions::default(), Progress::new(0)).await;
+    assert_eq!(refused.map(|f| f.id).map_err(|e| e.status), Err(403), "the refusal arrives, not a network error");
+}
+
 /// Restoring from the trash and deleting forever are granted separately.
 /// Share links: the public page lists the file and the Shared view shows it;
 /// unsharing removes both. Every listing view builds its own SQL, so each is read.
@@ -503,6 +521,7 @@ async fn full_workflow() {
     assert_edit_locks(&admin, &base, &deep.id).await;
     assert_browser_sessions_lock(&admin, &env.database, &deep.id).await;
     assert_change_feed(&admin, &env.database, &docs.id, &item.id).await;
+    assert_refusals_are_heard(&admin, &base).await;
 
     // Search, stats, star.
     assert!(admin.search("note", 10).await.unwrap().iter().any(|f| f.id == item.id));

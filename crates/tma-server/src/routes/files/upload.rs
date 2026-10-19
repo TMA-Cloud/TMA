@@ -27,6 +27,25 @@ fn upload_key(auth: &AuthUser) -> String {
     format!("upload:{}", auth.user_id)
 }
 
+/// An upload's permission and rate checks; a refusal reads the body first, so
+/// the client hears why (see `upload::refuse`).
+async fn admit(
+    state: &AppState,
+    auth: &AuthUser,
+    ctx: &ReqCtx,
+    need: Permission,
+    form: Multipart,
+) -> ApiResult<Multipart> {
+    let checks = async {
+        auth::require(state, auth, ctx, need).await?;
+        state.limits.check(limits::UPLOAD, &upload_key(auth)).map_err(ApiError::from)
+    };
+    match checks.await {
+        Ok(()) => Ok(form),
+        Err(err) => Err(upload::refuse(form, err).await),
+    }
+}
+
 /// Refuse up front when the declared size cannot fit (the client uses this before a big upload).
 pub async fn check(
     State(state): State<AppState>,
@@ -97,8 +116,7 @@ pub async fn single(
     auth: AuthUser,
     form: Multipart,
 ) -> ApiResult<Json<FileItem>> {
-    auth::require(&state, &auth, &ctx, Permission::Upload).await?;
-    state.limits.check(limits::UPLOAD, &upload_key(&auth))?;
+    let form = admit(&state, &auth, &ctx, Permission::Upload, form).await?;
     let mut outcome = upload::receive(&state, form, true).await?;
     let file = first_upload(&outcome)?;
     validate_name(&file.name).map_err(|_| ApiError::bad_request("Invalid file name"))?;
@@ -154,8 +172,7 @@ pub async fn bulk(
     auth: AuthUser,
     form: Multipart,
 ) -> ApiResult<Json<BulkUploadResponse>> {
-    auth::require(&state, &auth, &ctx, Permission::Upload).await?;
-    state.limits.check(limits::UPLOAD, &upload_key(&auth))?;
+    let form = admit(&state, &auth, &ctx, Permission::Upload, form).await?;
     let mut outcome = upload::receive(&state, form, false).await?;
     let relative = outcome.field_list("relativePaths").to_vec();
     let client_ids = outcome.field_list("clientIds").to_vec();
@@ -256,8 +273,7 @@ pub async fn replace(
     Path(id): Path<String>,
     form: Multipart,
 ) -> ApiResult<Json<FileItem>> {
-    auth::require(&state, &auth, &ctx, Permission::Edit).await?;
-    state.limits.check(limits::UPLOAD, &upload_key(&auth))?;
+    let form = admit(&state, &auth, &ctx, Permission::Edit, form).await?;
     let mut outcome = upload::receive(&state, form, true).await?;
     let upload = first_upload(&outcome)?;
     let existing = owned_file(&state, &id, &auth.owner_id).await?;
@@ -311,9 +327,11 @@ pub async fn derived(
     Path(id): Path<String>,
     form: Multipart,
 ) -> ApiResult<Json<FileItem>> {
-    auth::require(&state, &auth, &ctx, Permission::Upload).await?;
-    state.limits.check(limits::UPLOAD, &upload_key(&auth))?;
-    let existing = owned_file(&state, &id, &auth.owner_id).await?;
+    let form = admit(&state, &auth, &ctx, Permission::Upload, form).await?;
+    let existing = match owned_file(&state, &id, &auth.owner_id).await {
+        Ok(existing) => existing,
+        Err(err) => return Err(upload::refuse(form, err).await),
+    };
     let mut outcome = upload::receive(&state, form, true).await?;
     let upload = first_upload(&outcome)?;
     validate_name(&upload.name).map_err(|_| ApiError::bad_request("Invalid file name"))?;
