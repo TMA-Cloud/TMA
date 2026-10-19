@@ -26,12 +26,13 @@ pub const LIST_COLUMNS: &str = "f.id, f.name, f.type,
     lock.expires_at AS lock_expires, lock.device_id AS lock_device";
 
 /// Joined after `FROM files f` wherever `LIST_COLUMNS` is selected: the live edit
-/// lock, found once per row by its primary key.
-pub const LOCK_JOIN: &str = "LEFT JOIN LATERAL (
+/// lock, found once per row by its primary key. Spaces on both ends keep it
+/// from running into the SQL pushed around it.
+pub const LOCK_JOIN: &str = " LEFT JOIN LATERAL (
        SELECT l.user_id, COALESCE(NULLIF(u.name, ''), u.email) AS name, l.acquired_at, l.expires_at, l.device_id
          FROM file_locks l JOIN users u ON u.id = l.user_id
         WHERE l.file_id = f.id AND l.expires_at > NOW()
-     ) lock ON TRUE";
+     ) lock ON TRUE ";
 
 /// Share expiry of a shared item: NULL when unshared or shared without expiry.
 pub fn expiry_join(owner_param: &str) -> String {

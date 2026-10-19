@@ -339,6 +339,23 @@ async fn assert_counters_stay_exact(owner: &Client, database: &str) {
 }
 
 /// Restoring from the trash and deleting forever are granted separately.
+/// Share links: the public page lists the file and the Shared view shows it;
+/// unsharing removes both. Every listing view builds its own SQL, so each is read.
+async fn assert_share_links(owner: &Client, id: &str) {
+    let in_shared =
+        || async { owner.list(&View::Shared, &ListQuery::default()).await.unwrap().files.iter().any(|f| f.id == id) };
+    let links = owner.share(&[id.to_string()], true, Some("7d")).await.unwrap();
+    let link = links.links.get(id).expect("a link").clone();
+    let page = reqwest::get(&link).await.unwrap();
+    assert!(page.status().is_success());
+    assert!(page.text().await.unwrap().contains("note.txt"));
+    assert!(in_shared().await);
+    owner.list(&View::Starred, &ListQuery::default()).await.unwrap();
+    owner.share(&[id.to_string()], false, None).await.unwrap();
+    assert_eq!(reqwest::get(&link).await.unwrap().status().as_u16(), 404);
+    assert!(!in_shared().await);
+}
+
 async fn assert_trash_grants_are_separate(owner: &Client, base: &str, id: &str) {
     let request = CreateSubUserRequest {
         email: "riley@example.test".into(),
@@ -498,14 +515,7 @@ async fn full_workflow() {
     assert_eq!(elsewhere.status().as_u16(), 401);
     assert_eq!(post_ticket(None).await.unwrap().status().as_u16(), 401);
 
-    // Share links: the public page lists the file; unsharing removes the link.
-    let links = admin.share(std::slice::from_ref(&item.id), true, Some("7d")).await.unwrap();
-    let link = links.links.get(&item.id).expect("a link").clone();
-    let page = reqwest::get(&link).await.unwrap();
-    assert!(page.status().is_success());
-    assert!(page.text().await.unwrap().contains("note.txt"));
-    admin.share(std::slice::from_ref(&item.id), false, None).await.unwrap();
-    assert_eq!(reqwest::get(&link).await.unwrap().status().as_u16(), 404);
+    assert_share_links(&admin, &item.id).await;
 
     // Trash, restore, delete forever (worker).
     admin.trash(std::slice::from_ref(&copy.id)).await.unwrap();
