@@ -61,5 +61,5 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             VERSION=${{ steps.version.outputs.version }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # No layer cache: a tag run can read only main's caches, never another
+          # tag's, and a published image must not be built from a shared cache.

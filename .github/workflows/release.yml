@@ -106,11 +106,13 @@ jobs:
         # libfuse2 runs the AppImage tooling; the app itself uses FUSE 3.
         run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config libfuse2t64
 
+      # Built from scratch on purpose: installers people download must not come
+      # from an Actions cache another workflow could have written.
       - name: Build installers
         shell: bash
         run: |
           rustup update stable --no-self-update && rustup default stable
-          cargo install cargo-packager --locked
+          cargo install cargo-packager --locked --version 0.11.8
           cargo xtask package
 
       - name: Upload
