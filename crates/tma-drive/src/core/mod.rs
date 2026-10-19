@@ -107,6 +107,9 @@ pub struct Core {
     readable: Mutex<Vec<(String, Instant)>>,
     /// Bumped whenever every listing is dropped, so adapters can resync.
     generation: AtomicU64,
+    /// Set by an adapter that asks the server what changed: a change elsewhere then
+    /// only wakes it, instead of dropping every cached listing.
+    follows_changes: AtomicBool,
     total: AtomicU64,
     free: AtomicU64,
 }
@@ -134,6 +137,7 @@ impl Core {
             deny_read: AtomicBool::new(false),
             readable: Mutex::new(Vec::new()),
             generation: AtomicU64::new(0),
+            follows_changes: AtomicBool::new(false),
             total: AtomicU64::new(SYNTHETIC_CAPACITY),
             free: AtomicU64::new(SYNTHETIC_CAPACITY),
         };
@@ -291,6 +295,19 @@ impl Core {
     pub fn invalidate_all(&self) {
         lock(&self.dirs).clear();
         self.generation.fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// Someone changed files elsewhere (a server event).
+    pub fn changed_elsewhere(&self) {
+        if self.follows_changes.load(Ordering::Relaxed) {
+            self.generation.fetch_add(1, Ordering::Relaxed);
+        } else {
+            self.invalidate_all();
+        }
+    }
+
+    pub fn follow_changes(&self) {
+        self.follows_changes.store(true, Ordering::Relaxed);
     }
 
     pub fn generation(&self) -> u64 {

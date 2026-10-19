@@ -207,7 +207,7 @@ fn run(
     set(status, Status::Mounted(point));
     let events_core = core.clone();
     // A change made anywhere (web, another device) shows up in the drive at once.
-    let _events = tma_client::events::subscribe(&client, Arc::new(move |_| events_core.invalidate_all()));
+    let _events = tma_client::events::subscribe(&client, Arc::new(move |_| events_core.changed_elsewhere()));
     let polling = Arc::new(AtomicBool::new(true));
     let (poll_core, poll_flag, poll_mode) = (core.clone(), polling.clone(), mode.clone());
     let _ = std::thread::Builder::new().name("drive-mode".into()).spawn(move || {

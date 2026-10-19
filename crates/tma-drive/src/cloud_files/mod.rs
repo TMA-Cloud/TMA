@@ -4,6 +4,7 @@
 
 mod cfapi;
 mod editing;
+mod feed;
 mod filter;
 mod local;
 mod worker;
@@ -174,6 +175,7 @@ pub fn mount(core: Arc<Core>, label: &str, at: Option<&str>) -> Result<Mounted, 
     release_folder(&folder, &id)?;
     register(&id, &folder, label)?;
 
+    core.follow_changes();
     let shared = Arc::new(Shared::new(core.clone(), folder.clone()));
     let connection = Session::new()
         .connect(&folder, Filter { shared: shared.clone() })

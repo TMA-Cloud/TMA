@@ -6,7 +6,7 @@ use std::path::Path;
 
 use chrono::{DateTime, Utc};
 use tma_client::{Client, ListQuery, Progress, Source, UploadFile, UploadOptions, View};
-use tma_core::api::FileLock;
+use tma_core::api::{Changes, FileLock};
 
 /// One entry of a folder listing.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -79,7 +79,15 @@ pub trait Backend: Send + Sync {
     fn unlock(&self, _id: &str) -> BackendResult<()> {
         Ok(())
     }
+    /// Folders whose listing changed since `cursor`; a backend without a change
+    /// feed says so, and the drive re-lists every open folder instead.
+    fn changes(&self, _cursor: Option<&str>) -> BackendResult<Changes> {
+        Err(NO_FEED.into())
+    }
 }
+
+/// What a backend without a change feed answers to `changes`.
+pub const NO_FEED: &str = "This server does not report changes";
 
 /// The API client, driven from the shared async runtime.
 pub struct ClientBackend {
@@ -221,5 +229,14 @@ impl Backend for ClientBackend {
 
     fn unlock(&self, id: &str) -> BackendResult<()> {
         tma_client::rt::block_on(self.client.unlock(id)).map(|_| ()).map_err(|e| e.message)
+    }
+
+    fn changes(&self, cursor: Option<&str>) -> BackendResult<Changes> {
+        match tma_client::rt::block_on(self.client.changes(cursor)) {
+            Ok(changes) => Ok(changes),
+            // An older server has no feed.
+            Err(err) if err.status == 404 => Err(NO_FEED.into()),
+            Err(err) => Err(err.message),
+        }
     }
 }

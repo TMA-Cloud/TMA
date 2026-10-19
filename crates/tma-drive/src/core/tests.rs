@@ -515,3 +515,28 @@ fn a_file_someone_else_is_editing_is_not_held() {
     core.leases().let_go(&id);
     assert_eq!(mock.locks.lock().unwrap().get(&id).map(String::as_str), Some("Sam"));
 }
+
+#[test]
+fn a_change_elsewhere_keeps_listings_for_an_adapter_that_asks_what_changed() {
+    let (mock, core, _d) = setup();
+    save(&core, "\\a.txt", b"one");
+    let root = core.resolve(crate::paths::ROOT).unwrap().unwrap();
+    assert_eq!(core.children(&root).unwrap().len(), 1);
+    let add =
+        |id: &str, name: &str| mock.items.lock().unwrap().insert(id.into(), (None, name.into(), false, Vec::new()));
+    // Without a change feed, any change elsewhere drops every listing.
+    add("x1", "b.txt");
+    let before = core.generation();
+    core.changed_elsewhere();
+    assert!(core.generation() > before);
+    assert_eq!(core.children(&root).unwrap().len(), 2);
+    // With one, the event only wakes the adapter, which drops the folders the feed names.
+    core.follow_changes();
+    add("x2", "c.txt");
+    let before = core.generation();
+    core.changed_elsewhere();
+    assert!(core.generation() > before);
+    assert_eq!(core.children(&root).unwrap().len(), 2, "still the cached listing");
+    core.invalidate(crate::paths::ROOT);
+    assert_eq!(core.children(&root).unwrap().len(), 3);
+}

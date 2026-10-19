@@ -55,7 +55,7 @@ fn host() -> Result<(), String> {
     let mounted = mount(core.clone())?;
     println!("mounted at {}", mounted.mount_point);
     // As in the app: a change made anywhere drops the cached listings.
-    let _events = tma_client::events::subscribe(&client, Arc::new(move |_| core.invalidate_all()));
+    let _events = tma_client::events::subscribe(&client, Arc::new(move |_| core.changed_elsewhere()));
     if let Some(secs) = std::env::var("TMA_HOLD").ok().and_then(|s| s.parse().ok()) {
         std::thread::sleep(std::time::Duration::from_secs(secs));
         return Ok(());

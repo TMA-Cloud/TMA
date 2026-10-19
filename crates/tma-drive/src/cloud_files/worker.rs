@@ -9,6 +9,7 @@ use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
 use crate::backend::{CONFLICT, Entry};
+use crate::cloud_files::feed::Feed;
 use crate::cloud_files::local;
 use crate::core::{Core, Node};
 use crate::paths;
@@ -18,8 +19,14 @@ use crate::sync_plan::{self, Fix, Stamp, Upload};
 const QUIET: Duration = Duration::from_millis(1500);
 /// A server delete waits this long, so a save that deletes and rewrites a file keeps its id.
 const DELETE_GRACE: Duration = Duration::from_secs(4);
-/// A full resync runs at least this often, in case a change event was missed.
-const RESYNC_EVERY: Duration = Duration::from_secs(120);
+/// Without an event, the change feed is still asked this often (an event can be lost).
+const CHECK_EVERY: Duration = Duration::from_secs(60);
+/// Every open folder is re-listed this often anyway, for anything the feed cannot see.
+const RESYNC_EVERY: Duration = Duration::from_secs(30 * 60);
+/// Events arriving together are answered with one question to the change feed.
+const GATHER: Duration = Duration::from_secs(1);
+/// Without a change feed, every open folder is re-listed on events, and at least this often.
+const FALLBACK_EVERY: Duration = Duration::from_secs(120);
 
 /// How a local file's save went.
 enum Saved {
@@ -28,7 +35,7 @@ enum Saved {
     Conflicted,
 }
 
-fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
+pub(super) fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|e| e.into_inner())
 }
 
@@ -46,6 +53,10 @@ pub struct Shared {
     kept: Mutex<HashMap<String, local::Snapshot>>,
     /// Server deletes waiting out the grace period: path key → (id, version, path, when).
     deletes: Mutex<HashMap<String, (String, i64, PathBuf, Instant)>>,
+    /// Where the change feed left off.
+    pub(super) cursor: Mutex<Option<String>>,
+    /// Open (populated) folders by server id; the root is `None`.
+    pub(super) open_folders: Mutex<HashMap<Option<String>, PathBuf>>,
     wake: Condvar,
     stop: AtomicBool,
 }
@@ -59,6 +70,8 @@ impl Shared {
             synced: Mutex::new(HashMap::new()),
             kept: Mutex::new(HashMap::new()),
             deletes: Mutex::new(HashMap::new()),
+            cursor: Mutex::new(None),
+            open_folders: Mutex::new(HashMap::new()),
             wake: Condvar::new(),
             stop: AtomicBool::new(false),
         }
@@ -269,6 +282,7 @@ impl Shared {
     /// Bring one populated folder in line with the server; returns its populated subfolders.
     pub fn resync_folder(&self, dir: &Path) -> Vec<PathBuf> {
         let Some(node) = self.folder(dir) else { return Vec::new() };
+        self.note_folder(node.id.clone(), dir);
         let (Some(server), Ok(folder)) = (self.server(&node), local::read(dir)) else { return Vec::new() };
         for item in folder.items.iter().filter(|i| !i.is_dir && i.in_sync) {
             if let Some(stamp) = &item.stamp {
@@ -310,7 +324,7 @@ impl Shared {
         folder.populated
     }
 
-    fn resync_all(&self) {
+    pub(super) fn resync_all(&self) {
         let mut queue = vec![self.root.clone()];
         while let Some(dir) = queue.pop() {
             if self.stop.load(Ordering::Relaxed) {
@@ -371,8 +385,10 @@ impl Shared {
     pub fn run(self: Arc<Self>) {
         self.scan_all();
         let mut generation = self.core.generation();
-        let mut resync_due = true;
-        let mut last_resync = Instant::now();
+        let mut last_full: Option<Instant> = None;
+        let mut last_check = Instant::now();
+        let mut pending = false;
+        let mut has_feed = true;
         while !self.stop.load(Ordering::Relaxed) {
             {
                 let dirty = lock(&self.dirty);
@@ -392,14 +408,29 @@ impl Shared {
                 }
             }
             let now = self.core.generation();
-            if now != generation || last_resync.elapsed() >= RESYNC_EVERY {
-                generation = now;
-                resync_due = true;
-            }
-            if resync_due {
-                resync_due = false;
-                last_resync = Instant::now();
-                self.resync_all();
+            pending |= now != generation;
+            generation = now;
+            if last_full.is_none_or(|t| t.elapsed() >= RESYNC_EVERY) {
+                (last_full, last_check, pending) = (Some(Instant::now()), Instant::now(), false);
+                self.full_resync();
+            } else if !has_feed {
+                if pending || last_check.elapsed() >= FALLBACK_EVERY {
+                    (last_check, pending) = (Instant::now(), false);
+                    self.resync_all();
+                }
+            } else if (pending && last_check.elapsed() >= GATHER) || last_check.elapsed() >= CHECK_EVERY {
+                (last_check, pending) = (Instant::now(), false);
+                match self.catch_up() {
+                    Feed::Done | Feed::Failed => {}
+                    Feed::Full => {
+                        last_full = Some(Instant::now());
+                        self.full_resync();
+                    }
+                    Feed::Unavailable => {
+                        has_feed = false;
+                        self.resync_all();
+                    }
+                }
             }
         }
     }
