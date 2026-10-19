@@ -1,6 +1,7 @@
 //! Settings: a section list on the left and the chosen section on the right.
 //! Each section loads what it shows when it opens.
 
+mod about;
 mod account;
 mod admin;
 mod admin_activity;
@@ -43,6 +44,7 @@ pub enum Page {
     Updates,
     Security,
     Host,
+    About,
 }
 
 /// Values a form edits before saving.
@@ -217,6 +219,7 @@ pub fn opened(main: &mut Main, tasks: &Tasks) {
         Page::Updates => updates::load(main, tasks),
         Page::Security => account::load_security(main, tasks),
         Page::Host => {}
+        Page::About => about::load(main, tasks),
     }
 }
 
@@ -234,6 +237,7 @@ pub(crate) fn pages(main: &Main, host_title: Option<&'static str>) -> Vec<(Page,
     if let Some(title) = host_title {
         pages.push((Page::Host, ph::DESKTOP, title));
     }
+    pages.push((Page::About, ph::INFO, "About"));
     pages
 }
 
@@ -314,6 +318,7 @@ fn page_body(main: &mut Main, host: &mut dyn Host, tasks: &Tasks, ui: &mut egui:
         Page::Administration => admin::show(main, ui, tasks, desktop),
         Page::Updates => updates::show(main, ui, tasks, host),
         Page::Security => account::security(main, ui, tasks),
+        Page::About => about::show(main, ui, tasks, host),
         Page::Host => {
             let client = main.client.clone();
             host.settings_ui(ui, &client, tasks);
