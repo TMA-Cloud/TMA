@@ -1,6 +1,6 @@
 # TMA Cloud
 
-A self-hosted cloud storage platform with file storage and management capabilities.
+Self-hosted cloud storage written in Rust: a web app, a desktop app for Windows, macOS and Linux, and your files encrypted in your own S3-compatible bucket.
 
 ## Features
 
