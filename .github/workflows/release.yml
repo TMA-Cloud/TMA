@@ -41,6 +41,8 @@ jobs:
           VERSION="${TAG#v}"
           echo "tag=$TAG" >> $GITHUB_OUTPUT
           echo "version=$VERSION" >> $GITHUB_OUTPUT
+          # Image names must be lowercase; the repository name is not.
+          echo "image=$REGISTRY/$(printf '%s' "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
           echo "Tag: $TAG, Version: $VERSION"
 
       - name: Verify version matches Cargo.toml
@@ -79,8 +81,8 @@ jobs:
 
             ### Docker Image
             ```bash
-            docker pull ${{ env.REGISTRY }}/${{ github.repository }}:${{ steps.version.outputs.version }}
-            docker pull ${{ env.REGISTRY }}/${{ github.repository }}:latest
+            docker pull ${{ steps.version.outputs.image }}:${{ steps.version.outputs.version }}
+            docker pull ${{ steps.version.outputs.image }}:latest
             ```
 
             ### Changes
