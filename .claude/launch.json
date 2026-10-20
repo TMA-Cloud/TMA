@@ -6,12 +6,6 @@
       "runtimeExecutable": "cmd",
       "runtimeArgs": ["/c", "target\\debug\\tma-server.exe serve --with-worker"],
       "port": 3000
-    },
-    {
-      "name": "wiki",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev", "--prefix", "../TMAWiki", "--", "-p", "3100"],
-      "port": 3100
     }
   ]
 }
