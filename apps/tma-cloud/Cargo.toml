@@ -31,6 +31,7 @@ reqwest = { workspace = true }
 uuid = { workspace = true }
 open = "5"
 dirs = "7"
+rfd = { workspace = true }
 # The saved sign-in, in the system's credential store (one store crate per system below).
 keyring-core = "1"
 env_logger = "0.11"

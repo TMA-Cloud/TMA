@@ -6252,6 +6252,7 @@ dependencies = [
  "raw-window-handle",
  "reqwest",
  "resvg",
+ "rfd",
  "serde",
  "serde_json",
  "tma-client",

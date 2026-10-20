@@ -18,6 +18,7 @@ mod cursors;
 mod drive;
 mod edit;
 mod fonts;
+mod gpu;
 mod host;
 mod notify_ui;
 mod shortcuts;
@@ -100,6 +101,15 @@ fn icon() -> Option<egui::IconData> {
     Some(egui::IconData { width: image.width(), height: image.height(), rgba: image.into_raw() })
 }
 
+/// Say why the window could not open; a windowed app has no console to print it to.
+fn report_start_failure(err: &eframe::Error) {
+    let _ = rfd::MessageDialog::new()
+        .set_level(rfd::MessageLevel::Error)
+        .set_title("TMA Cloud")
+        .set_description(format!("TMA Cloud could not open its window: {err}"))
+        .show();
+}
+
 fn main() -> eframe::Result {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info,wgpu=warn,naga=warn")).init();
     if std::env::args().nth(1).as_deref() == Some("--forget-drive") {
@@ -119,7 +129,8 @@ fn main() -> eframe::Result {
     if let Some(icon) = icon() {
         viewport = viewport.with_icon(icon);
     }
-    let options = eframe::NativeOptions { viewport, persist_window: false, ..Default::default() };
+    let options =
+        eframe::NativeOptions { viewport, persist_window: false, wgpu_options: gpu::options(), ..Default::default() };
     let result = eframe::run_native(
         "TMA Cloud",
         options,
@@ -145,6 +156,9 @@ fn main() -> eframe::Result {
             }))
         }),
     );
+    if let Err(err) = &result {
+        report_start_failure(err);
+    }
     // An update that closed the app starts its new version only now, once nothing of this copy runs.
     update::finish();
     result
