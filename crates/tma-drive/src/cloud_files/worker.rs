@@ -51,6 +51,9 @@ pub struct Shared {
     /// Files already kept as a conflicted copy, by path key, as they were then:
     /// not sent again until they change, so a failed revert cannot repeat the copy.
     kept: Mutex<HashMap<String, local::Snapshot>>,
+    /// Files uploaded but not yet marked synced, because the app that saved them
+    /// still holds them open (Excel does): by path key, as they were sent.
+    sent: Mutex<HashMap<String, local::Snapshot>>,
     /// Server deletes waiting out the grace period: path key → (id, version, path, when).
     deletes: Mutex<HashMap<String, (String, i64, PathBuf, Instant)>>,
     /// Where the change feed left off.
@@ -69,6 +72,7 @@ impl Shared {
             dirty: Mutex::new(HashMap::new()),
             synced: Mutex::new(HashMap::new()),
             kept: Mutex::new(HashMap::new()),
+            sent: Mutex::new(HashMap::new()),
             deletes: Mutex::new(HashMap::new()),
             cursor: Mutex::new(None),
             open_folders: Mutex::new(HashMap::new()),
@@ -113,6 +117,19 @@ impl Shared {
     /// The version a file written over the synced copy of `id` at `path` started from.
     fn synced_version(&self, path: &Path, id: &str) -> Option<i64> {
         lock(&self.synced).get(&paths::key(&path.to_string_lossy())).filter(|(sid, _)| sid == id).map(|(_, v)| *v)
+    }
+
+    /// Mark a file already on the server synced; false while its app still holds it.
+    fn mark_sent(&self, path: &Path, key: &str) -> bool {
+        let Some((id, version)) = lock(&self.synced).get(key).cloned() else {
+            lock(&self.sent).remove(key);
+            return true;
+        };
+        let marked = local::adopt(path, &Stamp { id, version }).is_ok();
+        if marked {
+            lock(&self.sent).remove(key);
+        }
+        marked
     }
 
     /// A file deleted moments ago and now written again at the same path keeps its
@@ -195,7 +212,13 @@ impl Shared {
             let path = dir.join(&name);
             let server_name = self.core.to_server_name(&name);
             let before = local::snapshot(&path);
-            if lock(&self.kept).get(&paths::key(&path.to_string_lossy())) == Some(&before) {
+            let key = paths::key(&path.to_string_lossy());
+            if lock(&self.kept).get(&key) == Some(&before) {
+                continue;
+            }
+            // Sent unchanged before: sending it again would only bump its version.
+            if lock(&self.sent).get(&key) == Some(&before) {
+                done &= self.mark_sent(&path, &key);
                 continue;
             }
             let backend = self.core.backend();
@@ -211,7 +234,11 @@ impl Shared {
                         })
                     })
                 }
-                Upload::Changed { id, base, .. } => Some((id.clone(), sync_plan::base(*base))),
+                // An earlier upload of this file that could not restamp it moved the version on.
+                Upload::Changed { id, base, .. } => {
+                    let synced = self.synced_version(&path, id).unwrap_or(*base);
+                    Some((id.clone(), sync_plan::base(synced.max(*base))))
+                }
                 Upload::Folder { .. } => None,
             };
             if let Some((id, base)) = target {
@@ -263,15 +290,20 @@ impl Shared {
                 done &= reverted;
             }
             for (path, id, before) in uploaded {
+                let found = server.iter().find(|e| e.id == id).map(Stamp::of);
+                // The server holds this content now; the next save of the file builds on it.
+                if let Some(stamp) = &found {
+                    self.note_synced(&path, stamp);
+                }
                 // Edited again while uploading: leave it unsynced so the next pass sends it.
                 if local::snapshot(&path) != before {
                     done = false;
                     continue;
                 }
-                let stamp = server.iter().find(|e| e.id == id).map(Stamp::of).unwrap_or(Stamp { id, version: 0 });
-                self.note_synced(&path, &stamp);
+                let stamp = found.unwrap_or(Stamp { id, version: 0 });
                 if let Err(err) = local::adopt(&path, &stamp) {
-                    log::warn!("[drive] could not mark {} synced: {err}", path.display());
+                    log::debug!("[drive] {} stays unmarked while an app holds it: {err}", path.display());
+                    lock(&self.sent).insert(paths::key(&path.to_string_lossy()), before);
                     done = false;
                 }
             }
