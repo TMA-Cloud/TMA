@@ -16,8 +16,13 @@ pub struct ApiError {
 pub type ApiResult<T> = Result<T, ApiError>;
 
 impl ApiError {
-    pub fn network(err: impl std::fmt::Display) -> Self {
-        Self { status: 0, message: format!("Cannot reach the server: {err}"), code: None, body: Value::Null }
+    pub fn network(err: impl std::error::Error) -> Self {
+        Self {
+            status: 0,
+            message: format!("Cannot reach the server: {}", with_causes(&err)),
+            code: None,
+            body: Value::Null,
+        }
     }
 
     pub fn local(message: impl Into<String>) -> Self {
@@ -58,5 +63,41 @@ impl ApiError {
 
     pub fn storage_not_configured(&self) -> bool {
         self.code.as_deref() == Some("STORAGE_NOT_CONFIGURED")
+    }
+}
+
+/// An error with what caused it ("tcp connect error: deadline has elapsed"): reqwest's
+/// own message never says why a request failed. hyper's "client error (...)" layer adds nothing.
+fn with_causes(err: &dyn std::error::Error) -> String {
+    let mut text = err.to_string();
+    let mut cause = err.source();
+    while let Some(c) = cause {
+        let part = c.to_string();
+        if !part.starts_with("client error") && !text.ends_with(&part) {
+            text = format!("{text}: {part}");
+        }
+        cause = c.source();
+    }
+    text
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(Debug, thiserror::Error)]
+    #[error("{0}")]
+    struct Layer(&'static str, #[source] Option<Box<Layer>>);
+
+    #[test]
+    fn network_errors_say_why() {
+        let os = Layer("connection refused", None);
+        let tcp = Layer("tcp connect error", Some(Box::new(os)));
+        let hyper = Layer("client error (Connect)", Some(Box::new(tcp)));
+        let top = Layer("error sending request for url (http://x/api/profile)", Some(Box::new(hyper)));
+        assert_eq!(
+            ApiError::network(top).message,
+            "Cannot reach the server: error sending request for url (http://x/api/profile): tcp connect error: connection refused"
+        );
     }
 }

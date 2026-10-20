@@ -77,7 +77,8 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
         app.screen = Screen::Auth(Box::new(AuthState::new(&server)));
     } else if retry {
         state.trying = true;
-        let client = state.client.clone();
+        // New connections each try: restarting the app got through where retries had kept failing.
+        let client = state.client.reconnected();
         app.check_session(client);
     }
 }

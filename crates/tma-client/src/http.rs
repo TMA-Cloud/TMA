@@ -84,6 +84,18 @@ impl Client {
     #[cfg(target_arch = "wasm32")]
     pub fn restore_session(&self, _token: &str) {}
 
+    /// The same server and sign-in on fresh connections, as after restarting the app.
+    pub fn reconnected(&self) -> Self {
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Ok(fresh) = Self::new(&self.inner.base) {
+            if let Some(token) = self.session_token() {
+                fresh.restore_session(&token);
+            }
+            return fresh;
+        }
+        self.clone()
+    }
+
     pub fn base_url(&self) -> &str {
         &self.inner.base
     }
