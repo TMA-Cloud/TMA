@@ -75,6 +75,36 @@ impl Placement {
     }
 }
 
+/// Room kept for the taskbar or dock, which the monitor size includes.
+const TASKBAR: f32 = 48.0;
+/// The share of the screen the window may take when it has to shrink.
+const SCREEN_SHARE: f32 = 0.92;
+
+/// A window size and position that fit the screen.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Fit {
+    pub inner: egui::Vec2,
+    pub position: egui::Pos2,
+}
+
+/// Where the opening window should go on a monitor of `monitor` points: with no
+/// saved place (`first`) it is centred, and a window bigger than the screen
+/// (a small or scaled laptop screen) shrinks to fit. None when it already fits.
+pub fn fit(monitor: egui::Vec2, inner: egui::Rect, outer: egui::Rect, first: bool) -> Option<Fit> {
+    if monitor.x <= 0.0 || monitor.y <= 0.0 {
+        return None;
+    }
+    let frame = (outer.size() - inner.size()).max(egui::Vec2::ZERO);
+    let screen = egui::vec2(monitor.x, monitor.y - TASKBAR);
+    let too_big = outer.width() > screen.x || outer.height() > screen.y;
+    if !first && !too_big {
+        return None;
+    }
+    let size = if too_big { inner.size().min(screen * SCREEN_SHARE - frame) } else { inner.size() };
+    let position = ((screen - size - frame) / 2.0).max(egui::Vec2::ZERO).to_pos2();
+    Some(Fit { inner: size, position })
+}
+
 fn path() -> Option<std::path::PathBuf> {
     Some(dirs::config_dir()?.join("TMA Cloud").join(FILE))
 }
@@ -188,6 +218,28 @@ mod tests {
         assert_eq!(r.step(0.0, true, false, &normal), Step::Cloak);
         assert_eq!(r.step(1.0, true, false, &normal), Step::Wait);
         assert_eq!(r.step(1.6, true, false, &normal), Step::Uncloak);
+    }
+
+    #[test]
+    fn a_first_window_fits_the_screen_and_is_centred() {
+        let rect = |x: f32, y: f32, w: f32, h: f32| egui::Rect::from_min_size(egui::pos2(x, y), egui::vec2(w, h));
+        // 1280 x 820 with a 32-point title bar, opened where Windows cascades it.
+        let (inner, outer) = (rect(34.0, 58.0, 1280.0, 820.0), rect(26.0, 26.0, 1296.0, 860.0));
+        // A full HD screen holds it: same size, centred above the taskbar.
+        let big = fit(egui::vec2(1920.0, 1080.0), inner, outer, true);
+        assert_eq!(big, Some(Fit { inner: egui::vec2(1280.0, 820.0), position: egui::pos2(312.0, 86.0) }));
+        // A 1366 x 768 laptop at 125% is 1093 x 614 points: it shrinks inside the screen.
+        let small = fit(egui::vec2(1092.8, 614.4), inner, outer, true);
+        assert!(small.is_some_and(|f| {
+            f.position.x >= 0.0
+                && f.position.y >= 0.0
+                && f.position.x + f.inner.x + 16.0 <= 1092.8
+                && f.position.y + f.inner.y + 40.0 <= 614.4 - TASKBAR
+        }));
+        // A saved place that fits is left alone; one too big for this screen is not.
+        assert_eq!(fit(egui::vec2(1920.0, 1080.0), inner, outer, false), None);
+        assert!(fit(egui::vec2(1092.8, 614.4), inner, outer, false).is_some());
+        assert_eq!(fit(egui::Vec2::ZERO, inner, outer, true), None);
     }
 
     #[test]

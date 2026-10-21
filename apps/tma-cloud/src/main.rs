@@ -30,6 +30,8 @@ mod window;
 const PREFS_KEY: &str = "prefs";
 const SERVER_KEY: &str = "server";
 const CLIENT_ID_KEY: &str = "client-id";
+/// The smallest window the interface is laid out for; a smaller screen lowers it.
+const MIN_SIZE: egui::Vec2 = egui::vec2(880.0, 560.0);
 
 struct Shell {
     app: tma_ui::App,
@@ -40,6 +42,8 @@ struct Shell {
     /// Whether the window opens maximized, which the first frames do not show yet.
     opens_maximized: bool,
     reveal: window::Reveal,
+    /// Until the monitor is known: whether the window has no saved place (see `window::fit`).
+    fit_pending: Option<bool>,
 }
 
 impl eframe::App for Shell {
@@ -51,6 +55,7 @@ impl eframe::App for Shell {
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         self.app.ui(ui);
         let info = ui.ctx().input(|i| i.viewport().clone());
+        self.fit_to_screen(ui.ctx(), &info);
         self.reveal_window(ui.ctx(), frame, &info);
         self.placement.observe(&info);
         self.cursors.apply(ui.ctx(), frame, tma_ui::widgets::tokens(ui).dark);
@@ -68,6 +73,19 @@ impl eframe::App for Shell {
 }
 
 impl Shell {
+    /// Keep the opening window on its screen: centred the first time, smaller when it does not fit.
+    fn fit_to_screen(&mut self, ctx: &egui::Context, info: &egui::ViewportInfo) {
+        let Some(first) = self.fit_pending else { return };
+        let (Some(monitor), Some(inner), Some(outer)) = (info.monitor_size, info.inner_rect, info.outer_rect) else {
+            return;
+        };
+        self.fit_pending = None;
+        let Some(fit) = window::fit(monitor, inner, outer, first) else { return };
+        ctx.send_viewport_cmd(egui::ViewportCommand::MinInnerSize(MIN_SIZE.min(fit.inner)));
+        ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(fit.inner));
+        ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(fit.position));
+    }
+
     /// Keep the window off the screen until it has drawn at its final size.
     fn reveal_window(&mut self, ctx: &egui::Context, frame: &eframe::Frame, info: &egui::ViewportInfo) {
         let now = ctx.input(|i| i.time);
@@ -119,12 +137,10 @@ fn main() -> eframe::Result {
     #[cfg(windows)]
     let Some(_single) = single::claim() else { return Ok(()) };
     credentials::init();
-    let placement = window::Placement::load().unwrap_or_default();
+    let saved = window::Placement::load();
+    let placement = saved.unwrap_or_default();
     let mut viewport = placement.apply(
-        egui::ViewportBuilder::default()
-            .with_title("TMA Cloud")
-            .with_min_inner_size([880.0, 560.0])
-            .with_app_id("tma-cloud"),
+        egui::ViewportBuilder::default().with_title("TMA Cloud").with_min_inner_size(MIN_SIZE).with_app_id("tma-cloud"),
     );
     if let Some(icon) = icon() {
         viewport = viewport.with_icon(icon);
@@ -153,6 +169,7 @@ fn main() -> eframe::Result {
                 placement,
                 opens_maximized: placement.maximized,
                 reveal: window::Reveal::default(),
+                fit_pending: (!placement.maximized).then_some(saved.is_none()),
             }))
         }),
     );
