@@ -93,8 +93,8 @@ async fn announce(state: &AppState, owner: &str, file: &FileItem, parent: Option
 }
 
 /// The one row a single-file upload inserts.
-async fn insert_one(state: &AppState, planned: &[PlannedUpload], owner: &str) -> ApiResult<FileItem> {
-    crud::insert_uploads(&state.pool, planned, owner)
+async fn insert_one(state: &AppState, planned: &[PlannedUpload], auth: &AuthUser) -> ApiResult<FileItem> {
+    crud::insert_uploads(&state.pool, planned, &auth.owner_id, Some(&auth.user_id))
         .await?
         .into_iter()
         .next()
@@ -123,7 +123,7 @@ pub async fn single(
     let parent = parent_id(outcome.field("parentId"))?;
     let modified = client_mtime(outcome.field("lastModifiedTimes"));
     let planned = [PlannedUpload { upload: file.clone(), parent_id: parent.clone(), modified, client_id: None }];
-    let item = insert_one(&state, &planned, &auth.owner_id).await?;
+    let item = insert_one(&state, &planned, &auth).await?;
     outcome.keys.keep_all();
     state.audit.log(
         &ctx,
@@ -219,7 +219,7 @@ pub async fn bulk(
     }
     let mut successful = Vec::new();
     if !planned.is_empty() {
-        match crud::insert_uploads(&state.pool, &planned, &auth.owner_id).await {
+        match crud::insert_uploads(&state.pool, &planned, &auth.owner_id, Some(&auth.user_id)).await {
             Ok(rows) => {
                 let stored: Vec<String> = planned.iter().map(|p| p.upload.storage_name.clone()).collect();
                 outcome.keys.keep(&stored);
@@ -336,7 +336,7 @@ pub async fn derived(
     let upload = first_upload(&outcome)?;
     validate_name(&upload.name).map_err(|_| ApiError::bad_request("Invalid file name"))?;
     let planned = [PlannedUpload { upload, parent_id: existing.parent_id.clone(), modified: None, client_id: None }];
-    let item = insert_one(&state, &planned, &auth.owner_id).await?;
+    let item = insert_one(&state, &planned, &auth).await?;
     outcome.keys.keep_all();
     state.audit.log(
         &ctx,

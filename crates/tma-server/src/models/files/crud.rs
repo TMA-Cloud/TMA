@@ -200,7 +200,13 @@ pub async fn check_quota(tx: &mut Transaction<'_, Postgres>, owner: &str, added:
 
 /// Insert the rows for streamed uploads in one quota transaction, giving each
 /// a free name ("photo (2).jpg") in its folder. Returns rows in input order.
-pub async fn insert_uploads(pool: &PgPool, entries: &[PlannedUpload], owner: &str) -> anyhow::Result<Vec<FileItem>> {
+/// `uploader` is who sent the files: Recent files names them as the last to open each one.
+pub async fn insert_uploads(
+    pool: &PgPool,
+    entries: &[PlannedUpload],
+    owner: &str,
+    uploader: Option<&str>,
+) -> anyhow::Result<Vec<FileItem>> {
     if entries.is_empty() {
         return Ok(Vec::new());
     }
@@ -245,7 +251,7 @@ pub async fn insert_uploads(pool: &PgPool, entries: &[PlannedUpload], owner: &st
     for (chunk_index, chunk) in entries.chunks(250).enumerate() {
         let offset = chunk_index * 250;
         let mut qb = sqlx::QueryBuilder::new(
-            "INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id, modified, dek_wrapped, dek_kek_version) ",
+            "INSERT INTO files(id, name, type, size, mime_type, path, parent_id, user_id, modified, dek_wrapped, dek_kek_version, accessed_by) ",
         );
         qb.push_values(chunk.iter().enumerate(), |mut b, (i, e)| {
             b.push_bind(e.upload.id.clone())
@@ -260,7 +266,8 @@ pub async fn insert_uploads(pool: &PgPool, entries: &[PlannedUpload], owner: &st
                 .push_bind_unseparated(e.modified)
                 .push_unseparated("::timestamptz, NOW())")
                 .push_bind(e.upload.dek_wrapped.clone())
-                .push_bind(e.upload.dek_kek_version);
+                .push_bind(e.upload.dek_kek_version)
+                .push_bind(uploader.map(String::from));
         });
         qb.push(
             " RETURNING id, name, type, size, modified, accessed_at, shared_at, mime_type, starred, shared, content_version, parent_id",

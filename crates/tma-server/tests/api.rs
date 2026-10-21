@@ -148,6 +148,13 @@ async fn assert_names_are_unique(client: &Client) {
     client.create_folder("Alpha", Some(&docs.id)).await.unwrap();
 }
 
+/// A new upload is in Recent files under the person who sent it, before anyone opens it.
+async fn assert_upload_names_uploader(client: &Client, id: &str) {
+    let recent = client.recent(10).await.unwrap();
+    let uploader = recent.iter().find(|f| f.id == id).and_then(|f| f.opened_by.clone());
+    assert_eq!(uploader.map(|o| o.name).as_deref(), Some("Ada Admin"));
+}
+
 /// Recent files say which of the account's people opened a file: here a sub-user.
 async fn assert_recent_names_opener(owner: &Client, sub: &Client, id: &str) {
     owner.save_access_time(true, 0, 1).await.unwrap();
@@ -500,6 +507,7 @@ async fn full_workflow() {
         )
         .await
         .unwrap();
+    assert_upload_names_uploader(&admin, &item.id).await;
     let dest = std::env::temp_dir().join(format!("tma-it-{}.txt", item.id));
     admin.download_to(&item.id, &dest, Progress::new(0)).await.unwrap();
     assert_eq!(std::fs::read_to_string(&dest).unwrap(), body);

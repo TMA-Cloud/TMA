@@ -218,7 +218,7 @@ async fn commit(
             client_id: None,
         })
         .collect();
-    let rows = match crud::insert_uploads(&state.pool, &planned, owner).await {
+    let rows = match crud::insert_uploads(&state.pool, &planned, owner, None).await {
         Ok(rows) => rows,
         Err(err) => {
             let _ = state.storage.delete_many(&keys).await;
