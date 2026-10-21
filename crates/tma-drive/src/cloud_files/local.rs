@@ -119,8 +119,45 @@ pub fn mark_listed(path: &Path) -> std::io::Result<()> {
         .map_err(std::io::Error::other)
 }
 
+/// Follow a rename made on the server. Windows takes the rename for a local change,
+/// so a copy that was in sync is marked so again; it would otherwise upload as an edit.
+pub fn rename(from: &Path, to: &Path, in_sync: bool) -> std::io::Result<()> {
+    std::fs::rename(from, to)?;
+    if in_sync {
+        cfapi::mark_in_sync(to)?;
+    }
+    Ok(())
+}
+
+/// A copy that is not in sync but read-only: the drive makes only synced copies
+/// read-only, and no app can write one, so it holds the synced contents still.
+pub fn unchanged_read_only(path: &Path) -> bool {
+    std::fs::metadata(path).is_ok_and(|m| m.permissions().readonly())
+}
+
+/// Mark a copy in sync again without touching its contents.
+pub fn mark_in_sync(path: &Path) -> std::io::Result<()> {
+    cfapi::mark_in_sync(path)
+}
+
+fn set_read_only(path: &Path, read_only: bool) -> std::io::Result<()> {
+    let mut permissions = std::fs::metadata(path)?.permissions();
+    if permissions.readonly() == read_only {
+        return Ok(());
+    }
+    permissions.set_readonly(read_only);
+    std::fs::set_permissions(path, permissions)
+}
+
+/// Clear the read-only mark (someone else editing) so the placeholder opens for writing;
+/// the metadata written next sets it again if they still are.
+fn make_writable(path: &Path) -> std::io::Result<()> {
+    set_read_only(path, false)
+}
+
 /// Point a placeholder at a newer server copy and drop the stale local contents.
 pub fn refresh(path: &Path, entry: &Entry) -> std::io::Result<()> {
+    make_writable(path)?;
     let blob = Stamp::of(entry).encode();
     let options = UpdateOptions::default().metadata(metadata(entry)).blob(&blob).update_if_in_sync().mark_in_sync();
     let options = if entry.is_folder { options } else { options.dehydrate() };
@@ -135,14 +172,13 @@ pub fn refresh(path: &Path, entry: &Entry) -> std::io::Result<()> {
 /// Make a synced file read-only while someone else edits it, or writable again.
 /// Only the attribute changes, which keeps it in sync; updating placeholder metadata would download it.
 pub fn mark_editor(path: &Path, entry: &Entry) -> std::io::Result<()> {
-    let mut permissions = std::fs::metadata(path)?.permissions();
-    permissions.set_readonly(entry.editor.is_some());
-    std::fs::set_permissions(path, permissions)
+    set_read_only(path, entry.editor.is_some())
 }
 
 /// Throw away a local edit already kept elsewhere (a conflicted copy): the
 /// placeholder points at the server copy again, in sync, contents dropped.
 pub fn revert(path: &Path, entry: &Entry) -> std::io::Result<()> {
+    make_writable(path)?;
     let blob = Stamp::of(entry).encode();
     let mut placeholder =
         Placeholder::options().write_access().exclusive().open(path).map_err(std::io::Error::other)?;

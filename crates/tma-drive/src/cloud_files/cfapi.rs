@@ -11,7 +11,7 @@ use std::path::Path;
 use windows::Win32::Foundation::{ERROR_NOT_A_CLOUD_FILE, HANDLE};
 use windows::Win32::Storage::CloudFilters::{
     CF_IN_SYNC_STATE_IN_SYNC, CF_PLACEHOLDER_INFO_STANDARD, CF_PLACEHOLDER_STANDARD_INFO, CF_PLACEHOLDER_STATE_PARTIAL,
-    CfGetPlaceholderInfo, CfGetPlaceholderStateFromAttributeTag,
+    CF_SET_IN_SYNC_FLAG_NONE, CfGetPlaceholderInfo, CfGetPlaceholderStateFromAttributeTag, CfSetInSyncState,
 };
 use windows::Win32::Storage::FileSystem::{
     FILE_ATTRIBUTE_TAG_INFO, FileAttributeTagInfo, GetFileInformationByHandleEx,
@@ -20,6 +20,7 @@ use windows::Win32::Storage::FileSystem::{
 /// The largest identity Windows stores with a placeholder.
 const MAX_IDENTITY: usize = 4096;
 const FILE_READ_ATTRIBUTES: u32 = 0x80;
+const WRITE_DAC: u32 = 0x0004_0000;
 /// Lets a folder be opened as a file handle.
 const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x0200_0000;
 
@@ -59,6 +60,19 @@ fn partial(file: &std::fs::File) -> std::io::Result<bool> {
     // SAFETY: a pure function of the two values passed.
     let state = unsafe { CfGetPlaceholderStateFromAttributeTag(tag.FileAttributes, tag.ReparseTag) };
     Ok(state.0 & CF_PLACEHOLDER_STATE_PARTIAL.0 != 0)
+}
+
+/// Mark a placeholder in sync again. WRITE_DAC is enough for that and, unlike write
+/// access, is granted on a read-only file (one someone else is editing).
+pub fn mark_in_sync(path: &Path) -> std::io::Result<()> {
+    let file = std::fs::OpenOptions::new()
+        .access_mode(FILE_READ_ATTRIBUTES | WRITE_DAC)
+        .share_mode(7)
+        .custom_flags(FILE_FLAG_BACKUP_SEMANTICS)
+        .open(path)?;
+    // SAFETY: the handle is open for as long as `file` lives, and no USN is passed back.
+    unsafe { CfSetInSyncState(HANDLE(file.as_raw_handle()), CF_IN_SYNC_STATE_IN_SYNC, CF_SET_IN_SYNC_FLAG_NONE, None) }
+        .map_err(std::io::Error::other)
 }
 
 /// Whether a folder's contents are on disk (a folder placeholder never browsed is not).

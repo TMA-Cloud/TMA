@@ -7,6 +7,7 @@ mod editing;
 mod feed;
 mod filter;
 mod local;
+mod saves;
 mod worker;
 
 use std::path::{Path, PathBuf};
