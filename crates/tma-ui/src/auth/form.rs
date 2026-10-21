@@ -23,7 +23,8 @@ fn shown(ui: &Ui, kind: Kind) -> bool {
 }
 
 /// The eye at the right end of a password field, which shows what was typed.
-fn eye(ui: &mut Ui, field: egui::Rect, kind: Kind) {
+/// True while it is pressed or clicked, so the field can keep its focus.
+fn eye(ui: &mut Ui, field: egui::Rect, kind: Kind) -> bool {
     let t = widgets::tokens(ui);
     let on = shown(ui, kind);
     let rect = egui::Rect::from_center_size(field.right_center() - egui::vec2(22.0, 0.0), Vec2::splat(30.0));
@@ -36,9 +37,11 @@ fn eye(ui: &mut Ui, field: egui::Rect, kind: Kind) {
         FontId::proportional(17.0),
         color,
     );
-    if toggle.on_hover_text(if on { "Hide password" } else { "Show password" }).clicked() {
+    let toggle = toggle.on_hover_text(if on { "Hide password" } else { "Show password" });
+    if toggle.clicked() {
         ui.data_mut(|d| d.insert_temp(shown_id(kind), !on));
     }
+    toggle.is_pointer_button_down_on() || toggle.clicked()
 }
 
 /// A label above its field, as forms should have: a placeholder vanishes as
@@ -57,8 +60,8 @@ pub(super) fn entry(ui: &mut Ui, value: &mut String, kind: Kind, placeholder: &s
     let on = password && shown(ui, kind);
     if !login_form::NATIVE_INPUTS {
         let r = text_field(ui, value, password && !on, placeholder);
-        if password {
-            eye(ui, r.rect, kind);
+        if password && eye(ui, r.rect, kind) {
+            r.request_focus();
         }
         return r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
     }
@@ -89,7 +92,11 @@ pub(super) fn text_field(ui: &mut Ui, value: &mut String, password: bool, placeh
     let width = ui.available_width();
     let (rect, _) = ui.allocate_exact_size(Vec2::new(width, HEIGHT), Sense::hover());
     let inner = egui::Rect::from_min_max(rect.min + egui::vec2(14.0, 0.0), rect.max - egui::vec2(44.0, 0.0));
+    let id = ui.next_auto_id().with("field");
+    // Under the text, so a press on the text reaches it; on top, egui drops the focus until release.
+    let whole = ui.interact(rect, id.with("box"), Sense::click());
     let edit = egui::TextEdit::singleline(value)
+        .id(id)
         .password(password)
         .hint_text(RichText::new(placeholder).color(t.label_tertiary))
         .font(FontId::proportional(14.0))
@@ -97,11 +104,11 @@ pub(super) fn text_field(ui: &mut Ui, value: &mut String, password: bool, placeh
         .align(egui::Align2::LEFT_CENTER)
         .desired_width(inner.width());
     let response = ui.put(inner, edit);
-    frame(ui, rect, response.has_focus());
     // The whole box focuses the field, not just the text line inside it.
-    if ui.interact(rect, response.id.with("box"), Sense::click()).clicked() {
+    if whole.is_pointer_button_down_on() || whole.clicked() {
         response.request_focus();
     }
+    frame(ui, rect, response.has_focus());
     response.with_new_rect(rect)
 }
 

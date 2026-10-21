@@ -301,6 +301,8 @@ pub fn show(app: &mut App, root: &mut egui::Ui) {
         let last = ui.data(|d| d.get_temp::<f32>(height_key)).unwrap_or(520.0);
         let narrow = ui.available_width() < 440.0;
         let width = (ui.available_width() - 32.0).min(380.0);
+        // The bar floats over the empty canvas, so a taller step doesn't nudge the card sideways.
+        ui.spacing_mut().scroll.floating_allocated_width = 0.0;
         egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
             ui.add_space(((ui.available_height() - last) / 2.0).max(24.0));
             let block = ui.vertical_centered(|ui| {
@@ -350,14 +352,17 @@ pub fn show(app: &mut App, root: &mut egui::Ui) {
             let height = block.response.rect.height();
             if (height - last).abs() > 0.5 {
                 ui.data_mut(|d| d.insert_temp(height_key, height));
-                ui.ctx().request_repaint();
+                // Lay out again before painting, or the card shows a frame off-centre and jumps.
+                ui.ctx().request_discard("sign-in card height changed");
             }
         });
     });
     if flip_theme {
         app.prefs.theme = if t.dark { crate::theme::ThemeChoice::Light } else { crate::theme::ThemeChoice::Dark };
     }
-    if do_probe && let Some(state) = auth_state(app) {
+    // A connected address is not probed again on every blur, which blinked its status line.
+    let again = |s: &&mut AuthState| s.probed.as_deref() != Some(s.server.as_str()) || s.reachable == Some(false);
+    if do_probe && let Some(state) = auth_state(app).filter(again) {
         state.probed = None;
     }
     if do_submit {
