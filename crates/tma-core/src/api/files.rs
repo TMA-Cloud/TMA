@@ -167,6 +167,9 @@ pub struct FileInfo {
     pub expires_at: Option<DateTime<Utc>>,
     #[serde(default)]
     pub location_path: Vec<String>,
+    /// The ids of the `location_path` folders, so the app can open the item's folder with its crumbs.
+    #[serde(default)]
+    pub location_ids: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub folder_info: Option<FolderInfo>,
 }

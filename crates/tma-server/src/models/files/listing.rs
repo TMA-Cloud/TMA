@@ -73,7 +73,7 @@ pub async fn list_trash(pool: &PgPool, owner: &str, keyset: &Keyset) -> anyhow::
 /// Recently opened files, newest first (a top-N walk of idx_files_user_accessed_at).
 pub async fn recent(pool: &PgPool, owner: &str, limit: i64) -> anyhow::Result<Vec<FileItem>> {
     let sql = format!(
-        "SELECT {LIST_COLUMNS}, {EXPIRY_COLUMN}, u.id AS opened_by_id,
+        "SELECT {LIST_COLUMNS}, {EXPIRY_COLUMN}, f.parent_id, u.id AS opened_by_id,
                 COALESCE(NULLIF(u.name, ''), u.email) AS opened_by_name
            FROM files f {LOCK_JOIN} {} LEFT JOIN users u ON u.id = f.accessed_by
           WHERE f.user_id = $1 AND f.deleted_at IS NULL AND f.type = 'file'
@@ -199,7 +199,11 @@ pub async fn info(pool: &PgPool, id: &str, owner: &str) -> anyhow::Result<FileIn
         .fetch_optional(pool)
         .await?
         .ok_or_else(|| DomainError::NotFound("File not found".into()))?;
-    let location_path = folder_path(pool, row.parent_id.as_deref(), owner).await?;
+    let trail = match row.parent_id.as_deref() {
+        Some(parent) => folder_trail(pool, parent, owner).await?,
+        None => Vec::new(),
+    };
+    let (location_ids, location_path) = trail.into_iter().unzip();
     let is_folder = row.item_type == "folder";
     Ok(FileInfo {
         id: row.id,
@@ -214,18 +218,13 @@ pub async fn info(pool: &PgPool, id: &str, owner: &str) -> anyhow::Result<FileIn
         shared_at: row.shared_at,
         expires_at: row.expires_at,
         location_path,
+        location_ids,
         folder_info: is_folder.then_some(FolderInfo {
             total_size: row.aggregate_size,
             file_count: row.aggregate_file_count as i64,
             folder_count: row.aggregate_folder_count as i64,
         }),
     })
-}
-
-/// Folder names from the root down to `folder_id` ("Home / A / B" without Home).
-pub async fn folder_path(pool: &PgPool, folder_id: Option<&str>, owner: &str) -> anyhow::Result<Vec<String>> {
-    let Some(folder_id) = folder_id else { return Ok(Vec::new()) };
-    Ok(folder_trail(pool, folder_id, owner).await?.into_iter().map(|(_, name)| name).collect())
 }
 
 /// Breadcrumbs for a folder: (id, name) from the root down.

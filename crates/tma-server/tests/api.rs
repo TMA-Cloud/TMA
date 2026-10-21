@@ -509,7 +509,10 @@ async fn full_workflow() {
         .await
         .unwrap();
     assert!(root(&admin).await.iter().any(|f| f.name == "A" && f.is_folder()));
-    assert_eq!(admin.info(&deep.id).await.unwrap().location_path, ["A", "B"]);
+    let info = admin.info(&deep.id).await.unwrap();
+    assert_eq!(info.location_path, ["A", "B"]);
+    assert_eq!(info.location_ids.last(), deep.parent_id.as_ref());
+    assert_eq!(info.location_ids.len(), 2);
 
     // New content for a file keeps its id, as saving in a desktop app does.
     let replaced = admin.replace(&deep.id, &text_file("deep.txt", "second", None), Progress::new(0)).await.unwrap();

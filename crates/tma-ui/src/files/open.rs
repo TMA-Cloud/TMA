@@ -3,7 +3,7 @@
 //! the folder that holds an item found elsewhere.
 
 use tma_core::Permission;
-use tma_core::api::FileItem;
+use tma_core::api::{FileInfo, FileItem};
 
 use super::Place;
 use super::actions::{Action, run};
@@ -119,26 +119,31 @@ pub(super) fn location(app: &mut App, item: FileItem) {
     let Screen::Main(main) = &mut app.screen else { return };
     let (client, generation) = (main.client.clone(), main.generation);
     main.section = Section::Files;
-    let parent = item.parent_id.clone();
-    app.tasks.run(
-        async move {
-            match parent {
-                Some(p) => client.info(&p).await.map(|info| vec![(info.id, info.name)]),
-                None => Ok(Vec::new()),
-            }
-        },
-        move |app, result| {
-            let prefs = app.prefs.clone();
-            let Screen::Main(main) = &mut app.screen else { return };
-            if main.generation != generation {
-                return;
-            }
-            let path = result.unwrap_or_default();
-            let client = main.client.clone();
-            main.browser.open(Place::Folder, path, &app.tasks, &client, generation, &prefs);
-            main.browser.select_only(&item.id);
-        },
-    );
+    // The item's own info, since items from some lists (the dashboard's) come without their parent.
+    let id = item.id.clone();
+    app.tasks.run(async move { client.info(&id).await.map(crumbs) }, move |app, result| {
+        let prefs = app.prefs.clone();
+        let Screen::Main(main) = &mut app.screen else { return };
+        if main.generation != generation {
+            return;
+        }
+        let path = result.unwrap_or_default();
+        let client = main.client.clone();
+        main.browser.open(Place::Folder, path, &app.tasks, &client, generation, &prefs);
+        main.browser.select_only(&item.id);
+    });
+}
+
+/// The crumbs from My Files down to the item's folder. A server without
+/// `locationIds` gives names only, so the parent alone is the best we can do.
+fn crumbs(info: FileInfo) -> Vec<(String, String)> {
+    if info.location_ids.len() == info.location_path.len() {
+        return info.location_ids.into_iter().zip(info.location_path).collect();
+    }
+    match (info.parent_id, info.location_path.last()) {
+        (Some(parent), Some(name)) => vec![(parent, name.clone())],
+        _ => Vec::new(),
+    }
 }
 
 #[cfg(test)]
@@ -150,5 +155,20 @@ mod tests {
         assert_eq!(no_preview("backup.zip"), "No preview for .zip files. Use Download.");
         assert_eq!(no_preview("Makefile"), "No preview for this file. Use Download.");
         assert!(is_document("Report.DOCX"));
+    }
+
+    #[test]
+    fn show_in_folder_opens_the_whole_path() {
+        let info = |ids: &[&str], names: &[&str]| FileInfo {
+            parent_id: ids.last().map(|s| s.to_string()),
+            location_ids: ids.iter().map(|s| s.to_string()).collect(),
+            location_path: names.iter().map(|s| s.to_string()).collect(),
+            ..FileInfo::default()
+        };
+        let pair = |id: &str, name: &str| (id.to_string(), name.to_string());
+        assert_eq!(crumbs(info(&["a", "b"], &["A", "B"])), [pair("a", "A"), pair("b", "B")]);
+        assert_eq!(crumbs(info(&[], &[])), []);
+        let old_server = FileInfo { location_ids: Vec::new(), ..info(&["a", "b"], &["A", "B"]) };
+        assert_eq!(crumbs(old_server), [pair("b", "B")]);
     }
 }

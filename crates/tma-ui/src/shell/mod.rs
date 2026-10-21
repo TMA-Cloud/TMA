@@ -346,8 +346,26 @@ fn storage_banner(app: &mut App, ui: &mut egui::Ui) {
     }
 }
 
+/// The search box shows the search on screen: leaving it empties the box and
+/// Back to it fills it again, while text not yet sent stays where it is.
+fn follow_search(ctx: &egui::Context, main: &mut crate::app::Main) {
+    let shown = match (main.section, &main.browser.place) {
+        (Section::Dashboard | Section::Settings, _) => None,
+        (_, Place::Search(q)) => Some(q.clone()),
+        _ => None,
+    };
+    let key = egui::Id::unique("shown-search");
+    if ctx.data(|d| d.get_temp::<Option<String>>(key)).flatten() != shown {
+        main.search = shown.clone().unwrap_or_default();
+        ctx.data_mut(|d| d.insert_temp(key, shown));
+    }
+}
+
 pub fn show(app: &mut App, root: &mut egui::Ui) {
     let ctx = &root.ctx().clone();
+    if let Screen::Main(main) = &mut app.screen {
+        follow_search(ctx, main);
+    }
     let phone = widgets::mobile(ctx);
     if phone {
         mobile::tab_bar(app, root);
