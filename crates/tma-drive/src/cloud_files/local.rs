@@ -158,15 +158,27 @@ fn make_writable(path: &Path) -> std::io::Result<()> {
 /// Point a placeholder at a newer server copy and drop the stale local contents.
 pub fn refresh(path: &Path, entry: &Entry) -> std::io::Result<()> {
     make_writable(path)?;
+    let mut placeholder =
+        Placeholder::options().write_access().exclusive().open(path).map_err(std::io::Error::other)?;
+    if entry.is_folder {
+        let blob = Stamp::of(entry).encode();
+        let options = UpdateOptions::default().metadata(metadata(entry)).blob(&blob).update_if_in_sync().mark_in_sync();
+        return placeholder.update(options, None).map(|_| ()).map_err(std::io::Error::other);
+    }
+    point_at(&mut placeholder, entry)
+}
+
+/// Drop a synced file's contents, then give it the server copy's size and stamp. Windows
+/// refuses a new size together with dropping the contents of a file that was downloaded
+/// ("The parameter is incorrect"), which left it on the old version for good; given
+/// the new size alone, its next download overran the old size ("The cloud operation is invalid").
+fn point_at(placeholder: &mut Placeholder, entry: &Entry) -> std::io::Result<()> {
     let blob = Stamp::of(entry).encode();
+    placeholder
+        .update(UpdateOptions::default().update_if_in_sync().dehydrate(), None)
+        .map_err(std::io::Error::other)?;
     let options = UpdateOptions::default().metadata(metadata(entry)).blob(&blob).update_if_in_sync().mark_in_sync();
-    let options = if entry.is_folder { options } else { options.dehydrate() };
-    Placeholder::options()
-        .write_access()
-        .exclusive()
-        .open(path)
-        .and_then(|mut p| p.update(options, None).map(|_| ()))
-        .map_err(std::io::Error::other)
+    placeholder.update(options, None).map(|_| ()).map_err(std::io::Error::other)
 }
 
 /// Make a synced file read-only while someone else edits it, or writable again.
@@ -184,8 +196,9 @@ pub fn revert(path: &Path, entry: &Entry) -> std::io::Result<()> {
         Placeholder::options().write_access().exclusive().open(path).map_err(std::io::Error::other)?;
     // An app that saved by writing a new file left a plain file: make it a placeholder again.
     let _ = placeholder.convert_to_placeholder(ConvertOptions::default().blob(blob.clone()), None);
-    let options = UpdateOptions::default().metadata(metadata(entry)).blob(&blob).mark_in_sync().dehydrate();
-    placeholder.update(options, None).map(|_| ()).map_err(std::io::Error::other)
+    // The edit is kept elsewhere: mark the file synced so its contents may be dropped.
+    placeholder.update(UpdateOptions::default().blob(&blob).mark_in_sync(), None).map_err(std::io::Error::other)?;
+    point_at(&mut placeholder, entry)
 }
 
 /// Remove what the server no longer has, keeping anything changed or made here.
@@ -209,6 +222,11 @@ pub fn remove_synced(path: &Path) -> bool {
         }
     }
     all && std::fs::remove_dir(path).is_ok()
+}
+
+/// Whether a file or folder is a placeholder of the drive (not one made here and not yet uploaded).
+pub fn is_placeholder(path: &Path) -> bool {
+    cfapi::state(path).is_ok_and(|s| s.is_some())
 }
 
 /// Forget the server copy a placeholder stood for, so its folder uploads again.

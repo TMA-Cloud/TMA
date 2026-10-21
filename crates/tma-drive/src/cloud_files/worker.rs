@@ -214,6 +214,8 @@ impl Shared {
                         Ok(()) => {
                             // A resync must not see the old listing and remove the new folder.
                             self.core.invalidate(&node.path);
+                            // Only now may it hold placeholders: bring in what the server has there.
+                            self.resync_folder(&path);
                             self.changed(path);
                             continue;
                         }
@@ -268,6 +270,11 @@ impl Shared {
 
     /// Bring one populated folder in line with the server; returns its populated subfolders.
     pub fn resync_folder(&self, dir: &Path) -> Vec<PathBuf> {
+        // A folder made here (or left by an earlier sign-in) uploads and is adopted first:
+        // a placeholder created inside an ordinary folder can never be downloaded.
+        if dir != self.root && !local::is_placeholder(dir) {
+            return Vec::new();
+        }
         let Some(node) = self.folder(dir) else { return Vec::new() };
         self.note_folder(node.id.clone(), dir);
         let (Some(server), Ok(folder)) = (self.server(&node), local::read(dir)) else { return Vec::new() };
