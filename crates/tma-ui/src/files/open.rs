@@ -40,8 +40,12 @@ pub(super) fn file(app: &mut App, item: FileItem) {
         // Every way of opening reads the file, which the server allows only with Download.
         app.toasts.error("You don't have permission to open files. Ask the account owner.");
     } else if app.host.kind() == HostKind::Desktop {
+        // Clicked again while its program is still starting: one open is already on its way.
+        if super::opening::is_pending(app.tasks.ctx(), &item.id) {
+            return;
+        }
         // The desktop app hands every file to the computer, which opens it in its own app;
-        // the host reports back once it has, which ends the opening animation.
+        // the host reports back once a window shows it, which ends the opening animation.
         if let Some(notice) = super::read_only_notice(&item, &main.user.id) {
             app.toasts.info(notice);
         }

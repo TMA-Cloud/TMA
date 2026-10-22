@@ -48,6 +48,18 @@ pub fn finish(ctx: &Context, id: &str) {
     ctx.request_repaint();
 }
 
+/// Whether an open of `started` (finished at `end`) is still under way at `now`.
+pub fn pending_at(now: f64, start: f64, end: Option<f64>) -> bool {
+    end.is_none() && now - start < GIVE_UP
+}
+
+/// Whether this file is still opening: another click on it is the same request again.
+pub fn is_pending(ctx: &Context, id: &str) -> bool {
+    let at = now(ctx);
+    ctx.data(|d| d.get_temp::<Starts>(key()).and_then(|s| s.get(id).copied()))
+        .is_some_and(|(start, end)| pending_at(at, start, end))
+}
+
 /// How a file being opened looks this frame.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Look {
@@ -122,6 +134,13 @@ pub fn paint(painter: &Painter, item: Rect, radius: u8, icon: Rect, look: Option
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_open_is_pending_until_it_reports_or_gives_up() {
+        assert!(pending_at(12.0, 10.0, None));
+        assert!(!pending_at(12.0, 10.0, Some(11.0)));
+        assert!(!pending_at(10.0 + GIVE_UP, 10.0, None));
+    }
 
     #[test]
     fn pops_spins_and_fades() {
