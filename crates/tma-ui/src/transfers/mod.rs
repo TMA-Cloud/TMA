@@ -175,6 +175,28 @@ impl Transfers {
     pub fn is_busy(&self) -> bool {
         self.items.iter().any(|i| matches!(i.state, State::Running | State::Queued))
     }
+
+    /// Stop every upload and download not finished yet: a large folder is one choice, not
+    /// hundreds. Files already sent stay; server jobs run to the end.
+    pub fn cancel_all(&mut self) {
+        for item in self.items.iter_mut().filter(|i| !matches!(i.direction, Direction::Job(_))) {
+            match item.state {
+                State::Queued => {
+                    item.progress.cancel();
+                    item.state = State::Failed("Cancelled".into());
+                }
+                State::Running => item.progress.cancel(),
+                State::Done | State::Failed(_) => {}
+            }
+        }
+    }
+
+    /// Whether any upload or download can still be cancelled.
+    pub fn can_cancel(&self) -> bool {
+        self.items
+            .iter()
+            .any(|i| !matches!(i.direction, Direction::Job(_)) && matches!(i.state, State::Running | State::Queued))
+    }
 }
 
 /// Failed uploads grouped by reason, largest group first: one heading saying 40
@@ -309,5 +331,36 @@ mod tests {
         }
         assert_eq!(unreported_failures(&mut transfers), vec![failure("x", "Nope")]);
         assert!(unreported_failures(&mut transfers).is_empty());
+    }
+
+    #[test]
+    fn cancel_all_stops_every_upload_but_not_server_jobs() {
+        let mut transfers = Transfers::default();
+        for (name, direction, state) in [
+            ("sent.pdf", Direction::Up, State::Done),
+            ("sending.pdf", Direction::Up, State::Running),
+            ("waiting.pdf", Direction::Up, State::Queued),
+            ("copying", Direction::Job("copy"), State::Running),
+        ] {
+            transfers.next_id += 1;
+            transfers.items.push(Transfer {
+                id: transfers.next_id,
+                name: name.into(),
+                direction,
+                progress: Progress::new(1),
+                state,
+                upload: None,
+                replace: None,
+                reported: false,
+            });
+        }
+        assert!(transfers.can_cancel());
+        transfers.cancel_all();
+        let cancelled: Vec<bool> = transfers.items.iter().map(|i| i.progress.is_cancelled()).collect();
+        assert_eq!(cancelled, [false, true, true, false]);
+        assert_eq!(transfers.items[0].state, State::Done);
+        assert_eq!(transfers.items[2].state, State::Failed("Cancelled".into()));
+        // The running upload ends once its request stops; the server job keeps going.
+        assert_eq!(transfers.items[3].state, State::Running);
     }
 }

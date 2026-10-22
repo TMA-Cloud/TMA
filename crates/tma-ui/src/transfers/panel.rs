@@ -41,6 +41,7 @@ pub fn show(main: &mut Main, ctx: &egui::Context) {
         crate::transfer_text::headline(&rows)
     };
     let mut clear = false;
+    let mut cancel_all = false;
     let area = egui::Area::new(egui::Id::unique("transfers"))
         // Bottom-right with the toasts stacked above it; on a phone it spans the width above the tab bar.
         .anchor(
@@ -74,6 +75,11 @@ pub fn show(main: &mut Main, ctx: &egui::Context) {
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             if !busy && widgets::icon_button(ui, ph::X, "Dismiss").clicked() {
                                 clear = true;
+                            }
+                            if main.transfers.can_cancel()
+                                && widgets::icon_button(ui, ph::X_CIRCLE, "Cancel all").clicked()
+                            {
+                                cancel_all = true;
                             }
                             let icon = if main.transfers.expanded { ph::CARET_DOWN } else { ph::CARET_UP };
                             let tip = if main.transfers.expanded { "Hide details" } else { "Show details" };
@@ -123,6 +129,9 @@ pub fn show(main: &mut Main, ctx: &egui::Context) {
     }
     if clear {
         main.transfers.items.clear();
+    }
+    if cancel_all {
+        main.transfers.cancel_all();
     }
 }
 
