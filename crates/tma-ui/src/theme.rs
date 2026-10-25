@@ -220,9 +220,17 @@ pub const RADIUS_SM: u8 = 6;
 pub const RADIUS_MD: u8 = 10;
 pub const RADIUS_LG: u8 = 14;
 
+/// How glyph coverage becomes alpha for light text on dark backgrounds.
+const DARK_TEXT_GAMMA: egui::epaint::FontColorTransferFunction = egui::epaint::FontColorTransferFunction::Gamma(0.8);
+
 /// Apply the tokens to egui's style: spacing, text sizes and widget colours.
 pub fn apply(ctx: &egui::Context, t: &Tokens) {
     let mut visuals = if t.dark { Visuals::dark() } else { Visuals::light() };
+    if t.dark {
+        // egui's dark curve (2c - c², about gamma 0.5) pushes edge pixels to full
+        // brightness, so light text looks blocky; 0.8 keeps edges soft yet not thin.
+        visuals.text_options.color_transfer_function = DARK_TEXT_GAMMA;
+    }
     visuals.panel_fill = t.canvas;
     visuals.window_fill = t.surface_raised;
     visuals.extreme_bg_color = t.surface_sunken;
