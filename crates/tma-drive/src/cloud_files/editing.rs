@@ -2,13 +2,21 @@
 //! the server while it stays open, and one someone else is editing is
 //! read-only here, so Office opens it read-only instead of saving over theirs.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use super::local;
-use super::worker::Shared;
+use super::worker::{Shared, lock};
 use crate::backend::Entry;
 use crate::editing;
 use crate::sync_plan::Local;
+
+/// Whether a program holds open a workbook in `dir` that leaves no owner file.
+fn holds_open_workbook(dir: &Path) -> bool {
+    let Ok(items) = std::fs::read_dir(dir) else { return false };
+    items
+        .flatten()
+        .any(|item| item.file_name().to_str().is_some_and(editing::open_by_handle) && local::held_open(&item.path()))
+}
 
 impl Shared {
     /// Lock the documents an app has open in `dir`; with `release`, free those it closed.
@@ -16,7 +24,9 @@ impl Shared {
         let Some(rel) = self.rel(dir) else { return };
         let Ok(items) = std::fs::read_dir(dir) else { return };
         let names: Vec<String> = items.flatten().filter_map(|i| i.file_name().into_string().ok()).collect();
-        let edited = editing::edited(&names);
+        let mut edited = editing::edited(&names);
+        // Formats without owner files show they are open by the handle their program keeps.
+        edited.extend(names.iter().filter(|n| editing::open_by_handle(n) && local::held_open(&dir.join(n))).cloned());
         let mut open = Vec::new();
         if !edited.is_empty() {
             let Some(server) = self.folder(dir).and_then(|node| self.server(&node)) else { return };
@@ -29,6 +39,27 @@ impl Shared {
         }
         for (name, editor) in self.core.leases().settle(&rel, &open, release) {
             log::warn!("[drive] {name} is open here while {editor} is editing it; saves stay theirs");
+        }
+    }
+
+    /// Look again at folders with documents locked from here, and at open folders for
+    /// workbooks a program holds without an owner file. Neither shows in the folder:
+    /// Windows reports an in-place write only when its program lets go, and Excel can
+    /// close an unchanged workbook without touching it, so no change would say so.
+    pub(super) fn recheck_edits(&self) {
+        let mut dirs: Vec<PathBuf> = self
+            .core
+            .leases()
+            .folders()
+            .iter()
+            .map(|rel| rel.split('\\').filter(|p| !p.is_empty()).fold(self.root.clone(), |dir, part| dir.join(part)))
+            .collect();
+        let open: Vec<PathBuf> = lock(&self.open_folders).values().cloned().collect();
+        dirs.extend(open.into_iter().filter(|dir| holds_open_workbook(dir)));
+        dirs.sort();
+        dirs.dedup();
+        for dir in dirs {
+            self.settle_edits(&dir, !self.is_dirty(&dir));
         }
     }
 

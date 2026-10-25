@@ -224,6 +224,23 @@ pub fn remove_synced(path: &Path) -> bool {
     all && std::fs::remove_dir(path).is_ok()
 }
 
+/// Whether a program holds this downloaded file open for writing, refusing other
+/// writers, as Excel does with a workbook it shows. Asking to read while refusing
+/// writers fails exactly then; a placeholder not downloaded is never open.
+pub fn held_open(path: &Path) -> bool {
+    use std::os::windows::fs::OpenOptionsExt;
+    const SHARE_READ_DELETE: u32 = 0x1 | 0x4;
+    const ERROR_SHARING_VIOLATION: i32 = 32;
+    if cfapi::state(path).is_ok_and(|s| s.is_some_and(|s| s.partial)) {
+        return false;
+    }
+    std::fs::OpenOptions::new()
+        .read(true)
+        .share_mode(SHARE_READ_DELETE)
+        .open(path)
+        .is_err_and(|e| e.raw_os_error() == Some(ERROR_SHARING_VIOLATION))
+}
+
 /// Whether a file or folder is a placeholder of the drive (not one made here and not yet uploaded).
 pub fn is_placeholder(path: &Path) -> bool {
     cfapi::state(path).is_ok_and(|s| s.is_some())

@@ -74,6 +74,14 @@ impl Leases {
         busy
     }
 
+    /// The folders (path keys) holding documents locked because an app here has them open.
+    pub fn folders(&self) -> Vec<String> {
+        let mut folders: Vec<String> = lock(&self.held).values().filter(|f| !f.is_empty()).cloned().collect();
+        folders.sort();
+        folders.dedup();
+        folders
+    }
+
     /// Lock a file while a program the desktop app started for it runs. Returns who
     /// else is editing it when someone is; then nothing is held.
     pub fn hold(&self, id: &str) -> Option<String> {

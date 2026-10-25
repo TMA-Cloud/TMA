@@ -26,6 +26,8 @@ const CHECK_EVERY: Duration = Duration::from_secs(60);
 const RESYNC_EVERY: Duration = Duration::from_secs(30 * 60);
 /// Events arriving together are answered with one question to the change feed.
 const GATHER: Duration = Duration::from_secs(1);
+/// Documents locked from here are checked this often for having closed (see `recheck_edits`).
+const RECHECK_EDITS: Duration = Duration::from_secs(10);
 /// Without a change feed, every open folder is re-listed on events, and at least this often.
 const FALLBACK_EVERY: Duration = Duration::from_secs(120);
 
@@ -88,6 +90,10 @@ impl Shared {
             return None;
         }
         Some(paths::normalize(if rest.is_empty() { paths::ROOT } else { rest }))
+    }
+
+    pub(super) fn is_dirty(&self, dir: &Path) -> bool {
+        lock(&self.dirty).contains_key(dir)
     }
 
     pub fn changed(&self, dir: PathBuf) {
@@ -386,6 +392,7 @@ impl Shared {
         let mut last_check = Instant::now();
         let mut pending = false;
         let mut has_feed = true;
+        let mut last_recheck = Instant::now();
         while !self.stop.load(Ordering::Relaxed) {
             {
                 let dirty = lock(&self.dirty);
@@ -403,6 +410,10 @@ impl Shared {
                     // Retry after another quiet period (an app still has the file, or the server failed).
                     self.changed(dir);
                 }
+            }
+            if last_recheck.elapsed() >= RECHECK_EDITS {
+                last_recheck = Instant::now();
+                self.recheck_edits();
             }
             let now = self.core.generation();
             pending |= now != generation;

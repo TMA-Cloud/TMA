@@ -35,10 +35,16 @@ impl Owner {
 /// document, which says more than whether the program is running.
 pub fn has_owner_files(name: &str) -> bool {
     const EXTS: &[&str] = &[
-        "doc", "docx", "docm", "dot", "dotx", "dotm", "xls", "xlsx", "xlsm", "xlsb", "xlt", "xltx", "xltm", "ppt",
-        "pptx", "pptm", "pps", "ppsx", "pot", "potx", "odt", "ods", "odp", "odg", "ott", "ots", "otp",
+        "doc", "docx", "docm", "dot", "dotx", "dotm", "xlsx", "xlsm", "xlsb", "xltx", "xltm", "ppt", "pptx", "pptm",
+        "pps", "ppsx", "pot", "potx", "odt", "ods", "odp", "odg", "ott", "ots", "otp",
     ];
     EXTS.contains(&tma_core::names::extension_of(name).as_str())
+}
+
+/// Excel 97-2003 workbooks: Excel leaves no owner file for them, but keeps them
+/// open while they are shown, refusing other writers; that open handle is the sign.
+pub fn open_by_handle(name: &str) -> bool {
+    matches!(tma_core::names::extension_of(name).as_str(), "xls" | "xlt")
 }
 
 /// Whether a window title names the file `name`: in full, or by its name without
@@ -95,6 +101,16 @@ mod tests {
         assert!(!window_shows("Quarterly Reports - Paint", "Quarterly Report.png"), "a longer word is another name");
         assert!(!window_shows("Notepad", "a.txt"));
         assert!(!window_shows("Docs - Google Chrome", "doc.txt"), "short stems never match alone");
+    }
+
+    #[test]
+    fn excel_97_workbooks_are_found_by_their_handle_not_an_owner_file() {
+        for name in ["Open Costing --Cambridge.xls", "Template.XLT"] {
+            assert!(open_by_handle(name) && !has_owner_files(name), "{name}");
+        }
+        for name in ["Booking.xlsx", "Report.doc", "Deck.ppt"] {
+            assert!(!open_by_handle(name) && has_owner_files(name), "{name}");
+        }
     }
 
     #[test]
