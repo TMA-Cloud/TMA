@@ -44,6 +44,7 @@ struct Shell {
     reveal: window::Reveal,
     /// Until the monitor is known: whether the window has no saved place (see `window::fit`).
     fit_pending: Option<bool>,
+    update: update::overlay::Overlay,
 }
 
 impl eframe::App for Shell {
@@ -54,6 +55,7 @@ impl eframe::App for Shell {
 
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         self.app.ui(ui);
+        self.update.show(ui.ctx());
         let info = ui.ctx().input(|i| i.viewport().clone());
         self.fit_to_screen(ui.ctx(), &info);
         self.reveal_window(ui.ctx(), frame, &info);
@@ -170,6 +172,7 @@ fn main() -> eframe::Result {
                 opens_maximized: placement.maximized,
                 reveal: window::Reveal::default(),
                 fit_pending: (!placement.maximized).then_some(saved.is_none()),
+                update: update::overlay::Overlay::default(),
             }))
         }),
     );

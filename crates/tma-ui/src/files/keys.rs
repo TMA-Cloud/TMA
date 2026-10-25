@@ -64,6 +64,10 @@ fn next_match(names: &[String], current: Option<usize>, typed: &str) -> Option<u
 }
 
 pub fn handle(main: &mut Main, ui: &mut Ui, actions: &mut Vec<Action>) {
+    // Nothing reaches the listing under a dialog, such as the desktop app's update card.
+    if ui.ctx().memory(|m| m.top_modal_layer().is_some()) {
+        return;
+    }
     // Mouse back and forward buttons work anywhere over the listing.
     let (back_button, forward_button) = ui
         .input(|i| (i.pointer.button_pressed(PointerButton::Extra1), i.pointer.button_pressed(PointerButton::Extra2)));

@@ -1,12 +1,14 @@
-//! Keeps the desktop app current: when a newer release is published, it downloads
-//! in the background and replaces this copy once no transfer is running, then the
-//! new version starts. Windows runs the silent installer; a Linux AppImage and a
+//! Keeps the desktop app current: when a newer release is published and no transfer
+//! is running, it downloads and replaces this copy behind a card over the blurred app
+//! (see `overlay`), then the new version starts. Windows runs the silent installer; a Linux AppImage and a
 //! macOS app bundle are swapped in place. Other installs (a .deb, a folder the user
 //! cannot write) get a notice and the releases page instead. The version comes from
 //! the release feed the server reads; the files from the GitHub repository set by
 //! `TMA_UPDATE_REPO` at build time (TMA-Cloud/TMA by default).
 
+mod blur;
 mod install;
+pub mod overlay;
 pub mod target;
 
 use std::io::Write;
@@ -29,6 +31,8 @@ const REPO: &str = match option_env!("TMA_UPDATE_REPO") {
 const RETRY: Duration = Duration::from_secs(10);
 /// How often a running app asks the feed again, so one left open for days still updates.
 const RECHECK: Duration = Duration::from_secs(6 * 60 * 60);
+/// How long "Installing" shows before the app closes.
+const CLOSE_AFTER: Duration = Duration::from_millis(1500);
 
 /// One download or install per run, even across sign-ins; cleared when it fails so a later check retries.
 static BUSY: AtomicBool = AtomicBool::new(false);
@@ -101,10 +105,7 @@ async fn check(client: &Client, notifier: &Notifier) {
     if BUSY.swap(true, Ordering::Relaxed) {
         return;
     }
-    match fetch(target, &version, notifier).await {
-        Some(path) => install_when_idle(target.clone(), path, version, notifier.clone()),
-        None => BUSY.store(false, Ordering::Relaxed),
-    }
+    update_when_idle(target.clone(), version, notifier.clone());
 }
 
 /// Where the download goes: the app's own folder, or beside the AppImage so the swap is one rename.
@@ -122,22 +123,14 @@ fn download_path(target: &Target, version: &str) -> Option<PathBuf> {
     })
 }
 
-/// Download the release for `target`.
-async fn fetch(target: &Target, version: &str, notifier: &Notifier) -> Option<PathBuf> {
-    let path = download_path(target, version)?;
-    let progress = notifier.track_download(&format!("TMA Cloud {version}"));
-    match download(&asset_url(version, &target.asset(version)), &path, &progress).await {
-        Ok(()) => {
-            notifier.finish_download(&progress, None);
-            Some(path)
-        }
-        Err(err) => {
-            let _ = std::fs::remove_file(&path);
-            notifier.finish_download(&progress, Some(err.clone()));
-            log::warn!("update download: {err}");
-            None
-        }
+/// Download the release for `target`, counting into `progress`.
+async fn fetch(target: &Target, version: &str, progress: &tma_client::Progress) -> Result<PathBuf, String> {
+    let path = download_path(target, version).ok_or("no folder to download the update to")?;
+    let result = download(&asset_url(version, &target.asset(version)), &path, progress).await;
+    if result.is_err() {
+        let _ = std::fs::remove_file(&path);
     }
+    result.map(|()| path)
 }
 
 async fn download(url: &str, path: &std::path::Path, progress: &tma_client::Progress) -> Result<(), String> {
@@ -174,43 +167,68 @@ pub fn finish() {
     }
 }
 
-/// Installing replaces the app, so it waits until no upload or download is running,
-/// puts the new copy in place, and closes the app; `finish` starts the new version
-/// after Cloud Drive has shut down cleanly and the window's place is saved.
-fn install_when_idle(target: Target, download: PathBuf, version: String, notifier: Notifier) {
+/// Installing replaces the app, so it waits until no upload or download is running.
+/// Then the card covers the app while the release downloads and the new copy is put
+/// in place, and the app closes; `finish` starts the new version after Cloud Drive has
+/// shut down cleanly and the window's place is saved.
+fn update_when_idle(target: Target, version: String, notifier: Notifier) {
     let _ = std::thread::Builder::new().name("update".into()).spawn(move || {
-        let (idle_tx, idle) = std::sync::mpsc::channel();
-        loop {
-            let tx = idle_tx.clone();
-            notifier.apply(move |app| {
-                if !app.transfers_mut().is_some_and(|t| t.is_busy()) {
-                    let _ = tx.send(());
-                }
+        wait_until_idle(&notifier);
+        let progress = tma_client::Progress::new(0);
+        show(&notifier, &version, overlay::Step::Downloading(progress.clone()));
+        let installed = tma_client::rt::block_on(fetch(&target, &version, &progress))
+            .map_err(|err| format!("Could not download the update: {err}"))
+            .and_then(|download| {
+                show(&notifier, &version, overlay::Step::Installing);
+                install(target, download).map_err(|err| format!("Could not install the update: {err}"))
             });
-            if idle.recv_timeout(RETRY).is_ok() {
-                break;
-            }
-        }
-        let installed = install::prepare(&target, &download).and_then(|()| {
-            if install::after_exit(&target) {
-                *PENDING.lock().unwrap_or_else(|e| e.into_inner()) = Some((target, download));
-                Ok(())
-            } else {
-                install::launch(&target, &download)
-            }
-        });
         match installed {
             Ok(()) => {
                 log::info!("installing TMA Cloud {version}");
+                // Long enough to read that the app will reopen.
+                std::thread::sleep(CLOSE_AFTER);
                 notifier.close_app();
             }
             Err(err) => {
-                log::warn!("update install: {err}");
-                notifier.apply(move |app| app.toasts.error(format!("Could not install the update: {err}")));
+                log::warn!("update: {err}");
+                overlay::set(None);
+                notifier.error(err);
                 BUSY.store(false, Ordering::Relaxed);
             }
         }
     });
+}
+
+/// Block until a frame finds no upload or download running.
+fn wait_until_idle(notifier: &Notifier) {
+    let (idle_tx, idle) = std::sync::mpsc::channel();
+    loop {
+        let tx = idle_tx.clone();
+        notifier.apply(move |app| {
+            if !app.transfers_mut().is_some_and(|t| t.is_busy()) {
+                let _ = tx.send(());
+            }
+        });
+        if idle.recv_timeout(RETRY).is_ok() {
+            return;
+        }
+    }
+}
+
+fn show(notifier: &Notifier, version: &str, step: overlay::Step) {
+    overlay::set(Some(overlay::Status { version: version.to_string(), step }));
+    notifier.repaint();
+}
+
+/// Put the new copy in place; the Windows installer waits for `finish`.
+fn install(target: Target, download: PathBuf) -> Result<(), String> {
+    install::prepare(&target, &download)?;
+    if install::after_exit(&target) {
+        *PENDING.lock().unwrap_or_else(|e| e.into_inner()) = Some((target, download));
+        Ok(())
+    } else {
+        install::launch(&target, &download)
+    }
 }
 
 #[cfg(test)]
