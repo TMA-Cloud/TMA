@@ -8,7 +8,7 @@ use tma_core::api::{FileItem, SortBy, SortOrder, StorageUsage, User};
 use crate::auth::AuthState;
 use crate::host::{Host, HostKind, SavedSession};
 use crate::tasks::Tasks;
-use crate::theme::{self, ThemeChoice, Tokens};
+use crate::theme::{self, TextSize, ThemeChoice, Tokens};
 use crate::toast::Toasts;
 use crate::{dashboard, files, modals, settings, transfers, widgets};
 
@@ -22,6 +22,8 @@ pub struct Prefs {
     pub order: SortOrder,
     /// The sidebar is folded away (the menu button in the header).
     pub sidebar_hidden: bool,
+    /// How large the app draws (Settings → Appearance).
+    pub text_size: TextSize,
 }
 
 impl Default for Prefs {
@@ -32,6 +34,7 @@ impl Default for Prefs {
             sort: SortBy::Name,
             order: SortOrder::Asc,
             sidebar_hidden: false,
+            text_size: TextSize::Default,
         }
     }
 }
@@ -311,6 +314,12 @@ impl App {
         if tokens.dark != self.t.dark || ctx.cumulative_frame_nr() == 0 {
             theme::apply(ctx, &tokens);
             crate::platform::use_app_cursors(tokens.dark);
+        }
+        // The Text size setting is the one zoom; egui's Ctrl +/- would only undo it.
+        let zoom = self.prefs.text_size.zoom();
+        if (ctx.zoom_factor() - zoom).abs() > f32::EPSILON {
+            ctx.options_mut(|o| o.zoom_with_keyboard = false);
+            ctx.set_zoom_factor(zoom);
         }
         self.t = tokens;
         widgets::store_tokens(ctx, tokens);

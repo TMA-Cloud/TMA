@@ -13,7 +13,7 @@ use crate::theme::Tokens;
 use crate::widgets;
 
 /// Two-line rows as in the web app: name above, size and date below.
-const ROW_HEIGHT: f32 = 48.0;
+const ROW_HEIGHT: f32 = 52.0;
 const ROW_GAP: f32 = 4.0;
 pub(super) const TILE: Vec2 = Vec2::new(156.0, 116.0);
 
@@ -262,7 +262,7 @@ fn list(main: &mut Main, ui: &mut Ui, t: &Tokens, desktop: bool, actions: &mut V
             let (rect, _) = ui.allocate_exact_size(Vec2::new(width, ROW_HEIGHT), Sense::hover());
             let text_left = rect.min.x + 50.0;
             let label = name_label(main, &item);
-            let galley = ui.painter().layout_no_wrap(label, FontId::new(14.0, crate::theme::semibold()), t.label);
+            let galley = ui.painter().layout_no_wrap(label, FontId::new(15.0, crate::theme::semibold()), t.label);
             let name_width = galley.size().x;
             // The icon and name move the item; the rest of the row starts a selection band.
             let grab = Rect::from_min_max(rect.min, egui::pos2(text_left + name_width + 8.0, rect.max.y));
@@ -280,7 +280,7 @@ fn list(main: &mut Main, ui: &mut Ui, t: &Tokens, desktop: bool, actions: &mut V
             let name_rect =
                 Rect::from_min_max(egui::pos2(text_left, rect.min.y), egui::pos2(rect.max.x - 12.0, rect.max.y));
             let painter = ui.painter().with_clip_rect(name_rect);
-            painter.galley(egui::pos2(text_left, rect.center().y - 18.0), galley, t.label);
+            painter.galley(egui::pos2(text_left, rect.center().y - 20.0), galley, t.label);
             let mut x = text_left + name_width + 6.0;
             for (show, icon, color) in [
                 (item.starred, egui_phosphor::fill::STAR, t.warning),
@@ -289,10 +289,10 @@ fn list(main: &mut Main, ui: &mut Ui, t: &Tokens, desktop: bool, actions: &mut V
             ] {
                 if show {
                     let badge = painter.text(
-                        egui::pos2(x, rect.center().y - 9.0),
+                        egui::pos2(x, rect.center().y - 10.0),
                         Align2::LEFT_CENTER,
                         icon,
-                        FontId::proportional(12.0),
+                        FontId::proportional(13.0),
                         color,
                     );
                     if icon == ph::LINK {
@@ -302,10 +302,10 @@ fn list(main: &mut Main, ui: &mut Ui, t: &Tokens, desktop: bool, actions: &mut V
                 }
             }
             painter.text(
-                egui::pos2(text_left, rect.center().y + 9.0),
+                egui::pos2(text_left, rect.center().y + 11.0),
                 Align2::LEFT_CENTER,
                 meta_line(main, &item, now),
-                FontId::proportional(12.0),
+                FontId::proportional(13.0),
                 t.label_tertiary,
             );
         }

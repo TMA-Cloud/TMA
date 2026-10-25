@@ -5,6 +5,7 @@ mod about;
 mod account;
 mod admin;
 mod admin_activity;
+mod appearance;
 mod bucket_form;
 mod dialogs;
 mod dialogs_admin;
@@ -38,6 +39,7 @@ use crate::widgets;
 pub enum Page {
     #[default]
     Profile,
+    Appearance,
     Storage,
     SubUsers,
     Administration,
@@ -218,14 +220,18 @@ pub fn opened(main: &mut Main, tasks: &Tasks) {
         Page::Administration => admin::load(main, tasks),
         Page::Updates => updates::load(main, tasks),
         Page::Security => account::load_security(main, tasks),
-        Page::Host => {}
+        Page::Appearance | Page::Host => {}
         Page::About => about::load(main, tasks),
     }
 }
 
 /// The settings pages this account can open, in menu order.
 pub(crate) fn pages(main: &Main, host_title: Option<&'static str>) -> Vec<(Page, &'static str, &'static str)> {
-    let mut pages = vec![(Page::Profile, ph::USER, "Profile"), (Page::Storage, ph::HARD_DRIVES, "Storage")];
+    let mut pages = vec![
+        (Page::Profile, ph::USER, "Profile"),
+        (Page::Appearance, ph::TEXT_AA, "Appearance"),
+        (Page::Storage, ph::HARD_DRIVES, "Storage"),
+    ];
     if !main.user.is_sub_user {
         pages.push((Page::SubUsers, ph::USERS, "Sub-users"));
     }
@@ -276,7 +282,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
             ui.add_space((1.0 - arrival) * 8.0);
             ui.set_width(page_width(ui.available_width()));
             ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
-            page_body(main, &mut *app.host, &app.tasks, ui);
+            page_body(main, &mut app.prefs, &mut *app.host, &app.tasks, ui);
         });
     });
     if let Some(page) = switch
@@ -309,10 +315,11 @@ fn page_width(available: f32) -> f32 {
     available.clamp(0.0, 680.0)
 }
 
-fn page_body(main: &mut Main, host: &mut dyn Host, tasks: &Tasks, ui: &mut egui::Ui) {
+fn page_body(main: &mut Main, prefs: &mut crate::app::Prefs, host: &mut dyn Host, tasks: &Tasks, ui: &mut egui::Ui) {
     let desktop = host.kind() == crate::host::HostKind::Desktop;
     match main.settings.page {
         Page::Profile => account::profile(main, ui),
+        Page::Appearance => appearance::show(prefs, ui),
         Page::Storage => storage::show(main, ui, tasks),
         Page::SubUsers => subusers::show(main, ui, tasks),
         Page::Administration => admin::show(main, ui, tasks, desktop),

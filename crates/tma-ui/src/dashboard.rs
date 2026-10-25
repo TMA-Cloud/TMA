@@ -187,20 +187,22 @@ fn recent(main: &crate::app::Main, ui: &mut Ui, t: &crate::theme::Tokens, action
                 crate::files::opening::paint(ui.painter(), rect, 12, icon, opening, t);
                 let icon = crate::files::opening::icon_rect(icon, opening);
                 icons::file(ui.painter(), icon, t, &item.name, item.mime_type.as_deref());
-                ui.painter().text(
-                    rect.left_center() + Vec2::new(44.0, -9.0),
+                // A long name stops at the card's edge, as in the file list.
+                let text = ui.painter().with_clip_rect(rect.with_max_x(rect.max.x - 12.0));
+                text.text(
+                    rect.left_center() + Vec2::new(44.0, -10.0),
                     Align2::LEFT_CENTER,
                     &item.name,
-                    FontId::new(14.0, theme::semibold()),
+                    FontId::new(15.0, theme::semibold()),
                     t.label,
                 );
                 let opened = opened_line(item, now, &main.user.id);
                 let meta = format!("{}  ·  {opened}", item.size.map(tma_core::format::file_size).unwrap_or_default());
-                ui.painter().text(
-                    rect.left_center() + Vec2::new(44.0, 10.0),
+                text.text(
+                    rect.left_center() + Vec2::new(44.0, 11.0),
                     Align2::LEFT_CENTER,
                     meta,
-                    FontId::proportional(12.0),
+                    FontId::proportional(13.0),
                     t.label_tertiary,
                 );
                 if response.double_clicked() || response.clicked() {

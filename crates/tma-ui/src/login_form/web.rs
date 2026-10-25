@@ -154,7 +154,7 @@ fn place(doc: &Document, input: &mut Input, field: &Field<'_>, t: &crate::theme:
     let style = format!(
         "position:fixed;left:{:.1}px;top:{:.1}px;width:{:.1}px;height:{:.1}px;margin:0;padding:0;\
          box-sizing:border-box;border:0;outline:0;background:transparent;color:{};caret-color:{};\
-         font:14px Figtree,system-ui,-apple-system,'Segoe UI',sans-serif;z-index:5;",
+         font:14px 'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;z-index:5;",
         left + f64::from(r.min.x),
         top + f64::from(r.min.y),
         r.width(),

@@ -49,7 +49,7 @@ pub async fn open(name: &str, reply: serde_json::Value, look: &Look, tab_url: &s
     let bar = element(
         "div",
         &format!(
-            "display:flex;align-items:center;gap:8px;padding:8px 14px;background:{};border-bottom:1px solid {};font:600 14px Figtree,system-ui,sans-serif;color:{}",
+            "display:flex;align-items:center;gap:8px;padding:8px 14px;background:{};border-bottom:1px solid {};font:600 14px 'Inter',system-ui,sans-serif;color:{}",
             look.surface, look.separator, look.text
         ),
     )?;

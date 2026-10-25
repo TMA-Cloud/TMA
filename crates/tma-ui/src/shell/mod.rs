@@ -224,7 +224,14 @@ fn header(app: &mut App, root: &mut egui::Ui) {
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     let name =
                         main.user.name.clone().filter(|n| !n.is_empty()).unwrap_or_else(|| main.user.email.clone());
-                    let (rect, menu) = ui.allocate_exact_size(Vec2::new(170.0, 36.0), Sense::click());
+                    let (name_font, email_font) = (FontId::new(12.0, theme::semibold()), FontId::proportional(12.0));
+                    let measure =
+                        |s: &str, font: FontId| ui.painter().layout_no_wrap(s.to_string(), font, t.label).size().x;
+                    let text_width =
+                        measure(&name, name_font.clone()).max(measure(&main.user.email, email_font.clone()));
+                    // Fits the name and email; a very long one is clipped rather than crowding the search box.
+                    let width = (text_width + 64.0).clamp(170.0, 260.0);
+                    let (rect, menu) = ui.allocate_exact_size(Vec2::new(width, 36.0), Sense::click());
                     if menu.hovered() {
                         ui.painter().rect_filled(rect, CornerRadius::same(18), t.fill_quaternary);
                     }
@@ -234,14 +241,14 @@ fn header(app: &mut App, root: &mut egui::Ui) {
                         rect.left_center() + Vec2::new(36.0, -7.0),
                         Align2::LEFT_CENTER,
                         &name,
-                        FontId::new(12.0, theme::semibold()),
+                        name_font,
                         t.label,
                     );
                     text.text(
                         rect.left_center() + Vec2::new(36.0, 8.0),
                         Align2::LEFT_CENTER,
                         &main.user.email,
-                        FontId::proportional(12.0),
+                        email_font,
                         t.label_tertiary,
                     );
                     ui.painter().text(

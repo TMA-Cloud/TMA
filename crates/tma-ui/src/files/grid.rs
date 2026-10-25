@@ -92,7 +92,7 @@ pub(super) fn grid(main: &mut Main, ui: &mut Ui, t: &Tokens, desktop: bool, acti
                         halign: egui::Align::Center,
                         ..egui::text::LayoutJob::simple(
                             name_label(main, &item),
-                            FontId::new(12.0, crate::theme::semibold()),
+                            FontId::new(13.0, crate::theme::semibold()),
                             t.label,
                             text_rect.width(),
                         )
@@ -104,7 +104,7 @@ pub(super) fn grid(main: &mut Main, ui: &mut Ui, t: &Tokens, desktop: bool, acti
                         egui::pos2(text_rect.center().x, text_rect.min.y + name_height + 3.0),
                         Align2::CENTER_TOP,
                         meta_line(main, &item, now),
-                        FontId::proportional(12.0),
+                        FontId::proportional(13.0),
                         t.label_tertiary,
                     );
                     let mut corner = rect.right_top() + Vec2::new(-16.0, 16.0);
@@ -113,7 +113,7 @@ pub(super) fn grid(main: &mut Main, ui: &mut Ui, t: &Tokens, desktop: bool, acti
                             corner,
                             Align2::CENTER_CENTER,
                             egui_phosphor::fill::STAR,
-                            FontId::proportional(12.0),
+                            FontId::proportional(13.0),
                             t.warning,
                         );
                         corner.x -= 16.0;
@@ -123,7 +123,7 @@ pub(super) fn grid(main: &mut Main, ui: &mut Ui, t: &Tokens, desktop: bool, acti
                             corner,
                             Align2::CENTER_CENTER,
                             ph::LINK,
-                            FontId::proportional(12.0),
+                            FontId::proportional(13.0),
                             t.accent,
                         );
                         super::view::share_tip(ui, &item, badge, now);

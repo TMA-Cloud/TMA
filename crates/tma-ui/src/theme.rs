@@ -36,6 +36,40 @@ pub enum ThemeChoice {
     Dark,
 }
 
+/// How large the app draws, as a browser zooms a page: text, icons and spacing
+/// grow together, so nothing overlaps or is cut off (WCAG 1.4.4, resize text).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, Default)]
+pub enum TextSize {
+    Small,
+    #[default]
+    Default,
+    Large,
+    Larger,
+}
+
+impl TextSize {
+    pub const ALL: [TextSize; 4] = [TextSize::Small, TextSize::Default, TextSize::Large, TextSize::Larger];
+
+    /// The zoom applied to the whole interface.
+    pub fn zoom(self) -> f32 {
+        match self {
+            TextSize::Small => 0.9,
+            TextSize::Default => 1.0,
+            TextSize::Large => 1.15,
+            TextSize::Larger => 1.3,
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            TextSize::Small => "Small",
+            TextSize::Default => "Default",
+            TextSize::Large => "Large",
+            TextSize::Larger => "Larger",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct Tokens {
     pub dark: bool,
@@ -267,9 +301,9 @@ pub fn apply(ctx: &egui::Context, t: &Tokens) {
         // Menus, dialogs and panels ease in over about the old web app's timing, not egui's 1/12 s.
         style.animation_time = 0.16;
         style.text_styles = [
-            (TextStyle::Small, FontId::new(12.0, FontFamily::Proportional)),
-            (TextStyle::Body, FontId::new(13.0, FontFamily::Proportional)),
-            (TextStyle::Button, FontId::new(13.0, FontFamily::Proportional)),
+            (TextStyle::Small, FontId::new(13.0, FontFamily::Proportional)),
+            (TextStyle::Body, FontId::new(14.0, FontFamily::Proportional)),
+            (TextStyle::Button, FontId::new(14.0, FontFamily::Proportional)),
             (TextStyle::Heading, FontId::new(20.0, FontFamily::Proportional)),
             (TextStyle::Monospace, FontId::new(12.0, FontFamily::Monospace)),
         ]
@@ -277,14 +311,15 @@ pub fn apply(ctx: &egui::Context, t: &Tokens) {
     });
 }
 
-/// Figtree (OFL): a geometric sans with a warm, slightly rounded voice that stays
-/// clear at the 12 to 14 point sizes most of the app uses. It covers Latin; other
-/// scripts fall back to the system or egui font.
-const FIGTREE: [(&str, &[u8]); 4] = [
-    ("figtree-regular", include_bytes!("../assets/fonts/Figtree-Regular.ttf")),
-    ("figtree-medium", include_bytes!("../assets/fonts/Figtree-Medium.ttf")),
-    ("figtree-semibold", include_bytes!("../assets/fonts/Figtree-SemiBold.ttf")),
-    ("figtree-bold", include_bytes!("../assets/fonts/Figtree-Bold.ttf")),
+/// Inter (OFL), a screen sans with a tall x-height, so long lists of file names stay
+/// readable. Its serifed I and tailed l (cv08, cv05) are baked in, since egui cannot
+/// turn on font features and file codes need I, l and 1 apart. Subset to Latin, Greek
+/// and Cyrillic; other scripts fall back to the system or egui font.
+const UI_FONT: [(&str, &[u8]); 4] = [
+    ("ui-regular", include_bytes!("../assets/fonts/Inter-Regular.ttf")),
+    ("ui-medium", include_bytes!("../assets/fonts/Inter-Medium.ttf")),
+    ("ui-semibold", include_bytes!("../assets/fonts/Inter-SemiBold.ttf")),
+    ("ui-bold", include_bytes!("../assets/fonts/Inter-Bold.ttf")),
 ];
 
 pub fn medium() -> FontFamily {
@@ -318,11 +353,11 @@ impl Weight for egui::RichText {
     }
 }
 
-/// Figtree in four weights, the icon font in every family so icons mix into any
+/// The UI font in four weights, the icon font in every family so icons mix into any
 /// label, and the system UI font (desktop) then egui's faces as fallbacks.
 pub fn install_fonts(ctx: &egui::Context, system_font: Option<Vec<u8>>) {
     let mut fonts = egui::FontDefinitions::default();
-    for (name, bytes) in FIGTREE {
+    for (name, bytes) in UI_FONT {
         fonts.font_data.insert(name.into(), egui::FontData::from_static(bytes).into());
     }
     egui_phosphor::add_to_fonts(&mut fonts, egui_phosphor::Variant::Regular);
@@ -332,16 +367,27 @@ pub fn install_fonts(ctx: &egui::Context, system_font: Option<Vec<u8>>) {
         fallbacks.insert(0, "system-ui".into());
     }
     let with = |primary: &str| std::iter::once(primary.to_string()).chain(fallbacks.iter().cloned()).collect();
-    fonts.families.insert(FontFamily::Proportional, with("figtree-regular"));
-    fonts.families.insert(medium(), with("figtree-medium"));
-    fonts.families.insert(semibold(), with("figtree-semibold"));
-    fonts.families.insert(bold(), with("figtree-bold"));
+    fonts.families.insert(FontFamily::Proportional, with("ui-regular"));
+    fonts.families.insert(medium(), with("ui-medium"));
+    fonts.families.insert(semibold(), with("ui-semibold"));
+    fonts.families.insert(bold(), with("ui-bold"));
     ctx.set_fonts(fonts);
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn text_sizes_grow_in_order_around_the_default() {
+        let zooms: Vec<f32> = TextSize::ALL.iter().map(|s| s.zoom()).collect();
+        assert!(zooms.windows(2).all(|w| w[0] < w[1]));
+        assert_eq!(TextSize::default().zoom(), 1.0);
+        // Settings saved before the option existed keep the default size.
+        let prefs: crate::app::Prefs = serde_json::from_str(r#"{"theme":"Dark","grid_view":true}"#)
+            .unwrap_or_else(|e| unreachable!("older settings load: {e}"));
+        assert_eq!(prefs.text_size, TextSize::Default);
+    }
 
     #[test]
     fn mixing_keeps_translucent_colours() {
