@@ -2,7 +2,7 @@
 # TMA Cloud: one image with the server (API, worker, admin commands) and the
 # web app it serves.
 #
-#   docker build --build-arg VERSION=4.0.2 -t tma-cloud .
+#   docker build --build-arg VERSION=<tag> -t tma-cloud .
 #   docker run -p 3000:3000 --env-file .env tma-cloud            # API + web app
 #   docker run --env-file .env tma-cloud tma-server worker       # background worker
 
