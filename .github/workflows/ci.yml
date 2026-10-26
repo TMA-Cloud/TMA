@@ -1,4 +1,4 @@
-name: Tests
+name: CI
 
 on:
   push:
@@ -10,9 +10,10 @@ permissions:
   contents: read
 
 # A newer push to a pull request replaces its run still going. Runs on main
-# always finish, so every commit there is tested and its cache saved.
+# always finish, so every commit there is tested and its cache saved; a release
+# waits for that run.
 concurrency:
-  group: tests-${{ github.ref }}
+  group: ci-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
@@ -64,7 +65,7 @@ jobs:
   # Apart from lint, which only checks code the tests build, so the two run side
   # by side. Covers the Linux desktop app and Cloud Drive, which are workspace members.
   test:
-    name: Tests
+    name: Tests (Linux)
     runs-on: ubuntu-latest
 
     # The server suite talks to a real database, cache and bucket; here they
@@ -101,8 +102,8 @@ jobs:
         run: |
           docker run -d --name rustfs -p 9000:9000 \
             -e RUSTFS_ACCESS_KEY=tmatestkey -e RUSTFS_SECRET_KEY=tmatestsecret123 \
-            rustfs/rustfs:latest /data
-          for i in $(seq 1 30); do curl -s -o /dev/null http://localhost:9000/ && break; sleep 1; done
+            rustfs/rustfs:1.0.4 /data
+          for _ in $(seq 1 30); do curl -s -o /dev/null http://localhost:9000/ && break; sleep 1; done
 
       - name: Toolchain
         run: rustup update stable --no-self-update && rustup default stable
@@ -134,7 +135,7 @@ jobs:
         run: cargo test --workspace --test api --test cache -- --test-threads=1
 
   desktop:
-    name: Desktop app (${{ matrix.name }})
+    name: Desktop tests (${{ matrix.name }})
     # Each system has its own Cloud Drive adapter and app glue, built only
     # there; Linux is covered by the jobs above.
     strategy:
@@ -168,7 +169,7 @@ jobs:
           cargo test -p tma-drive -p tma-cloud
 
   scripts:
-    name: Install scripts
+    name: Shell scripts
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
