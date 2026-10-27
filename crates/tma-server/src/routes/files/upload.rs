@@ -294,12 +294,19 @@ pub async fn replace(
     {
         Err(err) if matches!(err.downcast_ref::<DomainError>(), Some(DomainError::Conflict(_))) => {
             // Recorded, so a save someone believes lost can be traced; the client keeps it as a copy.
+            // Either the copy was out of date or someone else holds the edit lock, which says who.
+            let message = match err.downcast_ref::<DomainError>() {
+                Some(DomainError::Conflict(message)) => message.clone(),
+                _ => String::new(),
+            };
+            let reason = if message == crud::STALE_SAVE { "stale_version" } else { "locked" };
             state.audit.log(
                 &ctx,
                 Event::new("file.update")
                     .failure()
                     .resource("file", Some(&id))
-                    .meta(json!({ "fileName": existing.name, "reason": "stale_version", "baseVersion": base })),
+                    .meta(json!({ "fileName": existing.name, "reason": reason, "baseVersion": base }))
+                    .error(&message),
             );
             return Err(err.into());
         }
