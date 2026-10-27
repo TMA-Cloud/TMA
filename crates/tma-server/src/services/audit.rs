@@ -82,6 +82,7 @@ struct Row {
     event: Event,
     ip: Option<String>,
     user_agent: Option<String>,
+    processing_ms: Option<i32>,
 }
 
 enum Msg {
@@ -163,6 +164,7 @@ impl AuditLog {
             role: event.actor_role.clone().or_else(|| ctx.role.map(String::from)),
             ip: ctx.ip.clone(),
             user_agent: ctx.user_agent.clone(),
+            processing_ms: ctx.started.map(|at| i32::try_from(at.elapsed().as_millis()).unwrap_or(i32::MAX)),
             event,
         };
         if let Err(err) = self.tx.try_send(Msg::Row(Box::new(row)))
@@ -228,7 +230,7 @@ async fn insert(pool: &PgPool, rows: &[Row], strip_users: bool) -> Result<(), sq
             .push_bind(row.user_agent.clone())
             .push_bind(row.event.metadata.as_ref().map(redact))
             .push_bind(row.event.error_message.clone())
-            .push_bind(None::<i32>);
+            .push_bind(row.processing_ms);
     });
     builder.build().execute(pool).await.map(|_| ())
 }

@@ -33,6 +33,8 @@ pub struct ReqCtx {
     pub user_id: Option<String>,
     pub owner_id: Option<String>,
     pub role: Option<&'static str>,
+    /// When the request arrived, for the processing time in the audit log.
+    pub started: Option<Instant>,
 }
 
 impl<S: Send + Sync> FromRequestParts<S> for ReqCtx {
@@ -112,6 +114,7 @@ pub async fn context(State(state): State<AppState>, mut req: Request, next: Next
         } else {
             None
         },
+        started: Some(started),
         ..Default::default()
     };
     let request_id = ctx.request_id.clone();
