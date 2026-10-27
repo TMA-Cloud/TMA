@@ -179,3 +179,18 @@ jobs:
       # These scripts write keys and passwords on users' servers; shellcheck ships with the runner.
       - name: Shellcheck
         run: shellcheck -x setup.sh update.sh rotate.sh scripts/db-backup-restore.sh .githooks/pre-commit .githooks/pre-push .githooks/commit-msg
+
+  dependencies:
+    name: Dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Known vulnerabilities, yanked releases, licenses and crate sources, as deny.toml sets
+      # them. It reads the advisory database fresh each run, so a new advisory fails main too.
+      - name: cargo deny
+        uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
+        with:
+          command: check

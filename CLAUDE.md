@@ -146,6 +146,7 @@ The wiki is a separate repo (TMA-Cloud/Wiki), checked out next to this one. Its
 | Server end to end  | `cargo test -p tma-server --test api` with the `TMA_TEST_*` vars                             |
 | Web app            | `cd apps/tma-cloud-web && trunk build --release`                                             |
 | Desktop installers | `cargo xtask package` (needs `cargo install cargo-packager`)                                 |
+| Dependencies       | `cargo deny check` (advisories, licenses, sources; see `deny.toml`)                          |
 | Root scripts       | `shellcheck setup.sh update.sh rotate.sh scripts/db-backup-restore.sh`                       |
 
 ## Git
