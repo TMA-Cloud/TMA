@@ -109,6 +109,29 @@ impl Paths {
         Some(path)
     }
 
+    /// Where the item `reveal` looked for at `path` really is, or None if it is not
+    /// there. Windows: a file the server renamed keeps its old name in the drive while
+    /// a program holds it open, so it is found by `id`, and other apps may read it for `time`.
+    #[cfg_attr(not(windows), expect(unused_variables, reason = "only Cloud Files can lag behind a rename"))]
+    pub fn locate(&self, path: &std::path::Path, id: &str, time: std::time::Duration) -> Option<std::path::PathBuf> {
+        if path.exists() {
+            return Some(path.to_path_buf());
+        }
+        #[cfg(windows)]
+        {
+            let found = tma_drive::cloud_files::find(path.parent()?, id)?;
+            let Status::Mounted(point) = self.status.lock().unwrap_or_else(|e| e.into_inner()).clone() else {
+                return None;
+            };
+            let rest = found.strip_prefix(crate::host::drive_root(&point)).ok()?;
+            let rel: Vec<String> = rest.components().map(|c| c.as_os_str().to_string_lossy().into_owned()).collect();
+            self.core()?.allow_read(&format!("\\{}", rel.join("\\")), time);
+            Some(found)
+        }
+        #[cfg(not(windows))]
+        None
+    }
+
     /// Make sure `path` is there for other programs. Windows makes a Cloud Drive
     /// folder's placeholders only when the folder is listed, so a file in a folder
     /// never browsed cannot be opened or copied yet: list each folder on the way.

@@ -46,15 +46,27 @@ pub fn open(paths: Paths, client: Client, file: FileItem, notifier: Notifier) {
         // Opening by path can block while Windows downloads the file; keep it off the async workers.
         let _ = std::thread::Builder::new().name("open-in-app".into()).spawn(move || {
             paths.reveal(&path);
+            // The launcher reports nothing back, so a path that is not there would only spin the ring.
+            let Some(path) = paths.locate(&path, &file.id, EDIT_WINDOW) else {
+                notifier.opened(&file.id);
+                notifier.error(format!(
+                    "Cannot open {}: Cloud Drive has not caught up with it yet. Try again in a moment.",
+                    file.name
+                ));
+                return;
+            };
             let opened = launch(&path, &file.name, &notifier);
+            // Its name in the drive, which the program shows: the old one until a rename catches up.
+            #[cfg(windows)]
+            let shown_as = path.file_name().map_or_else(|| file.name.clone(), |n| n.to_string_lossy().into_owned());
             // The ring turns until the program shows the file: a program that takes seconds
             // to start must not look as if the click did nothing, or people click again.
             #[cfg(windows)]
-            let shown = opened && wait_until_shown(&file.name);
+            let shown = opened && wait_until_shown(&shown_as);
             notifier.opened(&file.id);
             #[cfg(windows)]
             if shown {
-                hold_while_shown(&paths, &file);
+                hold_while_shown(&paths, &file.id, &shown_as);
             }
             #[cfg(not(windows))]
             let _ = opened;
@@ -88,24 +100,24 @@ fn wait_until_shown(name: &str) -> bool {
 /// their process says nothing; their title does. Office and LibreOffice track each
 /// document themselves.
 #[cfg(windows)]
-fn hold_while_shown(paths: &Paths, file: &FileItem) {
-    if tma_drive::editing::has_owner_files(&file.name) {
+fn hold_while_shown(paths: &Paths, id: &str, name: &str) {
+    if tma_drive::editing::has_owner_files(name) {
         return;
     }
     let Some(core) = paths.core() else { return };
     // Someone else is editing: the drive already made it read-only and the app said so.
-    if core.leases().hold(&file.id).is_some() {
+    if core.leases().hold(id).is_some() {
         return;
     }
     // Called once a window shows the file.
     let mut seen = std::time::Instant::now();
     while seen.elapsed() <= GONE {
         std::thread::sleep(Duration::from_secs(1));
-        if crate::app_windows::titles().iter().any(|t| tma_drive::editing::window_shows(t, &file.name)) {
+        if crate::app_windows::titles().iter().any(|t| tma_drive::editing::window_shows(t, name)) {
             seen = std::time::Instant::now();
         }
     }
-    core.leases().let_go(&file.id);
+    core.leases().let_go(id);
 }
 
 /// Open a file in its app; Windows asks which app when none is set for the type.

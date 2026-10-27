@@ -55,7 +55,7 @@ pub fn copied(paths: Paths, client: Client, items: Vec<FileItem>, cut: bool, not
                 }
             };
             match paths.local_path(&info.location_path, &info.name, PASTE_WINDOW) {
-                Some(path) => local.push(path),
+                Some(path) => local.push((path, item.id.clone())),
                 None => {
                     notifier
                         .info(format!("{} copied. Connect Cloud Drive to paste in other apps as well.", label(total)));
@@ -66,8 +66,11 @@ pub fn copied(paths: Paths, client: Client, items: Vec<FileItem>, cut: bool, not
         let reveal = paths.clone();
         let Ok(local) = tma_client::rt::handle()
             .spawn_blocking(move || {
-                local.iter().for_each(|path| reveal.reveal(path));
-                local
+                let found = |(path, id): (std::path::PathBuf, String)| {
+                    reveal.reveal(&path);
+                    reveal.locate(&path, &id, PASTE_WINDOW).unwrap_or(path)
+                };
+                local.into_iter().map(found).collect::<Vec<_>>()
             })
             .await
         else {

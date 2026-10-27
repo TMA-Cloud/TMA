@@ -20,6 +20,7 @@ use cloud_filter::root::{
 use notify::Watcher;
 
 use crate::core::Core;
+use crate::sync_plan;
 use filter::Filter;
 use worker::Shared;
 
@@ -77,6 +78,13 @@ pub fn forget_all() -> Result<(), String> {
         let _ = std::fs::remove_dir(&folder);
     }
     Ok(())
+}
+
+/// The file in `dir` that stands for server item `id`, by its stamp rather than its name:
+/// a file the server renamed keeps its old name here while a program holds it open.
+pub fn find(dir: &Path, id: &str) -> Option<PathBuf> {
+    let folder = local::read(dir).ok()?;
+    sync_plan::holding(&folder.items, id).filter(|item| !item.is_dir).map(|item| dir.join(&item.name))
 }
 
 fn same_path(a: &Path, b: &Path) -> bool {
