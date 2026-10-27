@@ -5,10 +5,10 @@ use std::path::Path;
 
 use super::local;
 use super::worker::{Shared, lock};
-use crate::backend::CONFLICT;
+use crate::backend::{CONFLICT, Entry};
 use crate::core::Node;
 use crate::paths;
-use crate::sync_plan::{self, Stamp};
+use crate::sync_plan::{self, Local, Stamp};
 
 /// How a local file's save went.
 pub(super) enum Saved {
@@ -25,6 +25,18 @@ impl Shared {
     /// The version a file written over the synced copy of `id` at `path` started from.
     pub(super) fn synced_version(&self, path: &Path, id: &str) -> Option<i64> {
         lock(&self.synced).get(&paths::key(&path.to_string_lossy())).filter(|(sid, _)| sid == id).map(|(_, v)| *v)
+    }
+
+    /// The server file and version `path` last held when it was synced.
+    pub(super) fn synced_at(&self, path: &Path) -> Option<(String, i64)> {
+        lock(&self.synced).get(&paths::key(&path.to_string_lossy())).cloned()
+    }
+
+    /// The server file a new file at `path` saves into, and the version to check, when the
+    /// server renamed that file while its program held it (see `sync_plan::renamed_while_open`).
+    pub(super) fn renamed_away(&self, path: &Path, local: &[Local], server: &[Entry]) -> Option<(String, Option<i64>)> {
+        let (id, version) = self.synced_at(path)?;
+        sync_plan::renamed_while_open(local, server, &id).then(|| (id, sync_plan::base(version)))
     }
 
     /// Mark a file already on the server synced; false while its app still holds it.

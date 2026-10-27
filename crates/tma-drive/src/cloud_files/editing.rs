@@ -32,8 +32,14 @@ impl Shared {
             let Some(server) = self.folder(dir).and_then(|node| self.server(&node)) else { return };
             for name in edited {
                 let server_name = self.core.to_server_name(&name);
-                if let Some(entry) = server.iter().find(|e| !e.is_folder && e.name.eq_ignore_ascii_case(&server_name)) {
-                    open.push((entry.id.clone(), name));
+                let by_name = server.iter().find(|e| !e.is_folder && e.name.eq_ignore_ascii_case(&server_name));
+                // Renamed on the server while open: the old name here is still that file.
+                let id = by_name.map(|e| e.id.clone()).or_else(|| {
+                    let (id, _) = self.synced_at(&dir.join(&name))?;
+                    server.iter().any(|e| e.id == id && !e.is_folder).then_some(id)
+                });
+                if let Some(id) = id {
+                    open.push((id, name));
                 }
             }
         }

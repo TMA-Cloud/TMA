@@ -183,12 +183,15 @@ impl Shared {
                 Upload::File { replace, .. } => {
                     let deleted = self.take_delete(&path).map(|(id, v)| (id, sync_plan::base(v)));
                     // Over a server file of the same name: checked if it replaced that file's synced copy.
-                    deleted.or_else(|| {
-                        replace.clone().map(|id| {
-                            let base = self.synced_version(&path, &id).and_then(sync_plan::base);
-                            (id, base)
+                    deleted
+                        .or_else(|| {
+                            replace.clone().map(|id| {
+                                let base = self.synced_version(&path, &id).and_then(sync_plan::base);
+                                (id, base)
+                            })
                         })
-                    })
+                        // A save under the name the server renamed away is still that file, not a new one.
+                        .or_else(|| self.renamed_away(&path, &folder.items, &server))
                 }
                 // An earlier upload of this file that could not restamp it moved the version on.
                 Upload::Changed { id, base, .. } => {

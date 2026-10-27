@@ -108,6 +108,24 @@ fn key(name: &str) -> String {
     name.to_lowercase()
 }
 
+/// The item here that stands for server item `id`, not counting an editor's scratch
+/// copies. A file the server renamed keeps its old name here while a program holds it.
+pub fn holding<'a>(local: &'a [Local], id: &str) -> Option<&'a Local> {
+    local.iter().find(|l| !is_local_only(&l.name) && l.stamp.as_ref().is_some_and(|s| s.id == id))
+}
+
+/// Whether the item here named `name` stands for server item `id`.
+fn stands_for(local: &[Local], name: &str, id: &str) -> bool {
+    local.iter().any(|l| key(&l.name) == key(name) && l.stamp.as_ref().is_some_and(|s| s.id == id))
+}
+
+/// Whether a new file, last synced here as server file `id`, is a save of that file.
+/// The server renamed it while a program held it open, so the program saved under the
+/// old name; it is still that file as long as the server has it and nothing else here does.
+pub fn renamed_while_open(local: &[Local], server: &[Entry], id: &str) -> bool {
+    server.iter().any(|e| e.id == id && !e.is_folder) && holding(local, id).is_none()
+}
+
 fn same_type(local: &Local, entry: &Entry) -> bool {
     local.is_dir == entry.is_folder
 }
@@ -132,6 +150,10 @@ pub fn reconcile(local: &[Local], server: &[Entry]) -> Vec<Fix> {
                     let free = key(&entry.name) == key(&item.name) || !local_names.contains(&key(&entry.name));
                     if free {
                         fixes.push(Fix::Rename { from: item.name.clone(), entry: (*entry).clone() });
+                    } else if !item.is_dir && item.in_sync && stands_for(local, &entry.name, &entry.id) {
+                        // A save under the old name, made while the server renamed the file:
+                        // the copy under the new name holds the same contents now.
+                        fixes.push(Fix::Remove(item.name.clone()));
                     }
                 } else if !item.is_dir && item.in_sync && stamp.version != entry.version {
                     fixes.push(Fix::Update { name: item.name.clone(), entry: (*entry).clone() });
@@ -195,6 +217,31 @@ mod tests {
 
     fn plain(name: &str, is_dir: bool) -> Local {
         Local { name: name.into(), is_dir, stamp: None, in_sync: false }
+    }
+
+    #[test]
+    fn a_file_renamed_while_open_is_found_and_saved_by_id() {
+        // Excel holds "Invoice.xlsx" while the server renames it; the rename waits here.
+        let server = [entry("a", "Invoice details.xlsx", false, 5)];
+        let held = [placeholder("Invoice.xlsx", "a", 5, true)];
+        assert_eq!(holding(&held, "a").map(|l| l.name.as_str()), Some("Invoice.xlsx"));
+        // Its save replaces the placeholder with a new file under the old name; only the
+        // scratch backup still carries the id until Excel deletes it.
+        let saved = [plain("Invoice.xlsx", false), placeholder("9C2F1A00", "a", 5, false)];
+        assert_eq!(holding(&saved, "a"), None);
+        assert!(renamed_while_open(&saved, &server, "a"));
+        // Not when the renamed file is here already, or gone from the server.
+        let both = [plain("Invoice.xlsx", false), placeholder("Invoice details.xlsx", "a", 5, true)];
+        assert!(!renamed_while_open(&both, &server, "a"));
+        assert!(!renamed_while_open(&saved, &[entry("b", "Other.xlsx", false, 5)], "a"));
+        assert!(!renamed_while_open(&saved, &[entry("a", "Invoice details", true, 5)], "a"));
+        // The save went into "a" and its new name came down meanwhile; once Excel lets go,
+        // the old-name copy is marked as "a" too, and goes unless it changed again.
+        let done = [placeholder("Invoice.xlsx", "a", 6, true), placeholder("Invoice details.xlsx", "a", 6, true)];
+        let server = [entry("a", "Invoice details.xlsx", false, 6)];
+        assert_eq!(reconcile(&done, &server), [Fix::Remove("Invoice.xlsx".into())]);
+        let edited = [placeholder("Invoice.xlsx", "a", 6, false), placeholder("Invoice details.xlsx", "a", 6, true)];
+        assert_eq!(reconcile(&edited, &server), []);
     }
 
     #[test]
