@@ -129,7 +129,10 @@ impl Handler for Filter {
         let children = core.children(&folder).map_err(|e| unsuccessful("listing", format!("{e:?}")))?;
         let placeholders: Vec<NewPlaceholder> =
             children.iter().filter_map(local::entry).filter_map(|e| local::placeholder(&e)).collect();
-        request.list(&placeholders).map_err(|e| unsuccessful("placeholders", e))
+        request.list(&placeholders).map_err(|e| unsuccessful("placeholders", e))?;
+        // Listed now, so server changes in it must reach it, not wait for the next full pass.
+        self.shared.note_folder(folder.id.clone(), request.path());
+        Ok(())
     }
 
     fn delete(&self, request: &Request) -> Result<(), Refusal> {
