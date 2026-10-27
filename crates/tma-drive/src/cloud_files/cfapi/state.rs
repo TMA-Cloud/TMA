@@ -1,6 +1,5 @@
-//! Reading a placeholder's state straight from cldapi: cloud-filter 0.0.6
-//! slices the stored identity from the wrong offset (and panics on an empty one),
-//! and has no way to ask whether a folder has been listed yet.
+//! A placeholder's state, read straight from cldapi without opening it for data, so
+//! nothing downloads and no app holding the file is in the way.
 #![expect(unsafe_code, reason = "reads placeholder state through the cldapi C API")]
 
 use std::mem::{offset_of, size_of};

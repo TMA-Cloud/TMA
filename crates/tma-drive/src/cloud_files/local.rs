@@ -4,13 +4,9 @@
 use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, Utc};
-use cloud_filter::metadata::Metadata;
-use cloud_filter::placeholder::{ConvertOptions, Placeholder, UpdateOptions};
-use cloud_filter::placeholder_file::PlaceholderFile;
-use cloud_filter::utility::FileTime;
 
 use crate::backend::Entry;
-use crate::cloud_files::cfapi;
+use crate::cloud_files::cfapi::{self, FileTime, Handle, Metadata, NewPlaceholder, Update};
 use crate::core::Node;
 use crate::sync_plan::{Local, Stamp};
 
@@ -18,7 +14,7 @@ use crate::sync_plan::{Local, Stamp};
 const EPOCH_DIFF_MS: i64 = 11_644_473_600_000;
 
 pub fn file_time(at: DateTime<Utc>) -> FileTime {
-    FileTime::new((at.timestamp_millis() + EPOCH_DIFF_MS).max(0) as u64 * 10_000)
+    (at.timestamp_millis() + EPOCH_DIFF_MS).max(0) * 10_000
 }
 
 /// A listing node as a planner entry; the root and local-only nodes have no id.
@@ -35,27 +31,27 @@ pub fn entry(node: &Node) -> Option<Entry> {
     })
 }
 
-/// `FILE_ATTRIBUTE_READONLY`: Office then opens the document read-only.
-const READ_ONLY: u32 = 0x1;
-
 fn metadata(entry: &Entry) -> Metadata {
-    let at = file_time(entry.modified);
-    let base = match (entry.is_folder, &entry.editor) {
-        (true, _) => Metadata::directory(),
-        (false, None) => Metadata::file().size(entry.size),
-        // Someone else is editing it.
-        (false, Some(_)) => Metadata::file().size(entry.size).attributes(READ_ONLY),
-    };
-    base.created(at).written(at).changed(at).accessed(entry.accessed.map(file_time).unwrap_or(at))
+    let written = file_time(entry.modified);
+    Metadata {
+        folder: entry.is_folder,
+        size: entry.size,
+        written,
+        accessed: entry.accessed.map(file_time).unwrap_or(written),
+        // Someone else is editing it: Office then opens it read-only.
+        read_only: entry.editor.is_some(),
+    }
 }
 
 /// A placeholder for a server item: no contents until opened, folders listed when browsed.
-pub fn placeholder(entry: &Entry) -> PlaceholderFile {
-    PlaceholderFile::new(&entry.name).metadata(metadata(entry)).blob(Stamp::of(entry).encode()).mark_in_sync()
+/// None for a name Windows cannot hold.
+pub fn placeholder(entry: &Entry) -> Option<NewPlaceholder> {
+    NewPlaceholder::new(&entry.name, metadata(entry), Stamp::of(entry).encode())
 }
 
 pub fn create(dir: &Path, entry: &Entry) -> std::io::Result<()> {
-    placeholder(entry).create::<&Path>(dir).map(|_| ()).map_err(std::io::Error::other)
+    let item = placeholder(entry).ok_or_else(|| std::io::Error::other("not a name Windows can hold"))?;
+    cfapi::create(dir, &[item])
 }
 
 /// What a placeholder knows: its stamp, whether it still matches the server,
@@ -98,25 +94,18 @@ pub fn read(dir: &Path) -> std::io::Result<Folder> {
 
 /// Make a file or folder made here a placeholder for its new server copy.
 pub fn adopt(path: &Path, stamp: &Stamp) -> std::io::Result<()> {
-    let mut placeholder =
-        Placeholder::options().write_access().exclusive().open(path).map_err(std::io::Error::other)?;
+    let mut placeholder = Handle::open(path, true, true)?;
     let blob = stamp.encode();
-    let converted =
-        placeholder.convert_to_placeholder(ConvertOptions::default().mark_in_sync().blob(blob.clone()), None);
-    if converted.is_err() {
+    if placeholder.convert(&blob).is_err() {
         // Already a placeholder (an earlier attempt converted it): just restamp it.
-        placeholder.update(UpdateOptions::default().blob(&blob).mark_in_sync(), None).map_err(std::io::Error::other)?;
+        placeholder.update(&Update { identity: Some(&blob), mark_in_sync: true, ..Default::default() })?;
     }
     Ok(())
 }
 
 /// Mark a folder the engine filled itself as listed, so it opens while the app is closed.
 pub fn mark_listed(path: &Path) -> std::io::Result<()> {
-    Placeholder::options()
-        .write_access()
-        .open(path)
-        .and_then(|mut p| p.update(UpdateOptions::default().has_no_children(), None).map(|_| ()))
-        .map_err(std::io::Error::other)
+    Handle::open(path, true, false)?.update(&Update { listed: true, ..Default::default() })
 }
 
 /// Follow a rename made on the server. Windows takes the rename for a local change,
@@ -158,12 +147,9 @@ fn make_writable(path: &Path) -> std::io::Result<()> {
 /// Point a placeholder at a newer server copy and drop the stale local contents.
 pub fn refresh(path: &Path, entry: &Entry) -> std::io::Result<()> {
     make_writable(path)?;
-    let mut placeholder =
-        Placeholder::options().write_access().exclusive().open(path).map_err(std::io::Error::other)?;
+    let mut placeholder = Handle::open(path, true, true)?;
     if entry.is_folder {
-        let blob = Stamp::of(entry).encode();
-        let options = UpdateOptions::default().metadata(metadata(entry)).blob(&blob).update_if_in_sync().mark_in_sync();
-        return placeholder.update(options, None).map(|_| ()).map_err(std::io::Error::other);
+        return placeholder.update(&synced_as(entry, &Stamp::of(entry).encode()));
     }
     point_at(&mut placeholder, entry)
 }
@@ -172,13 +158,20 @@ pub fn refresh(path: &Path, entry: &Entry) -> std::io::Result<()> {
 /// refuses a new size together with dropping the contents of a file that was downloaded
 /// ("The parameter is incorrect"), which left it on the old version for good; given
 /// the new size alone, its next download overran the old size ("The cloud operation is invalid").
-fn point_at(placeholder: &mut Placeholder, entry: &Entry) -> std::io::Result<()> {
-    let blob = Stamp::of(entry).encode();
-    placeholder
-        .update(UpdateOptions::default().update_if_in_sync().dehydrate(), None)
-        .map_err(std::io::Error::other)?;
-    let options = UpdateOptions::default().metadata(metadata(entry)).blob(&blob).update_if_in_sync().mark_in_sync();
-    placeholder.update(options, None).map(|_| ()).map_err(std::io::Error::other)
+fn point_at(placeholder: &mut Handle, entry: &Entry) -> std::io::Result<()> {
+    placeholder.update(&Update { if_in_sync: true, dehydrate: true, ..Default::default() })?;
+    placeholder.update(&synced_as(entry, &Stamp::of(entry).encode()))
+}
+
+/// The server copy's metadata and stamp, in sync, if nothing changed it here meanwhile.
+fn synced_as<'a>(entry: &Entry, blob: &'a [u8]) -> Update<'a> {
+    Update {
+        metadata: Some(metadata(entry)),
+        identity: Some(blob),
+        if_in_sync: true,
+        mark_in_sync: true,
+        ..Default::default()
+    }
 }
 
 /// Make a synced file read-only while someone else edits it, or writable again.
@@ -192,12 +185,11 @@ pub fn mark_editor(path: &Path, entry: &Entry) -> std::io::Result<()> {
 pub fn revert(path: &Path, entry: &Entry) -> std::io::Result<()> {
     make_writable(path)?;
     let blob = Stamp::of(entry).encode();
-    let mut placeholder =
-        Placeholder::options().write_access().exclusive().open(path).map_err(std::io::Error::other)?;
+    let mut placeholder = Handle::open(path, true, true)?;
     // An app that saved by writing a new file left a plain file: make it a placeholder again.
-    let _ = placeholder.convert_to_placeholder(ConvertOptions::default().blob(blob.clone()), None);
+    let _ = placeholder.convert(&blob);
     // The edit is kept elsewhere: mark the file synced so its contents may be dropped.
-    placeholder.update(UpdateOptions::default().blob(&blob).mark_in_sync(), None).map_err(std::io::Error::other)?;
+    placeholder.update(&Update { identity: Some(&blob), mark_in_sync: true, ..Default::default() })?;
     point_at(&mut placeholder, entry)
 }
 
@@ -247,15 +239,10 @@ pub fn is_placeholder(path: &Path) -> bool {
 }
 
 /// Forget the server copy a placeholder stood for, so its folder uploads again.
-/// The identity is never left empty: cloud-filter reads an empty one as a null slice.
+/// The identity is never left empty: an empty one would leave the old stamp in place.
 pub fn unstamp(path: &Path) -> std::io::Result<()> {
-    Placeholder::options()
-        .write_access()
-        .open(path)
-        .and_then(|mut p| {
-            p.update(UpdateOptions::default().blob(Stamp::UNSTAMPED).mark_not_in_sync(), None).map(|_| ())
-        })
-        .map_err(std::io::Error::other)
+    let update = Update { identity: Some(Stamp::UNSTAMPED), mark_not_in_sync: true, ..Default::default() };
+    Handle::open(path, true, false)?.update(&update)
 }
 
 /// A file's size and write time, to tell whether it changed while uploading.

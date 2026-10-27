@@ -13,10 +13,7 @@ mod worker;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use cloud_filter::root::{
-    Connection, HydrationType, PopulationType, ProtectionMode, SecurityId, Session, SupportedAttribute, SyncRootId,
-    SyncRootIdBuilder, SyncRootInfo,
-};
+use cfapi::{Connection, RootSpec};
 use notify::Watcher;
 
 use crate::core::Core;
@@ -28,7 +25,7 @@ const PROVIDER: &str = "TMACloud";
 
 /// Cloud Files arrived in Windows 10 1709.
 pub fn is_available() -> bool {
-    cloud_filter::root::is_supported().unwrap_or(false)
+    cfapi::is_supported()
 }
 
 /// The folder the drive appears as: "TMA Cloud" in the user's profile, like OneDrive.
@@ -44,7 +41,7 @@ pub struct Mounted {
     shared: Arc<Shared>,
     worker: Option<std::thread::JoinHandle<()>>,
     watcher: Option<notify::RecommendedWatcher>,
-    connection: Option<Connection<Filter>>,
+    connection: Option<Connection>,
 }
 
 impl Drop for Mounted {
@@ -94,8 +91,7 @@ fn same_path(a: &Path, b: &Path) -> bool {
 /// Remove a folder's synced copies, keeping anything made or changed locally.
 fn clear(folder: &Path) -> Result<(), String> {
     // A running app would take these deletes as the user's and trash the files on the server.
-    let idle = Session::new()
-        .connect(folder, filter::Idle)
+    let idle = cfapi::connect(folder, Arc::new(filter::Idle))
         .map_err(|e| format!("Close TMA Cloud before removing its folder ({e})"))?;
     if let Ok(items) = std::fs::read_dir(folder) {
         for item in items.flatten() {
@@ -108,20 +104,17 @@ fn clear(folder: &Path) -> Result<(), String> {
 
 /// Unregister this provider's sync roots at `folder` (all of them for `None`),
 /// except `keep`, removing their synced copies. Returns the folders unregistered.
-fn unregister(folder: Option<&Path>, keep: Option<&SyncRootId>) -> Result<Vec<PathBuf>, String> {
-    let roots = cloud_filter::root::active_roots().map_err(|e| e.to_string())?;
+fn unregister(folder: Option<&Path>, keep: Option<&str>) -> Result<Vec<PathBuf>, String> {
     let mut released = Vec::new();
-    for root in roots {
-        let id = root.id();
-        let path = root.path();
+    for (id, path) in cfapi::active_roots()? {
         // Other providers' ids need not split cleanly; compare the prefix only.
-        let ours = id.to_os_string().to_string_lossy().starts_with(&format!("{PROVIDER}!"));
+        let ours = id.starts_with(&format!("{PROVIDER}!"));
         let here = folder.is_none_or(|f| same_path(&path, f));
-        if !ours || !here || keep.is_some_and(|k| id.to_os_string() == k.to_os_string()) {
+        if !ours || !here || keep == Some(id.as_str()) {
             continue;
         }
         clear(&path)?;
-        id.unregister().map_err(|e| format!("Cannot release the drive folder: {e}"))?;
+        cfapi::unregister(&id).map_err(|e| format!("Cannot release the drive folder: {e}"))?;
         released.push(path);
     }
     Ok(released)
@@ -134,7 +127,7 @@ fn holds_local_work(folder: &Path) -> bool {
 
 /// A folder left by another account (or an older registration) is never
 /// reused: its synced placeholders go, and anything made there is set aside.
-fn release_folder(folder: &Path, keep: &SyncRootId) -> Result<(), String> {
+fn release_folder(folder: &Path, keep: &str) -> Result<(), String> {
     if !unregister(Some(folder), Some(keep))?.is_empty() && holds_local_work(folder) {
         let aside = folder.with_file_name(format!(
             "{} (previous account {})",
@@ -147,26 +140,16 @@ fn release_folder(folder: &Path, keep: &SyncRootId) -> Result<(), String> {
     Ok(())
 }
 
-fn register(id: &SyncRootId, folder: &Path, label: &str) -> Result<(), String> {
-    if id.is_registered().unwrap_or(false) {
-        match id.info() {
-            Ok(info) if same_path(&info.path(), folder) => return Ok(()),
-            _ => id.unregister().map_err(|e| e.to_string())?,
-        }
+fn register(id: &str, folder: &Path, label: &str) -> Result<(), String> {
+    match cfapi::registered_path(id) {
+        Ok(Some(path)) if same_path(&path, folder) => return Ok(()),
+        Ok(Some(_)) => cfapi::unregister(id)?,
+        _ => {}
     }
     let icon = std::env::current_exe().map(|exe| format!("{},0", exe.display())).unwrap_or_default();
-    let info = SyncRootInfo::default()
-        .with_display_name(label)
-        .with_icon(icon)
-        .with_version(env!("CARGO_PKG_VERSION"))
-        .with_hydration_type(HydrationType::Full)
-        .with_population_type(PopulationType::Full)
-        .with_protection_mode(ProtectionMode::Personal)
-        .with_allow_pinning(true)
-        .with_supported_attribute(SupportedAttribute::FileLastWriteTime | SupportedAttribute::DirectoryLastWriteTime)
-        .with_path(folder)
-        .map_err(|e| e.to_string())?;
-    id.register(info).map_err(|e| format!("Cannot register the drive folder: {e}"))
+    let version = env!("CARGO_PKG_VERSION");
+    cfapi::register(&RootSpec { id, folder, display_name: label, icon: &icon, version })
+        .map_err(|e| format!("Cannot register the drive folder: {e}"))
 }
 
 pub fn mount(core: Arc<Core>, label: &str, at: Option<&str>) -> Result<Mounted, String> {
@@ -179,15 +162,14 @@ pub fn mount(core: Arc<Core>, label: &str, at: Option<&str>) -> Result<Mounted, 
     };
     std::fs::create_dir_all(&folder).map_err(|e| format!("Cannot create {}: {e}", folder.display()))?;
     let account = core.backend().account().ok().filter(|a| !a.is_empty()).unwrap_or_else(|| "default".into());
-    let sid = SecurityId::current_user().map_err(|e| e.to_string())?;
-    let id = SyncRootIdBuilder::new(PROVIDER).user_security_id(sid).account_name(account).build();
+    // "Provider!SID!account", the form Windows expects; neither part holds a "!".
+    let id = format!("{PROVIDER}!{}!{}", cfapi::current_user_sid()?, account.replace('!', "_"));
     release_folder(&folder, &id)?;
     register(&id, &folder, label)?;
 
     core.follow_changes();
     let shared = Arc::new(Shared::new(core.clone(), folder.clone()));
-    let connection = Session::new()
-        .connect(&folder, Filter { shared: shared.clone() })
+    let connection = cfapi::connect(&folder, Arc::new(Filter { shared: shared.clone() }))
         .map_err(|e| format!("Cannot connect the drive folder: {e}"))?;
     let events = shared.clone();
     let mut watcher = notify::recommended_watcher(move |event: notify::Result<notify::Event>| {

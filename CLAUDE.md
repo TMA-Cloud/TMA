@@ -48,7 +48,7 @@ into one image; `make build` tags it with the workspace version.
 - **Pure logic goes in its own module** so tests can cover it directly.
 - **Never crash.** Crates `deny(clippy::unwrap_used, expect_used, panic)` outside
   tests; return errors with `?`. `unsafe` is denied workspace-wide; only
-  `cloud_files/cfapi.rs` and the desktop app's Windows glue (`cursors/windows.rs`,
+  `cloud_files/cfapi/` and the desktop app's Windows glue (`cursors/windows.rs`,
   `single.rs`, `clipboard_ole.rs`, `cloak.rs`, `app_windows.rs`) allow it, with a `SAFETY:` comment on every block.
 - **Colours come from `theme::Tokens`** in `tma-ui` and the apps: `cargo xtask house`
   rejects literal colours outside `theme.rs` (use `theme::with_alpha`, `theme::mix`
@@ -109,8 +109,9 @@ Layers: `routes → services / models → storage / crypto / util / config`.
   Downloads stream straight into the placeholder; nothing is staged on disk.
   Windows never calls the engine for its own process, so drive it from another
   process when testing (the `mount_test` example does).
-- `cloud-filter` is a patched copy in `vendor/cloud-filter` (see its
-  `PATCHES.md`): the published crate panics inside Windows callbacks.
+- `cloud_files/cfapi/` is our own thin layer over Cloud Files (cldapi and the
+  WinRT sync-root manager) through Microsoft's `windows` crate. Every Windows
+  callback is caught and always answered: a panic there aborts the app.
 - The desktop app's Edit in app and Copy hand other apps paths inside the
   mounted drive, never temporary copies. `Core::allow_read` lets those paths
   through save-only mode for a while.
