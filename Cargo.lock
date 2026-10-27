@@ -8196,7 +8196,3 @@ dependencies = [
  "syn 3.0.9",
  "winnow 1.0.4",
 ]
-
-[[patch.unused]]
-name = "cloud-filter"
-version = "0.0.6"

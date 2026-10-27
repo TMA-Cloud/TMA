@@ -84,8 +84,6 @@ inherits = "release"
 opt-level = "s"
 lto = "fat"
 
-# A patched copy: the published 0.0.6 panics inside Windows callbacks, which
-# aborts the desktop app. See vendor/cloud-filter/PATCHES.md.
+# A patched copy until egui-phosphor supports this egui. See vendor/egui-phosphor/PATCHES.md.
 [patch.crates-io]
-cloud-filter = { path = "vendor/cloud-filter" }
 egui-phosphor = { path = "vendor/egui-phosphor" }
