@@ -6,7 +6,9 @@
 use std::path::{Path, PathBuf};
 
 use super::worker::Shared;
+use super::{cfapi, local};
 use crate::backend::NO_FEED;
+use crate::core::Populate;
 
 /// What catching up found.
 pub(super) enum Feed {
@@ -65,5 +67,23 @@ impl Shared {
         }
         *super::worker::lock(&self.cursor) = Some(changes.cursor);
         Feed::Done
+    }
+}
+
+impl Populate for Shared {
+    fn populate(&self, dir: &str) {
+        let mut path = self.root.clone();
+        for part in dir.split('\\').filter(|p| !p.is_empty()) {
+            path.push(part);
+            // A folder not on disk yet is created by its parent's listing; one made here is plain.
+            if !path.is_dir() || !local::is_placeholder(&path) || cfapi::is_populated(&path) {
+                continue;
+            }
+            self.resync_folder(&path);
+            // Windows need not ask for it any more (it would not ask on our behalf anyway).
+            if let Err(err) = local::mark_listed(&path) {
+                log::debug!("[drive] {} stays unlisted: {err}", path.display());
+            }
+        }
     }
 }

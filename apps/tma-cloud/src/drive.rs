@@ -89,7 +89,6 @@ pub struct Paths {
 
 impl Paths {
     /// The mounted drive's core, while there is one.
-    #[cfg_attr(not(windows), expect(dead_code, reason = "only Windows watches for the file's window"))]
     pub fn core(&self) -> Option<Arc<tma_drive::Core>> {
         self.core.lock().unwrap_or_else(|e| e.into_inner()).clone()
     }
@@ -132,13 +131,22 @@ impl Paths {
         None
     }
 
-    /// Make sure `path` is there for other programs. Windows makes a Cloud Drive
-    /// folder's placeholders only when the folder is listed, so a file in a folder
-    /// never browsed cannot be opened or copied yet: list each folder on the way.
-    /// Blocking; the drive answers these listings from the server.
+    /// Make sure `path` is there for other programs. A folder's items appear only once
+    /// it is listed, so a file in a folder never browsed cannot be opened or copied yet:
+    /// list each folder on the way. Cloud Files never lists for this app's own process,
+    /// so there the drive fills them in itself. Blocking; the listings come from the server.
     pub fn reveal(&self, path: &std::path::Path) {
         let Status::Mounted(point) = self.status.lock().unwrap_or_else(|e| e.into_inner()).clone() else { return };
         let Ok(rest) = path.strip_prefix(crate::host::drive_root(&point)) else { return };
+        if let Some(core) = self.core() {
+            let parts: Vec<String> = rest
+                .parent()
+                .into_iter()
+                .flat_map(|p| p.components())
+                .map(|c| c.as_os_str().to_string_lossy().into_owned())
+                .collect();
+            core.populate(&format!("\\{}", parts.join("\\")));
+        }
         let mut dir = std::path::PathBuf::from(crate::host::drive_root(&point));
         for part in rest.parent().into_iter().flat_map(|p| p.components()) {
             dir.push(part);

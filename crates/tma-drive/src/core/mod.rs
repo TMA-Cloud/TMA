@@ -14,7 +14,7 @@ pub use leases::Leases;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard, Weak};
 use std::time::{Duration, Instant};
 
 use chrono::{DateTime, Utc};
@@ -84,6 +84,12 @@ struct Listing {
     fetched: Instant,
 }
 
+/// An adapter that puts a folder's items on disk when asked (see `Core::populate`).
+pub trait Populate: Send + Sync {
+    /// Make sure the folders down to `dir` (a drive path) hold their items.
+    fn populate(&self, dir: &str);
+}
+
 pub struct Core {
     backend: Arc<dyn Backend>,
     staging: PathBuf,
@@ -112,6 +118,7 @@ pub struct Core {
     follows_changes: AtomicBool,
     total: AtomicU64,
     free: AtomicU64,
+    populate: Mutex<Option<Weak<dyn Populate>>>,
 }
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -140,6 +147,7 @@ impl Core {
             follows_changes: AtomicBool::new(false),
             total: AtomicU64::new(SYNTHETIC_CAPACITY),
             free: AtomicU64::new(SYNTHETIC_CAPACITY),
+            populate: Mutex::new(None),
         };
         core.clean_staging(false);
         Ok(core)
@@ -304,6 +312,20 @@ impl Core {
         } else {
             self.invalidate_all();
         }
+    }
+
+    /// Cloud Files never asks the drive to list a folder for the drive's own process,
+    /// so the app has the folders it opens or copies from listed this way first.
+    /// FUSE and NFS list on demand for every process, so they set nothing.
+    pub fn populate(&self, dir: &str) {
+        let adapter = lock(&self.populate).as_ref().and_then(Weak::upgrade);
+        if let Some(adapter) = adapter {
+            adapter.populate(dir);
+        }
+    }
+
+    pub fn set_populate(&self, adapter: Weak<dyn Populate>) {
+        *lock(&self.populate) = Some(adapter);
     }
 
     pub fn follow_changes(&self) {

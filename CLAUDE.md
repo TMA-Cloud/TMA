@@ -112,6 +112,8 @@ Layers: `routes → services / models → storage / crypto / util / config`.
 - `cloud_files/cfapi/` is our own thin layer over Cloud Files (cldapi and the
   WinRT sync-root manager) through Microsoft's `windows` crate. Every Windows
   callback is caught and always answered: a panic there aborts the app.
+  Since Windows lists nothing for the app's own process, `Core::populate`
+  fills a folder's placeholders before the app opens or copies from it.
 - The desktop app's Edit in app and Copy hand other apps paths inside the
   mounted drive, never temporary copies. `Core::allow_read` lets those paths
   through save-only mode for a while.

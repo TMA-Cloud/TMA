@@ -169,6 +169,8 @@ pub fn mount(core: Arc<Core>, label: &str, at: Option<&str>) -> Result<Mounted, 
 
     core.follow_changes();
     let shared = Arc::new(Shared::new(core.clone(), folder.clone()));
+    let weak = Arc::downgrade(&shared);
+    core.set_populate(weak);
     let connection = cfapi::connect(&folder, Arc::new(Filter { shared: shared.clone() }))
         .map_err(|e| format!("Cannot connect the drive folder: {e}"))?;
     let events = shared.clone();
