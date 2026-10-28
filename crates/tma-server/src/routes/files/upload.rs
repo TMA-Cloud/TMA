@@ -326,32 +326,3 @@ pub async fn replace(
     announce(&state, &auth.owner_id, &updated, parent.as_deref(), types::FILE_UPDATED).await;
     Ok(Json(updated))
 }
-
-pub async fn derived(
-    State(state): State<AppState>,
-    ctx: ReqCtx,
-    auth: AuthUser,
-    Path(id): Path<String>,
-    form: Multipart,
-) -> ApiResult<Json<FileItem>> {
-    let form = admit(&state, &auth, &ctx, Permission::Upload, form).await?;
-    let existing = match owned_file(&state, &id, &auth.owner_id).await {
-        Ok(existing) => existing,
-        Err(err) => return Err(upload::refuse(form, err).await),
-    };
-    let mut outcome = upload::receive(&state, form, true).await?;
-    let upload = first_upload(&outcome)?;
-    validate_name(&upload.name).map_err(|_| ApiError::bad_request("Invalid file name"))?;
-    let planned = [PlannedUpload { upload, parent_id: existing.parent_id.clone(), modified: None, client_id: None }];
-    let item = insert_one(&state, &planned, &auth).await?;
-    outcome.keys.keep_all();
-    state.audit.log(
-        &ctx,
-        Event::new("file.upload")
-            .resource("file", Some(&item.id))
-            .meta(json!({ "fileName": item.name, "fileSize": item.size, "derivedFrom": existing.id })),
-    );
-    announce(&state, &auth.owner_id, &item, existing.parent_id.as_deref(), types::FILE_UPLOADED).await;
-    cleanup::link_new_items(&state, &auth.owner_id, existing.parent_id.as_deref(), vec![item.id.clone()]).await;
-    Ok(Json(item))
-}

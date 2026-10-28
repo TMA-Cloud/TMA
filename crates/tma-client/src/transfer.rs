@@ -172,19 +172,6 @@ impl Client {
         self.json(self.request(reqwest::Method::POST, &path).multipart(form)).await
     }
 
-    /// Upload a file saved next to `original_id` (an editor's Save As), into the same folder.
-    #[cfg(not(target_arch = "wasm32"))]
-    pub async fn upload_derived(
-        &self,
-        original_id: &str,
-        file: &UploadFile,
-        progress: Arc<Progress>,
-    ) -> ApiResult<FileItem> {
-        let form = reqwest::multipart::Form::new().part("file", file_part(file, progress).await?);
-        let path = format!("/api/files/{}/derived", crate::http::enc(original_id));
-        self.json(self.request(reqwest::Method::POST, &path).multipart(form)).await
-    }
-
     /// Hand a file's bytes to `sink` as they arrive, without writing them anywhere first.
     #[cfg(not(target_arch = "wasm32"))]
     pub async fn download_with(

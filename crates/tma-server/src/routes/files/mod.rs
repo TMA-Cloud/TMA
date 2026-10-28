@@ -23,7 +23,6 @@ pub fn routes() -> Router<AppState> {
         .route("/upload", post(upload::single))
         .route("/upload/bulk", post(upload::bulk))
         .route("/{id}/replace", post(upload::replace))
-        .route("/{id}/derived", post(upload::derived))
         .layer(DefaultBodyLimit::disable());
     Router::new()
         .route("/events", get(events::stream))
