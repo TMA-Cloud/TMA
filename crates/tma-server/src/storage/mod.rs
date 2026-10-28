@@ -201,21 +201,6 @@ impl Storage {
         Ok(out)
     }
 
-    /// Store a small, fully buffered body.
-    pub async fn put_bytes(&self, key: &str, data: Bytes) -> Result<()> {
-        let a = self.active().await?;
-        a.client
-            .put_object()
-            .bucket(&a.bucket)
-            .key(key)
-            .content_length(data.len() as i64)
-            .body(ByteStream::from(data))
-            .send()
-            .await
-            .with_context(|| format!("PutObject failed for {key}"))?;
-        Ok(())
-    }
-
     /// A sink that streams an unknown-length body to `key`, switching to a
     /// multipart upload once it outgrows one part.
     pub async fn upload_sink(&self, key: &str, maximum_len: u64) -> Result<UploadSink> {

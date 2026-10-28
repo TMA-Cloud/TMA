@@ -331,13 +331,3 @@ impl SortOrder {
         }
     }
 }
-
-/// The OnlyOffice editor session for one document.
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct OnlyOfficeSession {
-    pub config: serde_json::Value,
-    #[serde(default)]
-    pub token: Option<String>,
-    pub onlyoffice_js_url: String,
-}

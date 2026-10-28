@@ -90,23 +90,6 @@ pub fn full_date(date: DateTime<Utc>) -> String {
     date.with_timezone(&Local).format("%b %-d, %Y at %-I:%M %p").to_string()
 }
 
-/// Compact share countdown for an icon badge: "7d", "5h", "12m", "∞".
-pub fn share_badge(expires_at: Option<DateTime<Utc>>, now: DateTime<Utc>) -> String {
-    let Some(at) = expires_at else { return "∞".into() };
-    let ms = (at - now).num_milliseconds();
-    if ms <= 0 {
-        return "Expired".into();
-    }
-    let minutes = (ms + 59_999) / 60_000;
-    if minutes >= 1440 {
-        format!("{}d", (minutes + 1439) / 1440)
-    } else if minutes >= 60 {
-        format!("{}h", (minutes + 59) / 60)
-    } else {
-        format!("{minutes}m")
-    }
-}
-
 /// Long share countdown for Get Info: "6 days, 3 hours remaining".
 pub fn share_remaining(expires_at: Option<DateTime<Utc>>, now: DateTime<Utc>) -> String {
     let Some(at) = expires_at else { return "Never expires".into() };
@@ -152,9 +135,6 @@ mod tests {
     #[test]
     fn countdowns() {
         let now = Utc::now();
-        assert_eq!(share_badge(None, now), "∞");
-        assert_eq!(share_badge(Some(now + chrono::Duration::days(7)), now), "7d");
-        assert_eq!(share_badge(Some(now - chrono::Duration::days(1)), now), "Expired");
         assert_eq!(share_remaining(Some(now + chrono::Duration::minutes(90)), now), "1 hour, 30 minutes remaining");
     }
 }

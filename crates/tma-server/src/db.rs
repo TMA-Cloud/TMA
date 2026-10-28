@@ -62,8 +62,3 @@ async fn apply_pending(conn: &mut sqlx::PgConnection) -> Result<()> {
     }
     Ok(())
 }
-
-/// Whether an error is Postgres's "relation does not exist".
-pub fn is_missing_table(err: &sqlx::Error) -> bool {
-    matches!(err, sqlx::Error::Database(db) if db.code().as_deref() == Some("42P01"))
-}

@@ -165,19 +165,6 @@ pub fn windows_to_server(name: &str) -> String {
         .collect()
 }
 
-/// Whether a name is safe as one Windows path component.
-pub fn is_safe_windows_name(name: &str) -> bool {
-    if name.is_empty() || name.encode_utf16().count() > 255 || name == "." || name == ".." {
-        return false;
-    }
-    if name.ends_with('.') || name.ends_with(' ') {
-        return false;
-    }
-    !name.chars().any(|c| {
-        (c as u32) < 0x20 || c == '\u{7f}' || matches!(c, '\\' | '/' | ':' | '*' | '?' | '"' | '<' | '>' | '|')
-    })
-}
-
 #[cfg(test)]
 mod tests {
     #[test]
@@ -217,6 +204,19 @@ mod tests {
         assert_eq!(extname(".index.md"), ".md");
         assert_eq!(numbered_name("photo.jpg", 2, true), "photo (2).jpg");
         assert_eq!(numbered_name("Docs", 1, false), "Docs (1)");
+    }
+
+    /// Whether a name is safe as one Windows path component.
+    fn is_safe_windows_name(name: &str) -> bool {
+        if name.is_empty() || name.encode_utf16().count() > 255 || name == "." || name == ".." {
+            return false;
+        }
+        if name.ends_with('.') || name.ends_with(' ') {
+            return false;
+        }
+        !name.chars().any(|c| {
+            (c as u32) < 0x20 || c == '\u{7f}' || matches!(c, '\\' | '/' | ':' | '*' | '?' | '"' | '<' | '>' | '|')
+        })
     }
 
     #[test]

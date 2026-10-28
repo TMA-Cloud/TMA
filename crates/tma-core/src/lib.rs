@@ -19,9 +19,6 @@ pub const DESKTOP_HEADER_VALUE: &str = "tma-desktop";
 /// Header carrying a desktop install's id, so one person's computers are told apart.
 pub const DEVICE_HEADER_NAME: &str = "X-TMA-Device";
 
-/// Product name shown in titles and the About page.
-pub const PRODUCT_NAME: &str = "TMA Cloud";
-
 /// Whether `latest` is a newer dotted version than `current` (a leading `v` is ignored).
 pub fn is_newer_version(latest: &str, current: &str) -> bool {
     let parse =

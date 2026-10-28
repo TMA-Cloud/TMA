@@ -107,10 +107,6 @@ impl EventHub {
         self.send(user_id, message).await;
     }
 
-    pub fn connection_count(&self) -> usize {
-        self.connections.load(Ordering::Relaxed)
-    }
-
     /// Keep the pattern subscription alive for the life of the process,
     /// routing file events locally and settings changes to `on_settings`.
     pub fn spawn_listener<F>(&self, on_settings: F)
