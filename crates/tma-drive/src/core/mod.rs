@@ -28,6 +28,8 @@ const MAX_TRACKED: usize = 4096;
 /// Free space reported when the account has no limit (1 PiB), never below 1 GiB.
 const SYNTHETIC_CAPACITY: u64 = 1 << 50;
 const MIN_FREE: u64 = 1 << 30;
+/// The volume size follows the account's quota, asked for at most this often.
+const SPACE_TTL: Duration = Duration::from_secs(30);
 
 #[derive(Debug, Clone, thiserror::Error, PartialEq, Eq)]
 pub enum FsError {
@@ -118,6 +120,7 @@ pub struct Core {
     follows_changes: AtomicBool,
     total: AtomicU64,
     free: AtomicU64,
+    space_checked: Mutex<Option<Instant>>,
     populate: Mutex<Option<Weak<dyn Populate>>>,
 }
 
@@ -147,6 +150,7 @@ impl Core {
             follows_changes: AtomicBool::new(false),
             total: AtomicU64::new(SYNTHETIC_CAPACITY),
             free: AtomicU64::new(SYNTHETIC_CAPACITY),
+            space_checked: Mutex::new(None),
             populate: Mutex::new(None),
         };
         core.clean_staging(false);
@@ -440,7 +444,7 @@ impl Core {
     }
 
     /// Refresh the volume size from the account's quota.
-    pub fn refresh_space(&self) {
+    fn refresh_space(&self) {
         let Ok(space) = self.backend.space() else { return };
         match space.total {
             Some(total) => {
@@ -454,7 +458,19 @@ impl Core {
         }
     }
 
+    /// The volume's (total, free) bytes, refreshed when the last check is older than `SPACE_TTL`.
     pub fn space(&self) -> (u64, u64) {
+        let due = {
+            let mut checked = lock(&self.space_checked);
+            let due = checked.is_none_or(|at| at.elapsed() >= SPACE_TTL);
+            if due {
+                *checked = Some(Instant::now());
+            }
+            due
+        };
+        if due {
+            self.refresh_space();
+        }
         (self.total.load(Ordering::Relaxed), self.free.load(Ordering::Relaxed))
     }
 }

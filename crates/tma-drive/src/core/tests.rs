@@ -540,3 +540,10 @@ fn a_change_elsewhere_keeps_listings_for_an_adapter_that_asks_what_changed() {
     core.invalidate(crate::paths::ROOT);
     assert_eq!(core.children(&root).unwrap().len(), 3);
 }
+
+#[test]
+fn volume_space_comes_from_the_account() {
+    let (_mock, core, _dir) = setup();
+    // No quota: a large synthetic volume, less what the account already uses.
+    assert_eq!(core.space(), (1 << 50, (1 << 50) - 10));
+}
