@@ -283,7 +283,7 @@ fn list(main: &mut Main, ui: &mut Ui, t: &Tokens, desktop: bool, actions: &mut V
             painter.galley(egui::pos2(text_left, rect.center().y - 20.0), galley, t.label);
             let mut x = text_left + name_width + 6.0;
             for (show, icon, color) in [
-                (item.starred, egui_phosphor::fill::STAR, t.warning),
+                (item.starred, ph::fill::STAR, t.warning),
                 (super::is_shared(&item), ph::LINK, t.accent),
                 (super::editor(&item, &main.user.id).is_some(), ph::PENCIL_SIMPLE, t.warning),
             ] {

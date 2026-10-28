@@ -5,7 +5,7 @@ use egui::epaint::PathShape;
 use egui::{Align2, Color32, FontId, Painter, Pos2, Rect, Stroke, Vec2, pos2};
 use tma_core::FileKind;
 
-pub use egui_phosphor::regular as ph;
+pub mod ph;
 
 use crate::theme::Tokens;
 

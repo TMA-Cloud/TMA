@@ -330,6 +330,12 @@ const UI_FONT: [(&str, &[u8]); 4] = [
     ("ui-bold", include_bytes!("../assets/fonts/Inter-Bold.ttf")),
 ];
 
+/// Only the Phosphor icons the app uses (`icons::ph`); `scripts/subset-icons.py` builds them.
+const ICON_FONTS: [(&str, &[u8]); 2] = [
+    ("icons", include_bytes!("../assets/fonts/PhosphorIcons.ttf")),
+    ("icons-fill", include_bytes!("../assets/fonts/PhosphorIcons-Fill.ttf")),
+];
+
 pub fn medium() -> FontFamily {
     FontFamily::Name("medium".into())
 }
@@ -365,15 +371,16 @@ impl Weight for egui::RichText {
 /// label, and the system UI font (desktop) then egui's faces as fallbacks.
 pub fn install_fonts(ctx: &egui::Context, system_font: Option<Vec<u8>>) {
     let mut fonts = egui::FontDefinitions::default();
-    for (name, bytes) in UI_FONT {
+    for (name, bytes) in UI_FONT.into_iter().chain(ICON_FONTS) {
         fonts.font_data.insert(name.into(), egui::FontData::from_static(bytes).into());
     }
-    egui_phosphor::add_to_fonts(&mut fonts, egui_phosphor::Variant::Regular);
     let mut fallbacks: Vec<String> = fonts.families.get(&FontFamily::Proportional).cloned().unwrap_or_default();
     if let Some(bytes) = system_font {
         fonts.font_data.insert("system-ui".into(), egui::FontData::from_owned(bytes).into());
         fallbacks.insert(0, "system-ui".into());
     }
+    // Icons sit in Phosphor's private-use codepoints, which no text font fills, so first place is safe.
+    fallbacks.splice(0..0, ICON_FONTS.map(|(name, _)| name.to_string()));
     let with = |primary: &str| std::iter::once(primary.to_string()).chain(fallbacks.iter().cloned()).collect();
     fonts.families.insert(FontFamily::Proportional, with("ui-regular"));
     fonts.families.insert(medium(), with("ui-medium"));
@@ -395,6 +402,31 @@ mod tests {
         let prefs: crate::app::Prefs = serde_json::from_str(r#"{"theme":"Dark","grid_view":true}"#)
             .unwrap_or_else(|e| unreachable!("older settings load: {e}"));
         assert_eq!(prefs.text_size, TextSize::Default);
+    }
+
+    #[test]
+    fn every_icon_has_a_glyph_in_the_bundled_fonts() {
+        let ctx = egui::Context::default();
+        install_fonts(&ctx, None);
+        // One frame loads the fonts; its texture upload is not needed here.
+        ctx.run_ui(egui::RawInput::default(), |_| {}).textures_delta.clear();
+        // Every "\u{...}" in the list, outlined and filled: one missing means the fonts need rebuilding.
+        let list = include_str!("icons/ph.rs");
+        let icons: Vec<char> = list
+            .split("\"\\u{")
+            .skip(1)
+            .filter_map(|rest| u32::from_str_radix(rest.split('}').next()?, 16).ok())
+            .filter_map(char::from_u32)
+            .collect();
+        assert_eq!(icons.len(), 92);
+        let missing: Vec<String> = ctx.fonts_mut(|fonts| {
+            icons
+                .iter()
+                .filter(|&&c| !fonts.has_glyph(&egui::FontId::proportional(14.0), c))
+                .map(|c| format!("U+{:X}", *c as u32))
+                .collect()
+        });
+        assert!(missing.is_empty(), "run scripts/subset-icons.py; no glyph for {missing:?}");
     }
 
     #[test]

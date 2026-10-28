@@ -14,7 +14,6 @@ workspace = true
 tma-core = { workspace = true }
 tma-client = { workspace = true }
 egui = { workspace = true, features = ["default_fonts"] }
-egui-phosphor = { workspace = true }
 rfd = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

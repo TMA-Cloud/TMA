@@ -64,7 +64,6 @@ reqwest = { version = "0.13", default-features = false, features = ["json", "str
 egui = "0.37"
 eframe = { version = "0.37", default-features = false }
 egui_extras = { version = "0.37", default-features = false }
-egui-phosphor = { version = "0.14", default-features = false, features = ["regular", "fill"] }
 rfd = { version = "0.17", default-features = false, features = ["xdg-portal"] }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp", "bmp"] }
 

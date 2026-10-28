@@ -288,7 +288,7 @@ fn selection_tools(main: &Main, ui: &mut Ui, selection: &[FileItem], actions: &m
         }
         if user.can(Permission::Edit) {
             let all = selection.iter().all(|i| i.starred);
-            let (icon, tip) = if all { (egui_phosphor::fill::STAR, "Unstar") } else { (ph::STAR, "Star") };
+            let (icon, tip) = if all { (ph::fill::STAR, "Unstar") } else { (ph::STAR, "Star") };
             if tool(ui, icon, tip, false, all.then_some(t.warning)).clicked() {
                 actions.push(Action::Star(ids.clone(), !all));
             }
@@ -296,11 +296,8 @@ fn selection_tools(main: &Main, ui: &mut Ui, selection: &[FileItem], actions: &m
         if user.can(Permission::Share) {
             // Lit like Star when every selected item already has a live link.
             let all = selection.iter().all(super::is_shared);
-            let (icon, tip) = if all {
-                (egui_phosphor::fill::SHARE_NETWORK, "Shared: manage link")
-            } else {
-                (ph::SHARE_NETWORK, "Share")
-            };
+            let (icon, tip) =
+                if all { (ph::fill::SHARE_NETWORK, "Shared: manage link") } else { (ph::SHARE_NETWORK, "Share") };
             if tool(ui, icon, tip, false, all.then_some(t.accent)).clicked() {
                 actions.push(Action::Share(selection.to_vec()));
             }

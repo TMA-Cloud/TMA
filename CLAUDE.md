@@ -86,6 +86,9 @@ Layers: `routes → services / models → storage / crypto / util / config`.
   the app on the next frame. Check the session `generation` (via `App::finish`)
   so results for an old session are dropped.
 - **Colours come from `theme::Tokens`** (the light and dark palettes); never literals.
+- **Icons come from `icons::ph`**: Phosphor glyphs in two small fonts that hold only
+  the icons listed there. After adding one, run `python scripts/subset-icons.py`; a test
+  fails while any listed icon has no glyph.
 - **Pointers come from `cursors.rs`**: the app's own artwork replaces system
   cursors (CSS on the web; Win32, X11 Render or NSCursor in the desktop app,
   while Wayland keeps the system's). Set the `egui::CursorIcon` you mean; file

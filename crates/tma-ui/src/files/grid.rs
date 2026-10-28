@@ -112,7 +112,7 @@ pub(super) fn grid(main: &mut Main, ui: &mut Ui, t: &Tokens, desktop: bool, acti
                         ui.painter().text(
                             corner,
                             Align2::CENTER_CENTER,
-                            egui_phosphor::fill::STAR,
+                            ph::fill::STAR,
                             FontId::proportional(13.0),
                             t.warning,
                         );

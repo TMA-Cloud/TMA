@@ -1919,13 +1919,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "egui-phosphor"
-version = "0.14.0"
-dependencies = [
- "egui",
-]
-
-[[package]]
 name = "egui-wgpu"
 version = "0.37.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6341,7 +6334,6 @@ dependencies = [
  "chrono",
  "data-encoding",
  "egui",
- "egui-phosphor",
  "image",
  "js-sys",
  "log",
@@ -8196,3 +8188,7 @@ dependencies = [
  "syn 3.0.9",
  "winnow 1.0.4",
 ]
+
+[[patch.unused]]
+name = "egui-phosphor"
+version = "0.14.0"
