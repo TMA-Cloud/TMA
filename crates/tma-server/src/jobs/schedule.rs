@@ -53,25 +53,38 @@ struct ScheduleRow {
     created_at: DateTime<Utc>,
 }
 
+/// Whether `row`'s next occurrence has come by `now`.
+fn is_due(row: &ScheduleRow, now: DateTime<Utc>) -> bool {
+    match next_after(&row.cron, row.last_run_at.unwrap_or(row.created_at)) {
+        Some(due) => due <= now,
+        None => {
+            tracing::warn!(name = %row.name, cron = %row.cron, "Invalid cron schedule");
+            false
+        }
+    }
+}
+
 /// Enqueue every schedule whose next occurrence has come; returns how many fired.
+/// Rows are read without locks and only a due one is locked and checked again:
+/// locking them all on every tick wrote to the table while nothing was due.
 pub async fn fire_due(pool: &PgPool, queue: &JobQueue) -> anyhow::Result<usize> {
     let now = Utc::now();
+    let rows =
+        sqlx::query_as::<_, ScheduleRow>("SELECT name, queue, cron, data, last_run_at, created_at FROM job_schedules")
+            .fetch_all(pool)
+            .await?;
     let mut fired = 0;
-    let mut tx = pool.begin().await?;
-    let rows = sqlx::query_as::<_, ScheduleRow>(
-        "SELECT name, queue, cron, data, last_run_at, created_at FROM job_schedules FOR UPDATE SKIP LOCKED",
-    )
-    .fetch_all(&mut *tx)
-    .await?;
-    for row in rows {
-        let from = row.last_run_at.unwrap_or(row.created_at);
-        let Some(due) = next_after(&row.cron, from) else {
-            tracing::warn!(name = %row.name, cron = %row.cron, "Invalid cron schedule");
-            continue;
-        };
-        if due > now {
-            continue;
-        }
+    for name in rows.iter().filter(|r| is_due(r, now)).map(|r| &r.name) {
+        let mut tx = pool.begin().await?;
+        let locked = sqlx::query_as::<_, ScheduleRow>(
+            "SELECT name, queue, cron, data, last_run_at, created_at FROM job_schedules
+              WHERE name = $1 FOR UPDATE SKIP LOCKED",
+        )
+        .bind(name)
+        .fetch_optional(&mut *tx)
+        .await?;
+        // Another worker holds it, or fired it after the read above.
+        let Some(row) = locked.filter(|r| is_due(r, now)) else { continue };
         // Missed occurrences collapse into one run; the key keeps a slow job from stacking.
         queue.send_unique(&row.queue, row.data.clone(), &row.name).await?;
         sqlx::query("UPDATE job_schedules SET last_run_at = $2 WHERE name = $1")
@@ -79,9 +92,9 @@ pub async fn fire_due(pool: &PgPool, queue: &JobQueue) -> anyhow::Result<usize> 
             .bind(now)
             .execute(&mut *tx)
             .await?;
+        tx.commit().await?;
         fired += 1;
     }
-    tx.commit().await?;
     Ok(fired)
 }
 
