@@ -24,6 +24,8 @@ pub struct ListQuery {
     order: Option<String>,
     cursor: Option<String>,
     limit: Option<String>,
+    /// `true` for a listing a client makes on its own, such as Cloud Drive's resyncs.
+    background: Option<String>,
 }
 
 impl ListQuery {
@@ -54,7 +56,8 @@ pub async fn folder(State(state): State<AppState>, auth: AuthUser, Query(q): Que
     let page = listing::list(&state.pool, &auth.owner_id, View::Folder(parent.as_deref()), &q.keyset(SortBy::Modified))
         .await?;
     // The directory counts as accessed, not its children (the root is not a row).
-    if let Some(p) = &parent {
+    // A background listing is no one opening it, and each access write rewrites the row.
+    if let Some(p) = parent.as_ref().filter(|_| q.background.as_deref() != Some("true")) {
         state.access.record_one(p, &auth.owner_id, Some(&auth.user_id));
     }
     Ok(page_response(page))

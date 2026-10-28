@@ -153,7 +153,7 @@ impl Browser {
         } else {
             (prefs.sort, prefs.order)
         };
-        ListQuery { sort: Some(sort), order: Some(order), cursor, limit: Some(200) }
+        ListQuery { sort: Some(sort), order: Some(order), cursor, limit: Some(200), background: false }
     }
 
     /// Switch to a place and load it from the start.

@@ -26,6 +26,8 @@ pub struct ListQuery {
     pub order: Option<SortOrder>,
     pub cursor: Option<String>,
     pub limit: Option<u32>,
+    /// Asked for by the app itself, not a person, so the folder's access time stays.
+    pub background: bool,
 }
 
 /// One page of a listing; `next_cursor` fetches the rest.
@@ -61,6 +63,9 @@ impl Client {
         }
         if let Some(limit) = query.limit {
             params.push(format!("limit={limit}"));
+        }
+        if query.background {
+            params.push("background=true".into());
         }
         let url = if params.is_empty() { path.to_string() } else { format!("{path}?{}", params.join("&")) };
         let response = self.send(self.request(reqwest::Method::GET, &url)).await?;

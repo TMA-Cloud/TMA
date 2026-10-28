@@ -144,7 +144,8 @@ impl Backend for ClientBackend {
         let view = View::Folder(parent.map(String::from));
         let mut entries = Vec::new();
         let me = self.me();
-        let mut query = ListQuery { limit: Some(500), ..Default::default() };
+        // The drive keeps its folders current; that is not someone opening them.
+        let mut query = ListQuery { limit: Some(500), background: true, ..Default::default() };
         // A folder can hold more than one page; the drive needs all of it.
         for _ in 0..200 {
             let page = tma_client::rt::block_on(self.client.list(&view, &query)).map_err(|e| e.message)?;
