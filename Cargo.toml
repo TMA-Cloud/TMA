@@ -1,7 +1,6 @@
 [workspace]
 resolver = "3"
 members = ["crates/*", "apps/*", "xtask"]
-exclude = ["vendor/*"]
 
 [workspace.package]
 version = "4.0.3"
@@ -82,7 +81,3 @@ strip = "debuginfo"
 inherits = "release"
 opt-level = "s"
 lto = "fat"
-
-# A patched copy until egui-phosphor supports this egui. See vendor/egui-phosphor/PATCHES.md.
-[patch.crates-io]
-egui-phosphor = { path = "vendor/egui-phosphor" }

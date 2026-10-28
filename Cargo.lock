@@ -8188,7 +8188,3 @@ dependencies = [
  "syn 3.0.9",
  "winnow 1.0.4",
 ]
-
-[[patch.unused]]
-name = "egui-phosphor"
-version = "0.14.0"

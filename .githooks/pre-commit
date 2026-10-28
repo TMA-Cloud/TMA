@@ -36,7 +36,7 @@ printf '%s\n' "$staged" | while IFS= read -r f; do
 done || status=1
 
 # Vendored crates stay as upstream wrote them, like cargo fmt (which skips them) and Prettier below.
-rs_files=$(printf '%s\n' "$staged" | grep -E '\.rs$' | grep -vE '^(vendor|target)/' || true)
+rs_files=$(printf '%s\n' "$staged" | grep -E '\.rs$' | grep -vE '^target/' || true)
 if [ -n "$rs_files" ]; then
   if command -v rustfmt >/dev/null 2>&1; then
     step "rustfmt on $(printf '%s\n' "$rs_files" | wc -l | tr -d ' ') file(s)"
@@ -63,7 +63,7 @@ if [ -n "$rs_files" ]; then
 fi
 
 # Prettier formats what rustfmt does not; the version matches xtask's.
-pretty_files=$(printf '%s\n' "$staged" | grep -E '\.(md|ya?ml|json|html|css)$' | grep -vE '^(vendor|target)/' || true)
+pretty_files=$(printf '%s\n' "$staged" | grep -E '\.(md|ya?ml|json|html|css)$' | grep -vE '^target/' || true)
 if [ -n "$pretty_files" ]; then
   if command -v npx >/dev/null 2>&1; then
     step "prettier on $(printf '%s\n' "$pretty_files" | wc -l | tr -d ' ') file(s)"
