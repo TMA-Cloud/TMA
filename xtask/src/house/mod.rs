@@ -18,7 +18,7 @@ use std::path::{Path, PathBuf};
 
 pub const MAX_LINES: usize = 400;
 
-/// Where Rust code lives. Vendored crates, build output and test files are not ours to size.
+/// Where Rust code lives. Build output and test files are not ours to size.
 const ROOTS: &[&str] = &["crates", "apps", "xtask"];
 
 /// Interface code, where colours must come from the theme.
@@ -35,7 +35,7 @@ fn rust_files(dir: &Path, out: &mut Vec<PathBuf>) {
         let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
         if path.is_dir() {
             // Integration tests and build output are exempt; `src`, `examples` and modules are not.
-            if !matches!(name.as_str(), "target" | "tests" | "node_modules" | "dist") {
+            if !matches!(name.as_str(), "target" | "tests" | "dist") {
                 rust_files(&path, out);
             }
         } else if name.ends_with(".rs") && name != "tests.rs" {

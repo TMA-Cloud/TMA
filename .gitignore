@@ -10,12 +10,10 @@ CLAUDE.local.md
 .env
 .env.*
 !.env.example
-!.env.test
 
 # Build output
 /target/
 apps/tma-cloud-web/dist/
-*.tgz
 
 # Logs
 logs/

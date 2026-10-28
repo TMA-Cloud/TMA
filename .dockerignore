@@ -7,8 +7,6 @@
 !crates/
 !apps/
 !xtask/
-# Patched copies of crates (see vendor/*/PATCHES.md), used through [patch.crates-io].
-!vendor/
 
 # Secrets
 **/.env

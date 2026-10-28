@@ -35,7 +35,6 @@ printf '%s\n' "$staged" | while IFS= read -r f; do
   fi
 done || status=1
 
-# Vendored crates stay as upstream wrote them, like cargo fmt (which skips them) and Prettier below.
 rs_files=$(printf '%s\n' "$staged" | grep -E '\.rs$' | grep -vE '^target/' || true)
 if [ -n "$rs_files" ]; then
   if command -v rustfmt >/dev/null 2>&1; then
