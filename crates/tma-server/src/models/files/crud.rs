@@ -24,10 +24,8 @@ pub struct StoredFile {
     pub size: Option<i64>,
     pub mime_type: Option<String>,
     pub path: Option<String>,
-    pub parent_id: Option<String>,
     pub dek_wrapped: Option<Vec<u8>>,
     pub dek_kek_version: Option<i32>,
-    pub modified: DateTime<Utc>,
 }
 
 impl StoredFile {
@@ -36,7 +34,7 @@ impl StoredFile {
     }
 }
 
-const STORED_COLUMNS: &str = "id, name, type, size, mime_type, path, parent_id, dek_wrapped, dek_kek_version, modified";
+const STORED_COLUMNS: &str = "id, name, type, size, mime_type, path, dek_wrapped, dek_kek_version";
 
 pub async fn get(pool: &PgPool, id: &str, owner: &str) -> anyhow::Result<Option<StoredFile>> {
     let sql = format!("SELECT {STORED_COLUMNS} FROM files WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL");

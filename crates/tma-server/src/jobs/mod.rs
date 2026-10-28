@@ -7,7 +7,6 @@ pub mod handlers;
 pub mod schedule;
 pub mod worker;
 
-use chrono::{DateTime, Utc};
 use serde_json::Value;
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -104,7 +103,6 @@ pub struct Job {
     pub id: Uuid,
     pub queue: String,
     pub data: Value,
-    pub singleton_key: Option<String>,
     pub retry_count: i32,
 }
 
@@ -116,7 +114,6 @@ pub struct JobState {
     pub data: Value,
     pub output: Option<Value>,
     pub error: Option<String>,
-    pub completed_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Clone)]
@@ -181,7 +178,7 @@ impl JobQueue {
 
     pub async fn get(&self, queue: &str, id: Uuid) -> anyhow::Result<Option<JobState>> {
         Ok(sqlx::query_as::<_, JobState>(
-            "SELECT id, state, data, output, error, completed_at FROM job_queue WHERE id = $1 AND queue = $2",
+            "SELECT id, state, data, output, error FROM job_queue WHERE id = $1 AND queue = $2",
         )
         .bind(id)
         .bind(queue)
@@ -206,7 +203,7 @@ impl JobQueue {
              )
              UPDATE job_queue SET state = 'active', started_at = NOW()
                FROM next WHERE job_queue.id = next.id
-             RETURNING job_queue.id, job_queue.queue, job_queue.data, job_queue.singleton_key, job_queue.retry_count",
+             RETURNING job_queue.id, job_queue.queue, job_queue.data, job_queue.retry_count",
         )
         .bind(queue)
         .bind(limit)

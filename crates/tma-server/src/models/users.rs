@@ -69,14 +69,11 @@ pub async fn by_id(state: &AppState, id: &str) -> anyhow::Result<Option<ProfileR
 
 #[derive(Debug, Clone, sqlx::FromRow)]
 pub struct PasswordRow {
-    pub id: String,
-    pub email: String,
     pub password: Option<String>,
-    pub name: Option<String>,
 }
 
 pub async fn with_password(pool: &PgPool, id: &str) -> anyhow::Result<Option<PasswordRow>> {
-    Ok(sqlx::query_as::<_, PasswordRow>("SELECT id, email, password, name FROM users WHERE id = $1")
+    Ok(sqlx::query_as::<_, PasswordRow>("SELECT password FROM users WHERE id = $1")
         .bind(id)
         .fetch_optional(pool)
         .await?)

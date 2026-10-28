@@ -193,7 +193,6 @@ pub struct SharedRoot {
     pub item_type: String,
     pub mime_type: Option<String>,
     pub size: Option<i64>,
-    pub path: Option<String>,
     pub user_id: String,
     pub expires_at: Option<DateTime<Utc>>,
 }
@@ -216,7 +215,7 @@ pub async fn by_token(pool: &PgPool, cache: &Cache, token: &str) -> anyhow::Resu
         return Ok(TokenLookup::Found(root));
     }
     let root = sqlx::query_as::<_, SharedRoot>(
-        "SELECT f.id, f.name, f.type, f.mime_type, f.size, f.path, f.user_id, s.expires_at
+        "SELECT f.id, f.name, f.type, f.mime_type, f.size, f.user_id, s.expires_at
            FROM share_links s JOIN files f ON s.file_id = f.id AND f.user_id = s.user_id
           WHERE s.id = $1 AND f.deleted_at IS NULL",
     )
@@ -338,7 +337,7 @@ pub async fn member(
     id: &str,
 ) -> anyhow::Result<Option<crate::models::files::crud::StoredFile>> {
     Ok(sqlx::query_as(
-        "SELECT f.id, f.name, f.type, f.size, f.mime_type, f.path, f.parent_id, f.dek_wrapped, f.dek_kek_version, f.modified
+        "SELECT f.id, f.name, f.type, f.size, f.mime_type, f.path, f.dek_wrapped, f.dek_kek_version
            FROM files f JOIN share_link_files slf ON slf.file_id = f.id AND slf.share_id = $1 WHERE f.id = $2 AND f.deleted_at IS NULL",
     )
     .bind(token)

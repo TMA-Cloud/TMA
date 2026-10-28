@@ -18,7 +18,6 @@ pub struct ArchiveEntry {
     pub path: Option<String>,
     pub archive_path: String,
     pub mime_type: Option<String>,
-    pub size: Option<i64>,
     pub modified: chrono::DateTime<chrono::Utc>,
     pub dek_wrapped: Option<Vec<u8>>,
     pub dek_kek_version: Option<i32>,
@@ -29,25 +28,25 @@ fn held_slots(limit: usize) -> Arc<Semaphore> {
     SLOTS.get_or_init(|| Arc::new(Semaphore::new(limit.max(1)))).clone()
 }
 
-const OWNER_TREE: &str = "WITH RECURSIVE tree(id, type, path, mime_type, size, modified, dek_wrapped, dek_kek_version, archive_path, visited) AS (
-    SELECT f.id, f.type, f.path, f.mime_type, f.size, f.modified, f.dek_wrapped, f.dek_kek_version, f.name::text, ARRAY[f.id]
+const OWNER_TREE: &str = "WITH RECURSIVE tree(id, type, path, mime_type, modified, dek_wrapped, dek_kek_version, archive_path, visited) AS (
+    SELECT f.id, f.type, f.path, f.mime_type, f.modified, f.dek_wrapped, f.dek_kek_version, f.name::text, ARRAY[f.id]
       FROM files f WHERE f.id = ANY($1::text[]) AND f.user_id = $2 AND f.deleted_at IS NULL
     UNION ALL
-    SELECT f.id, f.type, f.path, f.mime_type, f.size, f.modified, f.dek_wrapped, f.dek_kek_version, tree.archive_path || '/' || f.name, tree.visited || f.id
+    SELECT f.id, f.type, f.path, f.mime_type, f.modified, f.dek_wrapped, f.dek_kek_version, tree.archive_path || '/' || f.name, tree.visited || f.id
       FROM files f JOIN tree ON f.parent_id = tree.id
      WHERE f.user_id = $2 AND f.deleted_at IS NULL AND NOT f.id = ANY(tree.visited)
-  ) SELECT id, type, path, archive_path, mime_type, size, modified, dek_wrapped, dek_kek_version FROM tree ORDER BY archive_path, id";
+  ) SELECT id, type, path, archive_path, mime_type, modified, dek_wrapped, dek_kek_version FROM tree ORDER BY archive_path, id";
 
-const SHARED_TREE: &str = "WITH RECURSIVE tree(id, type, path, mime_type, size, modified, dek_wrapped, dek_kek_version, archive_path, visited) AS (
-    SELECT f.id, f.type, f.path, f.mime_type, f.size, f.modified, f.dek_wrapped, f.dek_kek_version, f.name::text, ARRAY[f.id]
+const SHARED_TREE: &str = "WITH RECURSIVE tree(id, type, path, mime_type, modified, dek_wrapped, dek_kek_version, archive_path, visited) AS (
+    SELECT f.id, f.type, f.path, f.mime_type, f.modified, f.dek_wrapped, f.dek_kek_version, f.name::text, ARRAY[f.id]
       FROM files f JOIN share_link_files slf ON slf.file_id = f.id AND slf.share_id = $1
      WHERE f.id = ANY($2::text[]) AND f.deleted_at IS NULL
     UNION ALL
-    SELECT f.id, f.type, f.path, f.mime_type, f.size, f.modified, f.dek_wrapped, f.dek_kek_version, tree.archive_path || '/' || f.name, tree.visited || f.id
+    SELECT f.id, f.type, f.path, f.mime_type, f.modified, f.dek_wrapped, f.dek_kek_version, tree.archive_path || '/' || f.name, tree.visited || f.id
       FROM files f JOIN share_link_files slf ON slf.file_id = f.id AND slf.share_id = $1
       JOIN tree ON f.parent_id = tree.id
      WHERE f.deleted_at IS NULL AND NOT f.id = ANY(tree.visited)
-  ) SELECT id, type, path, archive_path, mime_type, size, modified, dek_wrapped, dek_kek_version FROM tree ORDER BY archive_path, id";
+  ) SELECT id, type, path, archive_path, mime_type, modified, dek_wrapped, dek_kek_version FROM tree ORDER BY archive_path, id";
 
 fn stream_query(
     pool: PgPool,
