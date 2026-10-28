@@ -52,12 +52,6 @@ pub struct MaxUploadSize {
 
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-pub struct DesktopOnly {
-    pub desktop_only: bool,
-}
-
-#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
 pub struct CloudDriveConfig {
     pub save_only: bool,
     #[serde(default)]

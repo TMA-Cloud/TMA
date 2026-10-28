@@ -34,10 +34,7 @@ pub struct QueuedResponse {
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct JobStatus {
-    pub job_id: String,
     pub status: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub result: Option<serde_json::Value>,
 }
 
 /// Versions reported by `/api/version` and `/api/version/latest`.

@@ -252,12 +252,6 @@ pub struct SharedPage {
 pub struct FileEvent {
     #[serde(rename = "type")]
     pub event_type: String,
-    #[serde(default)]
-    pub timestamp: Option<String>,
-    #[serde(default)]
-    pub data: serde_json::Value,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub message: Option<String>,
 }
 
 impl FileEvent {
