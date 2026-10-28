@@ -3,7 +3,7 @@
 
 use tma_client::events::Subscription;
 use tma_client::{ApiError, ApiResult, Client};
-use tma_core::api::{FileItem, SortBy, SortOrder, StorageUsage, User};
+use tma_core::api::{SortBy, SortOrder, StorageUsage, User};
 
 use crate::auth::AuthState;
 use crate::host::{Host, HostKind, SavedSession};
@@ -74,7 +74,6 @@ pub struct Main {
     pub modal: Option<modals::Modal>,
     pub instance: Instance,
     pub search: String,
-    pub search_results: Option<Vec<FileItem>>,
     pub(crate) events: Option<Subscription>,
     /// A live event arrived since the last frame.
     pub(crate) change_pending: bool,
@@ -225,7 +224,6 @@ impl App {
             modal: None,
             instance: Instance::default(),
             search: String::new(),
-            search_results: None,
             events: Some(events),
             change_pending: false,
             changed_at: None,

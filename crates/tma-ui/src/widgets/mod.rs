@@ -5,7 +5,7 @@ use egui::{Color32, CornerRadius, Frame, Margin, Response, RichText, Sense, Stro
 
 use crate::icons::ph;
 use crate::theme::Weight;
-use crate::theme::{RADIUS_LG, RADIUS_MD, Tokens};
+use crate::theme::{RADIUS_LG, Tokens};
 
 mod rows;
 
@@ -158,12 +158,6 @@ pub fn icon_button(ui: &mut Ui, icon: &str, tip: &str) -> Response {
     .on_hover_text(tip)
 }
 
-/// An iOS-style switch.
-pub fn toggle(ui: &mut Ui, on: &mut bool) -> Response {
-    let id = ui.next_auto_id();
-    toggle_with_id(ui, id, on)
-}
-
 /// A switch with a stable id, for lists whose rows can appear while loading:
 /// an id from widget order could hand a click to the switch that was there before.
 pub fn toggle_with_id(ui: &mut Ui, id: egui::Id, on: &mut bool) -> Response {
@@ -255,16 +249,6 @@ pub fn text_edit(ui: &mut Ui, value: &mut String, hint: &str, width: f32) -> Res
     bordered_field(ui, edit)
 }
 
-pub fn badge(ui: &mut Ui, text: &str, color: Color32) -> Response {
-    let fill = crate::theme::with_alpha(color, 34);
-    Frame::new()
-        .fill(fill)
-        .corner_radius(CornerRadius::same(RADIUS_MD))
-        .inner_margin(Margin::symmetric(7, 2))
-        .show(ui, |ui| ui.label(RichText::new(text).size(12.0).color(color).semibold()))
-        .response
-}
-
 /// A page header: the title and a line of context. The menu beside it already
 /// shows the page's icon, so the header does not repeat it.
 pub fn heading(ui: &mut Ui, _icon: &str, title: &str, subtitle: &str) {
@@ -277,14 +261,6 @@ pub fn heading(ui: &mut Ui, _icon: &str, title: &str, subtitle: &str) {
         }
     });
     ui.add_space(12.0);
-}
-
-pub fn section_title(ui: &mut Ui, title: &str) {
-    let t = tokens(ui);
-    // Sentence case: a quiet title, not a tracked-out capital label.
-    ui.add_space(6.0);
-    ui.label(RichText::new(title).size(13.0).semibold().color(t.label_secondary));
-    ui.add_space(2.0);
 }
 
 pub fn muted(ui: &Ui, text: impl Into<String>) -> RichText {

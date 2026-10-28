@@ -2,7 +2,7 @@
 //! glyphs), and the Phosphor icon font for UI symbols.
 
 use egui::epaint::PathShape;
-use egui::{Align2, Color32, FontId, Painter, Pos2, Rect, Stroke, Vec2, pos2};
+use egui::{Align2, Color32, FontId, Painter, Pos2, Rect, Stroke, Vec2};
 use tma_core::FileKind;
 
 pub mod ph;
@@ -149,8 +149,4 @@ pub fn initials(name: &str) -> String {
     let initials: String =
         name.split_whitespace().filter_map(|w| w.chars().next()).take(2).collect::<String>().to_uppercase();
     if initials.is_empty() { "?".to_string() } else { initials }
-}
-
-pub fn point(x: f32, y: f32) -> Pos2 {
-    pos2(x, y)
 }

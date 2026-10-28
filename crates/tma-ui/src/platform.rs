@@ -271,13 +271,3 @@ pub fn open_url(url: &str) {
     #[cfg(not(target_arch = "wasm32"))]
     log::info!("open {url}");
 }
-
-/// Replace the page (web sign-in redirects).
-pub fn navigate(url: &str) {
-    #[cfg(target_arch = "wasm32")]
-    if let Some(window) = web_sys::window() {
-        let _ = window.location().assign(url);
-    }
-    #[cfg(not(target_arch = "wasm32"))]
-    log::info!("navigate {url}");
-}

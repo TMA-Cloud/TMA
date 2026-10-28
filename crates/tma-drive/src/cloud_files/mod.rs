@@ -37,7 +37,6 @@ pub fn default_mount_point() -> Option<PathBuf> {
 /// downloaded files stay, as with OneDrive).
 pub struct Mounted {
     pub mount_point: String,
-    pub core: Arc<Core>,
     shared: Arc<Shared>,
     worker: Option<std::thread::JoinHandle<()>>,
     watcher: Option<notify::RecommendedWatcher>,
@@ -199,7 +198,6 @@ pub fn mount(core: Arc<Core>, label: &str, at: Option<&str>) -> Result<Mounted, 
         .map_err(|e| e.to_string())?;
     Ok(Mounted {
         mount_point: folder.display().to_string(),
-        core,
         shared,
         worker: Some(worker),
         watcher: Some(watcher),

@@ -217,7 +217,6 @@ impl Tokens {
 }
 
 pub const RADIUS_SM: u8 = 6;
-pub const RADIUS_MD: u8 = 10;
 pub const RADIUS_LG: u8 = 14;
 
 /// How glyph coverage becomes alpha for light text on dark backgrounds.
