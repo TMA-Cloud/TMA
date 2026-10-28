@@ -20,7 +20,6 @@ tma-core = { workspace = true }
 
 anyhow = { workspace = true }
 async-stream = "0.3"
-aws-credential-types = "1"
 aws-sdk-s3 = { version = "1", default-features = false, features = ["rt-tokio", "behavior-version-latest", "default-https-client"] }
 axum = { version = "0.8", features = ["multipart", "macros"] }
 base64 = { workspace = true }
@@ -64,5 +63,6 @@ url = { workspace = true }
 uuid = { workspace = true }
 
 [dev-dependencies]
+aws-credential-types = "1"
 tower = { version = "0.5", features = ["util"] }
 tma-client = { workspace = true }

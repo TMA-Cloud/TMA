@@ -49,12 +49,10 @@ url = "2"
 percent-encoding = "2"
 bytes = "1"
 futures = "0.3"
-futures-util = "0.3"
 mime_guess = "2"
-regex = "1"
 uuid = { version = "1", features = ["v4", "serde"] }
 tokio = { version = "1", features = ["full"] }
-tokio-util = { version = "0.7", features = ["io", "compat"] }
+tokio-util = { version = "0.7", features = ["io"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 reqwest = { version = "0.13", default-features = false, features = ["json", "stream", "rustls", "multipart", "cookies", "query", "form"] }
@@ -62,7 +60,6 @@ reqwest = { version = "0.13", default-features = false, features = ["json", "str
 # ui
 egui = "0.37"
 eframe = { version = "0.37", default-features = false }
-egui_extras = { version = "0.37", default-features = false }
 rfd = { version = "0.17", default-features = false, features = ["xdg-portal"] }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp", "bmp"] }
 
