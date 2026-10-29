@@ -65,6 +65,7 @@ services:
       -c work_mem=8MB
       -c maintenance_work_mem=128MB
       -c max_connections=100
+      -c wal_compression=zstd
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -q -d "$$DATABASE_URL"']
       interval: 10s
