@@ -244,6 +244,22 @@ async fn assert_browser_sessions_lock(owner: &Client, database: &str, id: &str) 
     locks::renew_device(&pool, id, &session, Duration::from_secs(600)).await.unwrap();
     assert!(locks::release_device(&pool, id, &session).await.unwrap());
     assert!(locks::holder(&pool, id).await.unwrap().is_none());
+    // Taken twice at once from one install, the lock is new to only one of them, and a
+    // renewal is not new at all: each new lock is audited and announced.
+    let lease = Duration::from_secs(600);
+    for _ in 0..25 {
+        let (a, b) = tokio::join!(
+            locks::acquire(&pool, id, &me, browser, lease),
+            locks::acquire(&pool, id, &me, browser, lease)
+        );
+        let fresh = [a, b].into_iter().filter(|t| matches!(t, Ok(Some(Taken::Held { fresh: true, .. })))).count();
+        assert_eq!(fresh, 1, "only one of two simultaneous takes is new");
+        assert!(locks::release_device(&pool, id, &session).await.unwrap());
+    }
+    locks::acquire(&pool, id, &me, browser, lease).await.unwrap();
+    let renewed = locks::acquire(&pool, id, &me, browser, lease).await.unwrap();
+    assert!(matches!(renewed, Some(Taken::Held { fresh: false, .. })), "a renewal is not a new lock");
+    assert!(locks::release_device(&pool, id, &session).await.unwrap());
     pool.close().await;
 }
 

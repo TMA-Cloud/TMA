@@ -72,17 +72,21 @@ pub async fn acquire(
     actor: Actor<'_>,
     lease: Duration,
 ) -> anyhow::Result<Option<Taken>> {
-    let exists: Option<String> = sqlx::query_scalar(
-        "SELECT id FROM files WHERE id = $1 AND user_id = $2 AND type = 'file' AND deleted_at IS NULL",
+    let mut tx = pool.begin().await?;
+    // One take at a time per file, so whether it was this actor's a moment ago still
+    // holds when it is taken: two takes at once are audited and announced once.
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 1))").bind(file_id).execute(&mut *tx).await?;
+    let before: Option<(Option<String>, Option<String>)> = sqlx::query_as(
+        "SELECT l.user_id, l.device_id FROM files f
+           LEFT JOIN file_locks l ON l.file_id = f.id AND l.expires_at > NOW()
+          WHERE f.id = $1 AND f.user_id = $2 AND f.type = 'file' AND f.deleted_at IS NULL",
     )
     .bind(file_id)
     .bind(owner)
-    .fetch_optional(pool)
+    .fetch_optional(&mut *tx)
     .await?;
-    if exists.is_none() {
-        return Ok(None);
-    }
-    let before = holder(pool, file_id).await?;
+    let Some((held_by, held_on)) = before else { return Ok(None) };
+    let fresh = held_by.as_deref() != Some(actor.user) || held_on.as_deref() != actor.device;
     // Only a free (or expired) lock, or the caller's own from the same install, is
     // taken; a renewal keeps its start.
     let taken: Option<String> = sqlx::query_scalar(
@@ -105,14 +109,12 @@ pub async fn acquire(
     .bind(owner)
     .bind(lease.as_secs_f64())
     .bind(actor.device)
-    .fetch_optional(pool)
+    .fetch_optional(&mut *tx)
     .await?;
-    let now = holder(pool, file_id).await?;
+    let now = holder(&mut *tx, file_id).await?;
+    tx.commit().await?;
     Ok(Some(match (taken, now) {
-        (Some(_), Some(lock)) => {
-            let fresh = before.is_none_or(|b| !actor.holds(&b));
-            Taken::Held { lock, fresh }
-        }
+        (Some(_), Some(lock)) => Taken::Held { lock, fresh },
         (_, Some(lock)) => Taken::Busy(lock),
         (_, None) => anyhow::bail!("the lock vanished as it was taken"),
     }))
