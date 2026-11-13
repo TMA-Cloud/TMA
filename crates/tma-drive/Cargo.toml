@@ -4,6 +4,7 @@ description = "Cloud Drive: TMA Cloud mounted as a local drive (Cloud Files on W
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
 rust-version.workspace = true
 publish = false
 

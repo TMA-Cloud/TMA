@@ -4,6 +4,7 @@ description = "TMA Cloud server: the REST API, the background worker and the adm
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
 rust-version.workspace = true
 publish = false
 default-run = "tma-server"

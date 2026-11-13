@@ -6,7 +6,7 @@ members = ["crates/*", "apps/*", "xtask"]
 version = "4.0.5"
 edition = "2024"
 license = "MIT"
-# The oldest Rust that builds the locked dependencies (egui 0.36 needs 1.95); cargo
+# The oldest Rust that builds the locked dependencies (egui 0.37 needs 1.95); cargo
 # update only picks versions that build on it, so keep it true rather than low.
 rust-version = "1.95"
 repository = "https://github.com/TMA-Cloud/TMA"
