@@ -7,10 +7,10 @@
 #   docker run --env-file .env tma-cloud tma-server worker       # background worker
 
 ARG RUST_VERSION=1
-ARG TRUNK_VERSION=0.21.14
+ARG TRUNK_VERSION=0.22.1
 
 # The web app: the egui interface compiled to WebAssembly by trunk.
-FROM rust:${RUST_VERSION}-bookworm AS web
+FROM rust:${RUST_VERSION}-trixie AS web
 ARG TRUNK_VERSION
 RUN rustup target add wasm32-unknown-unknown \
     && curl -fsSL "https://github.com/trunk-rs/trunk/releases/download/v${TRUNK_VERSION}/trunk-x86_64-unknown-linux-gnu.tar.gz" | tar -xz -C /usr/local/bin \
@@ -26,7 +26,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
     && cp -r dist /web
 
 # The server.
-FROM rust:${RUST_VERSION}-bookworm AS server
+FROM rust:${RUST_VERSION}-trixie AS server
 WORKDIR /src
 COPY . .
 RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
@@ -35,7 +35,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
     && cp target/release/tma-server /tma-server
 
 # Runtime: glibc and nothing else; the server needs no shell, curl or OpenSSL.
-FROM gcr.io/distroless/cc-debian12
+FROM gcr.io/distroless/cc-debian13
 ARG VERSION=unknown
 LABEL org.opencontainers.image.title="TMA Cloud" \
       org.opencontainers.image.description="Self-hosted cloud storage" \
