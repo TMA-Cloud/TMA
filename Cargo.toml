@@ -3,7 +3,7 @@ resolver = "3"
 members = ["crates/*", "apps/*", "xtask"]
 
 [workspace.package]
-version = "4.0.5"
+version = "4.0.6"
 edition = "2024"
 license = "MIT"
 # The Rust every build uses: CI and the image take the latest stable. cargo update

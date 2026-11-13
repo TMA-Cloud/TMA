@@ -6139,7 +6139,7 @@ checksum = "fd3ca314f692efd6c868f8408f53fe444634a845f96c028b97d35f6a1f79f0ee"
 
 [[package]]
 name = "tma-client"
-version = "4.0.5"
+version = "4.0.6"
 dependencies = [
  "bytes",
  "futures",
@@ -6160,7 +6160,7 @@ dependencies = [
 
 [[package]]
 name = "tma-cloud"
-version = "4.0.5"
+version = "4.0.6"
 dependencies = [
  "apple-native-keyring-store",
  "chrono",
@@ -6197,7 +6197,7 @@ dependencies = [
 
 [[package]]
 name = "tma-cloud-web"
-version = "4.0.5"
+version = "4.0.6"
 dependencies = [
  "eframe",
  "egui",
@@ -6210,7 +6210,7 @@ dependencies = [
 
 [[package]]
 name = "tma-core"
-version = "4.0.5"
+version = "4.0.6"
 dependencies = [
  "chrono",
  "mime_guess",
@@ -6219,7 +6219,7 @@ dependencies = [
 
 [[package]]
 name = "tma-drive"
-version = "4.0.5"
+version = "4.0.6"
 dependencies = [
  "async-trait",
  "chrono",
@@ -6239,7 +6239,7 @@ dependencies = [
 
 [[package]]
 name = "tma-server"
-version = "4.0.5"
+version = "4.0.6"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -6290,7 +6290,7 @@ dependencies = [
 
 [[package]]
 name = "tma-ui"
-version = "4.0.5"
+version = "4.0.6"
 dependencies = [
  "bytes",
  "chrono",
@@ -7785,7 +7785,7 @@ checksum = "66fee0b777b0f5ac1c69bb06d361268faafa61cd4682ae064a171c16c433e9e4"
 
 [[package]]
 name = "xtask"
-version = "4.0.5"
+version = "4.0.6"
 
 [[package]]
 name = "xxhash-rust"
