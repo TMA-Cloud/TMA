@@ -60,7 +60,7 @@ reqwest = { version = "0.13", default-features = false, features = ["json", "str
 # ui
 egui = "0.37"
 eframe = { version = "0.37", default-features = false }
-rfd = { version = "0.17", default-features = false, features = ["xdg-portal"] }
+rfd = { version = "0.18", default-features = false, features = ["xdg-portal"] }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp", "bmp"] }
 
 [profile.dev.package."*"]

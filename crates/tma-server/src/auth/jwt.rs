@@ -39,18 +39,17 @@ pub fn issue(
         iat: now,
         exp: now + ttl_secs,
     };
-    Ok(jsonwebtoken::encode(&Header::new(Algorithm::HS256), &claims, &EncodingKey::from_secret(secret.as_bytes()))?)
+    Ok(jsonwebtoken::encode(&Header::new(Algorithm::HS256), &claims, &EncodingKey::from_secret(secret.as_bytes())?)?)
 }
 
 pub fn verify(secret: &str, token: &str) -> Option<Claims> {
-    jsonwebtoken::decode::<Claims>(token, &DecodingKey::from_secret(secret.as_bytes()), &validation())
-        .ok()
-        .map(|d| d.claims)
+    let key = DecodingKey::from_secret(secret.as_bytes()).ok()?;
+    jsonwebtoken::decode::<Claims>(token, &key, &validation()).ok().map(|d| d.claims)
 }
 
 /// Sign any claims with HS256 (OnlyOffice tokens, viewer and download tickets).
 pub fn sign_value<T: Serialize>(secret: &str, claims: &T) -> anyhow::Result<String> {
-    Ok(jsonwebtoken::encode(&Header::new(Algorithm::HS256), claims, &EncodingKey::from_secret(secret.as_bytes()))?)
+    Ok(jsonwebtoken::encode(&Header::new(Algorithm::HS256), claims, &EncodingKey::from_secret(secret.as_bytes())?)?)
 }
 
 /// Verify an HS256 token whose claims may lack `exp`.
@@ -60,9 +59,8 @@ pub fn verify_value(secret: &str, token: &str, require_exp: bool) -> Option<serd
         v.required_spec_claims.clear();
         v.validate_exp = false;
     }
-    jsonwebtoken::decode::<serde_json::Value>(token, &DecodingKey::from_secret(secret.as_bytes()), &v)
-        .ok()
-        .map(|d| d.claims)
+    let key = DecodingKey::from_secret(secret.as_bytes()).ok()?;
+    jsonwebtoken::decode::<serde_json::Value>(token, &key, &v).ok().map(|d| d.claims)
 }
 
 fn http_date(at: chrono::DateTime<Utc>) -> String {
@@ -103,5 +101,14 @@ mod tests {
         assert_eq!(claims.v, Some(3));
         assert!(verify("other", &token).is_none());
         assert_eq!(read_cookie(Some("a=1; token=abc; b=2"), "token").as_deref(), Some("abc"));
+    }
+
+    #[test]
+    fn an_empty_secret_signs_and_accepts_nothing() {
+        assert!(issue("", "user1234567890ab", 1, None, 60).is_err());
+        assert!(sign_value("", &serde_json::json!({ "a": 1 })).is_err());
+        let token = sign_value("s", &serde_json::json!({ "a": 1 })).unwrap();
+        assert!(verify_value("", &token, false).is_none());
+        assert_eq!(verify_value("s", &token, false).unwrap()["a"], 1);
     }
 }
