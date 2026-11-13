@@ -67,7 +67,7 @@ if [ -n "$pretty_files" ]; then
   if command -v npx >/dev/null 2>&1; then
     step "prettier on $(printf '%s\n' "$pretty_files" | wc -l | tr -d ' ') file(s)"
     whole=$(filter_by "$pretty_files" "$unstaged" drop)
-    if [ -n "$whole" ] && ! printf '%s\n' "$whole" | nul | xargs -0 npx --yes prettier@3.9.9 --check --log-level warn; then
+    if [ -n "$whole" ] && ! printf '%s\n' "$whole" | nul | xargs -0 npx --yes prettier@3.10.1 --check --log-level warn; then
       fail "formatting; fix with: cargo xtask fmt"
       status=1
     fi

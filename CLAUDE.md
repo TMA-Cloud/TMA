@@ -145,7 +145,7 @@ The wiki is a separate repo (TMA-Cloud/Wiki), checked out next to this one. Its
 | ------------------ | -------------------------------------------------------------------------------------------- |
 | Wiki matches code  | `npm run check:code` and `npm run lint` in the wiki                                          |
 | Format, lint, test | `cargo xtask ci` (rustfmt and Prettier, house rules, clippy `-D warnings`, tests, wasm lint) |
-| Format everything  | `cargo xtask fmt` (Prettier 3.9.9 through npx for Markdown, YAML, JSON, HTML, CSS)           |
+| Format everything  | `cargo xtask fmt` (Prettier 3.10.1 through npx for Markdown, YAML, JSON, HTML, CSS)          |
 | Server end to end  | `cargo test -p tma-server --test api` with the `TMA_TEST_*` vars                             |
 | Web app            | `cd apps/tma-cloud-web && trunk build --release`                                             |
 | Desktop installers | `cargo xtask package` (needs `cargo install cargo-packager`)                                 |

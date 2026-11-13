@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 
 /// Pinned, so every machine and CI format the same way (the wiki uses the same release).
-const PRETTIER: &str = "prettier@3.9.9";
+const PRETTIER: &str = "prettier@3.10.1";
 
 fn run(program: &str, args: &[&str]) -> bool {
     println!("$ {program} {}", args.join(" "));
