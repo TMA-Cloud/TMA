@@ -11,10 +11,9 @@ use std::time::{Duration, Instant};
 use crate::backend::Entry;
 use crate::cloud_files::feed::Feed;
 use crate::cloud_files::local;
-use crate::cloud_files::saves::Saved;
 use crate::core::{Core, Node};
 use crate::paths;
-use crate::sync_plan::{self, Fix, Stamp, Upload};
+use crate::sync_plan::{self, Fix, Stamp};
 
 /// A folder uploads once nothing in it has changed for this long.
 const QUIET: Duration = Duration::from_millis(1500);
@@ -30,6 +29,8 @@ const GATHER: Duration = Duration::from_secs(1);
 const RECHECK_EDITS: Duration = Duration::from_secs(10);
 /// Without a change feed, every open folder is re-listed on events, and at least this often.
 const FALLBACK_EVERY: Duration = Duration::from_secs(120);
+/// The longest wait before looking again at a folder that cannot finish (see `retry`).
+const RETRY_MAX: Duration = Duration::from_secs(30);
 
 pub(super) fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|e| e.into_inner())
@@ -40,13 +41,17 @@ pub struct Shared {
     pub root: PathBuf,
     /// Folders with local changes, by when they last changed.
     dirty: Mutex<HashMap<PathBuf, Instant>>,
+    /// Folders whose upload could not finish, by how many passes in a row.
+    retries: Mutex<HashMap<PathBuf, u32>>,
+    /// Folders waiting only for apps to let go of files they saved: those files.
+    pub(super) waiting: Mutex<HashMap<PathBuf, Vec<PathBuf>>>,
     /// The server file and version each synced path last held, by path key. Apps
     /// save by writing a new file over the placeholder, which loses its stamp; the
     /// new file still saves against the version it replaced.
     pub(super) synced: Mutex<HashMap<String, (String, i64)>>,
     /// Files already kept as a conflicted copy, by path key, as they were then:
     /// not sent again until they change, so a failed revert cannot repeat the copy.
-    kept: Mutex<HashMap<String, local::Snapshot>>,
+    pub(super) kept: Mutex<HashMap<String, local::Snapshot>>,
     /// Files uploaded but not yet marked synced, because the app that saved them
     /// still holds them open (Excel does): by path key, as they were sent.
     pub(super) sent: Mutex<HashMap<String, local::Snapshot>>,
@@ -66,6 +71,8 @@ impl Shared {
             core,
             root,
             dirty: Mutex::new(HashMap::new()),
+            retries: Mutex::new(HashMap::new()),
+            waiting: Mutex::new(HashMap::new()),
             synced: Mutex::new(HashMap::new()),
             kept: Mutex::new(HashMap::new()),
             sent: Mutex::new(HashMap::new()),
@@ -100,8 +107,25 @@ impl Shared {
         if self.rel(&dir).is_none() {
             return;
         }
+        lock(&self.retries).remove(&dir);
+        lock(&self.waiting).remove(&dir);
         lock(&self.dirty).insert(dir, Instant::now());
         self.wake.notify_one();
+    }
+
+    /// Look at a folder again later, waiting longer each pass in a row it cannot finish
+    /// (an app still holds a file, or the server failed): every pass lists the folder,
+    /// and Excel holds a saved workbook for as long as it shows it.
+    fn retry(&self, dir: PathBuf) {
+        let attempts = {
+            let mut retries = lock(&self.retries);
+            let n = retries.entry(dir.clone()).or_insert(0);
+            *n = n.saturating_add(1);
+            *n
+        };
+        let wait = sync_plan::retry_after(attempts, QUIET, RETRY_MAX);
+        // `take_quiet` waits QUIET after the stored time, so the rest is stored ahead.
+        lock(&self.dirty).insert(dir, Instant::now() + wait.saturating_sub(QUIET));
     }
 
     pub fn queue_delete(&self, id: String, version: i64, path: PathBuf) {
@@ -128,153 +152,6 @@ impl Shared {
                 None
             }
         }
-    }
-
-    /// Upload what changed in one folder. Returns false to retry later.
-    fn upload_folder(&self, dir: &Path) -> bool {
-        let Ok(folder) = local::read(dir) else { return true };
-        let Some(node) = self.folder(dir) else {
-            // The folder itself is new: its parent uploads it first.
-            if let Some(parent) = dir.parent().filter(|p| self.rel(p).is_some()) {
-                self.changed(parent.to_path_buf());
-            }
-            return true;
-        };
-        let Some(server) = self.server(&node) else { return false };
-        let mut done = true;
-        let mut uploaded: Vec<(PathBuf, String, local::Snapshot)> = Vec::new();
-        let mut conflicted: Vec<(PathBuf, String, local::Snapshot)> = Vec::new();
-        let mut repaired = false;
-        for step in sync_plan::uploads(&folder.items, &server) {
-            log::debug!("[drive] upload in {}: {step:?}", dir.display());
-            let name = match &step {
-                Upload::File { name, .. } | Upload::Folder { name, .. } | Upload::Changed { name, .. } => name.clone(),
-            };
-            if folder.busy.contains(&name) {
-                done = false;
-                continue;
-            }
-            let path = dir.join(&name);
-            let server_name = self.core.to_server_name(&name);
-            let before = local::snapshot(&path);
-            let key = paths::key(&path.to_string_lossy());
-            if lock(&self.kept).get(&key) == Some(&before) {
-                continue;
-            }
-            // Sent unchanged before: sending it again would only bump its version.
-            if lock(&self.sent).get(&key) == Some(&before) {
-                done &= self.mark_sent(&path, &key);
-                continue;
-            }
-            // Not an edit: as synced, it is refreshed from the server like any other copy.
-            if matches!(step, Upload::Changed { .. }) && local::unchanged_read_only(&path) {
-                match local::mark_in_sync(&path) {
-                    Ok(()) => repaired = true,
-                    Err(err) => {
-                        log::warn!("[drive] could not mark {} synced: {err}", path.display());
-                        done = false;
-                    }
-                }
-                continue;
-            }
-            let backend = self.core.backend();
-            // A new file over a same-named server one replaces it as asked; a rewrite keeps its version check.
-            let target = match &step {
-                Upload::File { replace, .. } => {
-                    let deleted = self.take_delete(&path).map(|(id, v)| (id, sync_plan::base(v)));
-                    // Over a server file of the same name: checked if it replaced that file's synced copy.
-                    deleted
-                        .or_else(|| {
-                            replace.clone().map(|id| {
-                                let base = self.synced_version(&path, &id).and_then(sync_plan::base);
-                                (id, base)
-                            })
-                        })
-                        // A save under the name the server renamed away is still that file, not a new one.
-                        .or_else(|| self.renamed_away(&path, &folder.items, &server))
-                }
-                // An earlier upload of this file that could not restamp it moved the version on.
-                Upload::Changed { id, base, .. } => {
-                    let synced = self.synced_version(&path, id).unwrap_or(*base);
-                    Some((id.clone(), sync_plan::base(synced.max(*base))))
-                }
-                Upload::Folder { .. } => None,
-            };
-            if let Some((id, base)) = target {
-                match self.save(&node, &id, &server_name, &path, base) {
-                    Ok(Saved::Replaced) => uploaded.push((path, id, before)),
-                    Ok(Saved::Conflicted) => {
-                        lock(&self.kept).insert(paths::key(&path.to_string_lossy()), before);
-                        conflicted.push((path, id, before));
-                    }
-                    Err(err) => {
-                        log::warn!("[drive] upload of {} failed: {err}", path.display());
-                        done = false;
-                    }
-                }
-                continue;
-            }
-            let result = match step {
-                Upload::File { .. } | Upload::Changed { .. } => backend.upload(node.id.as_deref(), &server_name, &path),
-                Upload::Folder { existing, .. } => {
-                    let made = existing.map(Ok).unwrap_or_else(|| backend.mkdir(node.id.as_deref(), &server_name));
-                    match made.and_then(|id| local::adopt(&path, &Stamp { id, version: 0 }).map_err(|e| e.to_string()))
-                    {
-                        Ok(()) => {
-                            // A resync must not see the old listing and remove the new folder.
-                            self.core.invalidate(&node.path);
-                            // Only now may it hold placeholders: bring in what the server has there.
-                            self.resync_folder(&path);
-                            self.changed(path);
-                            continue;
-                        }
-                        Err(err) => Err(err),
-                    }
-                }
-            };
-            match result {
-                Ok(id) => uploaded.push((path, id, before)),
-                Err(err) => {
-                    log::warn!("[drive] upload of {} failed: {err}", path.display());
-                    done = false;
-                }
-            }
-        }
-        if !uploaded.is_empty() || !conflicted.is_empty() {
-            self.core.invalidate(&node.path);
-            let server = self.server(&node).unwrap_or_default();
-            // The edit is safe in its copy: the original goes back to the server's version.
-            for (path, id, before) in conflicted {
-                let current = server.iter().find(|e| e.id == id);
-                let reverted =
-                    local::snapshot(&path) == before && current.is_some_and(|e| local::revert(&path, e).is_ok());
-                done &= reverted;
-            }
-            for (path, id, before) in uploaded {
-                let found = server.iter().find(|e| e.id == id).map(Stamp::of);
-                // The server holds this content now; the next save of the file builds on it.
-                if let Some(stamp) = &found {
-                    self.note_synced(&path, stamp);
-                }
-                // Edited again while uploading: leave it unsynced so the next pass sends it.
-                if local::snapshot(&path) != before {
-                    done = false;
-                    continue;
-                }
-                let stamp = found.unwrap_or(Stamp { id, version: 0 });
-                if let Err(err) = local::adopt(&path, &stamp) {
-                    log::debug!("[drive] {} stays unmarked while an app holds it: {err}", path.display());
-                    lock(&self.sent).insert(paths::key(&path.to_string_lossy()), before);
-                    done = false;
-                }
-            }
-        }
-        if repaired {
-            // Bring the repaired copies up to the server's version now.
-            self.core.invalidate(&node.path);
-            self.resync_folder(dir);
-        }
-        done
     }
 
     /// Bring one populated folder in line with the server; returns its populated subfolders.
@@ -406,12 +283,17 @@ impl Shared {
             }
             self.run_deletes();
             for dir in self.take_quiet() {
+                if self.still_held(&dir) {
+                    self.retry(dir);
+                    continue;
+                }
                 let done = self.upload_folder(&dir);
                 // A document closed with its last save not yet up keeps its lock until it is.
                 self.settle_edits(&dir, done);
-                if !done {
-                    // Retry after another quiet period (an app still has the file, or the server failed).
-                    self.changed(dir);
+                if done {
+                    lock(&self.retries).remove(&dir);
+                } else {
+                    self.retry(dir);
                 }
             }
             if last_recheck.elapsed() >= RECHECK_EDITS {

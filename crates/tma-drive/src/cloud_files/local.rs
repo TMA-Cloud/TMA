@@ -61,6 +61,11 @@ fn inspect(path: &Path) -> std::io::Result<Option<(Option<Stamp>, bool, bool)>> 
     Ok(state.map(|s| (Stamp::decode(&s.identity), s.in_sync, !s.partial)))
 }
 
+/// The server file a placeholder stands for, as stamped on it.
+pub fn stamp(path: &Path) -> Option<Stamp> {
+    inspect(path).ok().flatten().and_then(|(stamp, _, _)| stamp)
+}
+
 pub struct Folder {
     pub items: Vec<Local>,
     /// Items another app has open; left alone until it lets go.

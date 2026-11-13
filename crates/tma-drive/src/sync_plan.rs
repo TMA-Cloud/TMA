@@ -72,6 +72,12 @@ pub fn base(version: i64) -> Option<i64> {
     (version > 0).then_some(version)
 }
 
+/// How long to wait before looking again at a folder that has failed `attempts`
+/// passes in a row: `first`, doubling each time, never more than `cap`.
+pub fn retry_after(attempts: u32, first: std::time::Duration, cap: std::time::Duration) -> std::time::Duration {
+    first.saturating_mul(1u32.checked_shl(attempts.saturating_sub(1)).unwrap_or(u32::MAX)).min(cap)
+}
+
 /// The name a refused save is kept under, beside the file: "Report (conflicted copy
 /// 2026-10-15 1946).xlsx", as OneDrive and Dropbox name theirs.
 pub fn conflict_name(name: &str, when: &str) -> String {
@@ -337,6 +343,14 @@ mod tests {
                 Upload::Changed { name: "edited.txt".into(), id: "7".into(), base: 5 },
             ]
         );
+    }
+
+    #[test]
+    fn retries_back_off_to_the_cap() {
+        let (first, cap) = (std::time::Duration::from_millis(1500), std::time::Duration::from_secs(30));
+        let waits: Vec<u64> = (1..=7).map(|n| retry_after(n, first, cap).as_millis() as u64).collect();
+        assert_eq!(waits, [1500, 3000, 6000, 12000, 24000, 30000, 30000]);
+        assert_eq!(retry_after(200, first, cap), cap);
     }
 
     #[test]

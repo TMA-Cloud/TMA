@@ -8,6 +8,7 @@ mod feed;
 mod filter;
 mod local;
 mod saves;
+mod uploads;
 mod worker;
 
 use std::path::{Path, PathBuf};

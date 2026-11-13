@@ -28,18 +28,22 @@ impl Shared {
         // Formats without owner files show they are open by the handle their program keeps.
         edited.extend(names.iter().filter(|n| editing::open_by_handle(n) && local::held_open(&dir.join(n))).cloned());
         let mut open = Vec::new();
-        if !edited.is_empty() {
+        let mut unknown = Vec::new();
+        for name in edited {
+            // A synced file's id is known here, so the 10-second recheck of a document
+            // left open for hours asks the server nothing; only a new name needs the listing.
+            let path = dir.join(&name);
+            match self.synced_at(&path).map(|(id, _)| id).or_else(|| local::stamp(&path).map(|s| s.id)) {
+                Some(id) => open.push((id, name)),
+                None => unknown.push(name),
+            }
+        }
+        if !unknown.is_empty() {
             let Some(server) = self.folder(dir).and_then(|node| self.server(&node)) else { return };
-            for name in edited {
+            for name in unknown {
                 let server_name = self.core.to_server_name(&name);
-                let by_name = server.iter().find(|e| !e.is_folder && e.name.eq_ignore_ascii_case(&server_name));
-                // Renamed on the server while open: the old name here is still that file.
-                let id = by_name.map(|e| e.id.clone()).or_else(|| {
-                    let (id, _) = self.synced_at(&dir.join(&name))?;
-                    server.iter().any(|e| e.id == id && !e.is_folder).then_some(id)
-                });
-                if let Some(id) = id {
-                    open.push((id, name));
+                if let Some(entry) = server.iter().find(|e| !e.is_folder && e.name.eq_ignore_ascii_case(&server_name)) {
+                    open.push((entry.id.clone(), name));
                 }
             }
         }
