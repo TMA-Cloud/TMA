@@ -54,8 +54,12 @@ impl Shared {
 
     /// A file deleted moments ago and now written again at the same path keeps its
     /// server id, and the version it was synced at (a save that deletes and rewrites).
+    /// The deleted file's stamp lags when it was uploaded while its app held it (an
+    /// .xls Excel marked as in use), so the newer version uploaded from here wins.
     pub(super) fn take_delete(&self, path: &Path) -> Option<(String, i64)> {
-        lock(&self.deletes).remove(&paths::key(&path.to_string_lossy())).map(|(id, version, _, _)| (id, version))
+        let (id, stamped, _, _) = lock(&self.deletes).remove(&paths::key(&path.to_string_lossy()))?;
+        let version = self.synced_version(path, &id).map_or(stamped, |synced| synced.max(stamped));
+        Some((id, version))
     }
 
     /// Replace a server file with the local one. If someone else saved after this
